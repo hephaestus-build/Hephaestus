@@ -237,6 +237,7 @@ function ReviewRunRow({
 	position,
 }: ReviewRunRowProps) {
 	const { reviewedWork: work, reviewedAt: at } = run;
+	const today = new Date(useNow());
 	const WorkIcon = reviewedWorkIcon(work.kind, work.provider);
 	const reached = reachedPhrase(run);
 
@@ -245,7 +246,7 @@ function ReviewRunRow({
 			open={open}
 			link={{
 				text: "Open review",
-				name: `of ${work.label}, ${formatDayTime(at)}`,
+				name: `of ${work.label}, ${formatDayTime(at, today)}`,
 				onOpen: () => onOpenReview(run.reviewId),
 			}}
 		>
@@ -260,7 +261,7 @@ function ReviewRunRow({
 			<TableCell className="align-top whitespace-normal">
 				<span className="flex min-w-0 flex-col items-start gap-1">
 					<span className="flex min-w-0 items-center gap-1.5">
-						<WorkIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+						<WorkIcon className="size-3.5 shrink-0 text-muted-foreground" />
 						<InlineLink href={work.url} external className="truncate font-medium">
 							{work.label}
 						</InlineLink>

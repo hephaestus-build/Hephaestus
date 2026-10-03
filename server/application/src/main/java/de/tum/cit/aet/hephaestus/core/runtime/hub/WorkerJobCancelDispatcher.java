@@ -7,8 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Routes a job cancellation to the worker that owns the running job, over the WSS control channel
- * (#1138). The caller (e.g. {@code AgentJobService.cancel}) performs the authoritative
+ * Routes a job cancellation to the worker that owns the running job, over the WSS control channel.
+ * The caller (e.g. {@code AgentJobService.cancel}) performs the authoritative
  * {@code agent_job} status transition first; this just asks the owning worker to stop its container
  * promptly. If the owning worker is not connected to this hub, the cancel still takes effect via the
  * DB transition + reconciler/zombie-sweeper backstops — the container is simply not stopped early.

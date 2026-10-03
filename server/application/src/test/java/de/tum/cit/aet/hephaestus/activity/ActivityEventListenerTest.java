@@ -1,7 +1,13 @@
 package de.tum.cit.aet.hephaestus.activity;
 
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
@@ -22,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,12 +38,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-/**
- * Unit tests for ActivityEventListener.
- *
- * <p>Tests verify that activity events are correctly recorded using event payload data
- * and getReferenceById() for entity references (no N+1 queries).
- */
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ActivityEventListenerTest extends BaseUnitTest {
 
@@ -96,7 +97,6 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testRepository),
                             eq(ActivityTargetType.PULL_REQUEST),
                             eq(1L));
-            // Verify no findById was called (N+1 fix)
             verify(userRepository).getReferenceById(100L);
             verify(repositoryRepository).getReferenceById(200L);
         }
@@ -252,8 +252,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
             review.setSubmittedAt(null);
 
             listener.onReviewSubmitted(new ScmDomainEvent.ReviewSubmitted(createReviewData(review), createContext()));
-            listener.onReviewEdited(new ScmDomainEvent.ReviewEdited(
-                    createReviewData(review), java.util.Set.of("body"), createContext()));
+            listener.onReviewEdited(
+                    new ScmDomainEvent.ReviewEdited(createReviewData(review), Set.of("body"), createContext()));
 
             verifyNoInteractions(activityEventService);
         }
@@ -806,8 +806,6 @@ class ActivityEventListenerTest extends BaseUnitTest {
             verify(activityEventService).backfillCommitActors(200L);
         }
     }
-
-    // Helpers
 
     private Commit createCommit(Long id) {
         Commit commit = new Commit();

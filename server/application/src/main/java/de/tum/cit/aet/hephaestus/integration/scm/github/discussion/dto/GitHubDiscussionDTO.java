@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.label.dto.GitHubLabelDTO
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -106,7 +107,7 @@ public record GitHubDiscussionDTO(
         if (stateReason == null) {
             return null;
         }
-        return stateReason.name().toLowerCase();
+        return stateReason.name().toLowerCase(Locale.ROOT);
     }
 
     @Nullable
@@ -114,6 +115,6 @@ public record GitHubDiscussionDTO(
         if (lockReason == null) {
             return null;
         }
-        return lockReason.name().toLowerCase();
+        return lockReason.name().toLowerCase(Locale.ROOT);
     }
 }

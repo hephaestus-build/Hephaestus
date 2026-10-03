@@ -14,7 +14,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 /**
  * The arithmetic a recurring sweep is made of: which days each run covers, and when the next one is.
  *
- * <p>Both are load-bearing rather than incidental. The window decides whether a sweep's findings may be
+ * <p>Both are load-bearing rather than incidental. The window decides whether a sweep's observations may be
  * read beside reviews that events triggered; the advance decides whether a nightly sweep is still
  * nightly a month later.
  */

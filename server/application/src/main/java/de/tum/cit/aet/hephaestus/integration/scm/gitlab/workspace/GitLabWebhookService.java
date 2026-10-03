@@ -10,7 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitlabTokenLifecycleService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitLabTokenLifecycleService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabConnectionWebhookController;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -59,7 +59,7 @@ public class GitLabWebhookService {
     private final GitLabRouteCredential routeCredential;
     private final WorkspaceRepository workspaceRepository;
     private final ConnectionService connectionService;
-    private final ObjectProvider<GitlabTokenLifecycleService> tokenLifecycle;
+    private final ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle;
 
     public GitLabWebhookService(
             ObjectProvider<GitLabWebhookClient> webhookClientProvider,
@@ -67,7 +67,7 @@ public class GitLabWebhookService {
             GitLabRouteCredential routeCredential,
             WorkspaceRepository workspaceRepository,
             ConnectionService connectionService,
-            ObjectProvider<GitlabTokenLifecycleService> tokenLifecycle) {
+            ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle) {
         this.webhookClientProvider = webhookClientProvider;
         this.webhookProperties = webhookProperties;
         this.routeCredential = routeCredential;
@@ -107,7 +107,7 @@ public class GitLabWebhookService {
      * never edited: an exact URL is adopted, anything else gets a new hook. Its id is recorded only if the stored id is
      * still the one this registration started from, so a slower registration under an older key cannot replace a newer
      * hook. Only then is the replaced hook deleted, and only when it is this connection's hook under a key this server
-     * knows; the shared legacy hook and hooks of an unknown key are left alone.
+     * knows; the shared hook and hooks of an unknown key are left alone.
      *
      * @param workspace the workspace to register a webhook for
      * @return result indicating success or failure with reason
@@ -487,7 +487,7 @@ public class GitLabWebhookService {
                     // exists (so getGroupWebhook returns it) but it delivers nothing. A fresh register
                     // adopts by URL, which would re-adopt this same disabled hook — so delete it first,
                     // best-effort, then let registerWebhook create a clean one. A hook that is not this
-                    // connection's own, such as the shared legacy hook, is never deleted.
+                    // connection's own, such as the shared hook, is never deleted.
                     log.warn(
                             "Webhook auto-disabled (alert_status=disabled), re-registering: workspaceId={}, webhookId={}",
                             workspace.getId(),

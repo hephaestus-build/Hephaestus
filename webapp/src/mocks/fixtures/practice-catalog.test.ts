@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { realPracticeDefinition } from "./practice-catalog";
@@ -26,10 +26,10 @@ describe("bundled practice preview fixture", () => {
 		const practice = bundledCatalog.groups
 			.flatMap((group) => group.practices)
 			.find((candidate) => candidate.slug === "published-decisions-name-the-alternatives");
-		expect(practice).toBeDefined();
-		expect(realPracticeDefinition.criteria).toBe(
-			`${bundledCatalog.criteriaPreambles["docs.document"]}\n\n---\n\n${practice?.criteria}`,
-		);
+		const preamble = bundledCatalog.criteriaPreambles["docs.document"];
+		assert(practice, "The bundled catalog has no published-decisions practice");
+		assert(preamble !== undefined, "The bundled catalog has no document preamble");
+		expect(realPracticeDefinition.criteria).toBe(`${preamble}\n\n---\n\n${practice.criteria}`);
 		expect(realPracticeDefinition.criteria).not.toContain("NO_REVIEW_OCCASION");
 	});
 });

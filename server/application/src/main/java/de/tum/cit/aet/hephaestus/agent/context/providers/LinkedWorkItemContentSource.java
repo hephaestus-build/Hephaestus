@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -224,12 +225,10 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         parts.add(pullRequest.getHeadRefOid());
         parts.add(pullRequest.getTitle());
         parts.add(pullRequest.getBody());
-        closingIssues.stream()
-                .sorted(java.util.Comparator.comparingInt(Issue::getNumber))
-                .forEach(issue -> {
-                    parts.add(String.valueOf(issue.getNumber()));
-                    parts.add(text(issue));
-                });
+        closingIssues.stream().sorted(Comparator.comparingInt(Issue::getNumber)).forEach(issue -> {
+            parts.add(String.valueOf(issue.getNumber()));
+            parts.add(text(issue));
+        });
         return Optional.of(new SignalKey(
                 workspaceId,
                 pullRequest.getId(),

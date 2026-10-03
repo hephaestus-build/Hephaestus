@@ -10,7 +10,7 @@ import {
 import { useId } from "react";
 
 import type { SurveyInvitation } from "@/api/types.gen";
-import { GithubIcon } from "@/components/icons/brand";
+import { GitHubIcon } from "@/components/icons/brand";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -149,7 +149,7 @@ export function ProductFeedbackMenu({
 						aria-describedby={`${id}-github`}
 						render={<a href={HEPHAESTUS_GITHUB_ISSUES_URL} target="_blank" rel="noreferrer" />}
 					>
-						<GithubIcon className="mt-0.5" />
+						<GitHubIcon className="mt-0.5" />
 						<span className="flex min-w-0 flex-col">
 							<span className="flex items-center gap-1">
 								Open an issue on GitHub

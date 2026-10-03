@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -20,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -105,9 +107,8 @@ public class AccountProvisioningService {
             throw new IllegalStateException(provider.getType() + " identity is missing team_id");
         }
 
-        if (!writeFence.holdForWrite(java.util.List.of(new PersonIdentity(providerId, subject, teamId)))) {
-            throw new org.springframework.security.oauth2.core.OAuth2AuthenticationException(
-                    "identity_processing_suppressed");
+        if (!writeFence.holdForWrite(List.of(new PersonIdentity(providerId, subject, teamId)))) {
+            throw new OAuth2AuthenticationException("identity_processing_suppressed");
         }
 
         IdentityLink link = identityLinkRepository
@@ -235,8 +236,7 @@ public class AccountProvisioningService {
                 .lockStatusForUpdate(accountId)
                 .map(Account.Status.ACTIVE.name()::equals)
                 .orElse(false)) {
-            throw new org.springframework.security.oauth2.core.OAuth2AuthenticationException(
-                    "identity_processing_suppressed");
+            throw new OAuth2AuthenticationException("identity_processing_suppressed");
         }
     }
 

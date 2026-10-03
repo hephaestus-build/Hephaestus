@@ -1,12 +1,5 @@
-import { GithubIcon, GitlabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
+import { PROVIDER_ICONS } from "@/components/icons/integration-provider-icons";
 import { type ArtifactKindIcon, artifactKindIcon, type WorkProvider } from "@/lib/artifact-kinds";
-
-const PROVIDER_ICONS = {
-	GITHUB: GithubIcon,
-	GITLAB: GitlabIcon,
-	SLACK: SlackIcon,
-	OUTLINE: OutlineIcon,
-} satisfies Record<WorkProvider, ArtifactKindIcon>;
 
 /**
  * The provider's mark where the caller has one — a run records its provider — falling back to the

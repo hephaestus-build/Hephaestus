@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -9,7 +9,6 @@ import io.micrometer.core.instrument.Timer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -18,7 +17,7 @@ import tools.jackson.databind.ObjectMapper;
 // Gated like the worker-only accumulators it depends on; an ungated bean here would fail the context
 // of every tier that runs with the worker role off.
 @Component
-@ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnWorkerRole
 public class ProxyAccounting {
 
     private static final Logger log = LoggerFactory.getLogger(ProxyAccounting.class);

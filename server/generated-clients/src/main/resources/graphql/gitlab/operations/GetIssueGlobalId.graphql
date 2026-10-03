@@ -1,6 +1,4 @@
-# Resolves the GraphQL Global ID for an issue.
-# Used by GitlabFeedbackChannel (noteableId for the generic createNote mutation) so
-# practice-review feedback can be posted as an issue comment, mirroring the MR path.
+# Resolves an issue's GraphQL global ID, the noteableId that createNote needs to comment on an issue.
 
 query GetIssueGlobalId($fullPath: ID!, $iid: String!) {
     project(fullPath: $fullPath) {

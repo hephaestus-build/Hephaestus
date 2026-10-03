@@ -49,15 +49,19 @@ public class LlmAdmissionService {
         // The same row lock is taken by activation/repricing, so admission never observes an
         // activation/reprice half-state.
         if (locked.getInstanceModel() != null) {
-            modelRepository
+            if (modelRepository
                     .findByIdForUpdate(locked.getInstanceModel().getId())
-                    .orElseThrow(LlmAdmissionService::modelUnavailable);
+                    .isEmpty()) {
+                throw modelUnavailable();
+            }
         } else if (locked.getWorkspaceModel() != null) {
-            workspaceModelRepository
+            if (workspaceModelRepository
                     .findByIdAndWorkspaceIdForUpdate(
                             locked.getWorkspaceModel().getId(),
                             locked.getWorkspace().getId())
-                    .orElseThrow(LlmAdmissionService::modelUnavailable);
+                    .isEmpty()) {
+                throw modelUnavailable();
+            }
         }
         var resolved = resolver.resolve(locked);
         var ref = resolver.connectionRef(locked);

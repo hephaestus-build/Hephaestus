@@ -517,8 +517,6 @@ public class GitLabIssueSyncService {
         return issue;
     }
 
-    // Milestone extraction
-
     @SuppressWarnings("unchecked")
     @Nullable
     private static Integer extractMilestoneIid(Map<String, Object> node) {

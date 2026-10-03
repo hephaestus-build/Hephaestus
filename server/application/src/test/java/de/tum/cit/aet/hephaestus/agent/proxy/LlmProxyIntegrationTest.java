@@ -25,8 +25,10 @@ import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -185,7 +187,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         String token = tokenFor(job);
         String path = "/internal/llm/runtime/" + job.getId() + suffix;
         assertThat(authenticate(method, path, token).status()).isEqualTo(200);
-        assertThat(authenticate(method, "/internal/llm/runtime/" + java.util.UUID.randomUUID() + suffix, token)
+        assertThat(authenticate(method, "/internal/llm/runtime/" + UUID.randomUUID() + suffix, token)
                         .status())
                 .isEqualTo(401);
 
@@ -241,9 +243,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         // A workspace binds one model per purpose, so a second job re-points the binding it already has.
         WorkspaceAgentBinding binding = agentBindingRepository
                 .findByWorkspaceIdAndPurposeAndDataHandlingTier(
-                        workspace.getId(),
-                        AgentPurpose.PRACTICE_REVIEW,
-                        de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier.UNDECLARED)
+                        workspace.getId(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED)
                 .orElseGet(WorkspaceAgentBinding::new);
         binding.setWorkspace(workspace);
         binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);

@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -54,6 +56,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.core.task.TaskRejectedException;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit coverage for {@link SyncStatusService}: connection-health derivation across every
@@ -135,8 +138,6 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 List.of(githubRunner),
                 syncTargetProvider);
     }
-
-    // --- health derivation ---
 
     @Test
     void getStatus_pendingConnection_healthIsPending() {
@@ -335,7 +336,7 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 taskExecutor,
                 List.of(),
                 List.of(),
-                org.mockito.Mockito.mock(SyncTargetProvider.class));
+                mock(SyncTargetProvider.class));
 
         var status = noProviders.getStatus(WORKSPACE_ID, CONNECTION_ID);
 
@@ -363,7 +364,6 @@ class SyncStatusServiceTest extends BaseUnitTest {
         assertThat(status.lastEventProcessedAt()).isNull();
     }
 
-    // --- backfill capability ---
     // backfillSupported is what the admin UI gates its "Backfill" button on, so it must track the
     // runner's own answer rather than the connection's kind — otherwise the button and triggerSync's
     // 409 disagree.
@@ -394,13 +394,11 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 taskExecutor,
                 List.of(githubProvider),
                 List.of(),
-                org.mockito.Mockito.mock(SyncTargetProvider.class));
+                mock(SyncTargetProvider.class));
 
         assertThat(noRunners.getStatus(WORKSPACE_ID, CONNECTION_ID).backfillSupported())
                 .isFalse();
     }
-
-    // --- trigger ---
 
     @Test
     void triggerSync_notActiveConnection_throwsStateConflict() {
@@ -421,7 +419,7 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 taskExecutor,
                 List.of(githubProvider),
                 List.of(),
-                org.mockito.Mockito.mock(SyncTargetProvider.class));
+                mock(SyncTargetProvider.class));
 
         assertThatThrownBy(() -> noRunners.triggerSync(WORKSPACE_ID, CONNECTION_ID, SyncJobType.RECONCILIATION, null))
                 .isInstanceOf(SyncNotSupportedException.class);
@@ -471,14 +469,14 @@ class SyncStatusServiceTest extends BaseUnitTest {
     void shouldPermitImmediateRepositoryRecheckWhenAdminStartsConnectionSync() {
         var started = new SyncJobService.Started(pendingJob(), mock(SyncJobHandle.class));
         when(syncJobService.beginJob(any())).thenReturn(started);
-        org.mockito.Mockito.doAnswer(invocation -> {
+        doAnswer(invocation -> {
                     Runnable body = invocation.getArgument(0);
                     body.run();
                     return null;
                 })
                 .when(taskExecutor)
                 .execute(any());
-        org.mockito.Mockito.doAnswer(invocation -> {
+        doAnswer(invocation -> {
                     Consumer<SyncExecutionHandle> body = invocation.getArgument(1);
                     body.accept(started.handle());
                     return null;
@@ -486,7 +484,7 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 .when(syncJobService)
                 .executeBody(eq(started), any());
         service.triggerSync(WORKSPACE_ID, CONNECTION_ID, SyncJobType.RECONCILIATION, null);
-        var order = org.mockito.Mockito.inOrder(syncTargetProvider, githubRunner);
+        var order = inOrder(syncTargetProvider, githubRunner);
         order.verify(syncTargetProvider).recheckUnavailableRepositories(WORKSPACE_ID);
         order.verify(githubRunner).reconcile(any(), any(), eq(SyncJobType.RECONCILIATION));
     }
@@ -541,8 +539,6 @@ class SyncStatusServiceTest extends BaseUnitTest {
 
         verify(syncJobService).failStarted(eq(started), any());
     }
-
-    // --- cancel ---
 
     @Test
     @DisplayName(
@@ -601,8 +597,6 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 .isInstanceOf(SyncStateConflictException.class);
     }
 
-    // --- catalog ---
-
     @Test
     void catalog_joinsManifestRegistryWithExistingConnections() {
         when(connectionAdminService.manifests()).thenReturn(manifests);
@@ -641,8 +635,6 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 .containsExactly(IntegrationKind.GITHUB, IntegrationKind.SLACK);
     }
 
-    // --- helpers ---
-
     private SyncJob terminalJob(SyncJobStatus status) {
         SyncJob job = pendingJob();
         job.setStatus(status);
@@ -678,12 +670,6 @@ class SyncStatusServiceTest extends BaseUnitTest {
     }
 
     private static void setConnectionId(Connection connection, long id) {
-        try {
-            java.lang.reflect.Field field = Connection.class.getDeclaredField("id");
-            field.setAccessible(true);
-            field.set(connection, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(connection, "id", id);
     }
 }

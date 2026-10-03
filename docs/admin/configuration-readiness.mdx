@@ -236,8 +236,8 @@ only thing attached. So establish its owner first.
 
 Before upgrading from unscoped sandbox ownership or changing `owner`, drain reviews and interactive
 sessions and stop that installation's workers. Remove its remaining containers and networks only
-after verifying ownership. The new cleanup does not adopt legacy `hephaestus.managed=true`
-containers or `agent-net-` networks, or resources belonging to a previous owner.
+after verifying ownership. Cleanup never adopts containers labelled `hephaestus.managed=true`,
+`agent-net-` networks, or resources belonging to a previous owner.
 
 Java operations and interactive Docker CLI commands use the same host, TLS and certificate settings.
 Inherited `DOCKER_CONTEXT`, `DOCKER_HOST` and Docker TLS environment variables do not override

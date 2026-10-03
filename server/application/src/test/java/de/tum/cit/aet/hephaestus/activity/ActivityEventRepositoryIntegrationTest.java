@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.activity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.activity.adapter.ActivityPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -13,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -40,10 +41,7 @@ class ActivityEventRepositoryIntegrationTest extends BaseIntegrationTest {
     private ActivityEventService activityEventService;
 
     @Autowired
-    private ActivityPersonDataCatalog personData;
-
-    @Autowired
-    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private JdbcTemplate jdbc;
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
@@ -214,8 +212,7 @@ class ActivityEventRepositoryIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void skipsAnErasedNativeAuthorWithoutSkippingAnotherAuthorInTheSameBatch() {
-        var other = userRepository.saveAndFlush(
-                de.tum.cit.aet.hephaestus.testconfig.TestUserFactory.createUser(901L, "another-person", gitProvider));
+        var other = userRepository.saveAndFlush(TestUserFactory.createUser(901L, "another-person", gitProvider));
         var targetCommit = persistCommit("ffffffffffffffffffffffffffffffffffffffff", targetRepository, author);
         var otherCommit = persistCommit("1111111111111111111111111111111111111111", targetRepository, other);
         var targetEvent = persistCommitCreatedEvent(targetCommit, null);

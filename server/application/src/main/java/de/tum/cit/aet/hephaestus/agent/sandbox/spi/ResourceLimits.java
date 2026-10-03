@@ -48,7 +48,7 @@ public record ResourceLimits(
         if (pidsLimit > MAX_PIDS) {
             throw new IllegalArgumentException("pidsLimit exceeds maximum (" + MAX_PIDS + "), got: " + pidsLimit);
         }
-        maxRuntime = Objects.requireNonNull(maxRuntime, "maxRuntime must not be null");
+        Objects.requireNonNull(maxRuntime, "maxRuntime must not be null");
         if (maxRuntime.isNegative() || maxRuntime.isZero()) {
             throw new IllegalArgumentException("maxRuntime must be positive, got: " + maxRuntime);
         }

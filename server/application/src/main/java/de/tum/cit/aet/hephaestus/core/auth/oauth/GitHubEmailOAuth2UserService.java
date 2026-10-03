@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
@@ -54,7 +55,7 @@ public class GitHubEmailOAuth2UserService implements OAuth2UserService<OAuth2Use
         Map<String, Object> attrs = new HashMap<>(user.getAttributes());
         fetchPrimaryVerifiedEmail(userRequest).ifPresent(email -> {
             attrs.put("email", email);
-            attrs.put("email_verified", Boolean.TRUE);
+            attrs.put("email_verified", true);
         });
         return new DefaultOAuth2User(user.getAuthorities(), attrs, nameAttrKey);
     }
@@ -80,8 +81,7 @@ public class GitHubEmailOAuth2UserService implements OAuth2UserService<OAuth2Use
     }
 
     /** The {@code primary && verified} address, or empty. Pure — the verification policy under test. */
-    static Optional<String> selectPrimaryVerifiedEmail(
-            @org.jspecify.annotations.Nullable List<Map<String, Object>> emails) {
+    static Optional<String> selectPrimaryVerifiedEmail(@Nullable List<Map<String, Object>> emails) {
         if (emails == null) {
             return Optional.empty();
         }

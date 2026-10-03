@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import java.util.List;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -16,7 +17,7 @@ class PracticeFeedbackPersonDataAdmission {
     private final PersonProcessingSuppression personSuppression;
 
     PracticeFeedbackDispatchService.Result deliver(
-            AgentJob job, java.util.function.Supplier<PracticeFeedbackDispatchService.Result> delivery) {
+            AgentJob job, Supplier<PracticeFeedbackDispatchService.Result> delivery) {
         try (var capture = personCopies.capture()) {
             // Use the leased session, not a possibly stale source/JPA transaction. Erasure
             // revokes the job hash; a queued caller holding the old entity cannot recreate copies.

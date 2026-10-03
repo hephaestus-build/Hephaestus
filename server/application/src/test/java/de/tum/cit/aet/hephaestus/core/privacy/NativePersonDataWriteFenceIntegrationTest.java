@@ -1,21 +1,35 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
-import de.tum.cit.aet.hephaestus.integration.core.connection.*;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.*;
-import de.tum.cit.aet.hephaestus.testconfig.*;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
+import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
@@ -46,7 +60,7 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRejectAnOldSnapshotForAdmissionAndFinalErasureValidation() {
         var tx = new TransactionTemplate(transactions);
-        tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        tx.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
         var identities = List.of(new PersonIdentity(1L, "native-subject", null));
         assertThatThrownBy(() -> tx.executeWithoutResult(status -> fence.holdForErasure(identities)))
                 .isInstanceOf(IllegalStateException.class)

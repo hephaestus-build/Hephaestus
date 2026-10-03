@@ -4,11 +4,16 @@ import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -57,16 +62,12 @@ public final class ProvenanceDigest {
 
     /** Hashes the complete folder, including every object of its full-history repository checkouts. */
     public static String inputsDigestHex(
-            Map<String, byte[]> scaffolding,
-            Map<String, java.nio.file.Path> files,
-            java.util.List<EvidenceDirectory> directories,
-            UUID jobId) {
+            Map<String, byte[]> scaffolding, Map<String, Path> files, List<EvidenceDirectory> directories, UUID jobId) {
         var paths = new TreeMap<>(files);
         try {
             for (var directory : directories) {
-                try (var entries = java.nio.file.Files.walk(directory.source())) {
-                    for (var file : entries.filter(path ->
-                                    java.nio.file.Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS))
+                try (var entries = Files.walk(directory.source())) {
+                    for (var file : entries.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
                             .toList()) {
                         String path = directory.target()
                                 + directory.source().relativize(file).toString().replace('\\', '/');
@@ -79,7 +80,7 @@ public final class ProvenanceDigest {
             }
             var hashes = new TreeMap<String, String>();
             for (var entry : paths.entrySet()) {
-                try (var input = java.nio.file.Files.newInputStream(entry.getValue())) {
+                try (var input = Files.newInputStream(entry.getValue())) {
                     // Attempt-specific task metadata is small; source records and Git objects are streamed exactly.
                     hashes.put(
                             entry.getKey(),
@@ -108,7 +109,7 @@ public final class ProvenanceDigest {
             }
             return hex(digest);
         } catch (IOException exception) {
-            throw new java.io.UncheckedIOException(exception);
+            throw new UncheckedIOException(exception);
         }
     }
 

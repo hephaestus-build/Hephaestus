@@ -1,11 +1,26 @@
 package de.tum.cit.aet.hephaestus.notification;
 
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.config.ApplicationProperties;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
-import de.tum.cit.aet.hephaestus.notification.email.*;
+import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryMetrics;
+import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult;
+import de.tum.cit.aet.hephaestus.notification.email.EmailGateway;
+import de.tum.cit.aet.hephaestus.notification.email.EmailKind;
+import de.tum.cit.aet.hephaestus.notification.email.EmailProperties;
+import de.tum.cit.aet.hephaestus.notification.email.EmailRateLimiter;
+import de.tum.cit.aet.hephaestus.notification.email.EmailTestSupport;
+import de.tum.cit.aet.hephaestus.notification.email.EmailUnsubscribeLinks;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionKind;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.SurveyEmailInvitations;

@@ -20,16 +20,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-/**
- * Integration tests for ActivityEventService.
- *
- * <p>Tests verify database-level behavior including:
- * <ul>
- *   <li>Idempotency via unique constraint on event_key</li>
- *   <li>Relationship to workspace, user, and repository entities</li>
- *   <li>Cache eviction behavior</li>
- * </ul>
- */
 class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
@@ -128,7 +118,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
             ActivityEvent event = events.get(0);
             assertThat(event.getEventType()).isEqualTo(ActivityEventType.PULL_REQUEST_OPENED);
             assertThat(event.getOccurredAt()).isEqualTo(occurredAt);
-            org.junit.jupiter.api.Assertions.assertNotNull(event.getActor());
+            assertThat(event.getActor()).isNotNull();
             assertThat(event.getActor().getId()).isEqualTo(testUser.getId());
             assertThat(event.getRepository().getId()).isEqualTo(testRepository.getId());
             assertThat(event.getWorkspace().getId()).isEqualTo(testWorkspace.getId());

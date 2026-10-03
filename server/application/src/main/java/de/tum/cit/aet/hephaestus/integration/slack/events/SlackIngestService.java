@@ -51,7 +51,7 @@ public class SlackIngestService {
      * Fleet-wide capability flag, available by default, bound from
      * {@code hephaestus.integration.slack.conversation-ingest.enabled}. The first fail-closed layer in front of the
      * per-channel consent gate and the per-person firewall: while {@code false}, channel/group messages are never
-     * ingested at all and the conversation-detection/feedback subsystem downstream stays completely dormant.
+     * ingested at all and the conversation review and feedback downstream stays completely dormant.
      */
     private final boolean conversationIngestEnabled;
 

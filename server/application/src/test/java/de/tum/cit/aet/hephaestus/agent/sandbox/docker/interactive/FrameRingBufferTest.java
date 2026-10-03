@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.IntNode;
+import tools.jackson.databind.node.StringNode;
 
 class FrameRingBufferTest extends BaseUnitTest {
 
@@ -52,7 +53,7 @@ class FrameRingBufferTest extends BaseUnitTest {
     @Test
     void evictsByUtf8BytesBeforeTheFrameCountLimit() {
         var buffer = new FrameRingBuffer(20, dropped);
-        var frame = tools.jackson.databind.node.StringNode.valueOf("é".repeat(512 * 1024 - 1));
+        var frame = StringNode.valueOf("é".repeat(512 * 1024 - 1));
         for (int i = 0; i < 9; i++) buffer.offer(frame);
         assertThat(buffer.size()).isEqualTo(8);
         assertThat(dropped.count()).isEqualTo(1.0);
@@ -62,7 +63,7 @@ class FrameRingBufferTest extends BaseUnitTest {
     @Test
     void neverRetainsAFrameLargerThanTheEntireReplayBudget() {
         var buffer = new FrameRingBuffer(20, dropped);
-        buffer.offer(tools.jackson.databind.node.StringNode.valueOf("x".repeat(8 * 1024 * 1024)));
+        buffer.offer(StringNode.valueOf("x".repeat(8 * 1024 * 1024)));
         assertThat(buffer.size()).isZero();
         assertThat(buffer.latestSequence()).isZero();
         assertThat(dropped.count()).isEqualTo(1.0);

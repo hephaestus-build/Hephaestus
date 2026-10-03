@@ -52,27 +52,27 @@ import org.springframework.validation.annotation.Validated;
  *         - "my-org/5"    # Project #5 in my-org
  * }</pre>
  *
+ * @param runOnStartup whether to trigger a sync run immediately when the application starts
+ * @param timeframeDays number of days to look back when synchronizing pull requests
+ * @param cron cron expression for scheduled sync execution. Default: daily at 3 AM
+ * @param cooldownMinutes minimum minutes between consecutive sync operations
+ * @param backfill configuration for historical data backfill operations
+ * @param filters configuration for filtering which organizations and repositories to sync
+ * @param discussions configuration for GitHub Discussions sync (disabled by default)
+ * @param projects configuration for GitHub Projects V2 sync (disabled by default)
  * @see BackfillProperties
  * @see FilterProperties
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.sync")
 public record SyncSchedulerProperties(
-        /** Whether to trigger a sync run immediately when the application starts. */
         @DefaultValue("true") boolean runOnStartup,
-        /** Number of days to look back when synchronizing pull requests. */
         @Min(1) @Max(365) @DefaultValue("7") int timeframeDays,
-        /** Cron expression for scheduled sync execution. Default: daily at 3 AM. */
         @NotBlank @DefaultValue("0 0 3 * * *") String cron,
-        /** Minimum minutes between consecutive sync operations. */
         @Min(1) @Max(1440) @DefaultValue("15") int cooldownMinutes,
-        /** Configuration for historical data backfill operations. */
         @Valid BackfillProperties backfill,
-        /** Configuration for filtering which organizations and repositories to sync. */
         @Valid FilterProperties filters,
-        /** Configuration for GitHub Discussions sync (disabled by default). */
         @Valid DiscussionsProperties discussions,
-        /** Configuration for GitHub Projects V2 sync (disabled by default). */
         @Valid ProjectsProperties projects) {
     /**
      * Configuration for the backfill subsystem that handles historical data synchronization.

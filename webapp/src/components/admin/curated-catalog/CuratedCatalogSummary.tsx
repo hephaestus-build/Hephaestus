@@ -16,7 +16,7 @@ export function CuratedCatalogSummary({
 	onReviewChanges,
 }: CuratedCatalogSummaryProps) {
 	const updates =
-		summary.updatesChangingDetection +
+		summary.updatesChangingReview +
 		summary.updatesChangingWordingOnly +
 		summary.updatesChangingPresentation;
 	const changes = updates + removedDefaultsToReview;
@@ -29,10 +29,10 @@ export function CuratedCatalogSummary({
 			<span className="font-medium">
 				{changes} Hephaestus {changes === 1 ? "change needs" : "changes need"} review
 			</span>
-			{summary.updatesChangingDetection > 0 && (
+			{summary.updatesChangingReview > 0 && (
 				<Badge variant="warning">
-					{summary.updatesChangingDetection}{" "}
-					{summary.updatesChangingDetection === 1 ? "update would" : "updates would"} change review
+					{summary.updatesChangingReview}{" "}
+					{summary.updatesChangingReview === 1 ? "update would" : "updates would"} change review
 					rules
 				</Badge>
 			)}

@@ -152,7 +152,7 @@ function ReviewedWork({ work, tone }: { work: ReviewedWorkRef; tone: "head" | "l
 	if (isHead) {
 		return (
 			<div className="flex min-w-0 items-start gap-2.5 border-b px-4 py-3">
-				<Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+				<Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
 				<div className="flex min-w-0 flex-col gap-0.5">
 					{name}
 					{hasText(work.container) && (
@@ -165,7 +165,7 @@ function ReviewedWork({ work, tone }: { work: ReviewedWorkRef; tone: "head" | "l
 
 	return (
 		<span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-			<Icon className="size-3.5 shrink-0" aria-hidden />
+			<Icon className="size-3.5 shrink-0" />
 			{name}
 			{hasText(work.container) && (
 				<>

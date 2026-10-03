@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
@@ -23,9 +24,15 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitHubAppConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -47,24 +54,32 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import org.apache.commons.io.FileUtils;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -124,10 +139,10 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
     private RepositoryRepository repositoryRepository;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository connections;
+    private ConnectionRepository connections;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository monitors;
+    private RepositoryToMonitorRepository monitors;
 
     @Autowired
     private PullRequestRepository pullRequestRepository;
@@ -136,9 +151,9 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
     private JobEvidenceFiles evidenceFiles;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout evidenceLayout;
+    private FabricLayout evidenceLayout;
 
-    private final java.util.List<PreparedJobInputs> preparedEvidence = new java.util.ArrayList<>();
+    private final List<PreparedJobInputs> preparedEvidence = new ArrayList<>();
 
     private static final String HEAD_PATH = SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD";
     private static final String REFS_PATH = SandboxLayout.REPO_MOUNT_RELATIVE + ".git/hephaestus-captured-refs";
@@ -153,7 +168,7 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
     private String baseSha;
     private String headSha;
 
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void releasePreparedEvidence() throws Exception {
         preparedEvidence.forEach(PreparedJobInputs::close);
         preparedEvidence.clear();
@@ -161,7 +176,7 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
     }
 
     private void deleteFixtureEvidence() throws Exception {
-        org.apache.commons.io.FileUtils.deleteDirectory(evidenceLayout
+        FileUtils.deleteDirectory(evidenceLayout
                 .jobsRoot()
                 .resolve(workspace.getId().toString())
                 .resolve(agentJob.getId().toString())
@@ -208,18 +223,16 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
         repo.setDefaultBranch("main");
         repo = repositoryRepository.save(repo);
         monitors.save(WorkspaceTestFixtures.repositoryMonitor(workspace, repo.getNameWithOwner()));
-        var connection = new de.tum.cit.aet.hephaestus.integration.core.connection.Connection(
+        var connection = new Connection(
                 workspace,
-                de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB,
+                IntegrationKind.GITHUB,
                 "1732",
-                new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitHubAppConfig(
-                        1732L, workspace.getAccountLogin(), null, java.util.Set.of()));
-        org.springframework.test.util.ReflectionTestUtils.setField(
-                connection, "state", de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE);
+                new GitHubAppConfig(1732L, workspace.getAccountLogin(), null, Set.of()));
+        ReflectionTestUtils.setField(connection, "state", IntegrationState.ACTIVE);
         connections.save(connection);
 
         Instant now = Instant.now();
-        Long providerId = java.util.Objects.requireNonNull(provider.getId());
+        Long providerId = Objects.requireNonNull(provider.getId());
         pullRequestRepository.upsertCore(
                 5001L,
                 providerId,
@@ -302,16 +315,15 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
         EvidenceSnapshotFixtures.admittedPractice(
                 snapshot,
                 description.getSlug(),
-                java.util.Objects.requireNonNull(
-                        description.getCurrentRevision().getId()));
+                Objects.requireNonNull(description.getCurrentRevision().getId()));
         EvidenceSnapshotFixtures.admittedPractice(
                 snapshot,
                 errors.getSlug(),
-                java.util.Objects.requireNonNull(errors.getCurrentRevision().getId()));
-        preparedEvidence.add(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                Objects.requireNonNull(errors.getCurrentRevision().getId()));
+        preparedEvidence.add(PreparedJobInputsFixtures.prepare(
                 evidenceFiles,
                 agentJob,
-                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.inputs(
+                PreparedJobInputsFixtures.inputs(
                         new PreparedEvidence(
                                 Map.of(PullRequestContentSource.CHANGE_FILE, change),
                                 Map.of(
@@ -415,7 +427,7 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
         @Test
         void shouldKeepPublishedObservationsVerifiedAfterCapturedBytesAreDeleted() throws Exception {
             publishVerified(agentJob, List.of(observation("error-handling", Outcome.NOT_MET)));
-            String sha = java.util.Objects.requireNonNull(agentJob.getEvidenceSnapshot())
+            String sha = Objects.requireNonNull(agentJob.getEvidenceSnapshot())
                     .at("/manifest/sources/0/artifacts/0/sha256")
                     .asString();
 
@@ -432,7 +444,7 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
         void shouldVerifyEachSideOfTheChangeAgainstTheCapturedCheckout() {
             var atHead = observation("pr-description-quality", Outcome.MET);
             var atBase = observation("error-handling", Outcome.MET);
-            ((ObjectNode) java.util.Objects.requireNonNull(atBase.evidence())
+            ((ObjectNode) Objects.requireNonNull(atBase.evidence())
                             .withArray("citations")
                             .get(0))
                     .put("side", "OLD")
@@ -442,7 +454,7 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
 
             assertThat(result.inserted()).isEqualTo(2);
             assertThat(observationRepository.findAll())
-                    .extracting(persisted -> java.util.Objects.requireNonNull(persisted.getEvidence())
+                    .extracting(persisted -> Objects.requireNonNull(persisted.getEvidence())
                             .at("/citations/0/revision")
                             .asString())
                     .containsExactlyInAnyOrder(headSha, baseSha);
@@ -454,7 +466,7 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
         void shouldWithholdAQuoteTheCheckoutDoesNotHold() {
             var sound = observation("pr-description-quality", Outcome.MET);
             var wrongSide = observation("error-handling", Outcome.MET);
-            ((ObjectNode) java.util.Objects.requireNonNull(wrongSide.evidence())
+            ((ObjectNode) Objects.requireNonNull(wrongSide.evidence())
                             .withArray("citations")
                             .get(0))
                     .put("side", "OLD");
@@ -505,14 +517,12 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
                     .hasSize(2);
         }
 
-        @org.junit.jupiter.params.ParameterizedTest
-        @org.junit.jupiter.params.provider.ValueSource(
-                strings = {"summary", "outcome", "severity", "evidence", "rationale"})
+        @ParameterizedTest
+        @ValueSource(strings = {"summary", "outcome", "severity", "evidence", "rationale"})
         void changedRetryIsRejectedWithoutChangingTheRecordedClaim(String field) {
             var original = observation("error-handling", Outcome.NOT_MET);
             publishVerified(agentJob, List.of(original));
-            var changedEvidence =
-                    java.util.Objects.requireNonNull(original.evidence()).deepCopy();
+            var changedEvidence = Objects.requireNonNull(original.evidence()).deepCopy();
             if (field.equals("evidence")) {
                 ((ObjectNode) changedEvidence.path("search")).put("boundary", "changed claim scope");
             }
@@ -545,7 +555,7 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
 
             var first = publishVerified(agentJob, observations);
             var admittedEvidence =
-                    java.util.Objects.requireNonNull(first.recorded().getFirst().evidence());
+                    Objects.requireNonNull(first.recorded().getFirst().evidence());
             var storedEvidence = observationRepository
                     .findByAgentJobId(agentJob.getId(), workspace.getId())
                     .getFirst()
@@ -582,7 +592,7 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
 
         @Test
         @DisplayName("persisted observation pins the practice's current definition revision")
-        void findingPinsCurrentRevision() {
+        void observationPinsCurrentRevision() {
             Practice practice = practiceRepository
                     .findByWorkspaceIdAndSlug(workspace.getId(), "pr-description-quality")
                     .orElseThrow();

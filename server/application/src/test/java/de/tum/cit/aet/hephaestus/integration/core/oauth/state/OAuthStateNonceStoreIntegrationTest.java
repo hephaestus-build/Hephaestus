@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -35,7 +36,7 @@ class OAuthStateNonceStoreIntegrationTest extends BaseIntegrationTest {
     void aNonceCanBeConsumedExactlyOnce() {
         String nonce = "seq-" + Long.toHexString(System.nanoTime()); // <= 32 chars (column limit)
         var binding = new OAuthStateService.StateBinding(
-                1, IntegrationKind.GITHUB, Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+                1, IntegrationKind.GITHUB, Instant.now().truncatedTo(ChronoUnit.SECONDS));
         store.issue(nonce, 1L, IntegrationKind.GITHUB, binding.issuedAt());
 
         assertThat(store.tryConsume(nonce, binding)).as("first consume wins").isTrue();
@@ -47,7 +48,7 @@ class OAuthStateNonceStoreIntegrationTest extends BaseIntegrationTest {
     @Test
     void mismatchedSignedContextDoesNotConsumeNonce() {
         String nonce = "bound-" + Long.toHexString(System.nanoTime());
-        Instant issued = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Instant issued = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         store.issue(nonce, 1L, IntegrationKind.GITHUB, issued);
         assertThat(store.tryConsume(nonce, new OAuthStateService.StateBinding(2, IntegrationKind.GITHUB, issued)))
                 .isFalse();
@@ -75,7 +76,7 @@ class OAuthStateNonceStoreIntegrationTest extends BaseIntegrationTest {
     void concurrentConsumesOfOneNonceProduceExactlyOneWinner() throws Exception {
         String nonce = "race-" + Long.toHexString(System.nanoTime()); // <= 32 chars (column limit)
         var binding = new OAuthStateService.StateBinding(
-                1, IntegrationKind.GITHUB, Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+                1, IntegrationKind.GITHUB, Instant.now().truncatedTo(ChronoUnit.SECONDS));
         store.issue(nonce, 1L, IntegrationKind.GITHUB, binding.issuedAt());
 
         // Two OAuth callbacks land at once (a vendor retrying the redirect). The atomic conditional

@@ -40,6 +40,7 @@ import org.mockito.Mock;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -67,7 +68,7 @@ class GitLabTeamSyncServiceTest extends BaseUnitTest {
     private RepositoryCollaboratorRepository collaboratorRepository;
 
     private GitLabTeamSyncService service;
-    private HttpGraphQlClient.RequestSpec request;
+    private GraphQlClient.RequestSpec request;
     private HttpGraphQlClient client;
     private Team team;
 
@@ -110,7 +111,7 @@ class GitLabTeamSyncServiceTest extends BaseUnitTest {
         when(pageInfo.toEntity(GitLabPageInfo.class)).thenReturn(new GitLabPageInfo(false, null));
         when(response.field("group.groupMembers.pageInfo")).thenReturn(pageInfo);
         client = mock(HttpGraphQlClient.class);
-        request = mock(HttpGraphQlClient.RequestSpec.class);
+        request = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("GetGroupMembers")).thenReturn(request);
         when(request.variable(anyString(), any())).thenReturn(request);
         when(request.execute()).thenReturn(Mono.just(response));

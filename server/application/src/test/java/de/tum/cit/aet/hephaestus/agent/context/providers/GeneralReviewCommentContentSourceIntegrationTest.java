@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
@@ -102,9 +103,7 @@ class GeneralReviewCommentContentSourceIntegrationTest extends BaseIntegrationTe
         persistComment(pr, human, "split persistence out so each unit is testable", at("10:00"));
 
         List<IssueComment> rows = issueCommentRepository.findRecentHumanByIssueIdWithAuthor(
-                pr.getId(),
-                de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection.HEPHAESTUS_MARKER,
-                PageRequest.of(0, 50));
+                pr.getId(), WorkspaceScmProjection.HEPHAESTUS_MARKER, PageRequest.of(0, 50));
 
         assertThat(rows)
                 .extracting(IssueComment::getBody)

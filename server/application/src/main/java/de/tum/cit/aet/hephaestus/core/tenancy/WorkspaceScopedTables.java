@@ -76,7 +76,7 @@ public class WorkspaceScopedTables {
             "consent_decision",
             // The account's own AI choice; one answer for every workspace it is a member of
             "account_ai_choice",
-            // Fleet-wide worker liveness/capacity registry (#1138); not workspace-scoped
+            // Fleet-wide worker liveness/capacity registry; not workspace-scoped
             "worker_registry",
             // Instance-scoped OAuth login providers (sign-in options); shared across all workspaces
             "login_provider",

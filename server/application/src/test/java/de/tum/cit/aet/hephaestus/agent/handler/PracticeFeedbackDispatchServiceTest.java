@@ -27,6 +27,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.ExistingSummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchCompletion;
@@ -157,8 +159,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(new DiffNotePoster.DiffNoteResult(0, 0, List.of()));
         lenient()
                 .when(policy.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(
-                        new de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest()));
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(new PullRequest()));
     }
 
     @Test
@@ -471,10 +472,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
     @Test
     void aPauseSuppressesAnApprovedProposalTerminally() {
-        var feedback = de.tum.cit.aet.hephaestus.practices.feedback.Feedback.builder()
-                .id(UUID.randomUUID())
-                .body("approved body")
-                .build();
+        var feedback =
+                Feedback.builder().id(UUID.randomUUID()).body("approved body").build();
         FeedbackDispatch approved = dispatch(FeedbackDispatchState.PENDING, feedback.getId());
         when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
                 .thenReturn(Optional.of(approved));
@@ -624,8 +623,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(withoutInlineNotes(sent)));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
         when(policy.evaluateIssue(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(
-                        new de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue()));
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(new Issue()));
         when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
         when(channel.postSummary(any(), any())).thenReturn(new SummaryHandle("gid://gitlab/Note/5"));
 

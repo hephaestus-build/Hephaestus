@@ -150,7 +150,7 @@ public class GitHubPullRequestReviewSyncService {
      * Note: When called from GitHubPullRequestSyncService, the first batch of reviews
      * (up to 10) has already been processed inline. This method will re-process them
      * (idempotent update) and fetch any remaining reviews. For better efficiency,
-     * consider using {@link #syncRemainingReviews(Long, PullRequest, String)} with
+     * consider using {@link #syncRemainingReviews(Long, PullRequest, String, int)} with
      * a starting cursor.
      */
     public int syncForPullRequest(Long scopeId, PullRequest pullRequest) {

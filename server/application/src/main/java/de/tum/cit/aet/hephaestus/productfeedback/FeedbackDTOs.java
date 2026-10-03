@@ -1,8 +1,16 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -30,6 +38,9 @@ final class FeedbackDTOs {
         NPS
     }
 
+    /**
+     * @param allowOther a choice question also takes one free-text answer; false when a stored question omits it
+     */
     record QuestionDTO(
             @NotBlank @Size(max = 80) @Pattern(regexp = "[A-Za-z0-9_-]+") @NonNull
             String id,
@@ -37,9 +48,8 @@ final class FeedbackDTOs {
             @NotBlank @Size(max = 300) @NonNull String prompt,
             @NotNull @NonNull QuestionType type,
             @NotNull @Size(max = 20) @NonNull List<@NotBlank @Size(max = 200) String> options,
-            @NonNull boolean required,
-            /** A choice question may also take one free-text answer; surveys stored before the flag existed omit it. */
-            @NonNull boolean allowOther,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean required,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean allowOther,
             @Size(max = 60) @Nullable String lowLabel,
             @Size(max = 60) @Nullable String highLabel) {}
 
@@ -60,7 +70,6 @@ final class FeedbackDTOs {
             @Nullable Instant endsAt) {
         @AssertTrue(message = "endsAt must be after startsAt")
         @Schema(hidden = true)
-        @SuppressWarnings("PMD.UnusedPrivateMethod")
         private boolean isEndAfterStart() {
             return endsAt == null || endsAt.isAfter(startsAt);
         }
@@ -71,61 +80,70 @@ final class FeedbackDTOs {
             @NotBlank @Size(max = 500) @NonNull String description,
             @NotNull @NonNull Instant startsAt,
             @Nullable Instant endsAt,
-            @NonNull boolean active) {
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean active) {
         @AssertTrue(message = "endsAt must be after startsAt")
         @Schema(hidden = true)
-        @SuppressWarnings("PMD.UnusedPrivateMethod")
         private boolean isEndAfterStart() {
             return endsAt == null || endsAt.isAfter(startsAt);
         }
     }
 
+    /**
+     * @param researchOrganization the organisation a research survey was published for; absent for a product survey
+     */
     record SurveyDTO(
             @NonNull UUID id,
             @NonNull String title,
             @NonNull String description,
             Survey.@NonNull Purpose purpose,
-            /** The organisation a research survey was published for; absent for a product survey. */
             @Nullable String researchOrganization,
             @NonNull List<QuestionDTO> questions,
             @Nullable FeedbackWorkspaceRefDTO workspace,
             @NonNull Instant startsAt,
             @Nullable Instant endsAt,
-            @NonNull boolean active,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean active,
             @Nullable FeedbackAccountRefDTO createdBy,
             @NonNull Instant createdAt,
             @NonNull ParticipationCountsDTO participation) {}
 
+    /**
+     * @param invited every account shown the invitation, including those who then responded or declined
+     */
     record ParticipationCountsDTO(
-            /** Every account shown the invitation, including those who then responded or declined. */
-            @NonNull long invited,
-            @NonNull long responded,
-            @NonNull long declined) {}
+            @Schema(requiredMode = RequiredMode.REQUIRED) long invited,
+            @Schema(requiredMode = RequiredMode.REQUIRED) long responded,
+            @Schema(requiredMode = RequiredMode.REQUIRED) long declined) {}
 
+    /**
+     * @param researchOrganization set for a research survey: the organisation whose study the answers join
+     * @param seen the account has been shown this invitation; the webapp nudges only while false
+     */
     record SurveyInvitationDTO(
             @NonNull UUID id,
             @NonNull String title,
             @NonNull String description,
             Survey.@NonNull Purpose purpose,
-            /** Set for a research survey: the organisation whose study the answers join. */
             @Nullable String researchOrganization,
             @NonNull List<QuestionDTO> questions,
             @Nullable Instant endsAt,
-            /** The account has been shown this invitation; the webapp nudges only while false. */
-            @NonNull boolean seen) {}
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean seen) {}
 
     record SubmitSurveyDTO(@NotNull @Size(max = 20) @NonNull List<@NotNull @Valid AnswerDTO> answers) {}
 
-    record OptionCountDTO(@NonNull String value, @NonNull long count) {}
+    record OptionCountDTO(
+            @NonNull String value,
+            @Schema(requiredMode = RequiredMode.REQUIRED) long count) {}
 
+    /**
+     * @param other responses whose choices include a free-text answer; present for choice questions only
+     * @param score Net Promoter Score, −100…100, for an NPS question
+     */
     record QuestionSummaryDTO(
             @NonNull String questionId,
-            @NonNull long answered,
+            @Schema(requiredMode = RequiredMode.REQUIRED) long answered,
             @NonNull List<OptionCountDTO> counts,
-            /** Responses whose choices include a free-text answer; present for choice questions only. */
             @Nullable Long other,
             @Nullable Double average,
-            /** Net Promoter Score, −100…100, for {@link QuestionType#NPS}. */
             @Nullable Integer score) {}
 
     record SurveySummaryDTO(
@@ -150,7 +168,8 @@ final class FeedbackDTOs {
             @Size(max = 500) @Pattern(regexp = "[^\\p{Cc}]*") @Nullable
             String userAgent) {}
 
-    record FeedbackTriageDTO(@NonNull boolean resolved) {}
+    record FeedbackTriageDTO(
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean resolved) {}
 
     enum FeedbackFilter {
         OPEN,

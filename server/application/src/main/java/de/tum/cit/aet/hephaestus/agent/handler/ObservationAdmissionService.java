@@ -127,7 +127,7 @@ public class ObservationAdmissionService {
             return Objects.requireNonNull(transactions.execute(status -> {
                 AgentJob job = ownedJob(identity);
                 if (!digest.equals(admissionDigest(job))) throw new AdmissionConflictException();
-                return response(job, digest, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
+                return response(digest, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
             }));
         }
         PreparedObservations prepared;
@@ -162,7 +162,7 @@ public class ObservationAdmissionService {
                     jobs.discardRetiredArtifactInventory(
                             job.getId(), identity.workspaceId(), identity.attempt(), identity.workerId());
                 }
-                return response(job, digest, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
+                return response(digest, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
             }));
         } catch (ObservationsRefusedException refusal) {
             // The publish transaction rolled back before this separate refusal write.
@@ -235,7 +235,7 @@ public class ObservationAdmissionService {
         }
     }
 
-    private ObjectNode response(AgentJob job, String digest, List<Observation> admitted) {
+    private ObjectNode response(String digest, List<Observation> admitted) {
         ObjectNode root = mapper.createObjectNode();
         root.put("schemaVersion", 1);
         root.put("admissionDigest", digest);

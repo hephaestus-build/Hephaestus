@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -210,7 +211,7 @@ class InAppFeedbackPreparerTest extends BaseUnitTest {
 
     private List<Feedback> captureSaved() {
         ArgumentCaptor<Feedback> captor = ArgumentCaptor.forClass(Feedback.class);
-        verify(feedbackRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+        verify(feedbackRepository, atLeastOnce()).save(captor.capture());
         return captor.getAllValues();
     }
 

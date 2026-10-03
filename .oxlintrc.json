@@ -275,8 +275,16 @@
 		"typescript/strict-boolean-expressions": "error",
 		"typescript/prefer-nullish-coalescing": "error",
 		// A `switch` over a union names every member; a `default` does not stand in for the ones it
-		// leaves out, which is what makes `default-case` (above) wrong here.
-		"typescript/switch-exhaustiveness-check": "error",
+		// leaves out, which is what makes `default-case` (above) wrong here. Over a `string` or a
+		// `number` there are no members to name, so there the `default` is required.
+		"typescript/switch-exhaustiveness-check": ["error", { "requireDefaultForNonUnion": true }],
+		// `${value}` with `value` possibly `undefined` prints the word "undefined" into a label, a URL
+		// or a log line; with `value` typed `any` it prints whatever arrived. Numbers, booleans and
+		// regexes keep their defaults: they print what they are.
+		"typescript/restrict-template-expressions": [
+			"error",
+			{ "allowNullish": false, "allowAny": false }
+		],
 		// TS2366 and the declared return type already govern every report — an effect returning a
 		// cleanup on one path, a switch exhaustive over a union — and the rule adds a stylistic "spell
 		// it `return undefined`" to code TypeScript has accepted.
@@ -341,6 +349,10 @@
 		// A `reduce` is a loop whose accumulator is hidden in a parameter; the loop reads.
 		"unicorn/no-array-reduce": "error",
 		"unicorn/no-array-method-this-argument": "error",
+		// `.filter(isDefined)` is how a type guard narrows an array, and TypeScript already checks a
+		// referenced callback against `(value, index, array)`; the `.map(parseInt)` case it exists for
+		// is the only one left, and the wrapper it demands everywhere costs more than that.
+		"unicorn/no-array-callback-reference": "off",
 		"unicorn/prefer-array-flat": "error",
 		"unicorn/prefer-array-flat-map": "error",
 		"unicorn/prefer-array-some": "error",
@@ -459,6 +471,9 @@
 		"import/export": "error",
 		"import/named": "error",
 		"no-unreachable-loop": "error",
+		// A value assigned and overwritten before anyone reads it is a branch that does not do what
+		// its author thought.
+		"no-useless-assignment": "error",
 
 		// -- Files -----------------------------------------------------------------------------------
 		// The SPA adds PascalCase for a file that exports a component.
@@ -467,6 +482,11 @@
 	},
 
 	"overrides": [
+		{
+			// A test that asserts a `javascript:` URL is rejected has to name one.
+			"files": ["**/*.test.ts", "**/*.test.tsx"],
+			"rules": { "no-script-url": "off" }
+		},
 		{
 			// Java source sets split resources across `src/test/resources` and `src/main/resources`, so a
 			// spec reaches its subject across that boundary and no alias spans it.

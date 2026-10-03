@@ -374,7 +374,7 @@ public class GitHubProjectItemFieldValueSyncService {
             ClassificationResult classification, String phase, String scopeLabel, Object scopeValue, int retryAttempt) {
         Category category = classification.category();
 
-        switch (category) {
+        return switch (category) {
             case RETRYABLE -> {
                 if (retryAttempt < MAX_RETRY_ATTEMPTS) {
                     log.warn(
@@ -388,9 +388,9 @@ public class GitHubProjectItemFieldValueSyncService {
                         ExponentialBackoff.sleep(retryAttempt + 1);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        return false;
+                        yield false;
                     }
-                    return true;
+                    yield true;
                 }
                 log.warn(
                         "Aborting {} after {} retries: {}={}, error={}",
@@ -399,7 +399,7 @@ public class GitHubProjectItemFieldValueSyncService {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             case RATE_LIMITED -> {
                 if (retryAttempt < MAX_RETRY_ATTEMPTS && classification.suggestedWait() != null) {
@@ -410,9 +410,9 @@ public class GitHubProjectItemFieldValueSyncService {
                         Thread.sleep(waitMs);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        return false;
+                        yield false;
                     }
-                    return true;
+                    yield true;
                 }
                 log.warn(
                         "Aborting {} due to rate limit: {}={}, error={}",
@@ -420,7 +420,7 @@ public class GitHubProjectItemFieldValueSyncService {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             case NOT_FOUND -> {
                 log.warn(
@@ -429,7 +429,7 @@ public class GitHubProjectItemFieldValueSyncService {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             case AUTH_ERROR -> {
                 log.warn(
@@ -438,7 +438,7 @@ public class GitHubProjectItemFieldValueSyncService {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             case CLIENT_ERROR -> {
                 log.warn(
@@ -447,7 +447,7 @@ public class GitHubProjectItemFieldValueSyncService {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             default -> {
                 log.warn(
@@ -457,9 +457,9 @@ public class GitHubProjectItemFieldValueSyncService {
                         scopeValue,
                         category,
                         classification.message());
-                return false;
+                yield false;
             }
-        }
+        };
     }
 
     private boolean waitForRateLimitIfNeeded(Long scopeId, String phase, String scopeLabel, Object scopeValue) {

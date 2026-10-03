@@ -2,12 +2,13 @@ package de.tum.cit.aet.hephaestus.core.privacy.spi;
 
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /** Exact source registration, including providers that have never authenticated an account. */
 public record PersonSourceNamespace(String providerType, String serverUrl) {
     public PersonSourceNamespace {
-        if (!java.util.Set.of("GITHUB", "GITLAB", "SLACK", "OUTLINE").contains(providerType)
+        if (!Set.of("GITHUB", "GITLAB", "SLACK", "OUTLINE").contains(providerType)
                 || ScmOrigin.of(serverUrl).isEmpty())
             throw new IllegalArgumentException("A source namespace requires its exact provider type and origin");
     }

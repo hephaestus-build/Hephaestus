@@ -1,8 +1,16 @@
 package de.tum.cit.aet.hephaestus.practices.adapter;
 
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonConversationCopySource;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -65,12 +73,12 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                     WHERE selected.id=p.id)
                 ORDER BY f.workspace_id,p.chat_message_id
                 """,
-                java.util.Map.of(
+                Map.of(
                         "keys",
                         mapper.writeValueAsString(selected.rows().stream()
                                 .map(PersonDataSelection.RowKey::columns)
                                 .toList())),
-                (rs, row) -> new ConversationCopy(rs.getLong(1), java.util.UUID.fromString(rs.getString(2))));
+                (rs, row) -> new ConversationCopy(rs.getLong(1), UUID.fromString(rs.getString(2))));
     }
 
     @Override

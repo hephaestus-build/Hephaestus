@@ -5,22 +5,41 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStateConflictException;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -39,7 +58,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     private final PersonDataCopyFence fence;
     private final ObjectProvider<AgentJobExecutor> executor;
     private final ObjectProvider<AgentJobLifecycleService> lifecycles;
-    private final ThreadLocal<ActiveCapture> active = new ThreadLocal<>();
+    private static final ThreadLocal<ActiveCapture> ACTIVE = new ThreadLocal<>();
     private @Nullable UUID localStoreId;
 
     public EvidenceFolderPersonDataCatalog(
@@ -62,7 +81,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     }
 
     public void beginCapture(AgentJob job) {
-        if (active.get() != null) throw new IllegalStateException("An evidence capture is already active");
+        if (ACTIVE.get() != null) throw new IllegalStateException("An evidence capture is already active");
         var admission = fence.capture();
         EvidenceFolderLease lease = null;
         PersonDataCopyRecorder.Capture provenance = null;
@@ -90,7 +109,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                     workspace);
             if (changed != 1) throw new IllegalStateException("This review attempt is no longer admitted");
             var capture = new ActiveCapture(job.getId(), workspace, copyId, receipt, provenance, lease, admission);
-            active.set(capture);
+            ACTIVE.set(capture);
             provenance.onChange(() -> recordProgress(capture));
         } catch (RuntimeException exception) {
             if (provenance != null) provenance.close();
@@ -133,12 +152,12 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         } finally {
             capture.provenance().close();
             capture.admission().close();
-            active.remove();
+            ACTIVE.remove();
         }
     }
 
     public void abortCapture(AgentJob job) {
-        ActiveCapture capture = active.get();
+        ActiveCapture capture = ACTIVE.get();
         if (capture == null) return;
         if (!capture.jobId().equals(job.getId())) throw new IllegalStateException("Wrong evidence capture owner");
         try {
@@ -151,12 +170,12 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
             capture.provenance().close();
             capture.lease().close();
             capture.admission().close();
-            active.remove();
+            ACTIVE.remove();
         }
     }
 
     private ActiveCapture requireCapture(AgentJob job) {
-        ActiveCapture capture = active.get();
+        ActiveCapture capture = ACTIVE.get();
         if (capture == null || !capture.jobId().equals(job.getId()))
             throw new IllegalStateException("Evidence capture has no exact provenance owner");
         return capture;
@@ -193,8 +212,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         if (changed != 1) throw new IllegalStateException("Evidence capture ownership changed");
     }
 
-    private boolean isSuppressed(
-            List<PersonCopyIdentity> identities, org.springframework.jdbc.core.JdbcOperations controls) {
+    private boolean isSuppressed(List<PersonCopyIdentity> identities, JdbcOperations controls) {
         if (identities.isEmpty()) return false;
         var blocked = controls.query(
                 """
@@ -205,7 +223,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                 (rs, row) -> new PersonCopyIdentity(
                         Objects.requireNonNull(rs.getString(1)), Objects.requireNonNull(rs.getString(2)),
                         Objects.requireNonNull(rs.getString(3)), rs.getString(4)),
-                new org.springframework.jdbc.support.SqlArrayValue(
+                new SqlArrayValue(
                         "text",
                         identities.stream()
                                 .map(PersonCopyIdentity::subject)
@@ -341,7 +359,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     public Set<UUID> jobsContaining(PersonScope person) {
         return selectCopies(person, false).rows().stream()
                 .map(key -> UUID.fromString(key.columns().get("job_id")))
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override
@@ -353,7 +371,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
             """,
                 (rs, row) -> new PersonDataSelection.RowKey(
                         Map.of("job_id", rs.getString(1), "copy_id", rs.getString(2), "workspace_id", rs.getString(3))),
-                new org.springframework.jdbc.support.SqlArrayValue("uuid", jobIds.toArray())));
+                new SqlArrayValue("uuid", jobIds.toArray())));
         requestRemoval(selection);
         awaitRemoval(selection);
     }
@@ -432,7 +450,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
             SELECT c.job_id,c.workspace_id,c.id FROM person_evidence_copy c
             WHERE c.store_id=CAST(? AS uuid) AND c.state IN ('ERASE_REQUESTED','PURGE_REQUESTED') ORDER BY c.job_id,c.id
             """,
-                (org.springframework.jdbc.core.RowCallbackHandler) rs -> {
+                (RowCallbackHandler) rs -> {
                     UUID jobId = Objects.requireNonNull(rs.getObject(1, UUID.class));
                     long workspaceId = rs.getLong(2);
                     String copyId = Objects.requireNonNull(rs.getString(3));
@@ -473,7 +491,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                         UUID.randomUUID().toString(),
                         StandardOpenOption.CREATE_NEW,
                         StandardOpenOption.WRITE);
-            } catch (java.nio.file.FileAlreadyExistsException existing) {
+            } catch (FileAlreadyExistsException existing) {
                 // The mounted store, not a transient connection, owns this receipt.
             }
             UUID result = UUID.fromString(Files.readString(identity).strip());

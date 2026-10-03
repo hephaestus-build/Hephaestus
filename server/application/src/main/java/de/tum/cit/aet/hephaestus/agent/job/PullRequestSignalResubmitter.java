@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionRequest;
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
@@ -18,7 +19,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
  * therefore paces the next attempt.
  */
 @Component
-@ConditionalOnProperty(prefix = "hephaestus.agent", name = "enabled", havingValue = "true")
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 public class PullRequestSignalResubmitter {
 
     private static final Logger log = LoggerFactory.getLogger(PullRequestSignalResubmitter.class);
@@ -114,8 +115,8 @@ public class PullRequestSignalResubmitter {
                 log.debug("Pending signal now skipped by practice gate: prId={}, reason={}", pr.getId(), skip.reason());
                 signalRecorder.markRefused(key, skip.resolvedSignalReason());
             }
-            case GateDecision.Detect detect -> {
-                if (MergeActorAdmission.awaitsMerger(manifests, pr, key.signalName(), detect.matchedPractices())) {
+            case GateDecision.Run run -> {
+                if (MergeActorAdmission.awaitsMerger(manifests, pr, key.signalName(), run.matchedPractices())) {
                     log.debug("Pending merge review still waits for its merger: prId={}", pr.getId());
                     signalRecorder.markRefused(key, SignalStateReason.MERGE_ACTOR_UNAVAILABLE);
                     return;
@@ -133,14 +134,14 @@ public class PullRequestSignalResubmitter {
                 }
                 if (reviewData != null) request = request.forSubmittedReview(reviewData);
                 agentJobService.submit(
-                        detect.workspace().getId(),
+                        run.workspace().getId(),
                         AgentJobType.PULL_REQUEST_REVIEW,
                         // Carried from the ledger row rather than defaulted: a re-offered signal keeps the
                         // population it was discovered for, so a campaign's budget-deferred tail cannot land
                         // in the live series hours after the campaign paused.
                         request.withOrigin(SignalOrigins.observationOriginOf(signal.getDiscoveredVia())),
                         key,
-                        detect);
+                        run);
             }
         }
     }

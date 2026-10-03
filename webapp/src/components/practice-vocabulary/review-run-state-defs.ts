@@ -14,7 +14,7 @@ export const REVIEW_RUN_STATE_DEFS: StatusDefs<ReviewRunState> = {
 		label: "Running",
 		icon: LoaderIcon,
 		badgeVariant: "secondary",
-		description: "The review is being run now; what it finds appears as it finishes.",
+		description: "The review is being run now. What it records appears as it finishes.",
 	},
 	COMPLETED: {
 		label: "Completed",
@@ -26,6 +26,6 @@ export const REVIEW_RUN_STATE_DEFS: StatusDefs<ReviewRunState> = {
 		label: "Failed",
 		icon: CircleAlertIcon,
 		badgeVariant: "destructive",
-		description: "The review stopped before it finished; what it recorded up to then still stands.",
+		description: "The review stopped before it finished. What it recorded up to then still stands.",
 	},
 };

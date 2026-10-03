@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.mentor.ChatMessage;
 import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -122,7 +123,7 @@ class MentorInFlightReaperTest extends BaseUnitTest {
         new ApplicationContextRunner()
                 .withBean(ChatMessageRepository.class, () -> chatMessageRepository)
                 .withBean(MentorInFlightAccounting.class, () -> mock(MentorInFlightAccounting.class))
-                .withBean(io.micrometer.core.instrument.MeterRegistry.class, () -> meterRegistry)
+                .withBean(MeterRegistry.class, () -> meterRegistry)
                 .withBean(MentorInFlightReaper.class)
                 .run(context -> assertThat(
                                 context.getBean(MentorInFlightReaper.class).window())

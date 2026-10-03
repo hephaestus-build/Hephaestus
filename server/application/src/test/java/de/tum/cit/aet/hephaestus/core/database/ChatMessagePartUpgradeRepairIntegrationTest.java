@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.postgresql.Driver;
 import org.springframework.jdbc.datasource.SimpleDriverDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
@@ -54,7 +55,7 @@ class ChatMessagePartUpgradeRepairIntegrationTest {
 
     private void runRepair() {
         DataSource dataSource = new SimpleDriverDataSource(
-                new org.postgresql.Driver(), postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+                new Driver(), postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
         SpringLiquibase liquibase = new SpringLiquibase();
         liquibase.setDataSource(dataSource);
         repair.postProcessBeforeInitialization(liquibase, "liquibase");

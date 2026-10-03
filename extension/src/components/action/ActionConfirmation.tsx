@@ -1,10 +1,10 @@
 import { CircleAlertIcon, CircleCheckIcon, CircleSlashIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { HephMark } from "~/components/brand/HephaestusLogo";
+import { HephMark } from "@/components/brand/HephaestusLogo";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "~/components/common/Button";
-import { Skeleton } from "~/components/common/Skeleton";
-import { Spinner } from "~/components/common/Spinner";
 import type { ActionOutcome, ActionPreview } from "~/shared/review-actions";
 import { workNoun } from "~/shared/work-noun";
 

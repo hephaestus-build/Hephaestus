@@ -27,7 +27,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
+import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
@@ -81,7 +84,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
                 usageRecorder,
                 objectMapper,
                 feedbackDispatchRepository,
-                new AgentJobTelemetry(new SimpleMeterRegistry(), io.micrometer.tracing.Tracer.NOOP));
+                new AgentJobTelemetry(new SimpleMeterRegistry(), Tracer.NOOP));
 
         workspace = new Workspace();
         workspace.setId(1L);
@@ -238,7 +241,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
         void cancellingAClaimedRunningJob_recordsAnUnpricedLedgerEntry() {
             AgentJob job = createJobWithStatus(AgentJobStatus.RUNNING);
             job.setWorkerId("worker-1");
-            job.setExecutionStartedAt(java.time.Instant.now());
+            job.setExecutionStartedAt(Instant.now());
             UUID jobId = job.getId();
 
             when(agentJobRepository.findByIdAndWorkspaceId(jobId, 1L)).thenReturn(Optional.of(job));
@@ -266,7 +269,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
         void cancellingALegacyClaimedJobWithoutAdmissionPrice_preservesCancellationAndRecordsUnpricedUsage() {
             AgentJob job = createJobWithStatus(AgentJobStatus.RUNNING);
             job.setWorkerId("worker-1");
-            job.setExecutionStartedAt(java.time.Instant.now());
+            job.setExecutionStartedAt(Instant.now());
             ConfigSnapshot legacySnapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper)
                     .withPriceSnapshot(null);
             job.setConfigSnapshot(legacySnapshot.toJson(objectMapper));
@@ -481,7 +484,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
                             jobId,
                             DeliveryStatus.DELIVERED,
                             "existing-comment-id",
-                            java.util.Set.of(DeliveryStatus.PENDING),
+                            Set.of(DeliveryStatus.PENDING),
                             CLAIMED_ATTEMPTS);
         }
 
@@ -518,7 +521,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
                             jobId,
                             DeliveryStatus.DELIVERED,
                             completedJob.getDeliveryCommentId(),
-                            java.util.Set.of(DeliveryStatus.PENDING),
+                            Set.of(DeliveryStatus.PENDING),
                             CLAIMED_ATTEMPTS);
         }
 

@@ -56,7 +56,7 @@ class SourceContractValueTest {
     }
 
     @Test
-    void shouldRejectLegacyContextIndexesAsJobFolderIndexs() {
+    void shouldRejectLegacyContextIndexWhenReadAsJobFolderIndex() {
         String legacy = """
             {"schemaVersion":1,"entries":[]}
             """;

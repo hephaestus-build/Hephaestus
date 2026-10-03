@@ -9,9 +9,14 @@ import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService.StateBinding;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -99,15 +104,12 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
 
     @Test
     void rejectsCorrectlySignedLegacyNumericLogin() throws Exception {
-        String payload = "42|GITHUB|" + java.time.Instant.now().getEpochSecond() + "|nonce|NDI";
-        var mac = javax.crypto.Mac.getInstance("HmacSHA256");
-        mac.init(new javax.crypto.spec.SecretKeySpec(
-                SECRET.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
-        var encoder = java.util.Base64.getUrlEncoder().withoutPadding();
-        String signature =
-                encoder.encodeToString(mac.doFinal(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-        String state =
-                encoder.encodeToString((payload + "|" + signature).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String payload = "42|GITHUB|" + Instant.now().getEpochSecond() + "|nonce|NDI";
+        var mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        var encoder = Base64.getUrlEncoder().withoutPadding();
+        String signature = encoder.encodeToString(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
+        String state = encoder.encodeToString((payload + "|" + signature).getBytes(StandardCharsets.UTF_8));
         var service = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
         assertThatThrownBy(() -> service.consume(state))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -297,7 +299,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
                 @Nullable String nonce,
                 long workspaceId,
                 IntegrationKind kind,
-                java.time.Instant issuedAt,
+                Instant issuedAt,
                 @Nullable Long actorAccountId) {
             if (nonce == null) return;
             consumed.putIfAbsent(nonce, false);

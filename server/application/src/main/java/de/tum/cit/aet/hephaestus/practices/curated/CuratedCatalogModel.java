@@ -14,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -128,10 +129,7 @@ final class CuratedCatalogModel {
     }
 
     static <D extends CatalogDefinition> CatalogEntry<D> requireEntry(
-            java.util.Optional<CatalogEntry<D>> entry,
-            String type,
-            String slug,
-            @Nullable EntityTagPrecondition precondition) {
+            Optional<CatalogEntry<D>> entry, String type, String slug, @Nullable EntityTagPrecondition precondition) {
         CatalogEntry<D> found = entry.orElseThrow(() -> new EntityNotFoundException(type, slug));
         if (precondition == null) {
             throw new CuratedPreconditionRequiredException();

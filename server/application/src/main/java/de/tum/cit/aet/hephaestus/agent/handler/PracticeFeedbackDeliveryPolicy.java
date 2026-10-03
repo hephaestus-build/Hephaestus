@@ -39,7 +39,10 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeDeliveryStatus;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewSettings;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -170,8 +173,7 @@ public class PracticeFeedbackDeliveryPolicy {
         Issue issue = integralId(metadata, "issue_id")
                 .flatMap(issueRepository::findByIdWithAuthorAndRepository)
                 .orElse(null);
-        Issue target = workspace != null
-                        && isEligibleTarget(issue, metadata, "issue_number", workspaceId)
+        Issue target = isEligibleTarget(issue, metadata, "issue_number", workspaceId)
                         && issue != null
                         && issue.getAuthor() != null
                         && (recipientUserId == null
@@ -187,8 +189,7 @@ public class PracticeFeedbackDeliveryPolicy {
                         : target.getReviewSnapshotId() == null
                                         || !target.getReviewSnapshotId()
                                                 .toString()
-                                                .equals(java.util.Objects.requireNonNull(
-                                                                metadata, "eligible issue has metadata")
+                                                .equals(Objects.requireNonNull(metadata, "eligible issue has metadata")
                                                         .path("review_snapshot_id")
                                                         .asString(""))
                                 ? FeedbackSuppressionReason.ISSUE_SNAPSHOT_CHANGED
@@ -196,10 +197,8 @@ public class PracticeFeedbackDeliveryPolicy {
         String repositoryName = issue == null || issue.getRepository() == null
                 ? null
                 : issue.getRepository().getNameWithOwner();
-        CoverageAssessment coverage = workspace == null
-                ? null
-                : coverageService.assess(
-                        workspace, repositoryName, null, issue == null ? null : issue.reviewSubject(), false);
+        CoverageAssessment coverage = coverageService.assess(
+                workspace, repositoryName, null, issue == null ? null : issue.reviewSubject(), false);
         Resolution resolution = resolve(
                 job,
                 surface,
@@ -297,17 +296,16 @@ public class PracticeFeedbackDeliveryPolicy {
                 .orElse(null);
         ReviewSubject subject = pullRequest == null ? null : pullRequestSubject(pullRequest, metadata);
         Long subjectUserId = subject == null ? null : subject.actorId();
-        PullRequest target = workspace != null
-                        && isEligibleTarget(pullRequest, metadata, "pr_number", workspaceId)
+        PullRequest target = isEligibleTarget(pullRequest, metadata, "pr_number", workspaceId)
                         && pullRequest != null
                         && subjectUserId != null
                         && (recipientUserId == null || recipientUserId.equals(subjectUserId))
                 ? pullRequest
                 : null;
-        PracticeReviewSettings settings = workspace == null ? null : workspace.getReviewSettings();
+        PracticeReviewSettings settings = workspace.getReviewSettings();
         // Merged work keeps its feedback on the developer's own surfaces: a retrospective is what the
         // merge-stage practices exist for. Only a comment on the merged work itself is the setting's call.
-        FeedbackSuppressionReason artifactRefusal = target == null || settings == null
+        FeedbackSuppressionReason artifactRefusal = target == null
                 ? FeedbackSuppressionReason.ARTIFACT_GONE
                 : target.getState() == Issue.State.CLOSED
                         ? FeedbackSuppressionReason.ARTIFACT_CLOSED
@@ -319,14 +317,8 @@ public class PracticeFeedbackDeliveryPolicy {
         String repositoryName = pullRequest == null || pullRequest.getRepository() == null
                 ? null
                 : pullRequest.getRepository().getNameWithOwner();
-        CoverageAssessment coverage = workspace == null
-                ? null
-                : coverageService.assess(
-                        workspace,
-                        repositoryName,
-                        pullRequest == null ? null : pullRequest.getBaseRefName(),
-                        subject,
-                        true);
+        CoverageAssessment coverage = coverageService.assess(
+                workspace, repositoryName, pullRequest == null ? null : pullRequest.getBaseRefName(), subject, true);
         Resolution resolution = resolve(
                 job,
                 surface,
@@ -516,7 +508,7 @@ public class PracticeFeedbackDeliveryPolicy {
 
     private boolean recipientAllowsDelivery(Issue artifact) {
         return accountPreferencesQuery.practiceFeedbackDeliveryEnabled(
-                java.util.Objects.requireNonNull(artifact.getAuthor(), "a target artifact always has an author")
+                Objects.requireNonNull(artifact.getAuthor(), "a target artifact always has an author")
                         .getId());
     }
 
@@ -624,7 +616,7 @@ public class PracticeFeedbackDeliveryPolicy {
         List<DeliveryPolicyFactsSnapshot.PracticeFact> facts = practices.stream()
                 .map(practice -> new DeliveryPolicyFactsSnapshot.PracticeFact(
                         practice.getSlug(), AutonomyResolver.effectiveAutonomyOf(practice, workspaceDefault)))
-                .sorted(java.util.Comparator.comparing(DeliveryPolicyFactsSnapshot.PracticeFact::slug))
+                .sorted(Comparator.comparing(DeliveryPolicyFactsSnapshot.PracticeFact::slug))
                 .toList();
         boolean authorized = !facts.isEmpty() && facts.size() == expected;
         if (approvedAttempt) {
@@ -693,11 +685,11 @@ public class PracticeFeedbackDeliveryPolicy {
             @Nullable Long evaluatedRevision,
             DeliveryPolicyFactsSnapshot facts) {}
 
-    private static java.util.Optional<Long> integralId(@Nullable JsonNode metadata, String key) {
+    private static Optional<Long> integralId(@Nullable JsonNode metadata, String key) {
         if (metadata == null || !metadata.path(key).isIntegralNumber()) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
-        return java.util.Optional.of(metadata.path(key).asLong());
+        return Optional.of(metadata.path(key).asLong());
     }
 
     private static long requireWorkspaceId(AgentJob job) {
@@ -714,11 +706,11 @@ public class PracticeFeedbackDeliveryPolicy {
         }
 
         public T target() {
-            return java.util.Objects.requireNonNull(artifact, "an allowed decision always carries its artifact");
+            return Objects.requireNonNull(artifact, "an allowed decision always carries its artifact");
         }
 
         public FeedbackSuppressionReason refusal() {
-            return java.util.Objects.requireNonNull(suppressionReason, "a suppressed decision always names its reason");
+            return Objects.requireNonNull(suppressionReason, "a suppressed decision always names its reason");
         }
 
         static <T> Decision<T> suppressed(FeedbackSuppressionReason reason) {
@@ -738,7 +730,7 @@ public class PracticeFeedbackDeliveryPolicy {
     public record DeliveryDecision(
             boolean allowed, @Nullable FeedbackSuppressionReason suppressionReason) {
         public FeedbackSuppressionReason refusal() {
-            return java.util.Objects.requireNonNull(suppressionReason, "a suppressed decision always names its reason");
+            return Objects.requireNonNull(suppressionReason, "a suppressed decision always names its reason");
         }
     }
 }

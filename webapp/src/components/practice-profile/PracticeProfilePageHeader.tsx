@@ -5,6 +5,7 @@ import { cn } from "cn";
 import type { ReviewRunRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { statusToneClass } from "@/components/common/status-def";
+import { useNow } from "@/components/common/use-now";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { countsTogether } from "@/components/practice-vocabulary/feedback-text";
 import { REVIEW_RUN_STATE_DEFS } from "@/components/practice-vocabulary/review-run-state-defs";
@@ -102,6 +103,7 @@ interface LatestReviewChipProps {
  * says so in words; its icon stands still, as every status icon does.
  */
 function LatestReviewChip({ run }: LatestReviewChipProps) {
+	const today = new Date(useNow());
 	if (run === undefined) {
 		return (
 			<Badge variant="muted">
@@ -127,7 +129,7 @@ function LatestReviewChip({ run }: LatestReviewChipProps) {
 			<span className="font-semibold">Latest review</span>
 			{at && (
 				<time dateTime={at.toISOString()} className="font-normal text-muted-foreground">
-					{formatDayTime(at)}
+					{formatDayTime(at, today)}
 				</time>
 			)}
 			<ClauseDot />

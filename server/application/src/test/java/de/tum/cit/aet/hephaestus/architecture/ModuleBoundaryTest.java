@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.*;
-import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.*;
-import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.*;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.BASE_PACKAGE;
+import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.beFinalOrHaveOnlyPrivateConstructors;
+import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.beImmutable;
 
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -17,7 +19,7 @@ import org.springframework.data.repository.Repository;
  *
  * <h2>Architecture: Modular Monolith with Multi-Provider Support</h2>
  * <ul>
- *   <li><b>integration.scm</b> - Shared kernel for git provider data sync (GitHub now, GitLab coming)</li>
+ *   <li><b>integration.scm</b> - Shared kernel for git provider data sync (GitHub and GitLab)</li>
  *   <li><b>workspace</b> - Cross-cutting context (multi-tenancy)</li>
  *   <li><b>Feature modules</b> - activity, mentor, practices depend on both</li>
  *   <li><b>Provider subpackages</b> - github/ and (future) gitlab/ isolate provider-specific logic</li>
@@ -35,8 +37,6 @@ import org.springframework.data.repository.Repository;
  */
 @DisplayName("Module Boundaries")
 class ModuleBoundaryTest extends HephaestusArchitectureTest {
-
-    // SPI (SERVICE PROVIDER INTERFACE) PATTERN
 
     @Nested
     class SpiPatternTests {
@@ -117,8 +117,6 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
             rule.check(classes);
         }
     }
-
-    // GITPROVIDER BOUNDED CONTEXT ISOLATION
 
     @Nested
     @DisplayName("Gitprovider Bounded Context")
@@ -202,8 +200,6 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
         }
     }
 
-    // DOMAIN EVENT PATTERNS
-
     @Nested
     class DomainEventPatternTests {
 
@@ -234,8 +230,6 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
         }
     }
 
-    // UTILITY CLASS PATTERNS
-
     @Nested
     class UtilityClassPatternTests {
 
@@ -260,8 +254,6 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
         }
     }
 
-    // DTO PATTERNS
-
     @Nested
     @DisplayName("DTO Patterns")
     class DtoPatternTests {
@@ -285,8 +277,6 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
             rule.check(classes);
         }
     }
-
-    // REPOSITORY PATTERNS
 
     @Nested
     @DisplayName("Repository Patterns")
@@ -316,8 +306,6 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
         }
     }
 
-    // EXCEPTION PATTERNS
-
     @Nested
     @DisplayName("Exception Patterns")
     class ExceptionPatternTests {
@@ -341,8 +329,6 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
             rule.check(classes);
         }
     }
-
-    // SPI BYPASS DETECTION
 
     @Nested
     class SpiBypassDetectionTests {
@@ -450,8 +436,6 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
             rule.check(classes);
         }
     }
-
-    // FEATURE MODULE BOUNDARIES
 
     @Nested
     class FeatureModuleBoundaryTests {

@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Unit tests for {@link GraphQlConnectionOverflowDetector}.
  *
- * <p>Pins the level-calibration contract from issue #1313: a count gap that remains after a
+ * <p>Pins the level-calibration contract: a count gap that remains after a
  * pagination loop completed normally is benign (DEBUG, no WARN), and WARN is reserved for genuine
  * terminal incompleteness (the loop stopped early, or a single-page embedded connection overflowed).
  */

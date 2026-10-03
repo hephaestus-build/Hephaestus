@@ -8,6 +8,9 @@ import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.IntStream;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;
@@ -29,7 +32,7 @@ class PracticeOutcomeCutoverMigrationTest {
     void shouldPreservePopulatedHistoryAndEnforceTheFlatContract() throws Exception {
         try (Liquibase liquibase = liquibase()) {
             var pending = liquibase.listUnrunChangeSets(new Contexts("prod"), new LabelExpression());
-            int index = java.util.stream.IntStream.range(0, pending.size())
+            int index = IntStream.range(0, pending.size())
                     .filter(i -> pending.get(i).getFilePath().endsWith(CUTOVER))
                     .findFirst()
                     .orElseThrow();
@@ -79,7 +82,7 @@ class PracticeOutcomeCutoverMigrationTest {
                                 "SELECT (signals IS NULL AND evidence_requirements IS NULL AND review_when IS NULL AND subject IS NULL AND review_rule_fingerprint IS NULL)::text FROM practice_revision WHERE id=991304"))
                 .isEqualTo("true");
         execute("UPDATE practice_revision SET review_rule_fingerprint=NULL WHERE id=991302");
-        for (String mutation : java.util.List.of("review_rule_fingerprint='v5:' || repeat('b',64)", "id=991303")) {
+        for (String mutation : List.of("review_rule_fingerprint='v5:' || repeat('b',64)", "id=991303")) {
             assertThatThrownBy(() -> execute("UPDATE practice_revision SET " + mutation + " WHERE id=991302"))
                     .isInstanceOfSatisfying(
                             SQLException.class,
@@ -191,7 +194,7 @@ class PracticeOutcomeCutoverMigrationTest {
                 var statement = connection.createStatement();
                 var rows = statement.executeQuery(sql)) {
             assertThat(rows.next()).isTrue();
-            return java.util.Objects.requireNonNull(rows.getString(1));
+            return Objects.requireNonNull(rows.getString(1));
         }
     }
 

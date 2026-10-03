@@ -39,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
  * exactly one origin.
  *
  * <p>Each withheld observation gets a SUPPRESSED ledger row rather than being dropped in silence, so a later
- * evaluation can tell a deliberate quiet from a detection miss. Writing the row is best-effort: a ledger
+ * evaluation can tell a deliberate quiet from a review that missed it. Writing the row is best-effort: a ledger
  * failure never blocks the delivery of the observations that survived.
  *
  * <p>A slug the catalogue read does not resolve is kept when only autonomy would have withheld it — it is

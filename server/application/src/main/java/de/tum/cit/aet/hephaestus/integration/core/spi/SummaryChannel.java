@@ -58,15 +58,6 @@ public interface SummaryChannel {
         return repoFullName + "#" + issueNumber;
     }
 
-    /**
-     * The posted summary's address on the work's own page, or null when this channel cannot address it.
-     *
-     * @param commentId the identifier this channel recorded for the posted summary
-     */
-    default @Nullable String summaryCommentUrl(String workUrl, String commentId) {
-        return null;
-    }
-
     record FeedbackTarget(
             IntegrationRef ref,
             String subjectExternalId,
@@ -87,8 +78,8 @@ public interface SummaryChannel {
         }
     }
 
-    record ExistingSummaryLookup(Kind kind, @Nullable SummaryHandle handle) {
-        public enum Kind {
+    record ExistingSummaryLookup(Presence kind, @Nullable SummaryHandle handle) {
+        public enum Presence {
             FOUND,
             ABSENT,
             UNKNOWN,
@@ -96,15 +87,15 @@ public interface SummaryChannel {
 
         public static ExistingSummaryLookup found(SummaryHandle handle) {
             Objects.requireNonNull(handle, "FOUND outcome requires a SummaryHandle");
-            return new ExistingSummaryLookup(Kind.FOUND, handle);
+            return new ExistingSummaryLookup(Presence.FOUND, handle);
         }
 
         public static ExistingSummaryLookup absent() {
-            return new ExistingSummaryLookup(Kind.ABSENT, null);
+            return new ExistingSummaryLookup(Presence.ABSENT, null);
         }
 
         public static ExistingSummaryLookup unknown() {
-            return new ExistingSummaryLookup(Kind.UNKNOWN, null);
+            return new ExistingSummaryLookup(Presence.UNKNOWN, null);
         }
     }
 

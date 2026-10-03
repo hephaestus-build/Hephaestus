@@ -37,8 +37,10 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,10 +75,8 @@ public class WorkerControlClient {
 
     private final LinkedBlockingQueue<QueuedFrame> outbound = new LinkedBlockingQueue<>(OUTBOUND_QUEUE_CAPACITY);
     private final LinkedBlockingQueue<InboundFrame> inbound = new LinkedBlockingQueue<>(INBOUND_QUEUE_CAPACITY);
-    private final java.util.concurrent.atomic.AtomicInteger outboundBytes =
-            new java.util.concurrent.atomic.AtomicInteger();
-    private final java.util.concurrent.atomic.AtomicInteger inboundBytes =
-            new java.util.concurrent.atomic.AtomicInteger();
+    private final AtomicInteger outboundBytes = new AtomicInteger();
+    private final AtomicInteger inboundBytes = new AtomicInteger();
     private final AtomicReference<@Nullable WebSocket> webSocket = new AtomicReference<>();
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private final AtomicReference<Instant> lastInboundAt = new AtomicReference<>(Instant.EPOCH);
@@ -96,10 +96,10 @@ public class WorkerControlClient {
     private volatile @Nullable BiConsumer<UUID, String> cancelHandler;
 
     private volatile String controlSessionId = "";
-    private volatile java.util.function.Consumer<MentorSessionCommand> mentorHandler = ignored -> {};
+    private volatile Consumer<MentorSessionCommand> mentorHandler = ignored -> {};
     private volatile Runnable mentorDisconnectHandler = () -> {};
 
-    public void setMentorHandlers(java.util.function.Consumer<MentorSessionCommand> handler, Runnable disconnected) {
+    public void setMentorHandlers(Consumer<MentorSessionCommand> handler, Runnable disconnected) {
         mentorHandler = handler;
         mentorDisconnectHandler = disconnected;
     }
@@ -234,8 +234,13 @@ public class WorkerControlClient {
                 return;
             }
             inboundBytes.addAndGet(-frame.bytes());
-            if (webSocket.get() == frame.source()) handleInbound(frame.frame());
+            if (isCurrent(frame.source())) handleInbound(frame.frame());
         }
+    }
+
+    @SuppressWarnings("ReferenceEquality") // connection identity, the same comparison webSocket.compareAndSet makes
+    private boolean isCurrent(WebSocket candidate) {
+        return webSocket.get() == candidate;
     }
 
     /** Package-private: the inbound frame decision is the unit under test. */
@@ -429,12 +434,17 @@ public class WorkerControlClient {
     private void forceReconnect(String reason) {
         WebSocket ws = webSocket.getAndSet(null);
         onTransportLost();
-        if (ws != null) {
-            try {
-                ws.sendClose(WebSocket.NORMAL_CLOSURE, reason);
-            } catch (RuntimeException ignored) {
-            }
-        }
+        if (ws != null) close(ws, reason);
+    }
+
+    /** Package-private: whether a replaced transport is left open is the unit under test. */
+    static void close(WebSocket ws, String reason) {
+        ws.sendClose(WebSocket.NORMAL_CLOSURE, reason).exceptionally(failure -> {
+            // The close was refused (a reason over 123 UTF-8 bytes, which a hub-requested reason can be, or
+            // output already closed) or failed in transit; abort so the replaced transport does not linger.
+            ws.abort();
+            return ws;
+        });
     }
 
     private void onTransportLost() {
@@ -464,7 +474,7 @@ public class WorkerControlClient {
         }
     }
 
-    private static boolean reserveBytes(java.util.concurrent.atomic.AtomicInteger counter, int bytes) {
+    private static boolean reserveBytes(AtomicInteger counter, int bytes) {
         while (true) {
             int current = counter.get();
             if (bytes > QUEUE_BYTE_BUDGET - current) return false;
@@ -488,7 +498,7 @@ public class WorkerControlClient {
 
         @Override
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-            if (WorkerControlClient.this.webSocket.get() != webSocket) return CompletableFuture.completedFuture(null);
+            if (!isCurrent(webSocket)) return CompletableFuture.completedFuture(null);
             if (partial.length() + data.length() > FrameCodec.MAX_FRAME_BYTES) {
                 partial.setLength(0);
                 forceReconnect("oversized-frame");

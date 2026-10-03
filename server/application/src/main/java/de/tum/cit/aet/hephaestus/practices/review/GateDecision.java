@@ -10,18 +10,18 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Result of the practice review detection gate evaluation.
+ * Result of the practice review gate evaluation.
  * <p>
  * Uses a sealed interface so callers must handle both outcomes, and each
  * variant carries only the data relevant to that outcome:
  * <ul>
- *   <li>{@link Detect}: the gate passed — carries the resolved workspace
+ *   <li>{@link Run}: the gate passed — carries the resolved workspace
  *       and matched practices so downstream consumers don't need to re-query</li>
  *   <li>{@link Skip}: the gate rejected — carries a human-readable reason
  *       for diagnostics and logging</li>
  * </ul>
  */
-public sealed interface GateDecision permits GateDecision.Detect, GateDecision.Skip {
+public sealed interface GateDecision permits GateDecision.Run, GateDecision.Skip {
     /**
      * The gate passed: the practice review agent should run.
      *
@@ -30,7 +30,7 @@ public sealed interface GateDecision permits GateDecision.Detect, GateDecision.S
      * @param recheckedPractices slugs of the matched practices the signal does not occasion, admitted because
      *     their current word on this work is a problem the work may since have answered
      */
-    record Detect(
+    record Run(
             Workspace workspace,
             List<Practice> matchedPractices,
             long rolloutRevision,
@@ -38,14 +38,14 @@ public sealed interface GateDecision permits GateDecision.Detect, GateDecision.S
             Set<String> recheckedPractices,
             Map<String, String> reviewState)
             implements GateDecision {
-        public Detect {
+        public Run {
             Objects.requireNonNull(workspace, "workspace must not be null");
             matchedPractices = List.copyOf(matchedPractices);
             recheckedPractices = Set.copyOf(recheckedPractices);
             reviewState = Map.copyOf(reviewState);
         }
 
-        public Detect(
+        public Run(
                 Workspace workspace,
                 List<Practice> matchedPractices,
                 long rolloutRevision,
@@ -54,7 +54,7 @@ public sealed interface GateDecision permits GateDecision.Detect, GateDecision.S
             this(workspace, matchedPractices, rolloutRevision, triggerMode, recheckedPractices, Map.of());
         }
 
-        public Detect(
+        public Run(
                 Workspace workspace, List<Practice> matchedPractices, long rolloutRevision, TriggerMode triggerMode) {
             this(workspace, matchedPractices, rolloutRevision, triggerMode, Set.of(), Map.of());
         }

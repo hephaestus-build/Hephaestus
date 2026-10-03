@@ -294,8 +294,8 @@ export function verifyReleaseEvidence(
 		throw new Error("release manifest must name the release it evidences");
 	}
 	// The evidence may belong to a release published under a pre-transfer namespace and
-	// signed by the pre-transfer repository, both of which it keeps forever (issue
-	// #1599) — resolve namespace *and* signer per version, never from the run context.
+	// signed by the pre-transfer repository, both of which it keeps forever — resolve
+	// namespace *and* signer per version, never from the run context.
 	const { release } = manifestValue;
 	const manifest = validateManifest(
 		manifestValue,
@@ -379,7 +379,7 @@ function readJsonFromCommand(name: string, args: string[]): unknown {
 
 function verifyIndexSignatures(manifest: Manifest, release: string): void {
 	// The image indexes are signed by reusable-docker-build.yml in the repository that
-	// built them, which for a pre-transfer release is the pre-transfer slug (#1599).
+	// built them, which for a pre-transfer release is the pre-transfer slug.
 	const repository = releaseRepository(release, process.env);
 	const owner = releaseOwner(release, process.env);
 	const indexes = new Map(

@@ -35,6 +35,7 @@ import com.github.dockerjava.api.exception.DockerException;
 import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.exception.NotModifiedException;
 import com.github.dockerjava.api.model.Container;
+import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.Network;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
@@ -48,7 +49,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
 class DockerClientOperationsTest extends BaseUnitTest {
@@ -135,8 +138,9 @@ class DockerClientOperationsTest extends BaseUnitTest {
     @Nested
     class ConnectToNetwork {
 
-        @Test
-        void shouldStripCidrSuffix() {
+        @ParameterizedTest
+        @CsvSource({"172.18.0.2/16, 172.18.0.2", "172.18.0.5, 172.18.0.5"})
+        void shouldReturnTheIpWithoutItsCidrSuffix(String reported, String expected) {
             ConnectToNetworkCmd connectCmd = mock(ConnectToNetworkCmd.class);
             when(dockerClient.connectToNetworkCmd()).thenReturn(connectCmd);
             when(connectCmd.withNetworkId("net-1")).thenReturn(connectCmd);
@@ -150,33 +154,11 @@ class DockerClientOperationsTest extends BaseUnitTest {
             Network.ContainerNetworkConfig containerConfig = mock(Network.ContainerNetworkConfig.class);
             when(inspectCmd.exec()).thenReturn(network);
             when(network.getContainers()).thenReturn(Map.of("ctr-1", containerConfig));
-            when(containerConfig.getIpv4Address()).thenReturn("172.18.0.2/16");
+            when(containerConfig.getIpv4Address()).thenReturn(reported);
 
             String ip = ops.connectToNetwork("net-1", "ctr-1");
 
-            assertThat(ip).isEqualTo("172.18.0.2");
-        }
-
-        @Test
-        void shouldReturnIpWithoutCidr() {
-            ConnectToNetworkCmd connectCmd = mock(ConnectToNetworkCmd.class);
-            when(dockerClient.connectToNetworkCmd()).thenReturn(connectCmd);
-            when(connectCmd.withNetworkId("net-1")).thenReturn(connectCmd);
-            when(connectCmd.withContainerId("ctr-1")).thenReturn(connectCmd);
-
-            InspectNetworkCmd inspectCmd = mock(InspectNetworkCmd.class);
-            when(dockerClient.inspectNetworkCmd()).thenReturn(inspectCmd);
-            when(inspectCmd.withNetworkId("net-1")).thenReturn(inspectCmd);
-
-            Network network = mock(Network.class);
-            Network.ContainerNetworkConfig containerConfig = mock(Network.ContainerNetworkConfig.class);
-            when(inspectCmd.exec()).thenReturn(network);
-            when(network.getContainers()).thenReturn(Map.of("ctr-1", containerConfig));
-            when(containerConfig.getIpv4Address()).thenReturn("172.18.0.5");
-
-            String ip = ops.connectToNetwork("net-1", "ctr-1");
-
-            assertThat(ip).isEqualTo("172.18.0.5");
+            assertThat(ip).isEqualTo(expected);
         }
 
         @Test
@@ -212,7 +194,6 @@ class DockerClientOperationsTest extends BaseUnitTest {
             when(cmd.withForce(true)).thenReturn(cmd);
             when(cmd.exec()).thenThrow(new NotFoundException("not found"));
 
-            // Should not throw
             ops.disconnectFromNetwork("net-1", "ctr-1");
         }
 
@@ -225,7 +206,6 @@ class DockerClientOperationsTest extends BaseUnitTest {
             when(cmd.withForce(true)).thenReturn(cmd);
             when(cmd.exec()).thenThrow(new NotModifiedException("already disconnected"));
 
-            // Should not throw
             ops.disconnectFromNetwork("net-1", "ctr-1");
         }
     }
@@ -239,7 +219,6 @@ class DockerClientOperationsTest extends BaseUnitTest {
             when(dockerClient.removeNetworkCmd("net-gone")).thenReturn(cmd);
             when(cmd.exec()).thenThrow(new NotFoundException("not found"));
 
-            // Should not throw
             ops.removeNetwork("net-gone");
         }
     }
@@ -255,7 +234,6 @@ class DockerClientOperationsTest extends BaseUnitTest {
             when(cmd.withTimeout(10)).thenReturn(cmd);
             when(cmd.exec()).thenThrow(new NotModifiedException("already stopped"));
 
-            // Should not throw
             ops.stopContainer("ctr-1", 10);
         }
 
@@ -283,7 +261,6 @@ class DockerClientOperationsTest extends BaseUnitTest {
             when(cmd.withRemoveVolumes(true)).thenReturn(cmd);
             when(cmd.exec()).thenThrow(new NotFoundException("not found"));
 
-            // Should not throw
             ops.removeContainer("ctr-gone", true);
         }
     }
@@ -415,7 +392,7 @@ class DockerClientOperationsTest extends BaseUnitTest {
             String id = ops.createContainer(spec);
 
             assertThat(id).isEqualTo("new-ctr");
-            var hostConfig = org.mockito.ArgumentCaptor.forClass(com.github.dockerjava.api.model.HostConfig.class);
+            var hostConfig = ArgumentCaptor.forClass(HostConfig.class);
             verify(cmd).withHostConfig(hostConfig.capture());
             assertThat(hostConfig.getValue().getNetworkMode()).isEqualTo("net-123");
             verify(cmd).withCmd(List.of("echo", "hello"));

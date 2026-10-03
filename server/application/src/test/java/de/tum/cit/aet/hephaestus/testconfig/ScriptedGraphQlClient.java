@@ -11,6 +11,7 @@ import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -33,7 +34,7 @@ public final class ScriptedGraphQlClient {
             if (!client.getMethod().getName().equals("documentName")) return RETURNS_DEFAULTS.answer(client);
             String document = client.getArgument(0);
             Map<String, @Nullable Object> variables = new HashMap<>();
-            return mock(HttpGraphQlClient.RequestSpec.class, spec -> switch (spec.getMethod()
+            return mock(GraphQlClient.RequestSpec.class, spec -> switch (spec.getMethod()
                     .getName()) {
                 case "variable" -> {
                     variables.put(spec.getArgument(0), spec.getArgument(1));

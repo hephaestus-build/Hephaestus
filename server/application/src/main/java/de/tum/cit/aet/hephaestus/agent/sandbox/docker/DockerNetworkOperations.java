@@ -32,7 +32,6 @@ interface DockerNetworkOperations {
     /** Disconnect a container from a network. No-op if already disconnected. */
     void disconnectFromNetwork(String networkId, String containerId);
 
-    /** Remove a network. */
     void removeNetwork(String networkId);
 
     /** List networks whose name starts with the given prefix. */

@@ -1,6 +1,10 @@
 package de.tum.cit.aet.hephaestus.workspace.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -57,8 +61,8 @@ class WorkspaceNatsSubscriptionProviderTest extends BaseUnitTest {
     }
 
     private void lenientReposAndOrg() {
-        org.mockito.Mockito.lenient().when(workspace.getAccountLogin()).thenReturn("acme");
-        org.mockito.Mockito.lenient().when(workspace.getRepositoriesToMonitor()).thenReturn(Set.of());
+        lenient().when(workspace.getAccountLogin()).thenReturn("acme");
+        lenient().when(workspace.getRepositoriesToMonitor()).thenReturn(Set.of());
     }
 
     private StreamSubscription streamNamed(NatsSubscriptionInfo info, String stream) {
@@ -70,7 +74,7 @@ class WorkspaceNatsSubscriptionProviderTest extends BaseUnitTest {
 
     @Test
     void scmConnectedWorkspaceEmitsTheScmStreamWithRepoAndOrgSubjects() {
-        RepositoryToMonitor repo = org.mockito.Mockito.mock(RepositoryToMonitor.class);
+        RepositoryToMonitor repo = mock(RepositoryToMonitor.class);
         when(repo.getNameWithOwner()).thenReturn("acme/app");
         when(workspace.getRepositoriesToMonitor()).thenReturn(Set.of(repo));
         when(workspaceScopeFilter.isRepositoryAllowed("acme/app")).thenReturn(true);
@@ -150,8 +154,7 @@ class WorkspaceNatsSubscriptionProviderTest extends BaseUnitTest {
 
         assertThat(info.hasSubscriptions()).isFalse();
         // The disabled arm must not even ask — no connection lookup on a dead code path.
-        org.mockito.Mockito.verify(connectionService, org.mockito.Mockito.never())
-                .findActiveOutlineConfig(WS);
+        verify(connectionService, never()).findActiveOutlineConfig(WS);
     }
 
     @Test
@@ -163,8 +166,7 @@ class WorkspaceNatsSubscriptionProviderTest extends BaseUnitTest {
         NatsSubscriptionInfo info = provider.getSubscriptionInfo(WS).orElseThrow();
 
         assertThat(info.hasSubscriptions()).isFalse();
-        org.mockito.Mockito.verify(connectionService, org.mockito.Mockito.never())
-                .findSlackConfig(WS);
+        verify(connectionService, never()).findSlackConfig(WS);
     }
 
     @Test

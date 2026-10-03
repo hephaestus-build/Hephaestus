@@ -101,8 +101,6 @@ public class RepositoryToMonitor {
                 : recentSyncError + "; " + historicalBackfillSyncError;
     }
 
-    // Issue Backfill Tracking
-
     /**
      * The highest issue number discovered in the repository for backfill tracking.
      * Set when issue backfill starts, used to know when issue backfill is complete.
@@ -115,8 +113,6 @@ public class RepositoryToMonitor {
      * When this reaches 0, issue backfill is complete.
      */
     private Integer issueBackfillCheckpoint;
-
-    // Pull Request Backfill Tracking
 
     /**
      * The highest pull request number discovered in the repository for backfill tracking.
@@ -158,8 +154,6 @@ public class RepositoryToMonitor {
     @JoinColumn(name = "workspace_id", nullable = false)
     @ToString.Exclude
     private @Nullable Workspace workspace;
-
-    // Backfill Status Helper Methods
 
     /**
      * Checks if issue backfill has been initialized (high water mark set).

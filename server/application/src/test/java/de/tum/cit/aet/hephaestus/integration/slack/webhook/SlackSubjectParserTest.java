@@ -13,7 +13,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * Parity with {@code GithubSubjectParserTest}/{@code GitlabSubjectParserTest}: pins the
+ * Parity with {@code GitHubSubjectParserTest}/{@code GitLabSubjectParserTest}: pins the
  * {@code slack.<team>.<channel>.<event>} → {@link EventTypeKey} contract and the malformed-subject
  * rejection arms of {@link SlackSubjectParser}.
  */

@@ -5,7 +5,7 @@
  * change the version*. A release that fails leaves the version consumed — the Version PR is merged
  * and the changesets it folded in are gone — so a decision keyed on the version commit can only be
  * retried by reverting that commit, which the changeset freeze rules block by construction and which
- * needed an administrator bypass all three times it was done (issues #1686, #1691, #1701). Keyed on
+ * needed an administrator bypass every time it was done. Keyed on
  * the version, the same release re-cuts from the next commit that carries the fix, which is how
  * everything else here recovers.
  *

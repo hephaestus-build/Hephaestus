@@ -5,5 +5,5 @@ public enum CatalogChangeKind {
     NONE,
     WORDING,
     PRESENTATION,
-    DETECTION,
+    REVIEW,
 }

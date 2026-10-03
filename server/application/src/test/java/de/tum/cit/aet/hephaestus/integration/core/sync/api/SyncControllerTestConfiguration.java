@@ -41,7 +41,7 @@ public class SyncControllerTestConfiguration {
                 taskExecutor,
                 List.of(driver.stateProvider()),
                 List.of(driver.runner()),
-                org.mockito.Mockito.mock(SyncTargetProvider.class));
+                mock(SyncTargetProvider.class));
     }
 
     public record SyncControllerTestDriver(ConnectionSyncStateProvider stateProvider, IntegrationSyncRunner runner) {}

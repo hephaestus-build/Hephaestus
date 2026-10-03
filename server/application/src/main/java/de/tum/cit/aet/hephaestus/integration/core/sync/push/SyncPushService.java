@@ -9,6 +9,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.nats.client.Connection;
 import io.nats.client.Dispatcher;
 import io.nats.client.Message;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -78,7 +79,7 @@ public class SyncPushService {
      * already connected by the time Spring finishes constructing it (its {@code @Bean} method blocks
      * on {@code Nats.connect}), so there is no readiness race to wait out here.
      */
-    @jakarta.annotation.PostConstruct
+    @PostConstruct
     void subscribeIfNatsAvailable() {
         Connection connection = natsConnectionProvider.getIfAvailable();
         if (connection == null) {

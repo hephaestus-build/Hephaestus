@@ -657,7 +657,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     @WithUser
     @DisplayName("feedback the work fell back on before the window is not a change inside it")
     void shouldNotReportAResetWhenTheWorkFellBackBeforeTheWindow() {
-        Feedback feedback = releaseNotesFeedbackWithTwoCleanPieces();
+        releaseNotesFeedbackWithTwoCleanPieces();
         // The problem is older than the previous run, so the window opens on a clean run already at nothing.
         Instant slipAt = FIRST_RUN_AT.minus(Duration.ofDays(1));
         AgentJob slipRun = persistPullRequestReview(workspace, 43, slipAt);

@@ -24,6 +24,8 @@ import java.sql.Statement;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.IntStream;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;
@@ -176,7 +178,7 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
                         rows.getString("name"),
                         signals,
                         requirements,
-                        java.util.Map.of(),
+                        Map.of(),
                         ActorRole.AUTHOR,
                         null,
                         rows.getString("criteria"),
@@ -196,7 +198,7 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
                         rows.getString("name"),
                         signals,
                         requirements,
-                        java.util.Map.of(),
+                        Map.of(),
                         ActorRole.AUTHOR,
                         null,
                         rows.getString("criteria"),
@@ -614,7 +616,7 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
     private static void updateThrough(String changeSetId) throws Exception {
         try (Liquibase liquibase = liquibase()) {
             List<ChangeSet> pending = liquibase.listUnrunChangeSets(contexts(), new LabelExpression());
-            int index = java.util.stream.IntStream.range(0, pending.size())
+            int index = IntStream.range(0, pending.size())
                     .filter(candidate -> pending.get(candidate).getId().equals(changeSetId))
                     .findFirst()
                     .orElseThrow();

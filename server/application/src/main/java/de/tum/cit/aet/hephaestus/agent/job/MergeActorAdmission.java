@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
@@ -29,9 +28,9 @@ final class MergeActorAdmission {
             IntegrationManifestRegistry manifests, PullRequest pr, SignalName signal, List<Practice> matchedPractices) {
         return signal.equals(ScmSignals.PULL_REQUEST_MERGED)
                 && pr.getMergedBy() == null
-                && pr.getProvider() instanceof IdentityProvider provider
+                && pr.getProvider() != null
                 && manifests
-                        .manifestFor(provider.kind())
+                        .manifestFor(pr.getProvider().kind())
                         .filter(manifest ->
                                 manifest.rolesNamedAfterTheOccasion().contains(ActorRole.MERGER))
                         .isPresent()

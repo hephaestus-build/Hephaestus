@@ -68,11 +68,11 @@ const WINDOWS = [
 /** Each one names what stopped it and the single thing that restarts it — never just the cause. */
 const PAUSE_EXPLANATIONS: Record<NonNullable<ReviewBackfillRun["pauseReason"]>, string> = {
 	BUDGET_EXHAUSTED:
-		"The monthly AI budget funding these reviews is used up. Nothing has been skipped — the backfill continues from where it stopped once the budget resets or the cap is raised.",
+		"The monthly AI budget funding these reviews is used up. Nothing has been skipped. The backfill continues from where it stopped once the budget resets or the cap is raised.",
 	REVIEW_MODEL_UNBOUND:
-		"This workspace has no review model that can run. Nothing has been skipped — the backfill continues once one is chosen under AI models.",
+		"This workspace has no review model that can run. Nothing has been skipped. The backfill continues once one is chosen under AI models.",
 	WORKSPACE_UNAVAILABLE:
-		"Practice reviews are off for this workspace, or the workspace is not active. Nothing has been skipped — the backfill continues once they are back on.",
+		"Practice reviews are off for this workspace, or the workspace is not active. Nothing has been skipped. The backfill continues once they are back on.",
 };
 
 const countOf = (count: number, artifactKind: string) =>
@@ -136,7 +136,7 @@ export function PracticeReviewBackfill({
 					<AlertCircle />
 					<AlertTitle>Backfills couldn’t be loaded</AlertTitle>
 					<AlertDescription>
-						<p>Any backfill already running is unaffected — this is only about showing it here.</p>
+						<p>Any backfill already running is unaffected. This is only about showing it here.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
 							Try again
 						</Button>
@@ -294,7 +294,7 @@ function ConfirmationSection({
 				<AlertCircle />
 				<AlertTitle>What a backfill does and does not do</AlertTitle>
 				<AlertDescription>
-					Each {noun} is reviewed once, as it stands now — there is no record of how it looked while
+					Each {noun} is reviewed once, as it stands now. There is no record of how it looked while
 					it was being worked on. Nothing is posted on the work itself and nobody is notified:
 					commenting on {plural} that are already finished would notify everyone involved about work
 					nobody can act on. The observations it records are kept separate from your live trends,
@@ -356,7 +356,7 @@ function ActiveRunSection({
 			<div className="space-y-2">
 				<Progress value={percent} aria-label="Backfill progress" />
 				<p className="text-sm text-muted-foreground">
-					{walked} of {countOf(total, run.artifactKind)} looked at — {run.submittedCount} sent for
+					{walked} of {countOf(total, run.artifactKind)} looked at. {run.submittedCount} sent for
 					review, {run.passedCount} already reviewed or outside your review rules.
 					{run.failedCount > 0
 						? ` ${run.failedCount} could not be read, so were not reviewed.`

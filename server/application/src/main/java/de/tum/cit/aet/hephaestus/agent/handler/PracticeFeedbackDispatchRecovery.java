@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import java.time.Instant;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
@@ -167,8 +168,7 @@ class PracticeFeedbackDispatchRecovery {
             case SENT -> PracticeFeedbackDispatchService.Result.sent(dispatch.getDeliveredExternalRef());
             case SUPPRESSED ->
                 PracticeFeedbackDispatchService.Result.suppressed(
-                        FeedbackSuppressionReason.valueOf(
-                                java.util.Objects.requireNonNull(dispatch.getSuppressionReason())),
+                        FeedbackSuppressionReason.valueOf(Objects.requireNonNull(dispatch.getSuppressionReason())),
                         dispatch.getDeliveredExternalRef());
             case FAILED -> PracticeFeedbackDispatchService.Result.failed(dispatch.getDeliveredExternalRef());
             case PENDING, CLAIMED, UNCERTAIN ->

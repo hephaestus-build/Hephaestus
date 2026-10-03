@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
@@ -30,8 +31,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Covers the logic that moved out of the controller — workspace-scoped lookup +
@@ -165,7 +166,7 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
         assertThat(result.credentials(credentialConverter)).contains(new BearerToken("ol-test", null));
 
         ArgumentCaptor<TransitionRequest> req = ArgumentCaptor.forClass(TransitionRequest.class);
-        Mockito.verify(connectionService).transition(any(Connection.class), req.capture());
+        verify(connectionService).transition(any(Connection.class), req.capture());
         assertThat(req.getValue().next()).isEqualTo(IntegrationState.ACTIVE);
         assertThat(req.getValue().eventType()).isEqualTo("INITIATE");
         assertThat(req.getValue().actorAccountId()).isEqualTo(42L);
@@ -181,12 +182,6 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
     }
 
     private static void setId(Connection c, long id) {
-        try {
-            var f = Connection.class.getDeclaredField("id");
-            f.setAccessible(true);
-            f.set(c, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(c, "id", id);
     }
 }

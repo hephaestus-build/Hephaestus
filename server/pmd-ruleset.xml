@@ -6,31 +6,18 @@
 
     <description>Project PMD rules.</description>
 
-    <!-- Best practices -->
+    <!-- A rule an enabled Error Prone check already enforces at compile time is not repeated here. -->
 
-    <rule ref="category/java/bestpractices.xml/UnusedPrivateField">
-        <!-- These type-level annotations do not imply that fields are used. -->
-        <properties>
-            <property name="reportForAnnotations"
-                      value="org.springframework.boot.autoconfigure.SpringBootApplication,
-                             org.springframework.boot.context.properties.ConfigurationPropertiesScan,
-                             org.springframework.cache.annotation.EnableCaching,
-                             org.springframework.resilience.annotation.EnableResilientMethods"/>
-        </properties>
-    </rule>
-    <rule ref="category/java/bestpractices.xml/UnusedLocalVariable"/>
-    <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod"/>
+    <!-- Best practices -->
 
     <rule ref="category/java/bestpractices.xml/AvoidReassigningParameters"/>
     <rule ref="category/java/bestpractices.xml/DefaultLabelNotLastInSwitch"/>
-    <rule ref="category/java/bestpractices.xml/MissingOverride"/>
     <rule ref="category/java/bestpractices.xml/PreserveStackTrace"/>
     <rule ref="category/java/bestpractices.xml/NonExhaustiveSwitch"/>
     <rule ref="category/java/bestpractices.xml/UseCollectionIsEmpty"/>
 
     <!-- Error prone -->
 
-    <rule ref="category/java/errorprone.xml/AvoidDecimalLiteralsInBigDecimalConstructor"/>
     <rule ref="category/java/errorprone.xml/AvoidMultipleUnaryOperators"/>
     <rule ref="category/java/errorprone.xml/BrokenNullCheck"/>
     <rule ref="category/java/errorprone.xml/UnusedReturnValue"/>
@@ -38,8 +25,6 @@
     <rule ref="category/java/errorprone.xml/DontUseFloatTypeForLoopIndices"/>
     <rule ref="category/java/errorprone.xml/JumbledIncrementer"/>
     <rule ref="category/java/errorprone.xml/MisplacedNullCheck"/>
-    <rule ref="category/java/errorprone.xml/OverrideBothEqualsAndHashcode"/>
-    <rule ref="category/java/errorprone.xml/ReturnFromFinallyBlock"/>
     <rule ref="category/java/errorprone.xml/UnconditionalIfStatement"/>
     <rule ref="category/java/errorprone.xml/UnnecessaryConversionTemporary"/>
 

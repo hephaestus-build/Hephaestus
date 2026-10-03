@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
@@ -37,8 +38,8 @@ class FrameCodecRoundTripTest extends BaseUnitTest {
     void mentorCommandsAndEventsRoundTripWithUnicodeAndBinaryInputs() {
         var mapper = new ObjectMapper();
         var body = mapper.createObjectNode().put("text", "Heph 🌍");
-        var session = java.util.UUID.randomUUID();
-        var request = java.util.UUID.randomUUID();
+        var session = UUID.randomUUID();
+        var request = UUID.randomUUID();
         for (var operation : MentorSessionCommand.Operation.values()) {
             var input = FrameEnvelope.of(new MentorSessionCommand(session, request, operation, body));
             assertThat(codec.decode(codec.encode(input))).isEqualTo(input);
@@ -54,8 +55,8 @@ class FrameCodecRoundTripTest extends BaseUnitTest {
         String oversized = "🌍".repeat(FrameCodec.MAX_FRAME_BYTES / 4 + 1);
         assertThatThrownBy(() -> codec.decode(oversized)).isInstanceOf(FrameCodec.FrameCodecException.class);
         var body = new ObjectMapper().createObjectNode().put("text", oversized);
-        assertThatThrownBy(() -> codec.encode(FrameEnvelope.of(new MentorSessionEvent(
-                        java.util.UUID.randomUUID(), null, MentorSessionEvent.Kind.FRAME, body))))
+        assertThatThrownBy(() -> codec.encode(FrameEnvelope.of(
+                        new MentorSessionEvent(UUID.randomUUID(), null, MentorSessionEvent.Kind.FRAME, body))))
                 .isInstanceOf(FrameCodec.FrameCodecException.class);
     }
 }

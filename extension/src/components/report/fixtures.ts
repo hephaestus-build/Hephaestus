@@ -9,16 +9,6 @@ import { minutesBefore } from "~/stories/story-clock";
 
 export const WEB_APP = "https://heph.example.test";
 
-/**
- * A value a newer server may send and this build has no words for. Typed as the union it is not,
- * because that is exactly the lie a stale generated client tells at runtime.
- */
-// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- The caller names the union the value pretends to belong to.
-export function fromNewerServer<T extends string>(value: string): T {
-	// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The point: a runtime value outside the generated union.
-	return value as T;
-}
-
 export const DESCRIPTIVE_PRACTICE: PracticeTraceEntry = {
 	autonomy: "AUTOMATIC",
 	decidedAt: minutesBefore(42),

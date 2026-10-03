@@ -176,9 +176,14 @@ export const Empty: Story = {
 	},
 };
 
-/** Loading the connected accounts. */
+/** The rows hold their place while the accounts load, and nothing claims there are none. */
 export const Loading: Story = {
 	args: { isLoading: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("list", { name: "Loading connected accounts" })).toBeVisible();
+		await expect(canvas.queryByText(/no connected accounts yet/iu)).toBeNull();
+		await expect(canvas.queryByRole("button")).toBeNull();
+	},
 };
 
 /** Failed to load — the shared error alert, with a retry. */

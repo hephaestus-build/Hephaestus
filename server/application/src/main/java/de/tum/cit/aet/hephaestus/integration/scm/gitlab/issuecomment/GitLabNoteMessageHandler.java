@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLab
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiffNoteWebhookProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -179,7 +180,7 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
     private static boolean isBotCommand(String noteBody) {
         return noteBody != null
                 && !noteBody.isBlank()
-                && noteBody.strip().toLowerCase().startsWith(BOT_COMMAND_PREFIX);
+                && noteBody.strip().toLowerCase(Locale.ROOT).startsWith(BOT_COMMAND_PREFIX);
     }
 
     /**

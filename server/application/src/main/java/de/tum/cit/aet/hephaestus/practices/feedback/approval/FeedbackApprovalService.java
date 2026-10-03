@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.DecideFeedbackProposalRequestDTO;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -57,8 +58,7 @@ public class FeedbackApprovalService {
         if (existing != null) {
             if (existing.getDecision() != request.decision()
                     || existing.getRejectionReason() != request.rejectionReason()
-                    || !java.util.Objects.equals(
-                            existing.getRejectionNote(), normalizedNote(request.rejectionNote()))) {
+                    || !Objects.equals(existing.getRejectionNote(), normalizedNote(request.rejectionNote()))) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "This proposal has already been decided");
             }
             if (existing.getDecision() == FeedbackApprovalDecision.APPROVED) {

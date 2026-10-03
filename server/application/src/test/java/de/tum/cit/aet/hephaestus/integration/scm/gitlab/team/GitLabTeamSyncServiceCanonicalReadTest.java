@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.graphql.ResponseError;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -39,7 +40,7 @@ class GitLabTeamSyncServiceCanonicalReadTest {
         service = new GitLabTeamSyncService(
                 mock(), mock(), mock(), clients, handler, mock(), mock(), mock(), properties, mock(), mock(), null);
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec request = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec request = mock(GraphQlClient.RequestSpec.class);
         when(clients.forScope(3L)).thenReturn(client);
         when(client.documentName(anyString())).thenReturn(request);
         when(request.variable(anyString(), any())).thenReturn(request);

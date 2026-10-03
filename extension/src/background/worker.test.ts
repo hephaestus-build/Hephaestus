@@ -121,7 +121,7 @@ async function harness() {
 		throw new Error(`Unexpected request: ${url.pathname}`);
 	});
 	platform.identity.getRedirectURL.mockImplementation(
-		(path) => `https://${ID}.chromiumapp.org/${path}`,
+		(path) => `https://${ID}.chromiumapp.org/${path ?? ""}`,
 	);
 	const launch = platform.identity.launchWebAuthFlow.mockImplementation(async ({ url }) =>
 		completeSignInURL(url),

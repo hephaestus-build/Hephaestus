@@ -32,6 +32,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
@@ -40,6 +41,17 @@ import org.jspecify.annotations.Nullable;
  * <p>
  * This is the unified model used by both GraphQL sync and webhook handlers.
  * It can be constructed from any source (GraphQL, REST, webhook payload).
+ *
+ * @param mergeCommitInfo merge commit metadata extracted from GraphQL. Null when the PR is not merged or when
+ *     created from webhook payloads (which only provide the SHA via {@code mergeCommitSha}).
+ * @param headChecks what the checks said about the head, from GraphQL; null when the source did not read it (a
+ *     webhook payload), which leaves the stored check state alone.
+ * @param closingIssueNumbers the numbers of this repository's issues GitHub lists as closing candidates for the
+ *     pull request, from GraphQL; null when the source did not read them, which leaves the stored set alone.
+ * @param requestedTeams the teams asked to review: every
+ *     <a href="https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request">pull_request
+ *     webhook</a> payload and every sync lists them all, so a team no longer listed is no longer asked. Null when
+ *     the source did not read them, which leaves the stored set alone.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GitHubPullRequestDTO(
@@ -80,29 +92,9 @@ public record GitHubPullRequestDTO(
         @Nullable MergeStateStatus mergeStateStatus,
         @Nullable Boolean isMergeable,
         boolean maintainerCanModify,
-        /**
-         * Merge commit metadata extracted from GraphQL.
-         * Null when the PR is not merged or when created from webhook payloads
-         * (which only provide the SHA via {@link #mergeCommitSha}).
-         */
         @Nullable MergeCommitInfo mergeCommitInfo,
-        /**
-         * What the checks said about the head, from GraphQL; null when the source did not read it (a
-         * webhook payload), which leaves the stored observation alone.
-         */
         @Nullable HeadChecks headChecks,
-        /**
-         * The numbers of this repository's issues GitHub lists as closing candidates for the pull request,
-         * from GraphQL; null when the source did not read them, which leaves the stored set alone.
-         */
         @Nullable List<Integer> closingIssueNumbers,
-        /**
-         * The teams asked to review: every webhook payload and every sync lists them all, so a team no longer
-         * listed is no longer asked. Null when the source did not read them, which leaves the stored set alone.
-         *
-         * @see <a href="https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request">GitHub
-         *     pull_request webhook</a>
-         */
         @JsonProperty("requested_teams") @Nullable List<GitHubTeamRefDTO> requestedTeams) {
     /** A team asked to review, by GitHub's database id. */
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -386,7 +378,7 @@ public record GitHubPullRequestDTO(
         if (state == null) {
             return null; // Let processor handle missing state with appropriate logging
         }
-        return state.name().toLowerCase();
+        return state.name().toLowerCase(Locale.ROOT);
     }
 
     private static List<GitHubUserDTO> extractAssignees(@Nullable GHUserConnection connection, String context) {

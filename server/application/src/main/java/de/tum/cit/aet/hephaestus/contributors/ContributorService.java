@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -108,7 +109,7 @@ public class ContributorService {
             ContributorDTO.GitHubContributorResponse contributor, Map<Long, ContributorDTO> accumulator) {
         try {
             String login = contributor.login();
-            if (login != null && EXCLUDED_LOGINS.contains(login.toLowerCase())) {
+            if (login != null && EXCLUDED_LOGINS.contains(login.toLowerCase(Locale.ROOT))) {
                 log.debug("Skipping excluded contributor: {}", login);
                 return;
             }

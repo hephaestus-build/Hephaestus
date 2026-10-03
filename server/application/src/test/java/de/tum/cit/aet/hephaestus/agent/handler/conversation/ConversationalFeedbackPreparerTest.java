@@ -80,19 +80,17 @@ class ConversationalFeedbackPreparerTest extends BaseUnitTest {
                 .when(supersession.supersede(anyLong(), anyLong(), any(), any()))
                 .thenReturn(FeedbackSupersession.Outcome.standalone());
         lenient().when(feedbackRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        lenient()
-                .when(observationRepository.practiceSlugsFor(any(), org.mockito.ArgumentMatchers.anyLong()))
-                .thenAnswer(invocation -> {
-                    Collection<UUID> ids = invocation.getArgument(0);
-                    List<ObservationRepository.ObservationPracticeSlug> rows = new ArrayList<>();
-                    for (UUID id : ids) {
-                        String slug = practiceSlugByObservation.get(id);
-                        if (slug != null) {
-                            rows.add(new StubPracticeSlug(id, slug));
-                        }
-                    }
-                    return rows;
-                });
+        lenient().when(observationRepository.practiceSlugsFor(any(), anyLong())).thenAnswer(invocation -> {
+            Collection<UUID> ids = invocation.getArgument(0);
+            List<ObservationRepository.ObservationPracticeSlug> rows = new ArrayList<>();
+            for (UUID id : ids) {
+                String slug = practiceSlugByObservation.get(id);
+                if (slug != null) {
+                    rows.add(new StubPracticeSlug(id, slug));
+                }
+            }
+            return rows;
+        });
     }
 
     private record StubPracticeSlug(UUID observationId, String practiceSlug)

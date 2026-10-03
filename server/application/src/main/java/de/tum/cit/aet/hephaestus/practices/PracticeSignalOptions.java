@@ -68,7 +68,7 @@ public class PracticeSignalOptions {
 
     /**
      * Whether this signal is the one a person raises by asking for a review of this kind of work.
-     * Derived from the descriptor rather than the signal's spelling — the detection gate and the catalog
+     * Derived from the descriptor rather than the signal's spelling — the review gate and the catalog
      * injector both rely on this agreeing with theirs.
      */
     public boolean isManualRequest(SignalName signal) {

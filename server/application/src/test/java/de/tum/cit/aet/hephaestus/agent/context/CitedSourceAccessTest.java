@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewRepositoryPreparer;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationThreadProjection;
@@ -18,25 +19,32 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Answers;
+import org.mockito.Mockito;
 import tools.jackson.databind.json.JsonMapper;
 
 class CitedSourceAccessTest extends BaseUnitTest {
-    private static de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog personCopies() {
+    private static EvidenceFolderPersonDataCatalog personCopies() {
         AutoCloseable released = () -> {};
-        return org.mockito.Mockito.mock(
-                de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog.class,
+        return Mockito.mock(
+                EvidenceFolderPersonDataCatalog.class,
                 invocation -> invocation.getMethod().getName().equals("finishCapture")
                         ? released
-                        : org.mockito.Answers.RETURNS_DEFAULTS.answer(invocation));
+                        : Answers.RETURNS_DEFAULTS.answer(invocation));
     }
 
     @TempDir
@@ -128,7 +136,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
         var job = job();
         job.setMetadata(mapper.createObjectNode().put("docs_document_id", 7L));
         var document = DocumentProjection.ProjectedDocument.withoutAuthors("c", "d", "Title", "quote", false);
-        when(documents.documentById(1L, 7L)).thenReturn(java.util.Optional.of(document));
+        when(documents.documentById(1L, 7L)).thenReturn(Optional.of(document));
         var citation = mapper.createObjectNode().put("artifactPath", "context/document.md");
         var access = access(files);
         access.bind(job, citation, "a".repeat(64));
@@ -138,7 +146,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
                         .path("id")
                         .asLong())
                 .isEqualTo(7L);
-        when(documents.documentById(1L, 7L)).thenReturn(java.util.Optional.empty());
+        when(documents.documentById(1L, 7L)).thenReturn(Optional.empty());
         assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isFalse();
     }
@@ -152,7 +160,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
         var citation = mapper.createObjectNode()
                 .put("artifactPath", "context/comments.json")
                 .put("sourceKind", "scm.pull-request.discussion");
-        when(repositories.permittedRepositories(1L)).thenReturn(java.util.List.of());
+        when(repositories.permittedRepositories(1L)).thenReturn(List.of());
         assertThatThrownBy(() -> access(files).bind(job, citation, "a".repeat(64)))
                 .isInstanceOf(JobDeliveryException.class)
                 .hasMessageContaining("no longer permitted");
@@ -168,7 +176,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     void composedViewsCannotBypassCanonicalRecordAuthorization() {
         var files = new JobEvidenceFiles(
                 new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
-        for (String path : java.util.List.of("inputs/history/observations.json", "context/project_inventory.json")) {
+        for (String path : List.of("inputs/history/observations.json", "context/project_inventory.json")) {
             var citation = mapper.createObjectNode().put("artifactPath", path);
             assertThatThrownBy(() -> access(files).bind(job(), citation, "a".repeat(64)))
                     .isInstanceOf(JobDeliveryException.class)
@@ -201,7 +209,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     void malformedNumericSourceIdentityIsATypedAdmissionRefusal() {
         var files = new JobEvidenceFiles(
                 new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
-        for (String path : java.util.List.of("context/people/not-a-person/person.json", "repos/not-a-repo/.git/HEAD")) {
+        for (String path : List.of("context/people/not-a-person/person.json", "repos/not-a-repo/.git/HEAD")) {
             assertThatThrownBy(() -> access(files)
                             .bind(job(), mapper.createObjectNode().put("artifactPath", path), "a".repeat(64)))
                     .isInstanceOf(JobDeliveryException.class)
@@ -214,7 +222,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
         var files = new JobEvidenceFiles(
                 new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         var access = access(files);
-        for (String path : java.util.List.of(
+        for (String path : List.of(
                 "context/conversation_thread.json",
                 "context/document.md",
                 "inputs/history/feedback.json",
@@ -235,13 +243,13 @@ class CitedSourceAccessTest extends BaseUnitTest {
                 .addObject()
                 .put("type", "repository")
                 .put("id", 2L);
-        when(repositories.permittedRepositories(1L)).thenReturn(java.util.List.of());
+        when(repositories.permittedRepositories(1L)).thenReturn(List.of());
         assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isFalse();
     }
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"observations.jsonl", "feedback.jsonl", "person.json"})
+    @ParameterizedTest
+    @ValueSource(strings = {"observations.jsonl", "feedback.jsonl", "person.json"})
     void canonicalPersonReferencesReuseVisibilityAndRecordWithdrawal(String filename) {
         var files = new JobEvidenceFiles(
                 new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
@@ -251,8 +259,8 @@ class CitedSourceAccessTest extends BaseUnitTest {
         byte[] bytes = ("{\"id\":\"" + recordId + "\",\"synced_at\":null}\n").getBytes(StandardCharsets.UTF_8);
         when(memberPolicy.allowsPerson(job, 42L)).thenReturn(true);
         when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(false, null));
-        var member = new de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership();
-        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(java.util.Optional.of(member));
+        var member = new WorkspaceMembership();
+        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(Optional.of(member));
         String type = filename.startsWith("observations") ? "observation" : "feedback";
         when(history.permitsHistoryRecord(1L, type, recordId, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .thenReturn(true);
@@ -275,7 +283,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
             assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                     .isFalse();
             member.setHidden(false);
-            when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(java.util.Optional.empty());
+            when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(Optional.empty());
             assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                     .isFalse();
         }
@@ -293,7 +301,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
         when(doc.slug()).thenReturn("design");
         when(doc.collectionSlug()).thenReturn("engineering");
         when(doc.bodyMarkdown()).thenReturn("quote");
-        when(documents.documentsByReference(1L, java.util.List.of("source-7"))).thenReturn(java.util.List.of(doc));
+        when(documents.documentsByReference(1L, List.of("source-7"))).thenReturn(List.of(doc));
         try (var prepared = files.prepare(job, new PreparedEvidence(Map.of(path, bytes), null), null)) {
             assertThat(prepared.filesOnDisk()).containsKey(path);
             var citation = mapper.createObjectNode().put("artifactPath", path);
@@ -315,8 +323,8 @@ class CitedSourceAccessTest extends BaseUnitTest {
         }
     }
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(
+    @ParameterizedTest
+    @ValueSource(
             strings = {
                 "[]",
                 "{}",
@@ -328,8 +336,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
         var files = new JobEvidenceFiles(
                 new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(false, null));
-        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L))
-                .thenReturn(java.util.Optional.of(new de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership()));
+        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(Optional.of(new WorkspaceMembership()));
         var citation = mapper.createObjectNode().put("artifactPath", "context/people/42/observations.jsonl");
         citation.set("sourceReference", mapper.readTree(reference));
         assertThat(access(files).permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))

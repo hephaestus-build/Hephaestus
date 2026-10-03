@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.ChatSignals;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
@@ -24,7 +25,7 @@ public final class PracticeTestEvidence {
     public static PracticeAutomatedReviewPolicy forArtifact(ArtifactKind artifactKind) {
         needsFor(artifactKind); // reject an unsupported kind here rather than at the binding
         return new PracticeAutomatedReviewPolicy(
-                de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry.CURRENT_VERSION,
+                ArtifactSourceCatalogRegistry.CURRENT_VERSION,
                 new PracticeAutomatedReview(
                         PracticeAutomatedReviewMode.LANGUAGE_MODEL,
                         PracticeEvidenceSufficiency.SUFFICIENT_WHEN_REQUIREMENTS_MET),

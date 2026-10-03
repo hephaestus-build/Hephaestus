@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -52,7 +53,7 @@ class GitLabTeamSyncServiceMembershipLookupTest extends BaseUnitTest {
 
     private GitLabTeamSyncService service;
     private ClientResponseField nodes;
-    private HttpGraphQlClient.RequestSpec request;
+    private GraphQlClient.RequestSpec request;
 
     @BeforeEach
     void setUp() {
@@ -84,7 +85,7 @@ class GitLabTeamSyncServiceMembershipLookupTest extends BaseUnitTest {
         doReturn(List.of()).when(nodes).getValue();
         when(response.field("group.groupMembers.nodes")).thenReturn(nodes);
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        request = mock(HttpGraphQlClient.RequestSpec.class);
+        request = mock(GraphQlClient.RequestSpec.class);
         when(graphQlClientProvider.forScope(1L)).thenReturn(client);
         when(client.documentName("GetGroupMember")).thenReturn(request);
         when(request.variable(anyString(), any())).thenReturn(request);

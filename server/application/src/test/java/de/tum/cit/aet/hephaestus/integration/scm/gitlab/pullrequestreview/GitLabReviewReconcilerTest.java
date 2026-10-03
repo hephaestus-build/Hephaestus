@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -134,7 +135,6 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
         PullRequestReview review = approval(APPROVED_AT);
         when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         Instant unapprovedAt = APPROVED_AT.plusSeconds(600);
-        Instant reapprovedAt = APPROVED_AT.plusSeconds(1_200);
 
         PullRequestReview dismissed = reconciler.recordUnapproval(pr, approver, unapprovedAt, provider);
 
@@ -169,7 +169,7 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
     void shouldNotChangeCurrentApprovalMembershipWhenHistoricalWithdrawalAndReapprovalAreReplayed() {
         PullRequestReview review = approval(MERGED_AT);
         review.setSubmittedAt(null);
-        for (String body : java.util.List.of("unapproved this merge request", "approved this merge request")) {
+        for (String body : List.of("unapproved this merge request", "approved this merge request")) {
             assertThat(reconciler.recordSystemNote(
                             pr,
                             approver,

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -22,6 +23,8 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -33,7 +36,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -114,12 +116,7 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
         Account account = account(Account.Status.ACTIVE);
         when(provisioningService.resolveOrProvision(any(), any(), any(), any())).thenReturn(provision(account, false));
         when(authIntentCookie.read(any())).thenReturn(clientIntent());
-        when(clientSessionService.createHandoff(
-                        org.mockito.ArgumentMatchers.eq(42L),
-                        any(InstalledClient.class),
-                        org.mockito.ArgumentMatchers.eq(CHALLENGE),
-                        any(),
-                        any()))
+        when(clientSessionService.createHandoff(eq(42L), any(InstalledClient.class), eq(CHALLENGE), any(), any()))
                 .thenReturn(Optional.of("code-1"));
 
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -176,12 +173,9 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
     @Test
     void successHandlerDoesNotOwnTransactionSoHandledProvisioningErrorsCanRedirect() throws Exception {
         var method = HephaestusAuthSuccessHandler.class.getMethod(
-                "onAuthenticationSuccess",
-                jakarta.servlet.http.HttpServletRequest.class,
-                jakarta.servlet.http.HttpServletResponse.class,
-                Authentication.class);
+                "onAuthenticationSuccess", HttpServletRequest.class, HttpServletResponse.class, Authentication.class);
 
-        Assertions.assertNull(method.getAnnotation(Transactional.class));
+        assertThat(method.getAnnotation(Transactional.class)).isNull();
     }
 
     @ParameterizedTest

@@ -41,7 +41,7 @@ export function ReviewArtifactLabel({ reviewedWork, className }: ReviewArtifactP
 	const Icon = reviewedWorkIcon(reviewedWork.kind, reviewedWork.provider);
 	return (
 		<span className={cn("inline-flex max-w-full min-w-0 items-center gap-1.5", className)}>
-			<Icon className="size-3.5 shrink-0" aria-hidden />
+			<Icon className="size-3.5 shrink-0" />
 			<span className="min-w-0 break-words">{qualifiedLabel(reviewedWork)}</span>
 		</span>
 	);
@@ -62,7 +62,7 @@ export function ReviewArtifactLink({ reviewedWork, className }: ReviewArtifactPr
 			external
 			className={cn("relative inline-flex max-w-full min-w-0 items-center gap-1.5", className)}
 		>
-			<Icon className="size-3.5 shrink-0" aria-hidden />
+			<Icon className="size-3.5 shrink-0" />
 			<span className="min-w-0 break-words">{qualifiedLabel(reviewedWork)}</span>
 		</InlineLink>
 	);

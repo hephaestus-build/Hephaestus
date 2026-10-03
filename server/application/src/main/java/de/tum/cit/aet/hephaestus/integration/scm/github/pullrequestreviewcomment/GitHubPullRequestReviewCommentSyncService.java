@@ -614,15 +614,13 @@ public class GitHubPullRequestReviewCommentSyncService {
                         // Set resolvedBy user if available (already converted to DTO)
                         GitHubUserDTO resolvedByDto = threadDto.resolvedBy();
                         if (resolvedByDto != null) {
-                            if (resolvedByDto != null) {
-                                User resolvedBy = userProcessor.ensureExists(
-                                        resolvedByDto,
-                                        Objects.requireNonNull(pullRequest
-                                                .requireRepository()
-                                                .getProvider()
-                                                .getId()));
-                                thread.setResolvedBy(resolvedBy);
-                            }
+                            User resolvedBy = userProcessor.ensureExists(
+                                    resolvedByDto,
+                                    Objects.requireNonNull(pullRequest
+                                            .requireRepository()
+                                            .getProvider()
+                                            .getId()));
+                            thread.setResolvedBy(resolvedBy);
                         }
                     } else {
                         thread.setState(PullRequestReviewThread.State.UNRESOLVED);

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -105,9 +106,11 @@ class DockerSandboxLiveTest {
                 try {
                     containerManager.forceRemove(c.id());
                 } catch (Exception ignored) {
+                    // One resource that refuses to go must not stop the sweep of the rest.
                 }
             });
         } catch (Exception ignored) {
+            // The sweep is a safety net; Docker failing here must not mask the test's own result.
         }
 
         try {
@@ -115,9 +118,11 @@ class DockerSandboxLiveTest {
                 try {
                     networkManager.removeNetwork(n.id());
                 } catch (Exception ignored) {
+                    // One resource that refuses to go must not stop the sweep of the rest.
                 }
             });
         } catch (Exception ignored) {
+            // The sweep is a safety net; Docker failing here must not mask the test's own result.
         }
     }
 
@@ -223,14 +228,14 @@ class DockerSandboxLiveTest {
                     new NetworkPolicy(true, null, "live-gateway-token"),
                     new ResourceLimits(256 * 1024 * 1024, 0.5, 64, Duration.ofMinutes(1)),
                     testSecurityProfile(),
-                    Map.of(".prompt", "injected content".getBytes()),
+                    Map.of(".prompt", "injected content".getBytes(UTF_8)),
                     "/workspace/out");
 
             SandboxResult result = sandboxAdapter.execute(spec);
 
             assertThat(result.exitCode()).isZero();
             assertThat(result.outputFiles()).containsKey("echo.txt");
-            assertThat(new String(result.outputFiles().get("echo.txt"))).isEqualTo("injected content");
+            assertThat(new String(result.outputFiles().get("echo.txt"), UTF_8)).isEqualTo("injected content");
         }
     }
 

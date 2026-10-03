@@ -499,7 +499,7 @@ public class WorkspaceRepositoryMonitorService {
      * by name before its first sync — in which case the periodic sync backfills it later via
      * {@link de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider#reconcileSyncTargetIdentity}.
      */
-    @org.jspecify.annotations.Nullable
+    @Nullable
     private Long resolveNativeId(String nameWithOwner) {
         if (StringUtils.isBlank(nameWithOwner)) {
             return null;

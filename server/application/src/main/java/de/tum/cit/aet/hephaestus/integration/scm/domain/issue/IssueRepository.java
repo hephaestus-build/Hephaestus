@@ -76,7 +76,6 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
         long getCompleted();
     }
 
-    /** Fetches an issue with its repository eagerly — used to build an issue-detection job submission. */
     @Query("SELECT i FROM Issue i LEFT JOIN FETCH i.repository WHERE TYPE(i) = Issue AND i.id = :id")
     Optional<Issue> findByIdWithRepository(@Param("id") long id);
 
@@ -87,7 +86,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
     /**
      * Fetches an issue with the associations {@code ReviewGate.evaluateIssue} needs:
      * repository (workspace resolution) and assignees (role check). Restricted to {@code TYPE(i) = Issue}
-     * so a pull-request row never enters the issue-detection path.
+     * so a pull-request row never enters the issue review path.
      *
      * <p>The author comes along because the same load feeds
      * {@code ReviewRequestAuthority}, which asks whether the requester is the person the review is
@@ -172,7 +171,7 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
      * under single-table inheritance. Not cosmetic: for GitLab, issue and merge-request IIDs occupy
      * <em>separate</em> per-project namespaces (issue #5 and MR !5 coexist), so a type-blind UPDATE
      * keyed only on {@code (repository.id, number)} would tombstone a live merge request whenever an
-     * issue of the same number is swept — hiding it from counts, mentor and detection until the next
+     * issue of the same number is swept — hiding it from counts, mentor and review until the next
      * reconciliation upsert revives it.
      *
      * <p>{@code deletedAt IS NULL} in the predicate makes this idempotent and preserves the

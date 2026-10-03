@@ -20,7 +20,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
@@ -57,7 +59,7 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
         this.runtime = runtime;
         this.mapper = mapper;
         this.properties = properties;
-        this.frameByteBudget = properties.maxFrameChars();
+        this.frameByteBudget = properties.maxFrameBytes();
         this.onClosed = onClosed;
         this.meters = meters;
         frames = new FrameRingBuffer(
@@ -132,13 +134,13 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new InteractiveSandboxException("Interrupted while waiting for worker", interrupted);
-        } catch (java.util.concurrent.ExecutionException failure) {
+        } catch (ExecutionException failure) {
             if (failure.getCause() instanceof RuntimeException runtime) {
                 runtime.addSuppressed(failure);
                 throw runtime;
             }
             throw new InteractiveSandboxException("Worker operation failed", failure);
-        } catch (java.util.concurrent.TimeoutException failure) {
+        } catch (TimeoutException failure) {
             throw new InteractiveSandboxException("Worker operation timed out", failure);
         }
     }

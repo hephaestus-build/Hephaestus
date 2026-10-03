@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -23,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 @WorkspaceAgnostic("Feedback is scoped by a raw workspace_id scalar (cross-module FK), not a Workspace association")
 public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
-    @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT f FROM Feedback f WHERE f.id = :id AND f.workspaceId = :workspaceId")
     Optional<Feedback> lockByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
@@ -606,8 +607,6 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
         return deleteFeedbackOfKindAboutUser(workspaceId, ArtifactKinds.CONVERSATION_THREAD, aboutUserId);
     }
 
-    // --- conversational feedback delivery loop ---
-
     /**
      * Flips a PREPARED conversational unit to DELIVERED (compare-and-set): the {@code delivery_state='PREPARED'}
      * predicate lets exactly one of N racing mentor turns win the flip, the rest see rowcount 0.
@@ -752,8 +751,8 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
      * The operator's page of feedback.
      *
      * <p><b>IN_APP bodies are never returned here.</b> {@code IN_CONTEXT} bodies are already public on
-     * the pull request and {@code IN_CHAT} bodies are NULL by construction, so until now "operators
-     * can read feedback bodies" exposed nothing private. A {@code IN_APP} body is the first
+     * the pull request and {@code IN_CHAT} bodies are NULL by construction, so for those channels "operators
+     * can read feedback bodies" exposes nothing private. A {@code IN_APP} body is the first
      * system-authored text about a named person that lives nowhere else — and in the course deployment
      * the workspace admin is the instructor. {@link FeedbackChannel}'s own contract says every channel is
      * developer-facing, "never to a mentor, instructor, or grader"; handing this one to an admin would
@@ -885,7 +884,6 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
         long getUnits();
     }
 
-    // --- the in-app lane ---
     //
     // Every query below carries `workspace_id` by hand. `feedback` is scoped by a raw scalar with no
     // Hibernate tenancy filter (see the @WorkspaceAgnostic reason on this interface), so on this table

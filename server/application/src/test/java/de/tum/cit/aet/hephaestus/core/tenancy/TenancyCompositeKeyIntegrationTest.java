@@ -2,10 +2,12 @@ package de.tum.cit.aet.hephaestus.core.tenancy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.core.instrument.Counter;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -54,7 +56,6 @@ class TenancyCompositeKeyIntegrationTest extends BaseIntegrationTest {
 
         inspector.inspect(sql);
 
-        org.mockito.Mockito.verify(reporter)
-                .report(sql, java.util.Set.of("repository_collaborator"), TenancyEnforcement.LOG);
+        verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
     }
 }

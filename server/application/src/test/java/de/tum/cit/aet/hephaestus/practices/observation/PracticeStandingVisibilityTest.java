@@ -97,7 +97,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
         return practiceStandingService.getStandings(WORKSPACE_ID);
     }
 
-    private Observation bad(Practice practice, @org.jspecify.annotations.Nullable Severity severity) {
+    private Observation bad(Practice practice, @Nullable Severity severity) {
         return Observation.builder()
                 .id(UUID.randomUUID())
                 .practice(practice)
@@ -115,7 +115,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSlug(slug);
         practice.setName("Handling failure robustly");
-        practice.setCriteria("ordinary criteria"); // not a defect-detector
+        practice.setCriteria("ordinary criteria");
         return practice;
     }
 
@@ -166,7 +166,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSlug("robust-error-handling");
         practice.setName("Handling failure robustly");
-        practice.setCriteria("ordinary criteria"); // not a defect-detector
+        practice.setCriteria("ordinary criteria");
 
         when(observationRepository.findByDeveloperAndWorkspaceBetween(
                         eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))

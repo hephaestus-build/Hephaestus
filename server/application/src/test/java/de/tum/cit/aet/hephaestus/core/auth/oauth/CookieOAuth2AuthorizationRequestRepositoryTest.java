@@ -1,12 +1,12 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.http.Cookie;
 import java.security.SecureRandom;
 import java.util.Set;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -185,7 +185,7 @@ class CookieOAuth2AuthorizationRequestRepositoryTest extends BaseUnitTest {
 
     @Test
     void rejectsNonThirtyTwoByteKey() {
-        Assertions.assertThrows(
-                IllegalArgumentException.class, () -> new CookieOAuth2AuthorizationRequestRepository(new byte[16]));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new CookieOAuth2AuthorizationRequestRepository(new byte[16]));
     }
 }

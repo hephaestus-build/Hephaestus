@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { ClaimCurrentnessBadge } from "@/components/practice-vocabulary/ClaimCurrentness";
 import { DEVELOPER_RESPONSE_DEFS } from "@/components/practice-vocabulary/observation-dispute-defs";
 import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
-import { observationResult } from "@/components/practice-vocabulary/observation-result";
+import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { Button } from "@/components/ui/button";
 import {
 	Empty,
@@ -96,7 +96,7 @@ export function ObservationRow({ observation, practice }: ObservationRowProps) {
 	const severity = observationSeverity(observation);
 	return (
 		<ReviewRow
-			status={observationResult(observation)}
+			status={OUTCOME_DEFS[observation.outcome]}
 			title={<ReviewRowLink entry={entry}>{observation.summary}</ReviewRowLink>}
 			meta={
 				<>

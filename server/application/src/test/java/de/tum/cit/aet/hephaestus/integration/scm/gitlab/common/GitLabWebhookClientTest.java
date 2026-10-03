@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -23,7 +25,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
@@ -38,9 +39,6 @@ import org.springframework.web.reactive.function.client.WebClient.ResponseSpec;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
-/**
- * Unit tests for {@link GitLabWebhookClient}.
- */
 @Tag("unit")
 class GitLabWebhookClientTest extends BaseUnitTest {
 
@@ -138,13 +136,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
             when(mockWebClient.post()).thenReturn(bodyUriSpec);
-            Mockito.doReturn(bodySpec).when(bodyUriSpec).uri(anyString(), eq(GROUP_ID));
-            Mockito.doReturn(bodySpec).when(bodySpec).header(anyString(), anyString());
-            org.mockito.Mockito.lenient()
-                    .doReturn(bodySpec)
-                    .when(bodySpec)
-                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
-            Mockito.doReturn(bodySpec).when(bodySpec).bodyValue(any());
+            doReturn(bodySpec).when(bodyUriSpec).uri(anyString(), eq(GROUP_ID));
+            doReturn(bodySpec).when(bodySpec).header(anyString(), anyString());
+            lenient().doReturn(bodySpec).when(bodySpec).attribute(anyString(), any());
+            doReturn(bodySpec).when(bodySpec).bodyValue(any());
             when(bodySpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                     .thenReturn(Mono.just(Map.of("id", 99, "url", "https://example.com/webhooks/gitlab")));
@@ -185,13 +180,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
-            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
-            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(99L));
-            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
-            org.mockito.Mockito.lenient()
-                    .doReturn(headersSpec)
-                    .when(headersSpec)
-                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+            doReturn(uriSpec).when(mockWebClient).get();
+            doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(99L));
+            doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            lenient().doReturn(headersSpec).when(headersSpec).attribute(anyString(), any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                     .thenReturn(Mono.just(Map.of("id", 99, "url", "https://example.com/webhooks/gitlab")));
@@ -210,13 +202,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
 
-            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
-            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(999L));
-            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
-            org.mockito.Mockito.lenient()
-                    .doReturn(headersSpec)
-                    .when(headersSpec)
-                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+            doReturn(uriSpec).when(mockWebClient).get();
+            doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(999L));
+            doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            lenient().doReturn(headersSpec).when(headersSpec).attribute(anyString(), any());
             when(headersSpec.retrieve())
                     .thenThrow(WebClientResponseException.create(
                             404, "Not Found", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));
@@ -238,13 +227,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
-            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
-            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID));
-            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
-            org.mockito.Mockito.lenient()
-                    .doReturn(headersSpec)
-                    .when(headersSpec)
-                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+            doReturn(uriSpec).when(mockWebClient).get();
+            doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID));
+            doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            lenient().doReturn(headersSpec).when(headersSpec).attribute(anyString(), any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                     .thenReturn(Mono.just(List.of(
@@ -266,13 +252,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
-            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
-            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID));
-            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
-            org.mockito.Mockito.lenient()
-                    .doReturn(headersSpec)
-                    .when(headersSpec)
-                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+            doReturn(uriSpec).when(mockWebClient).get();
+            doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID));
+            doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            lenient().doReturn(headersSpec).when(headersSpec).attribute(anyString(), any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class))).thenReturn(Mono.just(List.of()));
 
@@ -293,17 +276,13 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
-            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).delete();
-            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(99L));
-            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
-            org.mockito.Mockito.lenient()
-                    .doReturn(headersSpec)
-                    .when(headersSpec)
-                    .attributes(org.mockito.ArgumentMatchers.any());
+            doReturn(uriSpec).when(mockWebClient).delete();
+            doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(99L));
+            doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            lenient().doReturn(headersSpec).when(headersSpec).attributes(any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.toBodilessEntity()).thenReturn(Mono.empty());
 
-            // Should complete without exception
             webhookClient.deregisterGroupWebhook(SCOPE_ID, GROUP_ID, 99L);
         }
 
@@ -314,13 +293,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
 
-            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).delete();
-            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(999L));
-            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
-            org.mockito.Mockito.lenient()
-                    .doReturn(headersSpec)
-                    .when(headersSpec)
-                    .attributes(org.mockito.ArgumentMatchers.any());
+            doReturn(uriSpec).when(mockWebClient).delete();
+            doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(999L));
+            doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            lenient().doReturn(headersSpec).when(headersSpec).attributes(any());
             when(headersSpec.retrieve())
                     .thenThrow(WebClientResponseException.create(
                             404, "Not Found", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));
@@ -336,13 +312,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
 
-            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).delete();
-            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(99L));
-            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
-            org.mockito.Mockito.lenient()
-                    .doReturn(headersSpec)
-                    .when(headersSpec)
-                    .attributes(org.mockito.ArgumentMatchers.any());
+            doReturn(uriSpec).when(mockWebClient).delete();
+            doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(99L));
+            doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            lenient().doReturn(headersSpec).when(headersSpec).attributes(any());
             when(headersSpec.retrieve())
                     .thenThrow(WebClientResponseException.create(
                             500, "Internal Server Error", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));

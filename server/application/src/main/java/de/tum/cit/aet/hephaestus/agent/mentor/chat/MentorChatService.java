@@ -53,6 +53,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -66,6 +67,7 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -210,7 +212,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                             e.getMessage(),
                             e);
                     metrics.recordCompleted(MentorChatMetrics.Outcome.ERROR);
-                    channel.completeWithError(userFacingError(e));
+                    completeWithError(channel, e, userFacingError(e));
                     return Boolean.FALSE;
                 } finally {
                     metrics.stopTimer(sample);
@@ -237,22 +239,22 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             } catch (RuntimeException ignored) {
                 // Best-effort: the channel may already be closed.
             }
-            if (t instanceof Error) throw (Error) t;
+            if (t instanceof Error) {
+                throw t;
+            }
         }
     }
 
+    @SuppressWarnings("try") // Each MDC entry is removed when its binding closes.
     private MentorChatMetrics.Outcome runTurn(
             MentorTurnRequest request,
             MentorChannel channel,
             AtomicReference<@Nullable MentorRunnerClient> clientHolder,
             long acceptedAt) {
-        org.slf4j.MDC.put("mentorThreadId", request.threadId().toString());
-        org.slf4j.MDC.put("mentorWorkspaceId", Long.toString(request.workspaceId()));
-        try {
+        try (var ignoredThread =
+                        MDC.putCloseable("mentorThreadId", request.threadId().toString());
+                var ignoredWorkspace = MDC.putCloseable("mentorWorkspaceId", Long.toString(request.workspaceId()))) {
             return runTurnInternal(request, channel, clientHolder, acceptedAt);
-        } finally {
-            org.slf4j.MDC.remove("mentorThreadId");
-            org.slf4j.MDC.remove("mentorWorkspaceId");
         }
     }
 
@@ -353,7 +355,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 // sandbox waits for a cold start too.
                 turn.coldSandbox = !sandboxService.isWarm(spec);
                 if (turn.coldSandbox) {
-                    channel.send(UIMessageChunk.DataMentorStatus.of("warming-up", "container-cold"));
+                    channel.send(UIMessageChunk.DataMentorStatus.of(
+                            UIMessageChunk.DataMentorStatus.State.WARMING_UP, "container-cold"));
                 }
             } catch (RuntimeException beforeAttach) {
                 // Only attach uses, and so revokes, the credential the spec minted.
@@ -423,10 +426,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                                 MentorTurnPromptFactory.forRunner(request, contextInputs),
                                 MentorTurnEvidence.forRunner(objectMapper, contextInputs));
                         state.markLlmCallStarted();
-                        prompt.whenComplete((result, ex) -> {
-                            if (ex != null) {
-                                turn.done.completeExceptionally(ex);
-                            }
+                        prompt.exceptionally(ex -> {
+                            turn.done.completeExceptionally(ex);
+                            return null;
                         });
 
                         awaitTurn(prompt, turn.done, Duration.ofSeconds(llmConfig.timeoutSeconds()));
@@ -548,7 +550,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             closeOpenBlocks(state, channel);
             interruptOrLeaveForReaper(cookie, state, cause);
             if (userError != null) {
-                channel.completeWithError(userError);
+                completeWithError(channel, cause, userError);
             }
         } finally {
             turn.delivery.unlock();
@@ -565,7 +567,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             Turn turn,
             Function<MentorRunnerClient.FetchContextRequest, JsonNode> fetchContext,
             Predicate<MentorRunnerClient.LinkObservationRequest> linkObservation)
-            throws InterruptedException, java.util.concurrent.ExecutionException, TimeoutException {
+            throws InterruptedException, ExecutionException, TimeoutException {
         if (channel.isClientGone()) {
             throw new ClientDisconnectedException("Client disconnected during sandbox attach");
         }
@@ -673,7 +675,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     /** Bounds traversal of cyclic or unreasonably deep cause chains. */
     private static final int MAX_CAUSE_DEPTH = 32;
 
-    /** The AI SDK reducer rejects an error chunk that follows an unmatched text-start (vercel/ai #11700). */
+    /** The AI SDK reducer rejects an error chunk that follows an unmatched text-start (vercel/ai#11700). */
     private void closeOpenBlocks(TranslatorState state, MentorChannel channel) {
         try {
             translator.closeOpenBlocks(state).forEach(channel::send);
@@ -692,23 +694,21 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             if (cur instanceof MentorRunnerException mre && mre.poisonsSandbox()) {
                 return true;
             }
-            Throwable next = cur.getCause();
-            if (next == cur) break;
-            cur = next;
+            cur = cur.getCause();
         }
         return false;
     }
 
     static void awaitTurn(
             CompletableFuture<JsonNode> acknowledgement, CompletableFuture<Void> terminal, Duration timeout)
-            throws InterruptedException, java.util.concurrent.ExecutionException, TimeoutException {
+            throws InterruptedException, ExecutionException, TimeoutException {
         // Events can finish a turn before its acknowledgement arrives. Acknowledgement has its own deadline;
         // the frozen turn timeout includes PiRuntimeFactory's reserve for native abort and terminal delivery.
         if (!terminal.isDone()) {
             try {
                 CompletableFuture.anyOf(acknowledgement, terminal)
                         .get(MentorRunnerClient.DEFAULT_PROMPT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-            } catch (java.util.concurrent.ExecutionException failure) {
+            } catch (ExecutionException failure) {
                 if (!terminal.isDone()) {
                     throw failure;
                 }
@@ -733,7 +733,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     complete(finish, state, channel, cookie, turn);
                     return;
                 }
-                if (chunk instanceof UIMessageChunk.Error err) {
+                if (chunk instanceof UIMessageChunk.TurnError err) {
                     if (turn.terminal.compareAndSet(null, Terminal.FAILED_IN_STREAM)) {
                         sendTerminal(channel, chunk);
                         interruptOrLeaveForReaper(cookie, state, new IllegalStateException(err.errorText()));
@@ -793,7 +793,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         }
         if (recorded.isEmpty()) {
             turn.terminal.set(Terminal.FAILED_IN_STREAM);
-            sendTerminal(channel, new UIMessageChunk.Error(REPLY_NOT_SAVED));
+            sendTerminal(channel, new UIMessageChunk.TurnError(REPLY_NOT_SAVED));
             turn.done.complete(null);
             return;
         }
@@ -857,12 +857,27 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     }
 
     /**
+     * A busy refusal also carries the {@code busy} turn state, so a client tells it from a failure without
+     * reading the sentence.
+     */
+    private static void completeWithError(MentorChannel channel, Throwable cause, String userError) {
+        if (isBusy(cause)) {
+            sendTerminal(channel, UIMessageChunk.DataMentorStatus.of(UIMessageChunk.DataMentorStatus.State.BUSY, null));
+        }
+        channel.completeWithError(userError);
+    }
+
+    private static boolean isBusy(Throwable e) {
+        return e instanceof MentorBusyException || e.getCause() instanceof MentorBusyException;
+    }
+
+    /**
      * Only sanitized messages cross the channel boundary; raw exception messages may expose
      * internal ids or upstream errors. The server log retains those details.
      */
     private static String userFacingError(Throwable e) {
-        if (e instanceof MentorBusyException || e.getCause() instanceof MentorBusyException) {
-            return "Heph is busy. Please try again.";
+        if (isBusy(e)) {
+            return MentorBusyException.USER_MESSAGE;
         }
         if (e.getCause() instanceof MentorStreamLostException || e instanceof MentorStreamLostException) {
             return PiEventToUiChunkTranslator.REPLY_LOST_IN_TRANSIT;
@@ -877,7 +892,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         if (e instanceof MentorRunnerException) {
             return "The mentor hit an unexpected error. Please try again.";
         }
-        if (e instanceof java.util.concurrent.TimeoutException) {
+        if (e instanceof TimeoutException) {
             return "Mentor turn timed out before completion.";
         }
         if (e instanceof ClientDisconnectedException) {

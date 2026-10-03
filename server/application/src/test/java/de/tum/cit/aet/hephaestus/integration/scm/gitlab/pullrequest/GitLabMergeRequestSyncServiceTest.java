@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -59,7 +60,7 @@ class GitLabMergeRequestSyncServiceTest extends BaseUnitTest {
     private HttpGraphQlClient client;
 
     @Mock
-    private HttpGraphQlClient.RequestSpec requestSpec;
+    private GraphQlClient.RequestSpec requestSpec;
 
     private GitLabMergeRequestSyncService service;
 

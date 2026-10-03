@@ -15,7 +15,7 @@ final class DeterministicGroupGuidanceComposer {
 
     /**
      * Produces a short standing sentence, a concrete focus, and at most one catalog-authored reminder.
-     * Detection criteria never enters this method: {@code whatGoodLooksLike}/{@code whyItMatters} are the
+     * Review criteria never enter this method: {@code whatGoodLooksLike}/{@code whyItMatters} are the
      * catalog's dedicated developer-facing layer.
      */
     static @Nullable String compose(PracticeGroupStandingDTO.Standing status, List<PracticeStandingDTO> cards) {

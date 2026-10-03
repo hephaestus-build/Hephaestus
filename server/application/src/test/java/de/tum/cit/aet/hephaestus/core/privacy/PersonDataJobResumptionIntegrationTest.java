@@ -3,21 +3,36 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import de.tum.cit.aet.hephaestus.core.auth.domain.*;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
-import de.tum.cit.aet.hephaestus.integration.core.connection.*;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.*;
-import de.tum.cit.aet.hephaestus.testconfig.*;
-import java.util.*;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
 /** Real PostgreSQL transactions prove a store mutation and its receipt cannot commit separately. */
@@ -165,7 +180,7 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
         assertThat(preparationCalls.get()).isEqualTo(1);
         assertThat(requests.findById(requestId).orElseThrow().getState()).isEqualTo(PersonDataRequest.State.FAILED);
         assertThatThrownBy(() -> tx.executeWithoutResult(status -> service.requestErasure(requestId, adminId, true)))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+                .isInstanceOf(ResponseStatusException.class);
         assertThat(secondCalls.get()).isEqualTo(1);
         var resumingAdministrator = new Account("Resuming administrator");
         resumingAdministrator.setAppRole(Account.AppRole.APP_ADMIN);
@@ -207,7 +222,7 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
                 jdbc.queryForObject("SELECT count(*) FROM user_preferences WHERE user_id=?", Long.class, userId));
     }
 
-    private @org.jspecify.annotations.Nullable String profileName(Long userId) {
+    private @Nullable String profileName(Long userId) {
         return jdbc.queryForObject("SELECT name FROM \"user\" WHERE id=?", String.class, userId);
     }
 

@@ -382,7 +382,7 @@ function HeaderContainer() {
 			feedbackDialog={
 				!userView && !isLoading && isAuthenticated ? (
 					<ProductFeedbackControls
-						key={`${getUserId()}:${chromeWorkspaceSlug}`}
+						key={`${getUserId() ?? ""}:${chromeWorkspaceSlug ?? ""}`}
 						workspaceSlug={chromeWorkspaceSlug}
 					/>
 				) : null

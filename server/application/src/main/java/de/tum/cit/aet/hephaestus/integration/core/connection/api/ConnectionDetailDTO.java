@@ -99,7 +99,7 @@ public record ConnectionDetailDTO(
      * Drops every {@code SENSITIVE_CONFIG_KEYS} entry. The key is removed outright rather than
      * masked with a placeholder: a {@code "***"} value would round-trip back through an admin
      * "edit config" client as a literal secret. Keys are compared lowercased with {@link
-     * Locale#ROOT} (the {@code LocaleSafetyArchTest} contract).
+     * Locale#ROOT}, so the JVM locale cannot change which keys match.
      */
     static Map<String, Object> redactSensitive(Map<String, Object> raw) {
         Map<String, Object> safe = new LinkedHashMap<>();

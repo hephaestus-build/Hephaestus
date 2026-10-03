@@ -13,13 +13,9 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /** The test schema is Hibernate-generated, so the one-active-Slack-per-team index is absent here. */
 class SlackWorkspaceResolverIntegrationTest extends AbstractWorkspaceIntegrationTest {
-
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
 
     @Autowired
     private ConnectionRepository connectionRepository;
@@ -52,7 +48,7 @@ class SlackWorkspaceResolverIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     private SlackWorkspaceResolver resolver() {
-        return new SlackWorkspaceResolver(jdbcTemplate);
+        return new SlackWorkspaceResolver(connectionRepository);
     }
 
     private static String uniqueTeam() {

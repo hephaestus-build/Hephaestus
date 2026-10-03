@@ -82,7 +82,7 @@ public class GitHubProjectItemSyncService {
      * Items referencing projects not yet synced are skipped with a debug log.
      * <p>
      * The {@code parentIssueId} is critical: embedded project items are fetched inline with
-     * their parent issue/PR, so the GraphQL query does NOT include the {@code content} block
+     * their parent issue/PR, so the GraphQL query does NOT include the {@code content { ... }} selection
      * (which would redundantly return the parent's own ID). Instead, we propagate the parent's
      * database ID so the processor can set both {@code issue_id} and {@code content_database_id}.
      *
@@ -278,7 +278,7 @@ public class GitHubProjectItemSyncService {
      * Processes a single embedded project item.
      * <p>
      * If the item's DTO has no {@code issueId} set (because the GraphQL query omitted
-     * the {@code content} block), the {@code parentIssueId} is injected as both
+     * the {@code content { ... }} selection), the {@code parentIssueId} is injected as both
      * {@code issueId} and {@code contentDatabaseId} via
      * {@link GitHubProjectItemDTO#withIssueId(Long)}.
      *
@@ -372,7 +372,7 @@ public class GitHubProjectItemSyncService {
             ClassificationResult classification, String phase, String scopeLabel, Object scopeValue, int retryAttempt) {
         Category category = classification.category();
 
-        switch (category) {
+        return switch (category) {
             case RETRYABLE -> {
                 if (retryAttempt < MAX_RETRY_ATTEMPTS) {
                     log.warn(
@@ -386,9 +386,9 @@ public class GitHubProjectItemSyncService {
                         ExponentialBackoff.sleep(retryAttempt + 1);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        return false;
+                        yield false;
                     }
-                    return true;
+                    yield true;
                 }
                 log.warn(
                         "Aborting {} after {} retries: {}={}, error={}",
@@ -397,7 +397,7 @@ public class GitHubProjectItemSyncService {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             case RATE_LIMITED -> {
                 if (retryAttempt < MAX_RETRY_ATTEMPTS && classification.suggestedWait() != null) {
@@ -408,9 +408,9 @@ public class GitHubProjectItemSyncService {
                         Thread.sleep(waitMs);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        return false;
+                        yield false;
                     }
-                    return true;
+                    yield true;
                 }
                 log.warn(
                         "Aborting {} due to rate limit: {}={}, error={}",
@@ -418,7 +418,7 @@ public class GitHubProjectItemSyncService {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             case NOT_FOUND -> {
                 log.warn(
@@ -427,7 +427,7 @@ public class GitHubProjectItemSyncService {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             case AUTH_ERROR -> {
                 log.warn(
@@ -436,7 +436,7 @@ public class GitHubProjectItemSyncService {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             case CLIENT_ERROR -> {
                 log.warn(
@@ -445,7 +445,7 @@ public class GitHubProjectItemSyncService {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             default -> {
                 log.warn(
@@ -455,9 +455,9 @@ public class GitHubProjectItemSyncService {
                         scopeValue,
                         category,
                         classification.message());
-                return false;
+                yield false;
             }
-        }
+        };
     }
 
     private boolean waitForRateLimitIfNeeded(Long scopeId, String phase, String scopeLabel, Object scopeValue) {

@@ -74,7 +74,7 @@ export function SlackPreferencesSection({
 			<ItemGroup>
 				<Item variant="outline" role="listitem">
 					<ItemMedia variant="icon">
-						<SlackIcon aria-hidden="true" />
+						<SlackIcon />
 					</ItemMedia>
 					<ItemContent>
 						<ItemTitle>Slack is not connected</ItemTitle>
@@ -85,7 +85,7 @@ export function SlackPreferencesSection({
 					<ItemActions>
 						{canConnectSlack ? (
 							<Button variant="outline" size="sm" onClick={onConnectSlack}>
-								<SlackIcon className="mr-1.5 size-3.5" aria-hidden="true" />
+								<SlackIcon className="mr-1.5 size-3.5" />
 								Connect Slack
 							</Button>
 						) : (
@@ -100,7 +100,7 @@ export function SlackPreferencesSection({
 			<ItemGroup>
 				<Item variant="outline" role="listitem">
 					<ItemMedia variant="icon">
-						<SlackIcon aria-hidden="true" />
+						<SlackIcon />
 					</ItemMedia>
 					<ItemContent>
 						<ItemTitle>
@@ -133,7 +133,7 @@ export function SlackPreferencesSection({
 		<section className="space-y-4" aria-labelledby="slack-preferences-heading">
 			<div className="space-y-1">
 				<div className="flex items-center gap-2">
-					<SlackIcon className="size-5" aria-hidden="true" />
+					<SlackIcon className="size-5" />
 					<h2 id="slack-preferences-heading" className="text-xl font-semibold">
 						Slack
 					</h2>

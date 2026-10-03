@@ -249,7 +249,7 @@ class AccountServiceTest extends BaseUnitTest {
         // The confirmation email is owed once the cooldown started: purge date = now + cooldown.
         verify(eventPublisher)
                 .publishEvent(
-                        new AccountDeletionScheduledEvent(2L, clock.instant().plus(Duration.ofHours(48))));
+                        new AccountDeletionScheduledEvent(2L, clock.instant().plus(Duration.ofDays(2))));
     }
 
     @Test

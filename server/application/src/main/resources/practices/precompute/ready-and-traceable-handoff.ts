@@ -11,7 +11,7 @@ export default async function readyAndTraceableHandoff(
 ) {
 	const directions: string[] = [];
 
-	// --- Traceability: does the handoff reference a motivating issue at all? ---
+	// Traceability: does the handoff reference a motivating issue at all?
 	const commits = await readCommits(contextDir);
 	const body = `${m.body ?? ""}\n${commits.map((c) => c.message).join("\n")}`;
 	const branch = m.source_branch;
@@ -28,7 +28,7 @@ export default async function readyAndTraceableHandoff(
 		);
 	}
 
-	// --- Readiness: the checklist as written, counted, so a tick is never guessed at. ---
+	// Readiness: the checklist as written, counted, so a tick is never guessed at.
 	const description = m.body ?? "";
 	const ticked = (description.match(/^\s*[-*]\s*\[[xX]\]/gmu) ?? []).length;
 	const unticked = (description.match(/^\s*[-*]\s*\[ \]/gmu) ?? []).length;

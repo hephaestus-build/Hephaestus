@@ -15,7 +15,7 @@ import tools.jackson.databind.JsonNode;
  * Translates Pi {@code AgentSessionEvent} JSON into AI SDK {@link UIMessageChunk}s. Stateful
  * per turn; the caller threads a {@link TranslatorState} through every call. An event it cannot
  * account for — an unknown or malformed type, or streamed text that does not match the model's
- * final text — fails the turn with an {@link UIMessageChunk.Error} rather than being dropped.
+ * final text — fails the turn with an {@link UIMessageChunk.TurnError} rather than being dropped.
  */
 @Component
 public class PiEventToUiChunkTranslator {
@@ -33,8 +33,8 @@ public class PiEventToUiChunkTranslator {
             case "message_start" -> handleMessageStart(piEvent, state);
             case "message_update" -> handleMessageUpdate(piEvent, state);
             case "message_end" -> handleMessageEnd(piEvent, state);
-            case "tool_execution_start" -> handleToolStart(piEvent, state);
-            case "tool_execution_end" -> handleToolEnd(piEvent, state);
+            case "tool_execution_start" -> handleToolStart(state);
+            case "tool_execution_end" -> handleToolEnd();
             case "turn_end" -> handleTurnEnd(state);
             case "agent_end" -> handleAgentEnd(piEvent, state);
             case "link_observation" -> handleLinkObservation(piEvent, state);
@@ -72,7 +72,7 @@ public class PiEventToUiChunkTranslator {
         log.warn("Mentor stream carried {}; failing the turn", what);
         state.markStreamBroken();
         List<UIMessageChunk> out = new ArrayList<>(closeOpenStreamingBlocks(state));
-        out.add(new UIMessageChunk.Error(REPLY_LOST_IN_TRANSIT));
+        out.add(new UIMessageChunk.TurnError(REPLY_LOST_IN_TRANSIT));
         return out;
     }
 
@@ -109,9 +109,9 @@ public class PiEventToUiChunkTranslator {
         // ("turn_watchdog_fired") leaked to the UI as the error text. Map to a user-facing
         // message; the runner-side correlate is logged at WARN already. Close any open
         // text block first so the AI SDK reducer doesn't crash on an `error` chunk
-        // following an unmatched `*-start` (vercel/ai #11700).
+        // following an unmatched `*-start` (vercel/ai#11700).
         List<UIMessageChunk> out = new ArrayList<>(closeOpenStreamingBlocks(state));
-        out.add(new UIMessageChunk.Error("Mentor turn timed out before completion."));
+        out.add(new UIMessageChunk.TurnError("Mentor turn timed out before completion."));
         return out;
     }
 
@@ -156,13 +156,13 @@ public class PiEventToUiChunkTranslator {
                     finalText == null
                             ? "no"
                             : finalText.stream().mapToInt(String::length).sum());
-            out.add(new UIMessageChunk.Error(REPLY_LOST_IN_TRANSIT));
+            out.add(new UIMessageChunk.TurnError(REPLY_LOST_IN_TRANSIT));
         }
         return out;
     }
 
     private static boolean failsTurn(List<UIMessageChunk> chunks) {
-        return chunks.stream().anyMatch(UIMessageChunk.Error.class::isInstance);
+        return chunks.stream().anyMatch(UIMessageChunk.TurnError.class::isInstance);
     }
 
     private static List<String> textBlocks(JsonNode message) {
@@ -175,8 +175,6 @@ public class PiEventToUiChunkTranslator {
         }
         return blocks;
     }
-
-    // message_start / Start + StartStep
 
     private List<UIMessageChunk> handleMessageStart(JsonNode event, TranslatorState state) {
         String role = optionalString(event.path("message"), "role");
@@ -227,9 +225,8 @@ public class PiEventToUiChunkTranslator {
 
     /**
      * Translate the inner {@code assistantMessageEvent} payload Pi attaches to every
-     * {@code message_update}. {@code contentIndex} is a stable per-message integer that lets us
-     * keep concurrent text + reasoning blocks separate; we derive a stable {@code text-<n>} /
-     * {@code reasoning-<n>} block id from it so subsequent deltas reconcile to the same
+     * {@code message_update}. {@code contentIndex} is a stable per-message integer; we derive a
+     * stable {@code text-<n>} block id from it so subsequent deltas reconcile to the same
      * {@link UIMessageChunk.TextStart} on the AI SDK side. Usage is captured opportunistically:
      * {@code partial.usage} accumulates per chunk on most providers (per
      * {@code AssistantMessageEvent.partial: AssistantMessage}). It is also re-emitted as a final
@@ -241,7 +238,7 @@ public class PiEventToUiChunkTranslator {
         // overwrites with the final snapshot. agent_end has no usage on the event itself.
         capturePartialUsage(ame.path("partial"), state);
         capturePartialUsage(parent.path("message"), state);
-        String blockId = blockIdFor(ame, innerType);
+        String blockId = blockIdFor(ame);
         return switch (innerType) {
             case "text_delta" -> {
                 String delta = optionalString(ame, "delta");
@@ -277,10 +274,10 @@ public class PiEventToUiChunkTranslator {
         return List.of(new UIMessageChunk.TextEnd(blockId));
     }
 
-    private static String blockIdFor(JsonNode ame, String innerType) {
+    private static String blockIdFor(JsonNode ame) {
         // Pi's contentIndex is the per-message position of the content block. Map it to a stable
-        // block id so concurrent deltas merge into the same TextStart on the AI SDK side. We
-        // namespace by inner-type so text-0 and reasoning-0 never collide.
+        // block id so concurrent deltas merge into the same TextStart on the AI SDK side. Only text
+        // blocks reach the client (reasoning is dropped), so one namespace is enough.
         JsonNode idx = ame.path("contentIndex");
         long index = idx.isIntegralNumber() ? idx.asLong() : 0L;
         return "text-" + index;
@@ -315,17 +312,13 @@ public class PiEventToUiChunkTranslator {
         return out;
     }
 
-    // tool_execution_start / end
-
-    private List<UIMessageChunk> handleToolStart(JsonNode event, TranslatorState state) {
+    private List<UIMessageChunk> handleToolStart(TranslatorState state) {
         return closeOpenStreamingBlocks(state);
     }
 
-    private List<UIMessageChunk> handleToolEnd(JsonNode event, TranslatorState state) {
+    private List<UIMessageChunk> handleToolEnd() {
         return List.of();
     }
-
-    // turn_end
 
     private List<UIMessageChunk> handleTurnEnd(TranslatorState state) {
         List<UIMessageChunk> out = closeOpenStreamingBlocks(state);
@@ -343,8 +336,6 @@ public class PiEventToUiChunkTranslator {
         }
         return out;
     }
-
-    // agent_end → Finish
 
     private List<UIMessageChunk> handleAgentEnd(JsonNode event, TranslatorState state) {
         // Pi shape per pi-coding-agent/dist/core/extensions/types.d.ts AgentEndEvent:
@@ -397,7 +388,7 @@ public class PiEventToUiChunkTranslator {
         out.addAll(closeOpenStreamingBlocks(state));
         // The runner forwards agent_end only after Pi settles its retries.
         if (mapStopReason(piStopReason) == UIMessageChunk.FinishReason.ERROR) {
-            out.add(new UIMessageChunk.Error("Heph couldn't finish this reply. Please try again."));
+            out.add(new UIMessageChunk.TurnError("Heph couldn't finish this reply. Please try again."));
             return out;
         }
         UIMessageChunk.MessageMetadata metadata = UIMessageChunk.MessageMetadata.of(
@@ -430,8 +421,6 @@ public class PiEventToUiChunkTranslator {
         };
     }
 
-    // link_observation → DataObservation
-
     private List<UIMessageChunk> handleLinkObservation(JsonNode event, TranslatorState state) {
         // Runner emits camelCase `observationId` and `text` (pi-mentor-runner.ts defineLinkObservationTool).
         // A link that cannot be read is feedback this turn would silently lose or show empty, so it fails the turn.
@@ -456,8 +445,6 @@ public class PiEventToUiChunkTranslator {
         return List.of(observation);
     }
 
-    // pi_error / turn_watchdog_fired → Error
-
     private List<UIMessageChunk> handleError(JsonNode event, TranslatorState state) {
         String errorText = optionalString(event, "message");
         if (errorText == null) {
@@ -467,13 +454,11 @@ public class PiEventToUiChunkTranslator {
             errorText = event.get("type").asString();
         }
         // Close any open text/reasoning block before the terminal error chunk: the AI SDK
-        // reducer crashes on an `error` chunk that follows an unmatched `*-start` (vercel/ai #11700).
+        // reducer crashes on an `error` chunk that follows an unmatched `*-start` (vercel/ai#11700).
         List<UIMessageChunk> out = new ArrayList<>(closeOpenStreamingBlocks(state));
-        out.add(new UIMessageChunk.Error(errorText));
+        out.add(new UIMessageChunk.TurnError(errorText));
         return out;
     }
-
-    // helpers
 
     /**
      * Return the {@code field}'s text value, or {@code null} if absent, JSON-null, or a non-text

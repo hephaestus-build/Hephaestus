@@ -20,7 +20,7 @@ public record SyncResult(Status status, int count) {
          * Sync completed successfully - all pages and phases were fetched. The timestamp should be
          * updated.
          */
-        COMPLETED,
+        COMPLETED(0),
 
         /**
          * Sync completed but with warnings - the primary phase succeeded but one or more secondary
@@ -29,19 +29,30 @@ public record SyncResult(Status status, int count) {
          * The timestamp for successfully completed phases should be updated. Failed phases retain
          * their previous timestamp for retry.
          */
-        COMPLETED_WITH_WARNINGS,
+        COMPLETED_WITH_WARNINGS(1),
 
         /**
          * Sync was aborted due to rate limiting. The timestamp should NOT be updated to allow retry
          * from the same point.
          */
-        ABORTED_RATE_LIMIT,
+        ABORTED_RATE_LIMIT(2),
 
         /**
          * Sync was aborted due to an error (auth, not found, client error, etc.). The timestamp
          * should NOT be updated to allow retry from the same point.
          */
-        ABORTED_ERROR,
+        ABORTED_ERROR(3);
+
+        /** How bad the outcome is; declared so reordering the constants cannot change {@link #merge}. */
+        private final int badness;
+
+        Status(int badness) {
+            this.badness = badness;
+        }
+
+        public boolean isWorseThan(Status other) {
+            return badness > other.badness;
+        }
     }
 
     /**
@@ -116,7 +127,7 @@ public record SyncResult(Status status, int count) {
         Status worstStatus = Status.COMPLETED;
         for (SyncResult r : results) {
             totalCount += r.count();
-            if (r.status().ordinal() > worstStatus.ordinal()) {
+            if (r.status().isWorseThan(worstStatus)) {
                 worstStatus = r.status();
             }
         }

@@ -15,8 +15,9 @@ import java.util.List;
  * @param pagesCompleted      number of pagination pages successfully fetched
  * @param projectsSkipped     number of individual projects that failed to process
  * @param projectsRedacted    number of projects returned as null by GitLab due to access restrictions
- * @param projectsReconciled  number of direct projects recovered by the reconciliation pass
- *                            (workaround for <a href="https://gitlab.com/gitlab-org/gitlab/-/issues/33419">GitLab #33419</a>)
+ * @param projectsReconciled  number of direct projects recovered by the reconciliation pass, which
+ *                            {@code includeSubgroups: true} can drop
+ *                            (<a href="https://gitlab.com/gitlab-org/gitlab/-/issues/33419">GitLab #33419</a>)
  */
 public record GitLabSyncResult(
         Status status,

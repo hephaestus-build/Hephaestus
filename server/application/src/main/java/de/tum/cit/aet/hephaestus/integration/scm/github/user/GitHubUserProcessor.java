@@ -261,9 +261,10 @@ public class GitHubUserProcessor {
     /**
      * Ensure a user exists, creating if necessary.
      * <p>
-     * Convenience method that delegates to {@link #findOrCreate(GitHubUserDTO)}.
+     * Convenience method that delegates to {@link #findOrCreate(GitHubUserDTO, Long)}.
      *
      * @param dto the GitHub user DTO
+     * @param providerId the identity provider the user belongs to
      * @return the User entity, or null if dto is null or has no ID
      */
     @Nullable

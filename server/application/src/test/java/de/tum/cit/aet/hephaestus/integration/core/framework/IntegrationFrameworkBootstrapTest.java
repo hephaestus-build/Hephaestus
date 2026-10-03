@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandlerRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
+import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectParser;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -220,7 +222,7 @@ class IntegrationFrameworkBootstrapTest extends BaseUnitTest {
 
             @Override
             public String deriveSubject(JsonNode payload, Map<String, String> headers) {
-                return kind.name().toLowerCase(java.util.Locale.ROOT) + ".test";
+                return kind.name().toLowerCase(Locale.ROOT) + ".test";
             }
 
             @Override
@@ -238,8 +240,8 @@ class IntegrationFrameworkBootstrapTest extends BaseUnitTest {
             }
 
             @Override
-            public de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey parse(String fullSubject) {
-                return new de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey(kind, "test");
+            public EventTypeKey parse(String fullSubject) {
+                return new EventTypeKey(kind, "test");
             }
         };
     }

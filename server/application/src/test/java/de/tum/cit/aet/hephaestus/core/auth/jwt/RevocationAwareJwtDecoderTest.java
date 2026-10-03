@@ -323,7 +323,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         CacheManager cm = cacheManager();
         Cache cache = cm.getCache(RevocationAwareJwtDecoder.CACHE_NAME);
         assertNotNull(cache);
-        cache.put(jti, Boolean.TRUE); // negative cache: only the REVOKED verdict is stored
+        cache.put(jti, true); // negative cache: only the REVOKED verdict is stored
 
         RevocationAwareJwtDecoder decoder = decoder(repo, cm);
         assertThatThrownBy(() -> decoder.decode(validToken(jti))).isInstanceOf(JwtException.class);
@@ -345,7 +345,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         // ACTIVE is never cached — both calls hit the DB, so a revoke is visible within DB lag, not TTL.
         verify(repo, times(2)).findActive(eq(jti), any());
         var cache = cm.getCache(RevocationAwareJwtDecoder.CACHE_NAME);
-        org.junit.jupiter.api.Assertions.assertNotNull(cache);
+        assertThat(cache).isNotNull();
         assertThat(cache.get(jti)).isNull();
     }
 

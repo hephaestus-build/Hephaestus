@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,7 +40,7 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
     void userExposesAccessTokenExpiry() {
         Account account = accountRepository.save(new Account("Expiry Eddie"));
         String token = jwtIssuer
-                .issue(java.util.Objects.requireNonNull(account.getId()), TokenConstraints.session(null, null), null)
+                .issue(Objects.requireNonNull(account.getId()), TokenConstraints.session(null, null), null)
                 .value();
 
         webTestClient
@@ -59,7 +60,7 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
         Account account = accountRepository.save(new Account("Rolling Rosa"));
         String current = jwtIssuer
                 .issue(
-                        java.util.Objects.requireNonNull(account.getId()),
+                        Objects.requireNonNull(account.getId()),
                         TokenConstraints.session(Instant.now().plus(Duration.ofHours(12)), null),
                         null)
                 .value();
@@ -86,7 +87,7 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
         long ceiling = Instant.now().getEpochSecond() + 120;
         String token = jwtIssuer
                 .issue(
-                        java.util.Objects.requireNonNull(account.getId()),
+                        Objects.requireNonNull(account.getId()),
                         TokenConstraints.session(Instant.ofEpochSecond(ceiling), null),
                         null)
                 .value();

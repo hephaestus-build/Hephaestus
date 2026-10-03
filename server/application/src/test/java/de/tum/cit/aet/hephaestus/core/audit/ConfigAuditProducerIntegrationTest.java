@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceSettingsService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
 import jakarta.persistence.EntityManager;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -155,7 +156,7 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
         entityManager.flush();
         var filter = new ConfigAuditFilter(List.of(entityType), null, null, null, null, null, null);
         return repository.findForWorkspace(workspace.getId(), filter, PageRequest.of(0, 50)).getContent().stream()
-                .sorted(java.util.Comparator.comparing(ConfigAuditEvent::getId))
+                .sorted(Comparator.comparing(ConfigAuditEvent::getId))
                 .toList();
     }
 }

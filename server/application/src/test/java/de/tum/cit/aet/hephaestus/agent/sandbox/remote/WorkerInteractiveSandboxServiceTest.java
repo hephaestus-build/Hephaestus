@@ -1,23 +1,42 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.remote;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.*;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandbox;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.*;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.*;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerControlWebSocketHandler;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerDisconnectedEvent;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerMentorSessionEvent;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerSession;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerSessionRegistry;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.CapacityReport;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.MentorSessionCommand;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.MentorSessionEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -155,15 +174,15 @@ class WorkerInteractiveSandboxServiceTest extends BaseUnitTest {
     @Test
     void workerCloseDeliversQueuedFramesBeforeReportingLoss() throws Exception {
         var handle = service.attach(spec("1"));
-        var entered = new java.util.concurrent.CountDownLatch(1);
-        var release = new java.util.concurrent.CountDownLatch(1);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
         var received = new CopyOnWriteArrayList<String>();
         var lost = new AtomicBoolean();
         var subscription = handle.subscribeFromNow(
                 frame -> {
                     entered.countDown();
                     try {
-                        release.await(2, java.util.concurrent.TimeUnit.SECONDS);
+                        release.await(2, TimeUnit.SECONDS);
                     } catch (InterruptedException interrupted) {
                         Thread.currentThread().interrupt();
                     }
@@ -178,7 +197,7 @@ class WorkerInteractiveSandboxServiceTest extends BaseUnitTest {
                             null,
                             MentorSessionEvent.Kind.FRAME,
                             mapper.createObjectNode().put("text", "first"))));
-            assertThat(entered.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
             service.receive(new WorkerMentorSessionEvent(
                     worker,
                     new MentorSessionEvent(
@@ -264,8 +283,8 @@ class WorkerInteractiveSandboxServiceTest extends BaseUnitTest {
                 new SimpleMeterRegistry());
         var stalled = service.attach(spec("1"));
         var healthy = service.attach(spec("2"));
-        var entered = new java.util.concurrent.CountDownLatch(1);
-        var release = new java.util.concurrent.CompletableFuture<Void>();
+        var entered = new CountDownLatch(1);
+        var release = new CompletableFuture<Void>();
         var lost = new AtomicBoolean();
         var subscription = stalled.subscribeFromNow(
                 frame -> {
@@ -282,13 +301,13 @@ class WorkerInteractiveSandboxServiceTest extends BaseUnitTest {
                         mapper.createObjectNode().put("text", "delta")));
         try {
             service.receive(frame);
-            assertThat(entered.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
             service.receive(frame);
-            var dispatched = java.util.concurrent.CompletableFuture.runAsync(() -> {
+            var dispatched = CompletableFuture.runAsync(() -> {
                 service.receive(frame);
                 healthy.send(mapper.createObjectNode().put("method", "hello"));
             });
-            dispatched.get(2, java.util.concurrent.TimeUnit.SECONDS);
+            dispatched.get(2, TimeUnit.SECONDS);
             assertThat(lost).isTrue();
             assertThat(sent).anySatisfy(command -> {
                 assertThat(command.sessionId()).isEqualTo(healthy.identity().sessionId());
@@ -309,8 +328,8 @@ class WorkerInteractiveSandboxServiceTest extends BaseUnitTest {
         when(replacementWorker.isOpen()).thenReturn(true);
         when(replacementWorker.lastCapacity()).thenReturn(new CapacityReport(1, 1, 0, 0, 1, 1));
         when(registry.sessions()).thenReturn(List.of(worker, replacementWorker));
-        var entered = new java.util.concurrent.CountDownLatch(1);
-        var release = new java.util.concurrent.CompletableFuture<Void>();
+        var entered = new CountDownLatch(1);
+        var release = new CompletableFuture<Void>();
         doAnswer(invocation -> {
                     var command = (MentorSessionCommand) invocation.getArgument(0);
                     if (command.operation() == MentorSessionCommand.Operation.CLOSE
@@ -354,20 +373,16 @@ class WorkerInteractiveSandboxServiceTest extends BaseUnitTest {
                 requested.resourceLimits(),
                 requested.securityProfile(),
                 requested.inputFiles());
-        var replacing = java.util.concurrent.CompletableFuture.supplyAsync(() -> service.attach(changed));
-        java.util.concurrent.CompletableFuture<AttachedSandbox> other = null;
+        var replacing = CompletableFuture.supplyAsync(() -> service.attach(changed));
+        CompletableFuture<AttachedSandbox> other = null;
         try {
-            assertThat(entered.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
-            other = java.util.concurrent.CompletableFuture.supplyAsync(() -> service.attach(spec("2")));
-            assertThat(other.get(2, java.util.concurrent.TimeUnit.SECONDS)
-                            .identity()
-                            .userId())
-                    .isEqualTo("2");
+            assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
+            other = CompletableFuture.supplyAsync(() -> service.attach(spec("2")));
+            assertThat(other.get(2, TimeUnit.SECONDS).identity().userId()).isEqualTo("2");
         } finally {
             release.complete(null);
-            replacing.get(5, java.util.concurrent.TimeUnit.SECONDS).close(Duration.ZERO);
-            if (other != null)
-                other.get(5, java.util.concurrent.TimeUnit.SECONDS).close(Duration.ZERO);
+            replacing.get(5, TimeUnit.SECONDS).close(Duration.ZERO);
+            if (other != null) other.get(5, TimeUnit.SECONDS).close(Duration.ZERO);
             original.close(Duration.ZERO);
         }
     }

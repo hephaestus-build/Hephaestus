@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 @Component
 public final class PracticeDefinitionValidator {
 
-    private static final Pattern DETECTOR_VOCAB = Pattern.compile(
+    private static final Pattern REVIEW_RESULT_LABEL = Pattern.compile(
             "\\b(?:PRESENT|ABSENT|GOOD|BAD|POSITIVE|NEGATIVE|ASSESSED|MET|NOT_MET|NOT_APPLICABLE|UNDETERMINED)\\b");
 
     private final ArtifactSourceCatalogRegistry sourceCatalogs;
@@ -36,8 +36,8 @@ public final class PracticeDefinitionValidator {
         if (!canRunAutomatedReview && definition.precomputeScript() != null) {
             throw new IllegalArgumentException("A practice Hephaestus cannot review cannot define a precompute script");
         }
-        rejectDetectorVocabulary("Why it matters", definition.whyItMatters());
-        rejectDetectorVocabulary("What good looks like", definition.whatGoodLooksLike());
+        rejectReviewResultLabels("Why it matters", definition.whyItMatters());
+        rejectReviewResultLabels("What good looks like", definition.whatGoodLooksLike());
         validateEvidence(definition.artifactKind(), definition);
     }
 
@@ -118,11 +118,11 @@ public final class PracticeDefinitionValidator {
         };
     }
 
-    private static void rejectDetectorVocabulary(String field, @Nullable String value) {
+    private static void rejectReviewResultLabels(String field, @Nullable String value) {
         if (value == null) {
             return;
         }
-        Matcher label = DETECTOR_VOCAB.matcher(value);
+        Matcher label = REVIEW_RESULT_LABEL.matcher(value);
         if (label.find()) {
             throw new IllegalArgumentException(field + " is guidance for people. Remove the review result label “"
                     + label.group() + "” and say it in plain words.");

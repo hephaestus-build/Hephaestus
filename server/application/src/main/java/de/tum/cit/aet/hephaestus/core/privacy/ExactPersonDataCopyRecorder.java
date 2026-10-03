@@ -1,8 +1,15 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
-import java.util.*;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -12,7 +19,7 @@ import org.springframework.stereotype.Component;
 @WorkspaceAgnostic("Only immutable user/provider keys are read; each producer owns its workspace-scoped content read")
 public class ExactPersonDataCopyRecorder implements PersonDataCopyRecorder {
     private final JdbcTemplate jdbc;
-    private final ThreadLocal<CaptureFrame> active = new ThreadLocal<>();
+    private static final ThreadLocal<CaptureFrame> ACTIVE = new ThreadLocal<>();
 
     public ExactPersonDataCopyRecorder(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
@@ -20,7 +27,7 @@ public class ExactPersonDataCopyRecorder implements PersonDataCopyRecorder {
 
     @Override
     public void recordUser(long userId) {
-        var frame = active.get();
+        var frame = ACTIVE.get();
         if (frame == null) return;
         frame.users
                 .computeIfAbsent(
@@ -38,7 +45,7 @@ public class ExactPersonDataCopyRecorder implements PersonDataCopyRecorder {
 
     @Override
     public void recordIdentity(PersonCopyIdentity identity) {
-        for (var frame = active.get(); frame != null; frame = frame.parent) {
+        for (var frame = ACTIVE.get(); frame != null; frame = frame.parent) {
             if (frame.identities.add(identity) && frame.writer != null) frame.writer.run();
         }
     }
@@ -46,19 +53,19 @@ public class ExactPersonDataCopyRecorder implements PersonDataCopyRecorder {
     @Override
     public void recordRepository(long repositoryId) {
         if (repositoryId <= 0) throw new IllegalArgumentException("A copied repository requires its exact row key");
-        for (var frame = active.get(); frame != null; frame = frame.parent) {
+        for (var frame = ACTIVE.get(); frame != null; frame = frame.parent) {
             if (frame.repositories.add(repositoryId) && frame.writer != null) frame.writer.run();
         }
     }
 
     @Override
     public Capture begin() {
-        var frame = new CaptureFrame(active.get());
-        active.set(frame);
+        var frame = new CaptureFrame(ACTIVE.get());
+        ACTIVE.set(frame);
         return frame;
     }
 
-    private final class CaptureFrame implements Capture {
+    private static final class CaptureFrame implements Capture {
         private final @Nullable CaptureFrame parent;
         private final Set<PersonCopyIdentity> identities = new LinkedHashSet<>();
         private final Set<Long> repositories = new LinkedHashSet<>();
@@ -94,11 +101,11 @@ public class ExactPersonDataCopyRecorder implements PersonDataCopyRecorder {
         @Override
         public void close() {
             if (closed) return;
-            if (active.get() != this)
+            if (ACTIVE.get() != this)
                 throw new IllegalStateException("Copy captures must close in their nesting order");
             closed = true;
-            if (parent == null) active.remove();
-            else active.set(parent);
+            if (parent == null) ACTIVE.remove();
+            else ACTIVE.set(parent);
         }
     }
 }

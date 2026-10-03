@@ -8,8 +8,8 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHand
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectParser;
-import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GithubSubjectParser;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabSubjectParser;
+import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GitHubSubjectParser;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabSubjectParser;
 import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackSubjectParser;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.Message;
@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 class IntegrationMessageDispatcherTest extends BaseUnitTest {
 
     private static final List<SubjectParser> ALL_PARSERS =
-            List.of(new GithubSubjectParser(), new GitlabSubjectParser(), new SlackSubjectParser());
+            List.of(new GitHubSubjectParser(), new GitLabSubjectParser(), new SlackSubjectParser());
 
     @Test
     void githubSubjectWithoutHandlerReturnsEmpty() {
@@ -95,15 +95,15 @@ class IntegrationMessageDispatcherTest extends BaseUnitTest {
 
     @Test
     void duplicateSubjectParserForSameKindFailsAtConstruction() {
-        SubjectParser first = new GithubSubjectParser();
-        SubjectParser second = new GithubSubjectParser();
+        SubjectParser first = new GitHubSubjectParser();
+        SubjectParser second = new GitHubSubjectParser();
         IntegrationMessageHandlerRegistry emptyRegistry = new IntegrationMessageHandlerRegistry(List.of());
 
         assertThatThrownBy(() -> new IntegrationMessageDispatcher(emptyRegistry, List.of(first, second)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Duplicate SubjectParser")
                 .hasMessageContaining("GITHUB")
-                .hasMessageContaining(GithubSubjectParser.class.getName());
+                .hasMessageContaining(GitHubSubjectParser.class.getName());
     }
 
     private static class RecordingHandler implements IntegrationMessageHandler {

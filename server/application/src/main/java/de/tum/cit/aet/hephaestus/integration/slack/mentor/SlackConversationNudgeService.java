@@ -27,7 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/** Notifies a recipient that conversational feedback is ready without exposing its findings. */
+/** Notifies a recipient that conversational feedback is ready without exposing what it says. */
 @Service
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
 public class SlackConversationNudgeService {
@@ -137,7 +137,7 @@ public class SlackConversationNudgeService {
         return cooldowns.asMap().putIfAbsent(recipient, now) == null;
     }
 
-    /** Count-only copy — deliberately no finding details, no severity, no artifact references. */
+    /** Count-only copy — deliberately no observation details, no severity, no artifact references. */
     static String message(int unitCount) {
         return unitCount == 1
                 ? "You have 1 new practice observation to explore — reply here to go through it."

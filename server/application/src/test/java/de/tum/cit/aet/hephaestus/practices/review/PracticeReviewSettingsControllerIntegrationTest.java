@@ -8,15 +8,20 @@ import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -35,15 +40,15 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
     }
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository monitors;
+    private RepositoryToMonitorRepository monitors;
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
     @WithAdminUser
     void shouldSetAndClearGeneratedPathsWithoutChangingCoverageForBothProviders(boolean gitLab) {
         Workspace workspace = setupWorkspace("generated-paths");
         String repositoryName = gitLab ? "group/nested/project" : "owner/repo";
-        var monitor = new de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor();
+        var monitor = new RepositoryToMonitor();
         monitor.setNameWithOwner(repositoryName);
         monitor.setWorkspace(workspace);
         monitor = monitors.saveAndFlush(monitor);
@@ -77,7 +82,7 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
                 .expectStatus()
                 .isBadRequest()
                 .expectBody(Void.class);
-        var monitor = new de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor();
+        var monitor = new RepositoryToMonitor();
         monitor.setNameWithOwner("owner/local");
         monitor.setWorkspace(workspace);
         monitors.saveAndFlush(monitor);
@@ -254,7 +259,7 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
                 .returnResult(Void.class)
                 .getResponseHeaders()
                 .getETag();
-        return java.util.Objects.requireNonNull(version, "the settings endpoint always answers with an ETag");
+        return Objects.requireNonNull(version, "the settings endpoint always answers with an ETag");
     }
 
     private WebTestClient.ResponseSpec patch(String slug, @Nullable String ifMatch, Map<String, Object> body) {

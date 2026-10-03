@@ -10,6 +10,7 @@ import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.metamodel.EntityType;
 import jakarta.persistence.metamodel.Metamodel;
 import java.util.Set;
+import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -50,7 +51,7 @@ class WorkspaceScopedTablesTest extends BaseUnitTest {
         EntityType<?> entity = mock(EntityType.class);
         lenient().when(metamodel.getEntities()).thenReturn(Set.of(entity));
         lenient()
-                .when(emf.unwrap(org.hibernate.SessionFactory.class))
+                .when(emf.unwrap(SessionFactory.class))
                 .thenThrow(new IllegalStateException("simulated Hibernate API regression"));
 
         WorkspaceScopedTables tables = new WorkspaceScopedTables(providerOf(emf));

@@ -23,7 +23,7 @@ class AccountLoginLookupArchitectureTest extends HephaestusArchitectureTest {
             "de.tum.cit.aet.hephaestus.workspace.WorkspaceProvisioningService",
             "de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceContextResolverAdapter",
             "de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceOrganizationMembershipAdapter",
-            "de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GithubLifecycleListener");
+            "de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener");
 
     @Test
     @DisplayName("no new caller of WorkspaceRepository.findByAccountLoginIgnoreCase outside the allowlist")

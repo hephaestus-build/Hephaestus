@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.events.BotCommandReceivedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScmCommentReactionSink;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,6 +34,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @Tag("unit")
 class BotCommandProcessorTest extends BaseUnitTest {
@@ -117,7 +120,7 @@ class BotCommandProcessorTest extends BaseUnitTest {
             verify(userRepository).findByNativeIdAndProviderId(AUTHOR_NATIVE_ID, PROVIDER_ID);
             verify(userRepository, never()).findByLogin(any());
             @SuppressWarnings("unchecked")
-            ArgumentCaptor<java.util.Collection<User>> captor = ArgumentCaptor.forClass(java.util.Collection.class);
+            ArgumentCaptor<Collection<User>> captor = ArgumentCaptor.forClass(Collection.class);
             verify(manualReviewRequests).requestPullRequestReview(any(), any(), captor.capture());
             assertThat(captor.getValue()).containsExactly(commenter);
         }
@@ -183,7 +186,7 @@ class BotCommandProcessorTest extends BaseUnitTest {
         @Test
         void missingBranchInfo_skipsProcessing() {
             PullRequest pr = createOpenPr();
-            org.springframework.test.util.ReflectionTestUtils.setField(pr, "headRefOid", null);
+            ReflectionTestUtils.setField(pr, "headRefOid", null);
             mockPrLookup(pr);
 
             processor.onBotCommandReceived(event("/hephaestus review"));
@@ -269,7 +272,7 @@ class BotCommandProcessorTest extends BaseUnitTest {
         return createPrWithState(PullRequest.State.OPEN);
     }
 
-    private PullRequest createPrWithState(PullRequest.State state) {
+    private PullRequest createPrWithState(Issue.State state) {
         Repository repo = new Repository();
         repo.setId(REPO_ID);
         repo.setNameWithOwner(REPO_NAME);

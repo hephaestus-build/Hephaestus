@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -418,7 +419,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         if (state == null) {
             return Issue.State.OPEN;
         }
-        return switch (state.toUpperCase()) {
+        return switch (state.toUpperCase(Locale.ROOT)) {
             case "CLOSED" -> Issue.State.CLOSED;
             default -> Issue.State.OPEN;
         };
@@ -432,7 +433,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         if (stateReason == null) {
             return null;
         }
-        return switch (stateReason.toUpperCase()) {
+        return switch (stateReason.toUpperCase(Locale.ROOT)) {
             case "COMPLETED" -> Issue.StateReason.COMPLETED;
             case "DUPLICATE" -> Issue.StateReason.DUPLICATE;
             case "REOPENED" -> Issue.StateReason.REOPENED;

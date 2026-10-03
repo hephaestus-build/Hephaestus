@@ -173,7 +173,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                 throw new InteractiveSandboxException("Previous sandbox for this session is still closing");
             }
             owned = true;
-            channel = attempt.session().enableInteractive(properties.maxFrameChars());
+            channel = attempt.session().enableInteractive(properties.maxFrameBytes());
             runnerEnv.put("SANDBOX_RUNTIME_URL", attempt.runtimeUrl(appServerIp));
             DockerOperations.ContainerSpec template = new DockerOperations.ContainerSpec(
                     spec.image(),
@@ -321,7 +321,9 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             public void disconnectAndRemoveNetwork(String nid) {
                 try {
                     networkManager.disconnectAppServer(nid);
-                } catch (Exception ignored) {
+                } catch (RuntimeException e) {
+                    // Not worth stopping for: the removal below reports what the daemon actually refuses.
+                    log.debug("Could not disconnect app-server from {}: {}", nid, e.getMessage());
                 }
                 networkManager.removeNetwork(nid);
             }
@@ -340,7 +342,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                 SUBSCRIBER_STALL_TIMEOUT,
                 properties.stdinWriteTimeoutMs(),
                 properties.sendQueueCapacity(),
-                properties.maxFrameChars(),
+                properties.maxFrameBytes(),
                 Duration.ofSeconds(properties.graceTimeoutSeconds()),
                 metrics,
                 lifecycleOps,
@@ -390,7 +392,8 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         if (channel != null) {
             try {
                 channel.close();
-            } catch (IOException | RuntimeException ignored) {
+            } catch (IOException | RuntimeException e) {
+                log.warn("Partial cleanup: closing the gateway channel failed: {}", e.getMessage());
             }
         }
         if (containerId != null) {
@@ -403,7 +406,9 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         if (networkId != null) {
             try {
                 networkManager.disconnectAppServer(networkId);
-            } catch (Exception ignored) {
+            } catch (RuntimeException e) {
+                // Not worth stopping for: the removal below reports what the daemon actually refuses.
+                log.debug("Partial cleanup: disconnectAppServer failed for {}: {}", networkId, e.getMessage());
             }
             try {
                 networkManager.removeNetwork(networkId);

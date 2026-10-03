@@ -6,15 +6,17 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -30,7 +32,7 @@ import org.springframework.stereotype.Component;
  */
 @ConditionalOnServerRole
 @Component
-@ConditionalOnProperty(prefix = "hephaestus.agent", name = "enabled", havingValue = "true")
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @WorkspaceAgnostic("Confirmed campaigns are driven for every workspace on the instance")
 public class ReviewBackfillDriver {
 
@@ -149,7 +151,7 @@ public class ReviewBackfillDriver {
         run.setSubmittedCount(run.getSubmittedCount() + submitted);
         run.setPassedCount(run.getPassedCount() + passed);
         run.setFailedCount(run.getFailedCount() + failed);
-        run.setUpdatedAt(java.time.Instant.now());
+        run.setUpdatedAt(Instant.now());
         runRepository.save(run);
         log.info(
                 "Review backfill batch: runId={}, submitted={}, passed={}, failed={}, cursor={}",

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceSyncTargetProvider;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
@@ -59,7 +60,7 @@ class RepositoryAvailabilityIntegrationTest extends AbstractWorkspaceIntegration
         monitors.recordUnavailable(scope, id, Instant.now(), Instant.now().minusSeconds(1));
         var first = CompletableFuture.supplyAsync(() -> provider.deferUnavailableRepository(scope, id));
         var second = CompletableFuture.supplyAsync(() -> provider.deferUnavailableRepository(scope, id));
-        assertThat(java.util.List.of(first.join(), second.join())).containsExactlyInAnyOrder(false, true);
+        assertThat(List.of(first.join(), second.join())).containsExactlyInAnyOrder(false, true);
     }
 
     @Test

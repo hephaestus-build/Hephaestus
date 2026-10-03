@@ -9,7 +9,7 @@ import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 // The candidate is built by this repository's CI, so it lives in the current
 // namespace. The previous release keeps the namespace it was published under —
-// GHCR packages do not transfer between organizations (issue #1599) — so its
+// GHCR packages do not transfer between organizations — so its
 // repository is resolved per version from security/release-identities.json.
 const currentNamespace = currentReleaseIdentity().namespace;
 const applicationRepository = `${currentNamespace}/application-server`;

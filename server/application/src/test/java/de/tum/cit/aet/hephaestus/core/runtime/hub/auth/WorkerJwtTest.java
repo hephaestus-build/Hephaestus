@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.core.runtime.hub.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -11,20 +13,20 @@ import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.security.interfaces.RSAPrivateKey;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.ArgumentMatchers;
 
 class WorkerJwtTest extends BaseUnitTest {
 
@@ -41,7 +43,7 @@ class WorkerJwtTest extends BaseUnitTest {
         keyRing = WorkerKeyRing.fromConfig(properties);
         issuer = new WorkerJwtIssuer(keyRing, properties);
         denylist = mock(WorkerTokenDenylistService.class);
-        lenient().when(denylist.isRevoked(ArgumentMatchers.anyString())).thenReturn(false);
+        lenient().when(denylist.isRevoked(anyString())).thenReturn(false);
         verifier = new JavaJwtWorkerJwtVerifier(keyRing, properties, denylist, new SimpleMeterRegistry());
     }
 
@@ -52,8 +54,7 @@ class WorkerJwtTest extends BaseUnitTest {
 
         assertThat(jwt.workerId()).isEqualTo("worker-1");
         assertThat(jwt.jti()).isEqualTo(issued.jti());
-        assertThat(jwt.expiresAt())
-                .isCloseTo(issued.expiresAt(), Assertions.within(1, java.time.temporal.ChronoUnit.SECONDS));
+        assertThat(jwt.expiresAt()).isCloseTo(issued.expiresAt(), within(1, ChronoUnit.SECONDS));
     }
 
     @Test
@@ -71,7 +72,7 @@ class WorkerJwtTest extends BaseUnitTest {
 
     @Test
     void shouldExpireJobTokenAtDeclaredUploadDeadline() {
-        Instant deadline = Instant.now().plusSeconds(600).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Instant deadline = Instant.now().plusSeconds(600).truncatedTo(ChronoUnit.SECONDS);
         JobJwt jwt = (JobJwt) verifier.verify(issuer.issueForJobUntil(UUID.randomUUID(), 42L, 0, deadline));
 
         assertThat(jwt.expiresAt()).isEqualTo(deadline);
@@ -253,7 +254,7 @@ class WorkerJwtTest extends BaseUnitTest {
         return new WorkerTokenProperties.KeyEntry(key.kid(), toPemPkcs8(key.privateKey()));
     }
 
-    private static String toPemPkcs8(java.security.interfaces.RSAPrivateKey key) {
+    private static String toPemPkcs8(RSAPrivateKey key) {
         return ("-----BEGIN PRIVATE KEY-----\n"
                 + Base64.getMimeEncoder(64, new byte[] {'\n'}).encodeToString(key.getEncoded())
                 + "\n-----END PRIVATE KEY-----\n");

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashSet;
+import javax.crypto.AEADBadTagException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -192,7 +193,7 @@ class CredentialBundleConverterTest extends BaseUnitTest {
             // wrong instanceKey
             assertThatThrownBy(() -> c.decrypt(blobForA, CTX_B))
                     .isInstanceOf(EncryptionException.class)
-                    .hasRootCauseInstanceOf(javax.crypto.AEADBadTagException.class);
+                    .hasRootCauseInstanceOf(AEADBadTagException.class);
             // wrong workspaceId
             assertThatThrownBy(() -> c.decrypt(
                             blobForA, new EncryptionContext(99L, CTX_A.kind(), CTX_A.instanceKey(), CTX_A.columnFqn())))

@@ -312,7 +312,7 @@ public class GitLabMilestoneSyncService {
                     // Force groupMilestone=true so the processor routes these rows onto the
                     // deterministic-negative nativeId path (avoids (provider_id, native_id)
                     // collisions when the same group milestone is fanned out to every repo).
-                    node.put("groupMilestone", Boolean.TRUE);
+                    node.put("groupMilestone", true);
                     GitLabMilestoneDTO dto = GitLabMilestoneDTO.fromGraphQlNode(node);
                     if (dto != null) {
                         collected.add(dto);

@@ -1,11 +1,15 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,7 +49,7 @@ public class NativePersonDataWriteFence implements PersonDataWriteFence {
     public boolean holdForUserWrite(long userId) {
         var identities = jdbc.query(
                 "SELECT provider_id,native_id::text FROM \"user\" WHERE id=?",
-                (rs, row) -> new PersonIdentity(rs.getLong(1), java.util.Objects.requireNonNull(rs.getString(2)), null),
+                (rs, row) -> new PersonIdentity(rs.getLong(1), Objects.requireNonNull(rs.getString(2)), null),
                 userId);
         return !identities.isEmpty() && holdIdentities(identities);
     }
@@ -59,8 +63,8 @@ public class NativePersonDataWriteFence implements PersonDataWriteFence {
                 "SELECT id,provider_id,native_id::text FROM \"user\" WHERE id=ANY(?) ORDER BY id",
                 (rs, row) -> new NativeUser(
                         rs.getLong(1),
-                        new PersonIdentity(rs.getLong(2), java.util.Objects.requireNonNull(rs.getString(3)), null)),
-                new org.springframework.jdbc.support.SqlArrayValue("bigint", userIds.toArray()));
+                        new PersonIdentity(rs.getLong(2), Objects.requireNonNull(rs.getString(3)), null)),
+                new SqlArrayValue("bigint", userIds.toArray()));
         lock(users.stream().map(NativeUser::identity).toList(), true);
         return users.stream()
                 .filter(user -> !suppression.isSuppressed(
@@ -103,11 +107,11 @@ public class NativePersonDataWriteFence implements PersonDataWriteFence {
                 JOIN identity_provider p ON p.id=i."providerId"
                 """,
                 (rs, row) -> new NativeKey(
-                        java.util.Objects.requireNonNull(rs.getString(1)),
+                        Objects.requireNonNull(rs.getString(1)),
                         ScmOrigin.of(rs.getString(2))
                                 .orElseThrow(() ->
                                         new IllegalStateException("Native admission requires a valid provider origin")),
-                        java.util.Objects.requireNonNull(rs.getString(3))),
+                        Objects.requireNonNull(rs.getString(3))),
                 mapper.writeValueAsString(identities));
         if (nativeKeys.size() != identities.size())
             throw new IllegalStateException("Native admission requires existing exact provider keys");

@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -133,7 +135,7 @@ class GitLabSubIssueSyncServiceTest extends BaseUnitTest {
 
     @SafeVarargs
     private void mockWorkItemResponse(Map<String, Object>... nodes) {
-        List<Map<String, Object>> nodeList = new java.util.ArrayList<>(nodes.length);
+        List<Map<String, Object>> nodeList = new ArrayList<>(nodes.length);
         for (Map<String, Object> node : nodes) {
             nodeList.add(node);
         }
@@ -141,7 +143,7 @@ class GitLabSubIssueSyncServiceTest extends BaseUnitTest {
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
         when(graphQlClientProvider.forScope(anyLong())).thenReturn(client);
 
-        HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName(anyString())).thenReturn(requestSpec);
         when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
 

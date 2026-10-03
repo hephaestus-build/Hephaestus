@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The research question ("do developers' practices change over time?") is unanswerable unless the SAME
- * underlying finding gets the SAME identity across separate detection runs. A title-anchored key never
+ * underlying observation gets the SAME identity across separate review runs. A title-anchored key never
  * correlates because the LLM re-words every run, so identity is the {@code (practice, artifact, subject,
  * file)} LOCUS, not the prose. These cases lock that grain and what must NEVER perturb it.
  */
@@ -27,7 +27,7 @@ class ObservationFingerprintTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("the file PATH is part of identity; a different file is a different finding")
+    @DisplayName("the file PATH is part of identity; a different file is a different observation")
     void pathParticipates() {
         String foo = ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "Foo.swift");
         assertThat(ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "Bar.swift"))
@@ -35,7 +35,7 @@ class ObservationFingerprintTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a different practice / target / subject is a different finding")
+    @DisplayName("a different practice / target / subject is a different observation")
     void discriminators() {
         String base = ObservationFingerprint.compute(SLUG, TYPE, 42L, 7L, "F.swift");
         assertThat(ObservationFingerprint.compute("other-practice", TYPE, 42L, 7L, "F.swift"))
@@ -73,7 +73,7 @@ class ObservationFingerprintTest extends BaseUnitTest {
     void fieldBoundariesAreSeparated() {
         // The SEP separator is the invariant that stops adjacent fields from concatenating ambiguously.
         // Were it dropped, these pairs (which differ ONLY in where the boundary falls) would collide and
-        // silently re-identify distinct findings. Lock that the separator keeps them apart.
+        // silently re-identify distinct observations. Lock that the separator keeps them apart.
         assertThat(ObservationFingerprint.compute("a-b", "PR", 1L, 1L, "F"))
                 .as("slug 'a-b' + type 'PR' must not collide with slug 'a' + type 'b-PR'")
                 .isNotEqualTo(ObservationFingerprint.compute("a", "b-PR", 1L, 1L, "F"));

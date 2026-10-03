@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 
 import java.net.URI;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -21,7 +22,9 @@ import org.jspecify.annotations.Nullable;
  * instead of a hand-rolled fetch wrapper.
  */
 public record InitiateConnectionResponseDTO(
-        Type type, @Nullable URI vendorUrl, @Nullable Long connectionId) {
+        @NonNull Type type,
+        @Nullable URI vendorUrl,
+        @Nullable Long connectionId) {
     public enum Type {
         REDIRECT,
         LINKED,

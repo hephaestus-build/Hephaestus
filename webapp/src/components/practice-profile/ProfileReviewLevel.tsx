@@ -18,6 +18,7 @@ import {
 } from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { useNow } from "@/components/common/use-now";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
@@ -247,6 +248,7 @@ function ReviewHead({
 }: ReviewHeadProps) {
 	const work = run?.reviewedWork;
 	const at = run?.reviewedAt;
+	const today = new Date(useNow());
 	const WorkIcon = reviewedWorkIcon(work?.kind, work?.provider);
 	const reached = run?.practicesEvaluated;
 	const isRequesting =
@@ -257,7 +259,7 @@ function ReviewHead({
 		<div className="flex min-w-0 flex-1 flex-col gap-2">
 			<DetailPath {...path} current="Review" />
 			<p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-				<WorkIcon className="size-3.5 shrink-0" aria-hidden />
+				<WorkIcon className="size-3.5 shrink-0" />
 				<span className="truncate">
 					{work ? reviewedWorkName(work) : artifactKindLabel(undefined)}
 					{hasText(work?.container) && `, ${work.container}`}
@@ -271,7 +273,7 @@ function ReviewHead({
 					<span>
 						Reviewed{" "}
 						<time dateTime={at.toISOString()} className="text-foreground">
-							{formatDayTime(at)}
+							{formatDayTime(at, today)}
 						</time>
 					</span>
 				)}

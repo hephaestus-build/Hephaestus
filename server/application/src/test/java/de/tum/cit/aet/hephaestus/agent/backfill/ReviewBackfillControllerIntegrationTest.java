@@ -15,6 +15,8 @@ import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -48,8 +50,8 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
         return workspace;
     }
 
-    private static java.util.function.Consumer<org.springframework.http.HttpHeaders> asAdminAccount() {
-        return headers -> headers.setBearerAuth(ADMIN_ACCOUNT_TOKEN);
+    private static void asAdminAccount(HttpHeaders headers) {
+        headers.setBearerAuth(ADMIN_ACCOUNT_TOKEN);
     }
 
     private Map<String, Object> window() {
@@ -65,7 +67,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
         webTestClient
                 .post()
                 .uri("/workspaces/{slug}/practices/backfill-runs", workspace.getWorkspaceSlug())
-                .headers(asAdminAccount())
+                .headers(ReviewBackfillControllerIntegrationTest::asAdminAccount)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(window())
                 .exchange()
@@ -99,7 +101,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
         webTestClient
                 .patch()
                 .uri("/workspaces/{slug}/practices/backfill-runs/{runId}/status", workspace.getWorkspaceSlug(), runId)
-                .headers(asAdminAccount())
+                .headers(ReviewBackfillControllerIntegrationTest::asAdminAccount)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("status", "RUNNING"))
                 .exchange()
@@ -138,7 +140,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
         webTestClient
                 .post()
                 .uri("/workspaces/{slug}/practices/backfill-runs", workspace.getWorkspaceSlug())
-                .headers(asAdminAccount())
+                .headers(ReviewBackfillControllerIntegrationTest::asAdminAccount)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(window())
                 .exchange()
@@ -158,7 +160,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
         webTestClient
                 .post()
                 .uri("/workspaces/{slug}/practices/backfill-runs", workspace.getWorkspaceSlug())
-                .headers(asAdminAccount())
+                .headers(ReviewBackfillControllerIntegrationTest::asAdminAccount)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("artifactKind", "scm.pull_request", "fromAt", TO.toString(), "toAt", FROM.toString()))
                 .exchange()
@@ -177,7 +179,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
         webTestClient
                 .post()
                 .uri("/workspaces/{slug}/practices/backfill-runs", workspace.getWorkspaceSlug())
-                .headers(asAdminAccount())
+                .headers(ReviewBackfillControllerIntegrationTest::asAdminAccount)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of(
                         "artifactKind", "chat.conversation_thread", "fromAt", FROM.toString(), "toAt", TO.toString()))
@@ -227,7 +229,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
         webTestClient
                 .get()
                 .uri("/workspaces/{slug}/practices/backfill-runs/{runId}", second.getWorkspaceSlug(), runId)
-                .headers(asAdminAccount())
+                .headers(ReviewBackfillControllerIntegrationTest::asAdminAccount)
                 .exchange()
                 .expectStatus()
                 .isNotFound()
@@ -238,7 +240,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
         byte[] body = webTestClient
                 .post()
                 .uri("/workspaces/{slug}/practices/backfill-runs", workspace.getWorkspaceSlug())
-                .headers(asAdminAccount())
+                .headers(ReviewBackfillControllerIntegrationTest::asAdminAccount)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(window())
                 .exchange()
@@ -249,8 +251,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
                 .getResponseBody();
         assertThat(body).isNotNull();
         return runRepository
-                .findByWorkspaceIdOrderByCreatedAtDesc(
-                        workspace.getId(), org.springframework.data.domain.PageRequest.ofSize(1))
+                .findByWorkspaceIdOrderByCreatedAtDesc(workspace.getId(), PageRequest.ofSize(1))
                 .getFirst()
                 .getId()
                 .toString();
@@ -260,7 +261,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
         return webTestClient
                 .patch()
                 .uri("/workspaces/{slug}/practices/backfill-runs/{runId}/status", workspace.getWorkspaceSlug(), runId)
-                .headers(asAdminAccount())
+                .headers(ReviewBackfillControllerIntegrationTest::asAdminAccount)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("status", status))
                 .exchange();

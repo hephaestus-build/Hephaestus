@@ -58,6 +58,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
+import org.hibernate.Hibernate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -455,7 +456,7 @@ public class GitHubPullRequestSyncService {
                     }
                     // Eagerly initialize the lazy provider proxy to prevent
                     // LazyInitializationException when EventContext.from() accesses provider.getType()
-                    org.hibernate.Hibernate.initialize(repo.getProvider());
+                    Hibernate.initialize(repo.getProvider());
                     ProcessingContext context =
                             ProcessingContext.forSync(scopeId, repo).withObservedAt(fetchedAt);
                     return processPullRequestPage(
@@ -563,7 +564,6 @@ public class GitHubPullRequestSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case RATE_LIMITED -> {
                         if (retryAttempt < MAX_RETRY_ATTEMPTS && classification.suggestedWait() != null) {
@@ -591,7 +591,6 @@ public class GitHubPullRequestSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_RATE_LIMIT;
-                        break;
                     }
                     case NOT_FOUND -> {
                         log.warn(
@@ -599,7 +598,6 @@ public class GitHubPullRequestSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case AUTH_ERROR -> {
                         log.error(
@@ -607,7 +605,6 @@ public class GitHubPullRequestSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case CLIENT_ERROR -> {
                         log.error(
@@ -615,7 +612,6 @@ public class GitHubPullRequestSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     default -> {
                         log.error(
@@ -624,7 +620,6 @@ public class GitHubPullRequestSyncService {
                                 classification.message(),
                                 e);
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                 }
                 break;
@@ -858,7 +853,7 @@ public class GitHubPullRequestSyncService {
                 if (repo == null) {
                     return false;
                 }
-                org.hibernate.Hibernate.initialize(repo.getProvider());
+                Hibernate.initialize(repo.getProvider());
                 return pullRequestProcessor.process(
                                 dto, ProcessingContext.forSync(scopeId, repo).withObservedAt(fetchedAt))
                         != null;

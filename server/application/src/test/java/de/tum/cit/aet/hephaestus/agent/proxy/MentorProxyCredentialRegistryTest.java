@@ -253,7 +253,7 @@ class MentorProxyCredentialRegistryTest extends BaseUnitTest {
             registry.accumulate(meter.turnId(), new ProxyTokenUsage(1_000_000, 0, 0, 0, 0));
 
             var attempt = registry.validate(token).orElseThrow().attempt();
-            org.junit.jupiter.api.Assertions.assertNotNull(attempt);
+            assertThat(attempt).isNotNull();
             assertThat(attempt.spentUsd()).isEqualByComparingTo("0");
             assertThat(meter.observed().inputTokens()).isEqualTo(1_000_000);
         }

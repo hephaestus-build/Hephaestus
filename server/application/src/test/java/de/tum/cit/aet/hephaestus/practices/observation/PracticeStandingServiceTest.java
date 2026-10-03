@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -90,19 +91,16 @@ class PracticeStandingServiceTest extends BaseUnitTest {
                 clock);
     }
 
-    private Observation bad(Practice practice, @org.jspecify.annotations.Nullable Severity severity) {
+    private Observation bad(Practice practice, @Nullable Severity severity) {
         return bad(practice, severity, 42L);
     }
 
-    private Observation bad(Practice practice, @org.jspecify.annotations.Nullable Severity severity, long artifactId) {
+    private Observation bad(Practice practice, @Nullable Severity severity, long artifactId) {
         return bad(practice, severity, artifactId, null);
     }
 
     private Observation bad(
-            Practice practice,
-            @org.jspecify.annotations.Nullable Severity severity,
-            long artifactId,
-            @org.jspecify.annotations.Nullable String recurrenceKey) {
+            Practice practice, @Nullable Severity severity, long artifactId, @Nullable String recurrenceKey) {
         return Observation.builder()
                 .id(UUID.randomUUID())
                 .practice(practice)
@@ -147,7 +145,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSlug(slug);
         practice.setName("Handling failure robustly");
-        practice.setCriteria("ordinary criteria"); // not a defect-detector
+        practice.setCriteria("ordinary criteria");
         return practice;
     }
 
@@ -267,7 +265,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSlug("robust-error-handling");
         practice.setName("Handling failure robustly");
-        practice.setCriteria("ordinary criteria"); // not a defect-detector
+        practice.setCriteria("ordinary criteria");
 
         when(observationRepository.findByDeveloperAndWorkspaceBetween(
                         eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))

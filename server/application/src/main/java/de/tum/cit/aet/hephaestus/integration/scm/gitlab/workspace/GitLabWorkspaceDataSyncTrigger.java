@@ -41,7 +41,7 @@ import org.springframework.stereotype.Component;
  * to ACTIVE). A {@link SyncJobConflictException} (already an active job on this connection) skips
  * the run rather than racing it.
  *
- * <p>The cancellable two-arg overload is reused as-is by {@code GitlabIntegrationSyncRunner} — it
+ * <p>The cancellable two-arg overload is reused as-is by {@code GitLabIntegrationSyncRunner} — it
  * deliberately does NOT wrap itself in another {@code SyncJobService} job: the runner is invoked
  * from inside a job the caller (the manual-trigger endpoint) already created, and a second nested
  * {@code beginJob} for the same connection would immediately collide with the one-active-job
@@ -103,7 +103,7 @@ public class GitLabWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
     }
 
     /**
-     * Cooperatively cancellable variant used by {@code GitlabIntegrationSyncRunner} so a
+     * Cooperatively cancellable variant used by {@code GitLabIntegrationSyncRunner} so a
      * {@code SyncJob} cancel request can stop the pass between repositories. Does NOT record its own
      * job — see class doc.
      */

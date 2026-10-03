@@ -4,6 +4,10 @@ import static de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures.admitt
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlightException;
@@ -37,10 +41,12 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -49,7 +55,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
-import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,6 +63,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -544,9 +550,8 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         CountDownLatch release = new CountDownLatch(1);
         try {
             var holder = pool.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
-                chatThreadRepository
-                        .lockForTurnAdmission(thread.getId(), workspace.getId())
-                        .orElseThrow();
+                assertThat(chatThreadRepository.lockForTurnAdmission(thread.getId(), workspace.getId()))
+                        .isPresent();
                 try {
                     admission.call();
                 } catch (Exception e) {
@@ -750,9 +755,10 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
                 persistence.persistInFlight(thread, "hello", assistantId, null, admittedMentorConfig());
 
         // 3-byte and 4-byte UTF-8 characters exercise any layer that round-trips through String.
-        byte[] expectedBytes = ("{\"type\":\"user_message\",\"text\":\"hello €\"}\n"
-                        + "{\"type\":\"assistant_message\",\"text\":\"hi 😀\",\"stopReason\":\"stop\"}\n")
-                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] expectedBytes = """
+                                {"type":"user_message","text":"hello €"}
+                                {"type":"assistant_message","text":"hi 😀","stopReason":"stop"}
+                                """.getBytes(StandardCharsets.UTF_8);
 
         TranslatorState state = new TranslatorState(assistantId);
         state.observeSessionJsonl(expectedBytes);
@@ -777,7 +783,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         byte[] bigBytes = new byte[1024 * 1024]; // 1 MiB
         // Pattern with a stable header + repeating non-zero filler so a partial-read regression
         // is detectable by a single-byte check anywhere in the array.
-        byte[] header = "{\"type\":\"user_message\",\"text\":\"".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] header = "{\"type\":\"user_message\",\"text\":\"".getBytes(StandardCharsets.UTF_8);
         System.arraycopy(header, 0, bigBytes, 0, header.length);
         for (int i = header.length; i < bigBytes.length - 3; i++) bigBytes[i] = (byte) ('a' + (i % 26));
         bigBytes[bigBytes.length - 3] = '"';
@@ -797,7 +803,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         UUID threadId = UUID.randomUUID();
         ChatThread thread = persistence.ensureThread(workspace.getId(), threadId, user, Set.of(user.getId()), "hello");
 
-        byte[] priorBytes = "{\"prior\":\"turn\"}\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] priorBytes = "{\"prior\":\"turn\"}\n".getBytes(StandardCharsets.UTF_8);
         chatThreadRepository.updateSessionJsonl(threadId, priorBytes, sessionVersion(threadId));
 
         UUID assistantId = UUID.randomUUID();
@@ -1031,9 +1037,9 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         int cacheWrite = 100 * summaryCalls;
         var recorded = new UIMessageChunk.MessageMetadata.Usage(
                 input, output, cacheRead, cacheWrite, input + output + cacheRead + cacheWrite);
-        var metadata = java.util.Objects.requireNonNull(sent.messageMetadata());
+        var metadata = Objects.requireNonNull(sent.messageMetadata());
         assertThat(metadata.usage()).isEqualTo(recorded);
-        double costUsd = java.util.Objects.requireNonNull(metadata.costUsd());
+        double costUsd = Objects.requireNonNull(metadata.costUsd());
         JsonNode row = chatMessageRepository.findById(assistantId).orElseThrow().getMetadata();
         assertThat(row.path("usage").path("input").asInt()).isEqualTo(input);
         assertThat(row.path("usage").path("output").asInt()).isEqualTo(output);
@@ -1089,14 +1095,14 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
             var sent = persistence
                     .complete(cookie, state, (UIMessageChunk.Finish) chunks.get(0))
                     .orElseThrow();
-            var metadata = java.util.Objects.requireNonNull(sent.messageMetadata());
-            var usage = java.util.Objects.requireNonNull(metadata.usage());
+            var metadata = Objects.requireNonNull(sent.messageMetadata());
+            var usage = Objects.requireNonNull(metadata.usage());
             assertThat(usage.input()).isEqualTo(1_050 + finalInput);
             assertThat(usage.output()).isEqualTo(42 + finalOutput);
             JsonNode row =
                     chatMessageRepository.findById(assistantId).orElseThrow().getMetadata();
             assertThat(row.path("usage").path("input").asInt()).isEqualTo(usage.input());
-            assertThat(row.path("costUsd").asDouble()).isEqualTo(java.util.Objects.requireNonNull(metadata.costUsd()));
+            assertThat(row.path("costUsd").asDouble()).isEqualTo(Objects.requireNonNull(metadata.costUsd()));
         } else {
             persistence.interrupt(cookie, state, new IllegalStateException("The final retry failed."));
             assertThat(chatMessageRepository.findById(assistantId).orElseThrow().getStatus())
@@ -1142,7 +1148,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
                     new UIMessageChunk.MessageMetadata(
                             "test-model", new UIMessageChunk.MessageMetadata.Usage(200, 20, 0, 0, 220), null));
             var sent = persistence.complete(cookie, state, streamed).orElseThrow();
-            var metadata = java.util.Objects.requireNonNull(sent.messageMetadata());
+            var metadata = Objects.requireNonNull(sent.messageMetadata());
             assertThat(metadata.usage()).isNull();
             assertThat(metadata.costUsd()).isNull();
             assertThat(chatMessageRepository
@@ -1222,9 +1228,9 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         failed.putObject("usage").put("input", 0).put("output", 0);
 
         var chunks = new PiEventToUiChunkTranslator().translate(end, state);
-        assertThat(chunks).singleElement().isInstanceOf(UIMessageChunk.Error.class);
+        assertThat(chunks).singleElement().isInstanceOf(UIMessageChunk.TurnError.class);
         persistence.interrupt(
-                cookie, state, new IllegalStateException(((UIMessageChunk.Error) chunks.get(0)).errorText()));
+                cookie, state, new IllegalStateException(((UIMessageChunk.TurnError) chunks.get(0)).errorText()));
 
         ChatMessage assistant = chatMessageRepository.findById(assistantId).orElseThrow();
         assertThat(assistant.getStatus()).isEqualTo(ChatMessage.Status.interrupted);
@@ -1329,7 +1335,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         UUID staleTurn = persistInFlightTurn("stale-turn");
         Instant now = Instant.now();
         setCreatedAt(tenMinuteTurn, now.minus(Duration.ofMinutes(10)));
-        setCreatedAt(maxDurationTurn, now.minus(Duration.ofMinutes(180)));
+        setCreatedAt(maxDurationTurn, now.minus(Duration.ofHours(3)));
         setCreatedAt(staleTurn, now.minus(Duration.ofMinutes(200)));
 
         MentorInFlightReaper sweeper = reaperWithAnUnsafeWindow();
@@ -1408,15 +1414,15 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
     }
 
     private MentorInFlightReaper reaperWithAnUnsafeWindow() {
-        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(MentorInFlightReaper.class);
-        var events = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        var logger = (Logger) LoggerFactory.getLogger(MentorInFlightReaper.class);
+        var events = new ListAppender<ILoggingEvent>();
         events.start();
         logger.addAppender(events);
         try {
             var reaper =
                     new MentorInFlightReaper(chatMessageRepository, accounting, meterRegistry, Duration.ofMinutes(10));
             assertThat(events.list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(ch.qos.logback.classic.Level.WARN);
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
                 assertThat(event.getFormattedMessage()).contains("PT10M is unsafe", "using PT3H10M");
             });
             return reaper;
@@ -1440,7 +1446,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
     void statusColumnCheckConstraintFires() throws Exception {
         ChatThread thread = persistence.ensureThread(
                 workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "constraint test");
-        Assertions.assertThatThrownBy(() -> {
+        assertThatThrownBy(() -> {
                     try (var conn = dataSource.getConnection();
                             var stmt = conn.prepareStatement(
                                     "INSERT INTO chat_message (id, thread_id, role, parts, status, created_at, version) "
@@ -1453,10 +1459,10 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
                         stmt.executeUpdate();
                     }
                 })
-                .isInstanceOf(java.sql.SQLException.class)
+                .isInstanceOf(SQLException.class)
                 // Production ships the explicit `chk_chat_message_status` via Liquibase; ddl-auto=create
                 // also generates a Hibernate-implicit `chat_message_status_check`. Either can fire first.
-                .satisfies(t -> Assertions.assertThat(t.getMessage())
+                .satisfies(t -> assertThat(t.getMessage())
                         .containsAnyOf("chk_chat_message_status", "chat_message_status_check"));
     }
 }

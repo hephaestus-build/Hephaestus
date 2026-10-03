@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -97,7 +98,7 @@ class GitLabDeletionSweepSelfHealIntegrationTest extends BaseIntegrationTest {
                 .containsExactly(number);
 
         int tombstoned = issueRepository.tombstoneIssuesByRepositoryIdAndNumbers(
-                repository.getId(), java.util.List.of(number), Instant.now());
+                repository.getId(), List.of(number), Instant.now());
         assertThat(tombstoned).isEqualTo(1);
         assertThat(issueRepository.findLiveIssueNumbersByRepositoryId(repository.getId()))
                 .isEmpty();
@@ -117,7 +118,7 @@ class GitLabDeletionSweepSelfHealIntegrationTest extends BaseIntegrationTest {
                 .containsExactly(number);
 
         int tombstoned = issueRepository.tombstonePullRequestsByRepositoryIdAndNumbers(
-                repository.getId(), java.util.List.of(number), Instant.now());
+                repository.getId(), List.of(number), Instant.now());
         assertThat(tombstoned).isEqualTo(1);
         assertThat(issueRepository.findLivePullRequestNumbersByRepositoryId(repository.getId()))
                 .isEmpty();
@@ -149,7 +150,7 @@ class GitLabDeletionSweepSelfHealIntegrationTest extends BaseIntegrationTest {
 
         // Issue #5 was deleted upstream; the issue sweep computed missing=[5] and tombstones the ISSUE.
         int tombstoned = issueRepository.tombstoneIssuesByRepositoryIdAndNumbers(
-                repository.getId(), java.util.List.of(iid), Instant.now());
+                repository.getId(), List.of(iid), Instant.now());
 
         assertThat(tombstoned).isEqualTo(1);
         assertThat(issueRepository.findLiveIssueNumbersByRepositoryId(repository.getId()))
@@ -167,7 +168,7 @@ class GitLabDeletionSweepSelfHealIntegrationTest extends BaseIntegrationTest {
         upsertMergeRequest(iid);
 
         int tombstoned = issueRepository.tombstonePullRequestsByRepositoryIdAndNumbers(
-                repository.getId(), java.util.List.of(iid), Instant.now());
+                repository.getId(), List.of(iid), Instant.now());
 
         assertThat(tombstoned).isEqualTo(1);
         assertThat(issueRepository.findLivePullRequestNumbersByRepositoryId(repository.getId()))

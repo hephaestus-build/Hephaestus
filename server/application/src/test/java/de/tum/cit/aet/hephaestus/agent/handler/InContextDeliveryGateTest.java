@@ -5,7 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -29,6 +32,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The in-context delivery predicate: which observations are allowed to land on the artifact, and what is
@@ -146,7 +150,7 @@ class InContextDeliveryGateTest extends BaseUnitTest {
 
     /** A ledger failure is telemetry loss, never delivery loss: the surviving observations still go out. */
     @Test
-    void aLedgerFailureDoesNotStopTheFindingsThatSurvived() {
+    void aLedgerFailureDoesNotStopTheObservationsThatSurvived() {
         when(practiceRepository.findByWorkspaceId(WORKSPACE_ID))
                 .thenReturn(List.of(
                         practice("measured", PracticeAutonomy.OFF), practice("loud", PracticeAutonomy.AUTOMATIC)));
@@ -176,7 +180,7 @@ class InContextDeliveryGateTest extends BaseUnitTest {
                 .isEmpty();
         // Never even asks for the autonomy states: no dial can make a retrospective observation actionable in place.
         verifyNoInteractions(practiceRepository);
-        verify(feedbackLedgerRecorder, org.mockito.Mockito.times(2))
+        verify(feedbackLedgerRecorder, times(2))
                 .recordWithheld(any(), any(), eq(FeedbackSuppressionReason.BACKFILL_QUIET), anyInt());
     }
 
@@ -207,7 +211,7 @@ class InContextDeliveryGateTest extends BaseUnitTest {
     /** A job stamped the way {@code ReviewBackfillSubmitter} stamps one. */
     private AgentJob backfillJob() {
         AgentJob job = job();
-        job.setMetadata(new tools.jackson.databind.ObjectMapper()
+        job.setMetadata(new ObjectMapper()
                 .createObjectNode()
                 .put(ReviewOutputService.ORIGIN_METADATA_KEY, ObservationOrigin.BACKFILL.name()));
         return job;
@@ -241,8 +245,8 @@ class InContextDeliveryGateTest extends BaseUnitTest {
     }
 
     private Observation observation(@Nullable String occurrenceKey) {
-        Observation observation = org.mockito.Mockito.mock(Observation.class);
-        org.mockito.Mockito.lenient().when(observation.getOccurrenceKey()).thenReturn(occurrenceKey);
+        Observation observation = mock(Observation.class);
+        lenient().when(observation.getOccurrenceKey()).thenReturn(occurrenceKey);
         return observation;
     }
 }

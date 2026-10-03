@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -29,6 +29,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -92,7 +93,7 @@ class SourceProviderNamespacesIntegrationTest extends BaseIntegrationTest {
                 new ConnectionConfig.OutlineConfig(aliasUrl, null, null, Set.of())));
         var writerPid = new AtomicInteger();
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            java.util.concurrent.Future<Connection> writer;
+            Future<Connection> writer;
             try (var admission = copies.erase()) {
                 writer = executor.submit(() -> new TransactionTemplate(transactions).execute(status -> {
                     writerPid.set(

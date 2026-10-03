@@ -1,8 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.gateway;
 
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -15,7 +14,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 @Configuration(proxyBeanMethods = false)
 @EnableWebSocket
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnWorkerRole
 public class SandboxGatewayWebSocketConfiguration implements WebSocketConfigurer {
     private static final String CONNECTED = "sandbox.gateway.connected";
     private final SandboxGatewaySessions sessions;

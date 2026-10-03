@@ -121,7 +121,8 @@ class JsonlStdinWriterTest extends BaseUnitTest {
         Thread firstSender = new Thread(() -> {
             try {
                 writer.send(StringNode.valueOf("first"));
-            } catch (Exception ignored) {
+            } catch (InteractiveSandboxException ignored) {
+                // The writer is terminated under this blocked sender; how its send ends is not under test.
             }
         });
         firstSender.start();
@@ -133,13 +134,15 @@ class JsonlStdinWriterTest extends BaseUnitTest {
         Thread secondSender = new Thread(() -> {
             try {
                 writer.send(StringNode.valueOf("second"));
-            } catch (Exception ignored) {
+            } catch (InteractiveSandboxException ignored) {
+                // The writer is terminated under this blocked sender; how its send ends is not under test.
             }
         });
         Thread thirdSender = new Thread(() -> {
             try {
                 writer.send(StringNode.valueOf("third"));
-            } catch (Exception ignored) {
+            } catch (InteractiveSandboxException ignored) {
+                // The writer is terminated under this blocked sender; how its send ends is not under test.
             }
         });
         secondSender.start();
@@ -228,7 +231,8 @@ class JsonlStdinWriterTest extends BaseUnitTest {
         Thread t = new Thread(() -> {
             try {
                 writer.send(StringNode.valueOf("stalled"));
-            } catch (Exception ignored) {
+            } catch (InteractiveSandboxException ignored) {
+                // The writer is terminated under this blocked sender; how its send ends is not under test.
             }
         });
         t.start();

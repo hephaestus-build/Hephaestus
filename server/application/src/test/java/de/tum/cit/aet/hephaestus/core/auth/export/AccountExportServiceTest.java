@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.export;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -30,11 +31,13 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -119,7 +122,7 @@ class AccountExportServiceTest extends BaseUnitTest {
 
         String json = new ObjectMapper().writeValueAsString(bundle);
         assertThat(json).contains("\"ada@example.com\"", "tum-ase", "notification_access");
-        assertThat(json.toLowerCase())
+        assertThat(json.toLowerCase(Locale.ROOT))
                 .as("export bundle must never disclose tokens / credentials / signing keys")
                 .doesNotContain("access_token")
                 .doesNotContain("refresh_token")
@@ -176,7 +179,7 @@ class AccountExportServiceTest extends BaseUnitTest {
 
         AccountExport ready = new AccountExport(ACCOUNT_ID);
         ready.setStatus(AccountExport.Status.READY);
-        ready.setPayload("{}".getBytes());
+        ready.setPayload("{}".getBytes(UTF_8));
         ready.setExpiresAt(Instant.parse("2026-05-29T11:00:00Z")); // before fixed clock now
         when(repo.findByIdAndAccountId(6L, ACCOUNT_ID)).thenReturn(Optional.of(ready));
 
@@ -190,11 +193,11 @@ class AccountExportServiceTest extends BaseUnitTest {
 
         AccountExport ready = new AccountExport(ACCOUNT_ID);
         ready.setStatus(AccountExport.Status.READY);
-        ready.setPayload("{\"ok\":true}".getBytes());
+        ready.setPayload("{\"ok\":true}".getBytes(UTF_8));
         ready.setExpiresAt(Instant.parse("2026-05-31T12:00:00Z")); // after fixed clock now
         when(repo.findByIdAndAccountId(7L, ACCOUNT_ID)).thenReturn(Optional.of(ready));
 
-        assertThat(service.downloadPayload(7L, ACCOUNT_ID)).contains("{\"ok\":true}".getBytes());
+        assertThat(service.downloadPayload(7L, ACCOUNT_ID)).contains("{\"ok\":true}".getBytes(UTF_8));
     }
 
     @Test
@@ -245,12 +248,6 @@ class AccountExportServiceTest extends BaseUnitTest {
     }
 
     private static void setId(Object entity, Long id) {
-        try {
-            var field = entity.getClass().getDeclaredField("id");
-            field.setAccessible(true);
-            field.set(entity, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError("could not set id via reflection", e);
-        }
+        ReflectionTestUtils.setField(entity, "id", id);
     }
 }

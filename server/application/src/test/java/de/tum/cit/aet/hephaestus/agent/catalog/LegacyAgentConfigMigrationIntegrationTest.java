@@ -98,7 +98,7 @@ class LegacyAgentConfigMigrationIntegrationTest {
                 .containsExactly("https://gpu.example.invalid/v1", "encrypted-seeded-key", "gpt-4o");
 
         assertThat(bindingsOf("legacy-seeded"))
-                .as("the mentor fell back to it and detection fanned out to it, so it keeps both purposes")
+                .as("the mentor fell back to it and practice review fanned out to it, so it keeps both purposes")
                 .containsExactly(
                         new String[] {"MENTOR", "900", "5", "true"},
                         new String[] {"PRACTICE_DETECTION", "900", "5", "true"});
@@ -192,7 +192,7 @@ class LegacyAgentConfigMigrationIntegrationTest {
     }
 
     /**
-     * Detection with no pointer fanned out to every enabled config, which one binding per (workspace,
+     * Practice review with no pointer fanned out to every enabled config, which one binding per (workspace,
      * purpose) can't express, so it collapses to the oldest config while every config still arrives as
      * a connection so no key is lost.
      */
@@ -211,13 +211,13 @@ class LegacyAgentConfigMigrationIntegrationTest {
     }
 
     /**
-     * A bound-but-disabled config paused detection, while the mentor fell through to the oldest
+     * A bound-but-disabled config paused practice review, while the mentor fell through to the oldest
      * enabled config so a user mid-conversation still got an answer — the old resolvers' deliberate
      * asymmetry.
      */
     @Test
     @Order(10)
-    void aPointerAtADisabledConfigPausesDetectionButNotTheMentor() throws SQLException {
+    void aPointerAtADisabledConfigPausesPracticeReviewButNotTheMentor() throws SQLException {
         assertThat(purposeToModelSlug("legacy-paused"))
                 .containsExactly(Map.entry("MENTOR", "legacy-9509"), Map.entry("PRACTICE_DETECTION", "legacy-9508"));
     }
@@ -291,7 +291,8 @@ class LegacyAgentConfigMigrationIntegrationTest {
                 .contains("carried over with a placeholder endpoint, model id or non-OpenAI protocol in these "
                         + "workspaces: legacy-anthropic, legacy-fanout, legacy-nomodel");
         assertThat(deployLog)
-                .as("only legacy-fanout ran detection on more than one config; legacy-paused had an explicit pointer")
+                .as(
+                        "only legacy-fanout ran practice review on more than one config; legacy-paused had an explicit pointer")
                 .contains("ran on SEVERAL configurations at once in these workspaces: legacy-fanout");
         assertThat(deployLog)
                 .as("a dropped config may hold a key worth revoking, so it is named before the table goes")
@@ -429,7 +430,7 @@ class LegacyAgentConfigMigrationIntegrationTest {
             """,
                 "UPDATE workspace SET practice_config_id = 9502, mentor_config_id = 9502 WHERE id = 9402",
                 "UPDATE workspace SET practice_config_id = 9508 WHERE id = 9407",
-                // A completed job with recorded spend, and a suppressed finding hanging off it so the FK
+                // A completed job with recorded spend, and a suppressed piece of feedback hanging off it so the FK
                 // this release hardens to RESTRICT has a row to refuse a cascade on.
                 "INSERT INTO \"user\" (id, native_id, provider_id) VALUES (9601, 9601, 1)",
                 """

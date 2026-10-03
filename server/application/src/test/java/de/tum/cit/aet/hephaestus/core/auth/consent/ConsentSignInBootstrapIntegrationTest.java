@@ -9,6 +9,7 @@ import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,8 +42,7 @@ class ConsentSignInBootstrapIntegrationTest extends RealAuthIntegrationTest {
     static class ConsentGateConfiguration {
         @Bean
         WebMvcConfigurer enableConsentGate(ConsentGateInterceptor interceptor) {
-            // The ordinary test profile omits ConsentWebConfiguration; this regression needs the
-            // real gate as well as the real cookie authentication used by the browser.
+            // The test profile omits ConsentWebConfiguration; these cases need the real consent gate.
             return new WebMvcConfigurer() {
                 @Override
                 public void addInterceptors(InterceptorRegistry registry) {
@@ -141,7 +141,7 @@ class ConsentSignInBootstrapIntegrationTest extends RealAuthIntegrationTest {
         assertProtectedContentBlocked(replacement);
     }
 
-    private String signIn(String username, @org.jspecify.annotations.Nullable String ambientCookie) {
+    private String signIn(String username, @Nullable String ambientCookie) {
         var request = client.post().uri("/auth/dev-login").contentType(MediaType.APPLICATION_JSON);
         if (ambientCookie != null) request.cookie(cookieName, ambientCookie);
         var response = request.bodyValue(Map.of("username", username, "admin", false))

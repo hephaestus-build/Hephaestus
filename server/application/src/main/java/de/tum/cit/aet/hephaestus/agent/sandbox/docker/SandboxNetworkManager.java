@@ -131,7 +131,6 @@ public class SandboxNetworkManager {
         networkOps.disconnectFromNetwork(networkId, containerId);
     }
 
-    /** Remove a job network. */
     public void removeNetwork(String networkId) {
         networkOps.removeNetwork(networkId);
     }

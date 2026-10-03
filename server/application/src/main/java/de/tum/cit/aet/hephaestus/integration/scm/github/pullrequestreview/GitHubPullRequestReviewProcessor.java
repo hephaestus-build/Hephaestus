@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPu
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.dto.GitHubPullRequestReviewEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
@@ -282,7 +283,7 @@ public class GitHubPullRequestReviewProcessor extends BaseGitHubProcessor {
                     "Review state is null, using UNKNOWN. This may indicate missing data in webhook or GraphQL response.");
             return PullRequestReview.State.UNKNOWN;
         }
-        return switch (state.toUpperCase()) {
+        return switch (state.toUpperCase(Locale.ROOT)) {
             case "APPROVED" -> PullRequestReview.State.APPROVED;
             case "CHANGES_REQUESTED" -> PullRequestReview.State.CHANGES_REQUESTED;
             case "COMMENTED" -> PullRequestReview.State.COMMENTED;
@@ -385,7 +386,7 @@ public class GitHubPullRequestReviewProcessor extends BaseGitHubProcessor {
                     + "This may indicate missing data in webhook payload.");
             return Issue.State.OPEN;
         }
-        return switch (state.toUpperCase()) {
+        return switch (state.toUpperCase(Locale.ROOT)) {
             case "OPEN" -> Issue.State.OPEN;
             case "CLOSED" -> Issue.State.CLOSED;
             case "MERGED" -> Issue.State.MERGED;

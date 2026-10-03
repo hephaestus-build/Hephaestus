@@ -8,19 +8,31 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -30,9 +42,9 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
     private GitRepositoryManager gitRepositoryManager;
 
     private RepositoryTreeContentSource source;
-    private final java.util.List<AutoCloseable> cleanups = new java.util.ArrayList<>();
+    private final List<AutoCloseable> cleanups = new ArrayList<>();
 
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void releaseCapturedTrees() throws Exception {
         for (var cleanup : cleanups) cleanup.close();
     }
@@ -41,12 +53,12 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
     void setUp() {
         source = new RepositoryTreeContentSource(
                 gitRepositoryManager,
-                org.mockito.Mockito.mock(ReviewRepositoryPreparer.class),
-                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder.class));
+                Mockito.mock(ReviewRepositoryPreparer.class),
+                Mockito.mock(PersonDataCopyRecorder.class));
     }
 
-    @org.junit.jupiter.api.io.TempDir
-    java.nio.file.Path stagingDir;
+    @TempDir
+    Path stagingDir;
 
     @Test
     void shouldMaterializePinnedRepositoryWithGitMetadata() {
@@ -71,15 +83,13 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
         assertThat(contribution.files()).isEmpty();
         assertThat(contribution.filesOnDisk())
                 .containsOnlyKeys("repos/reviewed/.git/HEAD", "repos/reviewed/.git/hephaestus-captured-refs");
-        assertThat(contribution.directories())
-                .containsExactly(
-                        new de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory("repos/reviewed/", stagingDir));
+        assertThat(contribution.directories()).containsExactly(new EvidenceDirectory("repos/reviewed/", stagingDir));
         verify(gitRepositoryManager)
                 .readTreeSnapshot(new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789");
     }
 
     @Test
-    @org.junit.jupiter.api.DisplayName("reports excluded tree entries as PARTIAL and names the exclusions")
+    @DisplayName("reports excluded tree entries as PARTIAL and names the exclusions")
     void shouldReportPartialWhenTreeEntriesAreExcluded() {
         AgentJob job = job(17L, "0123456789012345678901234567890123456789");
         when(gitRepositoryManager.isEnabled()).thenReturn(true);
@@ -104,9 +114,7 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
         // COMPLETE here would license a practice to say "this does not exist anywhere in the
         // repository" about a tree with excluded entries.
         assertThat(contribution.completeness())
-                .containsEntry(
-                        new SourceKind("scm.repository.tree"),
-                        de.tum.cit.aet.hephaestus.evidence.SourceCompleteness.PARTIAL);
+                .containsEntry(new SourceKind("scm.repository.tree"), SourceCompleteness.PARTIAL);
         assertThat(contribution.captureLimitations().get(new SourceKind("scm.repository.tree")))
                 .containsExactlyInAnyOrder(
                         GitRepositoryManager.TREE_LIMITATION_UNSAFE_PATH,
@@ -132,8 +140,7 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
                 .thenReturn(true);
         when(gitRepositoryManager.readTreeSnapshot(
                         new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789"))
-                .thenThrow(
-                        new GitRepositoryManager.GitOperationException("unreadable commit", new java.io.IOException()));
+                .thenThrow(new GitRepositoryManager.GitOperationException("unreadable commit", new IOException()));
 
         assertThatThrownBy(() -> source.capture(new ContextRequest.PracticeReviewRequest(job), source.sourceKinds()))
                 .isInstanceOf(EvidenceCollectionException.class)
@@ -180,7 +187,7 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
             metadata.put("commit_sha", commitSha);
         }
         AgentJob job = new AgentJob();
-        var workspace = new de.tum.cit.aet.hephaestus.workspace.Workspace();
+        var workspace = new Workspace();
         workspace.setId(99L);
         job.setWorkspace(workspace);
         job.setMetadata(metadata);

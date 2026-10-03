@@ -98,7 +98,7 @@ public final class WorkerMentorSessions {
                 case SEND -> {
                     AttachedSandbox attached = session.attached;
                     if (attached == null
-                            || mapper.writeValueAsBytes(command.body()).length > properties.maxFrameChars()) {
+                            || mapper.writeValueAsBytes(command.body()).length > properties.maxFrameBytes()) {
                         throw new InteractiveSandboxException("Session unavailable or frame too large");
                     }
                     attached.send(command.body());
@@ -218,7 +218,7 @@ public final class WorkerMentorSessions {
     private void reply(MentorSessionCommand command, MentorSessionEvent.Kind kind) {
         var body = mapper.createObjectNode();
         if (command.operation() == MentorSessionCommand.Operation.OPEN && kind == MentorSessionEvent.Kind.ACK) {
-            body.put("frameByteBudget", properties.maxFrameChars());
+            body.put("frameByteBudget", properties.maxFrameBytes());
         }
         if (!client.sendRequired(new MentorSessionEvent(command.sessionId(), command.requestId(), kind, body))) {
             Session session = sessions.get(command.sessionId());

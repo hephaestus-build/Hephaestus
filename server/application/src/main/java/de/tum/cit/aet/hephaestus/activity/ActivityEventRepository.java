@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.activity;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -70,8 +71,7 @@ public interface ActivityEventRepository extends JpaRepository<ActivityEvent, UU
             ON u.provider_id=s.provider_id AND u.native_id::text=s.subject
             WHERE u.id=gc.author_id AND s.team_key='')
         """, nativeQuery = true)
-    int backfillCommitActors(
-            @Param("repositoryId") Long repositoryId, @Param("authorIds") java.util.List<Long> authorIds);
+    int backfillCommitActors(@Param("repositoryId") Long repositoryId, @Param("authorIds") List<Long> authorIds);
 
     @WorkspaceAgnostic("Repository-bounded ledger maintenance; all selected native authors require write admission")
     @Query(value = """
@@ -80,7 +80,7 @@ public interface ActivityEventRepository extends JpaRepository<ActivityEvent, UU
           AND e.target_type='commit' AND e.event_type='COMMIT_CREATED' AND e.actor_id IS NULL
         ORDER BY gc.author_id
         """, nativeQuery = true)
-    java.util.List<Long> unresolvedCommitAuthors(@Param("repositoryId") Long repositoryId);
+    List<Long> unresolvedCommitAuthors(@Param("repositoryId") Long repositoryId);
 
     @Query(value = "SELECT COUNT(*) FROM activity_event WHERE workspace_id = :workspaceId", nativeQuery = true)
     long countByWorkspaceId(@Param("workspaceId") Long workspaceId);

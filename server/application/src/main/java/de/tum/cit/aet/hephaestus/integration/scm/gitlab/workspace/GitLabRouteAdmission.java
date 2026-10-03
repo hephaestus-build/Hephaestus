@@ -24,7 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProject
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabSubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabSubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -68,7 +68,7 @@ import tools.jackson.databind.ObjectMapper;
 public class GitLabRouteAdmission implements RouteAdmission {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabRouteAdmission.class);
-    private static final String SUBJECT_PREFIX = "gitlab." + GitlabSubjectKeyDeriver.CONNECTION_TOKEN + ".";
+    private static final String SUBJECT_PREFIX = "gitlab." + GitLabSubjectKeyDeriver.CONNECTION_TOKEN + ".";
     private static final ThreadLocal<@Nullable Delivery> CURRENT = new ThreadLocal<>();
 
     /** The connection a delivery was admitted for, the GitLab instance it is on and the group its hook covers. */
@@ -504,7 +504,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
         if (subject == null || headers == null) {
             return Optional.empty();
         }
-        String[] tokens = subject.split("\\.");
+        String[] tokens = subject.split("\\.", -1);
         try {
             long connectionId = Long.parseLong(tokens[2]);
             long workspaceId =

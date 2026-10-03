@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
@@ -156,9 +157,7 @@ class PracticeDefinitionOptionsServiceTest {
                     // saying where the capture stops asks an author to promise something they cannot check.
                     assertThat(option.selectionScope())
                             .isEqualTo(catalogs.requireSource(
-                                            catalogs.current().version(),
-                                            new de.tum.cit.aet.hephaestus.evidence.SourceKind(
-                                                    "scm.pull-request.comments"))
+                                            catalogs.current().version(), new SourceKind("scm.pull-request.comments"))
                                     .selectionScope());
                 });
         assertThat(pullRequests.allowedSources())

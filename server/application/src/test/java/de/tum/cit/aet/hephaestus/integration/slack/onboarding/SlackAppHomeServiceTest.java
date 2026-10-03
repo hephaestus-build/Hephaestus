@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -33,7 +34,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import tools.jackson.databind.json.JsonMapper;
 
 class SlackAppHomeServiceTest extends BaseUnitTest {
@@ -79,12 +79,11 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
                 messageService,
                 onboardingService,
                 uiLinks);
-        Mockito.lenient().when(mentorReadinessQuery.isReady(7L)).thenReturn(true);
-        Mockito.lenient()
+        lenient().when(mentorReadinessQuery.isReady(7L)).thenReturn(true);
+        lenient()
                 .when(monitoredChannelRepository.countByWorkspaceIdAndConsentState(7L, ConsentState.ACTIVE))
                 .thenReturn(1L);
-        Mockito.lenient().when(uiLinks.workspaceHomeUrl(7L)).thenReturn("https://heph.example/w/team");
-        Mockito.lenient().when(uiLinks.userSettingsUrl()).thenReturn("https://heph.example/settings");
+        lenient().when(uiLinks.userSettingsUrl()).thenReturn("https://heph.example/settings");
     }
 
     @Test

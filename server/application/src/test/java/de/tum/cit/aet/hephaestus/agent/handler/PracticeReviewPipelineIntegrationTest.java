@@ -7,7 +7,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,8 +21,13 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
+import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
+import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
@@ -37,19 +44,35 @@ import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettings;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState.Available;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitHubAppConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.OutlineConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor.DiffAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Disposition;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
+import de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocumentProjector;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport;
+import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -65,6 +88,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
@@ -78,11 +102,21 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.IntStream;
+import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,11 +124,17 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-@org.springframework.test.context.TestPropertySource(
+@TestPropertySource(
         properties = {
             "hephaestus.integration.slack.enabled=true",
             "hephaestus.integration.slack.signing-secret=test-signing-secret-not-real",
@@ -126,11 +166,11 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
     private JobEvidenceFiles evidenceFiles;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout evidenceLayout;
+    private FabricLayout evidenceLayout;
 
-    private final java.util.List<java.util.UUID> preparedJobIds = new java.util.ArrayList<>();
-    private final Map<String, byte[]> capturedFiles = new java.util.LinkedHashMap<>();
-    private final java.util.List<PreparedJobInputs> preparedEvidence = new java.util.ArrayList<>();
+    private final List<UUID> preparedJobIds = new ArrayList<>();
+    private final Map<String, byte[]> capturedFiles = new LinkedHashMap<>();
+    private final List<PreparedJobInputs> preparedEvidence = new ArrayList<>();
 
     @Autowired
     private AgentJobRepository agentJobRepository;
@@ -175,10 +215,10 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
     private FeedbackDeliveryService feedbackDeliveryService;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource historySource;
+    private ReviewHistoryContentSource historySource;
 
     @Autowired
-    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private JdbcTemplate jdbcTemplate;
 
     @Autowired
     private InstanceSettingsService instanceSettingsService;
@@ -204,15 +244,15 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
 
     @AfterEach
     void resetHandlerDoubles() {
-        org.mockito.Mockito.reset(commentPoster, diffNotePoster, accountPreferencesQuery);
+        reset(commentPoster, diffNotePoster, accountPreferencesQuery);
     }
 
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void releasePreparedEvidence() throws Exception {
         preparedEvidence.forEach(PreparedJobInputs::close);
         preparedEvidence.clear();
         for (var jobId : preparedJobIds) {
-            org.apache.commons.io.FileUtils.deleteDirectory(evidenceLayout
+            FileUtils.deleteDirectory(evidenceLayout
                     .jobsRoot()
                     .resolve(workspace.getId().toString())
                     .resolve(jobId.toString())
@@ -223,7 +263,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        org.mockito.Mockito.reset(commentPoster, diffNotePoster, accountPreferencesQuery);
+        reset(commentPoster, diffNotePoster, accountPreferencesQuery);
         databaseTestUtils.cleanDatabase();
         releaseSilentMode();
         when(commentPoster.findExistingSummaryComment(any())).thenReturn(ExistingDeliveryLookup.absent());
@@ -234,14 +274,12 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         workspace.getFeatures().setPracticesEnabled(true);
         workspace = workspaceRepository.save(workspace);
 
-        var scm = new de.tum.cit.aet.hephaestus.integration.core.connection.Connection(
+        var scm = new Connection(
                 workspace,
-                de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB,
+                IntegrationKind.GITHUB,
                 "1732",
-                new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitHubAppConfig(
-                        1732L, workspace.getAccountLogin(), null, java.util.Set.of()));
-        org.springframework.test.util.ReflectionTestUtils.setField(
-                scm, "state", de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE);
+                new GitHubAppConfig(1732L, workspace.getAccountLogin(), null, Set.of()));
+        ReflectionTestUtils.setField(scm, "state", IntegrationState.ACTIVE);
         connections.save(scm);
 
         Practice description = createPractice("pr-description-quality", "PR Description Quality");
@@ -268,7 +306,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         repositoryToMonitorRepository.save(WorkspaceTestFixtures.repositoryMonitor(workspace, repo.getNameWithOwner()));
 
         Instant now = Instant.now();
-        Long providerId = java.util.Objects.requireNonNull(provider.getId());
+        Long providerId = Objects.requireNonNull(provider.getId());
         pullRequestRepository.upsertCore(
                 8001L,
                 providerId,
@@ -335,10 +373,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         agentJob.setMetadata(metadata);
         agentJob.setEvidenceSnapshot(evidenceSnapshot(description, errors));
         agentJob = agentJobRepository.save(agentJob);
-        preparedEvidence.add(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
-                evidenceFiles,
-                agentJob,
-                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(capturedFiles)));
+        preparedEvidence.add(PreparedJobInputsFixtures.prepare(
+                evidenceFiles, agentJob, PreparedJobInputsFixtures.filesOnly(capturedFiles)));
         agentJob.setStatus(AgentJobStatus.COMPLETED);
         agentJob = agentJobRepository.saveAndFlush(agentJob);
         preparedJobIds.add(agentJob.getId());
@@ -350,27 +386,27 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
     }
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder folderBuilder;
+    private WorkspaceContextBuilder folderBuilder;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository connections;
+    private ConnectionRepository connections;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository outlineDocuments;
+    private OutlineDocumentRepository outlineDocuments;
 
     @Autowired
-    private org.springframework.transaction.PlatformTransactionManager transactions;
+    private PlatformTransactionManager transactions;
 
     @Autowired
     private ObservationAdmissionService admissionService;
 
-    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
-    private de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocumentProjector documentProjection;
+    @MockitoSpyBean
+    private OutlineDocumentProjector documentProjection;
 
     @Test
     void jobFolderVerifiesCrossSourceQuotesAndIncludesFreshlyCommittedPullRequest() throws Exception {
         setJobOutput(validAgentOutput());
-        var provider = java.util.Objects.requireNonNull(repository.getProvider());
+        var provider = Objects.requireNonNull(repository.getProvider());
         var other = new Repository();
         other.setProvider(provider);
         other.setNativeId(4002L);
@@ -381,13 +417,13 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         other = repositoryRepository.save(other);
         repositoryToMonitorRepository.save(
                 WorkspaceTestFixtures.repositoryMonitor(workspace, other.getNameWithOwner()));
-        long otherId = java.util.Objects.requireNonNull(other.getId());
-        var committedPullRequest = new java.util.concurrent.atomic.AtomicLong();
-        new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(status -> {
+        long otherId = Objects.requireNonNull(other.getId());
+        var committedPullRequest = new AtomicLong();
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
             Instant now = Instant.now();
             pullRequestRepository.upsertCore(
                     8002L,
-                    java.util.Objects.requireNonNull(provider.getId()),
+                    Objects.requireNonNull(provider.getId()),
                     51,
                     "Just committed",
                     "Fresh pull request body",
@@ -419,7 +455,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     BASE_SHA,
                     null,
                     null);
-            long freshId = java.util.Objects.requireNonNull(pullRequestRepository
+            long freshId = Objects.requireNonNull(pullRequestRepository
                     .findByRepositoryIdAndNumber(otherId, 51)
                     .orElseThrow()
                     .getId());
@@ -432,19 +468,17 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     "Other repository comment",
                     "https://github.com/" + repository.getNameWithOwner() + "/pull/50#issuecomment-1732001");
         });
-        var slack = new de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport(jdbcTemplate);
+        var slack = new SlackConversationTestSupport(jdbcTemplate);
         slack.seedChannel(workspace.getId(), "C1732", "ACTIVE");
         slack.seedMessage(workspace.getId(), "C1732", "1704067200.000001", null, "Slack source quote");
-        var outline = new de.tum.cit.aet.hephaestus.integration.core.connection.Connection(
+        var outline = new Connection(
                 workspace,
-                de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.OUTLINE,
+                IntegrationKind.OUTLINE,
                 "https://wiki.example.com",
-                new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.OutlineConfig(
-                        "https://wiki.example.com", null, null, java.util.Set.of()));
-        org.springframework.test.util.ReflectionTestUtils.setField(
-                outline, "state", de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE);
+                new OutlineConfig("https://wiki.example.com", null, null, Set.of()));
+        ReflectionTestUtils.setField(outline, "state", IntegrationState.ACTIVE);
         outline = connections.save(outline);
-        var document = new de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument();
+        var document = new OutlineDocument();
         document.setWorkspaceId(workspace.getId());
         document.setConnectionId(outline.getId());
         document.setDocumentId(UUID.randomUUID().toString());
@@ -456,7 +490,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         document.setLastMaterializedAt(Instant.now());
         outlineDocuments.save(document);
         for (int n = 0; n < 20; n++) {
-            var extra = new de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument();
+            var extra = new OutlineDocument();
             extra.setWorkspaceId(workspace.getId());
             extra.setConnectionId(outline.getId());
             extra.setDocumentId(UUID.randomUUID().toString());
@@ -471,9 +505,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         practice.setSignals(List.of(ScmSignals.PULL_REQUEST_OPENED));
         practice.setEvidenceRequirements(
                 List.of("scm.pull-request.core", "outline.documents", "workspace.project-inventory").stream()
-                        .map(kind -> new de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement(
-                                new de.tum.cit.aet.hephaestus.evidence.SourceKind(kind),
-                                de.tum.cit.aet.hephaestus.practices.EvidenceStance.REQUIRED))
+                        .map(kind -> new PracticeEvidenceRequirement(new SourceKind(kind), EvidenceStance.REQUIRED))
                         .toList());
         practice.setReviewWhen(Map.of());
         practice.setSubject(ActorRole.AUTHOR);
@@ -487,8 +519,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         next.setStatus(AgentJobStatus.QUEUED);
         next.setConfigSnapshot(agentJob.getConfigSnapshot());
-        var nextMetadata = (ObjectNode)
-                java.util.Objects.requireNonNull(agentJob.getMetadata()).deepCopy();
+        var nextMetadata =
+                (ObjectNode) Objects.requireNonNull(agentJob.getMetadata()).deepCopy();
         nextMetadata.remove(ObservationAdmissionService.DIGEST_METADATA_KEY);
         nextMetadata.put("pull_request_id", committedPullRequest.get());
         nextMetadata
@@ -499,22 +531,20 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next.setMetadata(nextMetadata);
         next = agentJobRepository.save(next);
         UUID claimId = next.getId();
-        next = java.util.Objects.requireNonNull(new org.springframework.transaction.support.TransactionTemplate(
-                        transactions)
-                .execute(status -> {
-                    var claimed = agentJobRepository
-                            .findByIdQueuedForUpdateSkipLocked(claimId, Instant.now())
-                            .orElseThrow();
-                    claimed.setStatus(AgentJobStatus.RUNNING);
-                    claimed.setWorkerId("test-worker");
-                    return agentJobRepository.saveAndFlush(claimed);
-                }));
-        org.mockito.Mockito.doAnswer(call -> {
+        next = Objects.requireNonNull(new TransactionTemplate(transactions).execute(status -> {
+            var claimed = agentJobRepository
+                    .findByIdQueuedForUpdateSkipLocked(claimId, Instant.now())
+                    .orElseThrow();
+            claimed.setStatus(AgentJobStatus.RUNNING);
+            claimed.setWorkerId("test-worker");
+            return agentJobRepository.saveAndFlush(claimed);
+        }));
+        doAnswer(call -> {
                     assertThat(jdbcTemplate.queryForObject("SHOW transaction_isolation", String.class))
                             .isEqualTo("repeatable read");
                     assertThat(jdbcTemplate.queryForObject("SHOW transaction_read_only", String.class))
                             .isEqualTo("on");
-                    java.util.concurrent.CompletableFuture.runAsync(() -> slack.seedMessage(
+                    CompletableFuture.runAsync(() -> slack.seedMessage(
                                     workspace.getId(),
                                     "C1732",
                                     "1704067201.000001",
@@ -527,9 +557,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 .documentsForWorkspace(workspace.getId());
         evidenceFiles.beginPersonCapture(next);
         var raw = folderBuilder.prepare(
-                new ContextRequest.PracticeReviewRequest(next),
-                de.tum.cit.aet.hephaestus.agent.context.EvidencePlan.compile(List.of(practice)));
-        var index = java.util.Objects.requireNonNull(raw.manifest());
+                new ContextRequest.PracticeReviewRequest(next), EvidencePlan.compile(List.of(practice)));
+        var index = Objects.requireNonNull(raw.manifest());
         assertThat(folderBuilder
                         .prepareAutomatedReviewReadiness(
                                 index, List.of(practice), next.getCreatedAt(), raw.files(), null)
@@ -540,8 +569,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             assertThat(index.sources())
                     .filteredOn(source -> source.kind().value().equals(workspaceSource))
                     .singleElement()
-                    .satisfies(source -> assertThat(source.state())
-                            .isInstanceOf(de.tum.cit.aet.hephaestus.evidence.SourceCaptureState.Available.class));
+                    .satisfies(source -> assertThat(source.state()).isInstanceOf(Available.class));
         }
 
         assertThat(index.artifacts().stream().filter(a -> a.artifact().path().startsWith("context/docs/")))
@@ -553,28 +581,25 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 .put("slug", practice.getSlug())
                 .put(
                         "revisionId",
-                        java.util.Objects.requireNonNull(
-                                practice.getCurrentRevision().getId()));
+                        Objects.requireNonNull(practice.getCurrentRevision().getId()));
         next.setEvidenceSnapshot(snapshot);
         next = agentJobRepository.save(next);
         var prepared = evidenceFiles.prepare(
                 next,
-                new de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence(
-                        raw.files(), raw.filesOnDisk(), raw.cleanups(), null, raw.directories()),
+                new PreparedEvidence(raw.files(), raw.filesOnDisk(), raw.cleanups(), null, raw.directories()),
                 null);
         preparedEvidence.add(prepared);
         preparedJobIds.add(next.getId());
-        assertThat(java.nio.file.Files.readString(
-                        prepared.filesOnDisk().get("context/scm/reviewed/pulls/51/record.json")))
+        assertThat(Files.readString(prepared.filesOnDisk().get("context/scm/reviewed/pulls/51/record.json")))
                 .contains("Just committed", "synced_at");
-        var comment = OBJECT_MAPPER.readTree(java.nio.file.Files.readAllLines(
+        var comment = OBJECT_MAPPER.readTree(Files.readAllLines(
                         prepared.filesOnDisk().get("context/scm/" + repository.getId() + "/pulls/50/comments.jsonl"))
                 .getFirst());
         assertThat(comment.has("synced_at")).isTrue();
         assertThat(comment.path("synced_at").isNull()).isTrue();
-        assertThat(java.nio.file.Files.readString(prepared.filesOnDisk().get("INDEX.md")))
+        assertThat(Files.readString(prepared.filesOnDisk().get("INDEX.md")))
                 .contains("context/chat/", "context/docs/", "context/people/");
-        assertThat(java.nio.file.Files.readString(prepared.filesOnDisk().get("context/chat/C1732/2024-01.jsonl")))
+        assertThat(Files.readString(prepared.filesOnDisk().get("context/chat/C1732/2024-01.jsonl")))
                 .doesNotContain("Committed during rendering");
         var output = OBJECT_MAPPER.createObjectNode();
         var observation = output.putArray("observations").addObject();
@@ -595,8 +620,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 "context/people/" + developer.getId() + "/observations.jsonl",
                 "Good PR description");
         for (var quote : quotes.entrySet()) {
-            var lines = java.nio.file.Files.readAllLines(prepared.filesOnDisk().get(quote.getKey()));
-            int line = java.util.stream.IntStream.range(0, lines.size())
+            var lines = Files.readAllLines(prepared.filesOnDisk().get(quote.getKey()));
+            int line = IntStream.range(0, lines.size())
                             .filter(n -> lines.get(n).contains(quote.getValue()))
                             .findFirst()
                             .orElseThrow()
@@ -702,13 +727,13 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         admit(job, observations);
         String digest = "test-admission-digest";
         JsonNode jobMetadata = job.getMetadata();
-        org.junit.jupiter.api.Assertions.assertNotNull(jobMetadata);
+        assertThat(jobMetadata).isNotNull();
         ObjectNode metadata = (ObjectNode) jobMetadata.deepCopy();
         metadata.put(ObservationAdmissionService.DIGEST_METADATA_KEY, digest);
         job.setMetadata(metadata);
         ObjectNode output = OBJECT_MAPPER.createObjectNode();
         output.putObject("feedback").put("admissionDigest", digest).putArray("units");
-        int eligible = java.util.Objects.requireNonNull(job.getEvidenceSnapshot())
+        int eligible = Objects.requireNonNull(job.getEvidenceSnapshot())
                 .path("practices")
                 .size();
         output.putObject("practiceCoverage")
@@ -741,14 +766,12 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next.setStatus(AgentJobStatus.RUNNING);
         next.setConfigSnapshot(agentJob.getConfigSnapshot());
         JsonNode metadata = agentJob.getMetadata();
-        org.junit.jupiter.api.Assertions.assertNotNull(metadata);
+        assertThat(metadata).isNotNull();
         next.setMetadata(metadata.deepCopy());
         next.setEvidenceSnapshot(agentJob.getEvidenceSnapshot().deepCopy());
         next = agentJobRepository.save(next);
-        preparedEvidence.add(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
-                evidenceFiles,
-                next,
-                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(capturedFiles)));
+        preparedEvidence.add(PreparedJobInputsFixtures.prepare(
+                evidenceFiles, next, PreparedJobInputsFixtures.filesOnly(capturedFiles)));
         next.setStatus(AgentJobStatus.COMPLETED);
         next = agentJobRepository.saveAndFlush(next);
         preparedJobIds.add(next.getId());
@@ -771,8 +794,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             EvidenceSnapshotFixtures.admittedPractice(
                     snapshot,
                     practice.getSlug(),
-                    java.util.Objects.requireNonNull(
-                            practice.getCurrentRevision().getId()));
+                    Objects.requireNonNull(practice.getCurrentRevision().getId()));
         }
         return snapshot;
     }
@@ -846,7 +868,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
      * ids, and units whose {@code {practice-slug}} placeholders name the observation of that practice.
      */
     private void compose(AgentJob job, String lead, String... units) {
-        ObjectNode output = (ObjectNode) java.util.Objects.requireNonNull(job.getOutput());
+        ObjectNode output = (ObjectNode) Objects.requireNonNull(job.getOutput());
         ObjectNode feedback = (ObjectNode) output.get("feedback");
         feedback.put("lead", lead);
         var staged = feedback.putArray("observations");
@@ -883,8 +905,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         next.setStatus(AgentJobStatus.RUNNING);
         next.setConfigSnapshot(agentJob.getConfigSnapshot());
-        ObjectNode metadata = (ObjectNode)
-                java.util.Objects.requireNonNull(agentJob.getMetadata()).deepCopy();
+        ObjectNode metadata =
+                (ObjectNode) Objects.requireNonNull(agentJob.getMetadata()).deepCopy();
         metadata.put("pull_request_id", pullRequestId);
         metadata.put("pr_number", number);
         metadata.put("commit_sha", headSha);
@@ -896,10 +918,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next.setMetadata(metadata);
         next.setEvidenceSnapshot(agentJob.getEvidenceSnapshot().deepCopy());
         next = agentJobRepository.save(next);
-        preparedEvidence.add(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
-                evidenceFiles,
-                next,
-                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(capturedFiles)));
+        preparedEvidence.add(PreparedJobInputsFixtures.prepare(
+                evidenceFiles, next, PreparedJobInputsFixtures.filesOnly(capturedFiles)));
         next.setStatus(AgentJobStatus.COMPLETED);
         next = agentJobRepository.saveAndFlush(next);
         preparedJobIds.add(next.getId());
@@ -929,17 +949,17 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         void aLineNoteThatNeverLandsIsRecordedFailedAndNotBehindTheDeliveredComment() {
             Practice parser = createPractice("parser-input-validation", "Parser input validation");
             Practice linking = createPractice("issue-linking", "Issue linking");
-            ObjectNode snapshot = (ObjectNode) java.util.Objects.requireNonNull(agentJob.getEvidenceSnapshot());
+            ObjectNode snapshot = (ObjectNode) Objects.requireNonNull(agentJob.getEvidenceSnapshot());
             EvidenceSnapshotFixtures.admittedPractice(
                     snapshot,
                     parser.getSlug(),
-                    java.util.Objects.requireNonNull(java.util.Objects.requireNonNull(parser.getCurrentRevision())
-                            .getId()));
+                    Objects.requireNonNull(
+                            Objects.requireNonNull(parser.getCurrentRevision()).getId()));
             EvidenceSnapshotFixtures.admittedPractice(
                     snapshot,
                     linking.getSlug(),
-                    java.util.Objects.requireNonNull(java.util.Objects.requireNonNull(linking.getCurrentRevision())
-                            .getId()));
+                    Objects.requireNonNull(
+                            Objects.requireNonNull(linking.getCurrentRevision()).getId()));
             agentJob.setEvidenceSnapshot(snapshot);
             agentJob = agentJobRepository.saveAndFlush(agentJob);
             setJobOutput(FOUR_OBSERVATIONS);
@@ -967,7 +987,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                                     landing.getId().toString(), 0, "src/App.java", "NEW", 3, 3)));
             List<ValidatedObservation> admitted =
                     List.of(validated(summarised, null), inlineA, inlineB, validated(supporting, null));
-            DeliveryContent content = java.util.Objects.requireNonNull(DeliveryComposer.composeAdmitted(
+            DeliveryContent content = Objects.requireNonNull(DeliveryComposer.composeAdmitted(
                     admitted, ArtifactKinds.PULL_REQUEST, Map.of(), List.of(unit), null));
             String landingKey = "observation:" + landing.getOccurrenceKey();
             String failingKey = "observation:" + failing.getOccurrenceKey();
@@ -1068,8 +1088,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             boolean landed = disposition != Disposition.FAILED;
             return new DeliveredSignal(
                     key,
-                    new de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor.DiffAnchor(
-                            "src/App.java", line, null),
+                    new DiffAnchor("src/App.java", line, null),
                     disposition,
                     landed ? "note-" + key : null,
                     landed ? "discussion-" + key : null);
@@ -1127,7 +1146,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             verify(commentPoster).post(argThat(write -> write.job().equals(first)));
             assertThat(deliveredBody(first)).contains("The issue link names the outcome");
 
-            Map<String, byte[]> history = new java.util.HashMap<>();
+            Map<String, byte[]> history = new HashMap<>();
             historySource.contribute(new ContextRequest.PracticeReviewRequest(agentJob), history);
             assertThat(new String(history.get(SandboxLayout.HISTORY_PREFIX + "feedback.json"), StandardCharsets.UTF_8))
                     .as("the next review's composer is given the praise already delivered")
@@ -1229,9 +1248,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 assertThat(row.getAgentJobId()).isEqualTo(second.getId());
                 assertThat(row.getOutcome()).isEqualTo(Outcome.MET);
             });
-            assertThat(de.tum.cit.aet.hephaestus.practices.observation.LatestRun.perClaim(
-                            observationRepository.findStandingForWork(
-                                    workspace.getId(), ArtifactKinds.PULL_REQUEST, prId, developer.getId())))
+            assertThat(LatestRun.perClaim(observationRepository.findStandingForWork(
+                            workspace.getId(), ArtifactKinds.PULL_REQUEST, prId, developer.getId())))
                     .extracting(Observation::getId)
                     .containsExactly(later.getFirst().getId());
             assertThat(observationRepository.findById(earlier.getFirst().getId()))
@@ -1297,7 +1315,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
 
         private void autonomy(PracticeAutonomy autonomy) {
             for (Practice practice : practiceRepository.findByWorkspaceIdAndSlugIn(
-                    workspace.getId(), java.util.Set.of("pr-description-quality", "error-handling"))) {
+                    workspace.getId(), Set.of("pr-description-quality", "error-handling"))) {
                 practice.setAutonomy(autonomy);
                 practiceRepository.saveAndFlush(practice);
             }
@@ -1308,7 +1326,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     .filter(feedback -> feedback.getAgentJobId().equals(job.getId())
                             && feedback.getDeliveryState() == FeedbackDeliveryState.DELIVERED)
                     .map(Feedback::getBody)
-                    .filter(java.util.Objects::nonNull)
+                    .filter(Objects::nonNull)
                     .findFirst()
                     .orElseThrow();
         }
@@ -1317,7 +1335,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             Instant now = Instant.now();
             pullRequestRepository.upsertCore(
                     nativeId,
-                    java.util.Objects.requireNonNull(repository.getProvider().getId()),
+                    Objects.requireNonNull(repository.getProvider().getId()),
                     number,
                     "Earlier change",
                     "Closes #1",
@@ -1487,7 +1505,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
-        void allPositiveFindingsStayQuietWhenTheReviewDidNotReachEveryPractice() {
+        void allPositiveObservationsStayQuietWhenTheReviewDidNotReachEveryPractice() {
             String output = """
                 {
                   "observations": [
@@ -1567,12 +1585,12 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         @Test
         void closedPrSkipsDelivery() {
             var pr = pullRequestRepository.findById(prId).orElseThrow();
-            var provider = java.util.Objects.requireNonNull(pr.getProvider());
-            var author = java.util.Objects.requireNonNull(pr.getAuthor());
-            var createdAt = java.util.Objects.requireNonNull(pr.getCreatedAt());
+            var provider = Objects.requireNonNull(pr.getProvider());
+            var author = Objects.requireNonNull(pr.getAuthor());
+            var createdAt = Objects.requireNonNull(pr.getCreatedAt());
             pullRequestRepository.upsertCore(
                     8001L,
-                    java.util.Objects.requireNonNull(provider.getId()),
+                    Objects.requireNonNull(provider.getId()),
                     50,
                     "Pipeline Test PR",
                     "Test body",
@@ -1622,7 +1640,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
     }
 
     @Nested
-    class FindingIdempotency {
+    class ObservationIdempotency {
 
         @Test
         @DisplayName("re-delivering same job creates no duplicate observations")

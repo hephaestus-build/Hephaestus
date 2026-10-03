@@ -8,6 +8,7 @@ import java.util.Objects;
  * between pure verifier/builder logic and the NATS publisher: tests assert on this value, never
  * on jnats directly.
  */
+@SuppressWarnings("ArrayRecordComponent") // raw webhook body published as-is; never compared, hashed or printed
 public record PublishRequest(String subject, String dedupId, Map<String, String> headers, byte[] body) {
     public PublishRequest {
         Objects.requireNonNull(subject, "subject");

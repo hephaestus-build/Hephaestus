@@ -1,11 +1,18 @@
 package de.tum.cit.aet.hephaestus.integration.scm;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
-import java.util.*;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Component;
 
 /** One source-role relation for exact scope selection and post-sync processing admission. */
@@ -37,8 +44,7 @@ public class ScmPersonSourceIdentityContributor implements PersonSourceIdentityC
         return jdbc.query(
                 "SELECT DISTINCT artifact_id FROM (" + ROLES + ") roles WHERE user_id=ANY(?) ORDER BY artifact_id",
                 (rs, row) -> rs.getLong(1),
-                new org.springframework.jdbc.support.SqlArrayValue(
-                        "bigint", person.userIds().toArray()));
+                new SqlArrayValue("bigint", person.userIds().toArray()));
     }
 
     @Override

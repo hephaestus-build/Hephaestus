@@ -1,4 +1,4 @@
 ---
 ---
 
-Polishes the review run level that #2263 added and no release has shipped yet; its release note already describes the surface.
+No release note of its own: reviews-of-your-work.md describes the review list it polishes.

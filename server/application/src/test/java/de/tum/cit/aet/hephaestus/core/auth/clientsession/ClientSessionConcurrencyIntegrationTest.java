@@ -113,8 +113,6 @@ class ClientSessionConcurrencyIntegrationTest extends RealAuthIntegrationTest {
         tx = new TransactionTemplate(transactionManager);
     }
 
-    // ── refresh vs single-session revoke ────────────────────────────────────────────────────────────
-
     @Test
     void shouldEndTheRotatedFamilyWhenAStaleEntryRevokeWaitsBehindARefresh() throws Exception {
         ClientSignInFlow.Tokens r0 = flow.signIn("race-single-a");
@@ -148,8 +146,6 @@ class ClientSessionConcurrencyIntegrationTest extends RealAuthIntegrationTest {
         assertFamilyDead(r0.accessToken(), r0.refreshToken());
     }
 
-    // ── two refreshes presenting the same current secret ────────────────────────────────────────────
-
     @Test
     void shouldMintOnceAndThenEndTheFamilyWhenTheSameSecretIsRefreshedTwiceConcurrently() throws Exception {
         ClientSignInFlow.Tokens r0 = flow.signIn("race-same-secret");
@@ -167,8 +163,6 @@ class ClientSessionConcurrencyIntegrationTest extends RealAuthIntegrationTest {
         assertFamilyDead(minted.accessToken(), minted.refreshToken());
         flow.assertRejected(r0.accessToken());
     }
-
-    // ── refresh vs account erasure ──────────────────────────────────────────────────────────────────
 
     @Test
     void shouldEraseTheTokenARefreshMintedWhenAPurgeWaitsBehindIt() throws Exception {
@@ -238,8 +232,6 @@ class ClientSessionConcurrencyIntegrationTest extends RealAuthIntegrationTest {
                 .isZero();
     }
 
-    // ── refresh vs revoke-all / revoke-all-except ───────────────────────────────────────────────────
-
     @Test
     void shouldRevokeTheTokenARefreshMintedWhenSignOutEverywhereWaitsBehindIt() throws Exception {
         ClientSignInFlow.Tokens target = flow.signIn("race-all-a");
@@ -286,8 +278,6 @@ class ClientSessionConcurrencyIntegrationTest extends RealAuthIntegrationTest {
         assertFamilyDead(rotated.accessToken(), rotated.refreshToken());
     }
 
-    // ── refresh vs the account losing its standing (deletion; no other path suspends an account) ──
-
     @Test
     void shouldRevokeTheTokenARefreshMintedWhenAccountDeletionWaitsBehindIt() throws Exception {
         ClientSignInFlow.Tokens target = flow.signIn("race-delete-a");
@@ -318,8 +308,6 @@ class ClientSessionConcurrencyIntegrationTest extends RealAuthIntegrationTest {
         assertThat(outcome.second()).isEmpty();
         assertFamilyDead(target.accessToken(), target.refreshToken());
     }
-
-    // ── exchange and handoff creation vs revoke-all ─────────────────────────────────────────────────
 
     @Test
     void shouldEndTheNewSessionWhenRevokeAllWaitsBehindAnExchange() throws Exception {
@@ -384,8 +372,6 @@ class ClientSessionConcurrencyIntegrationTest extends RealAuthIntegrationTest {
         flow.exchange(CLIENT_ID, CALLBACK, code, verifier).expectStatus().isOk().expectBody(Void.class);
     }
 
-    // ── demotion vs issuance: the principal is read under the lock ─────────────────────────────────
-
     @Test
     void shouldMintTheDemotedRoleWhenAnIssuanceWaitsBehindADemotion() throws Exception {
         Long target = admin("race-demote-a-target");
@@ -415,8 +401,6 @@ class ClientSessionConcurrencyIntegrationTest extends RealAuthIntegrationTest {
         assertThat(outcome.second().getAppRole()).isEqualTo(Account.AppRole.USER);
         flow.assertRejected(outcome.first().value());
     }
-
-    // ── browser cookie refresh vs revoke-all ────────────────────────────────────────────────────────
 
     @Test
     void shouldRevokeTheRotatedCookieTokenWhenRevokeAllWaitsBehindACookieRefresh() throws Exception {
@@ -458,8 +442,6 @@ class ClientSessionConcurrencyIntegrationTest extends RealAuthIntegrationTest {
                         accountId))
                 .isZero();
     }
-
-    // ── expired-session refresh vs cleanup: same lock order, never a deadlock ──────────────────────
 
     @Test
     void shouldSkipTheLockedSessionWhenCleanupRunsWhileAnExpiredRefreshHoldsIt() throws Exception {
@@ -512,8 +494,6 @@ class ClientSessionConcurrencyIntegrationTest extends RealAuthIntegrationTest {
         assertThat(sessionRepository.findById(sid)).isEmpty();
         flow.assertRejected(tokens.accessToken());
     }
-
-    // ── harness ─────────────────────────────────────────────────────────────────────────────────────
 
     record Outcome<A, B>(A first, B second) {}
 

@@ -147,7 +147,7 @@ export function LandingFeaturesSection() {
 							<LandingWorkCard title="#team-payments" rotate={2}>
 								<LandingQuote>
 									<span className="inline-flex items-center gap-1.5">
-										<SlackIcon className="size-3 shrink-0" aria-hidden="true" />
+										<SlackIcon className="size-3 shrink-0" />
 										<span className="font-medium text-foreground">daily update</span>
 									</span>
 									<br />

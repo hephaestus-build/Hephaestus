@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -41,11 +40,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import tools.jackson.databind.ObjectMapper;
 
 class ReviewGateIntegrationTest extends BaseIntegrationTest {
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Autowired
     private ReviewGate gate;
@@ -79,9 +75,6 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
-
-    @Autowired
-    private LabelRepository labelRepository;
 
     private Workspace workspace;
     private WorkspaceLlmModel workspaceModel;
@@ -217,10 +210,10 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
 
             GateDecision decision = gate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO);
 
-            assertThat(decision).isInstanceOf(GateDecision.Detect.class);
-            var detect = (GateDecision.Detect) decision;
-            assertThat(detect.matchedPractices()).hasSize(1);
-            assertThat(detect.matchedPractices().get(0).getSlug()).isEqualTo("pr-quality");
+            assertThat(decision).isInstanceOf(GateDecision.Run.class);
+            var run = (GateDecision.Run) decision;
+            assertThat(run.matchedPractices()).hasSize(1);
+            assertThat(run.matchedPractices().get(0).getSlug()).isEqualTo("pr-quality");
         }
 
         @Test
@@ -231,10 +224,10 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
 
             GateDecision decision = gate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO);
 
-            assertThat(decision).isInstanceOf(GateDecision.Detect.class);
-            var detect = (GateDecision.Detect) decision;
-            assertThat(detect.matchedPractices()).hasSize(1);
-            assertThat(detect.matchedPractices().get(0).getSlug()).isEqualTo("active-one");
+            assertThat(decision).isInstanceOf(GateDecision.Run.class);
+            var run = (GateDecision.Run) decision;
+            assertThat(run.matchedPractices()).hasSize(1);
+            assertThat(run.matchedPractices().get(0).getSlug()).isEqualTo("active-one");
         }
 
         @Test
@@ -260,10 +253,10 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
 
             GateDecision decision = gate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO);
 
-            assertThat(decision).isInstanceOf(GateDecision.Detect.class);
-            var detect = (GateDecision.Detect) decision;
-            assertThat(detect.matchedPractices()).hasSize(2);
-            assertThat(detect.matchedPractices())
+            assertThat(decision).isInstanceOf(GateDecision.Run.class);
+            var run = (GateDecision.Run) decision;
+            assertThat(run.matchedPractices()).hasSize(2);
+            assertThat(run.matchedPractices())
                     .extracting(Practice::getSlug)
                     .containsExactlyInAnyOrder("practice-a", "practice-b");
         }
@@ -329,9 +322,9 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
 
             GateDecision decision = gate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO);
 
-            assertThat(decision).isInstanceOf(GateDecision.Detect.class);
-            var detect = (GateDecision.Detect) decision;
-            assertThat(detect.workspace().getId()).isEqualTo(workspace.getId());
+            assertThat(decision).isInstanceOf(GateDecision.Run.class);
+            var run = (GateDecision.Run) decision;
+            assertThat(run.workspace().getId()).isEqualTo(workspace.getId());
         }
 
         @Test

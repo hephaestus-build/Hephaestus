@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.Payload
 import io.nats.client.Message;
 import java.io.IOException;
 import java.time.Instant;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -20,7 +21,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Spring's self-invocation limitation.
  *
  * <p>{@code eventType} is the registry index. For GitHub it carries a tier prefix
- * ({@code "repository.issues"}) that the {@code GithubSubjectParser} folds in; the raw
+ * ({@code "repository.issues"}) that the {@code GitHubSubjectParser} folds in; the raw
  * subject only carries the token after the last {@code '.'}. The base validates the
  * inbound subject's last segment against that derived token by exact equality.
  *
@@ -58,7 +59,7 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
      *                            handler runs DB writes; we need a real tx boundary).
      */
     protected AbstractIntegrationMessageHandler(
-            @org.jspecify.annotations.Nullable IntegrationKind kind,
+            @Nullable IntegrationKind kind,
             String eventType,
             Class<T> payloadType,
             NatsMessageDeserializer deserializer,

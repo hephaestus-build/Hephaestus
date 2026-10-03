@@ -47,7 +47,7 @@ class GitLabGroupProcessorTest extends BaseUnitTest {
     }
 
     @Nested
-    class Process {
+    class ProcessGroup {
 
         @Test
         void validGroup_createsOrganization() {

@@ -24,8 +24,11 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
+import org.hamcrest.MatcherAssert;
+import org.hamcrest.Matchers;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -566,14 +569,13 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .jsonPath("$[0].guidance")
                     .value(
                             String.class,
-                            value -> org.hamcrest.MatcherAssert.assertThat(
-                                    value, org.hamcrest.Matchers.startsWith("Your recent feedback is mixed in ")))
+                            value -> MatcherAssert.assertThat(
+                                    value, Matchers.startsWith("Your recent feedback is mixed in ")))
                     .jsonPath("$[0].guidance")
                     .value(
                             String.class,
-                            value -> org.hamcrest.MatcherAssert.assertThat(
-                                    value,
-                                    org.hamcrest.Matchers.containsString("with both strengths and room to grow.")));
+                            value -> MatcherAssert.assertThat(
+                                    value, Matchers.containsString("with both strengths and room to grow.")));
         }
 
         @Test
@@ -675,7 +677,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("a thin record still yields a verdict, but never a direction")
         void shouldNotDeriveADirectionFromTwoObservations() {
-            Instant previousDay = Instant.now().minus(1, java.time.temporal.ChronoUnit.DAYS);
+            Instant previousDay = Instant.now().minus(1, ChronoUnit.DAYS);
             insertObservation(agentJob, practice, developer, "Speculative gap", "NOT_MET", "MINOR", 1L, previousDay);
             insertObservation(agentJob, practice, developer, "Clear motivation section", "MET", null, 2L);
 
@@ -701,7 +703,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("reports IMPROVING when the latest opportunity bundle is more positive")
         void shouldReportImprovingTrajectory() {
-            Instant previousDay = Instant.now().minus(1, java.time.temporal.ChronoUnit.DAYS);
+            Instant previousDay = Instant.now().minus(1, ChronoUnit.DAYS);
             for (long artifactId = 1; artifactId <= 4; artifactId++) {
                 insertObservation(
                         agentJob,
@@ -738,7 +740,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("reports DECLINING when the latest opportunity bundle is less positive")
         void shouldReportRegressingTrajectory() {
-            Instant previousDay = Instant.now().minus(1, java.time.temporal.ChronoUnit.DAYS);
+            Instant previousDay = Instant.now().minus(1, ChronoUnit.DAYS);
             for (long artifactId = 1; artifactId <= 4; artifactId++) {
                 insertObservation(
                         agentJob,
@@ -775,7 +777,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldKeepObservationsARunNeverRevisited() {
             Practice reviewPractice =
                     persistPractice(workspace, group, "review-comments", "Actionable Review Comments");
-            Instant previousDay = Instant.now().minus(1, java.time.temporal.ChronoUnit.DAYS);
+            Instant previousDay = Instant.now().minus(1, ChronoUnit.DAYS);
             insertObservation(
                     agentJob, practice, developer, "Missing rollout plan", "NOT_MET", "MAJOR", 1L, previousDay);
             insertObservation(
@@ -803,7 +805,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("a later run that did cover the practice still supersedes what it found before")
         void shouldSupersedeObservationsTheLaterRunRevisited() {
-            Instant previousDay = Instant.now().minus(1, java.time.temporal.ChronoUnit.DAYS);
+            Instant previousDay = Instant.now().minus(1, ChronoUnit.DAYS);
             insertObservation(
                     agentJob, practice, developer, "Missing rollout plan", "NOT_MET", "MAJOR", 1L, previousDay);
             AgentJob laterJob = persistAgentJob(workspace);
@@ -829,7 +831,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("a later run about somebody else does not erase this developer's earlier observation")
         void shouldKeepObservationsWhenTheLaterRunWasAboutAnotherDeveloper() {
-            Instant previousDay = Instant.now().minus(1, java.time.temporal.ChronoUnit.DAYS);
+            Instant previousDay = Instant.now().minus(1, ChronoUnit.DAYS);
             insertObservation(
                     agentJob, practice, developer, "Missing rollout plan", "NOT_MET", "MAJOR", 1L, previousDay);
             User otherContributor = persistUser("other-contributor");

@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository.ObservationResolutionProjection;
@@ -13,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -31,8 +31,6 @@ class FeedbackResponseSuppressionFilter {
 
     private static final Set<FeedbackResolution> SUPPRESS_ACTIONS =
             Set.of(FeedbackResolution.DISPUTED, FeedbackResolution.NOT_APPLICABLE);
-
-    private static final String SECRET_SCANNER = "secret-diff-scanner";
 
     private final ObservationRepository observationRepository;
     private final ReactionRepository reactionRepository;
@@ -86,10 +84,7 @@ class FeedbackResponseSuppressionFilter {
             FeedbackResolution action = standingAnswer(pf, answers)
                     .map(answer -> FeedbackResolution.valueOf(answer.getResolution()))
                     .orElse(null);
-            boolean unsuppressableSecret = vf.outcome() == Outcome.NOT_MET
-                    && vf.evidence() != null
-                    && SECRET_SCANNER.equals(vf.evidence().path("detector").asString());
-            if (!unsuppressableSecret && action != null && SUPPRESS_ACTIONS.contains(action)) {
+            if (action != null && SUPPRESS_ACTIONS.contains(action)) {
                 try {
                     feedbackLedgerRecorder.recordSuppressed(job, pf, reasonFor(action), suppressedIndex++);
                 } catch (RuntimeException e) {
@@ -131,7 +126,7 @@ class FeedbackResponseSuppressionFilter {
 
     /** A location and outcome alone can describe different claims; carry a response only for the same statement. */
     private static String normalizeClaim(String summary) {
-        return summary.strip().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
+        return summary.strip().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
     private static FeedbackSuppressionReason reasonFor(FeedbackResolution action) {

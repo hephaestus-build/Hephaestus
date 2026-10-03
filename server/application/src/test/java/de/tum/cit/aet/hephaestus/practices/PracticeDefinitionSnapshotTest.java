@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class PracticeDefinitionSnapshotTest extends BaseUnitTest {
 
     @Test
-    void fingerprintsDetectionContentWithoutRecordingIt() throws Exception {
+    void fingerprintsReviewContentWithoutRecordingIt() throws Exception {
         Practice practice = new Practice();
         practice.setSlug("focused-reviews");
         practice.setName("Focused reviews");

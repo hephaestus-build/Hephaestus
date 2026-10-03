@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerWelcome;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -123,8 +124,7 @@ public class WorkerControlWebSocketHandler extends TextWebSocketHandler {
             close(transport, CloseStatus.SERVER_ERROR);
             return;
         }
-        if (message.getPayload().getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-                > FrameCodec.MAX_FRAME_BYTES) {
+        if (message.getPayload().getBytes(StandardCharsets.UTF_8).length > FrameCodec.MAX_FRAME_BYTES) {
             close(transport, CloseStatus.TOO_BIG_TO_PROCESS);
             return;
         }

@@ -255,20 +255,16 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 	} else {
 		peopleOptions = {
 			status: "ready",
-			options: membersQuery.data.flatMap((member) =>
-				member.userId == null || member.eligibleForPracticeReview !== true
-					? []
-					: [
-							{
-								value: member.userId,
-								label:
-									[member.userName, member.userLogin].find(
-										(name) => name != null && name.trim() !== "",
-									) ?? `Member ${member.userId}`,
-								description: hasText(member.userLogin) ? `@${member.userLogin}` : undefined,
-							},
-						],
-			),
+			options: membersQuery.data
+				.filter((member) => member.eligibleForPracticeReview)
+				.map((member) => ({
+					value: member.userId,
+					label:
+						[member.userName, member.userLogin].find(
+							(name) => name != null && name.trim() !== "",
+						) ?? `Member ${member.userId}`,
+					description: hasText(member.userLogin) ? `@${member.userLogin}` : undefined,
+				})),
 		};
 	}
 

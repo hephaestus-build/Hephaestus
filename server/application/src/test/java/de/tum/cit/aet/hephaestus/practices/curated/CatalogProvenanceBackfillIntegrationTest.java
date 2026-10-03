@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionField;
-import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeReleaseChoice;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -42,9 +41,6 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
 
     @Autowired
     private CuratedPracticeReleaseService releases;
-
-    @Autowired
-    private PracticeEvidenceDefaults evidenceDefaults;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -429,10 +425,6 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                 VALUES (?, now(), CASE WHEN ? THEN NULL ELSE now() END)
                 """, workspace.getId(), provenancePending);
         });
-    }
-
-    private String evidenceJson(PracticeDefinition definition) {
-        return evidenceJson(definition.automatedReviewPolicy());
     }
 
     private String evidenceJson(@Nullable PracticeAutomatedReviewPolicy evidence) {

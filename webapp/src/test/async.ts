@@ -11,7 +11,7 @@ export interface Deferred<T> {
 export function deferred<T = void>(): Deferred<T> {
 	let settle!: Deferred<T>["resolve"];
 	let refuse!: Deferred<T>["reject"];
-	// oxlint-disable-next-line promise/avoid-new -- the one place a promise is built from its callbacks.
+	// oxlint-disable-next-line promise/avoid-new -- `Promise.withResolvers` is past `tsconfig.json`'s `lib`.
 	const promise = new Promise<T>((resolve, reject) => {
 		settle = resolve;
 		refuse = reject;

@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.graphql.ResponseError;
@@ -200,7 +202,7 @@ public final class GitHubGraphQlErrorUtils {
                 continue;
             }
 
-            String lowerMessage = message.toLowerCase();
+            String lowerMessage = message.toLowerCase(Locale.ROOT);
 
             // GitHub timeout responses - these come back as HTTP 200 with error in body
             // Examples: "couldn't respond in time", "Something went wrong while executing your query"
@@ -270,12 +272,12 @@ public final class GitHubGraphQlErrorUtils {
          *
          * @return recommended wait duration
          */
-        public java.time.Duration getRecommendedWait() {
+        public Duration getRecommendedWait() {
             return switch (type) {
-                case TIMEOUT -> java.time.Duration.ofSeconds(5);
-                case RATE_LIMIT -> java.time.Duration.ofMinutes(1); // Secondary rate limits need 1 min minimum
-                case SERVER_ERROR -> java.time.Duration.ofSeconds(10);
-                case RESOURCE_LIMIT -> java.time.Duration.ofSeconds(0); // No wait - must reduce query complexity
+                case TIMEOUT -> Duration.ofSeconds(5);
+                case RATE_LIMIT -> Duration.ofMinutes(1); // Secondary rate limits need 1 min minimum
+                case SERVER_ERROR -> Duration.ofSeconds(10);
+                case RESOURCE_LIMIT -> Duration.ofSeconds(0); // No wait - must reduce query complexity
             };
         }
 

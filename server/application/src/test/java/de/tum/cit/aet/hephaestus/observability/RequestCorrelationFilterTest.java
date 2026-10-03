@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.observability;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -26,8 +27,7 @@ class RequestCorrelationFilterTest {
         Span.Builder builder = mock(Span.Builder.class);
         Span span = mock(Span.class);
         TraceContext context = mock(TraceContext.class);
-        when(propagator.extract(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
-                .thenReturn(builder);
+        when(propagator.extract(any(), any())).thenReturn(builder);
         when(builder.name("http.request")).thenReturn(builder);
         when(builder.kind(Span.Kind.SERVER)).thenReturn(builder);
         when(builder.start()).thenReturn(span);

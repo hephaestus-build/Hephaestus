@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import io.nats.client.Message;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -219,7 +220,7 @@ final class FixtureIntegration {
         ArtifactDescriptor descriptor = descriptor();
         return new ArtifactCatalog() {
             @Override
-            public java.util.Collection<ArtifactDescriptor> all() {
+            public Collection<ArtifactDescriptor> all() {
                 return List.of(descriptor);
             }
 

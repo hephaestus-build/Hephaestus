@@ -104,7 +104,7 @@ function ReviewStatusSection({
 					<FieldDescription>
 						{!workspace.enabled && modelUnavailable
 							? "This can be turned on once a review model is ready to run."
-							: "New work is reviewed while this is on. Switching it off stops new reviews; any already running may finish."}
+							: "New work is reviewed while this is on. Switching it off stops new reviews. Any already running may finish."}
 					</FieldDescription>
 				</FieldContent>
 				<Switch
@@ -323,7 +323,8 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 					<AlertDescription>
 						Reviews and in-app feedback continue, but no comments or mentor messages leave
 						Hephaestus. Automatic feedback is not queued for later delivery. Pending approvals
-						remain in the review queue; a workspace owner or admin can decide them after resuming.
+						remain in the review queue, and a workspace owner or admin can decide them after
+						resuming.
 					</AlertDescription>
 				</Alert>
 			) : null}

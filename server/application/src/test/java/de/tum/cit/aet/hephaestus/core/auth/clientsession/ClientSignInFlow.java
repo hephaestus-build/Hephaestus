@@ -2,12 +2,18 @@ package de.tum.cit.aet.hephaestus.core.auth.clientsession;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.text.ParseException;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -34,25 +40,24 @@ final class ClientSignInFlow {
      * A token's claims read without the revocation check, for identifying tokens a test has just watched
      * being revoked. Authentication itself is always asserted over HTTP.
      */
-    static com.nimbusds.jwt.JWTClaimsSet claims(String token) {
+    static JWTClaimsSet claims(String token) {
         try {
-            return com.nimbusds.jwt.SignedJWT.parse(token).getJWTClaimsSet();
-        } catch (java.text.ParseException e) {
+            return SignedJWT.parse(token).getJWTClaimsSet();
+        } catch (ParseException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    static java.util.UUID sid(String token) {
+    static UUID sid(String token) {
         try {
-            return java.util.UUID.fromString(
-                    Objects.requireNonNull(claims(token).getStringClaim("sid")));
-        } catch (java.text.ParseException e) {
+            return UUID.fromString(Objects.requireNonNull(claims(token).getStringClaim("sid")));
+        } catch (ParseException e) {
             throw new IllegalStateException(e);
         }
     }
 
-    static java.util.UUID jti(String token) {
-        return java.util.UUID.fromString(Objects.requireNonNull(claims(token).getJWTID()));
+    static UUID jti(String token) {
+        return UUID.fromString(Objects.requireNonNull(claims(token).getJWTID()));
     }
 
     static Long accountId(String token) {
@@ -63,7 +68,7 @@ final class ClientSignInFlow {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII));
             return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
-        } catch (java.security.NoSuchAlgorithmException e) {
+        } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
     }
@@ -155,7 +160,7 @@ final class ClientSignInFlow {
         Map<?, ?> body = response.expectStatus()
                 .isOk()
                 .expectHeader()
-                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .cacheControl(CacheControl.noStore())
                 .expectBody(Map.class)
                 .returnResult()
                 .getResponseBody();

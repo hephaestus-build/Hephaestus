@@ -457,8 +457,8 @@ Corrects § Decision and § Consequences on the receiver's code and routes; the 
   "Endpoints `/gitlab` and `/github`" bullet of § Consequences.
 - `HmacVerifier`, `GitLabTokenVerifier`, `GitLabSubjectBuilder`, `GitHubSubjectBuilder` and
   `DedupIdResolver` exist nowhere under `server/application/src/main`: signature checks are the
-  per-vendor `WebhookSignatureVerifier` implementations (`GithubWebhookSignatureVerifier`,
-  `GitlabWebhookSignatureVerifier`, `SlackWebhookSignatureVerifier`,
+  per-vendor `WebhookSignatureVerifier` implementations (`GitHubWebhookSignatureVerifier`,
+  `GitLabWebhookSignatureVerifier`, `SlackWebhookSignatureVerifier`,
   `OutlineWebhookSignatureVerifier`, each under its adapter's `webhook/` package), subject grammar is
   the `SubjectParser` / `SubjectKeyDeriver` SPI in `integration/core/spi/`, and the pipeline is
   `WebhookIngestPipeline` and `JetStreamPublisher` in `integration/core/webhook/`.

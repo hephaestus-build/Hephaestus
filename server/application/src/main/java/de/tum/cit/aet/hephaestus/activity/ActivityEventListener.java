@@ -307,7 +307,6 @@ public class ActivityEventListener {
                         pr.id()));
     }
 
-    /** Handle label added to pull request. */
     @Async
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -336,7 +335,6 @@ public class ActivityEventListener {
                         pr.id()));
     }
 
-    /** Handle label removed from pull request. */
     @Async
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -630,7 +628,6 @@ public class ActivityEventListener {
                         commentData.id()));
     }
 
-    /** Handle review comment edited events. */
     @Async
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -1087,8 +1084,6 @@ public class ActivityEventListener {
         return ActivityEventType.REVIEW_COMMENTED;
     }
 
-    // Commit Events
-
     /**
      * Handle commit created events.
      *
@@ -1326,8 +1321,6 @@ public class ActivityEventListener {
                         ActivityTargetType.DISCUSSION,
                         discussionId));
     }
-
-    // Discussion Comment Events
 
     /**
      * Handle discussion comment created events.

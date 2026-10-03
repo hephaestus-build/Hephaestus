@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.backfill.GitHubHistoricalBackfillService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill.GitLabHistoricalBackfillService;
+import jakarta.annotation.PostConstruct;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,7 +52,7 @@ public class HistoricalBackfillScheduler {
     private final SyncSchedulerProperties syncSchedulerProperties;
     private final ObjectProvider<GitLabHistoricalBackfillService> gitLabBackfillServiceProvider;
 
-    @jakarta.annotation.PostConstruct
+    @PostConstruct
     void logInitialization() {
         log.info(
                 "Historical backfill scheduler initialized: batchSize={}, rateLimitThreshold={}, intervalSeconds={}",

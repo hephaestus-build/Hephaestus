@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -72,7 +73,7 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldNotExposePrivateExecutionEvidenceOverHttp() {
         Workspace workspace = setupWorkspace();
         AgentJob job = createJob(workspace, AgentJobStatus.COMPLETED);
-        for (String suffix : java.util.List.of("execution-archive", "execution-archive/0/files/" + "a".repeat(64))) {
+        for (String suffix : List.of("execution-archive", "execution-archive/0/files/" + "a".repeat(64))) {
             webTestClient
                     .get()
                     .uri("/workspaces/{slug}/agents/jobs/{id}/" + suffix, workspace.getWorkspaceSlug(), job.getId())

@@ -45,6 +45,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -53,6 +54,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -61,6 +63,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
@@ -239,10 +242,9 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         CompletableFuture<PracticeFeedbackDispatchService.Result> delivery;
         try (var erasure = personCopies.erase()) {
             Integer backend = erasure.jdbc().queryForObject("SELECT pg_backend_pid()", Integer.class);
-            var snapshot = new TransactionTemplate(
-                    java.util.Objects.requireNonNull(transactionTemplate.getTransactionManager()));
-            snapshot.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
-            delivery = CompletableFuture.supplyAsync(() -> java.util.Objects.requireNonNull(snapshot.execute(status -> {
+            var snapshot = new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
+            snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+            delivery = CompletableFuture.supplyAsync(() -> Objects.requireNonNull(snapshot.execute(status -> {
                 // Establish a deliberately old source snapshot before waiting for admission.
                 assertThat(jdbc.queryForObject(
                                 "SELECT job_token_hash FROM agent_job WHERE id=?", String.class, job.getId()))
@@ -391,8 +393,8 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         CompletableFuture<Void> correction =
                 CompletableFuture.runAsync(() -> transactionTemplate.executeWithoutResult(status -> {
                     invalidate();
-                    correctionBackend.set(java.util.Objects.requireNonNull(
-                            jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
+                    correctionBackend.set(
+                            Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
                     locked.countDown();
                     awaitLatch(commit);
                 }));
@@ -743,7 +745,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
 
     /** Starts {@code delivery} and returns once its provider write is under way and held there. */
     private CompletableFuture<PracticeFeedbackDispatchService.Result> holdWrite(
-            java.util.function.Supplier<PracticeFeedbackDispatchService.Result> delivery) throws Exception {
+            Supplier<PracticeFeedbackDispatchService.Result> delivery) throws Exception {
         provider.duringWrite = () -> {
             writing.countDown();
             awaitLatch(release);

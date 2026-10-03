@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,13 +25,19 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Materialises attempt-local workspace inputs. Planned
@@ -71,10 +78,7 @@ public class WorkspaceContextBuilder {
         return buildWithoutManifest(request);
     }
 
-    @org.springframework.transaction.annotation.Transactional(
-            readOnly = true,
-            isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ,
-            propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRES_NEW)
     public PreparedEvidence prepare(ContextRequest request, EvidencePlan evidencePlan) {
         long startNs = System.nanoTime();
         try {
@@ -83,7 +87,7 @@ public class WorkspaceContextBuilder {
                     result.files(), result.filesOnDisk(), result.cleanups(), result.manifest(), result.directories());
             if (prepared.manifest() == null) {
                 prepared.close();
-                throw new IllegalStateException("Detector evidence was prepared without a source manifest");
+                throw new IllegalStateException("Review evidence was prepared without a source manifest");
             }
             return prepared;
         } finally {
@@ -127,7 +131,7 @@ public class WorkspaceContextBuilder {
 
     private record BuildResult(
             Map<String, byte[]> files,
-            Map<String, java.nio.file.Path> filesOnDisk,
+            Map<String, Path> filesOnDisk,
             List<EvidenceDirectory> directories,
             List<AutoCloseable> cleanups,
             @Nullable JobFolderIndex manifest) {}
@@ -137,7 +141,7 @@ public class WorkspaceContextBuilder {
         Set<SourceKind> stagedSources = Set.of();
         if (evidencePlan != null) {
             if (manifestBuilder == null) {
-                throw new IllegalStateException("Detector evidence capture requires a source manifest builder");
+                throw new IllegalStateException("Review evidence capture requires a source manifest builder");
             }
             stagedSources = manifestBuilder.stagedSources(evidencePlan);
         }
@@ -152,7 +156,7 @@ public class WorkspaceContextBuilder {
         Map<SourceKind, SourceCaptureState> stateOverrides = new HashMap<>();
         Map<SourceKind, List<String>> captureLimitations = new HashMap<>();
         Set<SourceKind> attemptedKinds = new HashSet<>();
-        Map<String, java.nio.file.Path> filesOnDisk = new LinkedHashMap<>();
+        Map<String, Path> filesOnDisk = new LinkedHashMap<>();
         List<EvidenceDirectory> directories = new ArrayList<>();
         List<AutoCloseable> cleanups = new ArrayList<>();
         List<WorkspaceRefusal> refusals = new ArrayList<>();
@@ -164,7 +168,7 @@ public class WorkspaceContextBuilder {
                     continue;
                 }
                 if (evidencePlan != null && !(provider instanceof EvidenceSource)) {
-                    throw new IllegalStateException("Detector context provider must declare source kinds: "
+                    throw new IllegalStateException("Review context provider must declare source kinds: "
                             + provider.getClass().getSimpleName());
                 }
                 if (provider instanceof WorkspaceFolderRenderer && evidencePlan != null && manifestBuilder != null) {
@@ -263,7 +267,7 @@ public class WorkspaceContextBuilder {
                         }
                         keySourceKind.put(key, kind);
                     } else if (evidencePlan != null) {
-                        throw new IllegalStateException(providerName + " emitted undocumented detector input " + key);
+                        throw new IllegalStateException(providerName + " emitted undocumented review input " + key);
                     }
                     if (value == null) {
                         // Disk-staged content has no in-memory value.
@@ -342,7 +346,7 @@ public class WorkspaceContextBuilder {
             Map<SourceKind, SourceCaptureState> stateOverrides,
             Map<SourceKind, List<String>> captureLimitations,
             Set<SourceKind> attemptedKinds,
-            Map<String, java.nio.file.Path> filesOnDisk,
+            Map<String, Path> filesOnDisk,
             List<EvidenceDirectory> directories,
             List<AutoCloseable> cleanups,
             List<WorkspaceRefusal> refusals) {
@@ -423,12 +427,10 @@ public class WorkspaceContextBuilder {
     /** Workspace-wide sources come from the folder; other work cannot repair missing reviewed-work evidence. */
     private static List<SourceCapture> mergeReadinessSources(JobFolderIndex primary, JobFolderIndex folder) {
         var workspaceSources = Set.of("outline.documents", "workspace.project-inventory");
-        var rendered = folder.sources().stream()
-                .collect(
-                        java.util.stream.Collectors.toMap(SourceCapture::kind, java.util.function.Function.identity()));
+        var rendered = folder.sources().stream().collect(Collectors.toMap(SourceCapture::kind, Function.identity()));
         return primary.sources().stream()
                 .map(source -> workspaceSources.contains(source.kind().value())
-                        ? java.util.Objects.requireNonNull(rendered.get(source.kind()))
+                        ? Objects.requireNonNull(rendered.get(source.kind()))
                         : source)
                 .toList();
     }
@@ -450,7 +452,7 @@ public class WorkspaceContextBuilder {
         Set<SourceKind> emittedKinds = contribution.files().keySet().stream()
                 .map(source::sourceKindFor)
                 .filter(kind -> !allowedKinds.contains(kind))
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
         if (!emittedKinds.isEmpty()) {
             throw new IllegalStateException(source.getClass().getSimpleName()
                     + " emitted files for sources outside this capture: " + emittedKinds);

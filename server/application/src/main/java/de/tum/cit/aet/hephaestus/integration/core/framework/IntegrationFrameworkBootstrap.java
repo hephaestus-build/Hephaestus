@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.framework;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApprovalChannel;
@@ -22,7 +23,6 @@ import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -35,7 +35,7 @@ import org.springframework.stereotype.Component;
  * are collected before anything throws so an operator sees every problem in one message.
  */
 @Component
-@ConditionalOnProperty(name = RuntimeRole.SERVER_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnServerRole
 public class IntegrationFrameworkBootstrap {
 
     private static final Logger log = LoggerFactory.getLogger(IntegrationFrameworkBootstrap.class);

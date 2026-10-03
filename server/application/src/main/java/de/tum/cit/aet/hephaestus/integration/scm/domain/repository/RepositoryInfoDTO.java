@@ -19,6 +19,10 @@ import org.jspecify.annotations.Nullable;
  * <pre>
  * public record ScopedRepositoryDTO(RepositoryInfoDTO repository, boolean hiddenFromContributions) {}
  * </pre>
+ *
+ * @param hiddenFromContributions whether activity in this repository is left out of a team's activity.
+ *     <b>Note:</b> This field is scope-specific business logic and should be moved to a workspace-specific DTO
+ *     during ETL extraction.
  */
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @Schema(description = "Information about a git repository")
@@ -40,12 +44,7 @@ public record RepositoryInfoDTO(
 
         @Nullable @Schema(description = "Labels defined in the repository")
         List<LabelInfoDTO> labels,
-        /**
-         * Whether activity in this repository is left out of a team's activity.
-         * <p>
-         * <b>Note:</b> This field is scope-specific business logic and should be moved
-         * to a workspace-specific DTO during ETL extraction.
-         */
+
         @NonNull @Schema(description = "Whether activity in this repository is left out of a team's activity")
         Boolean hiddenFromContributions) {
     @Nullable

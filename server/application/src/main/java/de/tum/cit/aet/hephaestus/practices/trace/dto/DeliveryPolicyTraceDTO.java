@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.StreamSupport;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.ObjectMapper;
@@ -36,7 +37,7 @@ public record DeliveryPolicyTraceDTO(
                 evaluation.getStage(),
                 evaluation.getAllowed(),
                 evaluation.getDecisiveReason(),
-                java.util.stream.StreamSupport.stream(evaluation.getChecks().spliterator(), false)
+                StreamSupport.stream(evaluation.getChecks().spliterator(), false)
                         .map(check -> new DeliveryPolicyTraceCheckDTO(
                                 DeliveryPolicyCheck.valueOf(check.path("check").asString()),
                                 DeliveryPolicyCheckStatus.valueOf(

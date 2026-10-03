@@ -1,11 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import org.jspecify.annotations.Nullable;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
@@ -20,7 +19,7 @@ import org.springframework.validation.annotation.Validated;
  * @param owner stable installation identifier, shared by roles using the same database
  */
 @Validated
-@ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnWorkerRole
 @ConfigurationProperties(prefix = "hephaestus.sandbox.docker", ignoreUnknownFields = false)
 public record DockerSandboxProperties(
         @DefaultValue("unix:///var/run/docker.sock") @NotBlank
@@ -34,7 +33,6 @@ public record DockerSandboxProperties(
         String owner) {
 
     @AssertTrue(message = "cert-path must be set when tls-verify is enabled")
-    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private boolean isTlsCertificatePathConfigured() {
         return !tlsVerify || (certPath != null && !certPath.isBlank());
     }

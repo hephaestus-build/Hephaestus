@@ -37,12 +37,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -178,8 +180,8 @@ public class ReviewHistoryContentSource implements EvidenceSource {
 
         if (selectedKinds.contains(FEEDBACK_HISTORY)) {
             List<Feedback> deliveredRows = feedbackRepository.findDeliveredForPersonHistory(workspaceId, subjectUserId);
-            List<Feedback> queuedRows = feedbackRepository.findPreparedForRecipient(
-                    workspaceId, subjectUserId, org.springframework.data.domain.Pageable.unpaged());
+            List<Feedback> queuedRows =
+                    feedbackRepository.findPreparedForRecipient(workspaceId, subjectUserId, Pageable.unpaged());
             Map<UUID, ReviewClaimCurrentness> shown = shownFeedback(workspaceId, deliveredRows, queuedRows);
             List<Feedback> delivered = deliveredRows.stream()
                     .filter(f -> shown.containsKey(f.getId()))
@@ -217,8 +219,8 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             long personId,
             Set<SourceKind> selectedKinds,
             UUID excludedJobId,
-            java.util.function.Consumer<ObjectNode> observations,
-            java.util.function.Consumer<ObjectNode> feedback) {
+            Consumer<ObjectNode> observations,
+            Consumer<ObjectNode> feedback) {
         if (selectedKinds.contains(OBSERVATION_HISTORY)) {
             List<Observation> rows = authorizeObservations(
                     workspaceId, observationRepository.findForPersonHistory(personId, workspaceId), excludedJobId);

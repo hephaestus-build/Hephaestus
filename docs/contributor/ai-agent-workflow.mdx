@@ -84,7 +84,7 @@ skill` prints every skill with the path it resolved from — so no skill needs a
 A *typed* `/name` is the exception: opencode resolves that from `.opencode/commands/` only, so each
 of these three has a file there whose entire body is `@.claude/skills/<name>/SKILL.md`. opencode
 [inlines a referenced file into the prompt](https://opencode.ai/docs/commands/), which is what makes
-a pointer enough where a copy used to be needed.
+a pointer enough.
 
 Codex shares no directory with the other two: it
 [scans `.agents/skills/`](https://developers.openai.com/codex/skills) and never `.claude/skills/`,

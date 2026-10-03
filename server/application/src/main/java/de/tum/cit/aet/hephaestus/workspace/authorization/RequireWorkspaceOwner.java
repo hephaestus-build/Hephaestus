@@ -12,7 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
  *
  * Usage:
  * <pre>
- *  @RequireWorkspaceOwner
+ *  {@literal @}RequireWorkspaceOwner
  *  public ResponseEntity<Void> someOwnerEndpoint() { ... }
  * </pre>
  */

@@ -86,7 +86,6 @@ public class ProjectField {
     /**
      * The project this field belongs to.
      */
-    @NonNull
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
     @ToString.Exclude

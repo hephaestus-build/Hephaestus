@@ -133,7 +133,7 @@ class NatsConsumerPropertiesTest extends BaseUnitTest {
             runner().withPropertyValues("hephaestus.integration.consumer.inactive-threshold=72")
                     .run(context -> assertThat(context.getBean(NatsConsumerProperties.class)
                                     .inactiveThreshold())
-                            .isEqualTo(Duration.ofHours(72)));
+                            .isEqualTo(Duration.ofDays(3)));
         }
 
         @Test

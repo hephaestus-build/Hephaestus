@@ -1,11 +1,11 @@
 import { CircleAlertIcon, InfoIcon, LogInIcon, ShieldAlertIcon } from "lucide-react";
 import { type ReactNode, type SubmitEvent, useId, useState } from "react";
 
-import { GithubIcon, GitlabIcon } from "@/components/icons/brand";
+import { GitHubIcon, GitLabIcon } from "@/components/icons/brand";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "~/components/common/Button";
 import { Notice } from "~/components/common/Notice";
-import { Skeleton } from "~/components/common/Skeleton";
-import { Spinner } from "~/components/common/Spinner";
 import type { SignInOption, SignInOptions } from "~/shared/rpc";
 
 export type SignInOptionsState =
@@ -31,10 +31,10 @@ export interface SignInPanelProps {
 function ProviderIcon({ option }: { option: SignInOption }): ReactNode {
 	switch (option.providerType.toUpperCase()) {
 		case "GITHUB": {
-			return <GithubIcon aria-hidden="true" aria-label="GitHub" />;
+			return <GitHubIcon />;
 		}
 		case "GITLAB": {
-			return <GitlabIcon aria-hidden="true" aria-label="GitLab" />;
+			return <GitLabIcon />;
 		}
 		default: {
 			return <LogInIcon aria-hidden />;

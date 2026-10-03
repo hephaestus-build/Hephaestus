@@ -16,7 +16,10 @@ import de.tum.cit.aet.hephaestus.testconfig.LiveLlmCredentials;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmTest;
 import de.tum.cit.aet.hephaestus.testconfig.PiSdkInstallation;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -207,9 +210,7 @@ class PracticeRunnerLiveLlmTest {
                     .isTrue();
         }
 
-        // Planted-violation detection: this practice must be detected when the violation is present.
-        // if it misses, the prompt or fixture is broken — not the LLM. A planted secret is a (PRESENT, BAD)
-        // observation: the bad signal IS present and that is a violation.
+        // The planted apiKey/dbPassword must come back NOT_MET; a miss means the prompt or fixture is broken.
         boolean foundViolation = false;
         for (JsonNode observation : observations) {
             if ("avoids-insecure-defaults-and-over-broad-permissions"
@@ -221,7 +222,7 @@ class PracticeRunnerLiveLlmTest {
         }
         assertThat(foundViolation)
                 .as(
-                        "at least one (PRESENT, BAD) avoids-insecure-defaults-and-over-broad-permissions observation for the planted apiKey/dbPassword. "
+                        "at least one NOT_MET avoids-insecure-defaults-and-over-broad-permissions observation for the planted apiKey/dbPassword. "
                                 + "Observations payload: "
                                 + rawOutput)
                 .isTrue();
@@ -236,8 +237,6 @@ class PracticeRunnerLiveLlmTest {
         }
         System.out.printf("[practice-live] %d observation(s); violation=%s%n", observations.size(), foundViolation);
     }
-
-    // Workspace staging
 
     private void stageWorkspace(LiveLlmCredentials creds) throws IOException {
         // ESM resolution walks node_modules upward from the importing file. Production binds the
@@ -355,8 +354,6 @@ class PracticeRunnerLiveLlmTest {
         Files.copy(FIXTURE_DIR.resolve(relativePath), dest, StandardCopyOption.REPLACE_EXISTING);
     }
 
-    // Process plumbing
-
     private static Process spawnRunner(String proxyUrl) throws IOException {
         ProcessBuilder pb = new ProcessBuilder("node", "pi-runner.ts");
         pb.directory(WORKSPACE.toFile());
@@ -389,11 +386,10 @@ class PracticeRunnerLiveLlmTest {
         return pb.start();
     }
 
-    private static Thread pumpStream(java.io.InputStream stream, String tag) {
+    private static Thread pumpStream(InputStream stream, String tag) {
         Thread t = new Thread(
                 () -> {
-                    try (var reader =
-                            new java.io.BufferedReader(new java.io.InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                    try (var reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
                         String line;
                         while ((line = reader.readLine()) != null) {
                             System.out.println(tag + " " + line);
@@ -517,8 +513,7 @@ class PracticeRunnerLiveLlmTest {
                                     exchange.getRequestBody().readAllBytes()))
                     .build();
             try {
-                HttpResponse<java.io.InputStream> response =
-                        client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+                HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
                 response.headers()
                         .firstValue("content-type")
                         .ifPresent(type -> exchange.getResponseHeaders().set("content-type", type));

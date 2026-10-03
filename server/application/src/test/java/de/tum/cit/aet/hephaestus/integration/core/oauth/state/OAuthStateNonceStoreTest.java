@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 
@@ -61,8 +62,7 @@ class OAuthStateNonceStoreTest extends BaseUnitTest {
                 .isFalse();
         assertThat(store.tryConsume("", new OAuthStateService.StateBinding(1, IntegrationKind.GITHUB, Instant.now())))
                 .isFalse();
-        verify(repository, never())
-                .markConsumed(any(), any(), org.mockito.ArgumentMatchers.anyLong(), any(), any(), any());
+        verify(repository, never()).markConsumed(any(), any(), ArgumentMatchers.anyLong(), any(), any(), any());
     }
     // The full consume-once-then-reject sequence (and its concurrency) is proven against real SQL by
     // OAuthStateNonceStoreIntegrationTest; a mock "thin mapper" replay of it here added no signal.

@@ -4,7 +4,7 @@ import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GithubLifecycleListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepositoryMonitorService;
@@ -22,7 +22,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
 
     private static final Logger log = LoggerFactory.getLogger(GitHubWorkspaceProvisioningAdapter.class);
 
-    private final GithubLifecycleListener githubLifecycleListener;
+    private final GitHubLifecycleListener githubLifecycleListener;
     private final WorkspaceRepositoryMonitorService repositoryMonitorService;
     private final WorkspaceScopeFilter workspaceScopeFilter;
 
@@ -30,7 +30,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
     private final AsyncTaskExecutor monitoringExecutor;
 
     public GitHubWorkspaceProvisioningAdapter(
-            GithubLifecycleListener githubLifecycleListener,
+            GitHubLifecycleListener githubLifecycleListener,
             WorkspaceRepositoryMonitorService repositoryMonitorService,
             WorkspaceScopeFilter workspaceScopeFilter,
             GitHubWorkspaceDataSyncTrigger dataSyncTrigger,

@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import jakarta.persistence.Entity;
+import jakarta.persistence.Inheritance;
+import jakarta.persistence.InheritanceType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -148,7 +151,7 @@ class PersonalDataMapArchTest {
                 assertThat(rows)
                         .as("export and erasure implementation citations for %s", store)
                         .anySatisfy(row -> {
-                            String[] cells = row.split("\\|");
+                            String[] cells = row.split("\\|", -1);
                             assertThat(cells.length).isGreaterThanOrEqualTo(4);
                             assertThat(cells[2]).contains(citation);
                             assertThat(cells[3]).contains(citation);
@@ -233,10 +236,9 @@ class PersonalDataMapArchTest {
         try {
             Class<?> parent = Class.forName(className, false, PersonalDataMapArchTest.class.getClassLoader())
                     .getSuperclass();
-            while (parent != null && parent.isAnnotationPresent(jakarta.persistence.Entity.class)) {
-                var inheritance = parent.getDeclaredAnnotation(jakarta.persistence.Inheritance.class);
-                if (inheritance != null)
-                    return inheritance.strategy() == jakarta.persistence.InheritanceType.SINGLE_TABLE;
+            while (parent != null && parent.isAnnotationPresent(Entity.class)) {
+                var inheritance = parent.getDeclaredAnnotation(Inheritance.class);
+                if (inheritance != null) return inheritance.strategy() == InheritanceType.SINGLE_TABLE;
                 parent = parent.getSuperclass();
             }
             return false;

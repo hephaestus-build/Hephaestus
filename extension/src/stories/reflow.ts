@@ -11,14 +11,3 @@ export async function expectNoHorizontalOverflow(canvasElement: HTMLElement): Pr
 	await expect(box?.clientWidth).toBe(320);
 	await expect(box?.scrollWidth).toBeLessThanOrEqual(320);
 }
-
-/** Whether an element lies inside the reflow box horizontally, rather than clipped off its edge. */
-export async function expectInsideReflowBox(
-	canvasElement: HTMLElement,
-	element: HTMLElement,
-): Promise<void> {
-	const box = canvasElement.querySelector<HTMLElement>("[data-reflow]")?.getBoundingClientRect();
-	const rect = element.getBoundingClientRect();
-	await expect(rect.width).toBeGreaterThan(0);
-	await expect(rect.right).toBeLessThanOrEqual(box?.right ?? 0);
-}

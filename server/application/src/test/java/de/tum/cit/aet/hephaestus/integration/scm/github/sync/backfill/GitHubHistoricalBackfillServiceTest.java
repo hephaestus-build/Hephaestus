@@ -47,18 +47,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/**
- * Unit tests for {@link GitHubHistoricalBackfillService}.
- *
- * <p>Tests the backfill orchestration logic including enable/disable gating,
- * per-repository skip conditions (incremental sync pending, cooldown, rate limits,
- * already complete), and progress tracking records.
- */
 class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
     @Mock
@@ -94,10 +86,7 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
     @Mock
     private TransactionTemplate transactionTemplate;
 
-    @Mock
-    private HttpGraphQlClient client;
-
-    private GitHubHistoricalBackfillService service = mock(GitHubHistoricalBackfillService.class);
+    private GitHubHistoricalBackfillService service;
 
     private static final Long SCOPE_ID = 100L;
     private static final Long INSTALLATION_ID = 200L;
@@ -145,6 +134,8 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
             TransactionCallback<?> callback = invocation.getArgument(0);
             return callback.doInTransaction(mock(TransactionStatus.class));
         });
+
+        service = createService(enabledSchedulerProperties);
     }
 
     @Test
@@ -152,7 +143,7 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
         var target = createTargetWithIncrementalComplete(SYNC_TARGET_ID_A, "course/project");
         when(syncTargetProvider.isRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID_A))
                 .thenReturn(true);
-        assertThat(createService(enabledSchedulerProperties).backfillRepository(target, 50, BackfillPageObserver.NOOP))
+        assertThat(service.backfillRepository(target, 50, BackfillPageObserver.NOOP))
                 .isFalse();
         verify(graphQlClientProvider, never()).forScope(any());
         verify(repositoryRepository, never()).findByNameWithOwner(any());
@@ -268,8 +259,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldReturnTrueWhenBackfillEnabled() {
-            service = createService(enabledSchedulerProperties);
-
             assertThat(service.isEnabled()).isTrue();
         }
 
@@ -297,7 +286,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldReturnNothingToDoWhenNoSessions() {
-            service = createService(enabledSchedulerProperties);
             when(syncTargetProvider.getSyncSessions(IntegrationKind.GITHUB)).thenReturn(List.of());
 
             BackfillCycleResult result = service.runBackfillCycle();
@@ -309,7 +297,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldSkipScopeWhenRateLimitBelowThreshold() {
-            service = createService(enabledSchedulerProperties);
             SyncTarget target = createTargetWithIncrementalComplete(SYNC_TARGET_ID_A, "org/repo-a");
             SyncSession session = createSession(List.of(target));
             when(syncTargetProvider.getSyncSessions(IntegrationKind.GITHUB)).thenReturn(List.of(session));
@@ -326,7 +313,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldSkipScopeWhenRateLimitBelowThresholdButNotCountCompleteRepos() {
-            service = createService(enabledSchedulerProperties);
             SyncTarget completeTarget = createTargetWithBackfillComplete(SYNC_TARGET_ID_A, "org/repo-a");
             SyncTarget incompleteTarget = createTargetWithIncrementalComplete(SYNC_TARGET_ID_B, "org/repo-b");
             SyncSession session = createSession(List.of(completeTarget, incompleteTarget));
@@ -343,7 +329,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldSkipRepoWhenBackfillAlreadyComplete() {
-            service = createService(enabledSchedulerProperties);
             SyncTarget completeTarget = createTargetWithBackfillComplete(SYNC_TARGET_ID_A, "org/repo-a");
             SyncSession session = createSession(List.of(completeTarget));
             when(syncTargetProvider.getSyncSessions(IntegrationKind.GITHUB)).thenReturn(List.of(session));
@@ -358,7 +343,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldSkipRepoWhenIncrementalSyncPendingAndCountAsPending() {
-            service = createService(enabledSchedulerProperties);
             SyncTarget pendingTarget = createTargetPendingIncrementalSync(SYNC_TARGET_ID_A, "org/repo-a");
             SyncSession session = createSession(List.of(pendingTarget));
             when(syncTargetProvider.getSyncSessions(IntegrationKind.GITHUB)).thenReturn(List.of(session));
@@ -375,8 +359,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldSkipEntireScopeWhenAnyRepoPendingIncrementalSync() {
-            service = createService(enabledSchedulerProperties);
-
             SyncTarget repoA = createTargetWithIncrementalComplete(SYNC_TARGET_ID_A, "org/repo-a");
             SyncTarget repoB = createTargetPendingIncrementalSync(SYNC_TARGET_ID_B, "org/repo-b");
             SyncSession session = createSession(List.of(repoA, repoB));
@@ -397,8 +379,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldBreakScopeLoopWhenRateLimitDropsBelowThresholdMidLoop() {
-            service = createService(enabledSchedulerProperties);
-
             SyncTarget repoA = createTargetWithIncrementalComplete(SYNC_TARGET_ID_A, "org/repo-a");
             SyncTarget repoB = createTargetWithIncrementalComplete(SYNC_TARGET_ID_B, "org/repo-b");
             SyncSession session = createSession(List.of(repoA, repoB));
@@ -423,11 +403,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
     @Nested
     class BackfillRepository {
-
-        @BeforeEach
-        void setUpService() {
-            service = createService(enabledSchedulerProperties);
-        }
 
         @Test
         void shouldReturnFalseWhenRepoNameIsInvalid() {
@@ -688,7 +663,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldReturnProgressWhenTargetExists() {
-            service = createService(enabledSchedulerProperties);
             SyncTarget target = createTargetWithBackfillInProgress(SYNC_TARGET_ID_A, "org/repo-a");
             when(syncTargetProvider.findSyncTargetById(SYNC_TARGET_ID_A)).thenReturn(Optional.of(target));
 
@@ -702,7 +676,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldReturnEmptyWhenTargetNotFound() {
-            service = createService(enabledSchedulerProperties);
             when(syncTargetProvider.findSyncTargetById(999L)).thenReturn(Optional.empty());
 
             Optional<BackfillProgress> progress = service.getProgress(999L);
@@ -718,7 +691,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldRecordBackfillFailureOnTheMonitoredRepository() {
-            service = createService(enabledSchedulerProperties);
             SyncTarget target = createTargetWithBackfillInProgress(SYNC_TARGET_ID_A, "org/repo-a");
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(1000);
             when(repositoryRepository.findByNameWithOwner("org/repo-a"))
@@ -736,7 +708,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void alreadyComplete_returnsFalseWithoutCheckingRateLimit() {
-            service = createService(enabledSchedulerProperties);
             SyncTarget target = createTargetWithBackfillComplete(SYNC_TARGET_ID_A, "org/repo-a");
 
             boolean didWork = service.runBackfillBatch(target, 50, BackfillPageObserver.NOOP);
@@ -747,7 +718,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void rateLimitBelowThreshold_returnsFalseWithoutAttemptingBackfill() {
-            service = createService(enabledSchedulerProperties); // rateLimitThreshold = 100
             SyncTarget target = createTargetWithBackfillInProgress(SYNC_TARGET_ID_A, "org/repo-a");
             when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(50);
 
@@ -775,8 +745,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldProcessMultipleSessionsIndependently() {
-            service = createService(enabledSchedulerProperties);
-
             Long scopeId2 = 200L;
             Long installationId2 = 300L;
 
@@ -820,8 +788,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("Should skip pending-incremental repos per-repo and process eligible ones")
         void shouldHandleMixedStatesCorrectly() {
-            service = createService(enabledSchedulerProperties);
-
             SyncTarget completeRepo = createTargetWithBackfillComplete(SYNC_TARGET_ID_A, "org/repo-complete");
             SyncTarget pendingRepo = createTargetPendingIncrementalSync(SYNC_TARGET_ID_B, "org/repo-pending");
             SyncTarget eligibleRepo = createTargetWithIncrementalComplete(SYNC_TARGET_ID_C, "org/repo-eligible");
@@ -844,8 +810,6 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
         @Test
         void shouldProcessEligibleAndSkipCompleteWhenAllIncrementalDone() {
-            service = createService(enabledSchedulerProperties);
-
             SyncTarget completeRepo = createTargetWithBackfillComplete(SYNC_TARGET_ID_A, "org/repo-complete");
             SyncTarget eligibleRepo = createTargetWithIncrementalComplete(SYNC_TARGET_ID_B, "org/repo-eligible");
 

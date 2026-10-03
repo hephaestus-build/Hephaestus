@@ -2,6 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
@@ -15,13 +19,17 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -29,7 +37,7 @@ class ObservationAdmissionConcurrencyIntegrationTest extends BaseIntegrationTest
 
     private static final int TIMEOUT_SECONDS = 30;
 
-    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    @MockitoSpyBean
     private PullRequestReviewHandler reviewHandler;
 
     @Autowired
@@ -69,19 +77,16 @@ class ObservationAdmissionConcurrencyIntegrationTest extends BaseIntegrationTest
             jobs.saveAndFlush(admitted);
             throw new JobDeliveryException("Reviewed work changed after submission");
         };
-        org.mockito.Mockito.doReturn(publication)
+        doReturn(publication)
                 .when(reviewHandler)
-                .prepareObservations(
-                        org.mockito.ArgumentMatchers.argThat(
-                                candidate -> candidate.getId().equals(saved.getId())),
-                        org.mockito.ArgumentMatchers.any());
+                .prepareObservations(argThat(candidate -> candidate.getId().equals(saved.getId())), any());
 
         assertThatThrownBy(() -> admission.admit(identity, mapper.createArrayNode()))
                 .isInstanceOf(JobDeliveryException.class)
                 .hasMessage("Reviewed work changed after submission");
 
         var reloaded = jobs.findById(saved.getId()).orElseThrow();
-        var metadata = java.util.Objects.requireNonNull(reloaded.getMetadata());
+        var metadata = Objects.requireNonNull(reloaded.getMetadata());
         assertThat(metadata.path("preserved").asString()).isEqualTo("value");
         assertThat(metadata.has("rolled_back")).isFalse();
         assertThat(metadata.path(ObservationAdmissionService.REFUSAL_METADATA_KEY)
@@ -162,19 +167,15 @@ class ObservationAdmissionConcurrencyIntegrationTest extends BaseIntegrationTest
         var identity = new AdmissionIdentity(saved.getId(), workspace.getId(), 0, "verifying-worker");
         var verifying = new CountDownLatch(1);
         var release = new CountDownLatch(1);
-        org.mockito.Mockito.doAnswer(invocation -> {
-                    assertThat(org.springframework.transaction.support.TransactionSynchronizationManager
-                                    .isActualTransactionActive())
+        doAnswer(invocation -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive())
                             .isFalse();
                     verifying.countDown();
                     await(release);
-                    return (de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations) admitted -> {};
+                    return (PreparedObservations) admitted -> {};
                 })
                 .when(reviewHandler)
-                .prepareObservations(
-                        org.mockito.ArgumentMatchers.argThat(
-                                candidate -> candidate.getId().equals(saved.getId())),
-                        org.mockito.ArgumentMatchers.any());
+                .prepareObservations(argThat(candidate -> candidate.getId().equals(saved.getId())), any());
         var pool = Executors.newFixedThreadPool(2);
         try {
             var admissionResult =
@@ -202,7 +203,7 @@ class ObservationAdmissionConcurrencyIntegrationTest extends BaseIntegrationTest
 
     private void awaitBlockedTransaction() {
         Integer holderPid = jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class);
-        org.awaitility.Awaitility.await()
+        Awaitility.await()
                 .pollInSameThread()
                 .atMost(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .until(() -> {

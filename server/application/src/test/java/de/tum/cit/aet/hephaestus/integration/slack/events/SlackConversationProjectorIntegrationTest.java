@@ -6,7 +6,10 @@ import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationProjector;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -94,10 +97,10 @@ class SlackConversationProjectorIntegrationTest extends BaseIntegrationTest {
                 Long.class);
         jdbc.update(
                 "INSERT INTO person_suppression(id,provider_id,subject,team_key) VALUES (?,?,?,'T1')",
-                java.util.UUID.randomUUID(),
+                UUID.randomUUID(),
                 providerId,
                 "UPRIVACYTARGET");
-        var captured = new java.util.ArrayList<ObjectNode>();
+        var captured = new ArrayList<ObjectNode>();
         projector.forEachWorkspaceMessage(workspace, captured::add);
         assertThat(captured)
                 .singleElement()
@@ -127,8 +130,8 @@ class SlackConversationProjectorIntegrationTest extends BaseIntegrationTest {
         seedMessage(workspace, "C1", "1704067201.0", null, "deleted");
         seedMessage(workspace, "C2", "1704067202.0", null, "revoked");
         seedMessage(otherWorkspace, "C1", "1704067203.0", null, "foreign");
-        messageRepository.tombstone(workspace, "T1", "C1", "1704067201.0", java.time.Instant.now());
-        var captured = new java.util.ArrayList<ObjectNode>();
+        messageRepository.tombstone(workspace, "T1", "C1", "1704067201.0", Instant.now());
+        var captured = new ArrayList<ObjectNode>();
         projector.forEachWorkspaceMessage(workspace, captured::add);
         assertThat(captured).singleElement().satisfies(record -> {
             assertThat(record.path("text").asString()).isEqualTo("permitted");
@@ -212,9 +215,9 @@ class SlackConversationProjectorIntegrationTest extends BaseIntegrationTest {
         seedMessage(ws, "C1", "100.5", "100.0", "reply will be deleted");
 
         // Edit the root, tombstone the reply (both via the scoped repository writes the ingest path drives).
-        assertThat(messageRepository.applyEdit(ws, "C1", "100.0", "root EDITED", java.time.Instant.now()))
+        assertThat(messageRepository.applyEdit(ws, "C1", "100.0", "root EDITED", Instant.now()))
                 .isEqualTo(1);
-        assertThat(messageRepository.tombstone(ws, "T1", "C1", "100.5", java.time.Instant.now()))
+        assertThat(messageRepository.tombstone(ws, "T1", "C1", "100.5", Instant.now()))
                 .isEqualTo(1);
 
         ObjectNode payload = projector.buildPayload(ws, 100L);
@@ -234,7 +237,7 @@ class SlackConversationProjectorIntegrationTest extends BaseIntegrationTest {
 
         // JetStream reorder: the message_deleted for ts 100.9 is processed BEFORE its base insert (e.g. the insert
         // was NAK'd and redelivered later). The durable upsert writes a contentless tombstone for that ts.
-        assertThat(messageRepository.tombstone(ws, "T1", "C1", "100.9", java.time.Instant.now()))
+        assertThat(messageRepository.tombstone(ws, "T1", "C1", "100.9", Instant.now()))
                 .isEqualTo(1);
 
         // The reordered base insert now arrives — ON CONFLICT DO NOTHING must NOT bring the deleted content back.
@@ -261,7 +264,7 @@ class SlackConversationProjectorIntegrationTest extends BaseIntegrationTest {
 
         // JetStream reorder: message_changed for ts 100.9 is processed BEFORE its base insert. The scoped UPDATE finds
         // no row (returns 0) and the row is genuinely absent — the durability primitive the service branches on.
-        assertThat(messageRepository.applyEdit(ws, "C1", "100.9", "EDITED body", java.time.Instant.now()))
+        assertThat(messageRepository.applyEdit(ws, "C1", "100.9", "EDITED body", Instant.now()))
                 .isZero();
         assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(ws, "C1", "100.9"))
                 .isFalse();
@@ -270,7 +273,7 @@ class SlackConversationProjectorIntegrationTest extends BaseIntegrationTest {
         // edited_at.
         assertThat(messageRepository.insertIfAbsent(ws, "T1", "C1", "100.9", "100.0", "U1", 100L, "EDITED body"))
                 .isEqualTo(1);
-        assertThat(messageRepository.applyEdit(ws, "C1", "100.9", "EDITED body", java.time.Instant.now()))
+        assertThat(messageRepository.applyEdit(ws, "C1", "100.9", "EDITED body", Instant.now()))
                 .isEqualTo(1);
 
         // The reordered base insert now arrives carrying the ORIGINAL text — ON CONFLICT DO NOTHING must NOT clobber

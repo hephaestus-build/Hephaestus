@@ -274,6 +274,8 @@ class ScopeConsumerTest {
                             try {
                                 releaseHandler.await();
                             } catch (InterruptedException ignored) {
+                                // stop() interrupts the dispatch thread; this handler stays in flight
+                                // until released, which is what proves stop() waits for it.
                             }
                         }
                     });

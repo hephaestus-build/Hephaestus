@@ -120,8 +120,20 @@ tasks.withType<JavaCompile>().configureEach {
         listOf("-Werror", "-Xlint:all,-processing", "-XDaddTypeAnnotationsToSymbol=true")
     )
     options.errorprone {
-        disableAllChecks.set(true)
-        error("NullAway", "RequireExplicitNullMarking")
+        // Google Javadoc style only: a doc that is just @param or @return tags is complete here.
+        disable("MissingSummary")
+        // Misfires on an inline tag in the Javadoc of a field Lombok generates an accessor for:
+        // google/error-prone#5855.
+        disable("UnrecognisedJavadocTag")
+        // Crashes on a literal after a text block once the formatter joins the line:
+        // google/error-prone#6103.
+        disable("StringConcatToTextBlock")
+        error(
+            "NullAway",
+            "RequireExplicitNullMarking",
+            "UnnecessarilyFullyQualified",
+            "WildcardImport",
+        )
         option("NullAway:AnnotatedPackages", "de.tum.cit.aet.hephaestus")
         option("NullAway:JSpecifyMode", "true")
         option("NullAway:TreatGeneratedAsUnannotated", "true")
@@ -346,7 +358,7 @@ pitest {
             "de.tum.cit.aet.hephaestus.core.auth.oauth.AuthIntentCookie",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.CookieOAuth2AuthorizationRequestRepository",
             "de.tum.cit.aet.hephaestus.integration.core.connection.EncryptionContext",
-            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabWebhookSignatureVerifier",
+            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabWebhookSignatureVerifier",
         )
     )
     targetTests.set(
@@ -361,7 +373,7 @@ pitest {
             "de.tum.cit.aet.hephaestus.core.auth.oauth.AuthIntentCookieTest",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.CookieOAuth2AuthorizationRequestRepositoryTest",
             "de.tum.cit.aet.hephaestus.integration.core.connection.EncryptionContextTest",
-            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabWebhookSignatureVerifierTest",
+            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabWebhookSignatureVerifierTest",
         )
     )
 }

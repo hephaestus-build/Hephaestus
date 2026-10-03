@@ -26,9 +26,9 @@ import org.junit.jupiter.api.Test;
  * <ul>
  *   <li>never import an {@code integration.outline} type (the Modulith import-check already forbids this for named
  *       interfaces, but this rule pins it explicitly for the whole bounded context), and</li>
- *   <li>never open a raw-SQL tunnel back into Outline's private schema — neither via {@code JdbcTemplate} (the
- *       mechanism that evades both the tenancy {@code StatementInspector} AND the Modulith import check, which sees
- *       Java imports, not SQL strings) nor via a raw SQL string naming the {@code outline_document} table.</li>
+ *   <li>never open a raw-SQL tunnel back into Outline's private schema through a raw SQL string naming the
+ *       {@code outline_document} table — the Modulith import check sees Java imports, not SQL strings. The other
+ *       tunnel, {@code JdbcTemplate}, is closed for every module by {@link CodeQualityTest}.</li>
  * </ul>
  *
  * <p>With this in place a column rename in Outline becomes a compile error <em>inside Outline</em>, not a silent

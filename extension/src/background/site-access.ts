@@ -18,7 +18,7 @@ export function desiredMatches(granted: readonly string[], instanceOrigin?: stri
 	const concrete = granted.filter(
 		(pattern) => patternOrigin(pattern) !== undefined && pattern !== instancePattern,
 	);
-	return [...new Set(concrete)].sort();
+	return [...new Set(concrete)].toSorted();
 }
 
 export async function grantedPatterns(): Promise<string[]> {
@@ -178,5 +178,5 @@ export function siteAccessEntries(
 		entry.workspaces.push(site.displayName);
 		bySite.set(site.siteOrigin, entry);
 	}
-	return [...bySite.values()].sort((a, b) => a.origin.localeCompare(b.origin));
+	return [...bySite.values()].toSorted((a, b) => a.origin.localeCompare(b.origin));
 }

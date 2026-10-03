@@ -1,6 +1,10 @@
 package de.tum.cit.aet.hephaestus.notification.email;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -16,14 +20,17 @@ import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Multipart;
 import jakarta.mail.SendFailedException;
+import jakarta.mail.Session;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import java.net.ConnectException;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.eclipse.angus.mail.smtp.SMTPAddressFailedException;
 import org.eclipse.angus.mail.smtp.SMTPSendFailedException;
 import org.eclipse.angus.mail.smtp.SMTPSenderFailedException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -41,12 +48,11 @@ class EmailGatewayTest extends BaseUnitTest {
     private final CapturingJavaMailSender sender = new CapturingJavaMailSender();
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
     private boolean silentMode;
-    private final EmailRateLimiter rateLimiter = org.mockito.Mockito.mock(EmailRateLimiter.class);
+    private final EmailRateLimiter rateLimiter = mock(EmailRateLimiter.class);
 
-    @org.junit.jupiter.api.BeforeEach
+    @BeforeEach
     void allowCapacity() {
-        org.mockito.Mockito.when(rateLimiter.acquire(org.mockito.ArgumentMatchers.anyBoolean()))
-                .thenReturn(true);
+        when(rateLimiter.acquire(anyBoolean())).thenReturn(true);
     }
 
     private EmailGateway gateway(Optional<JavaMailSender> transport, EmailProperties properties) {
@@ -103,7 +109,7 @@ class EmailGatewayTest extends BaseUnitTest {
 
     @Test
     void shouldAdvertiseOneClickOnlyForHttpsUnsubscribeLinks() throws Exception {
-        for (String scheme : java.util.List.of("https", "http")) {
+        for (String scheme : List.of("https", "http")) {
             String url = scheme + "://example.org/notifications/unsubscribe/opaque-token";
             configuredGateway().send(new EmailMessage(EmailKind.TEST_MESSAGE, MESSAGE.to(), "s", "t", "h", url));
             MimeMessage sent = sender.sent().getLast();
@@ -126,14 +132,13 @@ class EmailGatewayTest extends BaseUnitTest {
                 "https://example.org/#token"
             })
     void shouldRejectUnsafeUnsubscribeLinks(String url) {
-        org.assertj.core.api.Assertions.assertThatThrownBy(
-                        () -> new EmailMessage(EmailKind.TEST_MESSAGE, MESSAGE.to(), "s", "t", "h", url))
+        assertThatThrownBy(() -> new EmailMessage(EmailKind.TEST_MESSAGE, MESSAGE.to(), "s", "t", "h", url))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void shouldRefuseOptionalMailWithoutAnUnsubscribeCapability() {
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> EmailMessage.of(
+        assertThatThrownBy(() -> EmailMessage.of(
                         EmailKind.PRODUCT_FEEDBACK, "dev@example.org", new RenderedEmail("subject", "text", "html")))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -208,7 +213,7 @@ class EmailGatewayTest extends BaseUnitTest {
     void shouldClassifyRefusedMailboxAsRejected() throws MessagingException {
         Address[] invalid = {new InternetAddress("dev@example.org")};
         SendFailedException refused = new SendFailedException("550 no such user", null, null, null, invalid);
-        sender.failWith(new MailSendException(Map.of(new MimeMessage((jakarta.mail.Session) null), refused)));
+        sender.failWith(new MailSendException(Map.of(new MimeMessage((Session) null), refused)));
 
         EmailDeliveryResult result = configuredGateway().send(MESSAGE);
 
@@ -220,7 +225,7 @@ class EmailGatewayTest extends BaseUnitTest {
     @CsvSource({"451, UNAVAILABLE", "554, REJECTED"})
     void shouldClassifyDataFailureWithoutInvalidAddresses(int code, Outcome expected) {
         var failure = new SMTPSendFailedException(".", code, "relay response", null, null, null, null);
-        sender.failWith(new MailSendException(Map.of(new MimeMessage((jakarta.mail.Session) null), failure)));
+        sender.failWith(new MailSendException(Map.of(new MimeMessage((Session) null), failure)));
 
         assertThat(configuredGateway().send(MESSAGE).outcome()).isEqualTo(expected);
     }
@@ -231,7 +236,7 @@ class EmailGatewayTest extends BaseUnitTest {
         var failure = new SMTPSenderFailedException(
                 new InternetAddress("noreply@hephaestus.example"), "MAIL FROM", code, "relay response");
         sender.failWith(new MailSendException(
-                Map.of(new MimeMessage((jakarta.mail.Session) null), new MessagingException("send failed", failure))));
+                Map.of(new MimeMessage((Session) null), new MessagingException("send failed", failure))));
 
         assertThat(configuredGateway().send(MESSAGE).outcome()).isEqualTo(expected);
     }

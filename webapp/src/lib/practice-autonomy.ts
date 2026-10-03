@@ -1,5 +1,7 @@
 import type { AutonomyAssignment, Practice } from "@/api/types.gen";
 
+import { andList } from "@/lib/text";
+
 export type PracticeAutonomy = Practice["autonomy"]["effective"];
 
 export const PRACTICE_AUTONOMY_ORDER = [
@@ -76,7 +78,5 @@ export function autonomyDistributionSentence(counts: Record<string, number>): st
 		return "No practices yet.";
 	}
 	const total = autonomyTotal(counts);
-	const listed =
-		parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
-	return `${total} ${total === 1 ? "practice" : "practices"}: ${listed}.`;
+	return `${total} ${total === 1 ? "practice" : "practices"}: ${andList.format(parts)}.`;
 }

@@ -147,7 +147,7 @@ export function parseNameStatus(
 const RENAMES = "--find-renames=50%";
 const MAX_OUTPUT_BYTES = 256 * 1024 * 1024;
 
-function git(repository: string, args: string[]): Buffer {
+function git(repository: string, args: [string, ...string[]]): Buffer {
 	// A path is printed as its bytes, not as git's quoted-octal rendering: the path a citation names is
 	// the path the checkout has, and the server verifies it against the same bytes.
 	const child = spawnSync(
@@ -162,9 +162,9 @@ function git(repository: string, args: string[]): Buffer {
 		throw child.error;
 	}
 	if (child.status !== 0) {
-		throw new Error(
-			`git ${args[0]} failed (${child.status}): ${child.stderr.toString("utf8").trim()}`,
-		);
+		const ending =
+			child.status === null ? `signal ${child.signal ?? "unknown"}` : `exit ${child.status}`;
+		throw new Error(`git ${args[0]} failed (${ending}): ${child.stderr.toString("utf8").trim()}`);
 	}
 	return child.stdout;
 }

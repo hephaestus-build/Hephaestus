@@ -3,6 +3,7 @@ import { expect } from "storybook/test";
 
 import { ARTIFACT_KIND } from "@/lib/artifact-kinds";
 import { expectNoPageOverflow, expectTargetSize } from "@/stories/reflow";
+import { inStoryYear } from "@/stories/story-clock";
 
 import { PracticeProfilePageHeader } from "./PracticeProfilePageHeader";
 
@@ -13,7 +14,7 @@ const meta = {
 	args: {
 		latestRun: {
 			reviewId: "run-2026-09-09",
-			at: new Date("2026-09-09T14:10:00"),
+			at: inStoryYear("09-09T14:10"),
 			reviewedWork: {
 				id: "C01/p1",
 				label: "#releases",
@@ -105,7 +106,7 @@ export const LongWorkLabel: Story = {
 	args: {
 		latestRun: {
 			reviewId: "run-2026-09-09",
-			at: new Date("2026-09-09T14:10:00"),
+			at: inStoryYear("09-09T14:10"),
 			reviewedWork: {
 				id: "queue-retry-policy",
 				label: "Queue retry policy for the notification pipeline",
@@ -126,7 +127,7 @@ export const ReviewRunning: Story = {
 	args: {
 		latestRun: {
 			reviewId: "run-2026-09-27",
-			at: new Date("2026-09-27T09:20:00"),
+			at: inStoryYear("09-27T09:20"),
 			reviewedWork: { id: "905", label: "#905", kind: ARTIFACT_KIND.pullRequest },
 			status: "IN_PROGRESS",
 		},
@@ -142,7 +143,7 @@ export const LatestReviewFailed: Story = {
 	args: {
 		latestRun: {
 			reviewId: "run-2026-09-25",
-			at: new Date("2026-09-25T11:13:00"),
+			at: inStoryYear("09-25T11:13"),
 			reviewedWork: { id: "890", label: "#890", kind: ARTIFACT_KIND.pullRequest },
 			status: "FAILED",
 		},

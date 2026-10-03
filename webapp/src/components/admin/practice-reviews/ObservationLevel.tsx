@@ -178,7 +178,7 @@ export function ObservationLevel({
 				)}
 
 				<Section level={3} title="Evidence">
-					<ObservationEvidence evidence={record.evidence} detector={record.evidence?.detector} />
+					<ObservationEvidence evidence={record.evidence} />
 				</Section>
 
 				<Section level={3} title="Feedback from this observation">

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.architecture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -15,7 +16,7 @@ class PracticeReviewHttpSurfaceTest extends HephaestusArchitectureTest {
     void practiceReviewHttpSurfaceIsAdminGatedAndReadOnlyExceptForApprovalValidityAndWithdrawalDecisions() {
         var controllers = classes.stream()
                 .filter(type -> type.isAnnotatedWith(RequestMapping.class))
-                .filter(type -> java.util.Arrays.asList(
+                .filter(type -> Arrays.asList(
                                 type.getAnnotationOfType(RequestMapping.class).value())
                         .contains("/practices/reviews"))
                 .toList();

@@ -3,7 +3,7 @@ import { CircleCheck, MessageSquare, Square } from "lucide-react";
 import { motion, stagger } from "motion/react";
 import { useMediaQuery } from "usehooks-ts";
 import { LandingSignInCta } from "@/components/auth/LandingSignInCta";
-import { GithubIcon, GitlabIcon } from "@/components/icons/brand";
+import { GitHubIcon, GitLabIcon } from "@/components/icons/brand";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -272,7 +272,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 								"h-11 w-full sm:w-auto",
 							)}
 						>
-							<GithubIcon data-icon="inline-start" className="size-4" aria-hidden="true" />
+							<GitHubIcon data-icon="inline-start" className="size-4" />
 							View on GitHub
 							<span className="sr-only">(opens in a new tab)</span>
 						</a>
@@ -284,11 +284,11 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 					>
 						<span>Works with</span>
 						<Badge variant="secondary" size="lg">
-							<GithubIcon aria-hidden="true" />
+							<GitHubIcon />
 							GitHub
 						</Badge>
 						<Badge variant="secondary" size="lg">
-							<GitlabIcon aria-hidden="true" />
+							<GitLabIcon />
 							GitLab
 						</Badge>
 					</motion.p>

@@ -1,8 +1,3 @@
-// MSW request handlers for the native-auth endpoints (ADR 0017). These back the
-// Storybook browser worker (initialized via `initialize(...)` + `mswLoader` in
-// `.storybook/preview.tsx`) so query-driven components render without hitting a real
-// backend.
-//
 // URL patterns use the `*/path` wildcard so they match regardless of the API
 // client's configured base URL: in the app the client points at
 // `environment.serverUrl` (e.g. http://localhost:8080), while in Storybook the
@@ -54,7 +49,6 @@ export const handlers = [
 			updatedAt: new Date().toISOString(),
 		} satisfies Wire<AccountAiChoice>);
 	}),
-	// --- current user -------------------------------------------------------
 	http.get("*/user", () => HttpResponse.json(currentUser)),
 	http.get("*/user/notification-preferences", () =>
 		HttpResponse.json({
@@ -84,20 +78,16 @@ export const handlers = [
 			: new HttpResponse(null, { status: 400 }),
 	),
 
-	// --- product feedback --------------------------------------------------
 	http.get("*/workspaces/:workspaceSlug/product-feedback/surveys", () => HttpResponse.json([])),
-	// --- identity providers + linked identities -----------------------------
 	http.get("*/identity-providers", () => HttpResponse.json(identityProviders)),
 	http.get("*/user/identities", () => HttpResponse.json(linkedIdentities)),
 
-	// --- sessions ------------------------------------------------------------
 	http.get("*/user/sessions", () => HttpResponse.json(sessions)),
 	http.delete("*/user/sessions/:jti", () => new HttpResponse(null, { status: 204 })),
 	// Revoke-all-others (no path param) — registered after the `:jti` route so the
 	// more specific match wins for single-session revocation.
 	http.delete("*/user/sessions", () => new HttpResponse(null, { status: 204 })),
 
-	// --- data export (PENDING -> READY) + download --------------------------
 	http.post("*/user/exports", () => {
 		exportPolls.delete(String(exportPending.id));
 		return HttpResponse.json({ id: exportPending.id, status: "PENDING" }, { status: 202 });
@@ -115,7 +105,6 @@ export const handlers = [
 		return HttpResponse.json(count <= 1 ? exportPending : exportReady);
 	}),
 
-	// --- admin users ---------------------------------------------------------
 	http.get("*/admin/users", () => HttpResponse.json(adminUsers)),
 	http.patch<PathParams, AdminUserPatch>("*/admin/users/:id", async ({ request, params }) => {
 		const body = await request.json().catch((): AdminUserPatch => ({}));
@@ -129,23 +118,11 @@ export const handlers = [
 	}),
 ];
 
-// ---------------------------------------------------------------------------
-// Per-scenario override handlers. Spread one of these into a story's
-// `parameters.msw.handlers` (or pass to `server.use(...)` in a test) to flip a
-// single endpoint without redefining the whole default set.
-// ---------------------------------------------------------------------------
+// Spread one override into a story's `parameters.msw.handlers`, or pass it to `server.use(...)` in a
+// test, to flip a single endpoint without redefining the whole default set.
 
 /** `GET /user` -> 401, for logged-out / session-expired states. */
 export const unauthenticatedUser = http.get(
 	"*/user",
 	() => new HttpResponse(null, { status: 401 }),
 );
-
-/** `GET /user/sessions` -> 500, for the sessions error state. */
-export const sessionsError = http.get(
-	"*/user/sessions",
-	() => new HttpResponse(null, { status: 500 }),
-);
-
-/** `GET /user/sessions` -> empty list. */
-export const noSessions = http.get("*/user/sessions", () => HttpResponse.json([]));

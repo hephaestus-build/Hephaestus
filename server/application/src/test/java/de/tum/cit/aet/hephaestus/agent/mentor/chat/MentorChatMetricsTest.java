@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -45,7 +46,7 @@ class MentorChatMetricsTest extends BaseUnitTest {
         }
         // Total = N outcomes × 1 increment.
         long total = registry.find("mentor.turn.completed").meters().stream()
-                .mapToLong(m -> Math.round(((io.micrometer.core.instrument.Counter) m).count()))
+                .mapToLong(m -> Math.round(((Counter) m).count()))
                 .sum();
         assertThat(total).isEqualTo(MentorChatMetrics.Outcome.values().length);
     }

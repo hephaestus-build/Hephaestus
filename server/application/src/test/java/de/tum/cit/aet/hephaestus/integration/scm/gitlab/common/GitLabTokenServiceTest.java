@@ -2,8 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -22,9 +24,6 @@ import org.springframework.web.reactive.function.client.WebClient.RequestHeaders
 import org.springframework.web.reactive.function.client.WebClient.ResponseSpec;
 import reactor.core.publisher.Mono;
 
-/**
- * Unit tests for {@link GitLabTokenService}.
- */
 @Tag("unit")
 class GitLabTokenServiceTest extends BaseUnitTest {
 
@@ -152,10 +151,7 @@ class GitLabTokenServiceTest extends BaseUnitTest {
             when(mockWebClient.get()).thenReturn((RequestHeadersUriSpec) uriSpec);
             when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
             when(headersSpec.header(anyString(), anyString())).thenReturn((RequestHeadersSpec) headersSpec);
-            org.mockito.Mockito.lenient()
-                    .doReturn(headersSpec)
-                    .when(headersSpec)
-                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+            lenient().doReturn(headersSpec).when(headersSpec).attribute(anyString(), any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(eq(GitLabTokenService.GitLabUserResponse.class)))
                     .thenReturn(Mono.just(new GitLabTokenService.GitLabUserResponse(42L, "testuser")));

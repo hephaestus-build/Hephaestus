@@ -1,10 +1,13 @@
 package de.tum.cit.aet.hephaestus.integration.core.oauth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,26 +27,24 @@ import de.tum.cit.aet.hephaestus.integration.core.webhook.IntegrationKindRouting
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.servlet.http.HttpServletRequest;
-import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Pure unit tests for {@link OAuthCallbackController} — no Spring context, no MockMvc.
@@ -80,8 +81,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         controller =
                 new OAuthCallbackController(routing, oauthStateService, callbackService, List.of(slackStrategy), PROPS);
     }
-
-    // Happy path
 
     @Test
     void happyPath_slackCompleted_transitionsAndRedirects() {
@@ -147,8 +146,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(actor.getValue()).isNull();
     }
 
-    // Vendor-side error
-
     @Test
     void vendorError_jsonRequest_returns400WithStructuredJson() {
         ResponseEntity<?> response = controller.callbackGet(
@@ -193,8 +190,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         verify(oauthStateService, never()).consume(any());
         assertThat(slackStrategy.finalizeCalls).isEqualTo(0);
     }
-
-    // State validation
 
     @Test
     void missingState_jsonRequest_returns400() {
@@ -251,8 +246,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(slackStrategy.finalizeCalls).isEqualTo(0);
         verify(callbackService, never()).findOrCreatePendingConnection(anyLong(), any());
     }
-
-    // Strategy failure
 
     @Test
     void finalizeFailed_jsonRequest_returns400() {
@@ -318,8 +311,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(body.getProperties()).containsEntry("error", "strategy_error");
     }
 
-    // Callbacks the provider started
-
     @Test
     void shouldSendAProviderInitiatedCallbackHomeWithoutConnectingAnything() {
         slackStrategy.providerInitiated = true;
@@ -373,8 +364,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 .isEqualTo("https://app.example.com/");
     }
 
-    // Transition guard rejection
-
     @Test
     void completeConnection_transitionGuardRejects_jsonRequest_returns409() {
         StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
@@ -415,8 +404,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(location4.toString()).contains("reason=transition_conflict");
     }
 
-    // Unknown kind
-
     @Test
     void unknownKind_jsonRequest_returns404() {
         ResponseEntity<?> response =
@@ -438,8 +425,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(location5.toString()).contains("reason=unknown_kind");
     }
 
-    // No strategy registered
-
     @Test
     void noStrategy_returns500() {
         // Build a controller with NO strategies registered.
@@ -456,8 +441,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(body).isNotNull();
         assertThat(body.getProperties()).containsEntry("error", "no_strategy");
     }
-
-    // POST callback
 
     @Test
     void postCallback_sharesGetHandler() {
@@ -479,24 +462,20 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         verify(callbackService).completeConnection(any(), any(), any());
     }
 
-    // Duplicate strategy guard
-
     @Test
     void duplicateStrategy_throwsAtWiringTime() {
         FakeStrategy a = new FakeStrategy(IntegrationKind.SLACK);
         FakeStrategy b = new FakeStrategy(IntegrationKind.SLACK);
-        Assertions.assertThatThrownBy(() ->
+        assertThatThrownBy(() ->
                         new OAuthCallbackController(routing, oauthStateService, callbackService, List.of(a, b), PROPS))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Duplicate ConnectionStrategy");
     }
 
-    // helpers
-
     /** Browser request: {@code Accept: text/html,...} (typical browser default). */
     private static HttpServletRequest htmlRequest() {
-        HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
-        Mockito.lenient()
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        lenient()
                 .when(req.getHeader(HttpHeaders.ACCEPT))
                 .thenReturn("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
         return req;
@@ -504,8 +483,8 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
     /** JSON-only request (curl / devtools / E2E suite). */
     private static HttpServletRequest jsonRequest() {
-        HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
-        Mockito.lenient().when(req.getHeader(HttpHeaders.ACCEPT)).thenReturn("application/json");
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        lenient().when(req.getHeader(HttpHeaders.ACCEPT)).thenReturn("application/json");
         return req;
     }
 
@@ -526,8 +505,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                                 null);
                     case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, Set.of());
                     case OUTLINE ->
-                        new ConnectionConfig.OutlineConfig(
-                                "https://app.getoutline.com", null, null, java.util.Set.of());
+                        new ConnectionConfig.OutlineConfig("https://app.getoutline.com", null, null, Set.of());
                 };
         Connection c = new Connection(ws, kind, instanceKey, cfg);
         c.setState(state);
@@ -536,13 +514,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     }
 
     private static void setId(Connection c, long id) {
-        try {
-            Field idField = Connection.class.getDeclaredField("id");
-            idField.setAccessible(true);
-            idField.set(c, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(c, "id", id);
     }
 
     /**

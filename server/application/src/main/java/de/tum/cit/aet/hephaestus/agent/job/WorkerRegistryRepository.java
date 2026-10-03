@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -18,7 +19,7 @@ public interface WorkerRegistryRepository extends JpaRepository<WorkerRegistry, 
             value =
                     "SELECT worker_id FROM worker_registry WHERE last_heartbeat >= now() - make_interval(secs => :ttlSeconds)",
             nativeQuery = true)
-    java.util.List<String> findLiveWorkerIds(@Param("ttlSeconds") long ttlSeconds);
+    List<String> findLiveWorkerIds(@Param("ttlSeconds") long ttlSeconds);
 
     /** Upsert this worker's heartbeat on the DB clock, so every liveness comparison stays on one clock. */
     @Modifying

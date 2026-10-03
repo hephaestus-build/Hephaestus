@@ -36,7 +36,6 @@ public enum ReviewClaimCurrentness {
 
     public static ReviewClaimCurrentness of(
             @Nullable String evaluatedFingerprint, @Nullable String currentFingerprint) {
-        // Earlier schemes measured behavior-level claims, not the current whole-practice standard.
         if (evaluatedFingerprint == null
                 || currentFingerprint == null
                 || !ReviewRuleFingerprint.isCurrentScheme(evaluatedFingerprint)

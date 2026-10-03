@@ -1,8 +1,20 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -15,8 +27,7 @@ public class PersonDataRegistry {
         for (PersonDataCatalog catalog : catalogs) {
             var contributors = List.copyOf(catalog.contributors());
             PersonDataStores declaration =
-                    org.springframework.core.annotation.AnnotatedElementUtils.findMergedAnnotation(
-                            catalog.getClass(), PersonDataStores.class);
+                    AnnotatedElementUtils.findMergedAnnotation(catalog.getClass(), PersonDataStores.class);
             if (declaration == null
                     || !new TreeSet<>(Arrays.asList(declaration.value()))
                             .equals(new TreeSet<>(contributors.stream()

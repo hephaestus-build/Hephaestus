@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.spi;
 
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /** Account-owned workspace membership, resolved through verified identities rather than usernames. */
 public interface AccountWorkspaceMembershipQuery {
@@ -22,6 +23,6 @@ public interface AccountWorkspaceMembershipQuery {
             Long workspaceId,
             String workspaceSlug,
             String workspaceName,
-            @org.jspecify.annotations.Nullable String role,
-            @org.jspecify.annotations.Nullable Long memberId) {}
+            @Nullable String role,
+            @Nullable Long memberId) {}
 }

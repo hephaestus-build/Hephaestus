@@ -1,13 +1,18 @@
 package de.tum.cit.aet.hephaestus.integration.slack.domain;
 
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackRetentionSweeper;
+import jakarta.persistence.QueryHint;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.stream.Stream;
+import org.hibernate.jpa.HibernateHints;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,9 +44,8 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
           ON c.workspaceId=m.workspaceId AND c.slackChannelId=m.slackChannelId
         WHERE m.workspaceId=:workspaceId
         """ + MESSAGE_READ_GUARD + " ORDER BY m.slackChannelId,m.slackTs,m.id")
-    @org.springframework.data.jpa.repository.QueryHints(
-            @jakarta.persistence.QueryHint(name = org.hibernate.jpa.HibernateHints.HINT_FETCH_SIZE, value = "256"))
-    java.util.stream.Stream<WorkspaceMessage> streamWorkspaceMessages(@Param("workspaceId") long workspaceId);
+    @QueryHints(@QueryHint(name = HibernateHints.HINT_FETCH_SIZE, value = "256"))
+    Stream<WorkspaceMessage> streamWorkspaceMessages(@Param("workspaceId") long workspaceId);
 
     /** Scalar projection keeps the full-folder stream out of Hibernate's managed-entity cache. */
     interface WorkspaceMessage {
@@ -93,7 +97,7 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
            AND COALESCE(m.slack_thread_ts, m.slack_ts) = t.slack_thread_ts
         """, nativeQuery = true)
     int deleteByWorkspaceIdAndThreadIds(
-            @Param("workspaceId") long workspaceId, @Param("threadIds") java.util.Collection<Long> threadIds);
+            @Param("workspaceId") long workspaceId, @Param("threadIds") Collection<Long> threadIds);
 
     long deleteByWorkspaceId(Long workspaceId);
 

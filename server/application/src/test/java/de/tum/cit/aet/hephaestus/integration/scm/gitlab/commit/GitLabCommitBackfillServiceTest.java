@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,7 +49,7 @@ class GitLabCommitBackfillServiceTest extends BaseUnitTest {
                 targets);
         assertThat(service.backfillCommits(100L, TestEntities.repository(1L, "owner/repo", "main")))
                 .isEqualTo(SyncResult.abortedError(0));
-        verify(git, org.mockito.Mockito.never()).ensureRepository(any(), any(), any());
+        verify(git, never()).ensureRepository(any(), any(), any());
     }
 
     @Test
@@ -65,7 +66,7 @@ class GitLabCommitBackfillServiceTest extends BaseUnitTest {
                 mock(CommitDetailsPersister.class),
                 mock(CommitContributorRepository.class),
                 mock(CommitAuthorResolver.class),
-                org.mockito.Mockito.mock(SyncTargetProvider.class));
+                mock(SyncTargetProvider.class));
         when(git.isEnabled()).thenReturn(true);
         when(git.resolveBranchHead(new RepositoryKey(100L, 1L), "main")).thenReturn("unchanged-head");
         when(tokens.resolveServerUrl(100L)).thenReturn("https://gitlab.example.com");
@@ -97,7 +98,7 @@ class GitLabCommitBackfillServiceTest extends BaseUnitTest {
                 mock(CommitDetailsPersister.class),
                 mock(CommitContributorRepository.class),
                 mock(CommitAuthorResolver.class),
-                org.mockito.Mockito.mock(SyncTargetProvider.class));
+                mock(SyncTargetProvider.class));
         when(git.isEnabled()).thenReturn(true);
         when(git.resolveBranchHead(new RepositoryKey(100L, 1L), "main")).thenReturn("head");
         when(tokens.resolveServerUrl(100L)).thenReturn("https://gitlab.example.com");

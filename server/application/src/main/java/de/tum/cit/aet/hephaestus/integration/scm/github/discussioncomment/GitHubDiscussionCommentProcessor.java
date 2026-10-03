@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.discussioncomment.dto.Gi
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -202,7 +203,7 @@ public class GitHubDiscussionCommentProcessor extends BaseGitHubProcessor {
         if (association == null) {
             return null;
         }
-        return switch (association.toUpperCase()) {
+        return switch (association.toUpperCase(Locale.ROOT)) {
             case "COLLABORATOR" -> AuthorAssociation.COLLABORATOR;
             case "CONTRIBUTOR" -> AuthorAssociation.CONTRIBUTOR;
             case "FIRST_TIME_CONTRIBUTOR" -> AuthorAssociation.FIRST_TIME_CONTRIBUTOR;

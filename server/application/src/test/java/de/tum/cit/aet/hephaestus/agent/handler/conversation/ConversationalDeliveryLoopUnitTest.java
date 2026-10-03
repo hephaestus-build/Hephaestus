@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ConversationConsentGate;
+import de.tum.cit.aet.hephaestus.agent.handler.FeedbackSupersession;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -30,6 +31,7 @@ import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -50,11 +52,14 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /** Deterministic unit coverage for the conversational-delivery router, preparer, and reconciler. */
-@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -71,10 +76,10 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
     private FeedbackPlacementRepository feedbackPlacementRepository;
 
     @Mock
-    private de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository observationRepository;
+    private ObservationRepository observationRepository;
 
     @Mock
-    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    private ApplicationEventPublisher eventPublisher;
 
     @Mock
     private OutboundEgressGuard egressGuard;
@@ -84,7 +89,7 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
      * never reaches it. Present so the preparer can be built.
      */
     @Mock
-    private de.tum.cit.aet.hephaestus.agent.handler.FeedbackSupersession supersession;
+    private FeedbackSupersession supersession;
 
     @Mock
     private ObservationVisibilityPolicy visibilityPolicy;

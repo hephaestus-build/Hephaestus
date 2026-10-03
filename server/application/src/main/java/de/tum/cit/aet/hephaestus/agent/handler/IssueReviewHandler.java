@@ -221,37 +221,18 @@ public class IssueReviewHandler implements JobTypeHandler {
         Map<String, String> why = practiceCatalogInjector.whyBySlug(job.getWorkspace(), ArtifactKinds.ISSUE);
         List<ComposedFeedbackUnit> units = compositionResultParser.parse(job.getOutput(), FeedbackChannel.IN_CONTEXT);
         String lead = compositionResultParser.lead(job.getOutput());
-        // Everything either surface would compose from: both render an all-clear when no problem
-        // survives the gates, so the coverage question is asked once, over the union.
-        List<ReviewResultParser.ValidatedObservation> composable = java.util.stream.Stream.concat(
-                        proposals.stream(), loudEnough.stream())
-                .toList();
-        Set<String> included = composable.stream()
-                .map(ReviewResultParser.ValidatedObservation::occurrenceKey)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        List<ReviewResultParser.ValidatedObservation> reviewPackage = observations.stream()
-                .filter(observation -> included.contains(observation.occurrenceKey()))
-                .toList();
-        // The lead is unattributed prose that may speak for any practice, so automatic content goes without it.
-        var automatic =
-                DeliveryComposer.composeAdmitted(reviewPackage, ArtifactKinds.ISSUE, why, units, null, recurring);
-        if (ReviewCoverage.withholdsAllClear(job.getOutput(), composable)) {
-            log.info("Withholding an all-clear from a review that did not reach every practice: jobId={}", job.getId());
-            feedbackLedgerRecorder.recordNothingToPost(job, automatic == null ? null : automatic.withoutNote());
-            return;
-        }
-        if (!proposals.isEmpty()) {
-            var proposal =
-                    DeliveryComposer.composeAdmitted(reviewPackage, ArtifactKinds.ISSUE, why, units, lead, recurring);
-            // Only an observation the note was written from puts it under approval; a not-applicable
-            // result of an approval-gated practice beside it does not.
-            if (proposal != null && proposal.writtenFromAny(proposals)) {
-                feedbackLedgerRecorder.recordProposal(job, proposal);
-                return;
+        var composition = new AdmittedDelivery.Composition(ArtifactKinds.ISSUE, why, units, lead, recurring);
+        switch (AdmittedDelivery.decide(job.getOutput(), observations, proposals, loudEnough, composition)) {
+            case AdmittedDelivery.Withheld withheld -> {
+                log.info(
+                        "Withholding an all-clear from a review that did not reach every practice: jobId={}",
+                        job.getId());
+                feedbackLedgerRecorder.recordNothingToPost(job, withheld.content());
             }
+            case AdmittedDelivery.Proposed proposed -> feedbackLedgerRecorder.recordProposal(job, proposed.content());
+            case AdmittedDelivery.Automatic automatic ->
+                postIssueNote(job, automatic.content(), automatic.contributingPracticeSlugs());
         }
-        postIssueNote(
-                job, automatic, automatic == null ? Set.of() : automatic.contributingPracticeSlugs(reviewPackage));
     }
 
     private ReviewResultParser.ValidatedObservation validated(Observation observation) {

@@ -23,7 +23,7 @@ class LogSecretLiteralArchTest {
         try (var files = Files.walk(SOURCES)) {
             for (Path file :
                     files.filter(path -> path.toString().endsWith(".java")).toList()) {
-                for (String statement : Files.readString(file).split(";")) {
+                for (String statement : Files.readString(file).split(";", -1)) {
                     int logCall = Math.max(statement.lastIndexOf("log."), statement.lastIndexOf(".log("));
                     if (logCall >= 0
                             && RAW_BEARER_LITERAL

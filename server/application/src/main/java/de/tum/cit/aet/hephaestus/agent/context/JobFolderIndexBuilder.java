@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -57,6 +58,10 @@ public class JobFolderIndexBuilder {
         }
     }
 
+    /**
+     * @param captureLimitations per source, what its capture could not include; empty for a source that captured
+     *     it all
+     */
     public record CaptureMetadata(
             Map<SourceKind, SourceCompleteness> reportedCompleteness,
             Map<SourceKind, SourceContentState> reportedContentStates,
@@ -64,7 +69,6 @@ public class JobFolderIndexBuilder {
             Map<SourceKind, Instant> observedAt,
             Map<SourceKind, Instant> sourceEffectiveAt,
             Map<SourceKind, SourceCaptureState> stateOverrides,
-            /** Per source, what its capture could not include; empty for a source that captured it all. */
             Map<SourceKind, List<String>> captureLimitations,
             Set<SourceKind> attemptedKinds) {
         public CaptureMetadata(
@@ -220,11 +224,11 @@ public class JobFolderIndexBuilder {
             } else {
                 Path file = disk.get(path);
                 if (file == null) throw new IllegalStateException("Folder index references no file: " + path);
-                try (var input = java.nio.file.Files.newInputStream(file)) {
+                try (var input = Files.newInputStream(file)) {
                     digest = ProvenanceDigest.sha256Hex(input);
-                    size = java.nio.file.Files.size(file);
-                } catch (java.io.IOException exception) {
-                    throw new java.io.UncheckedIOException(exception);
+                    size = Files.size(file);
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
                 }
             }
             String mediaType = path.endsWith(".json")
@@ -279,7 +283,7 @@ public class JobFolderIndexBuilder {
             text.append("- `").append(directory.target()).append("`\n");
         text.append(
                 "\nCite exact file paths and line ranges. Admission verifies each quote against these frozen bytes. A refused target cannot supply evidence.\n");
-        files.put("INDEX.md", text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        files.put("INDEX.md", text.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     boolean isSourceUsePermitted(SourceContractVersion version, SourceKind kind) {
@@ -303,7 +307,7 @@ public class JobFolderIndexBuilder {
         }
         return catalogs.current().sources().stream()
                 .map(ArtifactSourceContract::kind)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
     }
 
     public PreparedAutomatedReviewReadiness prepareAutomatedReviewReadiness(

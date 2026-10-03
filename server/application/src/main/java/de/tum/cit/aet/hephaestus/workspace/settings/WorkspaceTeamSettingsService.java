@@ -31,10 +31,6 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>Label filters for teams per workspace</li>
  * </ul>
  *
- * <p>This service replaces direct modifications to the deprecated fields on
- * {@link Team#isHidden()}, {@link Team#getLabels()}, and
- * {@link de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermission#isHiddenFromContributions()}.
- *
  * @see WorkspaceTeamSettings
  * @see WorkspaceTeamRepositorySettings
  * @see WorkspaceTeamLabelFilter

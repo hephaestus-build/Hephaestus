@@ -29,7 +29,9 @@ const HAS_TYPE = /^type\s+\w+/mu;
 const HAS_INPUT = /^input\s+\w+/mu;
 
 /** Cheapest checks first: a wrong body is usually the wrong size, and never reaches the regexes. */
-function validateGraphQLSchema(content: string): { valid: boolean; reason?: string } {
+function validateGraphQLSchema(
+	content: string,
+): { valid: true } | { valid: false; reason: string } {
 	if (content.length < MIN_SIZE_BYTES) {
 		return {
 			valid: false,

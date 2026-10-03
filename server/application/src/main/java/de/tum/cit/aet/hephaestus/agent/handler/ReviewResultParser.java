@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -106,7 +107,7 @@ public class ReviewResultParser {
                 continue;
             }
             try {
-                valid.add(validateEntry(entry, i));
+                valid.add(validateEntry(entry));
             } catch (EntryValidationException e) {
                 discarded.add(new DiscardedEntry(i, String.valueOf(e.getMessage())));
             }
@@ -115,9 +116,9 @@ public class ReviewResultParser {
         return new ParseResult(Collections.unmodifiableList(valid), Collections.unmodifiableList(discarded));
     }
 
-    private ValidatedObservation validateEntry(JsonNode entry, int index) {
+    private ValidatedObservation validateEntry(JsonNode entry) {
         List<String> unknownFields = entry.properties().stream()
-                .map(java.util.Map.Entry::getKey)
+                .map(Entry::getKey)
                 .filter(field -> !OBSERVATION_FIELDS.contains(field))
                 .toList();
         if (!unknownFields.isEmpty()) {
@@ -151,7 +152,7 @@ public class ReviewResultParser {
             throw new EntryValidationException("missing or non-object field: evidence");
         }
         List<String> unknownEvidenceFields = evidence.properties().stream()
-                .map(java.util.Map.Entry::getKey)
+                .map(Entry::getKey)
                 .filter(field -> !EVIDENCE_FIELDS.contains(field))
                 .toList();
         if (!unknownEvidenceFields.isEmpty()) {
@@ -240,7 +241,7 @@ public class ReviewResultParser {
 
     /**
      * The orchestrator protocol emits phase markers (e.g. {@code [PHASE0]...}) before its JSON object; this
-     * finds the first {@code '{'} that starts a valid object containing an "observations" array.
+     * finds the first opening brace that starts a valid object containing an {@code "observations"} array.
      */
     @Nullable
     private JsonNode extractJsonFromText(String text) {

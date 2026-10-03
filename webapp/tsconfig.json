@@ -28,6 +28,7 @@
 		"allowUnreachableCode": false,
 		"allowUnusedLabels": false,
 		"paths": {
+			"@/brand/*": ["./brand/*"],
 			"@/*": ["./src/*"]
 		}
 	}

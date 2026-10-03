@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -73,7 +74,7 @@ class WorkspaceRegistryControllerTest {
         var request = request(IntegrationKind.GITHUB);
         var workspace = new Workspace();
         workspace.setWorkspaceSlug(Objects.requireNonNull(request.workspaceSlug()));
-        var dto = org.mockito.Mockito.mock(WorkspaceDTO.class);
+        var dto = mock(WorkspaceDTO.class);
         when(workspaceService.createWorkspaceWithInitialization(request)).thenReturn(workspace);
         when(workspaceQueryService.toWorkspaceDTO(workspace)).thenReturn(dto);
         var servletRequest = new MockHttpServletRequest("POST", "/workspaces");

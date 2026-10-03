@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,7 +34,6 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
-import java.lang.reflect.Field;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
@@ -41,19 +41,21 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
-import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
@@ -81,28 +83,22 @@ class ConnectionControllerTest extends BaseUnitTest {
     private FakeStrategy gitlabStrategy;
     private ConnectionController controller;
 
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void clearAuthentication() {
-        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        SecurityContextHolder.clearContext();
     }
 
     @BeforeEach
     void setUp() {
-        var jwt = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("test")
-                .header("alg", "none")
-                .subject("42")
-                .build();
-        org.springframework.security.core.context.SecurityContextHolder.getContext()
-                .setAuthentication(
-                        new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(
-                                jwt));
+        var jwt = Jwt.withTokenValue("test").header("alg", "none").subject("42").build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
         MockitoAnnotations.openMocks(this);
         objectMapper = new ObjectMapper();
         githubStrategy = new FakeStrategy(IntegrationKind.GITHUB);
         gitlabStrategy = new FakeStrategy(IntegrationKind.GITLAB);
         // admin.manifests() is the single source of truth for capability lookups in the controller;
         // wire it lazily-lenient so list/read/suspend/reactivate tests don't all need to restate it.
-        Mockito.lenient().when(admin.manifests()).thenReturn(manifests);
+        lenient().when(admin.manifests()).thenReturn(manifests);
         controller = new ConnectionController(
                 admin, connectionService, objectMapper, List.of(githubStrategy, gitlabStrategy));
     }
@@ -346,13 +342,13 @@ class ConnectionControllerTest extends BaseUnitTest {
         Connection c = newConnection(7L, workspaceId, IntegrationKind.GITHUB, "100", IntegrationState.ACTIVE);
         when(admin.findInWorkspaceOrThrow(workspaceId, 7L)).thenReturn(c);
 
-        Assertions.assertThatThrownBy(() -> controller.updateStatus(
+        assertThatThrownBy(() -> controller.updateStatus(
                         ctx(workspaceId),
                         7L,
                         new UpdateConnectionStatusRequestDTO(IntegrationState.PENDING, null),
                         null))
                 .isInstanceOf(IllegalArgumentException.class);
-        verify(connectionService, Mockito.never()).transition(any(Connection.class), any(TransitionRequest.class));
+        verify(connectionService, never()).transition(any(Connection.class), any(TransitionRequest.class));
     }
 
     @Test
@@ -406,8 +402,6 @@ class ConnectionControllerTest extends BaseUnitTest {
         assertThat(problem.getTitle()).isEqualTo("Resource not found");
     }
 
-    // helpers
-
     /**
      * Minimal admin {@link WorkspaceContext} for the given workspace id. The controller only reads
      * {@code id()}; the filter + {@code @RequireAtLeastWorkspaceAdmin} guard (covered by integration
@@ -450,24 +444,12 @@ class ConnectionControllerTest extends BaseUnitTest {
     }
 
     private static void setIdAndTimestamps(Connection c, long id) {
-        try {
-            // The entity normally gets createdAt/updatedAt from @CreationTimestamp /
-            // @UpdateTimestamp on save. Unit tests skip the JPA layer so we set them by
-            // reflection — DTO serialisation would NPE on null Instants otherwise.
-            Field idField = Connection.class.getDeclaredField("id");
-            idField.setAccessible(true);
-            idField.set(c, id);
-
-            Field createdAt = Connection.class.getDeclaredField("createdAt");
-            createdAt.setAccessible(true);
-            createdAt.set(c, Instant.parse("2026-01-01T00:00:00Z"));
-
-            Field updatedAt = Connection.class.getDeclaredField("updatedAt");
-            updatedAt.setAccessible(true);
-            updatedAt.set(c, Instant.parse("2026-01-02T00:00:00Z"));
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        // The entity normally gets createdAt/updatedAt from @CreationTimestamp /
+        // @UpdateTimestamp on save. Unit tests skip the JPA layer so we set them by
+        // reflection — DTO serialisation would NPE on null Instants otherwise.
+        ReflectionTestUtils.setField(c, "id", id);
+        ReflectionTestUtils.setField(c, "createdAt", Instant.parse("2026-01-01T00:00:00Z"));
+        ReflectionTestUtils.setField(c, "updatedAt", Instant.parse("2026-01-02T00:00:00Z"));
     }
 
     /** Per-kind strategy stub — initiate output is dictated by the test. */

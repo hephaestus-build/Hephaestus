@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -114,7 +115,7 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
         InstanceSettingsDTO initial = getSettings();
         assertThat(initial.silentModeEngaged()).isFalse();
 
-        String reason = "audit-proof-" + java.util.UUID.randomUUID();
+        String reason = "audit-proof-" + UUID.randomUUID();
         InstanceSettingsDTO engaged = patchSilentMode(Map.of("engaged", true, "reason", reason), null);
         assertThat(engaged.silentModeEngaged()).isTrue();
         assertThat(engaged.silentModeReason()).isEqualTo(reason);
@@ -267,7 +268,7 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .expectBody(InstanceSettingsDTO.class)
                 .returnResult()
                 .getResponseBody();
-        org.junit.jupiter.api.Assertions.assertNotNull(dto);
+        assertThat(dto).isNotNull();
         return dto;
     }
 

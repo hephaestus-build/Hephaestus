@@ -132,9 +132,9 @@ await test("every https router sets HSTS itself, not through the edge", () => {
 	// set for itself, so each router that terminates a public request carries it.
 	for (const stack of ["app", "core"] as const) {
 		const file = readFileSync(new URL(`../docker/compose.${stack}.yaml`, import.meta.url), "utf8");
-		const routers = [
-			...file.matchAll(/traefik\.http\.routers\.(?<name>https-[a-z-]+)\.rule=/gu),
-		].map((match) => match.groups?.name);
+		const routers = [...file.matchAll(/traefik\.http\.routers\.(?<name>https-[a-z-]+)\.rule=/gu)]
+			.map((match) => match.groups?.name)
+			.filter((name) => name !== undefined);
 		assert.ok(routers.length > 0, `${stack} declares no https router`);
 		for (const router of routers) {
 			const attached = new RegExp(`routers\\.${router}\\.middlewares=([^"\n]*)`, "u").exec(

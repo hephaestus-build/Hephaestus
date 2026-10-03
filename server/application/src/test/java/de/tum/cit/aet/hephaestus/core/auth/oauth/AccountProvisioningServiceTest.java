@@ -17,9 +17,12 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider.ProviderType;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Instant;
@@ -32,8 +35,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
@@ -54,11 +59,9 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     private AdminBootstrapPolicy adminBootstrapPolicy;
     private LoginProviderRepository loginProviderRepository;
     private GitProviderRegistry gitProviderRegistry;
-    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence writeFence =
-            mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence.class);
+    private final PersonDataWriteFence writeFence = mock(PersonDataWriteFence.class);
     private AccountProvisioningService service;
-    private final org.springframework.context.ApplicationEventPublisher events =
-            mock(org.springframework.context.ApplicationEventPublisher.class);
+    private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
 
     @BeforeEach
     void setUp() {
@@ -103,9 +106,9 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.resolveOrProvision(
                         "github", "new-native-subject", principal(), AuthIntentCookie.Intent.link(42L, null)))
-                .isInstanceOf(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class)
+                .isInstanceOf(OAuth2AuthenticationException.class)
                 .isInstanceOfSatisfying(
-                        org.springframework.security.oauth2.core.OAuth2AuthenticationException.class,
+                        OAuth2AuthenticationException.class,
                         exception -> assertThat(exception.getError().getErrorCode())
                                 .isEqualTo("identity_processing_suppressed"));
 
@@ -234,9 +237,9 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     }
 
     private void useOutlineProvider() {
-        var outlineProvider = new de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider();
+        var outlineProvider = new LoginProvider();
         outlineProvider.setRegistrationId("outline");
-        outlineProvider.setType(de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider.ProviderType.OUTLINE);
+        outlineProvider.setType(ProviderType.OUTLINE);
         outlineProvider.setBaseUrl("https://wiki.example.com");
         when(loginProviderRepository.findByRegistrationId("outline")).thenReturn(Optional.of(outlineProvider));
     }
@@ -340,7 +343,7 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.resolveOrProvision(
                         "github", "777", principal(), AuthIntentCookie.Intent.login(null, null)))
-                .isInstanceOf(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class);
+                .isInstanceOf(OAuth2AuthenticationException.class);
 
         verify(identityLinkRepository, never()).touchLastLogin(anyLong(), any());
         verify(identityLinkRepository, never()).linkExternalActorIfAbsent(anyLong(), anyLong());
@@ -454,11 +457,10 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
 
     @Test
     void erasedProviderIdentity_cannotCreateAnotherAccountOrAttachANewLink() {
-        when(writeFence.holdForWrite(java.util.List.of(
-                        new de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity(PROVIDER_ID, "42", null))))
+        when(writeFence.holdForWrite(List.of(new PersonIdentity(PROVIDER_ID, "42", null))))
                 .thenReturn(false);
         assertThatThrownBy(() -> service.resolveOrProvision("github", "42", mock(OAuth2User.class), null))
-                .isInstanceOf(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class);
+                .isInstanceOf(OAuth2AuthenticationException.class);
         verify(accountJitCreator, never()).create(any(), any());
         verify(identityLinkRepository, never()).save(any());
     }

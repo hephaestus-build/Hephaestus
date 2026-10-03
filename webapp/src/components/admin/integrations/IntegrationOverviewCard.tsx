@@ -4,7 +4,7 @@ import type { ConnectionSyncStatus, IntegrationCatalogEntry } from "@/api/types.
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { useNow } from "@/components/common/use-now";
-import { GithubIcon, GitlabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
+import { GitHubIcon, GitLabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,8 +29,8 @@ const DETAIL_ROUTE: Record<
 };
 
 const KIND_ICON: Record<IntegrationCatalogEntry["kind"], React.ReactNode> = {
-	GITHUB: <GithubIcon className="size-5" />,
-	GITLAB: <GitlabIcon className="size-5" />,
+	GITHUB: <GitHubIcon className="size-5" />,
+	GITLAB: <GitLabIcon className="size-5" />,
 	SLACK: <SlackIcon className="size-5" />,
 	OUTLINE: <OutlineIcon className="size-5" />,
 };

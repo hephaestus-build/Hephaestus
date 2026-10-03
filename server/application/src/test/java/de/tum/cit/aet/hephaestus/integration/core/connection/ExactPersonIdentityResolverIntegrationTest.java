@@ -7,39 +7,55 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest.State;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataStoreReceipt;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression suppression;
+    private PersonProcessingSuppression suppression;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository workspaces;
+    private WorkspaceRepository workspaces;
 
     @Autowired
-    private List<de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor> sourceOwners;
+    private List<PersonSourceIdentityContributor> sourceOwners;
 
     @Autowired
-    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private JdbcTemplate jdbc;
 
     @Autowired
     private ExactPersonIdentityResolver resolver;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.core.privacy.PersonDataService personData;
+    private PersonDataService personData;
 
     @Autowired
     private IdentityProviderRepository providers;
@@ -63,10 +79,10 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
                 Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
         var snapshot = personData.preview(administratorId, null, List.of(identity(provider, "42", null)));
         var export = personData.export(snapshot.request().getId());
-        java.util.Set<String> exportedStores = new java.util.TreeSet<>();
+        Set<String> exportedStores = new TreeSet<>();
         export.path("stores").propertyNames().forEach(exportedStores::add);
-        java.util.Map<String, Long> counts = new tools.jackson.databind.ObjectMapper()
-                .readValue(snapshot.request().getCountsJson(), new tools.jackson.core.type.TypeReference<>() {});
+        Map<String, Long> counts =
+                new ObjectMapper().readValue(snapshot.request().getCountsJson(), new TypeReference<>() {});
         assertThat(exportedStores).containsExactlyInAnyOrderElementsOf(counts.keySet());
         counts.forEach((store, count) -> assertThat(
                         (long) export.path("stores").path(store).size())
@@ -78,10 +94,8 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         personData.requestErasure(snapshot.request().getId(), administratorId, true);
         personData.run(snapshot.request().getId());
         var receipt = personData.get(snapshot.request().getId()).request();
-        assertThat(receipt.getState())
-                .isEqualTo(de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest.State.COMPLETE);
-        java.util.Map<String, Long> completed = de.tum.cit.aet.hephaestus.core.privacy.PersonDataStoreReceipt.counts(
-                new tools.jackson.databind.ObjectMapper(), receipt.getCompletedJson());
+        assertThat(receipt.getState()).isEqualTo(State.COMPLETE);
+        Map<String, Long> completed = PersonDataStoreReceipt.counts(new ObjectMapper(), receipt.getCompletedJson());
         assertThat(completed.keySet()).containsExactlyInAnyOrderElementsOf(exportedStores);
         assertThat(receipt.getScopeJson()).isNull();
         assertThat(receipt.getSelectionsJson()).isNull();
@@ -97,7 +111,7 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         String host = UUID.randomUUID() + ".example.com";
         var canonical = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, "https://" + host));
         var alias = providers.saveAndFlush(new IdentityProvider(
-                IdentityProviderType.GITLAB, "HTTPS://" + host.toUpperCase(java.util.Locale.ROOT) + ":443/"));
+                IdentityProviderType.GITLAB, "HTTPS://" + host.toUpperCase(Locale.ROOT) + ":443/"));
         var target = user(canonical, 42);
         var aliasTarget = user(alias, 42);
         var unrelated = user(alias, 84);
@@ -149,14 +163,13 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         var provider = provider(IdentityProviderType.GITLAB);
         var target = user(provider, 42);
         var other = user(provider, 84);
-        var seed = new de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder(jdbc);
-        var workspace = workspaces.saveAndFlush(
-                de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures.activeWorkspace("source-privacy"));
+        var seed = new SchemaRowSeeder(jdbc);
+        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("source-privacy"));
         long workspaceId = Objects.requireNonNull(workspace.getId());
         long repositoryId = 995201L;
         seed.insert(
                 "repository",
-                java.util.Map.of(
+                Map.of(
                         "id",
                         repositoryId,
                         "provider_id",
@@ -169,18 +182,10 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
                         "other/source-repository"));
         seed.insert(
                 "repository_to_monitor",
-                java.util.Map.of(
-                        "id",
-                        995201L,
-                        "native_id",
-                        repositoryId,
-                        "workspace_id",
-                        workspaceId,
-                        "generated_paths",
-                        "[]"));
+                Map.of("id", 995201L, "native_id", repositoryId, "workspace_id", workspaceId, "generated_paths", "[]"));
         seed.insert(
                 "connection",
-                java.util.Map.of(
+                Map.of(
                         "id",
                         995207L,
                         "workspace_id",
@@ -190,7 +195,7 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
                         "config",
                         "{\"serverUrl\":\"" + provider.getServerUrl() + "\"}"));
         for (long sourceId : List.of(995202L, 995203L, 995204L, 995205L)) {
-            var source = new java.util.HashMap<String, Object>(java.util.Map.of(
+            var source = new HashMap<String, Object>(Map.of(
                     "id",
                     sourceId,
                     "provider_id",
@@ -207,7 +212,7 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
                     sourceId,
                     "state",
                     "OPEN"));
-            source.putAll(java.util.Map.of(
+            source.putAll(Map.of(
                     "is_draft",
                     false,
                     "is_merged",
@@ -229,7 +234,7 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
                 target.getId());
         seed.insert(
                 "git_commit",
-                java.util.Map.of(
+                Map.of(
                         "id",
                         995206L,
                         "repository_id",
@@ -265,7 +270,7 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
                 .isFalse();
         personData.run(request.request().getId());
         assertThat(personData.get(request.request().getId()).request().getState())
-                .isEqualTo(de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest.State.COMPLETE);
+                .isEqualTo(State.COMPLETE);
         assertThat(users.findById(other.getId()).orElseThrow().getLogin()).doesNotStartWith("erased-");
         jdbc.update("DELETE FROM commit_pull_request WHERE commit_id=?", 995206L);
         jdbc.update("DELETE FROM git_commit WHERE id=?", 995206L);

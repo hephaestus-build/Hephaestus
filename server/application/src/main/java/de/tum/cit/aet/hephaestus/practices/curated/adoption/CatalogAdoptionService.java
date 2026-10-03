@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.curated.CuratedCatalogLock;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -43,9 +44,7 @@ public class CatalogAdoptionService {
     @Transactional
     public Practice adopt(WorkspaceContext context, String slug, String ifMatch) {
         catalogLock.acquire();
-        workspaceRepository
-                .findByIdForUpdate(context.id())
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", context.slug()));
+        lockWorkspace(context);
 
         CatalogAdoptionPlan plan;
         try {
@@ -71,9 +70,7 @@ public class CatalogAdoptionService {
     @Transactional
     public CatalogGroupAdoptionResult adoptGroup(WorkspaceContext context, String slug, String ifMatch) {
         catalogLock.acquire();
-        workspaceRepository
-                .findByIdForUpdate(context.id())
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", context.slug()));
+        lockWorkspace(context);
 
         CatalogGroupAdoptionPlan plan;
         try {
@@ -90,7 +87,7 @@ public class CatalogAdoptionService {
                 .map(practice -> practiceService.adoptPracticeFromCatalog(
                         context, practice.slug(), practice.definition(), practice.initialAutonomy()))
                 .toList();
-        List<Practice> moved = new java.util.ArrayList<>();
+        List<Practice> moved = new ArrayList<>();
         int position = 0;
         for (CatalogGroupPracticeActionDTO action : plan.actions()) {
             if (action.action() == CatalogGroupPracticeAction.MOVE_TO_GROUP) {
@@ -104,6 +101,13 @@ public class CatalogAdoptionService {
     }
 
     record CatalogGroupAdoptionResult(List<Practice> added, List<Practice> moved) {}
+
+    /** Serialises adoptions into one workspace; nothing here writes the workspace row itself. */
+    private void lockWorkspace(WorkspaceContext context) {
+        if (workspaceRepository.findByIdForUpdate(context.id()).isEmpty()) {
+            throw new EntityNotFoundException("Workspace", context.slug());
+        }
+    }
 
     private static void requireCurrentPlan(String ifMatch, String currentEtag) {
         EntityTagPrecondition precondition;

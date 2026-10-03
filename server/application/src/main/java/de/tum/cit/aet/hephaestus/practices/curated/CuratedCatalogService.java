@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -348,10 +349,10 @@ public class CuratedCatalogService {
         List<String> source = CuratedCatalogModel.practicesIn(before, sourceGroupSlug).stream()
                 .map(CatalogEntry::slug)
                 .filter(candidate -> !candidate.equals(slug))
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+                .collect(Collectors.toCollection(ArrayList::new));
         List<String> target = CuratedCatalogModel.practicesIn(before, groupSlug).stream()
                 .map(CatalogEntry::slug)
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+                .collect(Collectors.toCollection(ArrayList::new));
         if (position < 0 || position > target.size()) {
             throw new IllegalArgumentException("position exceeds the destination size");
         }

@@ -12,6 +12,7 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.eclipse.angus.mail.smtp.SMTPAddressFailedException;
@@ -138,12 +139,12 @@ public class EmailGateway {
 
     private static EmailDeliveryResult failed(EmailKind kind, String messageId, MailException e) {
         Outcome outcome = classify(e);
-        Throwable root = rootCause(e);
+        Throwable root = e.getMostSpecificCause();
         // The exception message can quote the recipient and the relay's reply; the class names are enough
         // to tell "connection refused" from "authentication failed" from "address rejected".
         log.warn(
                 "email: delivery {} kind={} messageId={} cause={} rootCause={}",
-                outcome.name().toLowerCase(java.util.Locale.ROOT),
+                outcome.name().toLowerCase(Locale.ROOT),
                 kind.tag(),
                 messageId,
                 e.getClass().getSimpleName(),
@@ -183,19 +184,16 @@ public class EmailGateway {
                     && sendFailed.getInvalidAddresses().length > 0) {
                 return true;
             }
-            if (current.getCause() == current) {
+            if (causesItself(current)) {
                 break;
             }
         }
         return false;
     }
 
-    private static Throwable rootCause(Throwable throwable) {
-        Throwable current = throwable;
-        while (current.getCause() != null && current.getCause() != current) {
-            current = current.getCause();
-        }
-        return current;
+    @SuppressWarnings("ReferenceEquality") // cycle guard: a Jakarta Mail next-exception chain can point at itself
+    private static boolean causesItself(Throwable failure) {
+        return failure.getCause() == failure;
     }
 
     /** Strict RFC 822 parse of exactly one mailbox; CR/LF or a second address fails it. */

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static de.tum.cit.aet.hephaestus.testconfig.TestEntities.agentJob;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -199,12 +200,10 @@ class ApprovedFeedbackDeliveryListenerTest {
                         .build()));
         when(eligibility.isEligible(7L, feedback.getId())).thenReturn(true);
         when(jobRepository.findByIdAndWorkspaceId(feedback.getAgentJobId(), 7L)).thenReturn(Optional.of(job));
-        org.mockito.Mockito.lenient()
-                .when(dispatchService.projectApproved(any(), any()))
-                .thenAnswer(invocation -> {
-                    ((Runnable) invocation.getArgument(1)).run();
-                    return true;
-                });
+        lenient().when(dispatchService.projectApproved(any(), any())).thenAnswer(invocation -> {
+            ((Runnable) invocation.getArgument(1)).run();
+            return true;
+        });
         ApprovedFeedbackDeliveryListener listener = new ApprovedFeedbackDeliveryListener(
                 feedbackRepository,
                 approvalRepository,

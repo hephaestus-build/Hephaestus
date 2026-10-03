@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import java.util.Arrays;
 import java.util.List;
 import org.springframework.util.AntPathMatcher;
 
@@ -25,7 +26,7 @@ public final class GeneratedPaths {
                             || value.contains("\\")
                             || value.contains("{")
                             || value.contains("}")
-                            || java.util.Arrays.asList(value.split("/", -1)).contains("..")) {
+                            || Arrays.asList(value.split("/", -1)).contains("..")) {
                         throw new InvalidReviewCoverageException(
                                 "Use a repository-relative generated-path glob of 1 to 512 characters; no negation, parent paths, backslashes or URI variables");
                     }

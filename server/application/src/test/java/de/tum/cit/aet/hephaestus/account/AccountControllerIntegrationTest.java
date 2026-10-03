@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /** Uses the real issuer and decoder: the JWT identifies an account, not an SCM actor. */
@@ -113,7 +114,7 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
                 .post()
                 .uri("/user/settings")
                 .headers(headers -> headers.setBearerAuth(seeded.token()))
-                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UserSettingsDTO(false))
                 .exchange()
                 .expectStatus()
@@ -200,7 +201,7 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
         link = identityLinkRepository.save(link);
 
         HephaestusJwtIssuer.Token token = jwtIssuer.issue(
-                java.util.Objects.requireNonNull(account.getId()), TokenConstraints.session(null, Instant.now()), null);
+                Objects.requireNonNull(account.getId()), TokenConstraints.session(null, Instant.now()), null);
         return new SeededIdentity(
                 token.value(),
                 Objects.requireNonNull(link.getId(), "Persisted identity link must have an ID"),

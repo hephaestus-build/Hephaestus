@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.stream.StreamSupport;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
@@ -194,10 +195,10 @@ public record AgentJobDTO(
         if (snapshot == null || !snapshot.has("generatedPaths")) return null;
         var policy = snapshot.path("generatedPaths");
         return new GeneratedPathReviewDTO(
-                java.util.stream.StreamSupport.stream(policy.path("patterns").spliterator(), false)
+                StreamSupport.stream(policy.path("patterns").spliterator(), false)
                         .map(JsonNode::asString)
                         .toList(),
-                java.util.stream.StreamSupport.stream(policy.path("paths").spliterator(), false)
+                StreamSupport.stream(policy.path("paths").spliterator(), false)
                         .map(JsonNode::asString)
                         .toList());
     }

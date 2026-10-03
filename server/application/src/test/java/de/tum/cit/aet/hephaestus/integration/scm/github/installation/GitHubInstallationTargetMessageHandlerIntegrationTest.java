@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,7 +80,7 @@ class GitHubInstallationTargetMessageHandlerIntegrationTest extends BaseIntegrat
         // not from legacy Workspace columns.
         WorkspaceTestFixtures.WorkspaceBuilder builder = WorkspaceTestFixtures.installationWorkspace(
                         installationId, login)
-                .withSlug(login.toLowerCase())
+                .withSlug(login.toLowerCase(Locale.ROOT))
                 .withAccountType(AccountType.ORG);
         Workspace saved = WorkspaceTestFixtures.persistInstallationWorkspace(
                 workspaceRepository, connectionRepository, builder, installationId);

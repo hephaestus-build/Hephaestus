@@ -6,6 +6,7 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaField;
 import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.lang.ArchCondition;
+import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
@@ -61,7 +62,7 @@ class ConfigAuditSnapshotArchTest extends HephaestusArchitectureTest {
     }
 
     /** Exposed so {@code ConfigAuditSnapshotSecretDetectionTest} can run it against fixtures. */
-    static com.tngtech.archunit.lang.ArchRule secretLikeComponentRule() {
+    static ArchRule secretLikeComponentRule() {
         return classes()
                 .that()
                 .implement(ConfigAuditSnapshot.class)

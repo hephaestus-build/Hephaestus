@@ -385,8 +385,6 @@ public class WorkspaceMembershipService {
         return hiddenFormerMemberRepository.deleteByWorkspaceIdAndUserId(workspaceId, userId) > 0;
     }
 
-    // Hidden member methods
-
     /**
      * Toggle the hidden flag for a workspace member.
      *
@@ -426,8 +424,6 @@ public class WorkspaceMembershipService {
     public Set<Long> getHiddenMemberIds(Long workspaceId) {
         return workspaceMembershipRepository.findHiddenUserIdsByWorkspaceId(workspaceId);
     }
-
-    // Query methods for controller
 
     /**
      * Gets a workspace membership by workspace and user ID.

@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.core.auth.AuthSessionService;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientKind;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.util.List;
@@ -47,12 +49,12 @@ public class SessionWebController {
      * @param client    what signed in
      */
     public record SessionViewDTO(
-            UUID jti,
+            @NonNull UUID jti,
             @Nullable Instant issuedAt,
-            Instant expiresAt,
+            @NonNull Instant expiresAt,
             @Nullable String userAgent,
             @Nullable String ip,
-            boolean current,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean current,
             @NonNull SessionClient client) {}
 
     @GetMapping

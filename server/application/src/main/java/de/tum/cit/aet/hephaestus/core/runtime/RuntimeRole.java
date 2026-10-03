@@ -5,56 +5,28 @@ import java.util.List;
 import org.springframework.core.env.Environment;
 
 /**
- * The slices of one JAR a container can boot, and the {@code @ConditionalOnProperty} keys that gate
- * subsystems by them. Single source of truth so role gating cannot drift between the property file,
- * the ArchUnit boundary test, the smoke test and what a process reports about itself.
- *
- * <p>See ADR 0005 (two-role baseline) and ADR 0008 (third role: webhook). Defaults: every
- * role enabled (single-JVM monolith); production deploys flip the appropriate flag to
- * {@code false} per pod via the corresponding profile YAML.
+ * The slices of one JAR a container can boot, and the flag that switches each off. Every role defaults
+ * to on, so a JAR started with no flags is the single-JVM monolith; a production container turns off
+ * the roles it does not run (ADR 0005, ADR 0008). Beans gate on {@link ConditionalOnServerRole},
+ * {@link ConditionalOnWorkerRole} or {@link ConditionalOnWebhookRole}.
  */
 public enum RuntimeRole {
     SERVER(RuntimeRole.SERVER_PROPERTY),
     WORKER(RuntimeRole.WORKER_PROPERTY),
     WEBHOOK(RuntimeRole.WEBHOOK_PROPERTY);
 
-    /**
-     * Property prefix for every runtime role flag. Concrete keys are
-     * {@code hephaestus.runtime.<role>.enabled}.
-     */
     public static final String PROPERTY_PREFIX = "hephaestus.runtime";
 
-    /**
-     * Wired property key for the server-role gate. Gates {@code ServerSchedulingConfig},
-     * {@code IntegrationNatsConsumer}, {@code WorkspaceStartupListener}, the user-facing
-     * {@code core.auth} web/auth surface and {@code WorkspaceContextFilter} (both via
-     * {@link ConditionalOnServerRole}). Authoritative list lives in {@code RuntimeRoleBoundaryTest}.
-     */
     public static final String SERVER_PROPERTY = PROPERTY_PREFIX + ".server.enabled";
 
-    /**
-     * Wired property key for the worker-role gate. Gates {@code DockerSandboxConfiguration}
-     * and the poll-based {@code AgentJobExecutor}.
-     */
     public static final String WORKER_PROPERTY = PROPERTY_PREFIX + ".worker.enabled";
 
-    /**
-     * Wired property key for the webhook-role gate. Gates webhook HTTP ingress,
-     * inbound signature verification, JetStream publishing/bootstrap, health
-     * indicators, and graceful-shutdown lifecycle.
-     *
-     * <p>The {@code webhook-server} production container deploys with this flag {@code true}
-     * and {@link #SERVER_PROPERTY} / {@link #WORKER_PROPERTY} {@code false} so it runs
-     * webhook ingestion in isolation from the {@code application-server} container —
-     * giving restart independence (push events from GitHub/GitLab are not manually
-     * redeliverable). See ADR 0008.
-     */
     public static final String WEBHOOK_PROPERTY = PROPERTY_PREFIX + ".webhook.enabled";
 
     /**
-     * Property key enabling the agent job poller, which additionally requires
-     * {@link #WORKER_PROPERTY}. The LLM proxy gates on {@link #WORKER_PROPERTY} alone, so it is always
-     * up wherever jobs can run — it is the only LLM credential path a job has.
+     * Enables agent jobs, off when unset: submitting them on any role, and polling them where
+     * {@link #WORKER_PROPERTY} is also on. The LLM proxy gates on {@link #WORKER_PROPERTY} alone, so it
+     * is up wherever jobs can run — it is the only LLM credential path a job has.
      */
     public static final String AGENT_ENABLED_PROPERTY = "hephaestus.agent.enabled";
 

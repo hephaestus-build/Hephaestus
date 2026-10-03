@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubTeamEventDTO;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -240,7 +241,7 @@ public class GitHubTeamProcessor {
             log.debug("Team privacy is null, using VISIBLE as default");
             return Team.Privacy.VISIBLE;
         }
-        return switch (privacy.toLowerCase()) {
+        return switch (privacy.toLowerCase(Locale.ROOT)) {
             case "secret" -> Team.Privacy.SECRET;
             // "visible" from GraphQL, "closed" from REST API - both map to VISIBLE
             case "visible", "closed" -> Team.Privacy.VISIBLE;

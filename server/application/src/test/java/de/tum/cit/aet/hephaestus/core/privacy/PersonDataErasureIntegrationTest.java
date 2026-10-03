@@ -3,41 +3,96 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import de.tum.cit.aet.hephaestus.account.*;
-import de.tum.cit.aet.hephaestus.agent.*;
+import de.tum.cit.aet.hephaestus.account.UserPreferences;
+import de.tum.cit.aet.hephaestus.account.UserPreferencesRepository;
+import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
-import de.tum.cit.aet.hephaestus.agent.job.*;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobExecutor;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobLifecycleService;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChatService;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
-import de.tum.cit.aet.hephaestus.core.auth.domain.*;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
-import de.tum.cit.aet.hephaestus.integration.core.connection.*;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
-import de.tum.cit.aet.hephaestus.integration.core.oauth.state.*;
+import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateNonceStore;
+import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.*;
-import de.tum.cit.aet.hephaestus.integration.slack.domain.*;
-import de.tum.cit.aet.hephaestus.mentor.*;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessage;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.mentor.ChatMessage;
+import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
+import de.tum.cit.aet.hephaestus.mentor.ChatThread;
+import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
-import de.tum.cit.aet.hephaestus.practices.feedback.*;
-import de.tum.cit.aet.hephaestus.practices.model.*;
+import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
+import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
+import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
-import de.tum.cit.aet.hephaestus.testconfig.*;
-import de.tum.cit.aet.hephaestus.workspace.*;
+import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.*;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -46,7 +101,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
@@ -177,11 +234,11 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                         .asString())
                 .isEqualTo("legacy-11");
         assertThatThrownBy(() -> personData.requestErasure(preview.request().getId(), fixture.administratorId(), false))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("un-deliver runbook");
         jdbc.update("UPDATE agent_job SET delivery_comment_id='legacy-12' WHERE id=?", fixture.jobId());
         assertThatThrownBy(() -> personData.requestErasure(preview.request().getId(), fixture.administratorId(), true))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("preview scope changed");
     }
 
@@ -191,7 +248,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         jdbc.update("UPDATE agent_job SET delivery_comment_id='legacy-11' WHERE id=?", fixture.jobId());
         assertThatThrownBy(() -> personData.preview(
                         fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null))))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(fixture.jobId().toString())
                 .hasMessageContaining("no exact reviewed-work inspection locator");
         assertThat(jdbc.queryForObject(
@@ -234,7 +291,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(exported.get(0).path("write_started").asBoolean()).isTrue();
         assertThat(exported.get(0).path("inline_write_started").asBoolean()).isTrue();
         assertThatThrownBy(() -> personData.requestErasure(preview.request().getId(), fixture.administratorId(), false))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("un-deliver runbook");
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM feedback_dispatch WHERE id=?", Long.class, fixture.dispatchId()))
@@ -253,10 +310,10 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 WHERE id=?
                 """, fixture.dispatchId());
         assertThatThrownBy(() -> personData.export(preview.request().getId()))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("preview scope changed");
         assertThatThrownBy(() -> personData.requestErasure(preview.request().getId(), fixture.administratorId(), true))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("preview scope changed");
         assertThat(personData.get(preview.request().getId()).request().getState())
                 .isEqualTo(PersonDataRequest.State.PREVIEW);
@@ -286,7 +343,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 fixture.dispatchId());
         assertThatThrownBy(() -> personData.preview(
                         fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null))))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(fixture.dispatchId().toString())
                 .hasMessageContaining("no exact reviewed-work locator");
         assertThat(jdbc.queryForObject(
@@ -296,8 +353,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 .isZero();
     }
 
-    private ExternalInspectionFixture externalInspectionFixture(
-            @org.jspecify.annotations.Nullable String reviewedWorkUrl) {
+    private ExternalInspectionFixture externalInspectionFixture(@Nullable String reviewedWorkUrl) {
         var provider = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://privacy-gitlab.example.com"));
         var target = users.saveAndFlush(TestUserFactory.createUser(42L, "display-only", provider));
@@ -346,10 +402,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         Account targetAccount = accounts.saveAndFlush(new Account("Target"));
         Account otherAccount = accounts.saveAndFlush(new Account("Other"));
         var targetOAuthBinding = new OAuthStateService.StateBinding(
-                1L,
-                IntegrationKind.GITHUB,
-                Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS),
-                targetAccount.getId());
+                1L, IntegrationKind.GITHUB, Instant.now().truncatedTo(ChronoUnit.SECONDS), targetAccount.getId());
         oauthNonces.issue(
                 "nonce-credential-canary",
                 1L,
@@ -499,7 +552,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(export.path("stores").path("feedback_placement").toString())
                 .contains("posted_comment_url", "https://team-");
         assertThatThrownBy(() -> personData.requestErasure(requestId, administratorId, false))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("un-deliver runbook");
         assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.PREVIEW);
         assertThat(counts.get("observation")).isEqualTo(4L);
@@ -686,7 +739,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                         null,
                         List.of(new PersonIdentity(Objects.requireNonNull(scm.getId()), "42", null)),
                         List.of(target.getId()))))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("different workspace")
                 .hasMessageContaining("exact delivery reference");
         assertThat(jdbc.queryForObject(
@@ -706,10 +759,10 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         PersonIdentity gitlabKey = new PersonIdentity(Objects.requireNonNull(scm.getId()), "42", null);
         PersonIdentity slackKey = new PersonIdentity(Objects.requireNonNull(slack.getId()), "UCACHE", "TCACHE");
         assertThatThrownBy(() -> resolver.resolve(null, List.of(gitlabKey)))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("exact Slack identity");
         assertThatThrownBy(() -> resolver.resolve(null, List.of(slackKey)))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("exact SCM provider identity");
         assertThat(resolver.resolve(null, List.of(gitlabKey, slackKey)).userIds())
                 .containsExactly(target.getId());
@@ -729,7 +782,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         administrator.setAppRole(Account.AppRole.USER);
         accounts.saveAndFlush(administrator);
         assertThatThrownBy(() -> personData.requestErasure(preview.request().getId(), administratorId, true))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("403");
         assertThat(personData.get(preview.request().getId()).request().getState())
                 .isEqualTo(PersonDataRequest.State.PREVIEW);
@@ -750,7 +803,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         var preview = personData.preview(personId, personId, List.of());
         UUID requestId = preview.request().getId();
         assertThatThrownBy(() -> personData.requestErasure(requestId, personId, true))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Another administrator");
         personData.requestErasure(requestId, administratorId, true);
         personData.run(requestId);
@@ -870,11 +923,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private void link(
-            Account account,
-            IdentityProvider provider,
-            String subject,
-            @org.jspecify.annotations.Nullable String team,
-            @org.jspecify.annotations.Nullable Long actor) {
+            Account account, IdentityProvider provider, String subject, @Nullable String team, @Nullable Long actor) {
         IdentityLink link = new IdentityLink();
         link.setAccount(account);
         link.setProviderId(Objects.requireNonNull(provider.getId()));
@@ -930,11 +979,10 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
 
     private record ConversationFeedbackCopy(UUID messageId, UUID replyId) {}
 
-    private List<tools.jackson.databind.JsonNode> withoutErasedCopies(
-            String store, List<tools.jackson.databind.JsonNode> rows, List<ConversationFeedbackCopy> copies) {
+    private List<JsonNode> withoutErasedCopies(
+            String store, List<JsonNode> rows, List<ConversationFeedbackCopy> copies) {
         if (!store.equals("chat_message")) return rows;
-        var copiedIds =
-                copies.stream().map(copy -> copy.messageId().toString()).collect(java.util.stream.Collectors.toSet());
+        var copiedIds = copies.stream().map(copy -> copy.messageId().toString()).collect(Collectors.toSet());
         return rows.stream()
                 .filter(row -> !copiedIds.contains(row.path("id").asString()))
                 .toList();
@@ -1007,7 +1055,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         ChatThread chatThread = new ChatThread();
         chatThread.setSessionJsonl(
                 "{\"type\":\"toolResult\",\"body\":\"runtime-credential-canary unrelated-profile-canary\"}"
-                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        .getBytes(StandardCharsets.UTF_8));
         chatThread.setId(UUID.randomUUID());
         chatThread.setWorkspace(workspace);
         chatThread.setUser(owner);

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueType;
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -46,7 +47,7 @@ public record GitHubIssueTypeDTO(
                 issueType.getId(),
                 issueType.getName(),
                 issueType.getDescription(),
-                issueType.getColor() != null ? issueType.getColor().name().toLowerCase() : null,
+                issueType.getColor() != null ? issueType.getColor().name().toLowerCase(Locale.ROOT) : null,
                 issueType.getIsEnabled());
     }
 }

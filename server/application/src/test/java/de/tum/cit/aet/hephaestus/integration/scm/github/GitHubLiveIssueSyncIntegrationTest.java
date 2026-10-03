@@ -54,9 +54,8 @@ class GitHubLiveIssueSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
         var createdIssue = fixtureService.createIssue(repoInfo.nodeId(), issueTitle, issueBody);
 
         // 3. Sync repository first
-        repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
-                .orElseThrow();
+        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+                .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 
@@ -84,9 +83,8 @@ class GitHubLiveIssueSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
         var createdIssue = createIssueWithComment(repository);
 
         // 2. Sync repository first
-        repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
-                .orElseThrow();
+        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+                .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 
@@ -143,9 +141,8 @@ class GitHubLiveIssueSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
         var issue2 = fixtureService.createIssue(repoInfo.nodeId(), issueTitle2, "Second issue body");
 
         // 3. Sync repository first
-        repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
-                .orElseThrow();
+        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+                .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 

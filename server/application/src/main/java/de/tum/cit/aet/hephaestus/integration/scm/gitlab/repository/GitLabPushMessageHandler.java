@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPus
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Objects;
@@ -227,7 +228,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
         }
         try {
             commitMergeRequestLinker.linkCommits(
-                    scopeId, repository, OffsetDateTime.now().minusHours(1));
+                    scopeId, repository, OffsetDateTime.now(ZoneOffset.UTC).minusHours(1));
         } catch (Exception e) {
             log.debug("Push-time commit→MR link failed: repoId={}, error={}", repository.getId(), e.getMessage());
         }

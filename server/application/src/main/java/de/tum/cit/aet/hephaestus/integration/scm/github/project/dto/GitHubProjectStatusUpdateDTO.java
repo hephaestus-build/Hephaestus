@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Locale;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 
@@ -50,7 +51,7 @@ public record GitHubProjectStatusUpdateDTO(
         if (status == null) {
             return null;
         }
-        return switch (status.toUpperCase()) {
+        return switch (status.toUpperCase(Locale.ROOT)) {
             case "INACTIVE" -> ProjectStatusUpdate.Status.INACTIVE;
             case "ON_TRACK" -> ProjectStatusUpdate.Status.ON_TRACK;
             case "AT_RISK" -> ProjectStatusUpdate.Status.AT_RISK;

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.graphql;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -26,7 +27,7 @@ import org.springframework.core.io.Resource;
 class FragmentMergingDocumentSourceTest extends BaseUnitTest {
 
     private static Resource byteResource(String content, String description) {
-        return new ByteArrayResource(content.getBytes()) {
+        return new ByteArrayResource(content.getBytes(UTF_8)) {
             @Override
             public String getDescription() {
                 return description;
@@ -82,18 +83,8 @@ class FragmentMergingDocumentSourceTest extends BaseUnitTest {
 
         @Test
         void shouldResolveTransitiveFragmentDependencies() {
-            // Arrange — FragA references ...FragB, so loading a doc that uses ...FragA
-            // should pull in both FragA and FragB
-            String fragments = """
-                fragment FragA on Type1 { field1 creator { ...FragB } }
-                fragment FragB on Type2 { field2 }
-                fragment FragC on Type3 { field3 }
-                """;
-            // Create a simple operation document that uses ...FragA
-            Resource opDir = byteResource("query TestOp { node { ...FragA } }", "test-operations");
-            // Use the fragment resource approach but we need an actual file on the classpath.
-            // Instead, test the transitive resolution via the real operations directory
-            // and a document that references ProjectV2ItemFields (which references ActorFieldsCompact)
+            // Arrange — operations are loaded from a classpath directory, so the transitive case runs on the
+            // real GetProjectItems document: it uses ...ProjectV2ItemFields, which uses ...ActorFieldsCompact
             FragmentMergingDocumentSource source = new FragmentMergingDocumentSource(
                     List.of(new ClassPathResource("graphql/github/operations/")),
                     List.of(".graphql"),

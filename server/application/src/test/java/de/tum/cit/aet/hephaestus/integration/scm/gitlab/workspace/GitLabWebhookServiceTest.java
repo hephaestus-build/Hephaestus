@@ -6,6 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -26,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.GroupInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitLabTokenLifecycleService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -46,7 +51,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -76,8 +80,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     private ConnectionService connectionService;
 
     @Mock
-    private ObjectProvider<de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitlabTokenLifecycleService>
-            tokenLifecycle;
+    private ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle;
 
     private GitLabWebhookService webhookService;
     private Workspace workspace;
@@ -132,17 +135,15 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
     /** The group's hooks as GitLab keeps them: listed, fetched, created and deleted through the client. */
     private void fakeGroupHooks() {
-        Mockito.lenient().when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-        Mockito.lenient()
-                .when(webhookClient.lookupGroup(1L, "my-org"))
-                .thenReturn(new GroupInfo(42L, "My Org", "my-org"));
-        Mockito.lenient().when(webhookClient.listGroupWebhooks(1L, 42L)).thenAnswer(inv -> List.copyOf(hooks));
-        Mockito.lenient()
+        lenient().when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
+        lenient().when(webhookClient.lookupGroup(1L, "my-org")).thenReturn(new GroupInfo(42L, "My Org", "my-org"));
+        lenient().when(webhookClient.listGroupWebhooks(1L, 42L)).thenAnswer(inv -> List.copyOf(hooks));
+        lenient()
                 .when(webhookClient.getGroupWebhook(eq(1L), eq(42L), anyLong()))
                 .thenAnswer(inv -> hooks.stream()
                         .filter(hook -> hook.id() == (long) inv.getArgument(2))
                         .findFirst());
-        Mockito.lenient()
+        lenient()
                 .when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
                 .thenAnswer(inv -> {
                     WebhookConfig config = inv.getArgument(2);
@@ -151,7 +152,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                     hooks.add(hook);
                     return hook;
                 });
-        Mockito.lenient()
+        lenient()
                 .doAnswer(inv -> hooks.removeIf(hook -> hook.id() == (long) inv.getArgument(2)))
                 .when(webhookClient)
                 .deregisterGroupWebhook(eq(1L), eq(42L), anyLong());
@@ -178,10 +179,10 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     void setUp() {
         routeCredential = credential(KEY, null);
         webhookService = service(routeCredential);
-        Connection connection = Mockito.mock(Connection.class);
-        Mockito.lenient().when(connection.getId()).thenReturn(CONNECTION_ID);
-        Mockito.lenient().when(connection.getConfig()).thenAnswer(inv -> gitLabConfigs.get(1L));
-        Mockito.lenient()
+        Connection connection = mock(Connection.class);
+        lenient().when(connection.getId()).thenReturn(CONNECTION_ID);
+        lenient().when(connection.getConfig()).thenAnswer(inv -> gitLabConfigs.get(1L));
+        lenient()
                 .when(connectionService.findActive(anyLong(), eq(IntegrationKind.GITLAB)))
                 .thenAnswer(inv -> gitLabConfigs.containsKey((long) inv.getArgument(0))
                         ? Optional.of(connection)
@@ -209,25 +210,21 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         // lenient() — each Nested test exercises a different code path, so a shared setUp stub may go
         // unused per test, which strict-stub mode would otherwise reject.
-        Mockito.lenient()
-                .when(connectionService.findActiveProviderKind(anyLong()))
-                .thenAnswer(inv -> {
-                    long id = inv.getArgument(0);
-                    return gitLabConfigs.containsKey(id) ? Optional.of(IntegrationKind.GITLAB) : Optional.empty();
-                });
-        Mockito.lenient()
-                .when(connectionService.findActiveGitLabConfig(anyLong()))
-                .thenAnswer(inv -> {
-                    long id = inv.getArgument(0);
-                    return Optional.ofNullable(gitLabConfigs.get(id));
-                });
-        Mockito.lenient()
+        lenient().when(connectionService.findActiveProviderKind(anyLong())).thenAnswer(inv -> {
+            long id = inv.getArgument(0);
+            return gitLabConfigs.containsKey(id) ? Optional.of(IntegrationKind.GITLAB) : Optional.empty();
+        });
+        lenient().when(connectionService.findActiveGitLabConfig(anyLong())).thenAnswer(inv -> {
+            long id = inv.getArgument(0);
+            return Optional.ofNullable(gitLabConfigs.get(id));
+        });
+        lenient()
                 .when(connectionService.findActiveBearerToken(anyLong(), eq(IntegrationKind.GITLAB)))
                 .thenAnswer(inv -> {
                     long id = inv.getArgument(0);
                     return Optional.ofNullable(gitLabBearerTokens.get(id));
                 });
-        Mockito.lenient()
+        lenient()
                 .when(connectionService.updateConfig(anyLong(), eq(IntegrationKind.GITLAB), any()))
                 .thenAnswer(this::applyUpdateConfig);
     }
@@ -350,7 +347,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             assertThat(result.webhookId()).isEqualTo(100L);
             assertThat(hooks).extracting(WebhookInfo::url).containsExactly(connectionUrl(rotating));
-            InOrder order = Mockito.inOrder(webhookClient, connectionService);
+            InOrder order = inOrder(webhookClient, connectionService);
             order.verify(webhookClient).registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class));
             order.verify(connectionService).updateConfig(eq(1L), eq(IntegrationKind.GITLAB), any());
             order.verify(webhookClient).deregisterGroupWebhook(1L, 42L, 99L);
@@ -577,9 +574,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
 
-            Mockito.doThrow(new RuntimeException("API error"))
-                    .when(webhookClient)
-                    .deregisterGroupWebhook(1L, 42L, 99L);
+            doThrow(new RuntimeException("API error")).when(webhookClient).deregisterGroupWebhook(1L, 42L, 99L);
 
             webhookService.deregisterWebhook(workspace);
 
@@ -649,7 +644,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @Test
         void deletesByConnectionIdRegardlessOfState() {
-            var connection = Mockito.mock(de.tum.cit.aet.hephaestus.integration.core.connection.Connection.class);
+            var connection = mock(Connection.class);
             when(connection.getConfig())
                     .thenReturn(new ConnectionConfig.GitLabConfig(
                             "https://gitlab.com",
@@ -670,7 +665,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @Test
         void bestEffortSwallowsAuthFailurePostPurge() {
-            var connection = Mockito.mock(de.tum.cit.aet.hephaestus.integration.core.connection.Connection.class);
+            var connection = mock(Connection.class);
             when(connection.getConfig())
                     .thenReturn(new ConnectionConfig.GitLabConfig(
                             "https://gitlab.com",
@@ -683,7 +678,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             when(connectionService.findBearerToken(1L, 7L))
                     .thenReturn(Optional.of(new BearerToken("glpat-token", null)));
             when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
-            Mockito.doThrow(new IllegalStateException("Scope 1 is not active"))
+            doThrow(new IllegalStateException("Scope 1 is not active"))
                     .when(webhookClient)
                     .deregisterGroupWebhookWithCredentials("https://gitlab.com", "glpat-token", 42L, 99L);
 
@@ -695,7 +690,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @Test
         void preparedDeregistrationCallsGitLabOnlyWhenRun() {
-            var connection = Mockito.mock(de.tum.cit.aet.hephaestus.integration.core.connection.Connection.class);
+            var connection = mock(Connection.class);
             when(connection.getConfig())
                     .thenReturn(new ConnectionConfig.GitLabConfig(
                             "https://gitlab.com",

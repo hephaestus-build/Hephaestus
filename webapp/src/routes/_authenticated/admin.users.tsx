@@ -130,7 +130,7 @@ function AdminUsersPage() {
 			toast.success(
 				count === 0
 					? "No active sessions to sign out."
-					: `Signed out — revoked ${count} session${count === 1 ? "" : "s"}.`,
+					: `Revoked ${count} session${count === 1 ? "" : "s"}.`,
 			);
 			setSignOutTarget(null);
 		},
@@ -261,7 +261,7 @@ function AdminUsersPage() {
 							Force sign-out {signOutTarget?.user.displayName ?? "this user"}?
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							This revokes all of the account’s active sessions immediately — they’ll have to sign
+							This revokes all of the account’s active sessions immediately, so they’ll have to sign
 							in again. This can’t be undone.
 						</AlertDialogDescription>
 					</AlertDialogHeader>

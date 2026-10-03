@@ -164,7 +164,7 @@ export const HephaestusUpdateAvailable: Story = {
 			status: {
 				...initialData.status,
 				state: "UPDATE_WAITING" as const,
-				changeKind: "DETECTION" as const,
+				changeKind: "REVIEW" as const,
 			},
 			shipped: {
 				name: "Say what changed and why",

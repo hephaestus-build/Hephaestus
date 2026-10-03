@@ -25,7 +25,7 @@ public final class CronSchedules {
     @Nullable
     public static Instant nextRun(String cron) {
         try {
-            LocalDateTime next = CronExpression.parse(cron).next(LocalDateTime.now());
+            LocalDateTime next = CronExpression.parse(cron).next(LocalDateTime.now(ZoneId.systemDefault()));
             return next == null ? null : next.atZone(ZoneId.systemDefault()).toInstant();
         } catch (IllegalArgumentException e) {
             log.debug("Unparseable sync cron '{}': {}", cron, e.getMessage());
@@ -49,7 +49,7 @@ public final class CronSchedules {
     public static Duration interval(String cron) {
         try {
             CronExpression expression = CronExpression.parse(cron);
-            LocalDateTime first = expression.next(LocalDateTime.now());
+            LocalDateTime first = expression.next(LocalDateTime.now(ZoneId.systemDefault()));
             if (first == null) {
                 return null;
             }

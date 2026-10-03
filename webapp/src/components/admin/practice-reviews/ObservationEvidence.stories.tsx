@@ -184,20 +184,15 @@ export const LineNumbersOnlyWhereTheyAreReal: Story = {
 	},
 };
 
-/**
- * The server accepts a citation with no quote from exactly one detector, so when that detector ran
- * the reason for the blank is knowable and can be said instead of shown as an empty panel. The
- * location is still shown, because that is the part an operator can act on.
- */
+/** A withheld quote still shows its location, because that is the part an operator can act on. */
 export const RedactedQuote: Story = {
 	args: {
-		detector: "secret-diff-scanner",
 		evidence: {
 			citations: [citation("scm.pull-request.diff", { quote: undefined, quoteRedacted: true })],
 		},
 	},
 	play: async ({ canvas, canvasElement }) => {
-		canvas.getByText(/This looked like a credential/u);
+		canvas.getByText("Not quoted. The passage was withheld, so only its location was kept.");
 		canvas.getByText("webapp/src/components/admin/practice-reviews/ReviewRow.tsx:12–13");
 		await expect(canvasElement.querySelector("pre")).toBeNull();
 	},

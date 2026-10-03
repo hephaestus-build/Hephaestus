@@ -22,18 +22,6 @@
 		"storybook-static"
 	],
 
-	"rules": {
-		// Both want `toSorted`/`toReversed`; copy before sorting an array a caller can observe.
-		"unicorn/no-array-sort": "off",
-		"unicorn/no-array-reverse": "off",
-		// Cyclomatic complexity counts every `&&`, `??` and `?.` in JSX, as in the webapp.
-		"complexity": ["error", { "max": 40 }],
-		// `webapp/AGENTS.md` § File naming: a file that exports a component is PascalCase.
-		"unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }],
-		// A semantic tag can carry extra form/list semantics; axe proves the rendered role.
-		"jsx-a11y/prefer-tag-over-role": "off"
-	},
-
 	"overrides": [
 		{
 			// The configs reach the webapp's lint loader and the root manifest, across the tree boundary
@@ -55,11 +43,6 @@
 					}
 				]
 			}
-		},
-		{
-			// Playwright names its fixture callback `use`, which the React plugin reads as the hook.
-			"files": ["e2e/**"],
-			"rules": { "react-hooks/rules-of-hooks": "off" }
 		}
 	]
 }

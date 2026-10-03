@@ -9,7 +9,7 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Stable cross-run identity of a {@link Feedback} delivery <em>unit</em> (ADR 0021, F-16) — the join key
+ * Stable cross-run identity of a {@link Feedback} delivery <em>unit</em> (ADR 0021) — the join key
  * that lets a re-review SUPERSEDE the prior delivery and edit its comment in place instead of posting a
  * fresh one.
  *
@@ -94,15 +94,7 @@ public final class FeedbackThreadKey {
 
     private static String canonical(String kind, String locus, long recipientUserId, FeedbackChannel surface) {
         Objects.requireNonNull(surface, "surface");
-        String canonical = new StringBuilder()
-                .append(kind)
-                .append(SEP)
-                .append(locus)
-                .append(SEP)
-                .append(recipientUserId)
-                .append(SEP)
-                .append(surface.name())
-                .toString();
+        String canonical = kind + SEP + locus + SEP + recipientUserId + SEP + surface.name();
         return sha256Hex(canonical);
     }
 

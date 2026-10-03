@@ -27,10 +27,9 @@ import org.junit.jupiter.api.Test;
  * <ul>
  *   <li>never import an {@code integration.slack} type (the Modulith import-check already forbids this for named
  *       interfaces, but this rule pins it explicitly for the whole bounded context), and</li>
- *   <li>never open a raw-SQL tunnel back into Slack's private schema — neither via {@code JdbcTemplate} (the exact
- *       mechanism the old tunnel used to evade the tenancy {@code StatementInspector} AND the Modulith import
- *       check, which sees Java imports, not SQL strings) nor via a raw SQL string naming a {@code slack_*}
- *       table.</li>
+ *   <li>never open a raw-SQL tunnel back into Slack's private schema through a raw SQL string naming a
+ *       {@code slack_*} table — the Modulith import check sees Java imports, not SQL strings. The other tunnel,
+ *       {@code JdbcTemplate}, is closed for every module by {@link CodeQualityTest}.</li>
  * </ul>
  *
  * <p>With this in place a column rename in Slack becomes a compile error <em>inside Slack</em>, not a silent
@@ -90,26 +89,6 @@ class AgentSlackReadPathBoundaryTest extends HephaestusArchitectureTest {
                 .because(
                         "The agent conversation read path is inverted through the agent-owned agent.conversation SPIs "
                                 + "(implemented by integration.slack); the agent must never depend on the Slack module directly");
-        rule.check(classes);
-    }
-
-    @Test
-    @DisplayName("agent must not use JdbcTemplate (the raw-JDBC tunnel vector)")
-    void agentDoesNotUseJdbcTemplate() {
-        ArchRule rule = noClasses()
-                .that()
-                .resideInAPackage(AGENT)
-                .and()
-                .doNotImplement(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog.class)
-                .should()
-                .dependOnClassesThat()
-                .haveFullyQualifiedName("org.springframework.jdbc.core.JdbcTemplate")
-                .because(
-                        "Raw JdbcTemplate is how the agent used to tunnel into Slack's private tables past the tenancy "
-                                + "StatementInspector and the Modulith import check; the agent reads its own storage via JPA "
-                                + "repositories and reaches Slack only through the agent.conversation SPIs. Registered person-data "
-                                + "adapters are the instance-wide erasure boundary; their mapped ownership and private-source "
-                                + "SQL prohibition are checked separately");
         rule.check(classes);
     }
 

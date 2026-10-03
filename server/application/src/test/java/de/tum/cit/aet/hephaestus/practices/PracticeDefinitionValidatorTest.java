@@ -4,14 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.evidence.EvidenceCollection;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.evidence.SubjectEvidenceCollection;
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,8 +34,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
 
     private final JsonMapper mapper = JsonMapper.builder().build();
     private final PracticeDefinitionValidator validator = new PracticeDefinitionValidator(
-            new ClasspathArtifactSourceCatalogRegistry(mapper, java.time.Clock.systemUTC()),
-            PracticeSignalOptionsFixture.real());
+            new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()), PracticeSignalOptionsFixture.real());
 
     /**
      * The artifact kind is derived from the signal's prefix, so a misspelled signal would otherwise
@@ -69,7 +69,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         List.of(ScmSignals.ISSUE_OPENED),
                         List.of(need(new SourceKind("scm.issue.core"))),
                         Map.of(),
-                        de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.MERGER,
+                        ActorRole.MERGER,
                         null,
                         "Assess the review",
                         null,
@@ -182,7 +182,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"PRESENT", "NOT_MET", "BAD", "ASSESSED", "NOT_APPLICABLE", "UNDETERMINED"})
-    void rejectsDetectorVocabularyInDeveloperFacingGuidance(String label) {
+    void rejectsReviewResultLabelsInDeveloperFacingGuidance(String label) {
         PracticeDefinition definition = new PracticeDefinition(
                 "Focused review",
                 List.of(ScmSignals.PULL_REQUEST_OPENED),
@@ -215,9 +215,9 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
      */
     @Test
     void everyNamedCollectionCanBeCapturedWholeAndSoCanActuallyDecideAClause() {
-        var catalogs = new ClasspathArtifactSourceCatalogRegistry(mapper, java.time.Clock.systemUTC());
+        var catalogs = new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC());
 
-        for (SubjectEvidenceCollection collection : SubjectEvidenceCollection.values()) {
+        for (EvidenceCollection collection : EvidenceCollection.values()) {
             assertThat(catalogs.requireSource(VERSION, collection.sourceKind())
                             .completenessPolicy()
                             .supportsComplete())
@@ -235,7 +235,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         List.of(ScmSignals.ISSUE_OPENED),
                         List.of(need(new SourceKind("scm.issue.core"))),
                         Map.of(),
-                        de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
+                        ActorRole.AUTHOR,
                         new PracticePrecondition(
                                 "the change touches no dependency manifest",
                                 List.of(PracticePreconditionClause.changedPathMatches(List.of("**/pom.xml")))),
@@ -266,7 +266,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                 List.of(ScmSignals.PULL_REQUEST_OPENED),
                 List.of(need(reads)),
                 Map.of(),
-                de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
+                ActorRole.AUTHOR,
                 subject,
                 "Assess the review",
                 null,

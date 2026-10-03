@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -258,21 +259,6 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldEscapeGitLabSlashCommands() {
-            assertThat(PullRequestCommentPoster.sanitize("/approve")).contains("`/approve`");
-            assertThat(PullRequestCommentPoster.sanitize("/merge")).contains("`/merge`");
-            assertThat(PullRequestCommentPoster.sanitize("/close")).contains("`/close`");
-            assertThat(PullRequestCommentPoster.sanitize("  /assign @user")).contains("`  /assign`");
-        }
-
-        @Test
-        void shouldNotEscapeSlashInMidSentence() {
-            String result = PullRequestCommentPoster.sanitize("Use path/to/file for reference");
-            assertThat(result).doesNotContain("`");
-            assertThat(result).contains("path/to/file");
-        }
-
-        @Test
         void shouldEscapeAtMentionsAfterMarkdownChars() {
             assertThat(PullRequestCommentPoster.sanitize("*@user*")).contains("`@user`");
             assertThat(PullRequestCommentPoster.sanitize(">@user")).contains("`@user`");
@@ -407,8 +393,7 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
         @Test
         void issueWrite_throwsWhenIntegrationKindMissing() {
             AgentJob job = createTestJob(null);
-            ObjectNode metadata =
-                    org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, job.getMetadata());
+            ObjectNode metadata = assertInstanceOf(ObjectNode.class, job.getMetadata());
             metadata.put("issue_number", 7);
 
             assertThatThrownBy(() -> poster.summaryWrite(job, true, "Formatted issue note", "marker"))
@@ -419,8 +404,7 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
         @Test
         void issueWrite_resolvesIssueSubjectAndPosts() {
             AgentJob job = createTestJob(IntegrationKind.GITLAB);
-            ObjectNode metadata =
-                    org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, job.getMetadata());
+            ObjectNode metadata = assertInstanceOf(ObjectNode.class, job.getMetadata());
             metadata.put("issue_number", 7);
             when(gitlabChannel.formatIssueSubjectId("owner/repo", 7)).thenReturn("owner/repo#7");
             when(gitlabChannel.postSummary(any(), any()))

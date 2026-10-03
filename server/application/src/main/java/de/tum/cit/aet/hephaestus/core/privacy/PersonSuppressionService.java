@@ -1,49 +1,60 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProviderInstanceRegistered;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.event.EventListener;
+import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @WorkspaceAgnostic("An instance-wide exact provider identity processing fence")
 public class PersonSuppressionService implements PersonProcessingSuppression {
     private final JdbcTemplate jdbc;
     private final PersonDataCopyFence copies;
-    private final java.util.List<PersonSourceIdentityContributor> sourceOwners;
+    private final List<PersonSourceIdentityContributor> sourceOwners;
 
     public PersonSuppressionService(
-            JdbcTemplate jdbc,
-            java.util.List<PersonSourceIdentityContributor> sourceOwners,
-            PersonDataCopyFence copies) {
+            JdbcTemplate jdbc, List<PersonSourceIdentityContributor> sourceOwners, PersonDataCopyFence copies) {
         var kinds = sourceOwners.stream()
                 .flatMap(owner -> owner.artifactKinds().stream())
                 .toList();
-        if (kinds.size() != new java.util.HashSet<>(kinds).size()
-                || !new java.util.HashSet<>(kinds)
-                        .equals(java.util.Set.of(
-                                "scm.issue", "scm.pull_request", "chat.conversation_thread", "docs.document"))) {
+        if (kinds.size() != new HashSet<>(kinds).size()
+                || !new HashSet<>(kinds)
+                        .equals(Set.of("scm.issue", "scm.pull_request", "chat.conversation_thread", "docs.document"))) {
             throw new IllegalStateException(
                     "Each shipped artifact kind requires exactly one person source attribution owner");
         }
         this.jdbc = jdbc;
         this.copies = copies;
-        this.sourceOwners = java.util.List.copyOf(sourceOwners);
+        this.sourceOwners = List.copyOf(sourceOwners);
     }
 
-    @org.springframework.context.event.EventListener
-    @org.springframework.transaction.annotation.Transactional(
-            propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    @EventListener
+    @Transactional(propagation = Propagation.MANDATORY)
     public void onProviderInstanceRegistered(PersonProviderInstanceRegistered event) {
         copies.holdForCapture();
         inheritProviderControls(jdbc, event.providerId());
     }
 
-    static void inheritProviderControls(org.springframework.jdbc.core.JdbcOperations jdbc, long providerId) {
+    static void inheritProviderControls(JdbcOperations jdbc, long providerId) {
         var instance = jdbc.query(
                 "SELECT type,server_url FROM identity_provider WHERE id=?",
                 (rs, row) -> new ProviderInstance(
@@ -79,7 +90,7 @@ public class PersonSuppressionService implements PersonProcessingSuppression {
 
     private record ProviderInstance(String type, String origin) {}
 
-    private record ProviderAlias(long id, java.util.Optional<String> origin) {}
+    private record ProviderAlias(long id, Optional<String> origin) {}
 
     public void suppress(PersonScope scope, UUID requestId) {
         for (PersonIdentity i : scope.identities()) {
@@ -96,9 +107,8 @@ public class PersonSuppressionService implements PersonProcessingSuppression {
                     i.subject(),
                     Objects.requireNonNullElse(i.teamId(), ""));
             if (owner != null && !owner.equals(requestId))
-                throw new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.CONFLICT,
-                        "An erasure request already owns an identity; resume that request");
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT, "An erasure request already owns an identity; resume that request");
             jdbc.update(
                     "UPDATE person_suppression SET active_request_id=? WHERE provider_id=? AND subject=? AND team_key=?",
                     requestId,
@@ -142,9 +152,7 @@ public class PersonSuppressionService implements PersonProcessingSuppression {
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional(
-            propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW,
-            readOnly = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public boolean isReviewJobSuppressed(UUID jobId) {
         String key = "[{\"columns\":{\"id\":\"" + jobId + "\"}}]";
         return Boolean.TRUE.equals(jdbc.queryForObject("""

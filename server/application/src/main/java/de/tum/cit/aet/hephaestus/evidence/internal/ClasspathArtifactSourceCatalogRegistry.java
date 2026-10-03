@@ -26,6 +26,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
@@ -34,6 +35,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,7 +75,7 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
 
         useDecisions.values().stream()
                 .map(SourceUseDecision::expiresAt)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .min(Instant::compareTo)
                 .ifPresent(expiry -> {
                     long days = ChronoUnit.DAYS.between(clock.instant(), expiry);
@@ -165,7 +167,7 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
         return useDecisions.values().stream()
                 .filter(decision -> purpose == null || decision.purpose() == purpose)
                 .map(SourceUseDecision::expiresAt)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .min(Instant::compareTo);
     }
 
@@ -311,12 +313,12 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
     static void validateUseDecisions(ArtifactSourceCatalog catalog, Map<String, SourceUseDecision> decisions) {
         Set<String> referencedDecisionIds = catalog.sources().stream()
                 .flatMap(source -> source.useDecisionIds().stream())
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                .collect(Collectors.toUnmodifiableSet());
         if (!decisions.keySet().equals(referencedDecisionIds)) {
             throw new IllegalStateException("Source-use decisions must match the catalog exactly");
         }
         for (ArtifactSourceContract source : catalog.sources()) {
-            java.util.EnumSet<SourceUsePurpose> covered = java.util.EnumSet.noneOf(SourceUsePurpose.class);
+            EnumSet<SourceUsePurpose> covered = EnumSet.noneOf(SourceUsePurpose.class);
             for (String decisionId : source.useDecisionIds()) {
                 SourceUseDecision decision = Objects.requireNonNull(decisions.get(decisionId));
                 if (!decision.sourceKind().equals(source.kind())) {
@@ -330,7 +332,7 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
                     throw new IllegalStateException("Source-use decision lifecycle does not match: " + decisionId);
                 }
             }
-            if (!covered.equals(java.util.EnumSet.allOf(SourceUsePurpose.class))) {
+            if (!covered.equals(EnumSet.allOf(SourceUsePurpose.class))) {
                 throw new IllegalStateException(
                         "Source-use decisions do not cover every product purpose: " + source.kind());
             }

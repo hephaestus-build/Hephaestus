@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLab
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabPullRequestReviewThreadProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -289,7 +290,7 @@ public class GitLabDiffNoteWebhookProcessor extends BaseGitLabProcessor {
 
     private static Issue.State convertMrState(@Nullable String state) {
         if (state == null) return Issue.State.OPEN;
-        return switch (state.toLowerCase()) {
+        return switch (state.toLowerCase(Locale.ROOT)) {
             case "opened" -> Issue.State.OPEN;
             case "closed" -> Issue.State.CLOSED;
             case "merged" -> Issue.State.MERGED;

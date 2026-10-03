@@ -5,26 +5,56 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
-import de.tum.cit.aet.hephaestus.agent.context.*;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
-import de.tum.cit.aet.hephaestus.agent.job.*;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
-import de.tum.cit.aet.hephaestus.integration.core.connection.*;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobExecutor;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobLifecycleService;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
-import de.tum.cit.aet.hephaestus.testconfig.*;
-import de.tum.cit.aet.hephaestus.workspace.*;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
+import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
 class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
@@ -50,7 +80,7 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
     private AgentJobRepository jobs;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository users;
+    private UserRepository users;
 
     @Autowired
     private PersonDataCopyFence fence;
@@ -65,15 +95,14 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
     private PersonDataRequestRepository requests;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository accounts;
+    private AccountRepository accounts;
 
     @Autowired
-    private org.springframework.transaction.PlatformTransactionManager transactions;
+    private PlatformTransactionManager transactions;
 
     private EvidenceFolderPersonDataCatalog catalog(Path store, PersonDataCopyRecorder recorder) {
         ObjectProvider<AgentJobExecutor> executor =
-                new org.springframework.beans.factory.support.DefaultListableBeanFactory()
-                        .getBeanProvider(AgentJobExecutor.class);
+                new DefaultListableBeanFactory().getBeanProvider(AgentJobExecutor.class);
         return new EvidenceFolderPersonDataCatalog(
                 new FabricLayout(store.toString()), jdbc, namedJdbc, mapper, recorder, fence, executor, lifecycles);
     }
@@ -111,8 +140,8 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
         databaseTestUtils.cleanDatabase();
         var provider = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://capture-race.example"));
-        var administrator = new de.tum.cit.aet.hephaestus.core.auth.domain.Account("Administrator");
-        administrator.setAppRole(de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole.APP_ADMIN);
+        var administrator = new Account("Administrator");
+        administrator.setAppRole(AppRole.APP_ADMIN);
         long administratorId =
                 Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
         var preview = personData.preview(
@@ -130,7 +159,7 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
         try {
             var erasure = executor.submit(
                     () -> assertThatThrownBy(() -> personData.requestErasure(requestId, administratorId, true))
-                            .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                            .isInstanceOf(ResponseStatusException.class)
                             .hasMessageContaining("preview scope changed"));
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
             while (!Boolean.TRUE.equals(jdbc.queryForObject(
@@ -140,7 +169,7 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
                     throw new AssertionError("Erasure did not wait for the capture fence");
                 Thread.sleep(20);
             }
-            var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+            var tx = new TransactionTemplate(transactions);
             tx.executeWithoutResult(status -> {
                 jdbc.execute("SET LOCAL lock_timeout='2s'");
                 assertThat(requests.lock(requestId).orElseThrow().getState())
@@ -173,9 +202,9 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
         var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog);
         files.beginPersonCapture(job);
         try {
-            var read = new org.springframework.transaction.support.TransactionTemplate(transactions);
+            var read = new TransactionTemplate(transactions);
             read.setReadOnly(true);
-            read.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
+            read.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
             read.executeWithoutResult(status -> {
                 try (var capture = recorder.begin()) {
                     recorder.recordIdentity(identity);
@@ -386,11 +415,11 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
         databaseTestUtils.cleanDatabase();
         var provider =
                 providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, "https://git-folder.example"));
-        var target = new de.tum.cit.aet.hephaestus.integration.scm.domain.user.User();
+        var target = new User();
         target.setProvider(provider);
         target.setNativeId(42L);
         target.setLogin("not-a-matching-key");
-        target.setType(de.tum.cit.aet.hephaestus.integration.scm.domain.user.User.Type.USER);
+        target.setType(User.Type.USER);
         target = users.saveAndFlush(target);
         var rows = new SchemaRowSeeder(jdbc);
         rows.insert(
@@ -452,8 +481,8 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
         var provider = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://same-copy-key.example"));
         var target = users.saveAndFlush(TestUserFactory.createUser(42L, "not-a-matching-key", provider));
-        var administrator = new de.tum.cit.aet.hephaestus.core.auth.domain.Account("Administrator");
-        administrator.setAppRole(de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole.APP_ADMIN);
+        var administrator = new Account("Administrator");
+        administrator.setAppRole(AppRole.APP_ADMIN);
         long administratorId =
                 Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
         var rows = new SchemaRowSeeder(jdbc);
@@ -503,10 +532,10 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(store.select(original)).isEqualTo(selected);
         assertThat(catalog.jobsContaining(original)).containsExactly(job.getId());
         assertThatThrownBy(() -> personData.export(requestId))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("preview scope changed");
         assertThatThrownBy(() -> personData.requestErasure(requestId, administratorId, true))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("preview scope changed");
         assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.PREVIEW);
         assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(AgentJobStatus.RUNNING);

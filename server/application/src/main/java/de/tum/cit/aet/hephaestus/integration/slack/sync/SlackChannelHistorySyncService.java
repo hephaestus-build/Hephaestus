@@ -218,7 +218,7 @@ public class SlackChannelHistorySyncService {
             HistoryPage page = slackMessageService.fetchHistoryPage(
                     workspaceId, channelId, floor, latest, cursor, properties.historyPageLimit());
             for (Message message : page.messages()) {
-                ingested += routeThroughIngest(workspaceId, channel, message) ? 1 : 0;
+                ingested += routeThroughIngest(channel, message) ? 1 : 0;
                 if (properties.repliesEnabled() && hasReplyGap(workspaceId, channelId, message)) {
                     ReplySync replySync = syncReplies(
                             workspaceId, channel, message, floor, repliesBudget, repliesBudgetExhausted, cancelled);
@@ -241,7 +241,7 @@ public class SlackChannelHistorySyncService {
      * event-path handler ({@link SlackChannelMessageHandler#CONTENT_BEARING_SUBTYPES}). Returns whether it was
      * eligible (the ingest stack itself may still refuse it — consent gates run inside).
      */
-    private boolean routeThroughIngest(long workspaceId, SlackMonitoredChannel channel, Message message) {
+    private boolean routeThroughIngest(SlackMonitoredChannel channel, Message message) {
         if (message.getBotId() != null) {
             return false;
         }
@@ -316,7 +316,7 @@ public class SlackChannelHistorySyncService {
                 if (parent.getTs().equals(reply.getTs())) {
                     continue; // Slack includes the parent in conversations.replies
                 }
-                ingested += routeThroughIngest(workspaceId, channel, reply) ? 1 : 0;
+                ingested += routeThroughIngest(channel, reply) ? 1 : 0;
             }
             cursor = page.nextCursor();
         } while (cursor != null);

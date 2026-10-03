@@ -3,16 +3,30 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonEvidenceErasure;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Instant;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.annotation.*;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.core.type.TypeReference;
@@ -40,8 +54,7 @@ public class PersonDataService {
             PersonDataRequest request, List<PersonDataContributor.ExternalDelivery> externalDeliveries) {}
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
-    public Snapshot preview(
-            Long administratorId, @org.jspecify.annotations.Nullable Long accountId, List<PersonIdentity> identities) {
+    public Snapshot preview(Long administratorId, @Nullable Long accountId, List<PersonIdentity> identities) {
         PersonScope scope = withEvidenceJobs(resolver.resolve(accountId, identities));
         PersonDataRequest request = new PersonDataRequest();
         request.setAdministratorAccountId(administratorId);
@@ -135,11 +148,9 @@ public class PersonDataService {
         r.setFailureCode(null);
     }
 
-    private record ErasureAdmission(
-            String state, @org.jspecify.annotations.Nullable String scopeJson) {}
+    private record ErasureAdmission(String state, @Nullable String scopeJson) {}
 
-    private void requireActiveAdministratorAndLockAccount(
-            long administratorId, @org.jspecify.annotations.Nullable Long personAccountId) {
+    private void requireActiveAdministratorAndLockAccount(long administratorId, @Nullable Long personAccountId) {
         // Lock both accounts in one order. Concurrent requests must not erase each other's
         // administrators after both have accepted a token validated before either erasure.
         List<Boolean> eligible = jdbc.query(
@@ -147,7 +158,7 @@ public class PersonDataService {
                 (rs, row) -> rs.getLong(1) == administratorId && rs.getBoolean(2),
                 administratorId,
                 Objects.requireNonNullElse(personAccountId, -1L));
-        if (!eligible.contains(Boolean.TRUE))
+        if (!eligible.contains(true))
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN, "An active instance administrator must authorize erasure");
     }
@@ -163,7 +174,7 @@ public class PersonDataService {
             if (frozen == null || frozen.isEmpty()) return;
             Set<String> inventory = registry.stores().stream()
                     .map(PersonDataContributor::store)
-                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                    .collect(Collectors.toUnmodifiableSet());
             if (!frozen.keySet().equals(inventory))
                 throw new IllegalStateException("Erasure contributor inventory changed");
             for (var store : registry.stores()) store.prepareErasure(Objects.requireNonNull(frozen.get(store.store())));
@@ -255,7 +266,7 @@ public class PersonDataService {
                 new TypeReference<Map<String, PersonDataSelection>>() {});
     }
 
-    private @org.jspecify.annotations.Nullable PersonDataRequest lockAdmittedErasure(UUID id) {
+    private @Nullable PersonDataRequest lockAdmittedErasure(UUID id) {
         var actors = jdbc.query(
                 "SELECT administrator_account_id,scope_json FROM person_data_request WHERE id=? AND state='ERASING'",
                 (rs, row) -> new StepAdmission(rs.getObject(1, Long.class), rs.getString(2)),
@@ -273,8 +284,7 @@ public class PersonDataService {
     }
 
     private record StepAdmission(
-            @org.jspecify.annotations.Nullable Long administratorAccountId,
-            @org.jspecify.annotations.Nullable String scopeJson) {}
+            @Nullable Long administratorAccountId, @Nullable String scopeJson) {}
 
     private Map<String, PersonDataStoreReceipt> completed(PersonDataRequest r) {
         return PersonDataStoreReceipt.read(mapper, r.getCompletedJson());

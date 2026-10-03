@@ -44,7 +44,6 @@ describe("ReviewObservationRow", () => {
 			observation: {
 				...observation,
 				evidence: {
-					detector: "secret-diff-scanner",
 					citations: [
 						{ ...citation("src/config.ts"), side: "OLD", quote: "const timeout = 30;" },
 						{
@@ -61,7 +60,7 @@ describe("ReviewObservationRow", () => {
 		expect(keyWarning).not.toHaveBeenCalled();
 		expect(screen.getAllByText("config.ts")).toHaveLength(2);
 		screen.getByText("const timeout = 30;");
-		screen.getByText(/This looked like a credential/u);
+		screen.getByText("Not quoted. The passage was withheld, so only its location was kept.");
 	});
 
 	it("shows the authored next step without substituting the provider comment", () => {

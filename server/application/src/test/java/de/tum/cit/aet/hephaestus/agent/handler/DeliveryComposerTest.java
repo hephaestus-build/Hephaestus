@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -103,10 +104,6 @@ class DeliveryComposerTest extends BaseUnitTest {
         LocationSpec(String path, int startLine, String sourceKind) {
             this(path, startLine, null, sourceKind, true);
         }
-
-        LocationSpec(String path, int startLine, @Nullable Integer endLine, String sourceKind) {
-            this(path, startLine, endLine, sourceKind, true);
-        }
     }
 
     private ValidatedObservation positiveObservation(String slug) {
@@ -138,7 +135,7 @@ class DeliveryComposerTest extends BaseUnitTest {
     }
 
     private static String humanizeTitle(String slug) {
-        return slug.replace('-', ' ').substring(0, 1).toUpperCase()
+        return slug.replace('-', ' ').substring(0, 1).toUpperCase(Locale.ROOT)
                 + slug.replace('-', ' ').substring(1);
     }
 
@@ -386,7 +383,7 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void shouldNotSpendTheImprovementCapOnRecurringLapses() {
-        List<ValidatedObservation> observations = new java.util.ArrayList<>();
+        List<ValidatedObservation> observations = new ArrayList<>();
         observations.add(negativeObservation(
                 "describe-what-and-why", "No why in the description.", Severity.MINOR, null, null, "r1"));
         for (String slug : List.of(
@@ -451,7 +448,7 @@ class DeliveryComposerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldOrderCriticalFindingBeforeMinorFindingWhenBothAreInSummary() {
+    void shouldOrderCriticalObservationBeforeMinorObservationWhenBothAreInSummary() {
         var critical = negativeObservation(
                 "avoids-insecure-defaults-and-over-broad-permissions",
                 "Token committed to the repo",
@@ -843,7 +840,6 @@ class DeliveryComposerTest extends BaseUnitTest {
         DeliveryContent result = DeliveryComposer.compose(observations);
         assertThat(result).isNotNull();
 
-        String mrNote = result.mrNote();
         assertThat(reachedTheDeveloper(result)).contains("Dead code in view");
         assertThat(reachedTheDeveloper(result)).contains("Views/DashboardView.swift:15");
 
@@ -990,11 +986,16 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void sanitizeStudentText_preservesMarkdownListAndHeadingNewlines() {
-        String guidance = "Add an acceptance-criteria section, for example:\n\n" + "### Acceptance Criteria\n"
-                + "- The workspace lists all capture sessions.\n"
-                + "- Users can create, rename, and delete sessions.\n"
-                + "- Sessions can be searched and filtered.\n\n"
-                + "These criteria give a clear definition of done.";
+        String guidance = """
+                          Add an acceptance-criteria section, for example:
+
+                          ### Acceptance Criteria
+                          - The workspace lists all capture sessions.
+                          - Users can create, rename, and delete sessions.
+                          - Sessions can be searched and filtered.
+
+                          These criteria give a clear definition of done.\
+                          """;
         String clean = DeliveryComposer.sanitizeStudentText(guidance);
         assertThat(clean).contains("\n- The workspace lists all capture sessions.");
         assertThat(clean).contains("\n- Users can create, rename, and delete sessions.");
@@ -1231,8 +1232,8 @@ class DeliveryComposerTest extends BaseUnitTest {
     }
 
     /**
-     * Everything the developer meets, on either surface. A finding with a line lives in its note on the
-     * diff and a finding without one lives in the comment, and which of the two carries it is not what
+     * Everything the developer meets, on either surface. An observation with a line lives in its note on
+     * the diff and one without lives in the comment, and which of the two carries it is not what
      * these tests are about.
      */
     private static String reachedTheDeveloper(DeliveryContent delivery) {
@@ -1284,7 +1285,6 @@ class DeliveryComposerTest extends BaseUnitTest {
         DeliveryContent result = DeliveryComposer.compose(observations, ArtifactKinds.PULL_REQUEST);
 
         assertThat(result).isNotNull();
-        String mrNote = result.mrNote();
         assertThat(reachedTheDeveloper(result))
                 .as("every blocker survives the cap")
                 .contains("Secret 1", "Secret 2", "Crash 1", "Crash 2", "Crash 3");
@@ -1318,7 +1318,6 @@ class DeliveryComposerTest extends BaseUnitTest {
         DeliveryContent result = DeliveryComposer.compose(observations, ArtifactKinds.PULL_REQUEST);
 
         assertThat(result).isNotNull();
-        String mrNote = result.mrNote();
         assertThat(reachedTheDeveloper(result))
                 .contains("A nudge", "B nudge", "C nudge")
                 .doesNotContain("Z nudge");
@@ -1404,7 +1403,6 @@ class DeliveryComposerTest extends BaseUnitTest {
         String note = result.mrNote() + "\n"
                 + result.diffNotes().stream().map(DiffNote::body).collect(Collectors.joining("\n"));
         assertThat(note).contains("28 files spread degrades review effectiveness");
-        assertThat(note).contains("28 files spread degrades review effectiveness");
         for (String leak : new String[] {
             "Per the fixed bucketing",
             "→ MAJOR",
@@ -1447,7 +1445,6 @@ class DeliveryComposerTest extends BaseUnitTest {
         assertThat(note).doesNotContain("diff_stat.txt");
         assertThat(note).doesNotContain("material disagreement");
         assertThat(note).contains("PR body lacks a quotable WHY");
-        assertThat(note).contains("PR body lacks a quotable WHY");
     }
 
     @Test
@@ -1484,9 +1481,6 @@ class DeliveryComposerTest extends BaseUnitTest {
         assertThat(result.diffNotes()).hasSize(1);
         assertThat(result.diffNotes().get(0).filePath()).isEqualTo("src/components/Button.tsx");
     }
-
-    private static final String SCOPE_WHY =
-            "A reviewer can only hold so much in their head at once; a focused change gets read carefully.";
 
     @Test
     void compose_withWhyBySlug_emptyMapIsBehaviourIdentical() {

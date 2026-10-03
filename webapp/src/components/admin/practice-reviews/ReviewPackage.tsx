@@ -1,6 +1,6 @@
 import { FileCode2Icon } from "lucide-react";
 
-import type { GetPracticeReviewFeedbackResponse } from "@/api/types.gen";
+import type { GetPracticeReviewFeedbackResponse, ReviewProposedPlacement } from "@/api/types.gen";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import {
 	Accordion,
@@ -19,7 +19,7 @@ export function ReviewPackage({
 	defaultExpanded?: boolean;
 }) {
 	const summary = feedback.proposedPlacements.find((placement) => placement.type === "SUMMARY");
-	const inline = feedback.proposedPlacements.filter((placement) => placement.type === "INLINE");
+	const inline = feedback.proposedPlacements.filter(isInline);
 
 	return (
 		<div className="min-w-0 space-y-3">
@@ -58,5 +58,18 @@ export function ReviewPackage({
 				</Accordion>
 			) : null}
 		</div>
+	);
+}
+
+type InlinePlacement = ReviewProposedPlacement & {
+	type: "INLINE";
+	path: string;
+	startLine: number;
+};
+
+/** The server builds an inline placement only with its file and first line; the summary has neither. */
+function isInline(placement: ReviewProposedPlacement): placement is InlinePlacement {
+	return (
+		placement.type === "INLINE" && placement.path !== undefined && placement.startLine !== undefined
 	);
 }

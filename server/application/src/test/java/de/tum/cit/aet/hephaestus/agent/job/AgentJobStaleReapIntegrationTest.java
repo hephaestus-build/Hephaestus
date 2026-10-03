@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Tracer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -97,7 +99,7 @@ class AgentJobStaleReapIntegrationTest extends BaseIntegrationTest {
                 lifecycleService,
                 usageRecorder,
                 meterRegistry,
-                new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP));
+                new AgentJobTelemetry(meterRegistry, Tracer.NOOP));
         workspace = workspaceRepository.save(TestEntities.activeWorkspace("stale-reap-ws"));
         LlmConnection connection = connectionRepository.save(LlmCatalogTestFixtures.connection("stale-reap"));
         instanceModel =
@@ -170,11 +172,11 @@ class AgentJobStaleReapIntegrationTest extends BaseIntegrationTest {
         return job;
     }
 
-    private tools.jackson.databind.JsonNode readableSnapshot() {
+    private JsonNode readableSnapshot() {
         return snapshot().toJson(objectMapper);
     }
 
-    private tools.jackson.databind.JsonNode snapshotFromTheFuture() {
+    private JsonNode snapshotFromTheFuture() {
         ObjectNode node = (ObjectNode) snapshot().toJson(objectMapper);
         return node.put("schemaVersion", ConfigSnapshot.SCHEMA_VERSION + 1);
     }
@@ -201,7 +203,7 @@ class AgentJobStaleReapIntegrationTest extends BaseIntegrationTest {
                         FundingSource.INSTANCE, PricingState.NO_CHARGE, null, null, null, null, null, null));
     }
 
-    private UUID staleRunningJob(tools.jackson.databind.JsonNode configSnapshot, AgentJob usage) {
+    private UUID staleRunningJob(JsonNode configSnapshot, AgentJob usage) {
         AgentJob job = new AgentJob();
         job.setWorkspace(workspace);
         job.setPurpose(AgentPurpose.PRACTICE_REVIEW);

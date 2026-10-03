@@ -3,8 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineSubjectKeyDeriver;
-import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GithubSubjectKeyDeriver;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabSubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GitHubSubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabSubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -37,8 +37,8 @@ class SubjectGrammarRoundTripTest extends BaseUnitTest {
     private static final Path GITHUB_DIR = Paths.get("src/test/resources/github");
     private static final Path OUTLINE_DIR = Paths.get("src/test/resources/outline");
 
-    private static final GithubSubjectKeyDeriver GITHUB = new GithubSubjectKeyDeriver();
-    private static final GitlabSubjectKeyDeriver GITLAB = new GitlabSubjectKeyDeriver();
+    private static final GitHubSubjectKeyDeriver GITHUB = new GitHubSubjectKeyDeriver();
+    private static final GitLabSubjectKeyDeriver GITLAB = new GitLabSubjectKeyDeriver();
     private static final OutlineSubjectKeyDeriver OUTLINE = new OutlineSubjectKeyDeriver(MAPPER);
 
     static Stream<Path> gitlabFixtures() throws IOException {
@@ -57,9 +57,9 @@ class SubjectGrammarRoundTripTest extends BaseUnitTest {
         if (!Files.isDirectory(dir)) {
             return Stream.empty();
         }
-        return Files.list(dir)
-                .filter(p -> p.getFileName().toString().endsWith(".json"))
-                .sorted();
+        try (Stream<Path> files = Files.list(dir)) {
+            return files.filter(p -> p.getFileName().toString().endsWith(".json")).sorted().toList().stream();
+        }
     }
 
     @ParameterizedTest(name = "GitLab fixture {0}")

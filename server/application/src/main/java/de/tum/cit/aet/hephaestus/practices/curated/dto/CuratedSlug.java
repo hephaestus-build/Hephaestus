@@ -9,7 +9,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/** Validates the durable identifier used by catalog provenance and detector paths. */
+/** Validates the durable identifier used by catalog provenance and practice paths. */
 @NotBlank(message = "Slug is required")
 @Size(min = 3, max = 64, message = "Slug must be between 3 and 64 characters")
 @Pattern(

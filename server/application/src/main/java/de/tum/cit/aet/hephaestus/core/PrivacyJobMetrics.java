@@ -69,6 +69,6 @@ public class PrivacyJobMetrics {
                 .description("Rows or subjects affected by privacy-job executions.")
                 .tag("job", job.tag)
                 .register(registry)
-                .increment(affected);
+                .increment((double) affected);
     }
 }

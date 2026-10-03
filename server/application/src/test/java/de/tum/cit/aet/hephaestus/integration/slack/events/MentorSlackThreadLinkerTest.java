@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
@@ -16,7 +17,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 
@@ -49,7 +49,7 @@ class MentorSlackThreadLinkerTest extends BaseUnitTest {
 
         assertThat(result).isEqualTo(existing);
         verifyNoInteractions(mentorSlackThreadService);
-        verify(mentorSlackThreadRepository, never()).save(ArgumentMatchers.any());
+        verify(mentorSlackThreadRepository, never()).save(any());
     }
 
     @Test

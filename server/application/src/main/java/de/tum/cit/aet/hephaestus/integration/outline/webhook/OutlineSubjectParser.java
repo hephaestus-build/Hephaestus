@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.outline.webhook;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectParser;
+import java.util.Arrays;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -41,8 +42,7 @@ public class OutlineSubjectParser implements SubjectParser {
         }
         // A well-formed subject has exactly 3 components; the deriver sanitizes dots in the event
         // to '~'. Defensively rejoin any trailing parts so a legacy/unsanitized event still parses.
-        String event =
-                parts.length == 3 ? parts[2] : String.join(".", java.util.Arrays.copyOfRange(parts, 2, parts.length));
+        String event = parts.length == 3 ? parts[2] : String.join(".", Arrays.copyOfRange(parts, 2, parts.length));
         if (event.isBlank()) {
             throw new IllegalArgumentException("Outline subject event component is blank: " + fullSubject);
         }

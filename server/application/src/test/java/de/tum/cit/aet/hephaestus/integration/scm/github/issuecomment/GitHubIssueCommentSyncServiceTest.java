@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.math.BigInteger;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -107,8 +108,8 @@ class GitHubIssueCommentSyncServiceTest extends BaseUnitTest {
         comment.setId("IC_node" + databaseId);
         comment.setFullDatabaseId(BigInteger.valueOf(databaseId));
         comment.setBody(body);
-        comment.setCreatedAt(OffsetDateTime.now());
-        comment.setUpdatedAt(OffsetDateTime.now());
+        comment.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        comment.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         return comment;
     }
 

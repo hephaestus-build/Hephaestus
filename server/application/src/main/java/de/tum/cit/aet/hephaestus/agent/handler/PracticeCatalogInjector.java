@@ -193,7 +193,7 @@ class PracticeCatalogInjector {
             Set<String> rechecked = recheckedOf(job);
             practices = practices.stream()
                     .filter(p -> rechecked.contains(p.getSlug())
-                            || p.getSignals().contains(signal) && ReviewWhen.matches(p.getReviewWhen(), reviewState))
+                            || (p.getSignals().contains(signal) && ReviewWhen.matches(p.getReviewWhen(), reviewState)))
                     .toList();
         }
         practices = practices.stream().filter(p -> attributable(p, job)).toList();

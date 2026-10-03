@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Tag;
@@ -90,7 +91,7 @@ class ExactPersonDataCopyRecorderTest {
 
     @Test
     void nestedProducersUpdateTheOuterReceiptBeforeWritingContent() {
-        var observations = new java.util.ArrayList<List<PersonCopyIdentity>>();
+        var observations = new ArrayList<List<PersonCopyIdentity>>();
         try (var outer = recorder.begin()) {
             outer.onChange(() -> observations.add(outer.identities()));
             try (var inner = recorder.begin()) {

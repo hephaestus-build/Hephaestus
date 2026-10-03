@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationSuspendedException;
-import de.tum.cit.aet.hephaestus.integration.scm.github.metrics.GithubMetrics;
+import de.tum.cit.aet.hephaestus.integration.scm.github.metrics.GitHubMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
@@ -11,8 +11,12 @@ import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
@@ -28,9 +32,6 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 @Slf4j
 public class GitHubExceptionClassifier {
 
-    /**
-     * Error categories for GitHub API exceptions.
-     */
     public enum Category {
         /**
          * Transient failures that should be retried with exponential backoff.
@@ -102,32 +103,32 @@ public class GitHubExceptionClassifier {
     private final Counter unknownCounter;
 
     public GitHubExceptionClassifier(MeterRegistry meterRegistry) {
-        this.retryableCounter = Counter.builder(GithubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
+        this.retryableCounter = Counter.builder(GitHubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
                 .description("Total GitHub sync errors by category")
                 .tag("category", "retryable")
                 .register(meterRegistry);
 
-        this.rateLimitedCounter = Counter.builder(GithubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
+        this.rateLimitedCounter = Counter.builder(GitHubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
                 .description("Total GitHub sync errors by category")
                 .tag("category", "rate_limited")
                 .register(meterRegistry);
 
-        this.notFoundCounter = Counter.builder(GithubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
+        this.notFoundCounter = Counter.builder(GitHubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
                 .description("Total GitHub sync errors by category")
                 .tag("category", "not_found")
                 .register(meterRegistry);
 
-        this.authErrorCounter = Counter.builder(GithubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
+        this.authErrorCounter = Counter.builder(GitHubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
                 .description("Total GitHub sync errors by category")
                 .tag("category", "auth_error")
                 .register(meterRegistry);
 
-        this.clientErrorCounter = Counter.builder(GithubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
+        this.clientErrorCounter = Counter.builder(GitHubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
                 .description("Total GitHub sync errors by category")
                 .tag("category", "client_error")
                 .register(meterRegistry);
 
-        this.unknownCounter = Counter.builder(GithubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
+        this.unknownCounter = Counter.builder(GitHubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
                 .description("Total GitHub sync errors by category")
                 .tag("category", "unknown")
                 .register(meterRegistry);
@@ -220,7 +221,7 @@ public class GitHubExceptionClassifier {
                 case "FORBIDDEN" -> {
                     // Check if it's a rate limit error
                     String message = error.getMessage();
-                    if (message != null && message.toLowerCase().contains("rate limit")) {
+                    if (message != null && message.toLowerCase(Locale.ROOT).contains("rate limit")) {
                         rateLimitedCounter.increment();
                         return ClassificationResult.rateLimited(
                                 Duration.ofMinutes(1), "GraphQL rate limit: " + message);
@@ -246,7 +247,7 @@ public class GitHubExceptionClassifier {
         // Fallback: check all error messages for rate limit text (covers null extensions/type)
         for (ResponseError error : errors) {
             String message = error.getMessage();
-            if (message != null && message.toLowerCase().contains("rate limit")) {
+            if (message != null && message.toLowerCase(Locale.ROOT).contains("rate limit")) {
                 rateLimitedCounter.increment();
                 return ClassificationResult.rateLimited(Duration.ofMinutes(1), "GraphQL rate limit: " + message);
             }
@@ -258,12 +259,16 @@ public class GitHubExceptionClassifier {
                 Category.UNKNOWN, "Unclassified GraphQL error: " + errors.get(0).getMessage());
     }
 
-    /**
-     * Internal classification logic without metric updates.
-     */
     private ClassificationResult doClassify(@Nullable Throwable e) {
         if (e == null) {
             return ClassificationResult.of(Category.UNKNOWN, "Null exception");
+        }
+
+        // Suspended installation - this is an auth error, not retryable, however deeply it is wrapped
+        InstallationSuspendedException suspended = suspendedInstallation(e);
+        if (suspended != null) {
+            return ClassificationResult.of(
+                    Category.AUTH_ERROR, "Installation " + suspended.getInstallationId() + " is suspended");
         }
 
         // Unwrap common wrapper exceptions
@@ -273,12 +278,6 @@ public class GitHubExceptionClassifier {
                         || e.getClass().getName().contains("CompletionException")
                         || e.getClass().getName().contains("ExecutionException"))) {
             cause = e.getCause();
-        }
-
-        // Suspended installation - this is an auth error, not retryable
-        if (cause instanceof InstallationSuspendedException suspended) {
-            return ClassificationResult.of(
-                    Category.AUTH_ERROR, "Installation " + suspended.getInstallationId() + " is suspended");
         }
 
         // Database deadlocks are transient and should be retried with backoff
@@ -320,11 +319,7 @@ public class GitHubExceptionClassifier {
             return ClassificationResult.of(Category.RETRYABLE, "IO error: " + cause.getMessage());
         }
 
-        // Check for suspended in message (legacy IllegalStateException)
         String message = cause.getMessage();
-        if (message != null && message.toLowerCase().contains("suspended")) {
-            return ClassificationResult.of(Category.AUTH_ERROR, "Installation suspended: " + message);
-        }
 
         // Check for FieldAccessException from Spring GraphQL - extract error type from message
         if (cause.getClass().getSimpleName().equals("FieldAccessException") && message != null) {
@@ -396,12 +391,20 @@ public class GitHubExceptionClassifier {
         return ClassificationResult.of(Category.UNKNOWN, message);
     }
 
-    /**
-     * Classifies network-level exceptions.
-     */
     private ClassificationResult classifyNetworkException(Throwable e) {
         String message = "Network error: " + e.getClass().getSimpleName() + " - " + e.getMessage();
         return ClassificationResult.of(Category.RETRYABLE, message);
+    }
+
+    private static @Nullable InstallationSuspendedException suspendedInstallation(Throwable e) {
+        // Each throwable is visited once, so a cyclic cause chain still ends.
+        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Throwable current = e; current != null && seen.add(current); current = current.getCause()) {
+            if (current instanceof InstallationSuspendedException suspended) {
+                return suspended;
+            }
+        }
+        return null;
     }
 
     /**
@@ -438,7 +441,7 @@ public class GitHubExceptionClassifier {
             }
 
             // Check message for deadlock indicators
-            if (message != null && message.toLowerCase().contains("deadlock")) {
+            if (message != null && message.toLowerCase(Locale.ROOT).contains("deadlock")) {
                 return true;
             }
 
@@ -447,9 +450,6 @@ public class GitHubExceptionClassifier {
         return false;
     }
 
-    /**
-     * Checks if the exception indicates a timeout.
-     */
     private boolean isTimeoutException(Throwable e) {
         if (e instanceof TimeoutException || e instanceof SocketTimeoutException) {
             return true;
@@ -510,7 +510,7 @@ public class GitHubExceptionClassifier {
         // Check response body for rate limit message
         String body = e.getResponseBodyAsString();
         if (body != null) {
-            String lowerBody = body.toLowerCase();
+            String lowerBody = body.toLowerCase(Locale.ROOT);
             return (lowerBody.contains("rate limit")
                     || lowerBody.contains("ratelimit")
                     || lowerBody.contains("abuse")
@@ -550,9 +550,6 @@ public class GitHubExceptionClassifier {
         return null;
     }
 
-    /**
-     * Increments the counter for the given category.
-     */
     private void incrementCounter(Category category) {
         switch (category) {
             case RETRYABLE -> retryableCounter.increment();

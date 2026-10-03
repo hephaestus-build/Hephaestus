@@ -29,13 +29,14 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
-import de.tum.cit.aet.hephaestus.practices.review.GateDecision.Detect;
+import de.tum.cit.aet.hephaestus.practices.review.GateDecision.Run;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaults;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -61,6 +62,10 @@ public class AgentJobService {
     private static final Logger log = LoggerFactory.getLogger(AgentJobService.class);
 
     private static final Set<AgentJobStatus> ACTIVE_STATUSES = Set.of(AgentJobStatus.QUEUED, AgentJobStatus.RUNNING);
+
+    // Persisted in agent_job.idempotency_key and matched by the active-job unique index and the cooldown
+    // query, so changing it would let a review that is still queued or running be submitted again.
+    private static final String PRACTICE_REVIEW_KEY_SUFFIX = ":detection";
 
     private final AgentJobRepository agentJobRepository;
     private final ReviewMemberAiPolicy memberAiPolicy;
@@ -113,8 +118,6 @@ public class AgentJobService {
                 .findByIdAndWorkspaceId(jobId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("AgentJob", jobId.toString()));
     }
-
-    // Submit
 
     /**
      * Build a detached PR review submission request. Reads the PR's lazy associations, so it MUST be
@@ -203,7 +206,7 @@ public class AgentJobService {
             AgentJobType jobType,
             JobSubmissionRequest request,
             @Nullable SignalKey signalKey,
-            @Nullable Detect admission) {
+            @Nullable Run admission) {
         return Optional.ofNullable(submitWithOutcome(workspaceId, jobType, request, signalKey, admission)
                 .job());
     }
@@ -222,7 +225,7 @@ public class AgentJobService {
             AgentJobType jobType,
             JobSubmissionRequest request,
             @Nullable SignalKey signalKey,
-            @Nullable Detect admission) {
+            @Nullable Run admission) {
         Workspace workspace = workspaceRepository
                 .findById(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId.toString()));
@@ -248,8 +251,7 @@ public class AgentJobService {
             return refuse(signalKey, SignalStateReason.BUDGET_EXHAUSTED);
         }
 
-        return submitForBinding(
-                workspace, jobType, artifactKindFor(jobType, request), submission, signalKey, admission);
+        return submitForBinding(workspace, jobType, artifactKindFor(jobType), submission, signalKey, admission);
     }
 
     /**
@@ -274,8 +276,8 @@ public class AgentJobService {
             ArtifactKind artifactKind,
             JobSubmission submission,
             @Nullable SignalKey signalKey,
-            @Nullable Detect admission) {
-        String detectionKey = submission.idempotencyKey() + ":detection";
+            @Nullable Run admission) {
+        String reviewKey = submission.idempotencyKey() + PRACTICE_REVIEW_KEY_SUFFIX;
 
         SubmissionOutcome outcome = transactionTemplate.execute(status -> {
             Workspace currentWorkspace = workspaceRepository
@@ -327,12 +329,12 @@ public class AgentJobService {
             // still active, so it is reached only by paths that cannot name a signal.
             if (signalKey == null) {
                 Optional<AgentJob> existing = agentJobRepository.findByWorkspaceIdAndIdempotencyKeyAndStatusIn(
-                        workspace.getId(), detectionKey, ACTIVE_STATUSES);
+                        workspace.getId(), reviewKey, ACTIVE_STATUSES);
                 if (existing.isPresent()) {
                     log.info(
                             "Deduplicated job submission: existingJobId={}, idempotencyKey={}",
                             existing.get().getId(),
-                            detectionKey);
+                            reviewKey);
                     return SubmissionOutcome.joined(existing.get());
                 }
             }
@@ -343,8 +345,8 @@ public class AgentJobService {
             if (cooldown > 0) {
                 String rawPrefix = extractCooldownKeyPrefix(submission.idempotencyKey());
                 String escaped = rawPrefix.replace("%", "\\%").replace("_", "\\_");
-                String cooldownPrefix = escaped + "%:detection";
-                Instant cutoff = Instant.now().minus(java.time.Duration.ofMinutes(cooldown));
+                String cooldownPrefix = escaped + "%" + PRACTICE_REVIEW_KEY_SUFFIX;
+                Instant cutoff = Instant.now().minus(Duration.ofMinutes(cooldown));
                 Optional<AgentJob> recent =
                         agentJobRepository.findRecentJobByKeyPrefix(workspace.getId(), cooldownPrefix, cutoff);
                 if (recent.isPresent()) {
@@ -353,7 +355,7 @@ public class AgentJobService {
                             recent.get().getId(),
                             recent.get().getCreatedAt(),
                             cooldown,
-                            detectionKey);
+                            reviewKey);
                     return refuseInTransaction(signalKey, SignalStateReason.COOLDOWN_ACTIVE);
                 }
             }
@@ -391,7 +393,7 @@ public class AgentJobService {
                 objectMetadata.set("generated_path_patterns", objectMapper.valueToTree(patterns));
             }
             job.setMetadata(metadata);
-            job.setIdempotencyKey(detectionKey);
+            job.setIdempotencyKey(reviewKey);
             job.setTraceId(resolveTraceId());
             try {
                 job.setConfigSnapshot(
@@ -419,7 +421,7 @@ public class AgentJobService {
                 // Partial unique index race: another concurrent submit won. Mark rollback so the broken
                 // Hibernate Session is cleaned up — which also unwinds this signal's ledger row, leaving
                 // the occurrence free to be recorded again rather than consumed by a job that never was.
-                log.info("Idempotency constraint caught concurrent duplicate: key={}", detectionKey);
+                log.info("Idempotency constraint caught concurrent duplicate: key={}", reviewKey);
                 status.setRollbackOnly();
                 return SubmissionOutcome.refused(SignalStateReason.CONCURRENT_DUPLICATE);
             }
@@ -474,10 +476,6 @@ public class AgentJobService {
             case CONVERSATION_REVIEW -> ArtifactKinds.CONVERSATION_THREAD;
             case DOCUMENT_REVIEW -> ArtifactKinds.DOCUMENT;
         };
-    }
-
-    private static ArtifactKind artifactKindFor(AgentJobType jobType, JobSubmissionRequest request) {
-        return artifactKindFor(jobType);
     }
 
     /**

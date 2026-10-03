@@ -4,6 +4,7 @@ import { expect, fn } from "storybook/test";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
 import { withStandardPage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { storySessions } from "@/stories/sessions-story-mock-data";
 
 import type { AiChoiceSectionProps } from "./AiChoiceSection";
 import { SettingsPage } from "./SettingsPage";
@@ -29,6 +30,16 @@ const meta = {
 				onChange: fn(),
 			},
 		},
+		sessionsProps: {
+			state: {
+				status: "ready",
+				sessions: storySessions,
+				revokingJti: null,
+				revokingOthers: false,
+				onRevoke: fn(),
+				onRevokeOthers: fn(),
+			},
+		},
 	},
 	parameters: {
 		layout: "fullscreen",
@@ -52,6 +63,7 @@ const defaultLinkedAccountsProps = {
 		{
 			id: 1,
 			providerType: "GITHUB",
+			subject: "583231",
 			username: "octocat",
 			displayName: "The Octocat",
 			lastLoginAt: new Date("2026-05-20T10:00:00Z"),

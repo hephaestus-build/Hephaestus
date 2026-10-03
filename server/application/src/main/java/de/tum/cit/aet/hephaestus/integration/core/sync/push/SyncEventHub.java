@@ -13,11 +13,12 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
@@ -67,11 +68,6 @@ public class SyncEventHub {
 
     private final Map<CoalesceKey, SyncEventHint> pendingHints = new ConcurrentHashMap<>();
     private final Set<CoalesceKey> pendingFlushes = ConcurrentHashMap.newKeySet();
-    private final ScheduledExecutorService coalesceScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "sync-event-coalesce");
-        thread.setDaemon(true);
-        return thread;
-    });
 
     /** Selects the production constructor when the package-private test constructor is also present. */
     @Autowired
@@ -156,12 +152,14 @@ public class SyncEventHub {
         }
     }
 
+    /** After shutdown the writer rejects the flush, which is moot: every subscriber is already gone. */
     private void scheduleFlush(CoalesceKey key) {
-        try {
-            coalesceScheduler.schedule(() -> flush(key), coalesceWindow.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (RejectedExecutionException e) {
-            flush(key);
-        }
+        Executor afterWindow =
+                CompletableFuture.delayedExecutor(coalesceWindow.toMillis(), TimeUnit.MILLISECONDS, writerExecutor);
+        CompletableFuture.runAsync(() -> flush(key), afterWindow).exceptionally(failure -> {
+            log.warn("Sync SSE flush failed: {}", failure.toString());
+            return null;
+        });
     }
 
     private void flush(CoalesceKey key) {
@@ -309,6 +307,7 @@ public class SyncEventHub {
         try {
             emitter.complete();
         } catch (RuntimeException ignored) {
+            // Already completed: the client went away or the container timed the request out.
         }
     }
 
@@ -320,7 +319,6 @@ public class SyncEventHub {
                 safeComplete(subscriber.emitter);
             }
         }
-        coalesceScheduler.shutdownNow();
         writerExecutor.shutdown();
         try {
             if (!writerExecutor.awaitTermination(5, TimeUnit.SECONDS)) {

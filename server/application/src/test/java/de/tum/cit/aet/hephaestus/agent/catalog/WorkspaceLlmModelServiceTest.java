@@ -23,9 +23,11 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.hibernate.exception.ConstraintViolationException;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -422,9 +424,8 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
         }
 
         private DataIntegrityViolationException upstreamIdConstraintViolation() {
-            org.hibernate.exception.ConstraintViolationException cve =
-                    new org.hibernate.exception.ConstraintViolationException(
-                            "duplicate", new java.sql.SQLException("duplicate"), "ux_ws_llm_model_connection_upstream");
+            ConstraintViolationException cve = new ConstraintViolationException(
+                    "duplicate", new SQLException("duplicate"), "ux_ws_llm_model_connection_upstream");
             return new DataIntegrityViolationException("duplicate", cve);
         }
     }

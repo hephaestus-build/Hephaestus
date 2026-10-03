@@ -44,9 +44,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -59,24 +57,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * Integration tests for GitLabIssueMessageHandler.
- * <p>
- * Tests the full webhook handling flow: JSON fixtures → DTO → handler → processor → DB.
- * <p>
- * <b>Fixture values (issue.open.json — Issue IID #5):</b>
- * <ul>
- *   <li>Native ID: 422296 (stored as nativeId; synthetic auto-generated PK for id)</li>
- *   <li>IID: 5</li>
- *   <li>Title: "Feature: Add user authentication"</li>
- *   <li>State: opened → OPEN</li>
- *   <li>Author: ga84xah (native ID 18024)</li>
- *   <li>Label: enhancement (native ID 85907)</li>
- *   <li>Provider: GITLAB</li>
- * </ul>
- * <p>
- * Note: Does NOT use @Transactional (see GitHubIssueMessageHandlerIntegrationTest for rationale).
- */
+/** The webhook flow from recorded GitLab issue hooks to the database. */
 @Tag("integration")
 @DisplayName("GitLab Issue Message Handler")
 class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
@@ -85,7 +66,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
     private static final long NATIVE_ISSUE_ID = 422296L;
     private static final int ISSUE_IID = 5;
     private static final long NATIVE_USER_ID = 18024L;
-    private static final long NATIVE_LABEL_ID = 85907L;
 
     // Fixture values
     private static final String FIXTURE_ISSUE_TITLE = "Feature: Add user authentication";
@@ -160,8 +140,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         setupTestData();
     }
 
-    // Event Type
-
     @Nested
     class EventType {
 
@@ -170,8 +148,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(handler.key().eventType()).isEqualTo("issue");
         }
     }
-
-    // Basic Lifecycle
 
     @Nested
     class BasicLifecycleEvents {
@@ -266,7 +242,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldCloseIssueOnCloseEvent() throws Exception {
-            // Create first
             handler.handleEvent(loadPayload("issue.open"));
             eventListener.clear();
 
@@ -284,7 +259,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldReopenIssueOnReopenEvent() throws Exception {
-            // Create and close
             handler.handleEvent(loadPayload("issue.open"));
             handler.handleEvent(loadPayload("issue.close"));
             eventListener.clear();
@@ -303,14 +277,12 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldUpdateIssueOnUpdateEvent() throws Exception {
-            // Create first
             handler.handleEvent(loadPayload("issue.open"));
             eventListener.clear();
 
             // Update
             handler.handleEvent(loadPayload("issue.update"));
 
-            // Should still be one issue
             assertThat(issueRepository.count()).isEqualTo(1);
             Issue issue = issueRepository
                     .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
@@ -382,8 +354,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     .isNotEqualTo(context.actorUserId());
         }
     }
-
-    // Review Revision
 
     /**
      * The webhook and the GraphQL sync must resolve the same issue review revision for the same GitLab issue:
@@ -559,8 +529,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // Confidential Issues
-
     @Nested
     class ConfidentialIssues {
 
@@ -587,8 +555,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).isEmpty();
         }
     }
-
-    // Author and Label Resolution
 
     @Nested
     class EntityResolution {
@@ -624,8 +590,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             });
         }
     }
-
-    // Edge Cases
 
     @Nested
     class EdgeCases {
@@ -714,8 +678,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         assertThat(assigned).isFalse();
     }
 
-    // Helpers
-
     private GitLabIssueEventDTO loadPayload(String filename) throws IOException {
         ClassPathResource resource = new ClassPathResource("gitlab/" + filename + ".json");
         String json = resource.getContentAsString(StandardCharsets.UTF_8);
@@ -763,10 +725,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         workspace.setAccountLogin(FIXTURE_ORG_LOGIN);
         workspace.setAccountType(AccountType.ORG);
         savedWorkspace = workspaceRepository.save(workspace);
-    }
-
-    private Set<String> labelNames(Issue issue) {
-        return issue.getLabels().stream().map(l -> l.getName()).collect(Collectors.toSet());
     }
 
     private static long persistedId(IdentityProvider provider) {

@@ -69,12 +69,12 @@ public class IdentityProvider {
         return type.kind();
     }
 
+    // Proxy-aware, like BaseGitServiceEntity#equals.
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        IdentityProvider that = (IdentityProvider) o;
-        return id != null && id.equals(that.id);
+        if (!(o instanceof IdentityProvider that)) return false;
+        return id != null && id.equals(that.getId());
     }
 
     @Override

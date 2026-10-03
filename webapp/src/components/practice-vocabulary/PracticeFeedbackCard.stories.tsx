@@ -4,6 +4,7 @@ import { expect, fn, userEvent, within } from "storybook/test";
 import { NEW_FEEDBACK_CARD } from "@/stories/practice-feedback-cards-story-mock-data";
 import { conversation, issue, pullRequest } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { inStoryYear } from "@/stories/story-clock";
 import { expectTouchTarget } from "@/test/controls";
 
 import { text, work } from "./feedback-text";
@@ -13,10 +14,10 @@ const card = NEW_FEEDBACK_CARD;
 /** One clean piece of work, reviewed on the day given, in the reader's own time zone. */
 const clean = (number: number, day: string) => ({
 	ref: pullRequest(number),
-	date: new Date(`${day}T00:00`),
+	date: inStoryYear(`${day}T00:00`),
 });
-const twoClean = [clean(21, "2026-09-07"), clean(22, "2026-09-09")];
-const threeClean = [clean(20, "2026-09-07"), clean(21, "2026-09-08"), clean(22, "2026-09-09")];
+const twoClean = [clean(21, "09-07"), clean(22, "09-09")];
+const threeClean = [clean(20, "09-07"), clean(21, "09-08"), clean(22, "09-09")];
 
 /** The strip's outcome icons, matched by the names they carry for a screen reader. */
 const OUTCOME_NAME = /^(?:Met|Not met)$/u;
@@ -247,7 +248,7 @@ export const MarkedAsAddressed: Story = {
 			resolvedBy: "DEVELOPER",
 			cleanWork: twoClean,
 			condition: [text("Marked as addressed on 9 September")],
-			timestamp: new Date("2026-09-09T16:05:00"),
+			timestamp: inStoryYear("09-09T16:05"),
 		},
 		resolution: "ADDRESSED",
 	},
@@ -330,12 +331,12 @@ export const EveryOutcome: Story = {
 			headline: "Descriptions named the what, rarely the why",
 			body: "#16 and #19 listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
 			reviewedWork: [
-				{ ref: pullRequest(16), date: new Date("2026-08-24T00:00"), outcome: "NOT_MET" },
-				{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "NOT_MET" },
-				{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "MET" },
+				{ ref: pullRequest(16), date: inStoryYear("08-24T00:00"), outcome: "NOT_MET" },
+				{ ref: pullRequest(19), date: inStoryYear("09-06T00:00"), outcome: "NOT_MET" },
+				{ ref: pullRequest(20), date: inStoryYear("09-03T00:00"), outcome: "MET" },
 				{
 					ref: pullRequest(21),
-					date: new Date("2026-09-08T00:00"),
+					date: inStoryYear("09-08T00:00"),
 					outcome: "MET",
 				},
 			],
@@ -357,8 +358,7 @@ export const EveryOutcome: Story = {
 
 /**
  * Work at GitLab is named by the provider's noun: the strip counts merge requests, not pull
- * requests, the wire's own labels carry the sigil, and the glyph leading the label is the forge the
- * work lives at rather than its kind.
+ * requests, and the wire's own labels carry the sigil.
  */
 export const GitLabWork: Story = {
 	args: {
@@ -374,9 +374,6 @@ export const GitLabWork: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Newest three merge requests")).toBeVisible();
 		await expect(canvas.getByRole("link", { name: /^!17/u })).toBeVisible();
-		// The glyph is decorative, so the mark is read off the brand icon's own <title>.
-		canvas.getByTitle("GitlabIcon");
-		await expect(canvas.queryByTitle("GithubIcon")).toBeNull();
 	},
 };
 
@@ -391,10 +388,10 @@ export const MixedWork: Story = {
 			...card,
 			state: "open",
 			reviewedWork: [
-				{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "NOT_MET" },
-				{ ref: issue(13), date: new Date("2026-09-03T00:00"), outcome: "NOT_MET" },
+				{ ref: pullRequest(17), date: inStoryYear("08-28T00:00"), outcome: "NOT_MET" },
+				{ ref: issue(13), date: inStoryYear("09-03T00:00"), outcome: "NOT_MET" },
 			],
-			cleanWork: [{ ref: conversation("#releases"), date: new Date("2026-09-05T00:00") }],
+			cleanWork: [{ ref: conversation("#releases"), date: inStoryYear("09-05T00:00") }],
 		},
 	},
 	play: async ({ canvas }) => {
@@ -432,11 +429,11 @@ export const WorkWithoutAnAddress: Story = {
 			reviewedWork: [
 				{
 					ref: conversation("#backend-review"),
-					date: new Date("2026-08-12T00:00"),
+					date: inStoryYear("08-12T00:00"),
 					outcome: "NOT_MET",
 				},
 			],
-			cleanWork: [{ ref: conversation("#releases"), date: new Date("2026-08-20T00:00") }],
+			cleanWork: [{ ref: conversation("#releases"), date: inStoryYear("08-20T00:00") }],
 		},
 	},
 	play: async ({ canvas }) => {
@@ -458,7 +455,7 @@ export const Closed: Story = {
 			state: "closed",
 			cleanWork: twoClean,
 			condition: [text("Closed on 9 September · the practice's review rules changed")],
-			timestamp: new Date("2026-09-09T09:00"),
+			timestamp: inStoryYear("09-09T09:00"),
 		},
 	},
 	play: async ({ canvas }) => {
@@ -489,7 +486,7 @@ export const Withdrawn: Story = {
 			reviewedWork: [],
 			cleanWork: [],
 			state: "withdrawn",
-			timestamp: new Date("2026-09-12T09:00"),
+			timestamp: inStoryYear("09-12T09:00"),
 		},
 	},
 	play: async ({ canvas }) => {

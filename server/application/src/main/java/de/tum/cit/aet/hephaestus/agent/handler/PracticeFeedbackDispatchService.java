@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRe
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
@@ -107,7 +109,7 @@ class PracticeFeedbackDispatchService {
                                 FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE,
                                 Set.copyOf(feedback.getProposedPracticeSlugs()),
                                 new DeliveryContent(
-                                        java.util.Objects.requireNonNull(feedback.getBody()),
+                                        Objects.requireNonNull(feedback.getBody()),
                                         proposedInlineNotes(feedback),
                                         List.of(),
                                         null)),
@@ -285,7 +287,7 @@ class PracticeFeedbackDispatchService {
                     return stateMachine.retry(dispatch, owner, "Provider lookup was inconclusive");
                 }
                 if (existing.kind() == ExistingDeliveryLookup.Kind.FOUND) {
-                    summaryRef = java.util.Objects.requireNonNull(existing.commentId());
+                    summaryRef = Objects.requireNonNull(existing.commentId());
                     summaryUrl = existing.commentUrl();
                 } else if (dispatch.getWriteStarted()) {
                     return stateMachine.retry(dispatch, owner, "A prior provider write has not been reconciled");
@@ -305,7 +307,7 @@ class PracticeFeedbackDispatchService {
                 }
             }
 
-            String deliveredSummaryRef = java.util.Objects.requireNonNull(summaryRef);
+            String deliveredSummaryRef = Objects.requireNonNull(summaryRef);
             var inlineNotes = inlineNotes(dispatch);
             if (!inlineNotes.isEmpty()) {
                 PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
@@ -483,8 +485,8 @@ class PracticeFeedbackDispatchService {
     private PracticeFeedbackDeliveryPolicy.Decision<?> evaluateAtEgress(FeedbackDispatch dispatch, AgentJob job) {
         Set<String> practiceSlugs = dispatch.getPracticeSlugs()
                 .valueStream()
-                .filter(tools.jackson.databind.JsonNode::isString)
-                .map(tools.jackson.databind.JsonNode::asString)
+                .filter(JsonNode::isString)
+                .map(JsonNode::asString)
                 .collect(Collectors.toUnmodifiableSet());
         if (isIssue(job)) {
             return policy.evaluateIssue(job, DeliveryPolicyStage.EGRESS, dispatch.getFeedbackId(), practiceSlugs);
@@ -518,8 +520,8 @@ class PracticeFeedbackDispatchService {
         return feedback.getProposedPlacements().stream()
                 .filter(placement -> placement.type() == PlacementType.INLINE)
                 .map(placement -> new DiffNote(
-                        java.util.Objects.requireNonNull(placement.path()),
-                        java.util.Objects.requireNonNull(placement.startLine()),
+                        Objects.requireNonNull(placement.path()),
+                        Objects.requireNonNull(placement.startLine()),
                         placement.endLine(),
                         placement.body(),
                         placement.deliveryKey(),
@@ -536,7 +538,7 @@ class PracticeFeedbackDispatchService {
     }
 
     private static boolean isIssue(AgentJob job) {
-        var artifact = AgentJobService.artifactKindFor(java.util.Objects.requireNonNull(job.getJobType()));
+        var artifact = AgentJobService.artifactKindFor(Objects.requireNonNull(job.getJobType()));
         if (artifact.equals(ArtifactKinds.ISSUE)) return true;
         if (artifact.equals(ArtifactKinds.PULL_REQUEST)) return false;
         throw new JobDeliveryException("Artifact dispatch does not support " + artifact.value());
@@ -591,11 +593,11 @@ class PracticeFeedbackDispatchService {
             @Nullable FeedbackSuppressionReason suppressionReason,
             List<DeliveredSignal> deliveredSignals) {
         FeedbackSuppressionReason refusal() {
-            return java.util.Objects.requireNonNull(suppressionReason, "a refused dispatch always names its reason");
+            return Objects.requireNonNull(suppressionReason, "a refused dispatch always names its reason");
         }
 
         String sentRef() {
-            return java.util.Objects.requireNonNull(externalRef, "a sent dispatch always has a provider id");
+            return Objects.requireNonNull(externalRef, "a sent dispatch always has a provider id");
         }
 
         static Result sent(@Nullable String ref) {

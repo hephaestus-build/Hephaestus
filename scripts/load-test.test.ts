@@ -225,7 +225,8 @@ if (process.argv.includes('inspect')) {
 					env: {
 						...process.env,
 						...env,
-						PATH: `${root}${path.delimiter}${process.env.PATH}`,
+						PATH:
+							process.env.PATH === undefined ? root : `${root}${path.delimiter}${process.env.PATH}`,
 						ARGS_FILE: argsFile,
 						LOAD_RESULTS_DIR: output,
 						LOAD_TEST_ACKNOWLEDGE: "isolated-host",

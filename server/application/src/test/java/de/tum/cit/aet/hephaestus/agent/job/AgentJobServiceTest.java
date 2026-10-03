@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
@@ -20,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.core.security.EncryptedStringConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
@@ -35,13 +37,20 @@ import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
+import de.tum.cit.aet.hephaestus.practices.review.GateDecision.Run;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
+import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.Convert;
+import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +59,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.slf4j.MDC;
@@ -61,25 +71,16 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class AgentJobServiceTest extends BaseUnitTest {
-    @org.junit.jupiter.api.BeforeEach
+    @BeforeEach
     void allowMemberAiForUnrelatedScenarios() {
-        org.mockito.Mockito.lenient()
-                .when(memberAiPolicy.permitsReview(
-                        org.mockito.ArgumentMatchers.anyLong(),
-                        org.mockito.ArgumentMatchers.any(),
-                        org.mockito.ArgumentMatchers.any()))
-                .thenReturn(true);
-        var handler = org.mockito.Mockito.mock(JobTypeHandler.class);
-        org.mockito.Mockito.lenient()
-                .when(handlerRegistry.getHandler(org.mockito.ArgumentMatchers.any()))
-                .thenReturn(handler);
-        org.mockito.Mockito.lenient()
-                .when(handler.createSubmission(org.mockito.ArgumentMatchers.any()))
-                .thenAnswer(ignored -> createSubmission());
+        lenient().when(memberAiPolicy.permitsReview(anyLong(), any(), any())).thenReturn(true);
+        var handler = mock(JobTypeHandler.class);
+        lenient().when(handlerRegistry.getHandler(any())).thenReturn(handler);
+        lenient().when(handler.createSubmission(any())).thenAnswer(ignored -> createSubmission());
     }
 
-    @org.mockito.Mock
-    private de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy memberAiPolicy;
+    @Mock
+    private ReviewMemberAiPolicy memberAiPolicy;
 
     @Mock
     private AgentJobRepository agentJobRepository;
@@ -100,7 +101,7 @@ class AgentJobServiceTest extends BaseUnitTest {
     private PracticeRepository practiceRepository;
 
     @Mock
-    private de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService llmBudgetService;
+    private LlmBudgetService llmBudgetService;
 
     @Mock
     private LlmModelResolver llmModelResolver;
@@ -296,12 +297,12 @@ class AgentJobServiceTest extends BaseUnitTest {
          */
         @ParameterizedTest(name = "a binding on {1}''s model is paused by {1}''s exhausted cap, and only by it")
         @CsvSource({"true, INSTANCE, WORKSPACE", "false, WORKSPACE, INSTANCE"})
-        void shouldCheckTheBudgetOfWhoeverFundsTheBoundDetectionModel(
+        void shouldCheckTheBudgetOfWhoeverFundsTheBoundReviewModel(
                 boolean boundToAnInstanceModel, FundingSource payer, FundingSource otherPurse) {
             // An instance model on the binding = the host's shared models pay; none = the workspace's
             // own connected provider does.
             if (boundToAnInstanceModel) {
-                enabledBinding.setInstanceModel(new de.tum.cit.aet.hephaestus.agent.catalog.LlmModel());
+                enabledBinding.setInstanceModel(new LlmModel());
             }
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
             // Exactly one purse is out of money. Mockito's default for the other is `false` (not blocked).
@@ -334,8 +335,7 @@ class AgentJobServiceTest extends BaseUnitTest {
         @Test
         void shouldSubmitNothingWhenThePayersBudgetIsBlocked() {
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
-            when(llmBudgetService.blockSubmission(
-                            any(), any(), eq(de.tum.cit.aet.hephaestus.agent.usage.FundingSource.WORKSPACE)))
+            when(llmBudgetService.blockSubmission(any(), any(), eq(FundingSource.WORKSPACE)))
                     .thenReturn(true);
 
             Optional<AgentJob> result =
@@ -386,9 +386,8 @@ class AgentJobServiceTest extends BaseUnitTest {
         }
 
         @ParameterizedTest
-        @org.junit.jupiter.params.provider.EnumSource(de.tum.cit.aet.hephaestus.practices.review.TriggerMode.class)
-        void shouldCreateAQueuedJobWithItsPurposeIdempotencyKeyAndFrozenSnapshot(
-                de.tum.cit.aet.hephaestus.practices.review.TriggerMode triggerMode) {
+        @EnumSource(TriggerMode.class)
+        void shouldCreateAQueuedJobWithItsPurposeIdempotencyKeyAndFrozenSnapshot(TriggerMode triggerMode) {
             MDC.put(StructuredLogKeys.TRACE_ID, "0123456789abcdef0123456789abcdef");
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
 
@@ -410,13 +409,13 @@ class AgentJobServiceTest extends BaseUnitTest {
                     AgentJobType.PULL_REQUEST_REVIEW,
                     mock(JobSubmissionRequest.class),
                     null,
-                    new de.tum.cit.aet.hephaestus.practices.review.GateDecision.Detect(
+                    new Run(
                             workspace,
                             List.of(),
                             workspace.getReviewSettings().getRolloutRevision(),
                             triggerMode,
-                            java.util.Set.of(),
-                            java.util.Map.of("state", "OPEN", "draftStatus", "NOT_DRAFT")));
+                            Set.of(),
+                            Map.of("state", "OPEN", "draftStatus", "NOT_DRAFT")));
 
             assertThat(result).isPresent();
             AgentJob job = result.get();
@@ -427,7 +426,7 @@ class AgentJobServiceTest extends BaseUnitTest {
             assertThat(job.getConfigSnapshot()).isNotNull();
             assertThat(job.getStatus()).isEqualTo(AgentJobStatus.QUEUED);
             assertThat(job.getPracticeTriggerMode()).isEqualTo(triggerMode);
-            assertThat(java.util.Objects.requireNonNull(job.getMetadata()).path("review_state"))
+            assertThat(Objects.requireNonNull(job.getMetadata()).path("review_state"))
                     .isEqualTo(objectMapper.readTree("{\"state\":\"OPEN\",\"draftStatus\":\"NOT_DRAFT\"}"));
             assertThat(job.getTraceId()).isEqualTo("0123456789abcdef0123456789abcdef");
         }
@@ -442,7 +441,7 @@ class AgentJobServiceTest extends BaseUnitTest {
                     .filteredOn(field -> field.isAnnotationPresent(Convert.class)
                             && field.getAnnotation(Convert.class).converter() == EncryptedStringConverter.class)
                     .describedAs("the job's own bearer token is the ONLY secret an agent_job row may carry")
-                    .extracting(java.lang.reflect.Field::getName)
+                    .extracting(Field::getName)
                     .containsExactly("jobToken");
         }
 
@@ -494,7 +493,7 @@ class AgentJobServiceTest extends BaseUnitTest {
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
             JobTypeHandler handler = mock(JobTypeHandler.class);
             when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
-            var monitor = new de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor();
+            var monitor = new RepositoryToMonitor();
             monitor.setWorkspace(workspace);
             monitor.setNameWithOwner("owner/repo");
             monitor.setGeneratedPaths(List.of("generated/**"));
@@ -513,11 +512,11 @@ class AgentJobServiceTest extends BaseUnitTest {
             var job = service.submit(1L, AgentJobType.PULL_REQUEST_REVIEW, mock(JobSubmissionRequest.class), key)
                     .orElseThrow();
 
-            assertThat(java.util.Objects.requireNonNull(job.getMetadata())
+            assertThat(Objects.requireNonNull(job.getMetadata())
                             .path(AgentJob.SIGNAL_REVISION_METADATA_KEY)
                             .asString())
                     .isEqualTo(key.revision().value());
-            assertThat(java.util.Objects.requireNonNull(job.getMetadata())
+            assertThat(Objects.requireNonNull(job.getMetadata())
                             .path("generated_path_patterns")
                             .get(0)
                             .asString())

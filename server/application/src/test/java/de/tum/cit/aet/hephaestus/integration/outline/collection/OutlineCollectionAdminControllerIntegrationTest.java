@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
@@ -44,6 +45,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -342,7 +344,7 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 .isOk()
                 // The live upstream view must never be cached by the browser or an intermediary.
                 .expectHeader()
-                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .cacheControl(CacheControl.noStore())
                 .expectBodyList(OutlineCollectionCandidateDTO.class)
                 .returnResult()
                 .getResponseBody();
@@ -374,7 +376,7 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
         seedCollection(MirrorState.ENABLED, SyncStatus.COMPLETE);
         seedDocument("doc-live");
         OutlineDocument tombstoned = seedDocument("doc-gone");
-        tombstoned.setDeletedAt(java.time.Instant.parse("2026-01-01T00:00:00Z"));
+        tombstoned.setDeletedAt(Instant.parse("2026-01-01T00:00:00Z"));
         documentRepository.save(tombstoned);
 
         ConnectionSyncStatusDTO status = syncStatusRequest()
@@ -461,8 +463,6 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange();
     }
-
-    // --- helpers ---
 
     private WebTestClient.ResponseSpec listRequest() {
         return webTestClient

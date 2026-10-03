@@ -67,7 +67,7 @@ class SignalGrammarTest extends BaseUnitTest {
 
         @Test
         void shouldKeepDescriptionEditsDistinguishableAtAnUnchangedHeadCommit() {
-            // The finding the ledger is built around: a practice whose criteria are about the
+            // The case the ledger is built around: a practice whose criteria are about the
             // description must stay re-measurable after the author fixes it, and no commit moved.
             SignalRevision before = SignalRevision.ofContentDigest("Add caching", "It is faster.");
             SignalRevision after = SignalRevision.ofContentDigest("Add caching", "Cuts p99 by 40%.");

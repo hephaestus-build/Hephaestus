@@ -108,7 +108,7 @@ public class SlackInteractivityController {
     }
 
     static String extractPayload(String body) {
-        for (String pair : body.split("&")) {
+        for (String pair : body.split("&", -1)) {
             int eq = pair.indexOf('=');
             if (eq > 0 && "payload".equals(pair.substring(0, eq))) {
                 return URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);

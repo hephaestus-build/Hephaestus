@@ -14,10 +14,12 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewPersonMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -58,7 +60,7 @@ public class PracticeReviewCoverageService {
             validated.put(name, GeneratedPaths.normalize(patterns));
         });
         validated.forEach((name, patterns) -> {
-            RepositoryToMonitor monitor = java.util.Objects.requireNonNull(monitors.get(name));
+            RepositoryToMonitor monitor = Objects.requireNonNull(monitors.get(name));
             monitor.setGeneratedPaths(patterns);
             monitorRepository.save(monitor);
         });
@@ -81,8 +83,8 @@ public class PracticeReviewCoverageService {
                             ? null
                             : new ReviewRepositoryTarget(monitor.getNameWithOwner(), target.getBaseBranches());
                 })
-                .filter(java.util.Objects::nonNull)
-                .sorted(java.util.Comparator.comparing(ReviewRepositoryTarget::nameWithOwner))
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(ReviewRepositoryTarget::nameWithOwner))
                 .toList();
         List<Long> people = personTargetRepository.findByWorkspaceId(workspaceId).stream()
                 .map(PracticeReviewPersonTarget::getUserId)
@@ -285,8 +287,7 @@ public class PracticeReviewCoverageService {
                     .collect(Collectors.toMap(RepositoryToMonitor::getNameWithOwner, RepositoryToMonitor::getId));
             for (ReviewRepositoryTarget selection : requested.repositories()) {
                 requestedRepositories.put(
-                        java.util.Objects.requireNonNull(
-                                monitorIds.get(selection.nameWithOwner()), "validated repository"),
+                        Objects.requireNonNull(monitorIds.get(selection.nameWithOwner()), "validated repository"),
                         selection.baseBranches());
             }
         }

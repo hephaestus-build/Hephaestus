@@ -21,9 +21,12 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.hibernate.exception.ConstraintViolationException;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -90,7 +93,7 @@ class LlmModelServiceTest extends BaseUnitTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
-    private static @org.jspecify.annotations.Nullable BigDecimal rate(@org.jspecify.annotations.Nullable String value) {
+    private static @Nullable BigDecimal rate(@Nullable String value) {
         return value == null ? null : new BigDecimal(value);
     }
 
@@ -491,9 +494,8 @@ class LlmModelServiceTest extends BaseUnitTest {
         }
 
         private DataIntegrityViolationException upstreamIdConstraintViolation() {
-            org.hibernate.exception.ConstraintViolationException cve =
-                    new org.hibernate.exception.ConstraintViolationException(
-                            "duplicate", new java.sql.SQLException("duplicate"), "ux_llm_model_connection_upstream");
+            ConstraintViolationException cve = new ConstraintViolationException(
+                    "duplicate", new SQLException("duplicate"), "ux_llm_model_connection_upstream");
             return new DataIntegrityViolationException("duplicate", cve);
         }
     }

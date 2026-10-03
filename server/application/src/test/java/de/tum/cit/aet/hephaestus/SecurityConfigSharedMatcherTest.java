@@ -8,6 +8,8 @@ import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockHttpServletRequest;
 
@@ -35,9 +37,8 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
         assertThat(SecurityConfig.EMAIL_UNSUBSCRIBE_MATCHER.matches(post)).isFalse();
     }
 
-    private static org.springframework.beans.factory.ObjectProvider<InstalledClientRegistry> noClients() {
-        return new org.springframework.beans.factory.support.StaticListableBeanFactory()
-                .getBeanProvider(InstalledClientRegistry.class);
+    private static ObjectProvider<InstalledClientRegistry> noClients() {
+        return new StaticListableBeanFactory().getBeanProvider(InstalledClientRegistry.class);
     }
 
     @Test

@@ -14,6 +14,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
+import de.tum.cit.aet.hephaestus.core.database.AuthEventPartitionMaintenance;
+import de.tum.cit.aet.hephaestus.core.privacy.ExactPersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.ShedLockConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -34,6 +36,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -61,6 +64,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -79,9 +83,10 @@ import tools.jackson.databind.node.ObjectNode;
 @Import({
     TestCacheConfiguration.class,
     SlackConversationProjector.class,
-    de.tum.cit.aet.hephaestus.core.privacy.ExactPersonDataCopyRecorder.class,
+    ExactPersonDataCopyRecorder.class,
     ConfigAuditRetentionJob.class,
     ShedLockConfig.class,
+    AuthEventPartitionMaintenance.class,
     ProductionSchemaContractIntegrationTest.JsonConfiguration.class,
 })
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -107,6 +112,9 @@ class ProductionSchemaContractIntegrationTest {
 
     @Autowired
     private LockProvider locks;
+
+    @Autowired
+    private AuthEventPartitionMaintenance partitionMaintenance;
 
     @Autowired
     private SlackConversationProjector slackConversationProjector;
@@ -145,6 +153,19 @@ class ProductionSchemaContractIntegrationTest {
         } finally {
             jdbcTemplate.update("DELETE FROM shedlock WHERE name = ?", name);
         }
+    }
+
+    @Test
+    void shouldRecreateTheNewestAuthEventPartitionWhenMaintenanceRuns() {
+        String newest = "partman.show_partition_name('public.auth_event', (now() + interval '2 months')::text)";
+        String partition = jdbcTemplate.queryForObject(
+                "SELECT partition_schema || '.' || partition_table FROM " + newest, String.class);
+        jdbcTemplate.execute("DROP TABLE " + partition);
+
+        partitionMaintenance.maintain();
+
+        assertThat(jdbcTemplate.queryForObject("SELECT table_exists FROM " + newest, Boolean.class))
+                .isTrue();
     }
 
     @Test
@@ -206,7 +227,7 @@ class ProductionSchemaContractIntegrationTest {
                         provider, IDENTITY_SUBJECT, ACCOUNT_FEATURE))
                 .isTrue();
 
-        identity.setDisabledAt(java.time.Instant.now());
+        identity.setDisabledAt(Instant.now());
         identityLinkRepository.save(identity);
 
         assertThat(accountFeatureRepository.existsActiveFeatureForProviderSubject(
@@ -357,16 +378,13 @@ class ProductionSchemaContractIntegrationTest {
                 .hasMessageContaining(constraint);
     }
 
-    static Stream<org.junit.jupiter.params.provider.Arguments> invalidDispatchStates() {
+    static Stream<Arguments> invalidDispatchStates() {
         return Stream.of(
-                org.junit.jupiter.params.provider.Arguments.of("state = 'CLAIMED'", "chk_feedback_dispatch_lease"),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "lease_owner = 'worker', lease_expires_at = now()", "chk_feedback_dispatch_lease"),
-                org.junit.jupiter.params.provider.Arguments.of("state = 'SENT'", "chk_feedback_dispatch_delivery"),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "state = 'SUPPRESSED'", "chk_feedback_dispatch_suppression"),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "suppression_reason = 'WORKSPACE_DELIVERY_PAUSED'", "chk_feedback_dispatch_suppression"));
+                Arguments.of("state = 'CLAIMED'", "chk_feedback_dispatch_lease"),
+                Arguments.of("lease_owner = 'worker', lease_expires_at = now()", "chk_feedback_dispatch_lease"),
+                Arguments.of("state = 'SENT'", "chk_feedback_dispatch_delivery"),
+                Arguments.of("state = 'SUPPRESSED'", "chk_feedback_dispatch_suppression"),
+                Arguments.of("suppression_reason = 'WORKSPACE_DELIVERY_PAUSED'", "chk_feedback_dispatch_suppression"));
     }
 
     /**
@@ -410,18 +428,16 @@ class ProductionSchemaContractIntegrationTest {
         assertThat(inserted).isEqualTo(accepted);
     }
 
-    static Stream<org.junit.jupiter.params.provider.Arguments> restorationStates() {
+    static Stream<Arguments> restorationStates() {
         Instant now = Instant.now();
         return Stream.of(
-                org.junit.jupiter.params.provider.Arguments.argumentSet("active", null, null, null, true),
-                org.junit.jupiter.params.provider.Arguments.argumentSet("restored", now, 1L, "Right after all", true),
-                org.junit.jupiter.params.provider.Arguments.argumentSet(
-                        "missing time", null, 1L, "Right after all", false),
-                org.junit.jupiter.params.provider.Arguments.argumentSet(
-                        "erased actor", now, null, "Right after all", true),
-                org.junit.jupiter.params.provider.Arguments.argumentSet("erased reason", now, 1L, null, true),
-                org.junit.jupiter.params.provider.Arguments.argumentSet("erased attribution", now, null, null, true),
-                org.junit.jupiter.params.provider.Arguments.argumentSet("blank reason", now, 1L, "   ", false));
+                Arguments.argumentSet("active", null, null, null, true),
+                Arguments.argumentSet("restored", now, 1L, "Right after all", true),
+                Arguments.argumentSet("missing time", null, 1L, "Right after all", false),
+                Arguments.argumentSet("erased actor", now, null, "Right after all", true),
+                Arguments.argumentSet("erased reason", now, 1L, null, true),
+                Arguments.argumentSet("erased attribution", now, null, null, true),
+                Arguments.argumentSet("blank reason", now, 1L, "   ", false));
     }
 
     @Test
@@ -444,7 +460,7 @@ class ProductionSchemaContractIntegrationTest {
     @ParameterizedTest
     @EnumSource(FeedbackSuppressionReason.class)
     void feedbackAcceptsEverySuppressionReasonTheServerRecords(FeedbackSuppressionReason reason) {
-        String key = "reason-" + reason.ordinal() + "-"
+        String key = "reason-" + reason.name().toLowerCase(Locale.ROOT).replace('_', '-') + "-"
                 + UUID.randomUUID().toString().substring(0, 8);
         UUID feedbackId = insertFeedback(insertDispatchOwner(key), key);
 
@@ -515,17 +531,13 @@ class ProductionSchemaContractIntegrationTest {
                 .isTrue();
     }
 
-    static Stream<org.junit.jupiter.params.provider.Arguments> withdrawalRestorationStates() {
+    static Stream<Arguments> withdrawalRestorationStates() {
         return Stream.of(
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "restored_at = now(), restored_by_account_id = %d", true),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "restored_at = now(), restored_by_account_id = %d, restoration_reason = '  '", false),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "restored_at = now(), restoration_reason = 'Right after all'", true),
-                org.junit.jupiter.params.provider.Arguments.of("restored_at = now()", true),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "restored_by_account_id = %d, restoration_reason = 'Right after all'", false));
+                Arguments.of("restored_at = now(), restored_by_account_id = %d", true),
+                Arguments.of("restored_at = now(), restored_by_account_id = %d, restoration_reason = '  '", false),
+                Arguments.of("restored_at = now(), restoration_reason = 'Right after all'", true),
+                Arguments.of("restored_at = now()", true),
+                Arguments.of("restored_by_account_id = %d, restoration_reason = 'Right after all'", false));
     }
 
     @ParameterizedTest
@@ -867,8 +879,8 @@ class ProductionSchemaContractIntegrationTest {
     static class JsonConfiguration {
 
         @Bean
-        tools.jackson.databind.ObjectMapper objectMapper() {
-            return new tools.jackson.databind.ObjectMapper();
+        ObjectMapper objectMapper() {
+            return new ObjectMapper();
         }
     }
 }

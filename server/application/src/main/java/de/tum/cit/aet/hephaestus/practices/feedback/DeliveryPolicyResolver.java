@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 public final class DeliveryPolicyResolver {
@@ -96,7 +97,7 @@ public final class DeliveryPolicyResolver {
     public record Result(
             boolean allowed, @Nullable FeedbackSuppressionReason suppressionReason, List<CheckResult> checks) {
         public FeedbackSuppressionReason refusal() {
-            return java.util.Objects.requireNonNull(suppressionReason, "a denied result always names its reason");
+            return Objects.requireNonNull(suppressionReason, "a denied result always names its reason");
         }
     }
 

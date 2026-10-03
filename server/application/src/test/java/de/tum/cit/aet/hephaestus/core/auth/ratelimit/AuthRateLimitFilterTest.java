@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.ratelimit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -20,7 +21,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.ArgumentMatchers;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -237,7 +237,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         assertThat(store).containsOnlyKeys("refresh:acct:4242");
         // verify the configured limit (60/min) reached the resolver for this endpoint
         var config = capturedConfigs.get("refresh:acct:4242");
-        org.junit.jupiter.api.Assertions.assertNotNull(config);
+        assertThat(config).isNotNull();
         assertThat(config.getBandwidths()[0].getCapacity()).isEqualTo(60);
     }
 
@@ -312,11 +312,11 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         FilterChain blockedChain = mock(FilterChain.class);
         f.doFilter(new MockHttpServletRequest("DELETE", "/user"), blocked, blockedChain);
 
-        verify(blockedChain, never()).doFilter(ArgumentMatchers.any(), ArgumentMatchers.any());
+        verify(blockedChain, never()).doFilter(any(), any());
         assertThat(blocked.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
         assertThat(store).containsOnlyKeys("delete-user:acct:7");
         var config = capturedConfigs.get("delete-user:acct:7");
-        org.junit.jupiter.api.Assertions.assertNotNull(config);
+        assertThat(config).isNotNull();
         assertThat(config.getBandwidths()[0].getCapacity()).isEqualTo(3);
     }
 

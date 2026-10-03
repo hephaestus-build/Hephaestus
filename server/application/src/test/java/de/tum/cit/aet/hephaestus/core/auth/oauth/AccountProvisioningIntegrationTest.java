@@ -12,10 +12,12 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.util.List;
 import java.util.Map;
+import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
@@ -140,18 +142,18 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
         account.setStatus(Account.Status.DELETING);
         accountRepository.saveAndFlush(account);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.resolveOrProvision(
+        Assertions.assertThatThrownBy(() -> service.resolveOrProvision(
                         "github-deleting",
                         "new-native-subject",
                         principal("new-native-subject", "contact@example.test", true, "display"),
                         AuthIntentCookie.Intent.link(accountId, null)))
-                .isInstanceOf(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class);
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.resolveOrProvision(
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        Assertions.assertThatThrownBy(() -> service.resolveOrProvision(
                         "github-deleting",
                         "original-native-subject",
                         principal("original-native-subject", "contact@example.test", true, "display"),
                         AuthIntentCookie.Intent.login(null, null)))
-                .isInstanceOf(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class);
+                .isInstanceOf(OAuth2AuthenticationException.class);
         assertThat(identityLinkRepository.findActiveByAccountId(accountId))
                 .extracting(IdentityLink::getSubject)
                 .containsExactly("original-native-subject");

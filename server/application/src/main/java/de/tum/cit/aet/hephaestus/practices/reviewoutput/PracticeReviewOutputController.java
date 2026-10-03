@@ -38,6 +38,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -133,7 +134,7 @@ public class PracticeReviewOutputController {
     public ResponseEntity<ReviewObservationDetailDTO> updateObservationValidity(
             WorkspaceContext workspaceContext,
             @PathVariable UUID observationId,
-            @Valid @org.springframework.web.bind.annotation.RequestBody UpdateObservationValidityRequestDTO request) {
+            @Valid @RequestBody UpdateObservationValidityRequestDTO request) {
         long actorAccountId = SecurityUtils.getCurrentAccountId().orElseThrow();
         invalidationService.setValidity(
                 workspaceContext.id(), observationId, actorAccountId, request.valid(), request.reason());
@@ -216,7 +217,7 @@ public class PracticeReviewOutputController {
     public ResponseEntity<ReviewFeedbackDetailDTO> updateFeedbackWithdrawal(
             WorkspaceContext workspaceContext,
             @PathVariable UUID feedbackId,
-            @Valid @org.springframework.web.bind.annotation.RequestBody UpdateFeedbackWithdrawalRequestDTO request) {
+            @Valid @RequestBody UpdateFeedbackWithdrawalRequestDTO request) {
         long actorAccountId = SecurityUtils.getCurrentAccountId().orElseThrow();
         withdrawalService.setWithdrawn(
                 workspaceContext.id(), feedbackId, actorAccountId, request.withdrawn(), request.reason());
@@ -229,7 +230,7 @@ public class PracticeReviewOutputController {
     public ResponseEntity<FeedbackApprovalDTO> decideFeedbackProposal(
             WorkspaceContext workspaceContext,
             @PathVariable UUID feedbackId,
-            @Valid @org.springframework.web.bind.annotation.RequestBody DecideFeedbackProposalRequestDTO request) {
+            @Valid @RequestBody DecideFeedbackProposalRequestDTO request) {
         long actorAccountId = SecurityUtils.getCurrentAccountId().orElseThrow();
         return ResponseEntity.ok(FeedbackApprovalDTO.from(
                 feedbackApprovalService.decide(workspaceContext.id(), feedbackId, actorAccountId, request)));

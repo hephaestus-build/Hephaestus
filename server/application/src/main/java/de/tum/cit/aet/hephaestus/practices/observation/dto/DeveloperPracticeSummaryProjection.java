@@ -15,10 +15,8 @@ public interface DeveloperPracticeSummaryProjection {
 
     Long getTotalObservations();
 
-    /** Count of MET outcomes. */
     Long getMet();
 
-    /** Count of NOT_MET outcomes. */
     Long getNotMet();
 
     Long getNotApplicable();

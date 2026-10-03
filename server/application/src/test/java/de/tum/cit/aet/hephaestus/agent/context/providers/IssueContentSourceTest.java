@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -115,7 +116,7 @@ class IssueContentSourceTest extends BaseUnitTest {
                 AgentJob.SIGNAL_REVISION_METADATA_KEY,
                 ScmSignals.issueUpdatedRevision(ScmEventPayload.IssueData.from(issue))
                         .value());
-        Map<String, byte[]> files = new java.util.HashMap<>();
+        Map<String, byte[]> files = new HashMap<>();
         provider.contribute(request(metadata), files);
         assertThat(files).containsKey(METADATA_KEY);
     }

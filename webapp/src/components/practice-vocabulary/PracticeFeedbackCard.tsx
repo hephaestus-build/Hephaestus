@@ -16,6 +16,7 @@ import { SectionLabel } from "@/components/common/SectionLabel";
 import { statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
+import { useNow } from "@/components/common/use-now";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { pillClasses } from "@/components/practice-vocabulary/group-visuals";
 import { Button } from "@/components/ui/button";
@@ -190,9 +191,9 @@ export interface PracticeFeedbackCardProps extends FeedbackRatingProps {
  * minute — "Created 9 September, 2:10 pm" — and one the work resolved says the day it happened —
  * "Resolved 9 September" — because the minute of a resolution is the review's, not the reader's.
  */
-function formatTimestamp(date: Date, state: FeedbackState): string {
+function formatTimestamp(date: Date, state: FeedbackState, today: Date): string {
 	return isOpenFeedback(state)
-		? `Created ${formatDayTime(date)}`
+		? `Created ${formatDayTime(date, today)}`
 		: `${FEEDBACK_STATE_DEFS[state].label} ${formatDay(date)}`;
 }
 
@@ -237,6 +238,7 @@ export function PracticeFeedbackCard({
 	// Which row of buttons the reader pressed last, so a write in flight says "Saving…" on the button
 	// that asked for it and not on a pressed button in the other row.
 	const [lastPressed, setLastPressed] = useState<"rating" | "answer">("rating");
+	const shownTimestamp = formatTimestamp(timestamp, state, new Date(useNow()));
 	const resolved = state === "resolved";
 	// No work can tick a closed card, so it draws no count towards the threshold.
 	const closed = state === "closed";
@@ -304,7 +306,7 @@ export function PracticeFeedbackCard({
 				<div className="flex flex-wrap items-center gap-3 border-t p-4">
 					<span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
 						<ClockIcon className="size-4 shrink-0" aria-hidden />
-						<time dateTime={timestamp.toISOString()}>{formatTimestamp(timestamp, state)}</time>
+						<time dateTime={timestamp.toISOString()}>{shownTimestamp}</time>
 					</span>
 				</div>
 			</article>
@@ -344,7 +346,7 @@ export function PracticeFeedbackCard({
 
 				<div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
 					<span className="inline-flex items-center gap-2 whitespace-nowrap text-muted-foreground">
-						<WorkIcon className="size-3.5 shrink-0" aria-hidden />
+						<WorkIcon className="size-3.5 shrink-0" />
 						{stripLabel.text}
 					</span>
 					{shownWork.map((piece, index) => (
@@ -442,7 +444,7 @@ export function PracticeFeedbackCard({
 				<div className="flex flex-wrap items-center gap-3">
 					<span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
 						<ClockIcon className="size-4 shrink-0" aria-hidden />
-						<time dateTime={timestamp.toISOString()}>{formatTimestamp(timestamp, state)}</time>
+						<time dateTime={timestamp.toISOString()}>{shownTimestamp}</time>
 					</span>
 					{onRate &&
 						statusValues(FEEDBACK_USEFULNESS_DEFS).map((value) => {

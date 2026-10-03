@@ -1,8 +1,8 @@
 // Precompute FACTS for validates-inputs-and-edge-cases-at-the-boundary: the added lines of source code
 // that hold a construct which can fail or mislead on an edge value — a subscript or slice, a division by
 // a name, a parse the language does not force the author to handle, an extreme sentinel, a payload
-// decode, a request's own input — across languages. A row marks where a consuming site may be, never a
-// finding: whether its value comes from outside the local logic, and what already handles its bad case,
+// decode, a request's own input — across languages. A row marks where a consuming site may be, never an
+// observation: whether its value comes from outside the local logic, and what already handles its bad case,
 // is read from the code, and the criteria decide. String-literal text and comments are not scanned; a
 // lookup or parse whose result the language makes optional is not listed, and a crash operator the author
 // wrote (`!`, `try!`, `unwrap()`) is the crash practice's. Adding a language = adding a row.
@@ -143,7 +143,7 @@ export default function validatesInputsAndEdgeCasesAtTheBoundary(
 	const directions =
 		hints.length > 0
 			? [
-					`${hints.length} added line(s) hold a construct that can fail or mislead on an edge value (${kinds}). String-literal text, comments and test files were not scanned; lookups and parses whose result the language makes optional, and crash operators, are not listed. A listed line marks where a consuming site may be, not a finding: whether its value comes from outside the local logic, and what already handles its bad case, is read from the code.`,
+					`${hints.length} added line(s) hold a construct that can fail or mislead on an edge value (${kinds}). String-literal text, comments and test files were not scanned; lookups and parses whose result the language makes optional, and crash operators, are not listed. A listed line marks where a consuming site may be, not an observation: whether its value comes from outside the local logic, and what already handles its bad case, is read from the code.`,
 				]
 			: [];
 

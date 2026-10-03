@@ -27,9 +27,9 @@ import org.springframework.stereotype.Component;
  * {@code @Target(TYPE_USE)} only, so it never reaches swagger's declaration-site inspection — and
  * every {@code required:} block silently disappears once the codebase migrates to JSpecify.
  * swagger-core's own fix for this is unmerged as of 2026-05 (swagger-api/swagger-core#4848, PR
- * #4985); springdoc maintainers recommend a custom {@link ModelConverter} in the meantime
- * (springdoc/springdoc-openapi#3110, #2991). springdoc auto-registers every {@code ModelConverter}
- * bean.
+ * swagger-api/swagger-core#4985); springdoc maintainers recommend a custom {@link ModelConverter} in
+ * the meantime (springdoc/springdoc-openapi#3110, springdoc/springdoc-openapi#2991). springdoc
+ * auto-registers every {@code ModelConverter} bean.
  *
  * <p><b>How.</b> After the default chain resolves a schema, this converter re-derives
  * {@code required} for our own types by reading the JSpecify {@code @NonNull} that sits at the
@@ -38,8 +38,10 @@ import org.springframework.stereotype.Component;
  * contract swagger used to derive from the Spring annotation. This is deliberately an explicit-
  * annotation read rather than {@code org.springframework.core.Nullness}: {@code Nullness} reports
  * every primitive as non-null, which would mark bare primitives (e.g. a counter) {@code required}
- * and diverge from the historical spec, whereas an explicitly {@code @NonNull} primitive
- * (e.g. {@code GitLabPreflightResponseDTO#valid}) must stay {@code required}.
+ * and diverge from the historical spec. A primitive cannot be null, so a nullness annotation on it
+ * says nothing; a primitive that must be {@code required} (e.g. {@code GitLabPreflightResponseDTO#valid})
+ * declares {@code @Schema(requiredMode = REQUIRED)}, which swagger-core reads itself and this
+ * converter leaves in place.
  *
  * <p><b>Scope.</b> Matching is by member name; a {@code @JsonProperty}/{@code @Schema(name=...)}
  * rename on an <em>exposed</em> schema would need its renamed key handled here. None exist today —

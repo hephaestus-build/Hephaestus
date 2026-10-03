@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 
@@ -133,7 +134,7 @@ public record GitHubProjectItemDTO(
         if (contentType == null) {
             return null;
         }
-        return switch (contentType.toUpperCase()) {
+        return switch (contentType.toUpperCase(Locale.ROOT)) {
             case "ISSUE" -> ProjectItem.ContentType.ISSUE;
             case "PULL_REQUEST", "PULLREQUEST" -> ProjectItem.ContentType.PULL_REQUEST;
             case "DRAFT_ISSUE", "DRAFTISSUE" -> ProjectItem.ContentType.DRAFT_ISSUE;
@@ -237,7 +238,7 @@ public record GitHubProjectItemDTO(
                 result.add(dto);
             }
         }
-        return result;
+        return List.copyOf(result);
     }
 
     // CONVERSION HELPERS

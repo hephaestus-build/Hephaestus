@@ -34,6 +34,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
@@ -448,7 +449,7 @@ public class CuratedCatalogAdminController {
     }
 
     private static <D extends CatalogDefinition, T> ResponseEntity<T> ok(
-            CatalogEntry<D> entry, java.util.function.Function<CatalogEntry<D>, T> body) {
+            CatalogEntry<D> entry, Function<CatalogEntry<D>, T> body) {
         return ResponseEntity.ok().eTag(etag(entry.etag())).body(body.apply(entry));
     }
 

@@ -3,11 +3,13 @@ package de.tum.cit.aet.hephaestus.agent.runtime;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -56,8 +58,7 @@ public class PiRuntimeFactory {
         inputFiles.put(SandboxLayout.PI_AGENT_PREFIX + "settings.json", buildPiSettingsJson(spec.upstreamModelId()));
         inputFiles.put(SandboxLayout.PROVIDER_CONFIG_FILENAME, buildProviderConfigJson(spec));
         inputFiles.put(
-                SandboxLayout.NODE_PACKAGE_JSON_FILENAME,
-                "{\"type\":\"module\"}\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                SandboxLayout.NODE_PACKAGE_JSON_FILENAME, "{\"type\":\"module\"}\n".getBytes(StandardCharsets.UTF_8));
 
         // Digested as the run's prompt version, so settings.json and pi-provider.json stay out: they
         // vary by model, which the job's config snapshot already pins.
@@ -140,7 +141,7 @@ public class PiRuntimeFactory {
      * The settings JSON Pi loads at session start. {@code defaultModel} is the upstream model id
      * verbatim, because Pi looks it up by exact match.
      */
-    public byte[] buildPiSettingsJson(@org.jspecify.annotations.Nullable String upstreamModelId) {
+    public byte[] buildPiSettingsJson(@Nullable String upstreamModelId) {
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("defaultProvider", "hephaestus");
         if (upstreamModelId != null && !upstreamModelId.isBlank()) {

@@ -1,11 +1,18 @@
 package de.tum.cit.aet.hephaestus.workspace.context;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
@@ -37,7 +44,7 @@ class WorkspaceContextExecutorTest {
 
         // Execute in different thread
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.submit(wrapped);
+        executor.submit(wrapped).get(5, TimeUnit.SECONDS);
         executor.shutdown();
         executor.awaitTermination(5, TimeUnit.SECONDS);
 
@@ -88,7 +95,7 @@ class WorkspaceContextExecutorTest {
         WorkspaceContextHolder.clearContext();
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.submit(wrapped);
+        executor.submit(wrapped).get(5, TimeUnit.SECONDS);
         executor.shutdown();
         executor.awaitTermination(5, TimeUnit.SECONDS);
 
@@ -102,7 +109,6 @@ class WorkspaceContextExecutorTest {
                 new WorkspaceContext(1L, "cleanup-test", "Test", AccountType.ORG, null, false, Set.of());
         WorkspaceContextHolder.setContext(context);
 
-        CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<WorkspaceContext> contextAfterExecution = new AtomicReference<>();
 
         Runnable wrapped = WorkspaceContextExecutor.wrap(() -> {
@@ -112,22 +118,17 @@ class WorkspaceContextExecutorTest {
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.submit(() -> {
-            wrapped.run();
-            // Check context after wrapped runnable completes
-            contextAfterExecution.set(WorkspaceContextHolder.getContext());
-            latch.countDown();
-        });
-
-        latch.await(5, TimeUnit.SECONDS);
+                    wrapped.run();
+                    contextAfterExecution.set(WorkspaceContextHolder.getContext());
+                })
+                .get(5, TimeUnit.SECONDS);
         executor.shutdown();
 
-        // Assert - Context should be cleaned up
         assertNull(contextAfterExecution.get());
     }
 
     @Test
     void shouldHandleNullContextGracefully() throws Exception {
-        // Arrange - No context set
         AtomicReference<WorkspaceContext> capturedContext = new AtomicReference<>();
 
         Runnable wrapped = WorkspaceContextExecutor.wrap(() -> {
@@ -135,7 +136,7 @@ class WorkspaceContextExecutorTest {
         });
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.submit(wrapped);
+        executor.submit(wrapped).get(5, TimeUnit.SECONDS);
         executor.shutdown();
         executor.awaitTermination(5, TimeUnit.SECONDS);
 
@@ -164,7 +165,6 @@ class WorkspaceContextExecutorTest {
         AtomicReference<String> capturedSlug1 = new AtomicReference<>();
         AtomicReference<String> capturedSlug2 = new AtomicReference<>();
 
-        // Act - Wrap two different contexts
         WorkspaceContextHolder.setContext(context1);
         Runnable wrapped1 = WorkspaceContextExecutor.wrap(() -> {
             capturedSlug1.set(WorkspaceContextHolder.getContext().slug());
@@ -179,12 +179,11 @@ class WorkspaceContextExecutorTest {
 
         // Execute both in same thread pool
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.submit(wrapped1);
-        executor.submit(wrapped2);
+        executor.submit(wrapped1).get(5, TimeUnit.SECONDS);
+        executor.submit(wrapped2).get(5, TimeUnit.SECONDS);
         executor.shutdown();
         executor.awaitTermination(5, TimeUnit.SECONDS);
 
-        // Assert - Each should capture its own context
         assertEquals("ws1", capturedSlug1.get());
         assertEquals("ws2", capturedSlug2.get());
     }
@@ -197,15 +196,15 @@ class WorkspaceContextExecutorTest {
                 new WorkspaceContext(11L, "wrapped", "Wrapped", AccountType.USER, null, false, Set.of());
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<WorkspaceContext> contextAfter = new AtomicReference<>();
         AtomicReference<String> preservedValue = new AtomicReference<>();
         AtomicReference<String> wrappedOnlyValue = new AtomicReference<>();
 
         executor.submit(() -> {
-            WorkspaceContextHolder.setContext(previousContext);
-            MDC.put("request-id", "abc-123");
-        });
+                    WorkspaceContextHolder.setContext(previousContext);
+                    MDC.put("request-id", "abc-123");
+                })
+                .get(5, TimeUnit.SECONDS);
 
         WorkspaceContextHolder.setContext(wrappedContext);
         Runnable wrapped = WorkspaceContextExecutor.wrap(() -> {
@@ -214,16 +213,14 @@ class WorkspaceContextExecutorTest {
         });
         WorkspaceContextHolder.clearContext();
 
-        executor.submit(wrapped);
+        executor.submit(wrapped).get(5, TimeUnit.SECONDS);
 
         executor.submit(() -> {
-            contextAfter.set(WorkspaceContextHolder.getContext());
-            preservedValue.set(MDC.get("request-id"));
-            wrappedOnlyValue.set(MDC.get("wrapped-only"));
-            latch.countDown();
-        });
-
-        assertTrue(latch.await(5, TimeUnit.SECONDS));
+                    contextAfter.set(WorkspaceContextHolder.getContext());
+                    preservedValue.set(MDC.get("request-id"));
+                    wrappedOnlyValue.set(MDC.get("wrapped-only"));
+                })
+                .get(5, TimeUnit.SECONDS);
         executor.shutdown();
 
         WorkspaceContext restored = contextAfter.get();

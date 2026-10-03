@@ -1,13 +1,13 @@
 import type { IdentityProviderView } from "@/api/types.gen";
-import { GithubIcon, GitlabIcon } from "@/components/icons/brand";
+import { GitHubIcon, GitLabIcon } from "@/components/icons/brand";
 import { Button } from "@/components/ui/button";
 
-export function ProviderIcon({ provider }: { provider: IdentityProviderView }) {
+function ProviderIcon({ provider }: { provider: IdentityProviderView }) {
 	if (provider.providerType?.toUpperCase() === "GITHUB") {
-		return <GithubIcon className="shrink-0" aria-hidden="true" focusable="false" />;
+		return <GitHubIcon className="shrink-0" />;
 	}
 	if (provider.providerType?.toUpperCase() === "GITLAB") {
-		return <GitlabIcon className="shrink-0" aria-hidden="true" focusable="false" />;
+		return <GitLabIcon className="shrink-0" />;
 	}
 	return null;
 }

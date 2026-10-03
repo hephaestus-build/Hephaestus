@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -98,7 +99,7 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
         channel.setConsentState(ConsentState.ACTIVE);
         // Announced well before every test message ts (100.1 / 200.1 / 300.1), so the forward-only ingest invariant
         // (ts > consent_announced_at) is satisfied and only the person firewall differentiates the two authors.
-        channel.setConsentAnnouncedAt(java.time.Instant.ofEpochSecond(1));
+        channel.setConsentAnnouncedAt(Instant.ofEpochSecond(1));
         monitoredChannelRepository.save(channel);
 
         // The two resolvers are pure lookups — mocked so the test exercises the REAL gates + REAL persistence.

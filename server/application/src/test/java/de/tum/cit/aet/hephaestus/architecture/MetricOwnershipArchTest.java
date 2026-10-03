@@ -25,6 +25,7 @@ import com.sun.source.util.TreeScanner;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Metrics;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -132,7 +133,7 @@ class MetricOwnershipArchTest {
                         violations.add("Duplicate meter name " + name + " in " + previous + " and " + catalog);
                     }
                 }
-                return super.visitVariable(node, unused);
+                return super.visitVariable(node, null);
             }
         }.scan(unit, null);
     }
@@ -231,7 +232,7 @@ class MetricOwnershipArchTest {
                         references.add(catalog);
                     }
                 }
-                return super.visitMemberSelect(node, unused);
+                return super.visitMemberSelect(node, null);
             }
         }.scan(unit, null);
         return references;
@@ -253,7 +254,7 @@ class MetricOwnershipArchTest {
                 nameArguments(node, staticBuilder, forwarders, declaredTypes)
                         .forEach(argument ->
                                 checkName(argument, node.getMethodSelect().toString()));
-                return super.visitMethodInvocation(node, unused);
+                return super.visitMethodInvocation(node, null);
             }
 
             @Override
@@ -265,7 +266,7 @@ class MetricOwnershipArchTest {
                         && !node.getArguments().isEmpty()) {
                     checkName(node.getArguments().getFirst(), type);
                 }
-                return super.visitNewClass(node, unused);
+                return super.visitNewClass(node, null);
             }
 
             private void checkName(ExpressionTree expression, String api) {
@@ -369,7 +370,7 @@ class MetricOwnershipArchTest {
                                 }
                             }
                         }
-                        return super.visitMethodInvocation(node, ignored);
+                        return super.visitMethodInvocation(node, null);
                     }
                 }.scan(method.getBody(), null);
                 return super.visitMethod(method, enclosing);
@@ -384,7 +385,7 @@ class MetricOwnershipArchTest {
             @Override
             public Void visitClass(ClassTree node, Void unused) {
                 types.add(node.getSimpleName().toString());
-                return super.visitClass(node, unused);
+                return super.visitClass(node, null);
             }
         }.scan(unit, null);
         return types;
@@ -423,7 +424,7 @@ class MetricOwnershipArchTest {
                     node.getParameters()
                             .forEach(parameter ->
                                     supplied.add(parameter.getName().toString()));
-                    return super.visitMethod(node, unused);
+                    return super.visitMethod(node, null);
                 }
 
                 @Override
@@ -431,7 +432,7 @@ class MetricOwnershipArchTest {
                     node.getParameters()
                             .forEach(parameter ->
                                     supplied.add(parameter.getName().toString()));
-                    return super.visitLambdaExpression(node, unused);
+                    return super.visitLambdaExpression(node, null);
                 }
 
                 @Override
@@ -440,7 +441,7 @@ class MetricOwnershipArchTest {
                         aliases.computeIfAbsent(node.getName().toString(), name -> new ArrayList<>())
                                 .add(node.getInitializer());
                     }
-                    return super.visitVariable(node, unused);
+                    return super.visitVariable(node, null);
                 }
             }.scan(unit, null);
         }
@@ -508,7 +509,7 @@ class MetricOwnershipArchTest {
         for (Class<?> api : List.of(MeterRegistry.class, MeterRegistry.More.class, Metrics.class, Metrics.More.class)) {
             var methods = Arrays.stream(api.getMethods())
                     .filter(method -> method.getParameterCount() > 0 && method.getParameterTypes()[0] == String.class)
-                    .map(java.lang.reflect.Method::getName)
+                    .map(Method::getName)
                     .filter(name -> !Set.of("find", "get").contains(name))
                     .collect(Collectors.toSet());
             assertThat(REGISTRATIONS)

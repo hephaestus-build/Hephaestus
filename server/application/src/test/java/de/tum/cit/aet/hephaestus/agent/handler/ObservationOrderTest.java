@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
+import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -15,11 +16,6 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/**
- * The ordering four stages used to duplicate, and used to tiebreak on the detector's self-reported
- * confidence. These pin what replaced it: severity where it applies, then how much of the corpus the
- * observation's citations actually span, then a stable identity so the order is total.
- */
 class ObservationOrderTest extends BaseUnitTest {
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
@@ -62,8 +58,7 @@ class ObservationOrderTest extends BaseUnitTest {
     @Test
     @DisplayName("evidence breadth counts distinct loci, so a repeated quote buys nothing")
     void breadthCountsDistinctLoci() {
-        // The lever confidence used to be was one the model could pull at will. Counting citations rather
-        // than distinct places would hand the same lever back: quote one line four times and lead the list.
+        // Counting citations rather than distinct places would let a model quote one line four times and lead.
         assertThat(ObservationOrder.evidenceBreadth(evidence(3, 0))).isEqualTo(3);
         assertThat(ObservationOrder.evidenceBreadth(evidence(3, 5))).isEqualTo(3);
         assertThat(ObservationOrder.evidenceBreadth(evidence(0, 0))).isZero();
@@ -126,13 +121,13 @@ class ObservationOrderTest extends BaseUnitTest {
     @Test
     @DisplayName("persisted rows fall back to their id, so the ledger's ordinal survives a re-run")
     void persistedRowsTiebreakOnId() {
-        var earlier = de.tum.cit.aet.hephaestus.practices.model.Observation.builder()
+        var earlier = Observation.builder()
                 .id(UUID.fromString("00000000-0000-0000-0000-000000000001"))
                 .outcome(Outcome.NOT_MET)
                 .severity(Severity.MINOR)
                 .evidence(evidence(1, 0))
                 .build();
-        var later = de.tum.cit.aet.hephaestus.practices.model.Observation.builder()
+        var later = Observation.builder()
                 .id(UUID.fromString("00000000-0000-0000-0000-000000000002"))
                 .outcome(Outcome.NOT_MET)
                 .severity(Severity.MINOR)

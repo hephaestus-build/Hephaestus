@@ -10,7 +10,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSync
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RateLimitSnapshot;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.metrics.GitlabMetrics;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.metrics.GitLabMetrics;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -279,7 +279,7 @@ public class GitLabRateLimitTracker {
                 "Pausing due to critical GitLab rate limit: scopeId={}, remaining={}, waitSeconds={}, resetAt={}",
                 scopeId,
                 currentRemaining,
-                waitTime.getSeconds(),
+                waitTime.toSeconds(),
                 reset);
 
         Thread.sleep(waitTime.toMillis());
@@ -427,32 +427,32 @@ public class GitLabRateLimitTracker {
         Tags tags = Tags.of("scope_id", String.valueOf(scopeId));
 
         // NaN, not 0, while unobserved: a gauge is a measurement too, and 0 would read as "exhausted".
-        Gauge.builder(GitlabMetrics.GITLAB_GRAPHQL_RATELIMIT_POINTS_REMAINING, state, s -> asDouble(s.remaining.get()))
+        Gauge.builder(GitLabMetrics.GITLAB_GRAPHQL_RATELIMIT_POINTS_REMAINING, state, s -> asDouble(s.remaining.get()))
                 .tags(tags)
                 .description("GitLab GraphQL API rate limit points remaining")
                 .register(meterRegistry);
 
-        Gauge.builder(GitlabMetrics.GITLAB_GRAPHQL_RATELIMIT_POINTS_LIMIT, state, s -> asDouble(s.limit.get()))
+        Gauge.builder(GitLabMetrics.GITLAB_GRAPHQL_RATELIMIT_POINTS_LIMIT, state, s -> asDouble(s.limit.get()))
                 .tags(tags)
                 .description("GitLab GraphQL API rate limit total points per minute")
                 .register(meterRegistry);
 
-        Gauge.builder(GitlabMetrics.GITLAB_GRAPHQL_RATELIMIT_POINTS_USED, state.used, AtomicInteger::get)
+        Gauge.builder(GitLabMetrics.GITLAB_GRAPHQL_RATELIMIT_POINTS_USED, state.used, AtomicInteger::get)
                 .tags(tags)
                 .description("GitLab GraphQL API rate limit points used in current window")
                 .register(meterRegistry);
 
-        Gauge.builder(GitlabMetrics.GITLAB_GRAPHQL_RATELIMIT_LAST_QUERY_COST, state.lastQueryCost, AtomicInteger::get)
+        Gauge.builder(GitLabMetrics.GITLAB_GRAPHQL_RATELIMIT_LAST_QUERY_COST, state.lastQueryCost, AtomicInteger::get)
                 .tags(tags)
                 .description("Points consumed by the last GitLab GraphQL query")
                 .register(meterRegistry);
 
-        Gauge.builder(GitlabMetrics.GITLAB_GRAPHQL_RATELIMIT_SECONDS_UNTIL_RESET, state, s -> {
+        Gauge.builder(GitLabMetrics.GITLAB_GRAPHQL_RATELIMIT_SECONDS_UNTIL_RESET, state, s -> {
                     Instant reset = s.resetAt.get();
                     if (reset == null) {
                         return 0.0;
                     }
-                    long seconds = Duration.between(Instant.now(), reset).getSeconds();
+                    long seconds = Duration.between(Instant.now(), reset).toSeconds();
                     return Math.max(0, seconds);
                 })
                 .tags(tags)

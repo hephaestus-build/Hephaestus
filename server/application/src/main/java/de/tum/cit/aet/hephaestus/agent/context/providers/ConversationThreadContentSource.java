@@ -29,7 +29,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Materialises the chat.conversation_thread detection context under {@code inputs/context/} — the repo-less,
+ * Materialises the chat.conversation_thread review context under {@code inputs/context/} — the repo-less,
  * no-diff counterpart of {@link IssueContentSource} for a settled Slack thread:
  *
  * <ul>

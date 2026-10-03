@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import java.time.Instant;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -240,7 +241,7 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
     private IssuedAccount issueRealTokenForNewAccount(String displayName) {
         Account account = accountRepository.save(new Account(displayName));
         HephaestusJwtIssuer.Token token = jwtIssuer.issue(
-                java.util.Objects.requireNonNull(account.getId()), TokenConstraints.session(null, Instant.now()), null);
+                Objects.requireNonNull(account.getId()), TokenConstraints.session(null, Instant.now()), null);
         return new IssuedAccount(token.value(), persistedId(account.getId()));
     }
 

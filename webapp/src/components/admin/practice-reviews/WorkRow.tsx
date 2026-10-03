@@ -35,7 +35,7 @@ export function WorkRow({ work }: WorkRowProps) {
 					<ReviewRowMeta
 						items={[
 							<span key="work" className="inline-flex items-center gap-1.5">
-								<WorkIcon className="size-3.5 shrink-0" aria-hidden />
+								<WorkIcon className="size-3.5 shrink-0" />
 								{reviewedWorkName(work.reviewedWork)}
 							</span>,
 							hasText(work.reviewedWork.container) && (

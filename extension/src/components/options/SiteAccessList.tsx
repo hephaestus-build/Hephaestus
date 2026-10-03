@@ -1,11 +1,11 @@
 import { CircleAlertIcon, CircleCheckIcon, CircleDashedIcon, CircleSlashIcon } from "lucide-react";
 
-import { GithubIcon, GitlabIcon } from "@/components/icons/brand";
+import { GitHubIcon, GitLabIcon } from "@/components/icons/brand";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "~/components/common/Button";
 import { ExternalLink } from "~/components/common/ExternalLink";
 import { Notice } from "~/components/common/Notice";
-import { Skeleton } from "~/components/common/Skeleton";
-import { Spinner } from "~/components/common/Spinner";
 import type { SiteAccessEntry } from "~/shared/rpc";
 
 export type SiteAccessState =
@@ -50,12 +50,12 @@ function SiteRow({
 }) {
 	const pending = activity?.status === "pending";
 	const provider = entry.providerType === "GITHUB" ? "GitHub" : "GitLab";
-	const ProviderIcon = entry.providerType === "GITHUB" ? GithubIcon : GitlabIcon;
+	const ProviderIcon = entry.providerType === "GITHUB" ? GitHubIcon : GitLabIcon;
 	return (
 		<li className="flex flex-col gap-2 p-3.5">
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
 				<span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
-					<ProviderIcon aria-hidden="true" aria-label={provider} className="size-4" />
+					<ProviderIcon className="size-4" />
 				</span>
 				<div className="flex min-w-0 flex-1 flex-col">
 					<p className="text-sm font-medium break-all">{host(entry.origin)}</p>

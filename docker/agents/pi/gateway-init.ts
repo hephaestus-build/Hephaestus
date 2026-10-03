@@ -91,11 +91,13 @@ async function extract(archive: string): Promise<void> {
 	);
 	const extracted = Promise.withResolvers<undefined>();
 	child.once("error", extracted.reject);
-	child.once("exit", (code) => {
+	child.once("exit", (code, signal) => {
 		if (code === 0) {
 			extracted.resolve(undefined);
 		} else {
-			extracted.reject(new Error(`Workspace extraction failed: ${code}`));
+			extracted.reject(
+				new Error(`Workspace extraction failed: ${code ?? signal ?? "no exit status"}`),
+			);
 		}
 	});
 	await extracted.promise;

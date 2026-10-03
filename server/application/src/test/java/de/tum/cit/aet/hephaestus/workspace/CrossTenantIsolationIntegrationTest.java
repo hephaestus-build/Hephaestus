@@ -176,7 +176,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 "scm.pull_request",
                 1L,
                 overlapUser.getId(),
-                "Finding in " + ws.getWorkspaceSlug(),
+                "Observation in " + ws.getWorkspaceSlug(),
                 "MET",
                 null,
                 null,
@@ -267,12 +267,12 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Nested
-    @DisplayName("Observations (practice findings)")
+    @DisplayName("Observations")
     class Observations {
 
         @Test
         @WithMentorUser
-        void listReturnsOnlyOwnWorkspaceFindings() {
+        void listReturnsOnlyOwnWorkspaceObservations() {
             webTestClient
                     .get()
                     .uri("/workspaces/{slug}/practices/observations", workspaceA.getWorkspaceSlug())
@@ -284,7 +284,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                     .jsonPath("$.content.length()")
                     .isEqualTo(1)
                     .jsonPath("$.content[0].summary")
-                    .isEqualTo("Finding in tenant-a");
+                    .isEqualTo("Observation in tenant-a");
         }
 
         @Test

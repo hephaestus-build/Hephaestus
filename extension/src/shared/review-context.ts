@@ -104,8 +104,6 @@ export interface ObservationPage {
 	fetchedAt: string;
 }
 
-export type ReviewContextStatus = ReviewContext["status"];
-
 /** How often a visible view asks again while something is moving, and otherwise. */
 export const SETTLING_REFRESH_MS = 10_000;
 export const VISIBLE_REFRESH_MS = 60_000;

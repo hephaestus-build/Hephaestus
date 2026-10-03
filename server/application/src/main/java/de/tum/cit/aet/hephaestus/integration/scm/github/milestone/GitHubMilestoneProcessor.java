@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.dto.GitHubMile
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -249,7 +250,7 @@ public class GitHubMilestoneProcessor {
                     "Milestone state is null, defaulting to OPEN. This may indicate missing data in webhook or GraphQL response.");
             return Milestone.State.OPEN;
         }
-        return switch (state.toUpperCase()) {
+        return switch (state.toUpperCase(Locale.ROOT)) {
             case "OPEN" -> Milestone.State.OPEN;
             case "CLOSED" -> Milestone.State.CLOSED;
             default -> {

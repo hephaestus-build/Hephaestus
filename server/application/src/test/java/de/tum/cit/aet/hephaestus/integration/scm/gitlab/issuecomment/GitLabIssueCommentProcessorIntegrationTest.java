@@ -207,8 +207,6 @@ class GitLabIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
         assertThat(unchanged.getBody()).isEqualTo("Original body");
     }
 
-    // Helpers
-
     private GitLabIssueCommentProcessor.SyncNoteData buildData(
             String body, String createdAt, @Nullable String updatedAt) {
         return new GitLabIssueCommentProcessor.SyncNoteData(

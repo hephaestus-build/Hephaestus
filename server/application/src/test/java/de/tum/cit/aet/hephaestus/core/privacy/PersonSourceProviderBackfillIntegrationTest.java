@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -14,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepos
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -56,7 +58,7 @@ class PersonSourceProviderBackfillIntegrationTest extends BaseIntegrationTest {
                 original.getId(),
                 "native-42",
                 "");
-        String legacyUrl = "HTTPS://" + host.toUpperCase(java.util.Locale.ROOT) + ":443/";
+        String legacyUrl = "HTTPS://" + host.toUpperCase(Locale.ROOT) + ":443/";
         var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("source-backfill"));
         connections.saveAndFlush(new Connection(
                 workspace,

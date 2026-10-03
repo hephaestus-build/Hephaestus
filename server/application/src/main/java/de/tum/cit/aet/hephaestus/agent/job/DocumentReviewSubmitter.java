@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentReviewTrigger;
 import de.tum.cit.aet.hephaestus.agent.handler.DocumentReviewSubmissionRequest;
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
@@ -18,14 +19,15 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Component
-@ConditionalOnProperty(prefix = "hephaestus.agent", name = "enabled", havingValue = "true")
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 public class DocumentReviewSubmitter implements DocumentReviewTrigger, PendingSignalResubmitter {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentReviewSubmitter.class);
@@ -99,7 +101,7 @@ public class DocumentReviewSubmitter implements DocumentReviewTrigger, PendingSi
                 key.signalName(),
                 TriggerMode.AUTO,
                 new ReviewSubject(aboutUserId, true),
-                java.util.Map.of("state", document.archived() ? "ARCHIVED" : "ACTIVE"))) {
+                Map.of("state", document.archived() ? "ARCHIVED" : "ACTIVE"))) {
             case GateDecision.Skip skip -> {
                 log.debug(
                         "Document signal skipped by practice gate: documentId={}, reason={}",
@@ -107,9 +109,9 @@ public class DocumentReviewSubmitter implements DocumentReviewTrigger, PendingSi
                         skip.reason());
                 refuse(key, skip.resolvedSignalReason());
             }
-            case GateDecision.Detect detect ->
+            case GateDecision.Run run ->
                 agentJobService.submit(
-                        detect.workspace().getId(),
+                        run.workspace().getId(),
                         AgentJobType.DOCUMENT_REVIEW,
                         new DocumentReviewSubmissionRequest(
                                 key.artifactId(),
@@ -122,7 +124,7 @@ public class DocumentReviewSubmitter implements DocumentReviewTrigger, PendingSi
                                 key.revision(),
                                 SignalOrigins.observationOriginOf(discoveredVia)),
                         key,
-                        detect);
+                        run);
         }
     }
 

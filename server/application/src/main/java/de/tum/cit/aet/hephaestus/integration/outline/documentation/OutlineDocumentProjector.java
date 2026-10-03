@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -77,9 +78,7 @@ public class OutlineDocumentProjector implements DocumentProjection {
         if (!isOriginApproved(workspaceId)) return List.of();
         AuthorContext authors = authorContext(workspaceId);
         Map<String, String> collectionNames = collectionNames(workspaceId);
-        return documentRepository
-                .findForProjection(workspaceId, org.springframework.data.domain.Pageable.unpaged())
-                .stream()
+        return documentRepository.findForProjection(workspaceId, Pageable.unpaged()).stream()
                 .map(doc -> project(doc, authors, collectionNames))
                 .toList();
     }

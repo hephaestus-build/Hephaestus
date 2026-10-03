@@ -17,6 +17,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * @param artifactKind a bare string, not an {@link ArtifactKind} — {@link QueryFilterSupport#artifactKind} has the
+ *     reason, and parses it in {@link #toFilter()}, where a malformed value becomes a 400
+ * @param origin without it this surface cannot separate a campaign's observations from live ones — a population-mixing
+ *     hazard in exactly the place an operator judges whether a campaign was worth what it cost
+ */
 public record ReviewObservationFilterParams(
         @RequestParam(required = false) @Nullable List<String> practiceSlug,
         @RequestParam(required = false) @Nullable List<String> groupSlug,
@@ -40,10 +46,7 @@ public record ReviewObservationFilterParams(
 
         @RequestParam(required = false) @Nullable List<Severity> severity,
         @RequestParam(required = false) @Nullable UUID agentJobId,
-        /**
-         * A bare string, not an {@link ArtifactKind} — {@link QueryFilterSupport#artifactKind} has the reason,
-         * and parses it in {@link #toFilter()}, where a malformed value becomes a 400.
-         */
+
         @Parameter(description = "Kind of reviewed work, e.g. scm.pull_request")
         @RequestParam(required = false)
         @Nullable
@@ -56,11 +59,7 @@ public record ReviewObservationFilterParams(
         Long artifactId,
 
         @RequestParam(required = false) @Positive @Nullable Long subjectUserId,
-        /**
-         * Without it this surface cannot separate a campaign's observations from live ones — a
-         * population-mixing hazard in exactly the place an operator judges whether a campaign was worth what
-         * it cost.
-         */
+
         @Parameter(description = "What occasioned the measurement: LIVE, MANUAL or BACKFILL")
         @RequestParam(required = false)
         @Nullable

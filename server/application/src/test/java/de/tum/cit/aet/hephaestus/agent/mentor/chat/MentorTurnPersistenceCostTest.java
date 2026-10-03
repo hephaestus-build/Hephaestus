@@ -76,7 +76,7 @@ class MentorTurnPersistenceCostTest extends BaseUnitTest {
                 .recordedFinish(finish(), state(1000, 200, 0, 0, 0, PricingState.PRICED), runner(1000, 200, 0, 0));
 
         var metadata = out.messageMetadata();
-        org.junit.jupiter.api.Assertions.assertNotNull(metadata);
+        assertThat(metadata).isNotNull();
         assertThat(metadata.model()).isEqualTo("authoritative-model");
         assertThat(metadata.costUsd()).isEqualTo(0.0123);
     }
@@ -90,12 +90,12 @@ class MentorTurnPersistenceCostTest extends BaseUnitTest {
                 .recordedFinish(finish(), state(0, 200, 500, 100, 150, PricingState.PRICED), runner(0, 200, 500, 100));
 
         var metadata = out.messageMetadata();
-        org.junit.jupiter.api.Assertions.assertNotNull(metadata);
+        assertThat(metadata).isNotNull();
         assertThat(metadata.costUsd())
                 .as("output $0.0023 + cacheRead $0.0100 + cacheWrite $0.0030, reasoning charged once")
                 .isEqualTo(0.0153);
         var usage = metadata.usage();
-        org.junit.jupiter.api.Assertions.assertNotNull(usage);
+        assertThat(usage).isNotNull();
         assertThat(usage.totalTokens()).as("every bucket, as Pi counts a total").isEqualTo(800);
     }
 
@@ -105,7 +105,7 @@ class MentorTurnPersistenceCostTest extends BaseUnitTest {
                 .recordedFinish(finish(), state(1000, 200, 0, 0, 0, PricingState.UNPRICED), runner(1000, 200, 0, 0));
 
         var metadata = out.messageMetadata();
-        org.junit.jupiter.api.Assertions.assertNotNull(metadata);
+        assertThat(metadata).isNotNull();
         assertThat(metadata.costUsd()).isNull();
         assertThat(metadata.usage()).isNotNull();
     }

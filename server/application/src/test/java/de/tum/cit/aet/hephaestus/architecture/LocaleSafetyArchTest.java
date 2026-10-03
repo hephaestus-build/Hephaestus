@@ -7,23 +7,14 @@ import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
 /**
- * Default-locale case folding corrupts ASCII on Turkish-locale JVMs (dotted-i bug). The webhook
- * subject grammar must never depend on locale, so every case-fold inside the package must pass
- * {@code Locale.ROOT} explicitly, and {@link Locale#getDefault()} is banned.
+ * Default-locale case folding corrupts ASCII on Turkish-locale JVMs (dotted-i bug). Error Prone's
+ * {@code StringCaseLocaleUsage} rejects a case fold without a locale everywhere; inside the webhook
+ * package the subject grammar must not depend on the JVM locale at all, so its second suggestion,
+ * {@link Locale#getDefault()}, is banned there too.
  */
 class LocaleSafetyArchTest extends HephaestusArchitectureTest {
 
     private static final String WEBHOOK_PACKAGE = "..integration.core.webhook..";
-
-    @Test
-    void noNakedToLowerCase() {
-        rejectNakedCaseFold("toLowerCase").check(classes);
-    }
-
-    @Test
-    void noNakedToUpperCase() {
-        rejectNakedCaseFold("toUpperCase").check(classes);
-    }
 
     @Test
     void noLocaleGetDefault() {
@@ -34,14 +25,5 @@ class LocaleSafetyArchTest extends HephaestusArchitectureTest {
                 .callMethod(Locale.class, "getDefault")
                 .because("Locale.getDefault() threads JVM-default locale into case-folds — use Locale.ROOT");
         rule.check(classes);
-    }
-
-    private static ArchRule rejectNakedCaseFold(String methodName) {
-        return noClasses()
-                .that()
-                .resideInAPackage(WEBHOOK_PACKAGE)
-                .should()
-                .callMethod(String.class, methodName)
-                .because("Default-locale " + methodName + "() — use " + methodName + "(Locale.ROOT)");
     }
 }

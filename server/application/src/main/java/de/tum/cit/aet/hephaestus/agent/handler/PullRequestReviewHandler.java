@@ -150,7 +150,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         String freshness = submissionRequest.reviewId() != null
                 ? "review-" + submissionRequest.reviewId()
                 : ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(submissionRequest.triggerSignal())
-                        ? java.util.Objects.requireNonNull(submissionRequest.linkedIssueRevision())
+                        ? Objects.requireNonNull(submissionRequest.linkedIssueRevision())
                         : ScmSignals.PULL_REQUEST_EDITED.equals(submissionRequest.triggerSignal())
                                 ? ScmSignals.pullRequestRevision(
                                                 ScmSignals.PULL_REQUEST_EDITED,
@@ -223,8 +223,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         return prompt;
     }
 
-    // Delivery
-
     @Override
     public void deliver(AgentJob job) {
         if (ObservationAdmissionService.observationsWereRefused(job)) return;
@@ -249,41 +247,21 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 .deliverable();
         List<ReviewResultParser.ValidatedObservation> proposals = inContextDeliveryGate.awaitingApproval(job, eligible);
         List<ReviewResultParser.ValidatedObservation> loudEnough = inContextDeliveryGate.admitInContext(job, eligible);
-        List<ReviewResultParser.ValidatedObservation> deliverable = loudEnough;
         List<ComposedFeedbackUnit> units = compositionResultParser.parse(job.getOutput(), FeedbackChannel.IN_CONTEXT);
         String lead = compositionResultParser.lead(job.getOutput());
         Map<String, String> why = practiceCatalogInjector.whyBySlug(job.getWorkspace(), ArtifactKinds.PULL_REQUEST);
-        // Everything either surface would compose from: both render an all-clear when no problem
-        // survives the gates, so the coverage question is asked once, over the union.
-        List<ReviewResultParser.ValidatedObservation> composable = java.util.stream.Stream.concat(
-                        proposals.stream(), deliverable.stream())
-                .toList();
-        Set<String> included = composable.stream()
-                .map(ReviewResultParser.ValidatedObservation::occurrenceKey)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        List<ReviewResultParser.ValidatedObservation> reviewPackage = scopedObservations.stream()
-                .filter(observation -> included.contains(observation.occurrenceKey()))
-                .toList();
-        // The lead is unattributed prose that may speak for any practice, so automatic content goes without it.
-        var automatic = DeliveryComposer.composeAdmitted(
-                reviewPackage, ArtifactKinds.PULL_REQUEST, why, units, null, recurring);
-        if (ReviewCoverage.withholdsAllClear(job.getOutput(), composable)) {
-            log.info("Withholding an all-clear from a review that did not reach every practice: jobId={}", job.getId());
-            feedbackService.deliverFeedback(job, automatic == null ? null : automatic.withoutNote(), Set.of());
-            return;
-        }
-        if (!proposals.isEmpty()) {
-            var proposal = DeliveryComposer.composeAdmitted(
-                    reviewPackage, ArtifactKinds.PULL_REQUEST, why, units, lead, recurring);
-            // Only an observation the note was written from puts it under approval; a not-applicable
-            // result of an approval-gated practice beside it does not.
-            if (proposal != null && proposal.writtenFromAny(proposals)) {
-                feedbackService.recordProposal(job, proposal);
-                return;
+        var composition = new AdmittedDelivery.Composition(ArtifactKinds.PULL_REQUEST, why, units, lead, recurring);
+        switch (AdmittedDelivery.decide(job.getOutput(), scopedObservations, proposals, loudEnough, composition)) {
+            case AdmittedDelivery.Withheld withheld -> {
+                log.info(
+                        "Withholding an all-clear from a review that did not reach every practice: jobId={}",
+                        job.getId());
+                feedbackService.deliverFeedback(job, withheld.content(), Set.of());
             }
+            case AdmittedDelivery.Proposed proposed -> feedbackService.recordProposal(job, proposed.content());
+            case AdmittedDelivery.Automatic automatic ->
+                feedbackService.deliverFeedback(job, automatic.content(), automatic.contributingPracticeSlugs());
         }
-        feedbackService.deliverFeedback(
-                job, automatic, automatic == null ? Set.of() : automatic.contributingPracticeSlugs(reviewPackage));
     }
 
     private ReviewResultParser.ValidatedObservation validated(Observation observation) {

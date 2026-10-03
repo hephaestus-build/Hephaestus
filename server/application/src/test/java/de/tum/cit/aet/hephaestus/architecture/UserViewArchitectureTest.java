@@ -6,6 +6,7 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import de.tum.cit.aet.hephaestus.core.UserViewRead;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
+import java.lang.reflect.AnnotatedElement;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
@@ -74,7 +75,7 @@ class UserViewArchitectureTest extends HephaestusArchitectureTest {
                 .anyMatch(path -> path.contains("{userId}"));
     }
 
-    private static Stream<String> paths(java.lang.reflect.AnnotatedElement element) {
+    private static Stream<String> paths(AnnotatedElement element) {
         RequestMapping mapping = AnnotatedElementUtils.findMergedAnnotation(element, RequestMapping.class);
         return mapping == null ? Stream.empty() : Arrays.stream(mapping.path());
     }

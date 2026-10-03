@@ -252,8 +252,6 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                 workspace.getSubIssuesSyncedAt());
     }
 
-    // USER AND TEAM SYNC STATE
-
     @Override
     @Transactional(readOnly = true)
     public Optional<UserSyncState> getUserSyncState(Long scopeId) {
@@ -283,7 +281,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                     // Apply repository filter to derive org names only from allowed repositories
                     .filter(workspaceScopeFilter::isRepositoryAllowed)
                     .map(RepositoryToMonitor::getNameWithOwner)
-                    .map(s -> s.split("/")[0])
+                    .map(s -> s.split("/", -1)[0])
                     .distinct()
                     .toList();
             return new TeamSyncState(ws.getId(), ws.getTeamsSyncedAt(), orgNames);
@@ -304,8 +302,6 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                                 "Failed to update teams sync timestamp: reason=workspaceNotFound, workspaceId={}",
                                 scopeId));
     }
-
-    // SYNC TARGET OPERATIONS
 
     @Override
     @Transactional(readOnly = true)
@@ -443,7 +439,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
         repositoryToMonitorRepository.findById(syncTargetId).ifPresent(rtm -> {
             boolean dirty = false;
 
-            // Capture the stable id the first time we resolve it (legacy / PAT rows start null).
+            // Capture the stable id the first time it resolves.
             if (rtm.getNativeId() == null && resolvedNativeId != null) {
                 rtm.setNativeId(resolvedNativeId);
                 dirty = true;
@@ -520,8 +516,6 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                                         kind,
                                         syncTargetId));
     }
-
-    // SYNC SESSIONS
 
     @Override
     @Transactional(readOnly = true)

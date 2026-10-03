@@ -158,8 +158,8 @@ export function PracticeReviewSweepSchedule({
 				</h2>
 				<p className="text-sm text-muted-foreground">
 					Reviews normally start the moment work happens. When a notification is lost, nothing ever
-					arrives — and there is no record of the review that did not happen. A recurring check
-					looks again over the last few days, so anything missed still gets reviewed.
+					arrives, and nothing records the review that did not happen. A recurring check looks again
+					over the last few days, so anything missed still gets reviewed.
 				</p>
 			</div>
 			{isError ? (
@@ -167,7 +167,7 @@ export function PracticeReviewSweepSchedule({
 					<AlertCircle />
 					<AlertTitle>Recurring checks couldn’t be loaded</AlertTitle>
 					<AlertDescription>
-						<p>Whatever is scheduled is still running — this is only about showing it here.</p>
+						<p>Whatever is scheduled is still running. This is only about showing it here.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
 							Try again
 						</Button>
@@ -322,7 +322,7 @@ function AddScheduleForm({
 						<FieldLabel id="sweep-cadence-label" htmlFor="sweep-cadence">
 							How often
 						</FieldLabel>
-						<FieldDescription>Runs on its own; there is nothing to start by hand.</FieldDescription>
+						<FieldDescription>Runs on its own. There is nothing to start by hand.</FieldDescription>
 					</FieldContent>
 					<Select
 						items={CADENCES}
@@ -386,7 +386,7 @@ function AddScheduleForm({
 					Start checking {chosenKind}
 				</Button>
 				<p className="text-sm text-muted-foreground">
-					Every check can start reviews, so this authorises the AI spend for all of them — not just
+					Every check can start reviews, so this authorises the AI spend for all of them, not just
 					the first.
 				</p>
 			</div>

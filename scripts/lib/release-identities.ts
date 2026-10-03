@@ -1,5 +1,5 @@
 /**
- * Per-release image namespace and signing identity (issue #1599).
+ * Per-release image namespace and signing identity.
  *
  * GHCR packages do not transfer between organizations and Fulcio certificates are
  * immutable, so a release keeps the namespace and certificate identity it was

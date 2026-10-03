@@ -1,10 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 
-import { GithubIcon, GitlabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
+import { GitHubIcon, GitLabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 
 const ICONS = [
-	{ label: "GitHub", Icon: GithubIcon },
-	{ label: "GitLab", Icon: GitlabIcon },
+	{ label: "GitHub", Icon: GitHubIcon },
+	{ label: "GitLab", Icon: GitLabIcon },
 	{ label: "Slack", Icon: SlackIcon },
 	{ label: "Outline", Icon: OutlineIcon },
 ];
@@ -31,6 +32,29 @@ export const AllMarks: StoryObj = {
 			))}
 		</div>
 	),
+	play: async ({ canvas }) => {
+		await expect(canvas.queryAllByRole("img")).toHaveLength(0);
+	},
+};
+
+/**
+ * A mark beside its provider's name is decoration and stays out of the accessibility tree; a mark
+ * standing alone carries an `aria-label` and is announced as an image of that name.
+ */
+export const Labelled: StoryObj = {
+	render: () => (
+		<div className="flex items-center gap-6">
+			<span className="flex items-center gap-2 text-sm">
+				<GitLabIcon className="size-4" />
+				GitLab
+			</span>
+			<GitHubIcon className="size-8" aria-label="GitHub" />
+		</div>
+	),
+	play: async ({ canvas }) => {
+		await expect(canvas.getAllByRole("img")).toHaveLength(1);
+		await expect(canvas.getByRole("img", { name: "GitHub" })).toBeVisible();
+	},
 };
 
 /** The sizes the marks actually ship at: inline in a heading, in an Item media slot, in a button. */

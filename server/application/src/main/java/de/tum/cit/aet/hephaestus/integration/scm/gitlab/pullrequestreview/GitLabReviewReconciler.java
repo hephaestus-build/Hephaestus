@@ -182,7 +182,7 @@ public class GitLabReviewReconciler {
     }
 
     /**
-     * The approval row for a live approval note that arrived before the {@code approved} merge request
+     * The approval row for a live approval note that arrived before the {@code "approved"} merge request
      * hook made one. Its submission time stays unknown: a note does not bind the approval to a head.
      */
     private void createLiveApproval(PullRequest pr, User approver, Instant approvedAt, IdentityProvider provider) {
@@ -230,7 +230,7 @@ public class GitLabReviewReconciler {
 
     /**
      * The system note "unapproved this merge request": the person withdrew their approval, so their
-     * approval review is dismissed, as the {@code unapproved} webhook dismisses it. Not a request for
+     * approval review is dismissed, as the {@code "unapproved"} webhook action dismisses it. Not a request for
      * changes — that is its own note and its own review.
      *
      * @return the review as it stands after the note, or {@code null} when no approval by this user is

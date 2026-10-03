@@ -79,10 +79,6 @@ export const MENTOR_ERROR_CODES = Object.freeze({
 
 export type MentorErrorCode = (typeof MENTOR_ERROR_CODES)[keyof typeof MENTOR_ERROR_CODES];
 
-//
-// ─── Java → runner: requests ──────────────────────────────────────────────────────────────────
-//
-
 /** `hello` and `shutdown` take no arguments; Java still sends an empty object rather than omitting. */
 export type EmptyParams = Record<string, never>;
 
@@ -131,10 +127,6 @@ interface RequestFrame<M extends MentorMethod> {
 
 /** Discriminated union over `method`, so `params` is correlated with the method it accompanies. */
 export type MentorRequest = { [M in MentorMethod]: RequestFrame<M> }[MentorMethod];
-
-//
-// ─── runner → Java: responses ─────────────────────────────────────────────────────────────────
-//
 
 export interface HelloResult {
 	protocolVersion: number;
@@ -199,10 +191,6 @@ export interface JsonRpcErrorResponse {
 	id: JsonRpcId;
 	error: JsonRpcError;
 }
-
-//
-// ─── runner → Java: event notifications ───────────────────────────────────────────────────────
-//
 
 /** Announced once at startup, before any request is served. Carries `threadId: null`. */
 export interface RunnerReadyEvent {
@@ -269,10 +257,6 @@ export interface MentorEventNotification {
 	};
 }
 
-//
-// ─── runner → Java: server callbacks ──────────────────────────────────────────────────────────
-//
-
 export interface FetchContextParams {
 	threadId: string;
 	/** A canonical context key, e.g. `inputs/context/recent_authored_work.json`. */
@@ -336,10 +320,6 @@ export interface ServerCallbackErrorResponse {
 
 /** A callback the runner sends Java. */
 export type ServerCallbackRequest = FetchContextRequest | LinkObservationRequest;
-
-//
-// ─── frame unions ─────────────────────────────────────────────────────────────────────────────
-//
 
 /** Everything the runner writes to stdout. */
 export type MentorOutboundFrame =

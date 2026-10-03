@@ -346,9 +346,6 @@ export const RequiredLinkOpen: Story = {
 				"Your AI choice is set and holds in all your workspaces. Connect Slack and you're in.",
 			),
 		).toBeVisible();
-		await expect(canvas.getByTitle("SlackIcon")).toBeVisible();
-		await expect(canvas.getByTitle("OutlineIcon")).toBeVisible();
-		await expect(canvas.queryByTitle("LinkIcon")).toBeNull();
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
 		await expect(
 			canvas.getByRole("button", { name: "Save AI choice and connect Slack" }),

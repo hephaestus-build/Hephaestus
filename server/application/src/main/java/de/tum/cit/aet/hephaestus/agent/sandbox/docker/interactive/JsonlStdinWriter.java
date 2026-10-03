@@ -120,7 +120,7 @@ final class JsonlStdinWriter {
         }
         try {
             ack.get(stdinWriteTimeoutMs, TimeUnit.MILLISECONDS);
-            framesBytesIn.increment(payload.length + 1L);
+            framesBytesIn.increment((double) (payload.length + 1L));
         } catch (TimeoutException te) {
             // Writer is still blocked inside write(); the watchdog will destroyForcibly.
             rejectedWriteTimeout.increment();
@@ -214,5 +214,6 @@ final class JsonlStdinWriter {
         }
     }
 
+    @SuppressWarnings("ArrayRecordComponent") // payload bytes queued for stdin; never compared, hashed or printed
     private record WriteEnvelope(byte[] payload, CompletableFuture<Void> ack) {}
 }

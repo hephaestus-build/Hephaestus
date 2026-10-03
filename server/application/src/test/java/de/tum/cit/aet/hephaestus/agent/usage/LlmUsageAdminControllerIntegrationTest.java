@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,11 +50,7 @@ class LlmUsageAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         seedEvent(workspace, cost, FundingSource.INSTANCE, PricingState.PRICED);
     }
 
-    private void seedEvent(
-            Workspace workspace,
-            @org.jspecify.annotations.Nullable String cost,
-            FundingSource funding,
-            PricingState pricing) {
+    private void seedEvent(Workspace workspace, @Nullable String cost, FundingSource funding, PricingState pricing) {
         LlmUsageEvent event = new LlmUsageEvent();
         event.setId(UUID.randomUUID());
         event.setWorkspace(workspace);

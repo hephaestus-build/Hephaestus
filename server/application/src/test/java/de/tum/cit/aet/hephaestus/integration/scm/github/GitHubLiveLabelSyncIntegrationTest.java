@@ -34,9 +34,8 @@ class GitHubLiveLabelSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
         var repository = seeded.repository();
         var createdLabel = seeded.label();
 
-        repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
-                .orElseThrow();
+        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+                .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
         labelSyncService.syncLabelsForRepository(workspace.getId(), localRepo.getId());
@@ -53,9 +52,8 @@ class GitHubLiveLabelSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
         var repository = seeded.repository();
         var createdLabel = seeded.label();
 
-        repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
-                .orElseThrow();
+        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+                .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
         labelSyncService.syncLabelsForRepository(workspace.getId(), localRepo.getId());
@@ -76,9 +74,8 @@ class GitHubLiveLabelSyncIntegrationTest extends AbstractGitHubLiveSyncIntegrati
         var repository = seeded.repository();
         var createdLabel = seeded.label();
 
-        repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
-                .orElseThrow();
+        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+                .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
         labelSyncService.syncLabelsForRepository(workspace.getId(), localRepo.getId());

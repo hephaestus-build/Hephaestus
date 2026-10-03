@@ -6,7 +6,6 @@ import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSync
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaborator;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaboratorRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -48,7 +47,6 @@ public class GitLabCollaboratorSyncService {
     private static final String GET_PROJECT_MEMBERS_DOCUMENT = "GetProjectMembers";
     private static final int LARGE_PAGE_SIZE = 100;
 
-    private final RepositoryRepository repositoryRepository;
     private final RepositoryCollaboratorRepository collaboratorRepository;
     private final GitLabGraphQlClientProvider graphQlClientProvider;
     private final GitLabGraphQlResponseHandler responseHandler;
@@ -58,7 +56,6 @@ public class GitLabCollaboratorSyncService {
     private final GitLabWorkspaceLinkService workspaceLinkService;
 
     public GitLabCollaboratorSyncService(
-            RepositoryRepository repositoryRepository,
             RepositoryCollaboratorRepository collaboratorRepository,
             GitLabGraphQlClientProvider graphQlClientProvider,
             GitLabGraphQlResponseHandler responseHandler,
@@ -66,7 +63,6 @@ public class GitLabCollaboratorSyncService {
             GitLabProperties gitLabProperties,
             TransactionTemplate transactionTemplate,
             GitLabWorkspaceLinkService workspaceLinkService) {
-        this.repositoryRepository = repositoryRepository;
         this.collaboratorRepository = collaboratorRepository;
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;

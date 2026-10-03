@@ -284,7 +284,7 @@ const fixtures: Fixture[] = [
 	},
 	// `no-restricted-imports` options replace rather than merge, so every override that sets the rule
 	// restates the `react` entry; one fixture per override scope proves none has dropped it.
-	...["src/lib", "src/stores", "src/components/ui", "src/components", "src"].map((scope) => ({
+	...["src/lib", "src/components/ui", "src/components", "src"].map((scope) => ({
 		path: `${scope}/lint-contract-memo.ts`,
 		code: "eslint(no-restricted-imports)",
 		source: 'export { useMemo } from "react";',

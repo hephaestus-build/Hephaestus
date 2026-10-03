@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.net.URI;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -21,12 +22,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /**
@@ -60,7 +64,7 @@ class ClientSessionIntegrationTest extends RealAuthIntegrationTest {
     private ClientSessionPruner pruner;
 
     @Autowired
-    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private AccountPurger accountPurger;
@@ -199,7 +203,7 @@ class ClientSessionIntegrationTest extends RealAuthIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isOk()
-                .expectBody(new org.springframework.core.ParameterizedTypeReference<List<Map<String, Object>>>() {})
+                .expectBody(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
                 .returnResult()
                 .getResponseBody();
 
@@ -369,7 +373,7 @@ class ClientSessionIntegrationTest extends RealAuthIntegrationTest {
     void shouldSignTheClientInWithoutTouchingTheCookieWhenTheBrowserHoldsARevokedWebSession() {
         String staleCookie = webLogin("web-stale");
         Long staleAccountId = ClientSignInFlow.accountId(staleCookie);
-        new org.springframework.transaction.support.TransactionTemplate(transactionManager)
+        new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> issuedJwtRepository.revokeAllForAccount(
                         staleAccountId, Instant.now(), IssuedJwt.RevokedReason.SIGN_OUT_EVERYWHERE));
         String verifier = Pkce.newSecret() + "-verifier";
@@ -634,10 +638,10 @@ class ClientSessionIntegrationTest extends RealAuthIntegrationTest {
         ClientSignInFlow.Tokens r1 = flow.rotate(r0.refreshToken());
         jdbc.update(
                 "UPDATE issued_jwt SET expires_at = ? WHERE jti = ?",
-                java.sql.Timestamp.from(Instant.now().minusSeconds(60)),
+                Timestamp.from(Instant.now().minusSeconds(60)),
                 j0);
 
-        new org.springframework.transaction.support.TransactionTemplate(transactionManager)
+        new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> issuedJwtRepository.deleteExpiredBefore(Instant.now()));
 
         assertThat(issuedJwtRepository.findById(j0)).isPresent();
@@ -653,7 +657,7 @@ class ClientSessionIntegrationTest extends RealAuthIntegrationTest {
         flow.logout(ended.refreshToken()).expectStatus().isNoContent().expectBody(Void.class);
         jdbc.update(
                 "UPDATE client_session SET revoked_at = ? WHERE id = ?",
-                java.sql.Timestamp.from(Instant.now().minus(Duration.ofDays(2))),
+                Timestamp.from(Instant.now().minus(Duration.ofDays(2))),
                 endedSid);
 
         pruner.prune();

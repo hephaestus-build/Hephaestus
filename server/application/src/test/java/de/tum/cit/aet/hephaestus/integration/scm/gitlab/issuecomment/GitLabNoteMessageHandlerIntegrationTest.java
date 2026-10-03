@@ -30,7 +30,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -118,9 +117,6 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
     private PullRequestReviewRepository reviewRepository;
 
     @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
     private OrganizationRepository organizationRepository;
 
     @Autowired
@@ -180,14 +176,10 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
         setupTestData();
     }
 
-    // Event Type
-
     @Test
     void returnsCorrectEventType() {
         assertThat(handler.key().eventType()).isEqualTo("note");
     }
-
-    // Issue Notes
 
     @Nested
     class IssueNotes {
@@ -236,8 +228,6 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // MR Notes
-
     @Nested
     class MergeRequestNotes {
 
@@ -281,16 +271,19 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // System Notes
-
     @Nested
-    class SystemNotes {
+    class SkippedNotes {
 
-        @Test
-        void shouldSkipSystemNote() throws Exception {
-            handler.handleEvent(loadPayload("note.system"));
+        @ParameterizedTest
+        @ValueSource(strings = {"note.system", "note.confidential.issue.create", "note.commit.create"})
+        void shouldSkipTheNoteWhenItIsASystemConfidentialOrCommitNote(String payload) throws Exception {
+            GitLabNoteEventDTO note = loadPayload(payload);
+            handler.handleEvent(note);
 
-            assertThat(commentRepository.count()).isZero();
+            long nativeId = Objects.requireNonNull(note.objectAttributes()).id();
+            assertThat(commentRepository.findByNativeIdAndProviderId(
+                            nativeId, Objects.requireNonNull(savedProvider.getId())))
+                    .isEmpty();
             assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
                     .isEmpty();
         }
@@ -409,8 +402,6 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     .setReviewDecision(decision));
         }
     }
-
-    // Inline discussions
 
     /**
      * A diff note webhook and the discussion read name one thread through the discussion's GID; a stored thread's
@@ -908,23 +899,6 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // Confidential Notes
-
-    @Nested
-    class ConfidentialNotes {
-
-        @Test
-        void shouldSkipConfidentialNote() throws Exception {
-            handler.handleEvent(loadPayload("note.confidential.issue.create"));
-
-            assertThat(commentRepository.count()).isZero();
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
-                    .isEmpty();
-        }
-    }
-
-    // Edge Cases
-
     @Nested
     class EdgeCases {
 
@@ -968,18 +942,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 assertThat(stubIssue.getNativeId()).isEqualTo(NATIVE_ISSUE_ID);
             });
         }
-
-        @Test
-        void shouldSkipCommitNote() throws Exception {
-            handler.handleEvent(loadPayload("note.commit.create"));
-
-            assertThat(commentRepository.count()).isZero();
-            assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
-                    .isEmpty();
-        }
     }
-
-    // Helpers
 
     private GitLabNoteEventDTO loadPayload(String filename) throws IOException {
         ClassPathResource resource = new ClassPathResource("gitlab/" + filename + ".json");

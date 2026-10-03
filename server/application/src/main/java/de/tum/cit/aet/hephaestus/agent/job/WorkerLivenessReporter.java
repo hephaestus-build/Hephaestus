@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -14,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
@@ -33,8 +34,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * only and this bean runs on worker pods.
  */
 @Component
-@ConditionalOnExpression(
-        "${" + RuntimeRole.AGENT_ENABLED_PROPERTY + ":false} and ${" + RuntimeRole.WORKER_PROPERTY + ":true}")
+@ConditionalOnWorkerRole
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @WorkspaceAgnostic("Fleet-wide worker liveness; not workspace-scoped.")
 public class WorkerLivenessReporter {
 
@@ -46,7 +47,9 @@ public class WorkerLivenessReporter {
     private final String workerId;
     private final Counter heartbeatFailures;
 
-    private volatile int consecutiveFailures;
+    /** beat() runs serially: once in start(), then only on the single scheduler thread start() creates after it. */
+    private int consecutiveFailures;
+
     private @Nullable ScheduledExecutorService scheduler;
 
     public WorkerLivenessReporter(
@@ -74,7 +77,9 @@ public class WorkerLivenessReporter {
             t.setDaemon(true);
             return t;
         });
-        scheduler.scheduleAtFixedRate(this::beat, interval.toSeconds(), interval.toSeconds(), TimeUnit.SECONDS);
+        // Periodic; stop() ends it with shutdownNow().
+        var unused =
+                scheduler.scheduleAtFixedRate(this::beat, interval.toSeconds(), interval.toSeconds(), TimeUnit.SECONDS);
         log.info("Worker liveness reporter started: workerId={}, interval={}", workerId, interval);
     }
 

@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -222,7 +223,7 @@ public class GitLabCommitBackfillService {
             return List.of();
         }
 
-        String primaryLower = primaryAuthorEmail != null ? primaryAuthorEmail.toLowerCase() : null;
+        String primaryLower = primaryAuthorEmail != null ? primaryAuthorEmail.toLowerCase(Locale.ROOT) : null;
         Set<String> seenEmails = new HashSet<>();
         if (primaryLower != null) {
             seenEmails.add(primaryLower);
@@ -236,7 +237,7 @@ public class GitLabCommitBackfillService {
             if (email.isEmpty()) {
                 continue;
             }
-            String emailLower = email.toLowerCase();
+            String emailLower = email.toLowerCase(Locale.ROOT);
             if (!seenEmails.add(emailLower)) {
                 continue;
             }

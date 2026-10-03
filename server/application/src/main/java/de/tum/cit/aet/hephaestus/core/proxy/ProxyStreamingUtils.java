@@ -57,7 +57,7 @@ public final class ProxyStreamingUtils {
         List<String> connectionValues = headers.get(HttpHeaders.CONNECTION);
         if (connectionValues != null) {
             for (String val : connectionValues) {
-                for (String token : val.split(",")) {
+                for (String token : val.split(",", -1)) {
                     String trimmed = token.trim();
                     if (!trimmed.isEmpty()) {
                         toStrip.add(trimmed.toLowerCase(Locale.ROOT));
@@ -196,6 +196,7 @@ public final class ProxyStreamingUtils {
     }
 
     /** A fully consumed upstream response: SSE is already written; other bodies remain buffered. */
+    @SuppressWarnings("ArrayRecordComponent") // buffered upstream response bytes; never compared, hashed or printed
     public record UpstreamResult(
             int status,
             HttpHeaders headers,

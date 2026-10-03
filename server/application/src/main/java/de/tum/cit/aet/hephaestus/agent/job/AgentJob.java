@@ -102,8 +102,8 @@ public class AgentJob {
     private AgentJobStatus status = AgentJobStatus.QUEUED;
 
     /**
-     * Which external system this job runs against; resolves the per-kind delivery channel. New rows MUST
-     * set this at submit time — nullable on the column only because legacy rows are backfilled.
+     * Which external system this job runs against; resolves the per-kind delivery channel. Every submit sets
+     * it; the column is nullable only for rows that predate it, which were backfilled.
      */
     @Enumerated(EnumType.STRING)
     @Column(name = "integration_kind", length = 48)
@@ -112,7 +112,7 @@ public class AgentJob {
 
     /**
      * Discriminator for the work subject this job analyses; drives polymorphic delivery dispatch.
-     * Nullable for legacy rows, which are backfilled as {@code scm.pull_request}.
+     * Every submit sets it; rows that predate the column were backfilled as {@code scm.pull_request}.
      */
     @Column(name = "artifact_kind", length = ArtifactKind.MAX_LENGTH)
     @Nullable

@@ -24,6 +24,7 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.graphql.client.ClientGraphQlResponse;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -168,7 +169,7 @@ class GitLabMergeRequestReadinessReaderTest extends BaseUnitTest {
     void shouldReadNothingWhenGitLabCannotBeReached() {
         GitLabGraphQlClientProvider provider = mock(GitLabGraphQlClientProvider.class);
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec request = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec request = mock(GraphQlClient.RequestSpec.class);
         when(provider.forScope(1L)).thenReturn(client);
         when(client.documentName(anyString())).thenReturn(request);
         when(request.variable(anyString(), any())).thenReturn(request);

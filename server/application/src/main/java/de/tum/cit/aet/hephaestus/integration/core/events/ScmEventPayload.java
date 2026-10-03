@@ -20,6 +20,8 @@ import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Immutable event payload DTOs for SCM domain events. These records are safe for
@@ -40,7 +42,7 @@ public final class ScmEventPayload {
      * on the join column). Callers use {@code Optional.empty()} as the contract; this log
      * exists so operators can investigate which DB rows triggered the empty path.
      */
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ScmEventPayload.class);
+    private static final Logger log = LoggerFactory.getLogger(ScmEventPayload.class);
 
     private ScmEventPayload() {}
 
@@ -92,7 +94,7 @@ public final class ScmEventPayload {
             int number,
             @NonNull String title,
             @Nullable String body,
-            PullRequest.@NonNull State state,
+            Issue.@NonNull State state,
             boolean isDraft,
             boolean isMerged,
             int additions,

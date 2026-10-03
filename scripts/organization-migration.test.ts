@@ -27,11 +27,11 @@ const SKIPPED_EXTENSIONS = new Set([
 	".zip",
 ]);
 
-// Sample repository names in stories and test fixtures are not the shipped rename (#1599).
+// Sample repository names in stories and test fixtures are not the shipped rename.
 const SAMPLE_DATA = /(?:\.stories\.tsx|\.test\.tsx?|fixtures\.ts)$/u;
 
 // Historical records of where a past release's images actually live, or a sample-format doc
-// comment — #1599 explicitly excludes both from the rename.
+// comment — the rename excludes both.
 const HISTORICAL_ALLOWLIST = new Set([
 	"webapp/src/components/admin/practice-reviews/ReviewArtifact.tsx",
 	"docs/admin/compatibility-policy.mdx",

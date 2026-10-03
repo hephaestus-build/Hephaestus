@@ -11,7 +11,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceDeliveryAuthorization;
+import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ConversationConsentGate;
+import de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChannel.DeliveryOutcome;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
@@ -38,6 +40,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 /**
  * The conversational reconciler reads and authorizes a whole turn's linked observations in two queries rather
@@ -151,11 +154,11 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
                         new EvidenceDeliveryAuthorization(
                                 jobs,
                                 catalogs,
-                                org.mockito.Mockito.mock(
-                                        de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                                mock(
+                                        CitedSourceAccess.class,
                                         call -> call.getMethod().getName().equals("permits")
                                                 ? true
-                                                : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call))),
+                                                : Mockito.RETURNS_DEFAULTS.answer(call))),
                         mock(ObservationInvalidationRepository.class)),
                 mock(ConversationConsentGate.class));
 
@@ -224,8 +227,7 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
                 .agentJobId(jobId)
                 .practice(practice)
                 .practiceRevision(evaluated)
-                .evidence(
-                        de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures.evidence(jobId, sourceKind))
+                .evidence(AdmittedObservationFixtures.evidence(jobId, sourceKind))
                 .build();
     }
 

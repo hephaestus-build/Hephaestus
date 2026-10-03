@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -145,8 +146,8 @@ class FeedbackDeliveryService {
                 return;
             }
             if (dispatch.getState() == FeedbackDispatchState.SUPPRESSED) {
-                FeedbackSuppressionReason reason = FeedbackSuppressionReason.valueOf(
-                        java.util.Objects.requireNonNull(dispatch.getSuppressionReason()));
+                FeedbackSuppressionReason reason =
+                        FeedbackSuppressionReason.valueOf(Objects.requireNonNull(dispatch.getSuppressionReason()));
                 if (!summaryDelivered && !inlineDelivered) {
                     feedbackLedgerRecorder.recordSuppressedUnit(job, delivery, reason);
                     reconcileJob(dispatch, DeliveryStatus.DELIVERED);
@@ -209,11 +210,11 @@ class FeedbackDeliveryService {
         Set<String> delivered = signals.stream()
                 .filter(signal -> signal.disposition() != Disposition.FAILED)
                 .map(DeliveredSignal::deliveryKey)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         return delivery.diffNotes().stream()
                 .map(ReviewResultParser.DiffNote::deliveryKey)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .filter(key -> !delivered.contains(key))
                 .toList();
     }
@@ -225,7 +226,7 @@ class FeedbackDeliveryService {
     }
 
     private static ArtifactKind artifactKind(AgentJob job) {
-        var artifact = AgentJobService.artifactKindFor(java.util.Objects.requireNonNull(job.getJobType()));
+        var artifact = AgentJobService.artifactKindFor(Objects.requireNonNull(job.getJobType()));
         if (artifact.equals(ArtifactKinds.PULL_REQUEST) || artifact.equals(ArtifactKinds.ISSUE)) return artifact;
         throw new JobDeliveryException("Artifact package projection does not support " + artifact.value());
     }

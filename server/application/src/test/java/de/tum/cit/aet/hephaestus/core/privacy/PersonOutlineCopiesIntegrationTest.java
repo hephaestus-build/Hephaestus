@@ -2,13 +2,24 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.core.auth.domain.*;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
-import de.tum.cit.aet.hephaestus.integration.core.connection.*;
-import de.tum.cit.aet.hephaestus.testconfig.*;
-import java.util.*;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
+import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
@@ -25,7 +36,7 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     private IdentityProviderRepository providers;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository documents;
+    private OutlineDocumentRepository documents;
 
     @Test
     void exactEditorAndCollaboratorKeysCoverBodyCopiesWithoutExportingOtherProfiles() {
@@ -114,13 +125,13 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
         jdbc.update(
                 "UPDATE outline_document SET collaborator_subjects=CAST(? AS jsonb),body_markdown='Restored copied body' WHERE id=995704",
                 "[\"" + target + "\",\"" + other + "\"]");
-        assertThat(documents.findForProjection(995701L, org.springframework.data.domain.Pageable.unpaged()))
-                .extracting(de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument::getId)
+        assertThat(documents.findForProjection(995701L, Pageable.unpaged()))
+                .extracting(OutlineDocument::getId)
                 .containsExactly(995705L);
         assertThat(documents.findByWorkspaceIdAndIdForProjection(995701L, 995703L))
                 .isEmpty();
         assertThat(documents.searchByRelevance(995701L, "body", 10))
-                .extracting(de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument::getId)
+                .extracting(OutlineDocument::getId)
                 .containsExactly(995705L);
     }
 }

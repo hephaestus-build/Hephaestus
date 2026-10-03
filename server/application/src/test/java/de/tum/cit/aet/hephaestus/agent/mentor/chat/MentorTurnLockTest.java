@@ -3,11 +3,14 @@ package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
@@ -154,8 +157,9 @@ class MentorTurnLockTest extends BaseUnitTest {
         AtomicInteger maxConcurrentShared = new AtomicInteger();
         try {
             // Two threads compete for the same SandboxKey — must serialise.
+            List<Future<?>> sameKey = new ArrayList<>();
             for (int i = 0; i < 2; i++) {
-                pool.submit(() -> {
+                sameKey.add(pool.submit(() -> {
                     try (var ignored = lock.acquireSandboxLock(shared)) {
                         int now = insideShared.incrementAndGet();
                         maxConcurrentShared.accumulateAndGet(now, Math::max);
@@ -170,11 +174,11 @@ class MentorTurnLockTest extends BaseUnitTest {
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                     }
-                });
+                }));
             }
             // A third thread on a DIFFERENT SandboxKey must not be blocked by the shared lock.
             CountDownLatch isolatedRan = new CountDownLatch(1);
-            pool.submit(() -> {
+            Future<?> differentKey = pool.submit(() -> {
                 try (var ignored = lock.acquireSandboxLock(isolated)) {
                     isolatedRan.countDown();
                 }
@@ -186,6 +190,11 @@ class MentorTurnLockTest extends BaseUnitTest {
                     .as("different-key thread must run in parallel")
                     .isTrue();
             firstMayLeave.countDown();
+            // Surfaces an assertion that failed inside a task.
+            for (Future<?> task : sameKey) {
+                task.get(5, TimeUnit.SECONDS);
+            }
+            differentKey.get(5, TimeUnit.SECONDS);
         } finally {
             pool.shutdown();
             pool.awaitTermination(5, TimeUnit.SECONDS);

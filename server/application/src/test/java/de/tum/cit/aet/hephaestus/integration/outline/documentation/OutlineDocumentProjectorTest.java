@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection.ProjectedDocument;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.springframework.data.domain.Pageable;
 
 class OutlineDocumentProjectorTest extends BaseUnitTest {
@@ -71,7 +73,7 @@ class OutlineDocumentProjectorTest extends BaseUnitTest {
                 identityResolver,
                 documentSelector,
                 new OutlineOriginPolicy(Set.of(SERVER_URL)),
-                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder.class));
+                Mockito.mock(PersonDataCopyRecorder.class));
         lenient()
                 .when(connectionService.findActiveOutlineConfig(WORKSPACE_ID))
                 .thenReturn(Optional.of(new ConnectionConfig.OutlineConfig(SERVER_URL, null, null, Set.of())));
@@ -192,8 +194,6 @@ class OutlineDocumentProjectorTest extends BaseUnitTest {
         });
     }
 
-    // --- archived flag + collection name ---
-
     @Test
     @DisplayName("an archived (soft, recoverable) row projects archived=true and keeps its body, unlike a tombstone")
     void documentsForWorkspace_archivedRowProjectsArchivedTrueWithBodyIntact() {
@@ -253,8 +253,6 @@ class OutlineDocumentProjectorTest extends BaseUnitTest {
                 .singleElement()
                 .satisfies(projected -> assertThat(projected.collectionName()).isNull());
     }
-
-    // --- authorship projection ---
 
     @Test
     @DisplayName("author substrate projects and a linked author resolves to their workspace member id")
@@ -451,7 +449,7 @@ class OutlineDocumentProjectorTest extends BaseUnitTest {
                 identityResolver,
                 documentSelector,
                 new OutlineOriginPolicy(Set.of()),
-                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder.class));
+                Mockito.mock(PersonDataCopyRecorder.class));
 
         assertThat(denied.documentsForWorkspace(WORKSPACE_ID)).isEmpty();
         verify(documentRepository, never()).findForProjection(anyLong(), any());

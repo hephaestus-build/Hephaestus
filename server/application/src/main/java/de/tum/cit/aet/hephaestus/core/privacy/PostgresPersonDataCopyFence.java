@@ -5,7 +5,9 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import java.sql.Connection;
 import java.sql.SQLException;
 import javax.sql.DataSource;
+import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,13 +70,12 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
             }
             throw new IllegalStateException("Copy admission is unavailable", exception);
         }
-        var receipts =
-                new JdbcTemplate(new org.springframework.jdbc.datasource.SingleConnectionDataSource(connection, true));
+        var receipts = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
         return new Lease() {
             private boolean closed;
 
             @Override
-            public org.springframework.jdbc.core.JdbcOperations jdbc() {
+            public JdbcOperations jdbc() {
                 return receipts;
             }
 
@@ -82,22 +83,28 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
             public synchronized void close() {
                 if (closed) return;
                 closed = true;
+                SQLException unlockFailure = null;
                 try {
                     execute(connection, shared ? "pg_advisory_unlock_shared" : "pg_advisory_unlock");
                 } catch (SQLException exception) {
+                    unlockFailure = exception;
                     // Never return a session with an unknown lock state to the pool.
                     try {
                         connection.abort(Runnable::run);
                     } catch (SQLException abortFailure) {
                         exception.addSuppressed(abortFailure);
                     }
-                    throw new IllegalStateException("Copy admission could not be released", exception);
-                } finally {
-                    try {
-                        connection.close();
-                    } catch (SQLException exception) {
-                        throw new IllegalStateException("Copy admission connection could not be closed", exception);
+                }
+                try {
+                    connection.close();
+                } catch (SQLException closeFailure) {
+                    if (unlockFailure == null) {
+                        throw new IllegalStateException("Copy admission connection could not be closed", closeFailure);
                     }
+                    unlockFailure.addSuppressed(closeFailure);
+                }
+                if (unlockFailure != null) {
+                    throw new IllegalStateException("Copy admission could not be released", unlockFailure);
                 }
             }
         };

@@ -10,13 +10,13 @@ import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 /** Pins the persisted AAD wire format and field separation that round trips cannot detect. */
 class EncryptionContextTest extends BaseUnitTest {
 
-    private static byte[] aad(
-            long ws, IntegrationKind kind, @org.jspecify.annotations.Nullable String instanceKey, String column) {
+    private static byte[] aad(long ws, IntegrationKind kind, @Nullable String instanceKey, String column) {
         return new EncryptionContext(ws, kind, instanceKey, column).toAad();
     }
 

@@ -1,12 +1,18 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
@@ -27,7 +33,7 @@ class SandboxWorkspaceManagerTest {
     void shouldPreserveMemoryAndDiskInputsInOneArchive() throws Exception {
         var source = Files.writeString(temporary.resolve("App.java"), "class App {}");
         Path archive = manager.createInputTar(
-                Map.of("inputs/diff.patch", "diff".getBytes()), Map.of("inputs/repository/App.java", source));
+                Map.of("inputs/diff.patch", "diff".getBytes(UTF_8)), Map.of("inputs/repository/App.java", source));
         try {
             var captured = new HashMap<String, byte[]>();
             try (var tar = new TarArchiveInputStream(Files.newInputStream(archive))) {
@@ -37,7 +43,7 @@ class SandboxWorkspaceManagerTest {
                 }
             }
             assertThat(captured).containsOnlyKeys("inputs/diff.patch", "inputs/repository/App.java");
-            assertThat(captured.get("inputs/diff.patch")).isEqualTo("diff".getBytes());
+            assertThat(captured.get("inputs/diff.patch")).isEqualTo("diff".getBytes(UTF_8));
             assertThat(captured.get("inputs/repository/App.java")).isEqualTo(Files.readAllBytes(source));
         } finally {
             Files.delete(archive);
@@ -96,14 +102,14 @@ class SandboxWorkspaceManagerTest {
     void shouldStreamAnInputLargerThanTheFormerRepositoryBudget() throws Exception {
         var source = temporary.resolve("large.bin");
         byte[] chunk = new byte[1024 * 1024];
-        java.util.Arrays.fill(chunk, (byte) 'x');
+        Arrays.fill(chunk, (byte) 'x');
         try (var output = Files.newOutputStream(source)) {
             for (int index = 0; index < 64; index++) output.write(chunk);
         }
         Path archive = manager.createInputTar(Map.of(), Map.of("large.bin", source));
         try (var tar = new TarArchiveInputStream(Files.newInputStream(archive))) {
             assertThat(tar.getNextEntry().getSize()).isEqualTo(64L * 1024 * 1024);
-            assertThat(tar.transferTo(java.io.OutputStream.nullOutputStream())).isEqualTo(Files.size(source));
+            assertThat(tar.transferTo(OutputStream.nullOutputStream())).isEqualTo(Files.size(source));
             assertThat(tar.getNextEntry()).isNull();
         } finally {
             Files.delete(archive);
@@ -127,11 +133,11 @@ class SandboxWorkspaceManagerTest {
         var git = Files.createDirectory(source.resolve(".git"));
         var head = Files.writeString(git.resolve("HEAD"), "captured-head");
         Files.writeString(source.resolve("App.java"), "source");
-        var directory = new de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory("inputs/repository/", source);
-        Path archive = manager.createInputTar(
-                Map.of(), Map.of("inputs/repository/.git/HEAD", head), java.util.List.of(directory));
+        var directory = new EvidenceDirectory("inputs/repository/", source);
+        Path archive =
+                manager.createInputTar(Map.of(), Map.of("inputs/repository/.git/HEAD", head), List.of(directory));
         try (var tar = new TarArchiveInputStream(Files.newInputStream(archive))) {
-            var names = new java.util.ArrayList<String>();
+            var names = new ArrayList<String>();
             TarArchiveEntry entry;
             while ((entry = tar.getNextEntry()) != null) names.add(entry.getName());
             assertThat(names)
@@ -147,17 +153,14 @@ class SandboxWorkspaceManagerTest {
         var source = Files.createDirectory(temporary.resolve("repository"));
         var other = Files.writeString(temporary.resolve("other"), "different");
         Files.writeString(source.resolve("file"), "captured");
-        var directory = new de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory("repo/", source);
-        assertThatThrownBy(() -> manager.createInputTar(
-                        Map.of("repo/file", new byte[0]), Map.of(), java.util.List.of(directory)))
+        var directory = new EvidenceDirectory("repo/", source);
+        assertThatThrownBy(() -> manager.createInputTar(Map.of("repo/file", new byte[0]), Map.of(), List.of(directory)))
                 .isInstanceOf(SandboxException.class);
-        assertThatThrownBy(() ->
-                        manager.createInputTar(Map.of(), Map.of("repo/file", other), java.util.List.of(directory)))
+        assertThatThrownBy(() -> manager.createInputTar(Map.of(), Map.of("repo/file", other), List.of(directory)))
                 .isInstanceOf(SandboxException.class);
-        assertThatThrownBy(() -> manager.createInputTar(Map.of(), Map.of(), java.util.List.of(directory, directory)))
+        assertThatThrownBy(() -> manager.createInputTar(Map.of(), Map.of(), List.of(directory, directory)))
                 .isInstanceOf(SandboxException.class);
-        assertThatThrownBy(() ->
-                        manager.createInputTar(Map.of("repo", new byte[0]), Map.of(), java.util.List.of(directory)))
+        assertThatThrownBy(() -> manager.createInputTar(Map.of("repo", new byte[0]), Map.of(), List.of(directory)))
                 .isInstanceOf(SandboxException.class);
     }
 
@@ -165,8 +168,8 @@ class SandboxWorkspaceManagerTest {
     void shouldRejectSymlinksAnywhereInACapturedDirectory() throws Exception {
         var source = Files.createDirectory(temporary.resolve("repository"));
         Files.createSymbolicLink(source.resolve("escape"), temporary);
-        var directory = new de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory("repo/", source);
-        assertThatThrownBy(() -> manager.createInputTar(Map.of(), Map.of(), java.util.List.of(directory)))
+        var directory = new EvidenceDirectory("repo/", source);
+        assertThatThrownBy(() -> manager.createInputTar(Map.of(), Map.of(), List.of(directory)))
                 .isInstanceOf(SandboxException.class);
     }
 }

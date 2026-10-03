@@ -9,6 +9,8 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -49,7 +51,8 @@ public class AccountAdminController {
 
     public record UpdateAccountRequestDTO(@Nullable String appRole) {}
 
-    public record RevokeSessionsResultDTO(int revoked) {}
+    public record RevokeSessionsResultDTO(
+            @Schema(requiredMode = RequiredMode.REQUIRED) int revoked) {}
 
     @GetMapping
     @Operation(summary = "List accounts (paged)", operationId = "adminListUsers")

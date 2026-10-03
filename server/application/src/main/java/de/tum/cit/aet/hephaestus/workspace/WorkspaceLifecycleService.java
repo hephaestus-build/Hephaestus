@@ -41,7 +41,6 @@ public class WorkspaceLifecycleService {
     private final ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
 
     // Repositories for workspace-scoped data cleanup
-    private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final WorkspaceMembershipRepository workspaceMembershipRepository;
     private final WorkspaceTeamSettingsRepository workspaceTeamSettingsRepository;
     private final WorkspaceTeamLabelFilterRepository workspaceTeamLabelFilterRepository;
@@ -55,7 +54,6 @@ public class WorkspaceLifecycleService {
             NatsConnectionProperties natsProperties,
             WorkspaceRepository workspaceRepository,
             ObjectProvider<IntegrationNatsConsumer> natsConsumerService,
-            RepositoryToMonitorRepository repositoryToMonitorRepository,
             WorkspaceMembershipRepository workspaceMembershipRepository,
             WorkspaceTeamSettingsRepository workspaceTeamSettingsRepository,
             WorkspaceTeamLabelFilterRepository workspaceTeamLabelFilterRepository,
@@ -68,7 +66,6 @@ public class WorkspaceLifecycleService {
         this.natsProperties = natsProperties;
         this.workspaceRepository = workspaceRepository;
         this.natsConsumerService = natsConsumerService;
-        this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceTeamSettingsRepository = workspaceTeamSettingsRepository;
         this.workspaceTeamLabelFilterRepository = workspaceTeamLabelFilterRepository;
@@ -82,7 +79,7 @@ public class WorkspaceLifecycleService {
      * Suspend a workspace, preventing new sync cycles and making it read-only.
      * Idempotent: calling suspend on an already suspended workspace is a no-op.
      *
-     * @param slug the workspace slug
+     * @param workspaceSlug the workspace slug
      * @return the suspended workspace
      * @throws EntityNotFoundException if workspace does not exist
      * @throws WorkspaceLifecycleViolationException if workspace is already purged
@@ -122,7 +119,7 @@ public class WorkspaceLifecycleService {
      * Resume a suspended workspace, making it active again.
      * Idempotent: calling resume on an already active workspace is a no-op.
      *
-     * @param slug the workspace slug
+     * @param workspaceSlug the workspace slug
      * @return the resumed workspace
      * @throws EntityNotFoundException if workspace does not exist
      * @throws WorkspaceLifecycleViolationException if workspace is purged (cannot resume purged)
@@ -223,7 +220,7 @@ public class WorkspaceLifecycleService {
     /**
      * Get the current status of a workspace.
      *
-     * @param slug the workspace slug
+     * @param workspaceSlug the workspace slug
      * @return the workspace status
      * @throws EntityNotFoundException if workspace does not exist
      */

@@ -34,9 +34,9 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code hephaestus.dev.trigger-enabled=true}; gated additionally by {@code app_admin} since the property
  * only makes the endpoint exist, not an access control, and this route spends real LLM budget.
  *
- * <p>Two modes: <b>bypass</b> (no {@code signal}) submits directly, skipping the detection gate;
+ * <p>Two modes: <b>bypass</b> (no {@code signal}) submits directly, skipping the review gate;
  * <b>gate-routed</b> (with {@code signal}) runs {@link ReviewGate} first, exactly what the
- * production listener would do — the only way to validate RETROSPECTIVE (merged/closed) detection on a
+ * production listener would do — the only way to validate RETROSPECTIVE (merged/closed) review on a
  * SYNCED mirror, since real merge/close webhooks never arrive there.
  *
  * <p>{@link AgentJobService#submit} must not run inside an outer transaction, so the session-bound work is

@@ -1,5 +1,5 @@
 # Reads a pull request's review threads for correlation-key reconciliation.
-# Used by GithubInlineFeedbackChannel to index this reviewer's prior threads (matched
+# Used by GitHubInlineFeedbackChannel to index this reviewer's prior threads (matched
 # by the correlation key embedded in the first comment's body) before posting, and to
 # detect bot threads that the current run no longer emits so they can be minimized.
 # Only the first comment per thread is needed — the bot's own anchor comment carries the
