@@ -234,7 +234,12 @@ Then:
 
 1. Open `https://<APP_HOSTNAME>` — the login page should offer **Sign in with GitHub**.
 2. Sign in as the bootstrap admin. You should see instance-admin navigation.
-3. Create your first workspace and connect it to GitHub.
+3. Open **Instance administration → Overview** and read **Configuration readiness**. Each item under
+   **Action required** needs a change, and links to its section in
+   [Configuration readiness](./configuration-readiness). **Not configured** lists optional settings you
+   have not set, such as email or error monitoring; leave them until you want them. The page never
+   shows a setting's value.
+4. Create your first workspace and connect it to GitHub.
 
 ## 6. Connect GitHub data
 
@@ -279,6 +284,21 @@ would be noise. The manual dev trigger answers with the reason, so use it to tel
 For operators in Germany that is a § 5 DDG / Art. 13 GDPR obligation **before** opening the
 instance to users. See [Legal Pages](./legal-pages).
 :::
+
+## 9. First practice review
+
+With GitHub connected (step 6) and a model bound to practice reviews ([Connect an AI
+Provider](./ai-providers)), run one review and read its feedback before anyone else can:
+
+1. Follow [First successful review](./practice-review#first-successful-review). On **Practices →
+   Review settings → How much**, set the **Workspace default** to **Review before sending**, so each
+   piece of feedback waits for your approval.
+2. When the review finishes, open **Practices → Practice reviews**. Its feedback is listed under
+   **Needs you**, awaiting approval. Nothing reaches the pull or merge request before you approve it.
+3. Open the feedback, read it and the observations behind it, then approve or reject it.
+
+Once it reads the way you want, widen coverage or give practices more autonomy as
+[Practice review](./practice-review) describes.
 
 ## Upgrades
 
