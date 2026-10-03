@@ -1,8 +1,9 @@
-import { ChevronDownIcon, CircleAlertIcon, LoaderIcon } from "lucide-react";
+import { ChevronDownIcon, CircleAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "cn";
 import { HephMark } from "@/components/brand/HephaestusLogo";
+import { Spinner } from "@/components/ui/spinner";
 import type { ReportSummary } from "~/components/report/report-summary";
 import { REPORT_ROW_HEIGHT } from "~/shared/frame-messages";
 
@@ -26,12 +27,7 @@ const TONE: Record<ReportSummary["tone"], { circle: string; badge: ReactNode }> 
 	neutral: { circle: "bg-muted", badge: null },
 	progress: {
 		circle: "bg-muted",
-		badge: (
-			<LoaderIcon
-				aria-hidden
-				className="size-3 animate-spin text-muted-foreground motion-reduce:animate-none"
-			/>
-		),
+		badge: <Spinner className="size-3 text-muted-foreground" />,
 	},
 	error: {
 		circle: "bg-destructive/15",

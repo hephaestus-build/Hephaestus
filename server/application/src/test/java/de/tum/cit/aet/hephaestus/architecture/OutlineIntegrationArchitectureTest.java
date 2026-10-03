@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.architecture;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -11,7 +10,6 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.lang.ArchCondition;
-import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.util.Set;
@@ -22,8 +20,8 @@ import org.junit.jupiter.api.Test;
  * Structural invariants of the Outline footprint — the module plus its agent-side outposts — that a careless
  * commit would otherwise break silently. Sibling of {@link SlackIntegrationArchitectureTest}, holding Outline to
  * the same bar: controllers are workspace-scoped, NATS consumers extend the core envelope-handler base,
- * repository finders carry the workspace predicate, nothing reaches for raw {@code JdbcTemplate}, and a class
- * whose name promises a stereotype actually carries it.
+ * repository finders carry the workspace predicate, and a class whose name promises a stereotype actually
+ * carries it.
  */
 class OutlineIntegrationArchitectureTest extends HephaestusArchitectureTest {
 
@@ -253,22 +251,6 @@ class OutlineIntegrationArchitectureTest extends HephaestusArchitectureTest {
                 .because("these pass-throughs are workspace-scoped and are fed by webhook-supplied ids — the tenancy "
                         + "StatementInspector must stay armed on them")
                 .check(classes);
-    }
-
-    @Test
-    @DisplayName("no Outline class depends on raw JdbcTemplate — DB queries belong in repositories")
-    void outlineClassesDoNotUseRawJdbcTemplate() {
-        // Unlike Slack (whose SlackWorkspaceResolver must query BEFORE workspace scoping exists), Outline resolves
-        // its tenant through the core ConnectionService — so this rule holds with NO allowlist. Keep it that way.
-        ArchRule rule = noClasses()
-                .that(OUTLINE_FOOTPRINT)
-                .should()
-                .dependOnClassesThat()
-                .haveFullyQualifiedName("org.springframework.jdbc.core.JdbcTemplate")
-                .because("DB queries belong in Spring Data repositories (JPQL/native @Query), not raw JdbcTemplate SQL "
-                        + "hand-rolled inside a @Component — Outline has no pre-scoping tenant-resolution exception, "
-                        + "so there is deliberately no allowlist here");
-        rule.check(classes);
     }
 
     /**

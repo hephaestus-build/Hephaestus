@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -100,6 +101,21 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     @Query("SELECT DISTINCT c.workspace.id FROM Connection c WHERE c.kind = :kind AND c.state = :state")
     List<Long> findWorkspaceIdsByKindAndState(
             @Param("kind") IntegrationKind kind, @Param("state") IntegrationState state);
+
+    /**
+     * Ids of the workspaces holding a {@code kind} connection in {@code state} for one provider instance — how a
+     * provider-side id such as a Slack team resolves to its tenant. Cross-workspace by design; selecting
+     * {@code workspace_id} satisfies the tenancy inspector without a bypass.
+     */
+    @Query("""
+            SELECT c.workspace.id FROM Connection c
+             WHERE c.kind = :kind AND c.instanceKey = :instanceKey AND c.state = :state
+            """)
+    List<Long> findWorkspaceIdsByKindAndInstanceKeyAndState(
+            @Param("kind") IntegrationKind kind,
+            @Param("instanceKey") String instanceKey,
+            @Param("state") IntegrationState state,
+            Limit limit);
 
     /**
      * Resolves the ACTIVE Outline Connection that registered {@code subscriptionId} — a single

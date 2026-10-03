@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.architecture;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.BASE_PACKAGE;
 import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.GENERATED_GRAPHQL_PACKAGE;
 import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.MAX_CONTROLLER_DEPENDENCIES;
@@ -12,6 +13,7 @@ import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.M
 import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.haveAtMostBusinessMethods;
 import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.haveAtMostConstructorParameters;
 
+import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaField;
 import com.tngtech.archunit.core.domain.JavaModifier;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.data.repository.Repository;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RestController;
@@ -486,6 +489,42 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     .because("ObjectProvider usage should be limited to documented cycle-breaking cases");
 
             rule.check(classes);
+        }
+    }
+
+    @Nested
+    class DataAccessTests {
+
+        /** A {@code @Configuration} class, or a class nested in one such as the post-processor it registers. */
+        private static final DescribedPredicate<JavaClass> CONFIGURATION = DescribedPredicate.describe(
+                "@Configuration classes and the classes nested in them",
+                javaClass -> javaClass.isMetaAnnotatedWith(Configuration.class)
+                        || javaClass
+                                .getEnclosingClass()
+                                .map(enclosing -> enclosing.isMetaAnnotatedWith(Configuration.class))
+                                .orElse(false));
+
+        /**
+         * Spring's JDBC templates and clients run SQL that neither the tenancy statement inspector nor the
+         * repository query rules can see. Configuration hands them to libraries, and {@code core.database} holds
+         * the schema infrastructure that has to run outside a repository's transaction.
+         */
+        @Test
+        void rawSqlLivesInRepositories() {
+            noClasses()
+                    .that()
+                    .resideInAPackage(BASE_PACKAGE + "..")
+                    .and()
+                    .resideOutsideOfPackage(BASE_PACKAGE + ".core.database..")
+                    .and()
+                    .areNotAssignableTo(Repository.class)
+                    .and(DescribedPredicate.not(CONFIGURATION))
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage("org.springframework.jdbc.core..")
+                    .because("SQL belongs in a Spring Data repository method (JPQL or native @Query), where the "
+                            + "tenancy inspector and the repository rules apply to it")
+                    .check(classes);
         }
     }
 

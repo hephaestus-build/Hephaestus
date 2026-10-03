@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
+import de.tum.cit.aet.hephaestus.core.database.AuthEventPartitionMaintenance;
 import de.tum.cit.aet.hephaestus.core.runtime.ShedLockConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -82,6 +83,7 @@ import tools.jackson.databind.node.ObjectNode;
     SlackConversationProjector.class,
     ConfigAuditRetentionJob.class,
     ShedLockConfig.class,
+    AuthEventPartitionMaintenance.class,
     ProductionSchemaContractIntegrationTest.JsonConfiguration.class,
 })
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -107,6 +109,9 @@ class ProductionSchemaContractIntegrationTest {
 
     @Autowired
     private LockProvider locks;
+
+    @Autowired
+    private AuthEventPartitionMaintenance partitionMaintenance;
 
     @Autowired
     private SlackConversationProjector slackConversationProjector;
@@ -145,6 +150,19 @@ class ProductionSchemaContractIntegrationTest {
         } finally {
             jdbcTemplate.update("DELETE FROM shedlock WHERE name = ?", name);
         }
+    }
+
+    @Test
+    void shouldRecreateTheNewestAuthEventPartitionWhenMaintenanceRuns() {
+        String newest = "partman.show_partition_name('public.auth_event', (now() + interval '2 months')::text)";
+        String partition = jdbcTemplate.queryForObject(
+                "SELECT partition_schema || '.' || partition_table FROM " + newest, String.class);
+        jdbcTemplate.execute("DROP TABLE " + partition);
+
+        partitionMaintenance.maintain();
+
+        assertThat(jdbcTemplate.queryForObject("SELECT table_exists FROM " + newest, Boolean.class))
+                .isTrue();
     }
 
     @Test

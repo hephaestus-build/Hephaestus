@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,15 +24,15 @@ public class AccountPurger {
     private static final String TOMBSTONE_DISPLAY_NAME = "deleted-account";
 
     private final AccountRepository accountRepository;
-    private final JdbcTemplate jdbcTemplate;
+    private final AccountErasureRepository erasureRepository;
     private final List<AccountErasureContributor> erasureContributors;
 
     public AccountPurger(
             AccountRepository accountRepository,
-            JdbcTemplate jdbcTemplate,
+            AccountErasureRepository erasureRepository,
             List<AccountErasureContributor> erasureContributors) {
         this.accountRepository = accountRepository;
-        this.jdbcTemplate = jdbcTemplate;
+        this.erasureRepository = erasureRepository;
         this.erasureContributors = erasureContributors;
     }
 
@@ -44,15 +43,15 @@ public class AccountPurger {
         accountRepository.lockStatusForUpdate(accountId);
         // Children carry ON DELETE CASCADE on account_id, but we keep the account tombstone, so the
         // cascade is not triggered — delete the personal/auth child rows explicitly.
-        jdbcTemplate.update("DELETE FROM account_feature WHERE account_id = ?", accountId);
+        erasureRepository.deleteFeatures(accountId);
         anonymizeAuditRows(accountId); // reads identity_link, so before it is deleted
-        jdbcTemplate.update("DELETE FROM identity_link WHERE account_id = ?", accountId);
-        jdbcTemplate.update("DELETE FROM client_sign_in_handoff WHERE account_id = ?", accountId);
+        erasureRepository.deleteIdentityLinks(accountId);
+        erasureRepository.deleteSignInHandoffs(accountId);
         // Sessions before tokens, the order every session operation locks them in.
-        jdbcTemplate.update("DELETE FROM client_session WHERE account_id = ?", accountId);
-        jdbcTemplate.update("DELETE FROM issued_jwt WHERE account_id = ?", accountId);
-        jdbcTemplate.update("DELETE FROM account_export WHERE account_id = ?", accountId);
-        jdbcTemplate.update("UPDATE consent_decision SET account_id = NULL WHERE account_id = ?", accountId);
+        erasureRepository.deleteClientSessions(accountId);
+        erasureRepository.deleteIssuedTokens(accountId);
+        erasureRepository.deleteExports(accountId);
+        erasureRepository.unlinkConsentDecisions(accountId);
         // Rows another module owns are erased by that module, inside this transaction.
         erasureContributors.forEach(contributor -> contributor.eraseAccount(accountId));
 
@@ -74,23 +73,12 @@ public class AccountPurger {
      * {@code occurred_at}) is what the trail is. Only the personal columns are nulled.
      */
     private void anonymizeAuditRows(Long accountId) {
-        int redacted = jdbcTemplate.update(
-                "UPDATE auth_event SET ip_inet = NULL, user_agent = NULL, details = NULL "
-                        + "WHERE account_id = ? OR acting_account_id = ? "
-                        + "OR viewed_user_id IN (SELECT external_actor_id FROM identity_link WHERE account_id = ?)",
-                accountId,
-                accountId,
-                accountId);
+        int redacted = erasureRepository.redactAuthEvents(accountId);
         if (redacted > 0) {
             log.info("auth.account: anonymized {} auth_event row(s) for erased accountId={}", redacted, accountId);
         }
 
-        // The append-only audit trigger permits nulling account references for erasure.
-        int unlinked = jdbcTemplate.update(
-                "UPDATE config_audit_event SET actor_account_id = NULL, acting_account_id = NULL "
-                        + "WHERE actor_account_id = ? OR acting_account_id = ?",
-                accountId,
-                accountId);
+        int unlinked = erasureRepository.unlinkConfigAuditEvents(accountId);
         if (unlinked > 0) {
             log.info(
                     "auth.account: unlinked {} config_audit_event row(s) for erased accountId={}", unlinked, accountId);

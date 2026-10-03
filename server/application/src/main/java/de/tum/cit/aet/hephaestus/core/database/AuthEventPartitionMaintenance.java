@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.core.auth.audit;
+package de.tum.cit.aet.hephaestus.core.database;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -9,7 +9,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Runs partition creation and retention according to {@code partman.part_config}. */
+/**
+ * Runs partition creation and retention according to {@code partman.part_config}.
+ *
+ * <p>Raw JDBC rather than a repository method: {@code run_maintenance_proc} commits after each
+ * partition set, and PostgreSQL rejects a {@code COMMIT} inside a procedure called within a
+ * transaction block, which every Spring Data modifying query runs in.
+ */
 @ConditionalOnServerRole
 @Component
 @WorkspaceAgnostic("auth_event is account/system-scoped; partition maintenance is global, not tenant data")

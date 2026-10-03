@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.base.DescribedPredicate;
@@ -9,7 +8,6 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.lang.ArchCondition;
-import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.util.Set;
@@ -28,10 +26,7 @@ import org.junit.jupiter.api.Test;
  *       shared deserialization/teamId discipline (and, for the channel path, the transaction boundary);</li>
  *   <li>every Slack repository finder carries the workspace predicate in its signature — the compile-time
  *       complement to the runtime tenancy {@code StatementInspector} (deliberately unscoped fleet-enumeration
- *       queries are individually allowlisted and guarded by {@code @WorkspaceAgnostic} callers);</li>
- *   <li>no class in the module reaches for raw {@code JdbcTemplate} SQL outside one narrow, documented exception —
- *       DB queries belong in Spring Data repositories, not hand-rolled JDBC tucked inside a {@code @Component}
- *       (the "hacky bandaid" this rule closes off for good); and</li>
+ *       queries are individually allowlisted and guarded by {@code @WorkspaceAgnostic} callers); and</li>
  *   <li>a class whose name promises a stereotype ({@code *Service}/{@code *Repository}/{@code *Controller}) is not
  *       lying about it — directional on purpose (see {@link #slackServiceNamesAreServices()}).</li>
  * </ul>
@@ -200,34 +195,6 @@ class SlackIntegrationArchitectureTest extends HephaestusArchitectureTest {
         assertThat(nameCarriesWorkspaceParam(scopedDerived)).isTrue();
         // The enumerator is unscoped BY DESIGN — the helper must say so, forcing it through the explicit allowlist.
         assertThat(nameCarriesWorkspaceParam(unscopedEnumerator)).isFalse();
-    }
-
-    /**
-     * The one deliberate, narrow raw-{@code JdbcTemplate} reader left in the module: {@code SlackWorkspaceResolver}
-     * resolves the tenant from a Slack {@code team_id} BEFORE workspace scoping exists (see its own javadoc), so a
-     * JPA query keyed on {@code instance_key} alone would trip the tenancy {@code StatementInspector} with no
-     * {@code workspace_id} to predicate on — that IS the resolution. Everything else went through the
-     * conversation-package cleanup (raw JDBC → Spring Data repositories); a reintroduced JdbcTemplate anywhere
-     * else in the module is exactly the "hacky bandaid" the maintainer flagged.
-     */
-    private static final Set<String> JDBC_TEMPLATE_ALLOWLIST = Set.of("SlackWorkspaceResolver");
-
-    @Test
-    @DisplayName("no Slack class outside the allowlist depends on raw JdbcTemplate — DB queries belong in repositories")
-    void slackClassesDoNotUseRawJdbcTemplate() {
-        ArchRule rule = noClasses()
-                .that()
-                .resideInAPackage(SLACK)
-                .and(DescribedPredicate.describe(
-                        "are not the allowlisted tenant-resolution exception",
-                        javaClass -> !JDBC_TEMPLATE_ALLOWLIST.contains(javaClass.getSimpleName())))
-                .should()
-                .dependOnClassesThat()
-                .haveFullyQualifiedName("org.springframework.jdbc.core.JdbcTemplate")
-                .because("DB queries belong in Spring Data repositories (JPQL/native @Query), not raw JdbcTemplate SQL "
-                        + "hand-rolled inside a @Component — SlackWorkspaceResolver is the one documented exception "
-                        + "(tenant resolution before workspace scoping exists)");
-        rule.check(classes);
     }
 
     /**

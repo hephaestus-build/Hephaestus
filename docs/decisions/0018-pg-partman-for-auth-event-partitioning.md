@@ -58,7 +58,7 @@ loads, `create_parent` builds current+2 ahead with a default, an insert lands in
 ## Update — 2026-09-17
 
 Corrects § Decision "Image" and "Definition"; scheduling is as decided
-(`core.auth.audit.AuthEventPartitionMaintenance` calls `partman.run_maintenance_proc()` from the
+(`core.database.AuthEventPartitionMaintenance` calls `partman.run_maintenance_proc()` from the
 server role, and `docker/postgres/Dockerfile` sets no `shared_preload_libraries`).
 
 - The image is `ghcr.io/hephaestus-build/postgres`, built from `postgres:18-bookworm` with

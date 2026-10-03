@@ -4,6 +4,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.GENERATED_GRAPHQL_PACKAGE;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -73,6 +74,21 @@ class IntegrationStructuralRulesTest extends HephaestusArchitectureTest {
         classRule.check(classes);
         fieldRule.check(classes);
         methodRule.check(classes);
+    }
+
+    @Test
+    void classNamesSpellGitHubAndGitLabAsTheBrandsDo() {
+        // The generated GitLab client keeps the schema's own spelling (GLGitlabSubscription).
+        ArchRule rule = noClasses()
+                .that()
+                .resideOutsideOfPackage(GENERATED_GRAPHQL_PACKAGE)
+                .should()
+                .haveSimpleNameContaining("Github")
+                .orShould()
+                .haveSimpleNameContaining("Gitlab")
+                .because("the brands are spelled GitHub and GitLab; a second spelling splits every search and "
+                        + "rename in two.");
+        rule.check(classes);
     }
 
     @Test
