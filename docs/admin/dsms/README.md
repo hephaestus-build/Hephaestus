@@ -45,6 +45,22 @@ Assess portability under Art. 20 separately: it applies to qualifying consent- o
 automated processing, and must respect other people's rights. A JSON download does not make all
 public-task processing subject to Art. 20.
 
+## Answering an access request
+
+An Art. 15 reply includes confirmation of processing, access to the person's data and information
+about the processing: purposes, categories, recipients, retention periods or criteria, rights,
+complaint route, available source information, applicable automated-decision information and transfer
+safeguards. Use verified deployment facts; downloading the JSON alone does not complete the reply.
+See the [EDPB right-of-access guidelines](https://www.edpb.europa.eu/documents/guideline/guidelines-012022-on-data-subject-rights-right-of-access_en).
+
+Before delivery, review shared-source and free-text content for other people's rights under
+Art. 15(4). Export field allowlists omit credential fields and other people's profiles; they do not
+redact every name, secret or third-party detail written into source text. Where disclosure would
+adversely affect another person's rights or freedoms, document the concrete risk and use targeted
+redaction of the delivery copy instead of refusing the whole request. Do not change the frozen
+selection or canonical records to prepare that copy. Use a verified recipient, secure transfer and
+an expiry for the delivery copy, and record any justified limits in the reply.
+
 ## Files
 
 | File | Purpose |

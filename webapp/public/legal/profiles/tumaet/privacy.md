@@ -184,8 +184,10 @@ administrator uses **Person data** to resolve your account or exact provider ide
 per-store scope and download one JSON file. It includes selected profiles, local source content,
 conversations, observations and feedback (including invalidated or never-delivered records), activity,
 product-feedback and surveys. It excludes credentials, other people's profiles, raw Git objects and
-hidden runtime journals. We must also assess retained copies outside that export and your rights
-under Art. 15(4). Art. 20 portability applies where its consent/contract and automated-processing
+hidden runtime journals. Our reply also provides information about the processing and assesses
+retained copies outside that export. We review shared-source and free-text content to protect other
+people's rights and freedoms under Art. 15(4); justified limits apply to the affected parts, not the
+whole request. Art. 20 portability applies where its consent/contract and automated-processing
 conditions are met; providing JSON does not make every public-task record portable under Art. 20.
 Original work on connected platforms needs their separate export process.
 
