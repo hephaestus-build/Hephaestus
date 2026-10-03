@@ -7,6 +7,10 @@ description: Mentor replica affinity, conversation checkpoints, and how to disab
 
 ## Heph session ownership
 
+`DockerInteractiveSandboxAdapter.attach` attaches the worker to the interactive sandbox.
+The runner connects to the worker gateway over WebSocket; attachment is not a `docker exec -i`
+process handle.
+
 Web chat and Slack DMs retain their front ends, admission, budget checks, persistence and
 `fetch_context` on the server. `WorkerInteractiveSandboxService` places a session on a connected
 worker with spare mentor capacity. The worker hub carries bounded session commands, acknowledgements,

@@ -21,9 +21,12 @@ deployment — distinct from a **workspace admin**, whose powers are scoped to a
   (`app_admin`/`admin`) that might arrive via a grantable `account_feature` row, so an
   `/admin/users`-granted flag can never escalate to instance admin.
 - First-admin bootstrap (no DB seed required) is covered separately in the
-  [auth-cutover runbook](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/runbooks/auth-cutover.md#first-instance-admin-bootstrap).
+  [operator bootstrap instructions](/admin/instance-admin#bootstrap-and-recovery).
 
 ## The shell
+
+The [operator guide](/admin/instance-admin) owns console tasks and the user-view procedure.
+This page owns authorization, routing, and persistence implementation.
 
 The admin area is a **dedicated sidebar context** (`AppSidebar` `context === "admin"`) — its own
 "Back to app" header with the workspace switcher suppressed (the GitLab/Grafana "admin area" pattern),
@@ -54,19 +57,9 @@ Instance metadata endpoints under `/admin`, all gated by `hasAuthority('app_admi
 
 ## Instance Silent Mode
 
-Silent Mode is an emergency and disaster-recovery brake, not a workspace rollout stage. It is
-**engaged by default** on new installs, when the singleton settings row is missing, and on upgrades
-whose seeded row was never explicitly changed. Detection, observation persistence, inbound webhook
-processing, synchronization, and admin access continue, but delivery writes to GitHub, GitLab, and
-Slack are refused at the provider gateway.
-
-Suppression is prospective: a suppressed review is recorded as `SUPPRESSED(INSTANCE_SILENCED)` for
-audit and preview, but is never queued for replay. Releasing the brake therefore sends nothing by
-itself; only a new source event can deliver. Each re-review is a new feedback unit, so a suppressed
-re-review is recorded without changing or superseding the last delivered one.
-
-OAuth/token lifecycle operations, webhook registration, and operator alerts remain available while
-Silent Mode is engaged.
+[Instance admin](/admin/instance-admin#silent-mode) owns operator behavior and recovery.
+`GET /admin/settings` returns an ETag; `PATCH /admin/settings/silent-mode` requires `If-Match`
+when releasing the brake. Provider gateways enforce it independently from observation persistence.
 
 ## Recent sign-in gate
 
