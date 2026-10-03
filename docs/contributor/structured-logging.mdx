@@ -39,11 +39,13 @@ Follow [OWASP's logging guidance](https://cheatsheetseries.owasp.org/cheatsheets
 never log credentials, full request/response bodies, signed URLs, private reviewed work, or raw
 SQL/row values. Exception messages can contain those same values. At a shared integration boundary,
 prefer the failure class and safe request metadata to the full exception. Preserve useful failure
-severity and correlation; do not replace an operational failure with silence.
+severity and correlation.
+Do not replace an operational failure with silence.
 
 Use fixed field names. Request-controlled keys must not become top-level log keys. The configured
 encoder escapes string values and keeps MDC in a separate object. This prevents JSON record
-injection and context collisions; it does not make the underlying string public data.
+injection and context collisions.
+It does not make the underlying string public data.
 [CWE-117](https://cwe.mitre.org/data/definitions/117.html) explains why an untrusted value must not
 change the structure or apparent origin of a log record.
 
@@ -66,22 +68,25 @@ Test both directions: context reaches the asynchronous task, and completion or f
 what was present before the task. Reuse the same worker thread in the regression so a workspace
 identifier left behind cannot pass unnoticed. Keep high-cardinality identifiers in logs/traces,
 not metric labels. The [OpenTelemetry log data model](https://opentelemetry.io/docs/specs/otel/logs/data-model/)
-distinguishes event attributes, severity, resource identity and trace/span correlation; it does not
-make log text or an identifier proof of successful export.
+distinguishes event attributes, severity, resource identity, and trace/span correlation.
+It does not make log text or an identifier proof of successful export.
 
 ## Verify the emitted record
 
 `RedactionContractTest` loads the production encoder configuration and parses its actual bytes.
 Its contract includes typed values, correlation fields, severity isolation, nested exception
 redaction, opaque sensitive fields, and exactly one JSON record despite control characters.
+
 `GlobalControllerAdviceLoggingTest` supplies hostile synthetic request/database values and verifies
 the actual emitted event and unchanged HTTP error contract. GitLab webhook and Outline client
-regressions exercise their own adapters with private response/transport payloads; the GitLab failure
-still reports its status and Outline retains its retryability contract. `MdcPropagationTest` proves propagation
+regressions exercise their own adapters with private response/transport payloads.
+The GitLab failure still reports its status.
+Outline retains its retryability contract.
+`MdcPropagationTest` proves propagation
 and restoration on a reused worker thread, including a failed task.
 
 Run focused regressions first, then the unit baseline and affected server tiers. Also inspect
 current CI's raw reports: a green test count is not proof that every log is appropriate. Known
 upstream scanner, buildpack or compiler diagnostics need an explicit disposition, not a blanket
-logging-level change. Test failures in expected-negative fixtures should be asserted narrowly;
-unexpected diagnostics remain visible.
+logging-level change. Assert test failures in expected-negative fixtures narrowly.
+Keep unexpected diagnostics visible.

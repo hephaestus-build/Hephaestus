@@ -12,7 +12,7 @@ body:
     attributes:
       label: Outcome
       description: State the result, not merely the activity.
-      placeholder: Failed GitHub requests are retried when GitHub says they are safe to retry.
+      placeholder: If GitHub says a failed request is safe to retry, Hephaestus retries it.
     validations:
       required: true
 
@@ -34,9 +34,9 @@ body:
     id: done
     attributes:
       label: Done when
-      description: Changes a reviewer can find in the repository — code, a test, a gate, a document. A measurement or a verdict alone is not a criterion (CONTRIBUTING.md § Issues).
+      description: Changes a reviewer can find in the repository, such as code, a test, a gate, or a document. A measurement or a verdict alone is not a criterion (CONTRIBUTING.md § Issues).
       placeholder: |
-        - [ ] Retryable responses are retried with the provider-requested delay.
-        - [ ] Non-retryable responses fail without another request.
+        - [ ] If a response permits a retry, Hephaestus retries with the provider-requested delay.
+        - [ ] If a response does not permit a retry, the operation fails without another request.
     validations:
       required: true

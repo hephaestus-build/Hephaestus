@@ -13,9 +13,9 @@ Evaluate the web application using
 
 The scope is the Hephaestus SPA at one tested commit and deployment, including:
 
-- public, authenticated, loading, empty, error and permission-denied states;
-- authentication, workspace creation, developer feedback, mentor and settings processes;
-- workspace and instance administration for every supported role; and
+- Public, authenticated, loading, empty, error, and permission-denied states.
+- Authentication, workspace creation, developer feedback, mentor, and settings processes.
+- Workspace and instance administration for every supported role.
 - Hephaestus controls and presentation around imported content.
 
 Linked sites and identity-provider pages are outside the application scope. The handoff to and return
@@ -44,37 +44,58 @@ expands this inventory to the routes, states and roles present in the tested rev
 Record the revision, deployment, test data, tester, date, and exact operating-system, browser and
 assistive-technology versions.
 
-1. On every surface, use only the keyboard to check operation, focus visibility and order, skip
-   navigation, overlay dismissal and focus restoration, and keyboard traps.
-2. On every surface, inspect landmarks, headings, names, roles and states with NVDA and Firefox on
-   Windows and VoiceOver and Safari on macOS. Complete every end-to-end process in both combinations,
-   including validation and error recovery.
-3. Build the structured and random samples required by WCAG-EM. Across those samples, evaluate every
-   applicable Level A and AA criterion, including 200% zoom, 320 CSS-pixel reflow,
-   [text spacing](https://www.w3.org/WAI/WCAG22/Understanding/text-spacing.html), contrast, use of
-   colour, target size and motion. Record the results with the
-   [WCAG-EM Report Tool](https://www.w3.org/WAI/eval/report-tool/).
-4. Run axe on the integrated sampled pages and reconcile its results with the manual evaluation.
-   `vp run --filter webapp test:e2e accessibility.spec.ts` does this against the built application and
-   a running server: every route in both colour schemes, the page title, a Tab walk, reflow at 320 and
-   640 CSS pixels, looping motion, menus and dialogs, the announcement of a page change, and three
-   complete keyboard-only processes. It decides nothing that NVDA or VoiceOver decide.
+1. On every surface, use only the keyboard to check these behaviors:
+   - Operation.
+   - Focus visibility and order.
+   - Skip navigation.
+   - Overlay dismissal and focus restoration.
+   - Keyboard traps.
+2. On every surface, inspect landmarks, headings, names, roles, and states with both combinations:
+   - NVDA and Firefox on Windows.
+   - VoiceOver and Safari on macOS.
+
+   Complete every end-to-end process in both combinations, including validation and error recovery.
+3. Build the structured and random samples required by WCAG-EM.
+   Across those samples, evaluate every applicable Level A and AA criterion.
+   Include these checks:
+   - 200% zoom.
+   - 320 CSS-pixel reflow.
+   - [Text spacing](https://www.w3.org/WAI/WCAG22/Understanding/text-spacing.html).
+   - Contrast and use of color.
+   - Target size and motion.
+
+   Record the results with the [WCAG-EM Report Tool](https://www.w3.org/WAI/eval/report-tool/).
+4. Run axe on the integrated sampled pages.
+   Reconcile its results with the manual evaluation.
+
+   `vp run --filter webapp test:e2e accessibility.spec.ts` does this against the built application and a running server.
+   It checks:
+   - Every route in both color schemes.
+   - The page title.
+   - A Tab walk.
+   - Reflow at 320 and 640 CSS pixels.
+   - Looping motion.
+   - Menus and dialogs.
+   - The announcement of a page change.
+   - Three complete keyboard-only processes.
+
+   It decides nothing that NVDA or VoiceOver decide.
 
 ## Findings and completion
 
-Link every failure to an issue with its context, reproduction steps, expected and observed behaviour,
-user impact, environment, applicable WCAG criterion and evidence. Use GitHub assignment, priority and
+Link every failure to an issue.
+Include its context, reproduction steps, expected and observed behavior, user impact, environment, applicable WCAG criterion, and evidence. Use GitHub assignment, priority and
 milestones for ownership and scheduling. Check other callers when the failure is in a shared component.
 
 `vp run --filter webapp test:storybook` runs axe against the maintained Storybook states in Chromium.
 Retain its report, revision and browser version with the audit, and document any rule exclusions.
-A story shows a component alone, so a defect that appears only where components meet, such as one
-control nested in another, needs a story that renders the meeting.
+A story shows a component alone.
+A defect that appears only where components meet needs a story that renders them together.
+One example is a control nested in another.
 
-Record a check that was not run as `Not tested`, never as `Not applicable`, and list it under
-*Remaining work* in the record. A statement that claims conformance has no `Not tested` rows.
+Record a check that did not run as `Not tested`, never as `Not applicable`.
+List it under *Remaining work* in the record. A statement that claims conformance has no `Not tested` rows.
 
-An AA conformance claim requires every scoped page and complete process to pass every applicable Level
-A and AA criterion. Follow W3C's
+An AA conformance claim requires every scoped page and complete process to pass all applicable Level A and AA criteria. Follow W3C's
 [conformance-claim requirements](https://www.w3.org/TR/WCAG22/#conformance-claims) when updating the
 public accessibility statement.

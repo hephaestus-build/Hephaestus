@@ -27,7 +27,9 @@ flowchart TB
 
 One JAR boots in the server, worker, and webhook roles. The supported Compose deployment runs each
 in its own container. Only the worker has Docker access. Heph sessions need connected workers even
-when server and worker roles share a JVM; there is no direct server-side sandbox fallback.
+when server and worker roles share a JVM.
+There is no direct server-side sandbox fallback.
+
 [Runtime roles](/admin/runtime-roles) owns role configuration, capacity, and drain behavior.
 [Observability](/admin/observability#scrape-metrics) owns the private management listener on port 9090.
 
@@ -35,7 +37,8 @@ when server and worker roles share a JVM; there is no direct server-side sandbox
 
 `integration` adapters own provider identity, source sync, and provider-side operations. GitHub,
 GitLab, Slack, and Outline each have their own adapter. A deployment syncs one configured GitLab
-instance; additional login providers do not create additional GitLab sync instances.
+instance.
+Additional login providers do not create additional GitLab sync instances.
 
 `agent` owns review execution and orchestration. `practices` owns practice revisions, observations,
 feedback, approval, and the review gate. Admission uses `integration.scm.ReviewTargetQuery` for SCM
@@ -67,7 +70,8 @@ sequenceDiagram
     S-->>B: Current account and access
 ```
 
-Spring Security `oauth2Login` federates sign-in. Hephaestus issues its own cookie-session JWTs;
+Spring Security `oauth2Login` federates sign-in.
+Hephaestus issues its own cookie-session JWTs.
 Keycloak is not part of the deployment. Slack and Outline are link-only identity providers.
 [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md)
 records native auth. [Instance administration](./instance-admin) owns recent-sign-in and user-view implementation.
@@ -75,9 +79,10 @@ records native auth. [Instance administration](./instance-admin) owns recent-sig
 ## Practice reviews
 
 The webhook role verifies and durably buffers provider events. Server consumers sync the work and
-record occurrences. Eligible occasions become PostgreSQL-backed jobs; workers claim and execute
-them in isolated sandboxes. The worker admits observations through the shared Java admission service
+record occurrences. Eligible occasions become PostgreSQL-backed jobs.
+Workers claim these jobs and execute them in isolated sandboxes. The worker admits observations through the shared Java admission service
 before composition and feedback delivery.
+
 Feedback on the work awaits workspace-admin approval by default. Delivery rechecks policy and
 Silent Mode independently from measurement.
 
@@ -91,8 +96,8 @@ Missing required capture produces no observation.
 The server owns HTTP/SSE, Slack delivery, admission, budget checks, thread persistence, and
 `fetch_context`. A connected worker owns the live session, its sandbox, attachment, and eviction.
 [Unified Pi runtime](./unified-pi-runtime) owns placement and conversation checkpoints.
-The UI uses shadcn components over Base UI; it renders streamed text, tool activity, and observation
-feedback without a separate assistant-ui runtime.
+The UI uses shadcn components over Base UI.
+It renders streamed text, tool activity, and observation feedback without a separate assistant-ui runtime.
 
 Heph is available to workspace members only, within their account-wide AI choice. It uses permitted
 recent work, review requests, assigned issues, earlier conversations, practices, and connected

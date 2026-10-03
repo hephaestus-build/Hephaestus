@@ -7,7 +7,8 @@ description: Trace a persisted practice observation to its review inputs, config
 
 This page describes the provenance available for automated practice reviews. The Java model and
 [Liquibase changelogs](https://github.com/hephaestus-build/Hephaestus/tree/main/server/application/src/main/resources/db/changelog)
-own the persisted contract; the [generated database schema](./database-schema.mdx) shows its structure.
+own the persisted contract.
+The [generated database schema](./database-schema.mdx) shows its structure.
 
 ## Review provenance
 
@@ -32,7 +33,8 @@ path-order-independent and elides occurrences of the job UUID. Equal digests the
 byte-identical sandbox workspaces or semantically equivalent evidence.
 
 The evidence snapshot records the exact admitted practice revision. Persistence carries that identity
-into `observation.practice_revision_id`; it is not reconstructed from a timestamp.
+into `observation.practice_revision_id`.
+The system does not reconstruct it from a timestamp.
 
 Comparisons must be stratified by the complete behaviour configuration, prompt digest, input or case
 cohort, and practice revision. Equality in one dimension does not make runs comparable in the others.
@@ -55,17 +57,18 @@ types define delivery outcomes and suppression reasons.
 - **Observation to review:** join `observation.agent_job_id` to `agent_job` for configuration, digests,
   repository metadata, and usage. Join `observation.practice_revision_id` to the admitted criteria.
 - **Observation to feedback:** join through `feedback_observation`. Absence of a link means no feedback
-  was composed from that observation; it says nothing about why.
+  was composed from that observation.
+  It says nothing about why.
 - **Feedback to placement:** join `feedback_placement` and inspect its channel reference. Feedback state
   alone is insufficient evidence of placement.
 - **Response to observation:** join `reaction.feedback_id` through `feedback_observation`. The latest
-  append-only reaction records the response fields that were provided; missing telemetry is unknown,
-  not a negative response.
+  append-only reaction records the supplied response fields.
+  Missing telemetry is unknown, not a negative response.
 
 ## Interpretation limits
 
-- Digests identify materialised bytes under their stated coverage; they do not establish semantic
-  equivalence or cover every sandbox-visible input.
+- Digests identify materialized bytes under their stated coverage.
+  They do not establish semantic equivalence or cover every sandbox-visible input.
 - Persisted observations exclude candidates rejected before persistence. Invalid-output and failure-rate
   analysis requires a durable attempt and transition record rather than logs or observation rows alone.
 - Delivery and placement evidence does not establish that feedback was read or changed behaviour.
@@ -73,7 +76,8 @@ types define delivery outcomes and suppression reasons.
 ## Approval and shown conversation feedback
 
 `feedback_approval` records the actor and decision on the exact proposed feedback package. Rejection
-records a reason; it does not invalidate observations. `observation_invalidation` records correction
+records a reason.
+It does not invalidate observations. `observation_invalidation` records correction
 and restoration separately. Neither an approval nor a valid citation proves the underlying judgment
 is correct.
 
