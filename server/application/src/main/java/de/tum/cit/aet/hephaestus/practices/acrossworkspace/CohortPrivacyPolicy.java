@@ -22,12 +22,12 @@ import org.jspecify.annotations.Nullable;
  * since the page states how many developers were observed and a missing part would be that total less the rest.
  * Omit rather than show a zero. The reader's own standing is shown in every case, since it is theirs.
  *
- * <p>A group's standing is read off its practices, so its has a standing is everyone with a standing in any of
- * them, and its split and its practices' splits can be subtracted from each other: two practices of sixteen and a
- * group of thirty one name the one developer with a standing in both. A practice therefore shows only while the
- * developers its group has and it lacks are none or at least {@link #MINIMUM_OTHERS}, and a group's practices show
- * only while the overlap they add up to beyond the group is none or at least {@link #MINIMUM_OTHERS}
- * ({@link #group}).
+ * <p>A group's standing is read off its practices, so its developers with a standing are everyone with a standing
+ * in any of them, and its split and its practices' splits can be subtracted from each other: two practices of
+ * sixteen and a group of thirty one name the one developer with a standing in both. A practice therefore shows only
+ * while the developers its group has and it lacks are none or at least {@link #MINIMUM_OTHERS}, and a group's
+ * practices show only while the overlap they add up to beyond the group is none or at least
+ * {@link #MINIMUM_OTHERS} ({@link #group}).
  *
  * <p>Each window is checked on its own and the figures are live, so two windows, or two reads at different times,
  * can still be subtracted from each other; ADR 0051 records that limit.
@@ -110,10 +110,11 @@ public final class CohortPrivacyPolicy {
      * The splits of one practice group and its practices.
      *
      * <p>Each split is first decided on its own. Then the cells a reader can work out by inclusion and exclusion
-     * must each hold none or at least K developers: a practice is withheld where its has a standing falls short of
-     * its group's by 1 to K - 1, and every practice of the group is withheld where the practices shown add up to 1
-     * to K - 1 more developers with a standing than the group has, which is how many hold a standing in more than
-     * one of them. The group's own split stands, since on its own every part it shows already holds enough.
+     * must each hold none or at least K developers: a practice is withheld where its developers with a standing
+     * fall short of its group's by 1 to K - 1, and every practice of the group is withheld where the practices
+     * shown add up to 1 to K - 1 more developers with a standing than the group has, which is how many hold a
+     * standing in more than one of them. The group's own split stands, since on its own every part it shows
+     * already holds enough.
      *
      * @param observed every observed developer's buckets, the reader's included when the reader is observed
      * @param practiceCount how many practices each row carries, which no row says when nobody is observed

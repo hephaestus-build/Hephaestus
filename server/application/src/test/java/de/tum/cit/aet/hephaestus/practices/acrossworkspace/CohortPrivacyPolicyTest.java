@@ -174,8 +174,8 @@ class CohortPrivacyPolicyTest {
 
     /**
      * Whatever the cohort, nothing the page shows lets a reader work out how many others have a standing in both
-     * practices of a group but a number that is none or at least K: has a standing in A, plus in B, less in the
-     * group, which counts everyone with a standing in either.
+     * practices of a group but a number that is none or at least K: those with a standing in A, plus in B, less
+     * in the group, which counts everyone with a standing in either.
      */
     @Test
     @DisplayName("no cohort lets the group and its practices name 1 to K - 1 developers with a standing in both")
@@ -207,8 +207,8 @@ class CohortPrivacyPolicyTest {
     }
 
     /**
-     * A practice whose has a standing falls short of its group's by 1 to K - 1 is withheld: the group less the
-     * practice would count those developers.
+     * A practice whose developers with a standing fall short of its group's by 1 to K - 1 is withheld: the group
+     * less the practice would count those developers.
      */
     @Test
     @DisplayName("a practice whose split falls short of its group's by fewer than three is withheld")
