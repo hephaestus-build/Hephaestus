@@ -835,18 +835,18 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
 
     /**
      * {@link #findByDeveloperAndWorkspaceBetween} for several developers of the workspace at once, under the same
-     * guards, as the observations stood at {@code until}: a claim superseded after it still stood then. One scan of
-     * {@code idx_observation_workspace_observed} that the caller partitions by {@code about_user_id}, so a read over
-     * the whole workspace costs one query rather than one per developer. Read by the page that shows the workspace
-     * as a whole, through {@link PracticeStandingService#getWorkspaceStandingSnapshots}, and by the open feedback
-     * it counts for each developer. The caller passes at least one developer.
+     * guards. One scan of {@code idx_observation_workspace_observed} that the caller partitions by
+     * {@code about_user_id}, so a read over the whole workspace costs one query rather than one per developer. Read
+     * by the page that shows the workspace as a whole, through
+     * {@link PracticeStandingService#getWorkspaceStandingSnapshots}, and by the open feedback it counts for each
+     * developer. The caller passes at least one developer.
      */
     @Query(value = """
                     SELECT f.* FROM observation f
                     WHERE f.workspace_id = :workspaceId
                       AND f.about_user_id IN (:developerIds)
             """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
-              AND (f.superseded_at IS NULL OR f.superseded_at > :until)
+              AND f.superseded_at IS NULL
               AND f.observed_at >= :since
               AND f.observed_at <= :until
             ORDER BY f.observed_at DESC

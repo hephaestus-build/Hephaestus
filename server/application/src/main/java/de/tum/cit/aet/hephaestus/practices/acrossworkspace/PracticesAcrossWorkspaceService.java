@@ -139,7 +139,7 @@ public class PracticesAcrossWorkspaceService {
         if (reader != null) {
             recipients.add(reader);
         }
-        Map<Long, Integer> openFeedback = inAppFeedbackService.countOpen(workspaceId, recipients, now);
+        Map<Long, Integer> openFeedback = inAppFeedbackService.countOpen(workspaceId, recipients);
         MiddleHalf openMiddle = CohortPrivacyPolicy.middleHalf(
                 eligible.stream()
                         .map(developer -> openFeedback.getOrDefault(developer, 0))

@@ -213,16 +213,15 @@ public class InAppFeedbackEvidence {
 
     /**
      * {@link #workResolutions} for the feedback of several developers at once, each piece read against its own
-     * recipient's work as it stood at {@code asOf}: one read of the workspace's observations rather than one per
-     * developer. Reading from the oldest piece of anyone's feedback changes no answer, since only work reviewed
+     * recipient's work: one read of the workspace's observations rather than one per developer. Reading from the oldest piece of anyone's feedback changes no answer, since only work reviewed
      * after a piece was prepared can resolve it.
      */
-    public Map<UUID, WorkResolution> workResolutionsAsOf(
+    public Map<UUID, WorkResolution> workResolutionsOfRecipients(
             Long workspaceId,
             Collection<Feedback> feedback,
             Map<UUID, List<Observation>> evidenceByFeedback,
             Map<UUID, Instant> practiceChangedAt,
-            Instant asOf) {
+            Instant now) {
         List<Feedback> withEvidence = feedback.stream()
                 .filter(piece -> evidenceByFeedback.containsKey(piece.getId()))
                 .toList();
@@ -234,7 +233,7 @@ public class InAppFeedbackEvidence {
         Map<Long, List<Feedback>> byRecipient =
                 withEvidence.stream().collect(Collectors.groupingBy(Feedback::getRecipientUserId));
         List<Observation> later = observationRepository.findByWorkspaceBetween(
-                workspaceId, byRecipient.keySet(), oldestPreparedAt.get(), asOf);
+                workspaceId, byRecipient.keySet(), oldestPreparedAt.get(), now);
         Set<UUID> visible =
                 visibilityPolicy.permitsAll(workspaceId, later, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         Map<Long, List<Observation>> laterByRecipient = later.stream()
