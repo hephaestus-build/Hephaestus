@@ -1,87 +1,52 @@
-import { classifyIssue, type IssueMetadata } from "../lib/issue-classification.ts";
-// Precompute HINTS for issue-scoped-to-single-concern: surface signals that an issue may bundle more than
-// one independently-shippable deliverable — multiple distinct task sections, "and also"/enumerated asks,
-// many referenced child issues. FACTS only (counts + the sub-issue rollup); the LLM decides single vs
-// multi-concern. No observation.
-
+// Precompute FACTS for issue-scoped-to-single-concern: the task-list items and issue-number mentions the
+// body carries, the provider's sub-issue rollup as reported, and how many sibling issues the inventory
+// lists. Whether the issue is one concern at its level is the criteria's to decide.
 import { readProjectInventory } from "../lib/context.ts";
+import {
+	bodyFact,
+	classifyIssue,
+	subIssueRollup,
+	type IssueMetadata,
+} from "../lib/issue-classification.ts";
+import { checkableItems } from "../lib/review.ts";
 import type { Hint } from "../lib/types.ts";
-
-interface IssueScopeMetadata extends IssueMetadata {
-	sub_issues_total?: number;
-	sub_issues_completed?: number;
-}
 
 export default async function issueScopedToSingleConcern(
 	_repo: string,
 	_diff: Map<string, unknown>,
-	m: IssueScopeMetadata,
+	m: IssueMetadata,
 	contextDir?: string,
 ) {
-	const { body, title, labels, emptyOrTitleEcho } = classifyIssue(m);
-
-	const isStub = body.length < 40;
-	const isDiscussion =
-		labels.some((l) => /support|question|discussion/u.test(l)) ||
-		(/\?\s*$/u.test(title) && body.length < 120);
-
-	const checkboxes = (body.match(/^[\s>]*[-*]\s+\[[ xX]\]/gmu) ?? []).length;
-	const childRefs = new Set((body.match(/(?:^|\s)#\d+\b/gu) ?? []).map((s) => s.trim())).size;
-	const andAlso = (body.match(/\b(?:and also|additionally|as well as|plus,|also,)\b/giu) ?? [])
-		.length;
-	// distinct imperative deliverable verbs as a coarse multi-ask signal
-	const deliverableVerbs = (
-		body.match(
-			/\b(?:add|implement|fix|refactor|migrate|remove|create|build|support|introduce|redesign)\b/giu,
-		) ?? []
-	).length;
-	const headingSections = (body.match(/^#{1,4}\s+\S/gmu) ?? []).length;
-
-	const directions: string[] = [];
-	if (emptyOrTitleEcho) {
-		directions.push(
-			`Classification fact: body is empty or merely echoes the title (emptyOrTitleEcho=1) — there is NO quotable deliverable to scope. Decide from this fact; do not manufacture a concern from the title alone.`,
-		);
-	} else if (isStub) {
-		directions.push(
-			`Body is ${body.length} chars — no quotable deliverable span to scope for single-vs-multi concern.`,
-		);
-	}
-	if (isDiscussion) {
-		directions.push(
-			`Looks like a question/discussion (support/question label or interrogative-only body) — no concrete deliverable to scope.`,
-		);
-	}
-	directions.push(
-		`Scope-breadth facts: deliverableVerbMentions=${deliverableVerbs}, andAlsoConjunctions=${andAlso}, headingSections=${headingSections}, childIssueRefs=${childRefs}, subIssuesTotal=${m.sub_issues_total ?? 0}. Multi-concern requires >=2 quotable independently-shippable deliverables — verify in the body, do not infer from counts alone.`,
-	);
-
-	// Cross-artifact fact: how many sibling issues exist. When this issue references several of them, or the
-	// project is large, the scope question includes "should some of these concerns have been (or already are)
-	// separate issues?" — the LLM checks project_inventory.json; this only states the neighbour count.
+	const shape = classifyIssue(m);
+	const { body, labels, emptyOrTitleEcho } = shape;
+	const checkboxes = checkableItems(body).length;
+	const issueMentions = new Set((body.match(/(?:^|\s)#\d+\b/gu) ?? []).map((s) => s.trim())).size;
+	const rollup = subIssueRollup(m);
 	const inventory = await readProjectInventory(contextDir);
-	const siblingIssueCount = inventory?.issues?.length ?? 0;
-	if (siblingIssueCount > 0) {
-		directions.push(
-			`Cross-artifact fact: ${siblingIssueCount} other issue(s) exist in this project (see project_inventory.json). If this issue bundles concerns that overlap separate siblings, that is evidence it is not scoped to a single concern — confirm against the inventory titles, do not infer from the count alone.`,
-		);
+
+	let inventoryDirection = "project_inventory.json was not captured.";
+	if (inventory !== null) {
+		inventoryDirection =
+			inventory.issues === undefined
+				? "project_inventory.json does not report an issue listing."
+				: `project_inventory.json lists ${String(inventory.issues.length)} issue(s)${inventory.truncated === true ? " (a truncated listing)" : ""}; compare titles and bodies, never the count.`;
 	}
+	const directions = [
+		...bodyFact(shape),
+		`Captured: ${String(checkboxes)} task-list item(s), ${String(issueMentions)} issue-number mention(s), ${rollup.text}; labels ${labels.join(", ") || "none"}. Judge the standard once over the title and the whole body; these counts locate text and decide nothing.`,
+		inventoryDirection,
+	];
 
 	const hints: Hint[] = [];
 	return {
 		hints,
 		metrics: {
 			bodyLength: body.length,
-			isStub: isStub ? 1 : 0,
 			emptyOrTitleEcho: emptyOrTitleEcho ? 1 : 0,
-			isDiscussion: isDiscussion ? 1 : 0,
 			checkboxes,
-			childIssueRefs: childRefs,
-			andAlsoConjunctions: andAlso,
-			deliverableVerbMentions: deliverableVerbs,
-			headingSections,
-			subIssuesTotal: m.sub_issues_total ?? 0,
-			siblingIssueCount,
+			childIssueRefs: issueMentions,
+			...rollup.metrics,
+			...(inventory?.issues === undefined ? {} : { siblingIssueCount: inventory.issues.length }),
 		},
 		directions,
 	};

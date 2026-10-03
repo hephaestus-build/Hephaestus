@@ -17,7 +17,9 @@ import de.tum.cit.aet.hephaestus.evidence.SourceReadinessReason;
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
+import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
@@ -193,10 +195,40 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                 .singleElement()
                 .satisfies(practice ->
                         assertThat(practice.definition().precomputeScript()).isNotBlank());
-        // A handoff practice reads the description as written; only code practices are framed by the diff.
-        assertThat(preambleOf(catalog, "honours-linked-issue-acceptance-criteria"))
-                .isEqualTo(preambleOf(catalog, "describe-what-and-why"))
-                .isNotEqualTo(preambleOf(catalog, "ships-tests-with-the-change"));
+        // Handoff, reviewer-comment and commit-history practices read what people wrote; only code practices
+        // are framed by the diff.
+        for (String slug : List.of(
+                "honours-linked-issue-acceptance-criteria",
+                "leaves-useful-specific-review-comments",
+                "reviews-respectfully-asks-rather-than-demands",
+                "reviews-substantively-with-understanding",
+                "commits-are-atomic-and-cohesive")) {
+            assertThat(preambleOf(catalog, slug))
+                    .as("preamble of %s", slug)
+                    .isEqualTo(preambleOf(catalog, "describe-what-and-why"))
+                    .isNotEqualTo(preambleOf(catalog, "ships-tests-with-the-change"));
+        }
+    }
+
+    @Test
+    void shouldDeduplicateOnlyPracticesThatDescribeTheSameEvent() {
+        BundledPracticeCatalog catalog = loader.catalog();
+
+        // A missing link or a mixed readiness signal is not the same event as an untested change.
+        assertThat(definitionOf(catalog, "ready-and-traceable-handoff").deliveryBehavior())
+                .isEqualTo(PracticeDeliveryBehavior.DEFAULT);
+        assertThat(definitionOf(catalog, "merge-confirms-the-linked-issue-outcome")
+                        .deliveryBehavior()
+                        .redundantToSlug())
+                .isEqualTo("honours-linked-issue-acceptance-criteria");
+    }
+
+    private static PracticeDefinition definitionOf(BundledPracticeCatalog catalog, String slug) {
+        return catalog.practices().stream()
+                .filter(practice -> practice.slug().equals(slug))
+                .findFirst()
+                .orElseThrow()
+                .definition();
     }
 
     private static String preambleOf(BundledPracticeCatalog catalog, String slug) {

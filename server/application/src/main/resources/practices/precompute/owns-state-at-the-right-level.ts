@@ -2,7 +2,7 @@
 // files, placed in its enclosing type. The rules (local values @State, shared models observed once,
 // edits through Binding, derived values computed) are the review's to apply; the script enumerates
 // the declarations so none is missed and counts a model created inside a view type as a lead.
-import { scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
+import { sampleNote, scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
 const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/u;
@@ -43,10 +43,10 @@ export default async function ownsStateAtTheRightLevel(
 		(h) => h.pattern === "@State creating an object" || h.pattern === "@StateObject",
 	).length;
 	const storedVarsInViews = inViews.filter((h) => h.pattern === "mutable stored property").length;
-	const directions: string[] = [];
-	if (scan.hints.length > 0) {
+	const directions: string[] = [...sampleNote(scan)];
+	if (scan.matched > 0) {
 		directions.push(
-			`${scan.hints.length} state declaration(s) or wiring line(s) added; ${inViews.length} inside view types. Walk each against the four rules.`,
+			`${scan.matched} state declaration(s) or wiring line(s) added; ${inViews.length} of the listed rows lie inside view types. Walk each against the four rules.`,
 		);
 	}
 	if (objectsCreatedInViews > 0) {
@@ -62,7 +62,7 @@ export default async function ownsStateAtTheRightLevel(
 	return {
 		hints: scan.hints,
 		metrics: {
-			stateDeclarationsAdded: scan.hints.length,
+			stateDeclarationsAdded: scan.matched,
 			stateDeclarationsInViews: inViews.length,
 			objectsCreatedInViews,
 			storedVarsInViews,

@@ -3,7 +3,7 @@
 // (`@Query`, `modelContext.insert`) is the framework's own and is not listed. Each is a candidate the review places;
 // a `load()` call on a store is not I/O in the view, and the script says which type a line lies in so
 // the review does not have to find the declaration itself.
-import { scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
+import { sampleNote, scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
 /** A SwiftUI view: a type conforming to `View`, or an `App`/`Scene`, which also declare a body. */
@@ -29,10 +29,10 @@ export default async function keepsViewsFreeOfNetworkingAndPersistence(
 		scope: SWIFTUI_VIEW,
 		onlyInScope: true,
 	});
-	const directions: string[] = [];
-	if (scan.hints.length > 0) {
+	const directions: string[] = [...sampleNote(scan)];
+	if (scan.matched > 0) {
 		directions.push(
-			`${scan.hints.length} I/O call(s) added inside or possibly inside a view type — read each hint's enclosing type; a line placed in a store or model is not the view's I/O.`,
+			`${scan.matched} I/O call(s) added inside or possibly inside a view type — read each hint's enclosing type; a line placed in a store or model is not the view's I/O.`,
 		);
 	}
 	if (scan.filesWithoutCheckout > 0) {
@@ -43,7 +43,7 @@ export default async function keepsViewsFreeOfNetworkingAndPersistence(
 	return {
 		hints: scan.hints,
 		metrics: {
-			ioCallsInViews: scan.hints.length,
+			ioCallsInViews: scan.matched,
 			viewLinesAdded: scan.linesInScope,
 			swiftLinesAdded: scan.linesAdded,
 			filesWithoutCheckout: scan.filesWithoutCheckout,

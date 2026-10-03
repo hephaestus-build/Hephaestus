@@ -847,10 +847,14 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 		availableSourceKinds,
 	);
 	validateInapplicabilityScope(observation, availableSourceKinds);
-	// Inapplicability must be grounded in the change unless another observation already consulted it.
+	// A practice that reads the change grounds a decision of nothing in it, unless another observation
+	// already consulted it; a practice judging comments or history alone owes the change nothing.
 	if (
 		(observation.outcome === "NOT_APPLICABLE" || observation.outcome === "UNDETERMINED") &&
 		availableSourceKinds.has(DIFF_SOURCE) &&
+		practiceIndex
+			.find((practice) => practice.slug === observation.practiceSlug)
+			?.readsSources.includes(DIFF_SOURCE) === true &&
 		![
 			...reviewState.observations.filter(
 				(previous) => previous.practiceSlug !== observation.practiceSlug,

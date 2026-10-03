@@ -146,7 +146,7 @@ void test("a new view without a preview is counted per file, a preview elsewhere
 	}
 });
 
-void test("a capability is paired with its usage key from the checkout's project.yml", async () => {
+void test("an API use is shown with the usage keys located for it and where, never a verdict on the target", async () => {
 	const { root, script } = await stage("declares-permissions-truthfully-at-point-of-use");
 	try {
 		writeFileSync(
@@ -161,9 +161,156 @@ void test("a capability is paired with its usage key from the checkout's project
 			metadata,
 		);
 		assert.equal(result.metrics.capabilitiesAdded, 2);
-		assert.equal(result.metrics.capabilitiesWithoutUsageKey, 1);
 		assert.equal(result.metrics.authorizationRequests, 1);
-		assert.ok(result.directions.some((d) => d.includes("No usage key found for CoreLocation")));
+		const said = result.directions.join("\n");
+		assert.match(said, /Location — keys located: none/u);
+		assert.match(said, /Camera — keys located: NSCameraUsageDescription \(project\.yml\)/u);
+		assert.match(said, /does not show the target declares it/u);
+		assert.doesNotMatch(said, /No usage key found/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a system picker, an import or an image picker on the library is not permission-bearing access", async () => {
+	const { root, script } = await stage("declares-permissions-truthfully-at-point-of-use");
+	try {
+		const source = [
+			"import CoreLocation",
+			"import PhotosUI",
+			"let picker = PHPickerViewController(configuration: PHPickerConfiguration())",
+			"let library = UIImagePickerController()",
+			"library.sourceType = .photoLibrary",
+			"let place = CLLocationCoordinate2D(latitude: 48.1, longitude: 11.6)",
+		].join("\n");
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([whole("App/Picker.swift", source)]),
+			metadata,
+		);
+		assert.equal(result.metrics.capabilitiesAdded, 0);
+		assert.deepEqual(result.directions, []);
+		// Choosing the camera as the picker's source is the access it is.
+		const camera = await script(
+			path.join(root, "repo"),
+			new Map([whole("App/Picker.swift", `${source}\nlibrary.sourceType = .camera\n`)]),
+			metadata,
+		);
+		assert.equal(camera.metrics.capabilitiesAdded, 1);
+		assert.match(camera.directions.join("\n"), /Camera — keys located: none/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a custom font given a size scales, one given a fixed size does not, and a system point size is read", async () => {
+	const { root, script } = await stage("makes-ui-accessible-by-default");
+	try {
+		const source = [
+			"struct Course: View {",
+			"    var body: some View {",
+			'        Text("A").font(.custom("CourseFont", size: 18))',
+			'        Text("B").font(.custom("CourseFont", fixedSize: 18))',
+			'        Text("C").font(.system(size: 14))',
+			"    }",
+			"}",
+		].join("\n");
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([whole("App/Course.swift", source)]),
+			metadata,
+		);
+		assert.deepEqual(
+			result.hints.map((h) => [h.line, h.pattern]),
+			[
+				[3, "scaled custom font"],
+				[4, "fixed-size custom font"],
+				[5, "system font with a point size"],
+			],
+		);
+		const said = result.directions.join("\n");
+		assert.match(said, /^1 custom font\(s\) with fixedSize: added/mu);
+		assert.match(said, /^1 system font\(s\) with a point size added/mu);
+		assert.doesNotMatch(said, /scaled only with relativeTo/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("rows beyond the cap are counted by kind and said to be unlisted", async () => {
+	const { root, script } = await stage("makes-ui-accessible-by-default");
+	try {
+		const icons = Array.from({ length: 65 }, () => '        Image(systemName: "star")');
+		const source = [
+			"struct Stars: View {",
+			"    var body: some View {",
+			...icons,
+			"    }",
+			"}",
+		].join("\n");
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([whole("App/Stars.swift", source)]),
+			metadata,
+		);
+		assert.equal(result.hints.length, 60);
+		assert.equal(result.metrics.symbolImages, 65);
+		assert.equal(result.metrics.interfaceLinesAdded, 65);
+		assert.match(
+			result.directions[0] ?? "",
+			/^65 matching added line\(s\); the first 60 are listed and 5 are not\./u,
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("detached work needs no written reason, and default isolation text is a lead per target, never the project's", async () => {
+	const { root, script } = await stage("uses-structured-concurrency-safely");
+	try {
+		const source = [
+			"struct Feed: View {",
+			"    var body: some View {",
+			'        Button("Load") { Task { await model.load() } }',
+			"        Text(model.title).onAppear { Task.detached { await model.prefetch() } }",
+			"    }",
+			"}",
+		].join("\n");
+		writeFileSync(path.join(root, "repo/App/Feed.swift"), source);
+		const diff = new Map([whole("App/Feed.swift", source)]);
+		const plain = await script(path.join(root, "repo"), diff, metadata);
+		const said = plain.directions.join("\n");
+		assert.match(said, /no written reason is required/u);
+		assert.doesNotMatch(said, /stated reason|whether \.task was available/u);
+		assert.match(said, /missing @MainActor on an added line does not by itself/u);
+		assert.match(said, /leaves the module's default unknown rather than nonisolated/u);
+		// Two targets that disagree, and a SwiftPM setting that is commented out.
+		writeFileSync(
+			path.join(root, "repo/project.yml"),
+			[
+				"targets:",
+				"  App:",
+				"    settings:",
+				"      SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor",
+				"  Widget:",
+				"    settings:",
+				"      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated",
+			].join("\n"),
+		);
+		writeFileSync(
+			path.join(root, "repo/Package.swift"),
+			'// .target(name: "Core", swiftSettings: [.defaultIsolation(MainActor.self)])\n',
+		);
+		const withSettings = await script(path.join(root, "repo"), diff, metadata);
+		const leads = withSettings.directions.join("\n");
+		assert.match(leads, /project\.yml:4 SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor/u);
+		assert.match(leads, /project\.yml:7 SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated/u);
+		assert.match(leads, /Package\.swift:1 \/\/ \.target/u);
+		assert.match(
+			leads,
+			/applies only to its own target or SwiftPM module and build configuration/u,
+		);
+		assert.doesNotMatch(leads, /sets MainActor as the default|is on the main actor unless/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -249,6 +396,28 @@ void test("a print beside an existing logger is a lead, a print under a scripts 
 	}
 });
 
+void test("a print in another language beyond the shared row cap is counted but not reported as a listed row", async () => {
+	const { root, script } = await stage("logs-through-the-platform-logger");
+	try {
+		const prints = Array.from({ length: 40 }, (_, i) => `        print("step ${String(i)}")`);
+		const swift = ["final class Store {", "    func load() {", ...prints, "    }", "}"].join("\n");
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([whole("App/Store.swift", swift), whole("scripts/report.py", 'print("done")\n')]),
+			metadata,
+		);
+		assert.equal(result.hints.length, 40);
+		assert.ok(result.hints.every((h) => h.pattern === "swift:print("));
+		assert.equal(result.metrics.printsAdded, 41);
+		// The script's own print is past the 40 rows returned, so no listed row is under a tool path.
+		assert.equal(result.metrics.printsInToolPaths, 0);
+		assert.match(result.directions[0] ?? "", /^41 diagnostic line\(s\) added; 40 are listed\./u);
+		assert.match(result.directions[1] ?? "", /\(0 listed under a tool or script path\)/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 void test("a literal and a named asset color are told apart, and the asset's dark appearance is read from the catalog", async () => {
 	const { root, script } = await stage("uses-adaptive-colors-for-every-appearance");
 	try {
@@ -266,8 +435,9 @@ void test("a literal and a named asset color are told apart, and the asset's dar
 			metadata,
 		);
 		assert.equal(result.metrics.literalColors, 2);
-		assert.equal(result.metrics.adaptiveColors, 1);
-		assert.equal(result.metrics.singleAppearanceAssets, 0);
+		assert.equal(result.metrics.systemAdaptiveColors, 0);
+		assert.equal(result.metrics.namedAssetColors, 1);
+		assert.equal(result.metrics.assetsWithoutDarkAppearance, 0);
 		assert.deepEqual(
 			result.hints.map((h) => [h.line, h.pattern, h.flags.hasDarkAppearance ?? null]),
 			[
@@ -276,6 +446,116 @@ void test("a literal and a named asset color are told apart, and the asset's dar
 				[7, "literal RGB", null],
 			],
 		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a colorset's appearances are read as JSON whatever the key order, and an unreadable one stays unknown", async () => {
+	const { root, script } = await stage("uses-adaptive-colors-for-every-appearance");
+	try {
+		const colorsets: Record<string, string> = {
+			// The dark appearance with its keys in the other order.
+			Reordered:
+				'{"colors":[{"color":{},"idiom":"universal"},{"color":{},"idiom":"universal","appearances":[{"value":"dark","appearance":"luminosity"}]}]}',
+			Single: '{"colors":[{"color":{},"idiom":"universal"}],"info":{"version":1}}',
+			Broken: '{"colors":[',
+			NoColors: '{"info":{"version":1}}',
+			Empty: '{"colors":[]}',
+			GamutOnly:
+				'{"colors":[{"idiom":"universal","display-gamut":"sRGB","color":{}},{"idiom":"universal","display-gamut":"display-P3","color":{}}]}',
+			// Valid JSON whose inspected entries are not the shape a colorset has.
+			NullEntry: '{"colors":[{"color":{},"idiom":"universal"},null]}',
+			TextAppearances: '{"colors":[{"color":{},"idiom":"universal","appearances":"dark"}]}',
+		};
+		for (const [name, contents] of Object.entries(colorsets)) {
+			mkdirSync(path.join(root, `repo/App/Assets.xcassets/${name}.colorset`), { recursive: true });
+			writeFileSync(
+				path.join(root, `repo/App/Assets.xcassets/${name}.colorset/Contents.json`),
+				contents,
+			);
+		}
+		const source = `struct Card: View {\n    var body: some View {\n${Object.keys(colorsets)
+			.map((name) => `        Text("x").foregroundStyle(Color("${name}"))`)
+			.join("\n")}\n    }\n}\n`;
+		writeFileSync(path.join(root, "repo/App/Card.swift"), source);
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([whole("App/Card.swift", source)]),
+			metadata,
+		);
+		assert.deepEqual(
+			result.hints.map((h) => [h.flags.asset, h.flags.hasDarkAppearance]),
+			[
+				["Reordered", true],
+				["Single", false],
+				["Broken", "unknown"],
+				["NoColors", "unknown"],
+				["Empty", "unknown"],
+				["GamutOnly", false],
+				["NullEntry", "unknown"],
+				["TextAppearances", "unknown"],
+			],
+		);
+		assert.equal(result.metrics.assetsWithoutDarkAppearance, 2);
+		const said = result.directions.join("\n");
+		assert.match(said, /no dark luminosity entry/u);
+		assert.doesNotMatch(said, /literal in disguise/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a named color resolves only to one colorset, exact name first; two candidates stay unknown", async () => {
+	const { root, script } = await stage("uses-adaptive-colors-for-every-appearance");
+	try {
+		const dark =
+			'{"colors":[{"color":{},"idiom":"universal"},{"color":{},"idiom":"universal","appearances":[{"appearance":"luminosity","value":"dark"}]}]}';
+		const colorsets: [string, string][] = [
+			["App/Assets.xcassets/Brand.colorset", dark],
+			["Widget/Assets.xcassets/BRAND.colorset", '{"colors":[{"color":{},"idiom":"universal"}]}'],
+			["App/Assets.xcassets/Accent.colorset", dark],
+			["Widget/Assets.xcassets/Accent.colorset", dark],
+		];
+		for (const [folder, contents] of colorsets) {
+			mkdirSync(path.join(root, "repo", folder), { recursive: true });
+			writeFileSync(path.join(root, "repo", folder, "Contents.json"), contents);
+		}
+		const source =
+			'struct Card: View {\n    var body: some View {\n        Text("x").foregroundStyle(Color("Brand"))\n        Text("y").foregroundStyle(Color("brand"))\n        Text("z").foregroundStyle(Color("Accent"))\n    }\n}\n';
+		writeFileSync(path.join(root, "repo/App/Card.swift"), source);
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([whole("App/Card.swift", source)]),
+			metadata,
+		);
+		assert.deepEqual(
+			result.hints.map((h) => [h.flags.asset, h.flags.hasDarkAppearance]),
+			[
+				["Brand", true],
+				["brand", "unknown"],
+				// The same exact name in two catalogs: which target's the view uses is not here.
+				["Accent", "unknown"],
+			],
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("system gray colors remain adaptive leads rather than literals", async () => {
+	const { root, script } = await stage("uses-adaptive-colors-for-every-appearance");
+	try {
+		const source =
+			'struct Card: View {\n    var body: some View {\n        Text("x").foregroundStyle(.gray)\n        Text("x").background(Color(.systemGray2))\n        Text("x").background(Color(uiColor: .systemGray6))\n    }\n}\n';
+		writeFileSync(path.join(root, "repo/App/Card.swift"), source);
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([whole("App/Card.swift", source)]),
+			metadata,
+		);
+		assert.equal(result.metrics.literalColors, 1);
+		assert.equal(result.metrics.systemAdaptiveColors, 2);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

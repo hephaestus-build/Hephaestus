@@ -1676,4 +1676,154 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                     .hasMessageContaining("No delivery route for artifact kind: kind=wiki.page");
         }
     }
+
+    /** An undecided review owes a captured change a reading only through a practice pinned to read it. */
+    @Nested
+    class TheChangeWitness {
+
+        private static final String TITLE = "\"title\":\"Bump the lockfile\"";
+
+        private PracticeEvidenceRequirement required(String sourceKind) {
+            return new PracticeEvidenceRequirement(new SourceKind(sourceKind), EvidenceStance.REQUIRED);
+        }
+
+        /** Pins revision 11 reading {@code sourceKinds}; today's definition reads the change regardless. */
+        private void pinDescriptionPractice(String... sourceKinds) {
+            testPractice.setName("Describe what and why");
+            testPractice.setCriteria("Judge the description.");
+            testPractice.setEvidenceRequirements(
+                    java.util.Arrays.stream(sourceKinds).map(this::required).toList());
+            PracticeRevision pinned = new PracticeRevision(testPractice, 1);
+            ReflectionTestUtils.setField(pinned, "id", 11L);
+            when(practiceRevisionRepository.findByIdAndWorkspaceId(11L, 1L)).thenReturn(Optional.of(pinned));
+            testPractice.setEvidenceRequirements(
+                    List.of(required("scm.pull-request.core"), required("scm.pull-request.diff")));
+        }
+
+        private ValidatedObservation fromTheRecord(String slug) {
+            ValidatedObservation observation = validObservation(slug, null);
+            ObjectNode citation = firstCitation(observation);
+            citation.put("sourceKind", "scm.pull-request.core");
+            citation.put("artifactPath", "context/pull_request.json");
+            citation.put("path", "pull_request.json");
+            citation.put("startLine", 1);
+            citation.put("endLine", 1);
+            citation.put("quote", TITLE);
+            citation.remove("side");
+            ((ObjectNode) evidenceOf(observation).get("inapplicability"))
+                    .putArray("consulted")
+                    .add("scm.pull-request.core");
+            lenient()
+                    .when(cas.containsUtf8AtLines(testJob, "context/pull_request.json", "b".repeat(64), TITLE, 1, 1))
+                    .thenReturn(Optional.of(true));
+            return observation;
+        }
+
+        @Test
+        void admitsAnUndecidedReviewWhosePinnedPracticeNeverReadTheCapturedChange() {
+            pinDescriptionPractice("scm.pull-request.core");
+
+            var result = publishVerified(testJob, List.of(fromTheRecord("pr-description-quality")));
+
+            assertThat(result.inserted()).isEqualTo(1);
+            assertThat(storedCitation(result)
+                            .path("verification")
+                            .path("status")
+                            .asString())
+                    .isEqualTo("VERIFIED");
+        }
+
+        @Test
+        void refusesAnUndecidedReviewWhosePinnedPracticeReadsTheChangeWithoutAWitness() {
+            pinDescriptionPractice("scm.pull-request.core", "scm.pull-request.diff");
+
+            assertThatThrownBy(() -> service.prepare(testJob, List.of(fromTheRecord("pr-description-quality"))))
+                    .isInstanceOfSatisfying(
+                            ObservationsRefusedException.class,
+                            e -> assertThat(e.reasonCode()).isEqualTo("did_not_read_the_diff"))
+                    .hasMessageContaining("answered without reading it");
+            verifyNoInteractions(observationRepository);
+        }
+
+        @Test
+        void aWithdrawnPracticeThatReadsTheChangeDoesNotBurdenTheReviewThatRemains() {
+            pinDescriptionPractice("scm.pull-request.core");
+            // The fixture's second practice reads the change, as a pull request practice does by default.
+            admitSecondPractice().setSourceCuratedSlug("withdrawn");
+            ReflectionTestUtils.setField(
+                    service,
+                    "fence",
+                    new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(Map.of(
+                            "withdrawn",
+                            new de.tum.cit.aet.hephaestus.practices.PracticeDefinition(
+                                    "Withdrawn",
+                                    PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
+                                    List.of(required("scm.pull-request.diff")),
+                                    Map.of(),
+                                    de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
+                                    null,
+                                    "Criteria",
+                                    null,
+                                    PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST)
+                                            .withdrawnFor(
+                                                    new de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation(
+                                                            "AT_CLOSE_STATE_NOT_CAPTURED",
+                                                            "Nothing records the close.")),
+                                    null,
+                                    null,
+                                    null))));
+
+            var result = publishVerified(
+                    testJob, List.of(fromTheRecord("pr-description-quality"), fromTheRecord("pr-scope")));
+
+            assertThat(result.recorded())
+                    .extracting(ValidatedObservation::practiceSlug)
+                    .containsExactly("pr-description-quality");
+        }
+
+        @Test
+        void aDiffQuoteThatDoesNotVerifyWitnessesNothingForAPracticeThatReadsTheChange() {
+            pinDescriptionPractice("scm.pull-request.core", "scm.pull-request.diff");
+            admitSecondPractice();
+            ValidatedObservation misquoted = validObservation("pr-scope", null);
+            firstCitation(misquoted).put("quote", "insecure();,");
+
+            var observations = List.of(fromTheRecord("pr-description-quality"), misquoted);
+
+            assertThatThrownBy(() -> service.prepare(testJob, observations))
+                    .isInstanceOfSatisfying(
+                            ObservationsRefusedException.class,
+                            e -> assertThat(e.reasonCode()).isEqualTo("did_not_read_the_diff"));
+            verifyNoInteractions(observationRepository);
+        }
+
+        @Test
+        void admitsAMixedUndecidedReviewOnceThePracticeThatReadsTheChangeQuotesIt() {
+            pinDescriptionPractice("scm.pull-request.core");
+            Practice tests = new Practice();
+            ReflectionTestUtils.setField(tests, "id", 12L);
+            tests.setSlug("ships-tests-with-the-change");
+            tests.setName("Include tests with the change");
+            tests.setCriteria("Judge the tests.");
+            PracticeTestEvidence.configure(tests, ArtifactKinds.PULL_REQUEST);
+            tests.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
+            tests.setEvidenceRequirements(List.of(required("scm.pull-request.diff")));
+            tests.setWorkspace(testPractice.getWorkspace());
+            PracticeRevision testsRevision = new PracticeRevision(tests, 1);
+            ReflectionTestUtils.setField(testsRevision, "id", 13L);
+            when(practiceRevisionRepository.findByIdAndWorkspaceId(13L, 1L)).thenReturn(Optional.of(testsRevision));
+            EvidenceSnapshotFixtures.admittedPractice(
+                    (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                    "ships-tests-with-the-change",
+                    13L);
+
+            var result = publishVerified(
+                    testJob,
+                    List.of(
+                            fromTheRecord("pr-description-quality"),
+                            validObservation("ships-tests-with-the-change", null)));
+
+            assertThat(result.inserted()).isEqualTo(2);
+        }
+    }
 }

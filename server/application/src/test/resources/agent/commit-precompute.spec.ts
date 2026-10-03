@@ -17,7 +17,7 @@ void test("captured commits distinguish empty history from missing or malformed 
 	const root = mkdtempSync(path.join(tmpdir(), "captured-commits-"));
 	try {
 		assert.equal(await readCapturedCommits(root), null);
-		for (const source of ["{", '{"commits":[null]}', '{"commits":{}}']) {
+		for (const source of ["{", '{"commits":[null]}', '{"commits":{}}', '{"commits":[{}]}']) {
 			writeFileSync(path.join(root, "commits.json"), source);
 			assert.equal(await readCapturedCommits(root), null);
 			assert.deepEqual(await readCommits(root), []);
@@ -26,7 +26,9 @@ void test("captured commits distinguish empty history from missing or malformed 
 		assert.deepEqual(await readCapturedCommits(root), []);
 		writeFileSync(
 			path.join(root, "commits.json"),
-			JSON.stringify({ commits: [{ sha: "1234567", authoredAt: "" }] }),
+			JSON.stringify({
+				commits: [{ sha: "1234567", message: "", parents: [], files: [], authoredAt: "" }],
+			}),
 		);
 		const captured = await readCapturedCommits(root);
 		assert.equal(captured?.[0]?.authoredAt, "");
@@ -150,6 +152,41 @@ void test("both commit practices read the subjects from the commit record and st
 					],
 				],
 			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	}
+});
+
+void test("one authored commit is still a history to judge, and an unread commit record is a collection gap", async () => {
+	for (const slug of ["commit-subjects-explain-each-change", "commits-are-atomic-and-cohesive"]) {
+		const { root, script, contextDir } = await stage(slug, [
+			commit("1111111", "Add the quiz view and reformat the project\n"),
+		]);
+		try {
+			const single = await script(path.join(root, "repo"), new Map(), metadata, contextDir);
+			assert.equal(single.metrics.authoredCommits, 1);
+			assert.equal(single.hints.length, 1);
+			assert.match(single.directions[0] ?? "", /^1 authored commit\(s\), one row each/u);
+			assert.doesNotMatch(single.directions.join(" "), /no partition|nothing to judge/u);
+			for (const source of [
+				"{",
+				'{"commits":[null]}',
+				'{"commits":[{}]}',
+				'{"commits":[{"sha":"1234567","message":"","parents":"missing","files":[]}]}',
+				'{"commits":[{"sha":"1234567","message":"","parents":[],"files":[{}]}]}',
+			]) {
+				writeFileSync(path.join(contextDir, "commits.json"), source);
+				const unread = await script(path.join(root, "repo"), new Map(), metadata, contextDir);
+				assert.deepEqual(unread.hints, []);
+				assert.deepEqual(unread.metrics, {});
+				assert.match(unread.directions[0] ?? "", /missing or malformed: a collection gap/u);
+			}
+			writeFileSync(path.join(contextDir, "commits.json"), '{"commits":[]}');
+			const empty = await script(path.join(root, "repo"), new Map(), metadata, contextDir);
+			assert.match(empty.directions[0] ?? "", /^No authored commit in the reviewed range/u);
+			assert.equal(empty.metrics.authoredCommits, 0);
+			assert.equal(empty.metrics.mergeCommits, 0);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}

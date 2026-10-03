@@ -150,6 +150,7 @@ public class ReviewOutputService {
         List<String> withheldObservations = new ArrayList<>();
         var verificationFailures = objectMapper.createArrayNode();
         boolean withheldNegative = false;
+        boolean changeReaderAdmitted = false;
         for (int submittedIndex = 0; submittedIndex < validObservations.size(); submittedIndex++) {
             ValidatedObservation observation = validObservations.get(submittedIndex);
             observation.outcome().validate(observation.severity());
@@ -206,6 +207,8 @@ public class ReviewOutputService {
                         observation.evidenceRationale(),
                         observation.keys());
                 admittedObservations.add(observation);
+                changeReaderAdmitted |= Objects.requireNonNull(revision.getEvidenceRequirements()).stream()
+                        .anyMatch(need -> PracticePreconditionClause.DIFF_SOURCE.equals(need.sourceKind()));
             } catch (EvidenceQuoteUnverifiedException ex) {
                 var failed = verificationFailures
                         .addObject()
@@ -227,6 +230,10 @@ public class ReviewOutputService {
                 withheldObservations.add(observation.practiceSlug() + ": " + ex.getMessage());
             }
         }
+        requireTheChangeRead(
+                job.getId(),
+                admittedObservations,
+                changeReaderAdmitted && captured.availableSources().contains(PracticePreconditionClause.DIFF_SOURCE));
         if (!withheldObservations.isEmpty()) {
             // Per claim, because a model that cannot quote its own evidence is a defect an otherwise
             // successful delivery would hide.
@@ -425,6 +432,50 @@ public class ReviewOutputService {
                 job.getId());
 
         return new RecordedObservations(inserted, discardedDuplicate, recordedObservations);
+    }
+
+    /**
+     * Refuses a review whose admitted observations decided nothing when an admitted practice's pinned
+     * revision reads a captured change and none of them read it. A review of comments or history alone
+     * owes the change nothing; a withheld observation neither burdens nor witnesses.
+     */
+    private static void requireTheChangeRead(UUID jobId, List<ValidatedObservation> observations, boolean changeOwed) {
+        if (changeOwed && observations.stream().noneMatch(f -> f.outcome().isDecided()) && !readTheDiff(observations)) {
+            throw new ObservationsRefusedException(
+                    "did_not_read_the_diff",
+                    "No observation decided anything or quoted the change, and a change was captured — the"
+                            + " review answered without reading it. Refusing to deliver. jobId="
+                            + jobId);
+        }
+    }
+
+    /**
+     * Whether an observation cites the diff or names it in a consulted-source warrant.
+     * This prevents a refusal; it does not replace citation verification at admission.
+     */
+    private static boolean readTheDiff(List<ValidatedObservation> observations) {
+        for (var observation : observations) {
+            JsonNode evidence = observation.evidence();
+            if (evidence == null) {
+                continue;
+            }
+            for (JsonNode citation : evidence.path("citations")) {
+                if (PracticePreconditionClause.DIFF_SOURCE
+                        .value()
+                        .equals(citation.path("sourceKind").asString())) {
+                    return true;
+                }
+            }
+            // Metadata-only practices can report consulting the diff without quoting it.
+            for (String warrant : List.of("search", "inapplicability", "undecidability")) {
+                for (JsonNode consulted : evidence.path(warrant).path("consulted")) {
+                    if (PracticePreconditionClause.DIFF_SOURCE.value().equals(consulted.asString())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /** What one admission may record against: the capture, the person and work it names, and its practices. */

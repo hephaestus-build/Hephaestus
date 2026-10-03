@@ -100,6 +100,9 @@ export interface Loader {
 		assert.equal(isTestPath("AppTests/EventListTests.swift"), true);
 		assert.equal(isTestPath("src/store.test.ts"), true);
 		assert.equal(isTestPath("App/Views/EventList.swift"), false);
+		assert.equal(isTestPath("CourseUITests/Smoke.swift"), true);
+		assert.equal(isTestPath("App/Latest.swift"), false);
+		assert.equal(isTestPath("App/Contest.swift"), false);
 	});
 });
 

@@ -21,7 +21,12 @@ export interface Placement {
 }
 
 export interface SourceScan {
+	/** The first `maxHints` matching lines; `matched` and `countLabel` count every one. */
 	hints: Hint[];
+	/** Every matching line, shown or not. */
+	matched: number;
+	/** Matching lines by pattern label, over every line scanned. */
+	counts: Map<string, number>;
 	/** Source files of the change in the languages named, tests excluded unless included. */
 	filesScanned: number;
 	/** Added source lines (comments excluded) in the languages named. */
@@ -65,6 +70,8 @@ export async function scanAddedLines(
 ): Promise<SourceScan> {
 	const scan: SourceScan = {
 		hints: [],
+		matched: 0,
+		counts: new Map(),
 		filesScanned: 0,
 		linesAdded: 0,
 		linesInScope: 0,
@@ -101,6 +108,11 @@ export async function scanAddedLines(
 				if (!re.test(content)) {
 					continue;
 				}
+				scan.matched += 1;
+				scan.counts.set(label, (scan.counts.get(label) ?? 0) + 1);
+				if (scan.hints.length >= (options.maxHints ?? 40)) {
+					break;
+				}
 				scan.hints.push({
 					file: path,
 					line,
@@ -117,10 +129,23 @@ export async function scanAddedLines(
 			}
 		}
 	}
-	scan.hints = scan.hints.slice(0, options.maxHints ?? 40);
 	return scan;
 }
 
+/** Matching lines of one pattern label, shown or not. */
 export function countLabel(scan: SourceScan, label: string): number {
-	return scan.hints.filter((h) => h.pattern === label).length;
+	return scan.counts.get(label) ?? 0;
+}
+
+/**
+ * Says that the rows are a sample when they are, so that nothing read off them — a placement, a
+ * missing kind — is taken for the whole change.
+ */
+export function sampleNote(scan: SourceScan): string[] {
+	const omitted = scan.matched - scan.hints.length;
+	return omitted > 0
+		? [
+				`${String(scan.matched)} matching added line(s); the first ${String(scan.hints.length)} are listed and ${String(omitted)} are not. Counts by kind cover every line; anything read off the listed rows alone covers only them.`,
+			]
+		: [];
 }

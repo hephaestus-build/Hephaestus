@@ -25,7 +25,6 @@ import de.tum.cit.aet.hephaestus.agent.task.Task;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
-import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -320,21 +319,9 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                             + parsed.discarded().size());
         }
 
-        CapturedEvidence captured = CapturedEvidence.of(job, objectMapper);
-        // Refuse an entirely unassessed review only when it also reports no use of the captured diff.
-        boolean nothingDecided =
-                parsed.validObservations().stream().noneMatch(f -> (f.outcome().isDecided()));
-        boolean changeCaptured = captured.availableSources().contains(PracticePreconditionClause.DIFF_SOURCE);
-        if (nothingDecided && changeCaptured && !readTheDiff(parsed.validObservations())) {
-            throw new ObservationsRefusedException(
-                    "did_not_read_the_diff",
-                    "No observation decided anything or quoted the change, and a change was captured — the"
-                            + " review answered without reading it. Refusing to deliver. jobId="
-                            + job.getId());
-        }
-        List<ReviewResultParser.ValidatedObservation> scopedObservations = parsed.validObservations();
-
-        var admissible = deliveryService.prepare(job, ReviewResultParser.validateCoherence(scopedObservations));
+        // Admission decides, against the job's pinned practice revisions, whether an undecided review owed
+        // the captured change a reading.
+        var admissible = deliveryService.prepare(job, ReviewResultParser.validateCoherence(parsed.validObservations()));
         return admitted -> deliveryService.publish(admitted, admissible);
     }
 
@@ -346,34 +333,5 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     @Override
     public boolean reconcilesMoreThanOneProviderObject() {
         return true;
-    }
-
-    /**
-     * Whether an observation cites the diff or names it in a consulted-source warrant.
-     * This prevents a refusal; it does not replace citation verification at admission.
-     */
-    static boolean readTheDiff(List<ReviewResultParser.ValidatedObservation> observations) {
-        for (var observation : observations) {
-            JsonNode evidence = observation.evidence();
-            if (evidence == null) {
-                continue;
-            }
-            for (JsonNode citation : evidence.path("citations")) {
-                if (PracticePreconditionClause.DIFF_SOURCE
-                        .value()
-                        .equals(citation.path("sourceKind").asString())) {
-                    return true;
-                }
-            }
-            // Metadata-only practices can report consulting the diff without quoting it.
-            for (String warrant : List.of("search", "inapplicability", "undecidability")) {
-                for (JsonNode consulted : evidence.path(warrant).path("consulted")) {
-                    if (PracticePreconditionClause.DIFF_SOURCE.value().equals(consulted.asString())) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
     }
 }
