@@ -1,6 +1,7 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { Activity, Building2, ChartNoAxesGantt, Compass, UserRound, Users } from "lucide-react";
 
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
 	SidebarGroup,
 	SidebarGroupLabel,
@@ -34,6 +35,21 @@ export function NavDashboards({
 	const onTeams = Boolean(matchRoute({ to: "/w/$workspaceSlug/teams", fuzzy: true }));
 	const onPracticePages = onPracticeProfile || onAcrossTheWorkspace;
 	const [practicesOpen, setPracticesOpen] = useSectionOpen(onPracticePages);
+	// The profile links nowhere else, so down to icons the section offers both pages as a menu.
+	const practicePages = [
+		{
+			to: "/w/$workspaceSlug/practice-profile",
+			label: "Your profile",
+			icon: UserRound,
+			active: onPracticeProfile,
+		},
+		{
+			to: "/w/$workspaceSlug/practices-across-the-workspace",
+			label: "Across the workspace",
+			icon: ChartNoAxesGantt,
+			active: onAcrossTheWorkspace,
+		},
+	] as const;
 
 	return (
 		<SidebarGroup>
@@ -46,37 +62,33 @@ export function NavDashboards({
 						active={onPracticePages}
 						open={practicesOpen}
 						onOpenChange={setPracticesOpen}
-						landingLink={
-							<Link
-								to="/w/$workspaceSlug/practice-profile"
-								params={{ workspaceSlug }}
-								aria-current={onPracticeProfile ? "page" : undefined}
-							/>
-						}
-					>
-						<SidebarMenuSubItem>
-							<SidebarMenuSubButton
-								isActive={onPracticeProfile}
-								render={<Link to="/w/$workspaceSlug/practice-profile" params={{ workspaceSlug }} />}
-							>
-								<UserRound aria-hidden />
-								<span>Your profile</span>
-							</SidebarMenuSubButton>
-						</SidebarMenuSubItem>
-						<SidebarMenuSubItem>
-							<SidebarMenuSubButton
-								isActive={onAcrossTheWorkspace}
+						menu={practicePages.map((page) => (
+							<DropdownMenuItem
+								key={page.to}
 								render={
 									<Link
-										to="/w/$workspaceSlug/practices-across-the-workspace"
+										to={page.to}
 										params={{ workspaceSlug }}
+										aria-current={page.active ? "page" : undefined}
 									/>
 								}
 							>
-								<ChartNoAxesGantt aria-hidden />
-								<span>Across the workspace</span>
-							</SidebarMenuSubButton>
-						</SidebarMenuSubItem>
+								<page.icon aria-hidden />
+								{page.label}
+							</DropdownMenuItem>
+						))}
+					>
+						{practicePages.map((page) => (
+							<SidebarMenuSubItem key={page.to}>
+								<SidebarMenuSubButton
+									isActive={page.active}
+									render={<Link to={page.to} params={{ workspaceSlug }} />}
+								>
+									<page.icon aria-hidden />
+									<span>{page.label}</span>
+								</SidebarMenuSubButton>
+							</SidebarMenuSubItem>
+						))}
 					</NavSection>
 				)}
 				<SidebarMenuItem>

@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, screen, userEvent, within } from "storybook/test";
+
+import { SidebarProvider } from "@/components/ui/sidebar";
 
 import { NavDashboards } from "./NavDashboards";
 import { withSidebarFrame } from "./sidebar-story-frame";
@@ -42,6 +44,32 @@ export const PracticePagesOpen: Story = {
 			"Your profile",
 			"Across the workspace",
 		]);
+	},
+};
+
+/**
+ * The sidebar folded to icons: nothing can unfold, and the profile links nowhere else, so the
+ * section's icon offers both pages as a menu beside it.
+ */
+export const PracticePagesFolded: Story = {
+	decorators: [
+		(Story) => (
+			<SidebarProvider defaultOpen={false} className="min-h-0">
+				<Story />
+			</SidebarProvider>
+		),
+	],
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Practice profile" }));
+		const menu = within(await screen.findByRole("menu"));
+		await expect(menu.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+			"Your profile",
+			"Across the workspace",
+		]);
+		await expect(menu.getByRole("menuitem", { name: "Across the workspace" })).toHaveAttribute(
+			"href",
+			"/w/aet/practices-across-the-workspace",
+		);
 	},
 };
 

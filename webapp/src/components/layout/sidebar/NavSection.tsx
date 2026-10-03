@@ -3,6 +3,13 @@ import { type ReactElement, type ReactNode, useState } from "react";
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuLabel,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
 	SidebarMenuBadge,
 	SidebarMenuButton,
 	SidebarMenuItem,
@@ -29,7 +36,7 @@ export function useSectionOpen(onSection: boolean) {
 	return [open, setOpen] as const;
 }
 
-export interface NavSectionProps {
+interface NavSectionBaseProps {
 	label: string;
 	icon: ReactNode;
 	active: boolean;
@@ -40,13 +47,27 @@ export interface NavSectionProps {
 	 * sight — closed, or the sidebar down to icons — so it is seen however the sidebar is folded.
 	 */
 	badge?: { count: number; phrase: string };
-	landingLink: ReactElement;
 	children: ReactNode;
 }
 
 /**
- * A sidebar entry that opens into sub entries: a trigger while the sidebar is expanded, and a link to
- * the section's landing page while it is down to icons, where nothing can unfold.
+ * What the section offers while the sidebar is down to icons: a link to its landing page, which
+ * reaches its other entries, or, where the landing page links nowhere else, its entries as a menu.
+ */
+export type NavSectionProps = NavSectionBaseProps &
+	(
+		| { landingLink: ReactElement; menu?: never }
+		| {
+				/** The section's entries as `DropdownMenuItem`s. */
+				menu: ReactNode;
+				landingLink?: never;
+		  }
+	);
+
+/**
+ * A sidebar entry that opens into sub entries: a trigger while the sidebar is expanded, and while it
+ * is down to icons, where nothing can unfold, a link to the section's landing page or a menu of its
+ * entries beside the icon.
  */
 export function NavSection({
 	label,
@@ -56,6 +77,7 @@ export function NavSection({
 	onOpenChange,
 	badge,
 	landingLink,
+	menu,
 	children,
 }: NavSectionProps) {
 	// Down to icons on a wide screen; on a phone the sidebar is a sheet with its full labels.
@@ -70,25 +92,46 @@ export function NavSection({
 	);
 	// The badge hides itself in the icon-only sidebar, where the tooltip says the count instead.
 	const tooltip = shown ? `${label} (${shown.phrase})` : label;
+	let button: ReactNode;
+	if (!collapsed) {
+		button = (
+			<CollapsibleTrigger
+				render={<SidebarMenuButton tooltip={tooltip} isActive={!open && active} />}
+			>
+				{icon}
+				{name}
+				<ChevronRight
+					className="ml-auto transition-transform group-aria-expanded/menu-button:rotate-90"
+					aria-hidden
+				/>
+			</CollapsibleTrigger>
+		);
+	} else if (landingLink === undefined) {
+		button = (
+			<DropdownMenu>
+				<DropdownMenuTrigger render={<SidebarMenuButton tooltip={tooltip} isActive={active} />}>
+					{icon}
+					{name}
+				</DropdownMenuTrigger>
+				<DropdownMenuContent side="right" align="start" className="min-w-48">
+					<DropdownMenuGroup>
+						<DropdownMenuLabel className="text-xs text-muted-foreground">{label}</DropdownMenuLabel>
+						{menu}
+					</DropdownMenuGroup>
+				</DropdownMenuContent>
+			</DropdownMenu>
+		);
+	} else {
+		button = (
+			<SidebarMenuButton tooltip={tooltip} isActive={active} render={landingLink}>
+				{icon}
+				{name}
+			</SidebarMenuButton>
+		);
+	}
 	return (
 		<Collapsible open={open} onOpenChange={onOpenChange} render={<SidebarMenuItem />}>
-			{collapsed ? (
-				<SidebarMenuButton tooltip={tooltip} isActive={active} render={landingLink}>
-					{icon}
-					{name}
-				</SidebarMenuButton>
-			) : (
-				<CollapsibleTrigger
-					render={<SidebarMenuButton tooltip={tooltip} isActive={!open && active} />}
-				>
-					{icon}
-					{name}
-					<ChevronRight
-						className="ml-auto transition-transform group-aria-expanded/menu-button:rotate-90"
-						aria-hidden
-					/>
-				</CollapsibleTrigger>
-			)}
+			{button}
 			{shown && (
 				// The button names the count for a screen reader; this is its picture, clear of the chevron.
 				<SidebarMenuBadge aria-hidden className="right-7">
