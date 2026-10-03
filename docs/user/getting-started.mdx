@@ -38,9 +38,11 @@ The navigation changes with what is set up in your workspace.
 | **Activity** | See what needs you, what you did over a time range, and the work you did it on. A workspace that does not review practices opens here. |
 | **Workspace activity** | See what everyone in the workspace, or one team, worked on, member by member. |
 | **Teams** | See contributors grouped by team. |
-| **Heph** | Start a chat about your feedback and recent work. Heph answers once your workspace has set up a model for it. |
+| **Heph** | For workspace members only. Talk about feedback and recent work, within your AI choice, when a matching model is set up. An instance admin who is not a member gets no Heph in that workspace. |
+| **Your AI choice** | Choose In-house, Cloud or No AI for your account, and connect the accounts this workspace requires. |
+| **Instance admin** | Operate the instance, if you are an instance admin. This does not grant workspace membership. |
 | **Administration** | Configure the workspace if you are a workspace admin. |
-| **User settings** | Manage your account, linked identities, sessions, and personal preferences. |
+| **User settings** | Manage [your AI choice, linked accounts, notifications, sessions, and account data](./user-settings). |
 
 Something that is not set up in your workspace does not appear in the navigation. See
 [Activity](./activity) for the two activity pages. On your Practice profile, the chip beside the title
@@ -52,7 +54,9 @@ opens [the reviews that recorded something about your work](./practice-profile#r
 
 When practice reviews are enabled, Hephaestus reviews eligible pull requests, merge requests, and issues
 in connected repositories. When it delivers feedback, the feedback explains the practice it observed,
-points to evidence, and suggests a next step. A completed review does not always produce a public comment.
+points to evidence, and suggests a next step. Feedback on the work waits for a workspace admin's approval by default. A completed review does not always produce a public comment.
+Workspace admins find the workspace-wide history under **Administration → Practices → Practice reviews → Work**;
+there is no separate Review activity page for members.
 
 See [Practice feedback](./ai-code-review) for triggers, comment structure, and the personal comment-delivery setting.
 

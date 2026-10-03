@@ -15,6 +15,7 @@ This guide is for developers who use Hephaestus and workspace admins who set it 
 - Uses AI to read pull requests, merge requests, issues and the conversation around them against the practices configured for your workspace.
 - Names the practice each piece of feedback came from, and points to the evidence in your work.
 - Says what went well as well as what could be better, and suggests a way to get there.
+- Feedback on the work waits for a workspace admin's approval by default.
 - Reaches you where you will see it: on the work itself, on your own practice pages, or in your next conversation with Hephaestus.
 
 ### Talking it through
@@ -22,6 +23,12 @@ This guide is for developers who use Hephaestus and workspace admins who set it 
 - In chat Hephaestus goes by **Heph**.
 - Draws on recent project activity, the feedback you have received, team conversations, and documentation as context.
 - Available in the web app and, when connected, in a Slack direct message.
+
+### Practice profile
+
+Your [Practice profile](./practice-profile) is the workspace home when it reviews practices.
+It shows how your own work stands, the evidence behind it, and your private feedback.
+A workspace that does not review practices opens on Activity.
 
 ### Activity
 
@@ -55,8 +62,10 @@ Read [Your data in Hephaestus](./privacy.mdx) to understand what connected servi
 ## Quick start
 
 1. Sign in with one of the providers offered by your deployment.
-2. Choose a workspace you belong to.
-3. Work normally in a connected GitHub or GitLab repository.
+2. Choose a workspace you belong to. On your first visit, choose **In-house**, **Cloud**, or **No AI**
+   when asked, and connect any required accounts. You can change your answer in **User settings**.
+3. Open your **Practice profile**, or **Activity** if this workspace does not review practices.
+   Work normally in a connected GitHub or GitLab repository.
 4. Open feedback from a contribution when practice reviews are enabled.
 5. Ask a follow-up question about any feedback you receive.
 
