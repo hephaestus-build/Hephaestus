@@ -29,8 +29,8 @@ import {
 import { PracticeDetailLevel } from "@/components/practice-profile/PracticeDetailLevel";
 import { PracticeGroupDetailLevel } from "@/components/practice-profile/PracticeGroupDetailLevel";
 import {
-	type AcrossWorkspaceWindow,
 	DEFAULT_WINDOW,
+	WINDOW_VALUES,
 } from "@/components/practices-across-the-workspace/across-workspace-copy";
 import {
 	PracticesAcrossTheWorkspacePage,
@@ -50,12 +50,6 @@ import { pageHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
-const WINDOWS = [
-	"ALL_TIME",
-	"DAYS_30",
-	"DAYS_90",
-] as const satisfies readonly AcrossWorkspaceWindow[];
-
 /**
  * The levels the page opens over itself: a practice group across the workspace, the reader's own
  * group over it, and one practice over either, as the profile drills down. Nothing here leaves for
@@ -68,7 +62,7 @@ const LEVEL_PARAMS = ["practiceTab"] as const;
 
 const searchSchema = z
 	.object({
-		window: z.enum(WINDOWS).default(DEFAULT_WINDOW).catch(DEFAULT_WINDOW),
+		window: z.enum(WINDOW_VALUES).default(DEFAULT_WINDOW).catch(DEFAULT_WINDOW),
 		practiceTab: z.enum(PRACTICE_TABS).default(DEFAULT_PRACTICE_TAB).catch(DEFAULT_PRACTICE_TAB),
 	})
 	.extend(detailStackSchema(LEVEL_KINDS).shape);

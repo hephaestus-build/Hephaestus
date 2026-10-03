@@ -1,5 +1,6 @@
 import type { PracticesAcrossWorkspace, WorkspaceSplit } from "@/api/types.gen";
 import type { FilterOption } from "@/components/common/FilterToggle";
+import { statusValues } from "@/components/common/status-def";
 import {
 	PRACTICE_GROUP_STANDING_DEFS,
 	type PracticeGroupStandingValue,
@@ -7,33 +8,45 @@ import {
 
 export type AcrossWorkspaceWindow = PracticesAcrossWorkspace["window"];
 
-/** The window toggle's options, shortest first, as Apple Health orders its ranges. */
-export const WINDOW_OPTIONS = [
-	{ value: "DAYS_30", label: "Last 30 days", shortLabel: "30 days" },
-	{ value: "DAYS_90", label: "Last 90 days", shortLabel: "90 days" },
-	{ value: "ALL_TIME", label: "All time", shortLabel: "All time" },
-] as const satisfies readonly FilterOption<AcrossWorkspaceWindow>[];
+interface WindowDef {
+	/** The toggle's label and the section's heading. */
+	label: string;
+	/** The toggle's label where the row is short of room. */
+	shortLabel: string;
+	/** The window as the tail of a sentence: "observed here so far". */
+	phrase: string;
+}
+
+/**
+ * Every window the page reads, the one home of its words, shortest first as Apple Health orders
+ * its ranges. A window the server adds fails to compile here rather than falling back unseen.
+ */
+const WINDOW_DEFS: Record<AcrossWorkspaceWindow, WindowDef> = {
+	DAYS_30: { label: "Last 30 days", shortLabel: "30 days", phrase: "in the last 30 days" },
+	DAYS_90: { label: "Last 90 days", shortLabel: "90 days", phrase: "in the last 90 days" },
+	ALL_TIME: { label: "All time", shortLabel: "All time", phrase: "so far" },
+};
+
+/** Every window, in the toggle's order, for the route's search schema. */
+export const WINDOW_VALUES = statusValues(WINDOW_DEFS);
+
+/** The window toggle's options. */
+export const WINDOW_OPTIONS: readonly FilterOption<AcrossWorkspaceWindow>[] = WINDOW_VALUES.map(
+	(value) => ({
+		value,
+		label: WINDOW_DEFS[value].label,
+		shortLabel: WINDOW_DEFS[value].shortLabel,
+	}),
+);
 
 /** The window the page opens on. */
 export const DEFAULT_WINDOW: AcrossWorkspaceWindow = "DAYS_30";
 
-const WINDOW_PHRASES: Record<AcrossWorkspaceWindow, string> = {
-	ALL_TIME: "so far",
-	DAYS_30: "in the last 30 days",
-	DAYS_90: "in the last 90 days",
-};
-
-const WINDOW_HEADINGS: Record<AcrossWorkspaceWindow, string> = {
-	ALL_TIME: "All time",
-	DAYS_30: "Last 30 days",
-	DAYS_90: "Last 90 days",
-};
-
 /** The window as the tail of a sentence: "observed here so far". */
-export const windowPhrase = (window: AcrossWorkspaceWindow): string => WINDOW_PHRASES[window];
+export const windowPhrase = (window: AcrossWorkspaceWindow): string => WINDOW_DEFS[window].phrase;
 
 /** The window as a section heading. */
-export const windowHeading = (window: AcrossWorkspaceWindow): string => WINDOW_HEADINGS[window];
+export const windowHeading = (window: AcrossWorkspaceWindow): string => WINDOW_DEFS[window].label;
 
 /** What the page is for and how a standing moves, under its title. */
 export const PAGE_PURPOSE =
