@@ -90,7 +90,7 @@ the type check on its own. Lint holds tests to the web app's Vitest policy: narr
   the row whose Hephaestus button the reader presses. No other page, and never page content. The
   onboarding, options, privacy docs and store listing say so.
 - **List rows are found by the provider's own title hooks** (`LIST_TITLE` in `anchors.ts`).
-  Never use any link in a list item.
+  Never find a list row by any link in a list item.
   A row can carry other links, and a page can carry other lists.
   The inspect control goes after the title's heading.
   It stops the row's own click and key handlers.
