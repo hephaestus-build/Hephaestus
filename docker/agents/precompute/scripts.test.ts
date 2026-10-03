@@ -329,3 +329,28 @@ void it("issue-reference syntax in templates remains a candidate rather than an 
 		/all establish the link|motivating-issue reference IS present/u,
 	);
 });
+
+void it("omits an uncaptured issue inventory count while preserving a captured empty listing", async () => {
+	const run = await loadScript("issue-scoped-to-single-concern");
+	const cases: [string | undefined, number | undefined][] = [
+		[undefined, undefined],
+		["{}", undefined],
+		['{"issues":"unreadable"}', undefined],
+		['{"issues":[]}', 0],
+		['{"issues":[{"number":7,"title":"First screen"}]}', 1],
+	];
+	for (const [source, count] of cases) {
+		const context = await createTempDir("pc-issue-inventory-");
+		if (source !== undefined) {
+			await writeFile(path.join(context, "project_inventory.json"), source);
+		}
+		const result = await run(
+			"",
+			new Map(),
+			{ title: "First screen", body: "Show the signed-in name." },
+			context,
+		);
+		assert.equal(Object.hasOwn(result.metrics, "siblingIssueCount"), count !== undefined);
+		assert.equal(result.metrics.siblingIssueCount, count);
+	}
+});

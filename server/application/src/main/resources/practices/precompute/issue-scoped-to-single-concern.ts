@@ -24,12 +24,17 @@ export default async function issueScopedToSingleConcern(
 	const rollup = subIssueRollup(m);
 	const inventory = await readProjectInventory(contextDir);
 
+	let inventoryDirection = "project_inventory.json was not captured.";
+	if (inventory !== null) {
+		inventoryDirection =
+			inventory.issues === undefined
+				? "project_inventory.json does not report an issue listing."
+				: `project_inventory.json lists ${String(inventory.issues.length)} issue(s)${inventory.truncated === true ? " (a truncated listing)" : ""}; compare titles and bodies, never the count.`;
+	}
 	const directions = [
 		...bodyFact(shape),
 		`Captured: ${String(checkboxes)} task-list item(s), ${String(issueMentions)} issue-number mention(s), ${rollup.text}; labels ${labels.join(", ") || "none"}. Judge the standard once over the title and the whole body; these counts locate text and decide nothing.`,
-		inventory === null
-			? "project_inventory.json was not captured."
-			: `project_inventory.json lists ${String(inventory.issues?.length ?? 0)} issue(s)${inventory.truncated === true ? " (a truncated listing)" : ""}; compare titles and bodies, never the count.`,
+		inventoryDirection,
 	];
 
 	const hints: Hint[] = [];
@@ -41,7 +46,7 @@ export default async function issueScopedToSingleConcern(
 			checkboxes,
 			childIssueRefs: issueMentions,
 			...rollup.metrics,
-			siblingIssueCount: inventory?.issues?.length ?? 0,
+			...(inventory?.issues === undefined ? {} : { siblingIssueCount: inventory.issues.length }),
 		},
 		directions,
 	};

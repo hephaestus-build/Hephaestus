@@ -19,7 +19,12 @@ async function stage(commits: { sha: string; message: string }[]) {
 	mkdirSync(path.join(root, "context"), { recursive: true });
 	writeFileSync(path.join(root, "package.json"), '{"type":"module"}\n');
 	symlinkSync(path.join(repositoryRoot, "docker/agents/precompute/lib"), path.join(root, "lib"));
-	writeFileSync(path.join(root, "context/commits.json"), JSON.stringify({ commits }));
+	writeFileSync(
+		path.join(root, "context/commits.json"),
+		JSON.stringify({
+			commits: commits.map((commit) => ({ ...commit, parents: ["p"], files: [] })),
+		}),
+	);
 	const staged = path.join(root, "practices/ready-and-traceable-handoff.ts");
 	cpSync(
 		path.join(

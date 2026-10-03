@@ -17,7 +17,7 @@ void test("captured commits distinguish empty history from missing or malformed 
 	const root = mkdtempSync(path.join(tmpdir(), "captured-commits-"));
 	try {
 		assert.equal(await readCapturedCommits(root), null);
-		for (const source of ["{", '{"commits":[null]}', '{"commits":{}}']) {
+		for (const source of ["{", '{"commits":[null]}', '{"commits":{}}', '{"commits":[{}]}']) {
 			writeFileSync(path.join(root, "commits.json"), source);
 			assert.equal(await readCapturedCommits(root), null);
 			assert.deepEqual(await readCommits(root), []);
@@ -26,7 +26,9 @@ void test("captured commits distinguish empty history from missing or malformed 
 		assert.deepEqual(await readCapturedCommits(root), []);
 		writeFileSync(
 			path.join(root, "commits.json"),
-			JSON.stringify({ commits: [{ sha: "1234567", authoredAt: "" }] }),
+			JSON.stringify({
+				commits: [{ sha: "1234567", message: "", parents: [], files: [], authoredAt: "" }],
+			}),
 		);
 		const captured = await readCapturedCommits(root);
 		assert.equal(captured?.[0]?.authoredAt, "");
@@ -167,7 +169,13 @@ void test("one authored commit is still a history to judge, and an unread commit
 			assert.equal(single.hints.length, 1);
 			assert.match(single.directions[0] ?? "", /^1 authored commit\(s\), one row each/u);
 			assert.doesNotMatch(single.directions.join(" "), /no partition|nothing to judge/u);
-			for (const source of ["{", '{"commits":[null]}']) {
+			for (const source of [
+				"{",
+				'{"commits":[null]}',
+				'{"commits":[{}]}',
+				'{"commits":[{"sha":"1234567","message":"","parents":"missing","files":[]}]}',
+				'{"commits":[{"sha":"1234567","message":"","parents":[],"files":[{}]}]}',
+			]) {
 				writeFileSync(path.join(contextDir, "commits.json"), source);
 				const unread = await script(path.join(root, "repo"), new Map(), metadata, contextDir);
 				assert.deepEqual(unread.hints, []);

@@ -87,6 +87,27 @@ export async function readCapturedCommits(
 	) {
 		return null;
 	}
+	if (
+		!parsed.commits.every(
+			(commit) =>
+				typeof commit.sha === "string" &&
+				commit.sha.trim() !== "" &&
+				typeof commit.message === "string" &&
+				Array.isArray(commit.parents) &&
+				commit.parents.every((parent) => typeof parent === "string" && parent !== "") &&
+				Array.isArray(commit.files) &&
+				commit.files.every(
+					(file) =>
+						isJsonObject(file) &&
+						typeof file.path === "string" &&
+						file.path !== "" &&
+						typeof file.status === "string" &&
+						file.status !== "",
+				),
+		)
+	) {
+		return null;
+	}
 	const lines = (source ?? "").split("\n");
 	return parsed.commits.map((commit) => {
 		const sha = text(commit.sha);
