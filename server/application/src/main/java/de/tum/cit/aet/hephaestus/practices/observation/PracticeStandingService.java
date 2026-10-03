@@ -129,16 +129,24 @@ public class PracticeStandingService {
         List<Observation> window = developerIds.isEmpty()
                 ? List.of()
                 : observationRepository.findByWorkspaceBetween(workspaceId, developerIds, since, until);
-        Set<UUID> visible =
-                visibilityPolicy.permitsAll(workspaceId, window, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        Map<Long, List<Observation>> byDeveloper =
-                window.stream().collect(Collectors.groupingBy(Observation::getAboutUserId));
+        // Each claim narrowed to its latest run first, so the gate reads only the rows a snapshot can use.
+        Map<Long, List<Observation>> latestByDeveloper = new LinkedHashMap<>();
+        window.stream()
+                .collect(Collectors.groupingBy(Observation::getAboutUserId))
+                .forEach((developerId, observations) ->
+                        latestByDeveloper.put(developerId, LatestRun.perClaim(observations)));
+        Set<UUID> visible = visibilityPolicy.permitsAll(
+                workspaceId,
+                latestByDeveloper.values().stream().flatMap(List::stream).toList(),
+                SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         Map<Long, StandingSnapshot> snapshots = new LinkedHashMap<>();
         for (Long developerId : developerIds) {
             snapshots.put(
                     developerId,
                     snapshot(
-                            latestVisible(byDeveloper.getOrDefault(developerId, List.of()), visible),
+                            latestByDeveloper.getOrDefault(developerId, List.of()).stream()
+                                    .filter(observation -> visible.contains(observation.getId()))
+                                    .toList(),
                             eligibility,
                             Map.of()));
         }
