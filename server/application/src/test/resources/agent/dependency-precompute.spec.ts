@@ -132,6 +132,40 @@ void test("a pom.xml version moved away from its artifactId is not a dropped pin
 	}
 });
 
+void test("raw manifest lines beyond the hint cap are counted but reported as not listed", async () => {
+	const { root, script } = await stage();
+	try {
+		const artifacts = Array.from(
+			{ length: 45 },
+			(_, i) => `      <artifactId>lib-${i}</artifactId>`,
+		);
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([
+				[
+					"package.json",
+					diffFile("package.json", [
+						'    "a": "^1.0.0",',
+						'    "b": "^2.0.0",',
+						'    "c": "^3.0.0",',
+					]),
+				],
+				["pom.xml", diffFile("pom.xml", artifacts)],
+			]),
+			metadata,
+		);
+		const raw = result.hints.filter((h) => h.pattern === "candidate:raw manifest line");
+		assert.equal(result.hints.length, 40);
+		assert.equal(result.metrics.onlyAdded, 3);
+		assert.equal(result.metrics.unpairedManifestLines, 45);
+		assert.equal(result.metrics.rawLinesListed, 37);
+		assert.equal(raw.length, 37);
+		assert.equal(raw.at(-1)?.context, "+ <artifactId>lib-36</artifactId>");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 void test("metadata lines shaped like dependencies stay candidates with their constraint delta", async () => {
 	const { root, script } = await stage();
 	try {

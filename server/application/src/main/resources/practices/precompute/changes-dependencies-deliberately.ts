@@ -447,6 +447,8 @@ export default function changesDependenciesDeliberately(
 	}
 
 	const lockfilePresent = checkoutLockfiles.length > 0 || touchedLockfiles.size > 0;
+	const listed = hints.slice(0, 40);
+	const rawLinesListed = listed.filter((h) => h.pattern === "candidate:raw manifest line").length;
 
 	const directions: string[] = [];
 	if (changedManifests.size > 0) {
@@ -455,7 +457,7 @@ export default function changesDependenciesDeliberately(
 		);
 		if (unpairedManifestLines > 0) {
 			directions.push(
-				`${unpairedManifestLines} changed dependency line(s) in a pom.xml or XcodeGen project.yml are listed as raw lines with no added, removed or pin label: these manifests spread one dependency over several lines and the diff shows only the changed ones. Read the manifest around each to tell an addition from a version change or a reordering; a pom.xml coordinate may also be a build plugin or a parent/BOM rather than a dependency.`,
+				`${unpairedManifestLines} changed dependency line(s) in a pom.xml or XcodeGen project.yml carry no added, removed or pin label${rawLinesListed < unpairedManifestLines ? `, and only ${rawLinesListed} of them are listed as raw lines here — read the manifest diffs for the other ${unpairedManifestLines - rawLinesListed}` : " and are listed as raw lines"}: these manifests spread one dependency over several lines and the diff shows only the changed ones. Read the manifest around each to tell an addition from a version change or a reordering; a pom.xml coordinate may also be a build plugin or a parent/BOM rather than a dependency.`,
 			);
 		}
 		if (lockfilePresent) {
@@ -470,7 +472,7 @@ export default function changesDependenciesDeliberately(
 	}
 
 	return {
-		hints: hints.slice(0, 40),
+		hints: listed,
 		metrics: {
 			manifestsChanged: changedManifests.size,
 			onlyAdded,
@@ -479,6 +481,7 @@ export default function changesDependenciesDeliberately(
 			pinsDropped,
 			bumped,
 			unpairedManifestLines,
+			rawLinesListed,
 			lockfilesTouched: touchedLockfiles.size,
 			lockfilePresent: lockfilePresent ? 1 : 0,
 		},

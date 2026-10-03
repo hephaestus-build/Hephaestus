@@ -204,7 +204,7 @@ void test("the input practice lists edge constructs in code only, and none the l
 	}
 });
 
-void test("the untrusted-input practice pairs a source with a rendering call, never with a native image template mode", async () => {
+void test("the untrusted-input practice pairs a source with a rendering call, never with a native image template mode or a template constructor", async () => {
 	const { root, script } = await stage("validates-and-escapes-untrusted-input");
 	try {
 		const result = await script(
@@ -226,6 +226,15 @@ void test("the untrusted-input practice pairs a source with a rendering call, ne
 					'name = request.args.get("name")',
 					'return render_template_string("Hello " + name)',
 				]),
+				added("server/compile.ts", [
+					"const name = req.query.name;",
+					"const template = Handlebars.compile(source);",
+				]),
+				added("server/page.py", [
+					'name = request.args.get("name")',
+					'template = jinja2.Template("Hello {{ name }}")',
+					"return template.render(name=name)",
+				]),
 			]),
 			metadata,
 		);
@@ -238,6 +247,7 @@ void test("the untrusted-input practice pairs a source with a rendering call, ne
 					"source→sink: UserDefaults / FileManager / env → WKWebView loadHTMLString / evaluateJavaScript",
 				],
 				["server/views.py", 2, "source→sink: request/req param → template render"],
+				["server/page.py", 3, "source→sink: request/req param → template render"],
 			],
 		);
 	} finally {
