@@ -330,7 +330,7 @@ scope and approval boundary. These categories belong in the full DPIA and the pe
 
 An account's **No AI**, **In-house** or **Cloud** choice applies across the instance's workspaces to
 practice review and Heph, including Slack. Model eligibility also depends on workspace policy and
-the declared operator. No AI stops new requests, not source sync or requests already sent. This
+the declared operator. No AI stops new reviews about that developer, Heph requests and feedback delivery, not source sync or requests already sent. Person-scoped history is checked against the person's choice, but shared repository content can remain in other developers' review context. This
 product choice is separate from research consent and is not the legal basis for underlying processing.
 Slack App Home reflects mentor eligibility and keeps channel-message controls available when Heph
 is refused. Linking Slack alone grants neither research participation nor unrestricted AI use.

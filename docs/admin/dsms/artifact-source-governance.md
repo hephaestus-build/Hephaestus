@@ -73,6 +73,11 @@ caps. Version 1.3.0 records this approval for automated practice review. It does
 approval. The existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks still apply. The engineering implementation ships in [#2335](https://github.com/hephaestus-build/Hephaestus/pull/2335). The full DPIA is indicated for this combined scope; a versioned engineering decision is not authority to activate it for TUM.
 The folder is not permission to disclose a refused record or to retain a source after its deletion boundary.
 
+The member AI choice gates reviews about the developer and access to their person-scoped history.
+It is not a per-person filter on shared repository context: another developer's review can still
+read that content. Treat this separately in necessity, transparency and objection handling; do not
+present No AI as removal from every model input.
+
 The wider Slack-thread and person-scoped history scope must be part of the pending TUM privacy-notice review in
 [#1377](https://github.com/hephaestus-build/Hephaestus/issues/1377). That legal-review item remains open and is owned
 by the maintainer. Engineering approval does not close it.

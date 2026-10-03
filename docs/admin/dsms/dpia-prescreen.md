@@ -123,7 +123,7 @@ controller's assessment. In particular, the maintainer approval in
 - [DSK mandatory DPIA list, version 1.1](https://www.datenschutzkonferenz-online.de/media/ah/20181017_ah_DSK_DSFA_Muss-Liste_Version_1.1_Deutsch.pdf): cross-check evaluation and monitoring in employment; non-public operators must check its direct applicability.
 
 Adversarial cases for the full assessment include a course leader reading disputes, a reviewer who
-never signed in appearing in a colleague's evidence, sensitive content in a long-lived Slack thread,
+never signed in appearing in a colleague's evidence, shared repository evidence containing work by someone who chose No AI, sensitive content in a long-lived Slack thread,
 a revoked repository permission leaving a retained mirror, and a backup restore that reintroduces
 erased data. For each case, record the audience, lawful basis, prevention, rights path and remaining
 risk. Do not infer low impact from the absence of automated decisions.
