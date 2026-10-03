@@ -175,18 +175,28 @@ for (const [group, test, surfaces] of [
 				// the server is busy.
 				test.setTimeout(120_000);
 				await open(page, surface.path);
-				await expect(page).toHaveTitle(PAGE_TITLE);
-				expect(await loopingAnimations(page), "loops with no way to stop").toEqual([]);
 
-				const walk = await walkTabOrder(page);
-				expect(walk.problems, "focus").toEqual([]);
-				expect(walk.leftDocument, "Tab never leaves the page").toBe(true);
-
-				expect(await axeViolations(page), "axe, light").toEqual([]);
-				await reloadInDarkScheme(page);
-				expect(await axeViolations(page), "axe, dark").toEqual([]);
-
-				await expectNoNarrowOverflow(page);
+				await test.step("the page has a title of its own", async () => {
+					await expect(page).toHaveTitle(PAGE_TITLE);
+				});
+				await test.step("nothing loops with no way to stop it", async () => {
+					expect(await loopingAnimations(page)).toEqual([]);
+				});
+				await test.step("Tab shows where it is and can leave", async () => {
+					const walk = await walkTabOrder(page);
+					expect(walk.problems).toEqual([]);
+					expect(walk.leftDocument).toBe(true);
+				});
+				await test.step("axe, light", async () => {
+					expect(await axeViolations(page)).toEqual([]);
+				});
+				await test.step("axe, dark", async () => {
+					await reloadInDarkScheme(page);
+					expect(await axeViolations(page)).toEqual([]);
+				});
+				await test.step("no sideways scrolling at 320 and 640 CSS pixels", async () => {
+					await expectNoNarrowOverflow(page);
+				});
 			});
 		}
 	});
