@@ -287,6 +287,49 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
         assertThat(practice.getPrecomputeScript()).isNull();
     }
 
+    @Test
+    @WithAdminUser
+    void shouldAdoptTheClosedIssueRecordPracticeAsReviewableBesideTheWithdrawnAtCloseCopy() {
+        ensureAdminMembership(workspace);
+        String historical = "issue-closed-with-unmet-outcome";
+        String current = "closed-issue-outcome-recorded";
+        for (String slug : List.of(historical, current)) {
+            String etag = required(webTestClient
+                    .get()
+                    .uri(BASE + "/" + slug, workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .returnResult(Void.class)
+                    .getResponseHeaders()
+                    .getETag());
+            webTestClient
+                    .post()
+                    .uri(BASE + "/" + slug, workspace.getWorkspaceSlug())
+                    .headers(headers -> {
+                        TestAuthUtils.withCurrentUser().accept(headers);
+                        headers.set(HttpHeaders.IF_MATCH, etag);
+                    })
+                    .exchange()
+                    .expectStatus()
+                    .isCreated()
+                    .expectBody(Void.class);
+        }
+
+        var withdrawn = practiceRepository
+                .findByWorkspaceIdAndSlug(workspace.getId(), historical)
+                .orElseThrow();
+        var adopted = practiceRepository
+                .findByWorkspaceIdAndSlug(workspace.getId(), current)
+                .orElseThrow();
+        assertThat(withdrawn.getAutonomy()).isEqualTo(PracticeAutonomy.OFF);
+        assertThat(adopted.getAutonomy()).isEqualTo(PracticeAutonomy.HUMAN_APPROVAL);
+        assertThat(adopted.getAutomatedReviewPolicy().automatedReview().canAttemptAutomatedReview())
+                .isTrue();
+        assertThat(adopted.getReviewWhen()).isEqualTo(java.util.Map.of("state", java.util.Set.of("CLOSED")));
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     @WithAdminUser

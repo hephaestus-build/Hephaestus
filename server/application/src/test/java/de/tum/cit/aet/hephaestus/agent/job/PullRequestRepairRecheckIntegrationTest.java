@@ -175,6 +175,9 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     private IssueRepository issueRepository;
 
     @Autowired
+    private de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision issueEvidenceRevision;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @Autowired
@@ -482,6 +485,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 gate,
                 workspaceResolver,
                 recorder,
+                issueEvidenceRevision,
                 transactionManager);
         for (String body : List.of("- [x] Confirm repair", "- [x] Confirm repair", "- [x] Confirm repair and test")) {
             transactions.executeWithoutResult(status -> {

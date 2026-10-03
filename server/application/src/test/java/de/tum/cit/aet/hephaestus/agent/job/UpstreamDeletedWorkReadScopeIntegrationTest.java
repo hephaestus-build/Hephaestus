@@ -38,6 +38,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
@@ -100,6 +101,9 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
 
     @Autowired
     private IssueRepository issueRepository;
+
+    @Autowired
+    private IssueEvidenceRevision issueEvidenceRevision;
 
     @Autowired
     private MentorContextQueryRepository mentorContextQueryRepository;
@@ -356,6 +360,7 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
                 reviewGate,
                 workspaceResolver,
                 signalRecorder,
+                issueEvidenceRevision,
                 java.util.Objects.requireNonNull(transactionTemplate.getTransactionManager()));
         tombstoneIssue();
 
@@ -372,7 +377,9 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
         var decision = new GateDecision.Detect(workspace, List.of(), 1, TriggerMode.AUTO);
         when(reviewGate.evaluateIssue(any(), anyLong(), eq(ScmSignals.ISSUE_OPENED), eq(TriggerMode.AUTO)))
                 .thenReturn(decision);
-        resubmit(new IssueSignalResubmitter(jobs, issueRepository, reviewGate, signalRecorder), held);
+        resubmit(
+                new IssueSignalResubmitter(jobs, issueRepository, reviewGate, signalRecorder, issueEvidenceRevision),
+                held);
 
         var request = ArgumentCaptor.forClass(IssueReviewSubmissionRequest.class);
         verify(jobs)
@@ -420,7 +427,8 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
     }
 
     private IssueSignalResubmitter issueResubmitter() {
-        return new IssueSignalResubmitter(agentJobService, issueRepository, gate, signalRecorder);
+        return new IssueSignalResubmitter(
+                agentJobService, issueRepository, gate, signalRecorder, issueEvidenceRevision);
     }
 
     /** Supplies the transaction the bean's own {@code REQUIRES_NEW} would open around the ledger writes. */

@@ -145,13 +145,22 @@ Issue practices bind to three lifecycle occasions:
 
 The snapshot is the title, body, native type, labels, assignees, milestone, state, and state reason — the
 fields the issue evidence a bundled practice reads is built from. Labels and assignees are sorted while the
-digest is built, so provider ordering does not change the revision.
+digest is built, so provider ordering does not change the revision. A closed issue's snapshot also covers its
+mirrored discussion: each comment's id, author, body and edit time, leaving out empty comments and those carrying
+Hephaestus's own marker. A comment written, edited or deleted on a closed issue, live or by sync, is translated
+into an update of that issue in the comment's transaction. Each snapshot change locks the issue row
+`FOR NO KEY UPDATE` (which a new comment's foreign-key `FOR KEY SHARE` does not conflict with) and reads the
+issue again before computing the digest, so concurrent writers record the committed body and comments.
 
 Updates review the current snapshot of both open and closed issues. A later outcome confirmation or repair
-in a closed issue's body can therefore occasion another update review, through the same coalescing and
-current-snapshot fences. It does not repeat the close occasion or establish what the body said at the close;
-only practices bound to updates are selected. A closed issue's title or body change also retains the separate
-repair occasion for assessments of merged pull or merge requests that close it.
+in a closed issue's body or discussion can therefore occasion another update review, through the same
+coalescing and current-snapshot fences. It does not repeat the close occasion or establish what the record said
+at the close; only practices bound to updates are selected. A closed issue's title or body change also retains
+the separate repair occasion for assessments of merged pull or merge requests that close it.
+
+A close review is admitted with the issue's snapshot token. If the token has moved by the time its evidence is
+captured, because the issue or its closed discussion changed or it was reopened, capture stops before writing evidence files and the review records no observation; the update occasion that moved the token reviews the current
+record. Publication checks the same token again under the issue row lock.
 
 Only `scm.issue.updated` keys on the whole snapshot. The other two deliberately do not, because a past-work
 campaign or a recurring sweep re-derives their keys from the artifact as it stands: an opening keys on the prose and a

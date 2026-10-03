@@ -26,9 +26,11 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
@@ -81,6 +83,9 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
     @Mock
     private PlatformTransactionManager transactionManager;
 
+    @Mock
+    private IssueCommentRepository issueCommentRepository;
+
     private IssueAgentJobEventListener listener;
 
     private Workspace owningWorkspace;
@@ -94,6 +99,7 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
                 reviewGate,
                 workspaceResolver,
                 signalRecorder,
+                new IssueEvidenceRevision(issueCommentRepository),
                 transactionManager);
         lenient()
                 .when(transactionManager.getTransaction(any()))

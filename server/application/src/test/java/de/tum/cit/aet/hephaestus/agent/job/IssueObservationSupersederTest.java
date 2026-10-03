@@ -14,10 +14,14 @@ import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -26,10 +30,13 @@ import org.mockito.ArgumentCaptor;
 class IssueObservationSupersederTest extends BaseUnitTest {
     private final IssueRepository issues = mock(IssueRepository.class);
     private final ObservationRepository observations = mock(ObservationRepository.class);
-    private final IssueObservationSuperseder superseder = new IssueObservationSuperseder(issues, observations);
+    private final LockedIssueRow lockedRow = mock(LockedIssueRow.class);
+    private final IssueObservationSuperseder superseder = new IssueObservationSuperseder(
+            issues, observations, new IssueEvidenceRevision(mock(IssueCommentRepository.class)), lockedRow);
 
     @Test
     void shouldRetireEarlierClaimsOnEachTransitionIncludingReturnToTheSameContent() {
+        when(lockedRow.lockAndRead(42L)).thenReturn(Optional.of(issue()));
         when(issues.advanceReviewSnapshot(eq(42L), any(), any())).thenReturn(1);
 
         superseder.onUpdated(update("first", Set.of("title")));
@@ -45,8 +52,22 @@ class IssueObservationSupersederTest extends BaseUnitTest {
     @Test
     void shouldNotRetireClaimsForAnUnrelatedMirrorEdit() {
         superseder.onUpdated(update("first", Set.of("commentsCount")));
+        verify(lockedRow, never()).lockAndRead(any(Long.class));
         verify(issues, never()).advanceReviewSnapshot(any(Long.class), any(), any());
         verify(observations, never()).supersedeIssueObservations(any(Long.class), any());
+    }
+
+    private static Issue issue() {
+        Repository repository = new Repository();
+        repository.setId(1L);
+        repository.setNameWithOwner("owner/repo");
+        Issue issue = new Issue();
+        issue.setId(42L);
+        issue.setNumber(1);
+        issue.setTitle("current");
+        issue.setState(Issue.State.OPEN);
+        issue.setRepository(repository);
+        return issue;
     }
 
     private static ScmDomainEvent.IssueUpdated update(String title, Set<String> fields) {

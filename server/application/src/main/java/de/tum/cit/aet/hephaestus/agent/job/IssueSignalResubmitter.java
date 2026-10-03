@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
@@ -32,16 +33,19 @@ public class IssueSignalResubmitter implements PendingSignalResubmitter {
     private final IssueRepository issueRepository;
     private final ReviewGate reviewGate;
     private final SignalRecorder signalRecorder;
+    private final IssueEvidenceRevision revisions;
 
     public IssueSignalResubmitter(
             AgentJobService agentJobService,
             IssueRepository issueRepository,
             ReviewGate reviewGate,
-            SignalRecorder signalRecorder) {
+            SignalRecorder signalRecorder,
+            IssueEvidenceRevision revisions) {
         this.agentJobService = agentJobService;
         this.issueRepository = issueRepository;
         this.reviewGate = reviewGate;
         this.signalRecorder = signalRecorder;
+        this.revisions = revisions;
     }
 
     @Override
@@ -73,7 +77,7 @@ public class IssueSignalResubmitter implements PendingSignalResubmitter {
         }
 
         if (key.signalName().equals(ScmSignals.ISSUE_UPDATED)
-                && !key.revision().equals(ScmSignals.issueUpdatedRevision(ScmEventPayload.IssueData.from(issue)))) {
+                && !key.revision().equals(revisions.of(ScmEventPayload.IssueData.from(issue)))) {
             signalRecorder.markRefused(key, SignalStateReason.COALESCED);
             return;
         }

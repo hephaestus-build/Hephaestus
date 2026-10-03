@@ -9,6 +9,8 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRevision;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,9 +62,15 @@ public final class ScmSignals {
     public static final SignalName ISSUE_CLOSED = SignalName.of("scm.issue.closed");
     public static final SignalName ISSUE_MANUAL_REVIEW = SignalName.of("scm.issue.manual_review");
 
+    /**
+     * The field an issue update names when only a closed issue's discussion moved. No provider sends it; the comment
+     * events of a closed issue are translated into it.
+     */
+    public static final String ISSUE_DISCUSSION_FIELD = "discussion";
+
     /** Fields used by issue review evidence; other mirror changes do not retire its observations. */
-    public static final Set<String> REVIEWABLE_ISSUE_FIELDS =
-            Set.of("title", "body", "state", "stateReason", "issueType", "milestone", "relationships");
+    public static final Set<String> REVIEWABLE_ISSUE_FIELDS = Set.of(
+            "title", "body", "state", "stateReason", "issueType", "milestone", "relationships", ISSUE_DISCUSSION_FIELD);
 
     private static final Map<String, SignalName> BY_TRIGGER_EVENT = Map.of(
             TriggerEventNames.PULL_REQUEST_CREATED,
@@ -205,9 +213,18 @@ public final class ScmSignals {
         return Optional.of(new SignalKey(workspaceId, issue.id(), signal, issueUpdatedRevision(issue)));
     }
 
-    /** Canonical issue evidence identity, shared by occasion discovery and the capture fence. */
+    /**
+     * The issue's own evidence identity. Occasion discovery and the capture fence read it through {@link
+     * IssueEvidenceRevision}, which adds a closed issue's discussion.
+     */
     public static SignalRevision issueUpdatedRevision(ScmEventPayload.IssueData issue) {
-        return SignalRevision.ofContentDigest(
+        return issueUpdatedRevision(issue, List.of());
+    }
+
+    /** {@link #issueUpdatedRevision(ScmEventPayload.IssueData)} with further framed parts after the issue's own. */
+    static SignalRevision issueUpdatedRevision(ScmEventPayload.IssueData issue, List<@Nullable String> discussion) {
+        List<@Nullable String> parts = new ArrayList<>();
+        parts.addAll(Arrays.<@Nullable String>asList(
                 issue.title(),
                 issue.body(),
                 issue.state().name(),
@@ -215,7 +232,9 @@ public final class ScmSignals {
                 issue.issueType(),
                 issue.milestone(),
                 joinSorted(issue.labels()),
-                joinSorted(issue.assignees()));
+                joinSorted(issue.assignees())));
+        parts.addAll(discussion);
+        return SignalRevision.ofContentDigest(parts.toArray(String[]::new));
     }
 
     private static Optional<SignalKey> issueKey(

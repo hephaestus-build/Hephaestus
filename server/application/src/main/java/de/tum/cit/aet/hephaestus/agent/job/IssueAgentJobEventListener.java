@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
@@ -61,6 +62,7 @@ public class IssueAgentJobEventListener {
     private final ReviewGate reviewGate;
     private final WorkspaceResolver workspaceResolver;
     private final SignalRecorder signalRecorder;
+    private final IssueEvidenceRevision revisions;
     private final TransactionTemplate workspaceTransaction;
 
     public IssueAgentJobEventListener(
@@ -70,6 +72,7 @@ public class IssueAgentJobEventListener {
             ReviewGate reviewGate,
             WorkspaceResolver workspaceResolver,
             SignalRecorder signalRecorder,
+            IssueEvidenceRevision revisions,
             PlatformTransactionManager transactionManager) {
         this.agentJobService = agentJobService;
         this.issueRepository = issueRepository;
@@ -77,6 +80,7 @@ public class IssueAgentJobEventListener {
         this.reviewGate = reviewGate;
         this.workspaceResolver = workspaceResolver;
         this.signalRecorder = signalRecorder;
+        this.revisions = revisions;
         this.workspaceTransaction = new TransactionTemplate(transactionManager);
         this.workspaceTransaction.setPropagationBehavior(Propagation.REQUIRES_NEW.value());
     }
@@ -241,6 +245,9 @@ public class IssueAgentJobEventListener {
         if (signal == null) {
             log.debug("No signal declared for trigger event, nothing to record: event={}", triggerEventName);
             return null;
+        }
+        if (signal.equals(ScmSignals.ISSUE_UPDATED)) {
+            return revisions.updatedKey(workspaceId, issueData);
         }
         return ScmSignals.issueKey(workspaceId, signal, issueData).orElse(null);
     }

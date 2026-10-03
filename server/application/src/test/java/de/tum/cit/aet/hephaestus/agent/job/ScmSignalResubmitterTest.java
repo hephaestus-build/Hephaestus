@@ -23,11 +23,13 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.github.manifest.GitHubManifest;
@@ -73,6 +75,18 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
     @Mock
     private SignalRecorder signalRecorder;
 
+    @Mock
+    private IssueCommentRepository issueCommentRepository;
+
+    private IssueSignalResubmitter issueResubmitter() {
+        return new IssueSignalResubmitter(
+                agentJobService,
+                issueRepository,
+                gate,
+                signalRecorder,
+                new IssueEvidenceRevision(issueCommentRepository));
+    }
+
     private Workspace workspace;
     private Repository repository;
 
@@ -107,7 +121,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         ArtifactSignal signal = signal(ScmSignals.ISSUE_OPENED.value());
         when(issueRepository.findByIdWithRepositoryAndAssignees(ARTIFACT_ID)).thenReturn(Optional.of(issue));
 
-        new IssueSignalResubmitter(agentJobService, issueRepository, gate, signalRecorder).resubmit(signal);
+        issueResubmitter().resubmit(signal);
 
         verify(signalRecorder).markRefused(signal.key(), SignalStateReason.ARTIFACT_NOT_VISIBLE);
         verify(gate, never()).evaluateIssue(any(), anyLong(), any(), any());
@@ -145,7 +159,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         when(gate.evaluateIssue(issue, WORKSPACE_ID, ScmSignals.ISSUE_OPENED, TriggerMode.AUTO))
                 .thenReturn(detection);
 
-        new IssueSignalResubmitter(agentJobService, issueRepository, gate, signalRecorder).resubmit(signal);
+        issueResubmitter().resubmit(signal);
 
         verify(agentJobService)
                 .submit(
@@ -174,7 +188,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         when(gate.evaluateIssue(issue, WORKSPACE_ID, ScmSignals.ISSUE_UPDATED, TriggerMode.AUTO))
                 .thenReturn(detection);
 
-        new IssueSignalResubmitter(agentJobService, issueRepository, gate, signalRecorder).resubmit(signal);
+        issueResubmitter().resubmit(signal);
 
         ArgumentCaptor<IssueReviewSubmissionRequest> request =
                 ArgumentCaptor.forClass(IssueReviewSubmissionRequest.class);
@@ -194,7 +208,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
     void shouldNotRetryAnUpdateAgainstADifferentIssueSnapshot() {
         ArtifactSignal signal = signal(ScmSignals.ISSUE_UPDATED.value());
         when(issueRepository.findByIdWithRepositoryAndAssignees(ARTIFACT_ID)).thenReturn(Optional.of(issue()));
-        new IssueSignalResubmitter(agentJobService, issueRepository, gate, signalRecorder).resubmit(signal);
+        issueResubmitter().resubmit(signal);
         verify(signalRecorder).markRefused(signal.key(), SignalStateReason.COALESCED);
         verify(gate, never()).evaluateIssue(any(), anyLong(), any(), any());
         verify(agentJobService, never()).submit(any(), any(), any(), any(), any());

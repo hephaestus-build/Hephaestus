@@ -24,6 +24,14 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
     @Query(value = "SELECT id FROM issue WHERE id = :id FOR SHARE", nativeQuery = true)
     Optional<Long> lockForReview(@Param("id") long id);
 
+    /**
+     * Serializes changes to one issue's review snapshot. {@code FOR NO KEY UPDATE} rather than {@code FOR UPDATE}: a
+     * new comment's foreign key takes {@code FOR KEY SHARE} on the issue, which this lock does not conflict with,
+     * while the review admission's {@link #lockForReview} {@code FOR SHARE} still waits for it.
+     */
+    @Query(value = "SELECT id FROM issue WHERE id = :id AND issue_type = 'ISSUE' FOR NO KEY UPDATE", nativeQuery = true)
+    Optional<Long> lockForSnapshotAdvance(@Param("id") long id);
+
     @Query(
             "SELECT i FROM Issue i WHERE i.repository.id = :repositoryId AND i.deletedAt IS NULL AND i.id > :after ORDER BY i.id")
     List<Issue> findLiveNoteParents(

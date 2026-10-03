@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.time.Instant;
@@ -20,10 +22,18 @@ public class IssueObservationSuperseder {
 
     private final IssueRepository issues;
     private final ObservationRepository observations;
+    private final IssueEvidenceRevision revisions;
+    private final LockedIssueRow lockedRow;
 
-    public IssueObservationSuperseder(IssueRepository issues, ObservationRepository observations) {
+    IssueObservationSuperseder(
+            IssueRepository issues,
+            ObservationRepository observations,
+            IssueEvidenceRevision revisions,
+            LockedIssueRow lockedRow) {
         this.issues = issues;
         this.observations = observations;
+        this.revisions = revisions;
+        this.lockedRow = lockedRow;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
@@ -43,14 +53,19 @@ public class IssueObservationSuperseder {
         advance(event.issue());
     }
 
-    private void advance(ScmEventPayload.IssueData issue) {
-        if (issue.isPullRequest()) {
+    /** Records the issue as it now stands, which may have moved since the event that occasioned this was built. */
+    private void advance(ScmEventPayload.IssueData event) {
+        if (event.isPullRequest()) {
             return;
         }
-        String digest = ScmSignals.issueUpdatedRevision(issue).value();
-        if (issues.advanceReviewSnapshot(issue.id(), UUID.randomUUID(), digest) != 1) {
+        Issue issue = lockedRow.lockAndRead(event.id()).orElse(null);
+        if (issue == null || issue.isPullRequest()) {
             return;
         }
-        observations.supersedeIssueObservations(issue.id(), Instant.now());
+        String digest = revisions.of(ScmEventPayload.IssueData.from(issue)).value();
+        if (issues.advanceReviewSnapshot(issue.getId(), UUID.randomUUID(), digest) != 1) {
+            return;
+        }
+        observations.supersedeIssueObservations(issue.getId(), Instant.now());
     }
 }
