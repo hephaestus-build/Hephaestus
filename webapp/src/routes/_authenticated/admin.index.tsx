@@ -69,22 +69,26 @@ function AdminOverviewPage() {
 		};
 	}
 
+	const retryReadiness = () => {
+		void readinessQuery.refetch();
+	};
 	let readinessState: InstanceConfigurationReadinessCardState;
 	if (readinessQuery.data) {
+		// A failed refresh keeps the last facts, so the card must be told they may be out of date.
 		readinessState =
 			readinessQuery.data.length > 0
-				? { status: "ready", facts: readinessQuery.data }
+				? {
+						status: "ready",
+						facts: readinessQuery.data,
+						refreshFailure: readinessQuery.isRefetchError
+							? { error: readinessQuery.error, onRetry: retryReadiness }
+							: undefined,
+					}
 				: { status: "empty" };
 	} else if (readinessQuery.isPending) {
 		readinessState = { status: "loading" };
 	} else {
-		readinessState = {
-			status: "error",
-			error: readinessQuery.error,
-			onRetry: () => {
-				void readinessQuery.refetch();
-			},
-		};
+		readinessState = { status: "error", error: readinessQuery.error, onRetry: retryReadiness };
 	}
 
 	return (

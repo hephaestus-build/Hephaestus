@@ -1,7 +1,9 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 
+import { adminGetConfigurationReadinessQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { ConfigurationFact } from "@/api/types.gen";
 import { server } from "@/mocks/server";
 import { renderRouteAt, ROUTE_RENDER_WAIT } from "@/test/router-harness";
@@ -73,6 +75,39 @@ describe("instance overview configuration readiness", () => {
 				.getAttribute("href"),
 		).toBe(`${GUIDE}#login`);
 		expect(document.body.textContent).not.toContain(PLANTED_SECRET);
+	});
+
+	it("keeps the last facts but says so when a refresh fails, and recovers on retry", async () => {
+		server.use(http.get("*/admin/configuration-readiness", () => HttpResponse.json(facts)));
+		const user = userEvent.setup();
+		const queryClient = renderRouteAt("/admin");
+		await screen.findByText(
+			"1 setting needs action. 1 setting not configured.",
+			{},
+			ROUTE_RENDER_WAIT,
+		);
+
+		server.use(
+			http.get("*/admin/configuration-readiness", () => HttpResponse.json({}, { status: 503 })),
+		);
+		await queryClient.invalidateQueries({ queryKey: adminGetConfigurationReadinessQueryKey() });
+		await screen.findByText(
+			"Couldn't refresh. Showing the last successful check.",
+			{},
+			ROUTE_RENDER_WAIT,
+		);
+		expect(screen.getByText("login-provider capability")).not.toBeNull();
+
+		server.use(http.get("*/admin/configuration-readiness", () => HttpResponse.json(facts)));
+		// Other overview cards have no API here and show alerts of their own; pick this card's.
+		const alert = screen
+			.getAllByRole("alert")
+			.find((candidate) => candidate.textContent.includes("Couldn't refresh"));
+		assert(alert);
+		await user.click(within(alert).getByRole("button", { name: "Retry" }));
+		await waitFor(() => {
+			expect(screen.queryByText("Couldn't refresh. Showing the last successful check.")).toBeNull();
+		});
 	});
 
 	it("keeps the rest of the overview when readiness is unavailable", async () => {

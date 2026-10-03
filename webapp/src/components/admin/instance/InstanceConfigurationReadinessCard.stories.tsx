@@ -155,6 +155,27 @@ export const OptionalNotConfigured: Story = {
 	},
 };
 
+/** A failed refresh keeps the last facts on screen and says they may be out of date. */
+export const RefreshFailed: Story = {
+	args: {
+		state: {
+			status: "ready",
+			facts: satisfied,
+			refreshFailure: { error: new Error("Network Error"), onRetry },
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText("Couldn't refresh. Showing the last successful check."),
+		).toBeVisible();
+		await expect(
+			canvas.getByText("Every check that applies to this instance passes."),
+		).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
+		await expect(onRetry).toHaveBeenCalledOnce();
+	},
+};
+
 export const Loading: Story = {
 	args: { state: { status: "loading" } },
 };

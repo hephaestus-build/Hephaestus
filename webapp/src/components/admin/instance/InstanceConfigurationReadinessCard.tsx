@@ -32,7 +32,12 @@ export type InstanceConfigurationReadinessCardState =
 	| { status: "loading" }
 	| { status: "error"; error: unknown; onRetry: () => void }
 	| { status: "empty" }
-	| { status: "ready"; facts: ConfigurationFact[] };
+	| {
+			status: "ready";
+			facts: ConfigurationFact[];
+			/** Set when the latest refresh failed, so `facts` are the last known ones, not current. */
+			refreshFailure?: { error: unknown; onRetry: () => void };
+	  };
 
 export interface InstanceConfigurationReadinessCardProps {
 	state: InstanceConfigurationReadinessCardState;
@@ -130,12 +135,18 @@ function ReadinessBody({ state }: InstanceConfigurationReadinessCardProps) {
 			);
 		}
 		case "ready": {
-			return <ReadyBody facts={state.facts} />;
+			return <ReadyBody facts={state.facts} refreshFailure={state.refreshFailure} />;
 		}
 	}
 }
 
-function ReadyBody({ facts }: { facts: ConfigurationFact[] }) {
+function ReadyBody({
+	facts,
+	refreshFailure,
+}: {
+	facts: ConfigurationFact[];
+	refreshFailure: { error: unknown; onRetry: () => void } | undefined;
+}) {
 	const groups = statusValues(CONFIGURATION_STATUS_DEFS).map((status) => ({
 		status,
 		// `filter` hands back a copy, so sorting it in place leaves `facts` alone.
@@ -153,6 +164,13 @@ function ReadyBody({ facts }: { facts: ConfigurationFact[] }) {
 
 	return (
 		<>
+			{refreshFailure ? (
+				<QueryErrorAlert
+					title="Couldn't refresh. Showing the last successful check."
+					error={refreshFailure.error}
+					onRetry={refreshFailure.onRetry}
+				/>
+			) : null}
 			<p className="flex items-center gap-2 text-sm font-medium">
 				<SummaryIcon className={cn("size-4 shrink-0", statusToneClass(badgeVariant))} aria-hidden />
 				{summary.text}
