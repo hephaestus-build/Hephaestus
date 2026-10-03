@@ -27,7 +27,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
  *    server render can read the open state, and nothing in this SPA reads it.
  * 2. The panel is a `<nav aria-label="Primary">`, where upstream renders a `<div>`: the sidebar is the
  *    app's main navigation, and a screen reader's landmark list had nothing to jump to (WCAG 2.2
- *    SC 1.3.1, 2.4.1). The mobile sheet's panel is the same landmark.
+ *    SC 1.3.1, 2.4.1). The mobile sheet's panel is the same landmark. Upstream report:
+ *    https://github.com/shadcn-ui/ui/issues/11533
  */
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";

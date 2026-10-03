@@ -17,10 +17,11 @@ import { Button } from "@/components/ui/button";
  * 2. `DialogBody`, the opt-in scrollable middle, keyboard-focusable for the same reason as
  *    `DrawerBody`: a submitting form disables everything inside it.
  * 3. `DialogForm`, the `display: contents` form wrapper.
- * 4. `DialogContent` opens on the first control inside the body. The body is keyboard-focusable
- *    (2), so it is the first tab stop, and Base UI's default would land focus on an unnamed box
- *    instead of the field the reader came to fill in (WCAG 2.2 SC 2.4.3). A body with nothing to
- *    focus keeps the default, and a caller's own `initialFocus` wins.
+ * 4. `DialogContent` opens on the first field inside the body, through Base UI's `initialFocus`
+ *    (https://base-ui.com/react/components/dialog). The body is keyboard-focusable (2), so it is the
+ *    first tab stop, and the default would land focus on an unnamed box instead of the field the
+ *    reader came to fill in (WCAG 2.2 SC 2.4.3). A body with no field keeps the default, and a
+ *    caller's own `initialFocus` wins.
  */
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
 	return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -70,7 +71,7 @@ function DialogContent({
 					interaction === "touch"
 						? true
 						: (popup.current?.querySelector<HTMLElement>(
-								"[data-slot=dialog-body] :is(input, textarea, select, button, [href], [role=checkbox], [role=radio], [role=switch], [role=combobox]):not([disabled])",
+								"[data-slot=dialog-body] :is(input, textarea, select, [role=checkbox], [role=radio], [role=switch], [role=combobox]):not([disabled])",
 							) ?? true)
 				}
 				data-slot="dialog-content"

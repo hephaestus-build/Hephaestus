@@ -115,6 +115,12 @@ export const PressedTogglesLookSelected: Story = {
 	},
 };
 
+/** `dark:bg-input/30` outranks a plain `aria-pressed:bg-muted`, so the dark theme needs its own. */
+export const PressedTogglesLookSelectedInDarkMode: Story = {
+	...PressedTogglesLookSelected,
+	globals: { theme: "dark" },
+};
+
 export const QuietRestsBelowFullContrast: Story = {
 	render: () => (
 		<div className="flex items-center gap-2 text-foreground">

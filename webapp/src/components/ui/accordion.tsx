@@ -38,7 +38,9 @@ function AccordionItem({
 /**
  * ⚠️ Diverges from the shadcn registry: `headingLevel` sets the level of the header, which Base UI
  * fixes at `<h3>`. A trigger is a heading, so its level has to follow the page it sits in: directly
- * under a page's `<h1>` it is a 2, and 3 is only right under an `<h2>` (WCAG 2.2 SC 1.3.1).
+ * under a page's `<h1>` it is a 2, and 3 is only right under an `<h2>` (WCAG 2.2 SC 1.3.1). Neither
+ * upstream offers the choice: https://github.com/shadcn-ui/ui/issues/1989 and
+ * https://github.com/mui/base-ui/issues/1678.
  */
 function AccordionTrigger({
 	className,
