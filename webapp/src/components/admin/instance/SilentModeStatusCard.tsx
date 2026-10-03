@@ -15,7 +15,6 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { hasText } from "@/lib/text";
 
 export interface SilentModeStatusCardProps {
 	settings?: InstanceSettings;
@@ -47,9 +46,9 @@ export function SilentModeStatusCard({
 				<Badge variant="destructive">Silent mode engaged</Badge>
 				<p className="text-sm text-muted-foreground">
 					Workspace delivery is blocked
-					{hasText(settings.silentModeChangedBy)
-						? ` — engaged by ${settings.silentModeChangedBy}`
-						: ""}
+					{settings.silentModeChangedByAccountId == null
+						? ""
+						: ` — engaged by account #${settings.silentModeChangedByAccountId}`}
 					{settings.silentModeChangedAt ? (
 						<>
 							{" "}

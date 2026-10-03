@@ -8,7 +8,7 @@ UPDATE instance_settings
 SET silent_mode_engaged = TRUE,
     silent_mode_reason = 'Restore clone: pre-boot safety lock',
     silent_mode_changed_at = now(),
-    silent_mode_changed_by = 'restore-operator',
+    silent_mode_changed_by_account_id = NULL,
     version = version + 1
 WHERE id = 1;
 

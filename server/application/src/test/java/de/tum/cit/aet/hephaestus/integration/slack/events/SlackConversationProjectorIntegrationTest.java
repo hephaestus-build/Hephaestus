@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,6 +73,50 @@ class SlackConversationProjectorIntegrationTest extends BaseIntegrationTest {
 
     private ArrayNode conversations(ObjectNode payload) {
         return (ArrayNode) payload.get("conversations");
+    }
+
+    @Test
+    void shouldExcludeAnErasedNativeAuthorFromEveryProjectionWithoutAliasingAnotherSlackTeam() {
+        long workspace = newWorkspace();
+        long otherWorkspace = newWorkspace();
+        seedChannel(workspace, "C1", "ACTIVE");
+        seedChannel(otherWorkspace, "C1", "ACTIVE");
+        seedThread(workspace, "C1", "100.0", "100.1", "{100}");
+        seedMessage(workspace, "C1", "100.0", null, "suppressed root");
+        seedMessage(workspace, "C1", "100.1", "100.0", "other participant reply");
+        seedMessage(otherWorkspace, "C1", "200.0", null, "same native user in another team");
+        jdbc.update(
+                "UPDATE slack_message SET author_slack_user_id='UPRIVACYTARGET' WHERE workspace_id=? AND slack_ts='100.0'",
+                workspace);
+        jdbc.update(
+                "UPDATE slack_message SET author_slack_user_id='UPRIVACYTARGET',slack_team_id='T2' WHERE workspace_id=?",
+                otherWorkspace);
+        jdbc.update("UPDATE slack_monitored_channel SET slack_team_id='T2' WHERE workspace_id=?", otherWorkspace);
+        Long providerId = jdbc.queryForObject(
+                "INSERT INTO identity_provider(type,server_url,created_at) VALUES ('SLACK','https://slack.com',CURRENT_TIMESTAMP) ON CONFLICT(type,server_url) DO UPDATE SET server_url=EXCLUDED.server_url RETURNING id",
+                Long.class);
+        jdbc.update(
+                "INSERT INTO person_suppression(id,provider_id,subject,team_key) VALUES (?,?,?,'T1')",
+                UUID.randomUUID(),
+                providerId,
+                "UPRIVACYTARGET");
+        var captured = new ArrayList<ObjectNode>();
+        projector.forEachWorkspaceMessage(workspace, captured::add);
+        assertThat(captured)
+                .singleElement()
+                .satisfies(record -> assertThat(record.path("text").asString()).isEqualTo("other participant reply"));
+        assertThat(projector.isMessageReadable(workspace, "C1", "100.0")).isFalse();
+        assertThat(projector.isMessageReadable(otherWorkspace, "C1", "200.0")).isTrue();
+        var audience = conversations(projector.buildPayload(workspace, 100L));
+        assertThat(audience).singleElement().satisfies(thread -> {
+            assertThat(thread.path("messageCount").asInt()).isEqualTo(1);
+            assertThat(thread.path("messages").get(0).path("text").asString()).isEqualTo("other participant reply");
+        });
+        assertThat(projector
+                        .buildThreadPayload(workspace, "C1", "100.0")
+                        .path("messages")
+                        .size())
+                .isEqualTo(1);
     }
 
     @Test

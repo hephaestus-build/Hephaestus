@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsAdminController.InstanceSettingsDTO;
 import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
@@ -12,10 +15,12 @@ import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,8 +49,23 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
     @Autowired
     private AuthEventRepository authEventRepository;
 
+    @Autowired
+    private AccountRepository accounts;
+
+    private long administratorId;
+
+    private Consumer<HttpHeaders> actorHeaders() {
+        return SecurityUtils.isSuperAdmin()
+                ? headers -> headers.setBearerAuth("mock-jwt-admin-" + administratorId)
+                : TestAuthUtils.withCurrentUser();
+    }
+
     @BeforeEach
     void shouldStartReleasedWhenExplicitSettingExists() {
+        var administrator = new Account("Settings test administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
         releaseDirectly();
     }
 
@@ -60,7 +80,7 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
         webTestClient
                 .get()
                 .uri("/admin/settings")
-                .headers(TestAuthUtils.withCurrentUser())
+                .headers(actorHeaders())
                 .exchange()
                 .expectStatus()
                 .isForbidden()
@@ -69,7 +89,7 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
         webTestClient
                 .patch()
                 .uri("/admin/settings/silent-mode")
-                .headers(TestAuthUtils.withCurrentUser())
+                .headers(actorHeaders())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("engaged", true))
                 .exchange()
@@ -106,7 +126,7 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .singleElement()
                 .satisfies(event -> assertThat(event.getResult()).isEqualTo(AuthEvent.Result.SUCCESS));
         assertThat(engaged.silentModeChangedAt()).isNotNull();
-        assertThat(engaged.silentModeChangedBy()).isNotBlank();
+        assertThat(engaged.silentModeChangedByAccountId()).isNotNull();
 
         assertThat(getSettings().silentModeEngaged()).isTrue();
         // API → DB → SPI: the port the delivery paths consult sees it too.
@@ -128,7 +148,7 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
         webTestClient
                 .patch()
                 .uri("/admin/settings/silent-mode")
-                .headers(TestAuthUtils.withCurrentUser())
+                .headers(actorHeaders())
                 .header(HttpHeaders.IF_MATCH, initial.etag())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("engaged", false))
@@ -147,7 +167,7 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
         webTestClient
                 .patch()
                 .uri("/admin/settings/silent-mode")
-                .headers(TestAuthUtils.withCurrentUser())
+                .headers(actorHeaders())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("engaged", false))
                 .exchange()
@@ -207,7 +227,7 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
         webTestClient
                 .patch()
                 .uri("/admin/settings/silent-mode")
-                .headers(TestAuthUtils.withCurrentUser())
+                .headers(actorHeaders())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("reason", "no engaged flag"))
                 .exchange()
@@ -220,7 +240,7 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
         var result = webTestClient
                 .get()
                 .uri("/admin/settings")
-                .headers(TestAuthUtils.withCurrentUser())
+                .headers(actorHeaders())
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -236,7 +256,7 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
         WebTestClient.RequestBodySpec request = webTestClient
                 .patch()
                 .uri("/admin/settings/silent-mode")
-                .headers(TestAuthUtils.withCurrentUser())
+                .headers(actorHeaders())
                 .contentType(MediaType.APPLICATION_JSON);
         if (currentEtag != null) {
             request.header(HttpHeaders.IF_MATCH, currentEtag);

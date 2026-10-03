@@ -66,7 +66,7 @@ interface ScmJobFolderRepository extends Repository<Issue, Long> {
 
     @Query(value = """
             SELECT jsonb_build_object('id', i.id, 'number', i.number, 'title', i.title, 'state', i.state,
-              'url', i.html_url, 'synced_at', i.last_sync_at, 'repository', r.name_with_owner)::text
+              'author_id', i.author_id, 'url', i.html_url, 'synced_at', i.last_sync_at, 'repository', r.name_with_owner)::text
             FROM issue i JOIN repository r ON r.id = i.repository_id
             WHERE i.repository_id = :repositoryId AND i.issue_type = :issueType AND i.deleted_at IS NULL
               AND EXISTS (SELECT 1 FROM repository_to_monitor m

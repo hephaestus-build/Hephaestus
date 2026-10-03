@@ -133,6 +133,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
         assertThat(rendered)
                 .contains(
                         switch (refusal) {
+                            case PERSON_ERASED -> "Personal data erased";
                             case NO_AI -> "Off for you";
                             case CHOICE_REQUIRED -> "Choose your AI";
                             case UNAVAILABLE -> "Unavailable for your AI choice";

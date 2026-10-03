@@ -33,10 +33,7 @@ public class CacheConfig {
             // avoid a config→core.auth internal-type dependency; the decoder owns the canonical const).
             new CacheSpec("auth_jwt_revoked", AUTH_JWT_REVOKED_TTL, AUTH_JWT_REVOKED_MAX),
             new CacheSpec("contributors", LONG_TTL, LONG_MAX),
-            new CacheSpec("mentor_authored_work_context", MENTOR_CONTEXT_TTL, MENTOR_MAX),
             new CacheSpec("mentor_practice_context", MENTOR_CONTEXT_TTL, MENTOR_MAX),
-            new CacheSpec("mentor_user_context", MENTOR_CONTEXT_TTL, MENTOR_MAX),
-            new CacheSpec("mentor_workspace_context", MENTOR_CONTEXT_TTL, MENTOR_MAX),
             new CacheSpec("pullRequestTemplates", LONG_TTL, LONG_MAX));
 
     @Bean

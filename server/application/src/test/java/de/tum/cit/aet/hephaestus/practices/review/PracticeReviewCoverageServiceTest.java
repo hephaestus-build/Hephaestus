@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
@@ -42,12 +43,16 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     @Mock
     private PracticeReviewPersonTargetRepository people;
 
+    @Mock
+    private PersonProcessingSuppression suppression;
+
     private PracticeReviewCoverageService service;
     private Workspace workspace;
 
     @BeforeEach
     void setUp() {
-        service = new PracticeReviewCoverageService(monitors, membershipService, repositoryTargets, people);
+        service =
+                new PracticeReviewCoverageService(monitors, membershipService, repositoryTargets, people, suppression);
         workspace = new Workspace();
         workspace.setId(1L);
     }

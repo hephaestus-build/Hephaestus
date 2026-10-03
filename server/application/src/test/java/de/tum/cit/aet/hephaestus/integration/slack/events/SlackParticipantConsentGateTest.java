@@ -41,4 +41,12 @@ class SlackParticipantConsentGateTest extends BaseUnitTest {
 
         assertThat(gate.ingestionAllowed(7L, "U1")).isTrue();
     }
+
+    @Test
+    void erasedPerson_isDeniedEvenWithoutWorkspaceOptOut() {
+        when(participantConsentRepository.isPersonProcessingSuppressed(7L, "U1"))
+                .thenReturn(true);
+
+        assertThat(gate.ingestionAllowed(7L, "U1")).isFalse();
+    }
 }

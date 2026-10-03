@@ -180,3 +180,12 @@ for (const second of ["untracked", "staged"] as const) {
 		}
 	});
 }
+
+void test("appending authored SQL preserves PostgreSQL dollar quotes and replacement tokens", () => {
+	const sql = "DO $$ BEGIN RAISE EXCEPTION 'Restore a verified backup'; END $$; -- $& $` $'";
+	const draft = `<databaseChangeLog><changeSet id="draft" author="draft"><sql splitStatements="false">${sql}</sql></changeSet></databaseChangeLog>`;
+	const existing = promoteDraft(generated, 1_700_000_000_000);
+	const appended = promoteDraft(draft, 1_700_000_000_000, existing);
+	assert.ok(appended.includes(`<sql splitStatements="false">${sql}</sql>`));
+	assert.equal(appended.split("</databaseChangeLog>").length, 2);
+});

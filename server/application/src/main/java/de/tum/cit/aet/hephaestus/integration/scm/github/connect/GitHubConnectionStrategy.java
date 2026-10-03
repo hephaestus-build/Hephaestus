@@ -81,7 +81,7 @@ public class GitHubConnectionStrategy implements ConnectionStrategy {
             throw new IllegalStateException(
                     "hephaestus.integration.github.app.client-id and client-secret are not configured — cannot verify a GitHub App installation");
         }
-        String state = oauthStateService.issue(request.workspaceId(), IntegrationKind.GITHUB, request.actorRef());
+        String state = oauthStateService.issue(request.workspaceId(), IntegrationKind.GITHUB, request.actorAccountId());
         String separator = installationUrl.contains("?") ? "&" : "?";
         URI vendorUrl = URI.create(installationUrl + separator + CALLBACK_PARAM_STATE + "="
                 + URLEncoder.encode(state, StandardCharsets.UTF_8));

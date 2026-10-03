@@ -126,6 +126,9 @@ public class AuthEvent {
         IMPERSONATION_END,
         ACCOUNT_DELETED,
         EXPORT_REQUESTED,
+        PERSON_DATA_PREVIEWED,
+        PERSON_DATA_EXPORTED,
+        PERSON_DATA_ERASURE_REQUESTED,
         APP_ROLE_CHANGED,
         RESEARCH_CONSENT_REVOKED,
         // An instance admin reached a workspace they are not a member of. One marker per access

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewPreparation;
@@ -22,6 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalog;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
@@ -60,10 +62,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Answers;
+import org.mockito.Mockito;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class WorkspaceFolderRendererTest extends BaseUnitTest {
+    private static EvidenceFolderPersonDataCatalog personCopies() {
+        AutoCloseable released = () -> {};
+        return Mockito.mock(
+                EvidenceFolderPersonDataCatalog.class,
+                invocation -> invocation.getMethod().getName().equals("finishCapture")
+                        ? released
+                        : Answers.RETURNS_DEFAULTS.answer(invocation));
+    }
+
     @TempDir
     Path root;
 
@@ -92,12 +105,16 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
                 policies,
                 git,
                 new JobEvidenceFiles(
-                        new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC()),
+                        new FabricLayout(root.toString()),
+                        mock(AgentJobRepository.class),
+                        Clock.systemUTC(),
+                        personCopies()),
                 repositories,
                 history,
                 memberPolicy,
                 memberships,
-                practices);
+                practices,
+                Mockito.mock(PersonDataCopyRecorder.class));
     }
 
     private AgentJob job() {

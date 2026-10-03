@@ -15,4 +15,6 @@ public enum AgentJobCancellationReason {
     MODEL_UNAVAILABLE,
     /** A developer declined AI or has not made the workspace-required choice. */
     MEMBER_AI_DECLINED,
+    /** Exact provider identity or captured source is blocked by a person-erasure control. */
+    PERSON_DATA_ERASED,
 }

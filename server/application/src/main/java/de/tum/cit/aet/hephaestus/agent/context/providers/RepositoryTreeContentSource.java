@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
@@ -16,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -47,6 +49,7 @@ public class RepositoryTreeContentSource implements EvidenceSource {
 
     private final GitRepositoryManager gitRepositoryManager;
     private final ReviewRepositoryPreparer repositoryPreparer;
+    private final PersonDataCopyRecorder personCopies;
 
     @Override
     public boolean supports(ContextRequest request) {
@@ -76,6 +79,10 @@ public class RepositoryTreeContentSource implements EvidenceSource {
             return absent(absence);
         }
         GitRepositoryManager.GitTreeSnapshot snapshot = snapshot(request);
+        if (request instanceof ContextRequest.PracticeReviewRequest review) {
+            var metadata = Objects.requireNonNull(review.job().getMetadata());
+            personCopies.recordRepository(metadata.path("repository_id").asLong());
+        }
         Map<String, Path> onDisk = Map.of(
                 SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD",
                         snapshot.stagingDir().resolve(".git/HEAD"),

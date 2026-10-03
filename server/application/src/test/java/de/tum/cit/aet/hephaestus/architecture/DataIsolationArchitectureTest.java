@@ -121,6 +121,8 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "WorkerTokenDenylist", // Fleet-wide JWT revocation; worker JWTs are not workspace-scoped
             // core.auth (ADR 0017) — identity is user/system-scoped, not workspace-scoped.
             // Account ↔ Workspace association lives on WorkspaceMembership, not on these rows.
+            "PersonDataRequest", // Instance-wide rights request, never a workspace endpoint
+            "PersonSuppression", // Exact provider identity processing fence spans workspaces
             "Account", // Hephaestus-native principal; spans workspaces
             "IdentityLink", // Federated-login association; user-scoped
             "AccountFeature", // Per-account feature opt-ins

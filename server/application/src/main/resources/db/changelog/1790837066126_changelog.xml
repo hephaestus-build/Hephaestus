@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790837066126-1" author="hephaestus">
+        <createTable tableName="person_data_request">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="person_data_requestPK"/>
+            </column>
+            <column name="administrator_account_id" type="BIGINT"/>
+            <column name="completed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="completed_json" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="counts_json" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="failure_code" type="VARCHAR(48)"/>
+            <column name="scope_json" type="TEXT"/>
+            <column name="selections_json" type="TEXT"/>
+            <column name="state" type="VARCHAR(24)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790837066126-2" author="hephaestus">
+        <createTable tableName="person_suppression">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="person_suppressionPK"/>
+            </column>
+            <column name="active_request_id" type="UUID"/>
+            <column name="provider_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="team_key" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790837066126-3" author="hephaestus">
+        <addColumn tableName="instance_settings">
+            <column name="silent_mode_changed_by_account_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790837066126-4" author="hephaestus">
+        <addColumn tableName="instance_llm_settings">
+            <column name="updated_by_account_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790837066126-5" author="hephaestus">
+        <addUniqueConstraint columnNames="provider_id, subject, team_key" constraintName="uq_person_suppression_key" tableName="person_suppression"/>
+    </changeSet>
+    <changeSet id="1790837066126-6" author="hephaestus">
+        <preConditions onFail="HALT"><columnExists tableName="instance_settings" columnName="silent_mode_changed_by"/></preConditions>
+        <comment>Approved removal of mutable login attribution. Do not infer account ownership from old logins. Operational facts and times remain.</comment>
+        <dropColumn columnName="silent_mode_changed_by" tableName="instance_settings"/>
+        <rollback><stop>Restore the verified pre-upgrade backup. Dropped attribution cannot be reconstructed.</stop></rollback>
+    </changeSet>
+    <changeSet id="1790837066126-7" author="hephaestus">
+        <preConditions onFail="HALT"><columnExists tableName="instance_llm_settings" columnName="updated_by"/></preConditions>
+        <comment>Approved removal of mutable login attribution. Do not infer account ownership from old logins. Operational facts and times remain.</comment>
+        <dropColumn columnName="updated_by" tableName="instance_llm_settings"/>
+        <rollback><stop>Restore the verified pre-upgrade backup. Dropped attribution cannot be reconstructed.</stop></rollback>
+    </changeSet>
+    <changeSet id="1790837066126-8" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="instance_settings" baseColumnNames="silent_mode_changed_by_account_id" referencedTableName="account" referencedColumnNames="id" constraintName="sfk_instance_settings_changed_by_account" onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="instance_llm_settings" baseColumnNames="updated_by_account_id" referencedTableName="account" referencedColumnNames="id" constraintName="sfk_instance_llm_settings_updated_by_account" onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="person_data_request" baseColumnNames="administrator_account_id" referencedTableName="account" referencedColumnNames="id" constraintName="sfk_person_data_request_administrator" onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="person_suppression" baseColumnNames="provider_id" referencedTableName="identity_provider" referencedColumnNames="id" constraintName="sfk_person_suppression_provider" onDelete="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="person_suppression" baseColumnNames="active_request_id" referencedTableName="person_data_request" referencedColumnNames="id" constraintName="sfk_person_suppression_active_request" onDelete="SET NULL"/>
+    </changeSet>
+    <changeSet id="1790837066126-9" author="hephaestus">
+        <addColumn tableName="connection_audit">
+            <column name="actor_account_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790837066126-10" author="hephaestus">
+        <comment>Approved removal of unresolved historical personal attribution. Never map actor_ref by name, login, email or numeric appearance. Keep lifecycle facts and times.</comment>
+        <sql>UPDATE connection_audit SET actor_ref=NULL, detail=NULL WHERE actor_kind IN ('ADMIN','USER')</sql>
+        <rollback><stop>Restore the verified pre-upgrade backup. Cleared attribution cannot be reconstructed.</stop></rollback>
+    </changeSet>
+    <changeSet id="1790837066126-11" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="connection_audit" baseColumnNames="actor_account_id" referencedTableName="account" referencedColumnNames="id" constraintName="sfk_connection_audit_actor_account" onDelete="SET NULL"/>
+    </changeSet>
+    <changeSet id="1790837066126-12" author="hephaestus">
+        <dropNotNullConstraint columnDataType="bigint" columnName="invalidated_by_account_id" tableName="observation_invalidation"/>
+    </changeSet>
+    <changeSet id="1790837066126-13" author="hephaestus">
+        <dropNotNullConstraint columnDataType="bigint" columnName="withdrawn_by_account_id" tableName="feedback_withdrawal"/>
+    </changeSet>
+    <changeSet id="1790837066126-14" author="hephaestus">
+        <comment>Keep restoration facts and times when a person request removes actor attribution and free text.</comment>
+        <sql><![CDATA[
+            ALTER TABLE observation_invalidation DROP CONSTRAINT ck_observation_invalidation_restoration;
+            ALTER TABLE observation_invalidation ADD CONSTRAINT ck_observation_invalidation_restoration
+                CHECK ((restored_at IS NULL AND restored_by_account_id IS NULL AND restoration_reason IS NULL)
+                    OR (restored_at IS NOT NULL AND (restoration_reason IS NULL OR btrim(restoration_reason) <> '')));
+            ALTER TABLE feedback_withdrawal DROP CONSTRAINT ck_feedback_withdrawal_restoration;
+            ALTER TABLE feedback_withdrawal ADD CONSTRAINT ck_feedback_withdrawal_restoration
+                CHECK ((restored_at IS NULL AND restored_by_account_id IS NULL AND restoration_reason IS NULL)
+                    OR (restored_at IS NOT NULL AND (restoration_reason IS NULL OR btrim(restoration_reason) <> '')));
+        ]]></sql>
+    </changeSet>
+    <changeSet id="1790837066126-15" author="hephaestus">
+        <comment>Permit exact-key person erasure of a membership audit subject while preserving role changes, event types and times.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.config_audit_event_block_mutation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+            BEGIN
+                IF TG_OP = 'DELETE' THEN
+                    -- Retention is the ONLY sanctioned delete (ConfigAuditRetentionJob, 365 days).
+                    -- Keeping the window here rather than blocking DELETE outright is what lets this
+                    -- table stay unpartitioned while still honouring storage limitation (GDPR Art.
+                    -- 5(1)(e)). Inside the window the row is untouchable.
+                    IF OLD.occurred_at >= now() - interval '365 days' THEN
+                        RAISE EXCEPTION 'config_audit_event is append-only: DELETE is only permitted past the 365-day retention window';
+                    END IF;
+                    RETURN OLD;
+                END IF;
+                -- Permit ONLY erasure, per column: each redactable column may stay or go to NULL. Per-column
+            -- (not all-at-once) so an FK's ON DELETE SET NULL, which touches one column, does not trip
+            -- this. Comparing to_jsonb(NEW) minus the redactable keys covers future columns with no edit here.
+
+                IF (NEW.actor_account_id IS NULL OR NEW.actor_account_id = OLD.actor_account_id)
+                   AND (NEW.acting_account_id IS NULL OR NEW.acting_account_id = OLD.acting_account_id)
+                   AND (NEW.old_value IS NULL OR NEW.old_value = OLD.old_value)
+                   AND (NEW.new_value IS NULL OR NEW.new_value = OLD.new_value)
+                   AND (NEW.entity_id IS NOT DISTINCT FROM OLD.entity_id
+                        OR (OLD.entity_type = 'WORKSPACE_ROLE' AND NEW.entity_id = 'ERASED'))
+                   AND (to_jsonb(NEW) - 'entity_id' - 'actor_account_id' - 'acting_account_id' - 'old_value' - 'new_value')
+                        IS NOT DISTINCT FROM (to_jsonb(OLD) - 'entity_id' - 'actor_account_id' - 'acting_account_id' - 'old_value' - 'new_value')
+                THEN
+                    RETURN NEW;
+                END IF;
+                RAISE EXCEPTION 'config_audit_event is append-only: only erasure (setting actor refs / snapshots to NULL, or erasing a membership subject) is permitted';
+            END;
+            $$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.config_audit_event_block_mutation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+            BEGIN
+                IF TG_OP = 'DELETE' THEN
+                    -- Retention is the ONLY sanctioned delete (ConfigAuditRetentionJob, 365 days).
+                    -- Keeping the window here rather than blocking DELETE outright is what lets this
+                    -- table stay unpartitioned while still honouring storage limitation (GDPR Art.
+                    -- 5(1)(e)). Inside the window the row is untouchable.
+                    IF OLD.occurred_at >= now() - interval '365 days' THEN
+                        RAISE EXCEPTION 'config_audit_event is append-only: DELETE is only permitted past the 365-day retention window';
+                    END IF;
+                    RETURN OLD;
+                END IF;
+                -- Permit ONLY erasure, per column: each redactable column may stay or go to NULL. Per-column
+            -- (not all-at-once) so an FK's ON DELETE SET NULL, which touches one column, does not trip
+            -- this. Comparing to_jsonb(NEW) minus the redactable keys covers future columns with no edit here.
+
+                IF (NEW.actor_account_id IS NULL OR NEW.actor_account_id = OLD.actor_account_id)
+                   AND (NEW.acting_account_id IS NULL OR NEW.acting_account_id = OLD.acting_account_id)
+                   AND (NEW.old_value IS NULL OR NEW.old_value = OLD.old_value)
+                   AND (NEW.new_value IS NULL OR NEW.new_value = OLD.new_value)
+                   AND (to_jsonb(NEW) - 'actor_account_id' - 'acting_account_id' - 'old_value' - 'new_value')
+                        IS NOT DISTINCT FROM (to_jsonb(OLD) - 'actor_account_id' - 'acting_account_id' - 'old_value' - 'new_value')
+                THEN
+                    RETURN NEW;
+                END IF;
+                RAISE EXCEPTION 'config_audit_event is append-only: only erasure (setting actor refs / snapshots to NULL) is permitted';
+            END;
+            $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790837066126-16" author="hephaestus">
+        <comment>Drop unresolved historical membership attribution. Keep event types, role changes and times; never infer a person from names, logins or emails.</comment>
+        <sql><![CDATA[
+            UPDATE config_audit_event e SET entity_id='ERASED'
+            WHERE e.entity_type='WORKSPACE_ROLE' AND e.entity_id<>'ERASED'
+                AND NOT EXISTS (SELECT 1 FROM "user" u WHERE u.id::text=e.entity_id);
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false">DO $$ BEGIN RAISE EXCEPTION 'Historical attribution cannot be restored. Restore a verified pre-migration backup instead.'; END $$;</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790837066126-17" author="hephaestus">
+        <addColumn tableName="oauth_state_nonce">
+            <column name="actor_account_id" type="BIGINT"/>
+        </addColumn>
+        <addForeignKeyConstraint baseTableName="oauth_state_nonce" baseColumnNames="actor_account_id"
+            constraintName="fk_oauth_state_nonce_actor_account" referencedTableName="account"
+            referencedColumnNames="id" onDelete="SET NULL"/>
+        <rollback><dropColumn tableName="oauth_state_nonce" columnName="actor_account_id"/></rollback>
+    </changeSet>
+    <changeSet id="1790837066126-18" author="hephaestus">
+        <preConditions onFail="HALT"><columnExists tableName="chat_thread" columnName="session_jsonl"/></preConditions>
+        <comment>Clear legacy hidden conversation memory without exact-person provenance. Preserve every visible message, thread and timestamp. New runtime copies must record exact native identities.</comment>
+        <sql>UPDATE chat_thread SET session_jsonl=NULL WHERE session_jsonl IS NOT NULL;</sql>
+        <rollback>
+            <sql splitStatements="false">DO $$ BEGIN RAISE EXCEPTION 'Legacy hidden conversation memory cannot be restored. Restore a verified pre-upgrade backup instead.'; END $$;</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790837066126-19" author="hephaestus">
+        <createTable tableName="person_evidence_copy">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="person_evidence_copyPK"/>
+            </column>
+            <column name="job_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state" type="VARCHAR(24)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="store_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790837066126-20" author="hephaestus">
+        <createIndex indexName="idx_person_evidence_copy_job" tableName="person_evidence_copy">
+            <column name="job_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790837066126-21" author="hephaestus">
+        <createIndex indexName="idx_person_evidence_copy_store" tableName="person_evidence_copy">
+            <column name="store_id"/>
+            <column name="state"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790837066126-22" author="hephaestus">
+    <preConditions onFail="HALT"><tableExists tableName="auth_event"/></preConditions>
+    <comment>Admit person request audit events in the production partitioned audit table. Keep all existing event types and recorded facts.</comment>
+    <sql>ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED'));</sql>
+    <rollback><sql splitStatements="false">DO $$ BEGIN RAISE EXCEPTION 'Person request audit types cannot be removed while their events are retained. Restore a verified pre-upgrade backup instead.'; END $$;</sql></rollback>
+  </changeSet>
+    <changeSet id="1790837066126-23" author="hephaestus">
+    <preConditions onFail="HALT"><sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conname='fk_oauth_state_nonce_actor_account' AND conrelid='oauth_state_nonce'::regclass</sqlCheck></preConditions>
+    <comment>Name the account foreign key as SQL-owned: OAuth stores only an opaque account id across the module boundary, not an Account entity association.</comment>
+    <sql>ALTER TABLE oauth_state_nonce RENAME CONSTRAINT fk_oauth_state_nonce_actor_account TO sfk_oauth_state_nonce_actor_account;</sql>
+    <rollback><sql>ALTER TABLE oauth_state_nonce RENAME CONSTRAINT sfk_oauth_state_nonce_actor_account TO fk_oauth_state_nonce_actor_account;</sql></rollback>
+  </changeSet>
+    <changeSet id="1790837066126-24" author="hephaestus">
+        <preConditions onFail="HALT">
+            <tableExists tableName="connection"/>
+            <tableExists tableName="identity_provider"/>
+            <tableExists tableName="person_suppression"/>
+            <tableExists tableName="outline_document"/>
+        </preConditions>
+        <comment>Register known source instances for people without accounts; retain exact source URL spelling and carry existing native controls across equivalent origins. No display attribution is matched or inferred.</comment>
+        <customChange class="de.tum.cit.aet.hephaestus.core.privacy.PersonSourceProviderBackfillChange"/>
+        <rollback><stop>Restore the verified pre-upgrade backup to reverse source namespace registration; do not remove provider references or native processing controls.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

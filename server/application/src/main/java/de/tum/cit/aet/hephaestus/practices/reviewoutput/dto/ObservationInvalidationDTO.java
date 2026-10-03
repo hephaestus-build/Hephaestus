@@ -36,7 +36,9 @@ public record ObservationInvalidationDTO(
                 invalidation.getId(),
                 invalidation.getReason(),
                 invalidation.getInvalidatedAt(),
-                nameOf(accounts.get(invalidation.getInvalidatedByAccountId())),
+                invalidation.getInvalidatedByAccountId() == null
+                        ? null
+                        : nameOf(accounts.get(invalidation.getInvalidatedByAccountId())),
                 invalidation.getRestorationReason(),
                 invalidation.getRestoredAt(),
                 restoredBy == null ? null : nameOf(accounts.get(restoredBy)),

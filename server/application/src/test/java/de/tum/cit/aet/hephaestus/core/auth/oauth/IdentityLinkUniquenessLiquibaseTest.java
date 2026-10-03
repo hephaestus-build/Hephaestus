@@ -53,7 +53,7 @@ class IdentityLinkUniquenessLiquibaseTest {
             Database database =
                     DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
             try (Liquibase liquibase = new Liquibase("db/master.xml", new ClassLoaderResourceAccessor(), database)) {
-                liquibase.update(new Contexts());
+                liquibase.update(new Contexts("dev"));
             }
         }
     }

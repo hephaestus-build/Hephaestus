@@ -127,13 +127,11 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
     void initiate_buildsAuthorizeUrlWithLockedScopes() {
         // The initiating admin's actorRef must be woven into the OAuth state so the post-callback
         // connection audit row attributes the connect to them.
-        when(oauthStateService.issue(42L, IntegrationKind.SLACK, "admin@example.com"))
-                .thenReturn("state-abc");
+        when(oauthStateService.issue(42L, IntegrationKind.SLACK, 42L)).thenReturn("state-abc");
 
-        var initiation =
-                strategy.initiate(new InitiateRequest(42L, IntegrationKind.SLACK, Map.of(), "admin@example.com"));
+        var initiation = strategy.initiate(new InitiateRequest(42L, IntegrationKind.SLACK, Map.of(), 42L));
 
-        verify(oauthStateService).issue(42L, IntegrationKind.SLACK, "admin@example.com");
+        verify(oauthStateService).issue(42L, IntegrationKind.SLACK, 42L);
 
         assertThat(initiation).isInstanceOf(RedirectToVendor.class);
         var redirect = (RedirectToVendor) initiation;
@@ -201,8 +199,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
                 "client-id",
                 "");
 
-        assertThatThrownBy(() -> misconfigured.initiate(
-                        new InitiateRequest(42L, IntegrationKind.SLACK, Map.of(), "admin@example.com")))
+        assertThatThrownBy(() -> misconfigured.initiate(new InitiateRequest(42L, IntegrationKind.SLACK, Map.of(), 42L)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("redirect URI");
     }

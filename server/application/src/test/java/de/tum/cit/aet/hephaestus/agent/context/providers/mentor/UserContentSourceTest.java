@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
-import org.springframework.cache.CacheManager;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -34,9 +33,6 @@ class UserContentSourceTest extends BaseUnitTest {
 
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();
-
-    @Mock
-    CacheManager cacheManager;
 
     @InjectMocks
     UserContentSource provider;

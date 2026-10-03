@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection.ProjectedDocument;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.springframework.data.domain.Pageable;
 
 class OutlineDocumentProjectorTest extends BaseUnitTest {
@@ -70,7 +72,8 @@ class OutlineDocumentProjectorTest extends BaseUnitTest {
                 connectionService,
                 identityResolver,
                 documentSelector,
-                new OutlineOriginPolicy(Set.of(SERVER_URL)));
+                new OutlineOriginPolicy(Set.of(SERVER_URL)),
+                Mockito.mock(PersonDataCopyRecorder.class));
         lenient()
                 .when(connectionService.findActiveOutlineConfig(WORKSPACE_ID))
                 .thenReturn(Optional.of(new ConnectionConfig.OutlineConfig(SERVER_URL, null, null, Set.of())));
@@ -445,7 +448,8 @@ class OutlineDocumentProjectorTest extends BaseUnitTest {
                 connectionService,
                 identityResolver,
                 documentSelector,
-                new OutlineOriginPolicy(Set.of()));
+                new OutlineOriginPolicy(Set.of()),
+                Mockito.mock(PersonDataCopyRecorder.class));
 
         assertThat(denied.documentsForWorkspace(WORKSPACE_ID)).isEmpty();
         verify(documentRepository, never()).findForProjection(anyLong(), any());

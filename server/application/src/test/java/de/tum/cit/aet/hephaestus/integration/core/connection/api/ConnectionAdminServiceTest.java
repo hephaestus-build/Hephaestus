@@ -151,7 +151,7 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
                 "200",
                 new BearerToken("ol-test", null),
                 Map.of("server_url", "https://wiki.example.com"),
-                "alice");
+                42L);
 
         assertThat(result.getId()).isEqualTo(99L);
         assertThat(result.getKind()).isEqualTo(IntegrationKind.OUTLINE);
@@ -169,7 +169,7 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
         verify(connectionService).transition(any(Connection.class), req.capture());
         assertThat(req.getValue().next()).isEqualTo(IntegrationState.ACTIVE);
         assertThat(req.getValue().eventType()).isEqualTo("INITIATE");
-        assertThat(req.getValue().actorRef()).isEqualTo("alice");
+        assertThat(req.getValue().actorAccountId()).isEqualTo(42L);
         assertThat(req.getValue().correlationId()).startsWith("initiate-99-");
     }
 
@@ -177,7 +177,7 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
     void createInlineConnection_missingWorkspace_throws() {
         when(workspaceRepository.findById(99L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createInlineConnection(
-                        99L, IntegrationKind.OUTLINE, "x", new BearerToken("t", null), Map.of(), "alice"))
+                        99L, IntegrationKind.OUTLINE, "x", new BearerToken("t", null), Map.of(), 42L))
                 .isInstanceOf(EntityNotFoundException.class);
     }
 

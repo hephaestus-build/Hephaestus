@@ -21,6 +21,8 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider.ProviderType;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Instant;
@@ -36,6 +38,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
@@ -56,12 +59,15 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     private AdminBootstrapPolicy adminBootstrapPolicy;
     private LoginProviderRepository loginProviderRepository;
     private GitProviderRegistry gitProviderRegistry;
+    private final PersonDataWriteFence writeFence = mock(PersonDataWriteFence.class);
     private AccountProvisioningService service;
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
 
     @BeforeEach
     void setUp() {
+        lenient().when(writeFence.holdForWrite(any())).thenReturn(true);
         accountRepository = mock(AccountRepository.class);
+        lenient().when(accountRepository.lockStatusForUpdate(anyLong())).thenReturn(Optional.of("ACTIVE"));
         identityLinkRepository = mock(IdentityLinkRepository.class);
         gitProviderRegistry = mock(GitProviderRegistry.class);
         verifiedEmailResolver = mock(VerifiedEmailResolver.class);
@@ -90,7 +96,25 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
                 accountJitCreator,
                 adminBootstrapPolicy,
                 Clock.fixed(NOW, ZoneOffset.UTC),
-                events);
+                events,
+                writeFence);
+    }
+
+    @Test
+    void linkingNewNativeIdentityToDeletingAccountIsRejectedBeforeWriting() {
+        when(accountRepository.lockStatusForUpdate(42L)).thenReturn(Optional.of("DELETING"));
+
+        assertThatThrownBy(() -> service.resolveOrProvision(
+                        "github", "new-native-subject", principal(), AuthIntentCookie.Intent.link(42L, null)))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .isInstanceOfSatisfying(
+                        OAuth2AuthenticationException.class,
+                        exception -> assertThat(exception.getError().getErrorCode())
+                                .isEqualTo("identity_processing_suppressed"));
+
+        verify(identityLinkRepository, never()).save(any());
+        verify(accountRepository, never()).findById(anyLong());
+        verify(accountJitCreator, never()).create(any(), any());
     }
 
     @Test
@@ -313,6 +337,20 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void returningLoginDoesNotUpdateADeletingAccount() {
+        existingLink(null);
+        when(accountRepository.lockStatusForUpdate(9L)).thenReturn(Optional.of("DELETING"));
+
+        assertThatThrownBy(() -> service.resolveOrProvision(
+                        "github", "777", principal(), AuthIntentCookie.Intent.login(null, null)))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+
+        verify(identityLinkRepository, never()).touchLastLogin(anyLong(), any());
+        verify(identityLinkRepository, never()).linkExternalActorIfAbsent(anyLong(), anyLong());
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
     void returningLogin_leavesAWiredLinkAlone() {
         existingLink(555L);
 
@@ -415,5 +453,15 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
                 .hasMessageContaining("authenticated account binding");
 
         verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void erasedProviderIdentity_cannotCreateAnotherAccountOrAttachANewLink() {
+        when(writeFence.holdForWrite(List.of(new PersonIdentity(PROVIDER_ID, "42", null))))
+                .thenReturn(false);
+        assertThatThrownBy(() -> service.resolveOrProvision("github", "42", mock(OAuth2User.class), null))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        verify(accountJitCreator, never()).create(any(), any());
+        verify(identityLinkRepository, never()).save(any());
     }
 }

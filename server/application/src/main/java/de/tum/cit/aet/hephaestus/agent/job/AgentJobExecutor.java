@@ -1153,6 +1153,17 @@ public class AgentJobExecutor {
 
             AgentJob job = locked.get();
 
+            if (memberAiPolicy.isProcessingSuppressed(
+                    job.getWorkspace().getId(), job.getJobType(), job.getMetadata())) {
+                job.setStatus(AgentJobStatus.CANCELLED);
+                job.setCompletedAt(Instant.now());
+                job.setErrorMessage("Processing is blocked by a personal-data erasure request.");
+                job.setCancellationReason(AgentJobCancellationReason.PERSON_DATA_ERASED);
+                jobRepository.save(job);
+                recordPracticeReviewRefusal(job, "person_data_erased");
+                return new TerminalClaim(job, AgentJobStatus.CANCELLED);
+            }
+
             if (!memberAiPolicy.permitsReview(job.getWorkspace().getId(), job.getJobType(), job.getMetadata())) {
                 job.setStatus(AgentJobStatus.CANCELLED);
                 job.setCompletedAt(Instant.now());

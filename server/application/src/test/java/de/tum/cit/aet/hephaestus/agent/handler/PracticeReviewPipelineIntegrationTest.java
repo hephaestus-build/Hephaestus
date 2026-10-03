@@ -352,7 +352,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         agentJob.setWorkerId("test-worker");
         agentJob.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         agentJob.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
-        agentJob.setStatus(AgentJobStatus.COMPLETED);
+        agentJob.setStatus(AgentJobStatus.RUNNING);
         agentJob.setConfigSnapshot(AdmittedReviewJobFixtures.snapshot(
                 workspace,
                 llmConnectionRepository,
@@ -375,6 +375,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         agentJob = agentJobRepository.save(agentJob);
         preparedEvidence.add(PreparedJobInputsFixtures.prepare(
                 evidenceFiles, agentJob, PreparedJobInputsFixtures.filesOnly(capturedFiles)));
+        agentJob.setStatus(AgentJobStatus.COMPLETED);
+        agentJob = agentJobRepository.saveAndFlush(agentJob);
         preparedJobIds.add(agentJob.getId());
 
         handler = handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW);
@@ -553,6 +555,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 })
                 .when(documentProjection)
                 .documentsForWorkspace(workspace.getId());
+        evidenceFiles.beginPersonCapture(next);
         var raw = folderBuilder.prepare(
                 new ContextRequest.PracticeReviewRequest(next), EvidencePlan.compile(List.of(practice)));
         var index = Objects.requireNonNull(raw.manifest());
@@ -742,12 +745,12 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
 
     private void releaseSilentMode() {
         var current = instanceSettingsService.get();
-        instanceSettingsService.updateSilentMode(false, null, "pipeline-test", version(current));
+        instanceSettingsService.updateSilentMode(false, null, null, version(current));
     }
 
     private void engageSilentMode() {
         var current = instanceSettingsService.get();
-        instanceSettingsService.updateSilentMode(true, "pipeline safety test", "pipeline-test", version(current));
+        instanceSettingsService.updateSilentMode(true, "pipeline safety test", null, version(current));
     }
 
     private static EntityTagPrecondition version(InstanceSettings settings) {
@@ -760,7 +763,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next.setWorkerId("test-worker");
         next.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
-        next.setStatus(AgentJobStatus.COMPLETED);
+        next.setStatus(AgentJobStatus.RUNNING);
         next.setConfigSnapshot(agentJob.getConfigSnapshot());
         JsonNode metadata = agentJob.getMetadata();
         assertThat(metadata).isNotNull();
@@ -769,6 +772,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next = agentJobRepository.save(next);
         preparedEvidence.add(PreparedJobInputsFixtures.prepare(
                 evidenceFiles, next, PreparedJobInputsFixtures.filesOnly(capturedFiles)));
+        next.setStatus(AgentJobStatus.COMPLETED);
+        next = agentJobRepository.saveAndFlush(next);
         preparedJobIds.add(next.getId());
         return admitAndSetOutput(next, rawOutput);
     }
@@ -898,7 +903,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next.setWorkerId("test-worker");
         next.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
-        next.setStatus(AgentJobStatus.COMPLETED);
+        next.setStatus(AgentJobStatus.RUNNING);
         next.setConfigSnapshot(agentJob.getConfigSnapshot());
         ObjectNode metadata =
                 (ObjectNode) Objects.requireNonNull(agentJob.getMetadata()).deepCopy();
@@ -915,6 +920,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next = agentJobRepository.save(next);
         preparedEvidence.add(PreparedJobInputsFixtures.prepare(
                 evidenceFiles, next, PreparedJobInputsFixtures.filesOnly(capturedFiles)));
+        next.setStatus(AgentJobStatus.COMPLETED);
+        next = agentJobRepository.saveAndFlush(next);
         preparedJobIds.add(next.getId());
         return admitAndSetOutput(next, rawOutput);
     }

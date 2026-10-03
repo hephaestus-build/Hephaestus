@@ -45,9 +45,6 @@ class ActivityEventListenerTest extends BaseUnitTest {
     private ActivityEventService activityEventService;
 
     @Mock
-    private ActivityEventRepository activityEventRepository;
-
-    @Mock
     private PullRequestReviewThreadRepository reviewThreadRepository;
 
     @Mock
@@ -64,11 +61,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         listener = new ActivityEventListener(
-                activityEventService,
-                activityEventRepository,
-                reviewThreadRepository,
-                userRepository,
-                repositoryRepository);
+                activityEventService, reviewThreadRepository, userRepository, repositoryRepository);
 
         testUser = new User();
         testUser.setId(100L);
@@ -784,13 +777,13 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
         @Test
         void backfillsCommitActorsOnReconciliation() {
-            when(activityEventRepository.backfillCommitActors(200L)).thenReturn(3);
+            when(activityEventService.backfillCommitActors(200L)).thenReturn(3);
 
             var event = new ScmDomainEvent.CommitAuthorsReconciled(200L, createContext());
 
             listener.onCommitAuthorsReconciled(event);
 
-            verify(activityEventRepository).backfillCommitActors(200L);
+            verify(activityEventService).backfillCommitActors(200L);
         }
 
         @Test
@@ -799,18 +792,18 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onCommitAuthorsReconciled(event);
 
-            verify(activityEventRepository, never()).backfillCommitActors(anyLong());
+            verify(activityEventService, never()).backfillCommitActors(anyLong());
         }
 
         @Test
         void swallowsBackfillExceptions() {
-            when(activityEventRepository.backfillCommitActors(200L)).thenThrow(new RuntimeException("db outage"));
+            when(activityEventService.backfillCommitActors(200L)).thenThrow(new RuntimeException("db outage"));
 
             var event = new ScmDomainEvent.CommitAuthorsReconciled(200L, createContext());
 
             listener.onCommitAuthorsReconciled(event);
 
-            verify(activityEventRepository).backfillCommitActors(200L);
+            verify(activityEventService).backfillCommitActors(200L);
         }
     }
 

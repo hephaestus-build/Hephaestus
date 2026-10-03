@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxService;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import java.util.Optional;
 import java.util.concurrent.RejectedExecutionException;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class MentorSandboxPreparer {
     private final ObjectProvider<InteractiveSandboxService> interactiveSandboxServiceProvider;
     private final MentorTurnLock turnLock;
     private final MemberAiRoutingAdapter memberAiRouting;
+    private final PersonProcessingSuppression personSuppression;
     private final LlmAdmissionService llmAdmissionService;
     private final LlmBudgetService llmBudgetService;
     private final MentorPiAdapter mentorPiAdapter;
@@ -61,6 +63,7 @@ public class MentorSandboxPreparer {
     // Closing the scope is the operation; its binding is intentionally unread.
     @SuppressWarnings("try")
     private void prepareSandbox(InteractiveSandboxService sandboxService, long workspaceId, long developerId) {
+        if (personSuppression.isUserSuppressed(developerId)) return;
         // tryLock, never lock: a turn that holds the sandbox attaches for itself, and a prepare must not queue it.
         var lock = turnLock.tryAcquireSandboxLock(new MentorTurnLock.SandboxKey(workspaceId, developerId));
         if (lock.isEmpty()) {

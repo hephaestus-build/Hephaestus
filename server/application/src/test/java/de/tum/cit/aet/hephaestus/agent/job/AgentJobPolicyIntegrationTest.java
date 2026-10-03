@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -214,7 +215,8 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
         var preferences = mock(MemberAiPreferences.class);
         when(preferences.forDeveloper(workspace.getId(), 20L))
                 .thenReturn(new MemberAiPreferences.Decision(true, MemberAiChoice.CLOUD));
-        var routing = new MemberAiRoutingAdapter(bindings, preferences, resolver, workspaces);
+        var routing = new MemberAiRoutingAdapter(
+                bindings, preferences, resolver, workspaces, mock(PersonProcessingSuppression.class));
 
         assertThat(routing.binding(workspace.getId(), AgentPurpose.PRACTICE_REVIEW, 20L))
                 .get()

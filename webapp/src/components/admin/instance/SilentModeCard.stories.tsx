@@ -9,7 +9,7 @@ const released: InstanceSettings = {
 	etag: '"0"',
 	silentModeEngaged: false,
 	silentModeChangedAt: new Date("2026-07-10T09:30:00Z"),
-	silentModeChangedBy: "felixtjdietrich",
+	silentModeChangedByAccountId: 42,
 };
 
 const engaged: InstanceSettings = {
@@ -17,7 +17,7 @@ const engaged: InstanceSettings = {
 	silentModeEngaged: true,
 	silentModeReason: "Investigating incident #42",
 	silentModeChangedAt: new Date("2026-07-16T08:00:00Z"),
-	silentModeChangedBy: "felixtjdietrich",
+	silentModeChangedByAccountId: 42,
 };
 
 const meta = {

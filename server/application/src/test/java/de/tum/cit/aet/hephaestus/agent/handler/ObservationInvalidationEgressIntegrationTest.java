@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryConten
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DiffNote;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.WithheldObservation;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -61,6 +63,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
@@ -109,6 +112,12 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private PersonDataCopyFence personCopies;
+
+    @Autowired
+    private PersonProcessingSuppression personSuppression;
+
     private final FakeProvider provider = new FakeProvider();
     private final PracticeFeedbackDeliveryPolicy policy = mock(PracticeFeedbackDeliveryPolicy.class);
 
@@ -152,7 +161,8 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
                 new DiffNotePoster(poster, commentFormatter, List.of(provider)),
                 stateMachine,
                 invalidationRepository,
-                new RepeatedSummaryCheck(observationRepository, feedbackRepository));
+                new RepeatedSummaryCheck(observationRepository, feedbackRepository),
+                new PracticeFeedbackPersonDataAdmission(personCopies, personSuppression));
         corrector = new PostedCopyCorrector(
                 invalidationRepository,
                 observationRepository,
@@ -225,6 +235,70 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         return dispatchRepository
                 .findByDestinationKeyAndWorkspaceId(destinationKey, workspace.getId())
                 .orElseThrow();
+    }
+
+    @Test
+    void shouldWaitForAnErasureAndRejectTheQueuedStaleJobBeforeCreatingAnIntent() throws Exception {
+        CompletableFuture<PracticeFeedbackDispatchService.Result> delivery;
+        try (var erasure = personCopies.erase()) {
+            Integer backend = erasure.jdbc().queryForObject("SELECT pg_backend_pid()", Integer.class);
+            var snapshot = new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
+            snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+            delivery = CompletableFuture.supplyAsync(() -> Objects.requireNonNull(snapshot.execute(status -> {
+                // Establish a deliberately old source snapshot before waiting for admission.
+                assertThat(jdbc.queryForObject(
+                                "SELECT job_token_hash FROM agent_job WHERE id=?", String.class, job.getId()))
+                        .isNotNull();
+                return dispatchAutomatic("Prepared before erasure", List.of(note));
+            })));
+            Awaitility.await()
+                    .atMost(10, TimeUnit.SECONDS)
+                    .until(() -> Boolean.TRUE.equals(jdbc.queryForObject(
+                            "SELECT EXISTS(SELECT FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid)))",
+                            Boolean.class,
+                            backend)));
+            assertThat(delivery.isDone()).isFalse();
+            jdbc.update(
+                    "UPDATE agent_job SET job_token_hash=NULL WHERE id=? AND workspace_id=?",
+                    job.getId(),
+                    workspace.getId());
+        }
+        assertThat(delivery.get(10, TimeUnit.SECONDS).suppressionReason())
+                .isEqualTo(FeedbackSuppressionReason.ARTIFACT_GONE);
+        assertThat(provider.comments).isEmpty();
+        assertThat(provider.notes).isEmpty();
+        assertThat(dispatchRepository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), workspace.getId()))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldCommitTheProviderOutcomeBeforeAnErasureCanAcquireAdmission() throws Exception {
+        var delivery = holdWrite(() -> dispatchAutomatic("Prepared guidance", List.of(note)));
+        var erasure = CompletableFuture.supplyAsync(() -> {
+            try (var admission = personCopies.erase()) {
+                return admission
+                        .jdbc()
+                        .queryForObject(
+                                "SELECT state FROM feedback_dispatch WHERE agent_job_id=? AND workspace_id=?",
+                                String.class,
+                                job.getId(),
+                                workspace.getId());
+            }
+        });
+        try {
+            Awaitility.await()
+                    .atMost(10, TimeUnit.SECONDS)
+                    .until(() -> Boolean.TRUE.equals(jdbc.queryForObject(
+                            "SELECT EXISTS(SELECT FROM pg_stat_activity WHERE lower(wait_event)='advisory' AND query LIKE '%pg_advisory_lock(2165,1)%')",
+                            Boolean.class)));
+            assertThat(erasure.isDone()).isFalse();
+        } finally {
+            releaseHeldWrite(delivery);
+        }
+        assertThat(erasure.get(10, TimeUnit.SECONDS)).isEqualTo("SENT");
+        assertThat(provider.comments).hasSize(1);
+        assertThat(provider.notes).hasSize(1);
+        assertThat(dispatch("review:" + job.getId()).getDeliveredExternalRef()).isEqualTo("summary-1");
     }
 
     @Test

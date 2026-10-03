@@ -195,6 +195,7 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
         agentJob = new AgentJob();
         agentJob.setWorkspace(workspace);
         agentJob.setWorkerId("test-worker");
+        agentJob.setStatus(AgentJobStatus.RUNNING);
         agentJob.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         agentJob.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         agentJob.setConfigSnapshot(AdmittedReviewJobFixtures.snapshot(
@@ -335,6 +336,7 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
                                 List.of(new EvidenceDirectory(SandboxLayout.REPO_MOUNT_RELATIVE, checkout))),
                         null)));
         agentJob.setEvidenceSnapshot(snapshot);
+        agentJob.setStatus(AgentJobStatus.QUEUED);
         agentJob = agentJobRepository.save(agentJob);
     }
 

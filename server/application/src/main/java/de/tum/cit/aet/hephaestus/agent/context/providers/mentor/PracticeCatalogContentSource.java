@@ -34,8 +34,7 @@ import tools.jackson.databind.node.ObjectNode;
  * the workspace.
  *
  * <p><b>Freshness is TTL-bounded only.</b> The {@code mentor_practice_context} cache has no
- * event-driven invalidation: there is no Practice-change domain event to hang an eviction off,
- * and {@link MentorContextInvalidator} only evicts per-user SCM/review-driven caches. So an
+ * event-driven invalidation: there is no Practice-change domain event to hang an eviction off. An
  * admin edit to a practice (criteria text, activate/deactivate, rename, group reassignment) is
  * picked up only after the entry expires (MENTOR_CONTEXT_TTL, see {@code CacheConfig}). This is an
  * accepted limit — the catalog is low-churn admin data and a few minutes of staleness in mentor

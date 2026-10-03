@@ -26,10 +26,10 @@ interface InstanceSettingsRepository extends JpaRepository<InstanceSettings, Lon
     @Query(
             value =
                     "UPDATE instance_settings SET silent_mode_engaged = TRUE, silent_mode_reason = :reason, "
-                            + "silent_mode_changed_at = :changedAt, silent_mode_changed_by = :actor, version = version + 1 WHERE id = 1",
+                            + "silent_mode_changed_at = :changedAt, silent_mode_changed_by_account_id = :actor, version = version + 1 WHERE id = 1",
             nativeQuery = true)
     int engageSilentMode(
             @Param("reason") @Nullable String reason,
             @Param("changedAt") Instant changedAt,
-            @Param("actor") @Nullable String actor);
+            @Param("actor") @Nullable Long actor);
 }

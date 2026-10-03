@@ -903,7 +903,7 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
             settings.updateSilentMode(
                     engaged,
                     engaged ? "survey test" : null,
-                    "survey-test",
+                    null,
                     EntityTagPrecondition.parse("\"" + current.getVersion() + "\""));
         }
     }

@@ -24,8 +24,6 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,7 +41,7 @@ import tools.jackson.databind.node.ObjectNode;
  * {@code waitingDays}). The workspace-shape lives in this single context so the agent has
  * the per-tenant context it needs in one read.
  *
- * <p>Cache key: {@code workspaceId + ":" + developerId} — the data is per-user per-workspace.
+ * <p>Personal context is read for each turn, not retained in a formatted-content cache.
  */
 @Component
 @RequiredArgsConstructor
@@ -58,13 +56,10 @@ public class WorkspaceContentSource implements ContentSource {
     private static final int MESSAGE_PREVIEW_LENGTH = 200;
     private static final int REVIEW_WAIT_URGENCY_DAYS = 3;
 
-    private static final String CACHE_NAME = "mentor_workspace_context";
-
     private final UserRepository userRepository;
     private final WorkspaceRepository workspaceRepository;
     private final MentorContextQueryRepository queryRepository;
     private final ObjectMapper objectMapper;
-    private final CacheManager cacheManager;
 
     @Override
     public boolean supports(ContextRequest request) {
@@ -81,12 +76,7 @@ public class WorkspaceContentSource implements ContentSource {
     @Transactional(readOnly = true)
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
         MentorChatRequest req = (MentorChatRequest) request;
-        String key = req.workspaceId() + ":" + req.developerId();
-        Cache cache = cacheManager.getCache(CACHE_NAME);
-        // Atomic compute-if-absent closes the get/build/put race on invalidation events.
-        ObjectNode payload = (cache != null)
-                ? cache.get(key, () -> buildPayload(req.workspaceId(), req.developerId()))
-                : buildPayload(req.workspaceId(), req.developerId());
+        ObjectNode payload = buildPayload(req.workspaceId(), req.developerId());
         try {
             files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(payload));
         } catch (JacksonException e) {
@@ -94,7 +84,7 @@ public class WorkspaceContentSource implements ContentSource {
         }
     }
 
-    /** Pure function of (workspaceId, developerId). Callers cache through {@link CacheManager}. */
+    /** Reads the current context; formatted personal copies are not retained between turns. */
     public ObjectNode buildPayload(Long workspaceId, Long developerId) {
         User user = userRepository
                 .findById(developerId)
@@ -112,7 +102,7 @@ public class WorkspaceContentSource implements ContentSource {
 
         // Each sub-context is independent and best-effort: a failing query degrades only its own
         // section to an empty array, never blanking the whole workspace context. The real cause is
-        // logged here so it is not swallowed by the cache loader's generic wrapper.
+        // logged here so an unavailable section does not hide the cause.
         guarded(
                 "recentSessions",
                 () -> addRecentSessions(root, workspaceId, developerId),

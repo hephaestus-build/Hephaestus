@@ -72,6 +72,23 @@ final class PracticeReviewPreparation {
             ContextRequest request,
             Supplier<TaskEnvelope> envelope,
             Consumer<Map<String, byte[]>> staging) {
+        evidenceFiles.beginPersonCapture(job);
+        try {
+            return prepareCaptured(job, artifactKind, request, envelope, staging);
+        } catch (InsufficientEvidenceException refused) {
+            throw refused;
+        } catch (RuntimeException failure) {
+            evidenceFiles.abortPersonCapture(job);
+            throw failure;
+        }
+    }
+
+    private PreparedJobInputs prepareCaptured(
+            AgentJob job,
+            ArtifactKind artifactKind,
+            ContextRequest request,
+            Supplier<TaskEnvelope> envelope,
+            Consumer<Map<String, byte[]>> staging) {
         List<Practice> eligible = practiceCatalogInjector.resolveEligiblePractices(job, artifactKind);
         eligible.forEach(practice -> practice.setCurrentRevision(practiceRevisionService.forReview(practice)));
         PreparedEvidence prepared = workspaceContextBuilder.prepare(request, EvidencePlan.compile(eligible));

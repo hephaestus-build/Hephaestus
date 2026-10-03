@@ -9,8 +9,11 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -18,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +50,7 @@ public class AccountProvisioningService {
     private final AdminBootstrapPolicy adminBootstrapPolicy;
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
+    private final PersonDataWriteFence writeFence;
 
     public AccountProvisioningService(
             AccountRepository accountRepository,
@@ -56,7 +61,8 @@ public class AccountProvisioningService {
             AccountJitCreator accountJitCreator,
             AdminBootstrapPolicy adminBootstrapPolicy,
             Clock clock,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            PersonDataWriteFence writeFence) {
         this.accountRepository = accountRepository;
         this.identityLinkRepository = identityLinkRepository;
         this.gitProviderRegistry = gitProviderRegistry;
@@ -66,6 +72,7 @@ public class AccountProvisioningService {
         this.adminBootstrapPolicy = adminBootstrapPolicy;
         this.clock = clock;
         this.eventPublisher = eventPublisher;
+        this.writeFence = writeFence;
     }
 
     /**
@@ -100,6 +107,10 @@ public class AccountProvisioningService {
             throw new IllegalStateException(provider.getType() + " identity is missing team_id");
         }
 
+        if (!writeFence.holdForWrite(List.of(new PersonIdentity(providerId, subject, teamId)))) {
+            throw new OAuth2AuthenticationException("identity_processing_suppressed");
+        }
+
         IdentityLink link = identityLinkRepository
                 .findActiveByProviderSubject(providerId, subject, teamId)
                 .orElse(null);
@@ -116,6 +127,8 @@ public class AccountProvisioningService {
                 throw new AccountLinkConflictException(
                         registrationId, subject, link.getAccount().getId());
             }
+            requireActiveAccountForWrite(
+                    Objects.requireNonNull(link.getAccount().getId()));
             identityLinkRepository.touchLastLogin(link.getId(), clock.instant());
             if (link.getExternalActorId() == null) {
                 // A developer synced from a repository before their first sign-in has a user row this
@@ -139,6 +152,7 @@ public class AccountProvisioningService {
             if (intent == null || intent.linkingAccountId() == null) {
                 throw new IllegalStateException("auth.link: link mode requires an authenticated account binding");
             }
+            requireActiveAccountForWrite(intent.linkingAccountId());
             Account account = accountRepository
                     .findById(intent.linkingAccountId())
                     .orElseThrow(() -> new IllegalStateException(
@@ -197,6 +211,7 @@ public class AccountProvisioningService {
                     .findActiveByProviderSubject(providerId, subject, teamId)
                     .map(IdentityLink::getAccount)
                     .map(winner -> {
+                        requireActiveAccountForWrite(Objects.requireNonNull(winner.getId()));
                         log.info(
                                 "auth.success: JIT race resolved — reused concurrently-created accountId={} via provider={}",
                                 winner.getId(),
@@ -210,6 +225,18 @@ public class AccountProvisioningService {
                                     + subject
                                     + " but no active link is visible (constraint/transaction anomaly)",
                             e));
+        }
+    }
+
+    private void requireActiveAccountForWrite(long accountId) {
+        // Native identity locks precede account locks, as they do in person erasure. The scalar
+        // locked status cannot be replaced by a potentially stale managed Account entity. A write
+        // lock also prevents concurrent bootstrap promotions from upgrading two shared locks.
+        if (!accountRepository
+                .lockStatusForUpdate(accountId)
+                .map(Account.Status.ACTIVE.name()::equals)
+                .orElse(false)) {
+            throw new OAuth2AuthenticationException("identity_processing_suppressed");
         }
     }
 

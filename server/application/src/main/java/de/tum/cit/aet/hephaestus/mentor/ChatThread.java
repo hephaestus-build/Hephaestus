@@ -93,7 +93,8 @@ public class ChatThread {
     /**
      * Verbatim Pi SDK session JSONL bytes. BYTEA, plain {@code byte[]} — NOT {@code @Lob},
      * which would force Postgres OID mode and break auto-commit reads. Bulk reads go through
-     * {@code ChatThreadRepository#findSessionJsonl}.
+     * {@code ChatThreadRepository#findSessionJsonl}. Person erasure leaves an empty journal: the next
+     * turn must not continue any session a warm runtime still holds for the thread.
      */
     @Column(name = "session_jsonl", columnDefinition = "bytea")
     @ToString.Exclude

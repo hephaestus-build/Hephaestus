@@ -379,7 +379,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
             instanceSettingsService.updateSilentMode(
                     engaged,
                     engaged ? "notification test" : null,
-                    "notification-test",
+                    null,
                     EntityTagPrecondition.parse("\"" + current.getVersion() + "\""));
         }
     }

@@ -823,6 +823,7 @@ export type ConfigurationFact = {
  *  <code>Connection</code> that this DTO omits.
  */
 export type ConnectionAuditEntry = {
+  actorAccountId?: number;
   actorKind?: string;
   actorRef?: string;
   correlationId?: string;
@@ -1691,6 +1692,10 @@ export type EmailTestResponse = {
   to?: string;
 };
 
+export type ErasureRequest = {
+  externalCopiesRemoved: boolean;
+};
+
 /**
  * A verified quote and its exact source location
  */
@@ -1773,6 +1778,11 @@ export type ExportStatus = {
   id?: number;
   requestedAt?: string;
   status?: string;
+};
+
+export type ExternalDelivery = {
+  locator: string;
+  workspaceId: number;
 };
 
 /**
@@ -2125,6 +2135,12 @@ export type HeldPractice = {
   workProvider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
 };
 
+export type Identity = {
+  providerId: number;
+  subject: string;
+  teamId?: string;
+};
+
 /**
  * One row per sign-in option. <code>providerType</code> drives the SPA's icon choice; <code>baseUrl</code> is
  *  the OAuth instance origin (scheme + host[:port]) of the authorization endpoint, so the
@@ -2319,7 +2335,7 @@ export type InstanceLlmSettings = {
 export type InstanceSettings = {
   etag: string;
   silentModeChangedAt?: string;
-  silentModeChangedBy?: string;
+  silentModeChangedByAccountId?: number;
   silentModeEngaged: boolean;
   silentModeReason?: string;
 };
@@ -3231,6 +3247,32 @@ export type ParticipationCounts = {
   responded: number;
 };
 
+export type PersonDataProvider = {
+  id: number;
+  serverUrl: string;
+  type: string;
+};
+
+export type PersonDataRequest = {
+  completed: {
+    [key: string]: number;
+  };
+  counts: {
+    [key: string]: number;
+  };
+  expiresAt: string;
+  externalDeliveries: Array<ExternalDelivery>;
+  failureCode?: string;
+  id: string;
+  scope?: PersonDataScope;
+  state: 'PREVIEW' | 'ERASING' | 'FAILED' | 'COMPLETE' | 'EXPIRED';
+};
+
+export type PersonDataScope = {
+  accountId?: number;
+  identities: Array<Identity>;
+};
+
 /**
  * A practice's position in the catalog
  */
@@ -4136,6 +4178,11 @@ export type PracticeWorkTypeDefinitionOptions = {
   supportedAutomatedReviewModes: Array<'LANGUAGE_MODEL' | 'NONE'>;
 };
 
+export type PreviewRequest = {
+  accountId?: number;
+  identities: Array<Identity>;
+};
+
 /**
  * Draft connection probe using a supplied (never-persisted) credential
  */
@@ -5025,7 +5072,7 @@ export type ReviewRequestOutcome = {
   /**
    * The controlled-vocabulary reason nothing was started; absent when a review was started
    */
-  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'BOT_AUTHOR' | 'BOT_REVIEWER' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MERGE_ACTOR_UNAVAILABLE' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'BOT_AUTHOR' | 'BOT_REVIEWER' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PERSON_DATA_ERASED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MERGE_ACTOR_UNAVAILABLE' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
   /**
    * The reason as one sentence for the person who asked. Render it verbatim: it is written next to the reason it explains so that every surface says the same thing, and a re-worded copy is how a screen and a support answer come to disagree.
    */
@@ -5777,7 +5824,7 @@ export type TracedSignal = {
   /**
    * Why it ended in that state; null once it triggered a review
    */
-  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'BOT_AUTHOR' | 'BOT_REVIEWER' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MERGE_ACTOR_UNAVAILABLE' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'BOT_AUTHOR' | 'BOT_REVIEWER' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PERSON_DATA_ERASED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MERGE_ACTOR_UNAVAILABLE' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
   /**
    * That reason as one sentence for a reader. Render it verbatim: it is written next to the reason it explains, so every surface that explains a silence says the same thing
    */
@@ -7086,7 +7133,7 @@ export type AdminListAuthEventsData = {
     size?: number;
     accountId?: number;
     actingAccountId?: number;
-    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
     result?: Array<'SUCCESS' | 'FAILURE'>;
     from?: string;
     to?: string;
@@ -7109,7 +7156,7 @@ export type AdminExportAuthEventsData = {
   query?: {
     accountId?: number;
     actingAccountId?: number;
-    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
+    eventType?: Array<'USER_VIEW' | 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED'>;
     result?: Array<'SUCCESS' | 'FAILURE'>;
     from?: string;
     to?: string;
@@ -7639,6 +7686,92 @@ export type AdminUpdateLoginProviderResponses = {
 };
 
 export type AdminUpdateLoginProviderResponse = AdminUpdateLoginProviderResponses[keyof AdminUpdateLoginProviderResponses];
+
+export type AdminPreviewPersonDataData = {
+  body: PreviewRequest;
+  path?: never;
+  query?: never;
+  url: '/admin/person-data/preview';
+};
+
+export type AdminPreviewPersonDataResponses = {
+  /**
+   * OK
+   */
+  200: PersonDataRequest;
+};
+
+export type AdminPreviewPersonDataResponse = AdminPreviewPersonDataResponses[keyof AdminPreviewPersonDataResponses];
+
+export type AdminListPersonDataProvidersData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/admin/person-data/providers';
+};
+
+export type AdminListPersonDataProvidersResponses = {
+  /**
+   * OK
+   */
+  200: Array<PersonDataProvider>;
+};
+
+export type AdminListPersonDataProvidersResponse = AdminListPersonDataProvidersResponses[keyof AdminListPersonDataProvidersResponses];
+
+export type AdminGetPersonDataRequestData = {
+  body?: never;
+  path: {
+    id: string;
+  };
+  query?: never;
+  url: '/admin/person-data/{id}';
+};
+
+export type AdminGetPersonDataRequestResponses = {
+  /**
+   * OK
+   */
+  200: PersonDataRequest;
+};
+
+export type AdminGetPersonDataRequestResponse = AdminGetPersonDataRequestResponses[keyof AdminGetPersonDataRequestResponses];
+
+export type AdminErasePersonDataData = {
+  body: ErasureRequest;
+  path: {
+    id: string;
+  };
+  query?: never;
+  url: '/admin/person-data/{id}/erase';
+};
+
+export type AdminErasePersonDataResponses = {
+  /**
+   * OK
+   */
+  200: PersonDataRequest;
+};
+
+export type AdminErasePersonDataResponse = AdminErasePersonDataResponses[keyof AdminErasePersonDataResponses];
+
+export type AdminExportPersonDataData = {
+  body?: never;
+  path: {
+    id: string;
+  };
+  query?: never;
+  url: '/admin/person-data/{id}/export';
+};
+
+export type AdminExportPersonDataResponses = {
+  /**
+   * JSON file
+   */
+  200: Blob | File;
+};
+
+export type AdminExportPersonDataResponse = AdminExportPersonDataResponses[keyof AdminExportPersonDataResponses];
 
 export type AdminGetCuratedCatalogData = {
   body?: never;

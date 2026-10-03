@@ -12,7 +12,7 @@ public record FeedbackApprovalDTO(
         FeedbackApprovalDecision decision,
         FeedbackRejectionReason rejectionReason,
         @Nullable String rejectionNote,
-        Long actorAccountId,
+        @Nullable Long actorAccountId,
         Instant decidedAt) {
     public static FeedbackApprovalDTO from(FeedbackApproval approval) {
         return new FeedbackApprovalDTO(

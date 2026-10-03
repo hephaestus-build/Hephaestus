@@ -24,7 +24,7 @@ export const Engaged: Story = {
 			etag: '"0"',
 			silentModeEngaged: true,
 			silentModeChangedAt: hoursBefore(2),
-			silentModeChangedBy: "felixtjdietrich",
+			silentModeChangedByAccountId: 42,
 		},
 	},
 };

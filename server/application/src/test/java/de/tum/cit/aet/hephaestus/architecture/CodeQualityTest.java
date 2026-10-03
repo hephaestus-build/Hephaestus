@@ -21,6 +21,8 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountErasureContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -403,6 +405,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
         @Test
         void objectProviderUsageIsLimited() {
             Set<String> knownCycleBreakers = Set.of(
+                    "EvidenceFolderPersonDataCatalog", // The executor is worker-only; resolving lifecycle/handlers
+                    // eagerly would recurse through evidence preparation into this mounted-store hook.
                     "FairRetryPostProcessor", // A static BeanPostProcessor must not initialize JDBC/serializer beans
                     // early.
                     "WorkspaceActivationService",
@@ -505,9 +509,26 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                                 .orElse(false));
 
         /**
+         * The person-data boundary: {@code core.privacy}, the adapters each module registers through its SPI
+         * or as an account erasure contributor, and the callers of the copy fence's leased session. They export
+         * and erase across every module's tables, including tables without an entity, and
+         * {@link PersonalDataMapArchTest} holds their SQL to the personal-data map.
+         */
+        private static final DescribedPredicate<JavaClass> PERSON_DATA_BOUNDARY = DescribedPredicate.describe(
+                "the person-data boundary",
+                javaClass -> javaClass.getPackageName().startsWith(BASE_PACKAGE + ".core.privacy")
+                        || javaClass.isAssignableTo(
+                                JavaClass.Predicates.resideInAPackage(BASE_PACKAGE + ".core.privacy.spi.."))
+                        || javaClass.isAssignableTo(AccountErasureContributor.class)
+                        || javaClass.getDirectDependenciesFromSelf().stream()
+                                .anyMatch(dependency ->
+                                        dependency.getTargetClass().isEquivalentTo(PersonDataCopyFence.Lease.class)));
+
+        /**
          * Spring's JDBC templates and clients run SQL that neither the tenancy statement inspector nor the
-         * repository query rules can see. Configuration hands them to libraries, and {@code core.database} holds
-         * the schema infrastructure that has to run outside a repository's transaction.
+         * repository query rules can see. Configuration hands them to libraries, {@code core.database} holds
+         * the schema infrastructure that has to run outside a repository's transaction, and the person-data
+         * boundary has its own guard.
          */
         @Test
         void rawSqlLivesInRepositories() {
@@ -519,6 +540,7 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     .and()
                     .areNotAssignableTo(Repository.class)
                     .and(DescribedPredicate.not(CONFIGURATION))
+                    .and(DescribedPredicate.not(PERSON_DATA_BOUNDARY))
                     .should()
                     .dependOnClassesThat()
                     .resideInAPackage("org.springframework.jdbc.core..")

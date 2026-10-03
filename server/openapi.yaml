@@ -73,6 +73,8 @@ tags:
   name: Practice reviews
 - description: GDPR Art. 20 self-service data export
   name: Account
+- description: Instance-administrator access and erasure requests
+  name: Person Data
 - description: Workspace-scoped history of admin configuration changes
   name: Config Audit
 - description: |-
@@ -218,6 +220,9 @@ paths:
             - IMPERSONATION_END
             - ACCOUNT_DELETED
             - EXPORT_REQUESTED
+            - PERSON_DATA_PREVIEWED
+            - PERSON_DATA_EXPORTED
+            - PERSON_DATA_ERASURE_REQUESTED
             - APP_ROLE_CHANGED
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
@@ -302,6 +307,9 @@ paths:
             - IMPERSONATION_END
             - ACCOUNT_DELETED
             - EXPORT_REQUESTED
+            - PERSON_DATA_PREVIEWED
+            - PERSON_DATA_EXPORTED
+            - PERSON_DATA_ERASURE_REQUESTED
             - APP_ROLE_CHANGED
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
@@ -935,6 +943,107 @@ paths:
       summary: Update a login provider
       tags:
       - Admin
+  /admin/person-data/preview:
+    post:
+      operationId: adminPreviewPersonData
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreviewRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonDataRequest"
+          description: OK
+      summary: Resolve exact identities and preview every personal-data store
+      tags:
+      - Person Data
+  /admin/person-data/providers:
+    get:
+      operationId: adminListPersonDataProviders
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PersonDataProvider"
+          description: OK
+      summary: List exact provider instances without credentials
+      tags:
+      - Person Data
+  /admin/person-data/{id}:
+    get:
+      operationId: adminGetPersonDataRequest
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonDataRequest"
+          description: OK
+      summary: Get a person-data preview or erasure receipt
+      tags:
+      - Person Data
+  /admin/person-data/{id}/erase:
+    post:
+      operationId: adminErasePersonData
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErasureRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonDataRequest"
+          description: OK
+      summary: Start or resume the preview's audited erasure job
+      tags:
+      - Person Data
+  /admin/person-data/{id}/export:
+    post:
+      operationId: adminExportPersonData
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: JSON file
+      summary: Download the preview's frozen scope as one JSON file
+      tags:
+      - Person Data
   /admin/practice-catalog:
     get:
       description: "Practice summaries, complete groups, ordering, and catalog state.\
@@ -10465,6 +10574,9 @@ components:
          <p>Lean projection of {@link ConnectionAudit ConnectionAudit} — the entity carries a back-reference to
          <code>Connection</code> that this DTO omits.
       properties:
+        actorAccountId:
+          type: integer
+          format: int64
         actorKind:
           type: string
         actorRef:
@@ -12119,6 +12231,13 @@ components:
             \ no recipient to resolve"
       required:
       - outcome
+    ErasureRequest:
+      type: object
+      properties:
+        externalCopiesRemoved:
+          type: boolean
+      required:
+      - externalCopiesRemoved
     EvidenceCitation:
       type: object
       description: A verified quote and its exact source location
@@ -12233,6 +12352,17 @@ components:
           format: date-time
         status:
           type: string
+    ExternalDelivery:
+      type: object
+      properties:
+        locator:
+          type: string
+        workspaceId:
+          type: integer
+          format: int64
+      required:
+      - locator
+      - workspaceId
     FeatureFlags:
       type: object
       description: Feature flags evaluated for the current user
@@ -12733,6 +12863,24 @@ components:
       - practiceSlug
       - since
       - workKind
+    Identity:
+      type: object
+      properties:
+        providerId:
+          type: integer
+          format: int64
+          exclusiveMinimum: 0
+        subject:
+          type: string
+          maxLength: 255
+          minLength: 1
+        teamId:
+          type: string
+          maxLength: 255
+          minLength: 1
+      required:
+      - providerId
+      - subject
     IdentityProviderView:
       type: object
       description: |-
@@ -12991,8 +13139,9 @@ components:
         silentModeChangedAt:
           type: string
           format: date-time
-        silentModeChangedBy:
-          type: string
+        silentModeChangedByAccountId:
+          type: integer
+          format: int64
         silentModeEngaged:
           type: boolean
         silentModeReason:
@@ -14319,6 +14468,74 @@ components:
       - declined
       - invited
       - responded
+    PersonDataProvider:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        serverUrl:
+          type: string
+        type:
+          type: string
+      required:
+      - id
+      - serverUrl
+      - type
+    PersonDataRequest:
+      type: object
+      properties:
+        completed:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+        expiresAt:
+          type: string
+          format: date-time
+        externalDeliveries:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExternalDelivery"
+        failureCode:
+          type: string
+        id:
+          type: string
+          format: uuid
+        scope:
+          $ref: "#/components/schemas/PersonDataScope"
+        state:
+          type: string
+          enum:
+          - PREVIEW
+          - ERASING
+          - FAILED
+          - COMPLETE
+          - EXPIRED
+      required:
+      - completed
+      - counts
+      - expiresAt
+      - externalDeliveries
+      - id
+      - state
+    PersonDataScope:
+      type: object
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        identities:
+          type: array
+          items:
+            $ref: "#/components/schemas/Identity"
+      required:
+      - identities
     PlacePracticeRequest:
       type: object
       description: A practice's position in the catalog
@@ -15717,6 +15934,21 @@ components:
       - signals
       - subjectRoles
       - supportedAutomatedReviewModes
+    PreviewRequest:
+      type: object
+      properties:
+        accountId:
+          type: integer
+          format: int64
+          exclusiveMinimum: 0
+        identities:
+          type: array
+          items:
+            $ref: "#/components/schemas/Identity"
+          maxItems: 32
+          minItems: 0
+      required:
+      - identities
     ProbeLlmConnectionRequest:
       type: object
       description: Draft connection probe using a supplied (never-persisted) credential
@@ -17194,6 +17426,7 @@ components:
           - NO_ACTIVE_PRACTICE
           - REVIEW_MODEL_UNBOUND
           - MEMBER_AI_DECLINED
+          - PERSON_DATA_ERASED
           - PRACTICE_AUTONOMY_OFF
           - BUDGET_EXHAUSTED
           - SUBJECT_UNLINKED
@@ -18325,6 +18558,7 @@ components:
           - NO_ACTIVE_PRACTICE
           - REVIEW_MODEL_UNBOUND
           - MEMBER_AI_DECLINED
+          - PERSON_DATA_ERASED
           - PRACTICE_AUTONOMY_OFF
           - BUDGET_EXHAUSTED
           - SUBJECT_UNLINKED

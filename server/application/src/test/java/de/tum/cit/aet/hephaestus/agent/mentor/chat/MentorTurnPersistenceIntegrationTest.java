@@ -20,6 +20,8 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.PricingState;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageProvenance;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRegistry;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -66,6 +68,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -116,6 +119,12 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ChatThreadService chatThreadService;
+
+    @Autowired
+    private PersonDataRegistry personDataRegistry;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private Workspace workspace;
     private User user;
@@ -795,7 +804,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         ChatThread thread = persistence.ensureThread(workspace.getId(), threadId, user, Set.of(user.getId()), "hello");
 
         byte[] priorBytes = "{\"prior\":\"turn\"}\n".getBytes(StandardCharsets.UTF_8);
-        chatThreadRepository.updateSessionJsonl(threadId, priorBytes);
+        chatThreadRepository.updateSessionJsonl(threadId, priorBytes, sessionVersion(threadId));
 
         UUID assistantId = UUID.randomUUID();
         MentorTurnPersistence.TurnPersistenceCookie cookie =
@@ -806,6 +815,61 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
                 new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
 
         assertThat(chatThreadRepository.findSessionJsonl(threadId)).contains(priorBytes);
+    }
+
+    @Test
+    void shouldNotStoreARunningTurnsSessionOverAJournalThatPersonErasureCleared() {
+        ChatThread thread =
+                persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "hello");
+        UUID threadId = thread.getId();
+        chatThreadRepository.updateSessionJsonl(
+                threadId, "{\"type\":\"earlier\"}\n".getBytes(StandardCharsets.UTF_8), sessionVersion(threadId));
+        UUID runningId = UUID.randomUUID();
+        MentorTurnPersistence.TurnPersistenceCookie running =
+                persistence.persistInFlight(thread, "hello", runningId, null, admittedMentorConfig());
+
+        User colleague = new User();
+        colleague.setNativeId(7_002L);
+        colleague.setLogin("erased-colleague");
+        colleague.setName("Erased Colleague");
+        colleague.setAvatarUrl("https://example.com/c.png");
+        colleague.setHtmlUrl("https://gitlab.com/erased-colleague");
+        colleague.setType(User.Type.USER);
+        colleague.setCreatedAt(Instant.now());
+        colleague.setUpdatedAt(Instant.now());
+        colleague.setProvider(user.getProvider());
+        colleague = userRepository.save(colleague);
+        jdbc.update(
+                "INSERT INTO workspace_membership(created_at,role,user_id,workspace_id,hidden) VALUES (CURRENT_TIMESTAMP,'MEMBER',?,?,FALSE)",
+                colleague.getId(),
+                workspace.getId());
+        var journals = personDataRegistry.stores().stream()
+                .filter(store -> store.store().equals("chat_thread_runtime_journal"))
+                .findFirst()
+                .orElseThrow();
+        var selection = journals.select(new PersonScope(null, List.of(), List.of(colleague.getId())));
+        assertThat(selection.rows()).isNotEmpty();
+        journals.erase(selection);
+
+        TranslatorState warm = new TranslatorState(runningId);
+        warm.observeSessionJsonl("{\"type\":\"warm\",\"context\":\"colleague\"}\n".getBytes(StandardCharsets.UTF_8));
+        persistence.complete(running, warm, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
+        assertThat(chatThreadRepository.findSessionJsonl(threadId))
+                .as("the runtime admitted before erasure cannot restore its session")
+                .hasValueSatisfying(bytes -> assertThat(bytes).isEmpty());
+
+        UUID nextId = UUID.randomUUID();
+        MentorTurnPersistence.TurnPersistenceCookie next =
+                persistence.persistInFlight(thread, "again", nextId, null, admittedMentorConfig());
+        byte[] fresh = "{\"type\":\"fresh\"}\n".getBytes(StandardCharsets.UTF_8);
+        TranslatorState nextState = new TranslatorState(nextId);
+        nextState.observeSessionJsonl(fresh);
+        persistence.complete(next, nextState, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
+        assertThat(chatThreadRepository.findSessionJsonl(threadId)).contains(fresh);
+    }
+
+    private String sessionVersion(UUID threadId) {
+        return chatThreadRepository.findSessionVersion(threadId).orElseThrow();
     }
 
     @Test
@@ -897,7 +961,8 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         ChatThread thread =
                 persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "hello");
         UUID threadId = thread.getId();
-        chatThreadRepository.updateSessionJsonl(threadId, "{\"type\":\"before\"}\n".getBytes(StandardCharsets.UTF_8));
+        chatThreadRepository.updateSessionJsonl(
+                threadId, "{\"type\":\"before\"}\n".getBytes(StandardCharsets.UTF_8), sessionVersion(threadId));
         UUID assistantId = UUID.randomUUID();
         MentorTurnPersistence.TurnPersistenceCookie cookie =
                 persistence.persistInFlight(thread, "hello", assistantId, null, admittedMentorConfig());

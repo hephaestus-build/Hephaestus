@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -29,6 +30,7 @@ public class ReviewMemberAiPolicy {
     private final MemberAiPreferences preferences;
     private final IssueRepository issues;
     private final ReviewableArtifactOwnershipRepository ownership;
+    private final PersonProcessingSuppression suppression;
 
     @Transactional(readOnly = true)
     public Optional<WorkspaceAgentBinding> binding(long workspaceId, AgentJobType type, @Nullable JsonNode metadata) {
@@ -36,7 +38,43 @@ public class ReviewMemberAiPolicy {
     }
 
     @Transactional(readOnly = true)
+    public boolean isProcessingSuppressed(long workspaceId, AgentJobType type, @Nullable JsonNode metadata) {
+        return processingSuppressed(workspaceId, type, metadata);
+    }
+
+    private boolean processingSuppressed(long workspaceId, AgentJobType type, @Nullable JsonNode metadata) {
+        Long developerId = subject(workspaceId, type, metadata);
+        if (developerId != null && suppression.isUserSuppressed(developerId)) return true;
+        String key;
+        String kind;
+        switch (type) {
+            case PULL_REQUEST_REVIEW -> {
+                key = "pull_request_id";
+                kind = "scm.pull_request";
+            }
+            case ISSUE_REVIEW -> {
+                key = "issue_id";
+                kind = "scm.issue";
+            }
+            case CONVERSATION_REVIEW -> {
+                key = "slack_thread_id";
+                kind = "chat.conversation_thread";
+            }
+            case DOCUMENT_REVIEW -> {
+                key = "docs_document_id";
+                kind = "docs.document";
+            }
+            default -> {
+                return false;
+            }
+        }
+        Long artifactId = id(metadata, key);
+        return artifactId != null && suppression.isArtifactSuppressed(workspaceId, kind, artifactId);
+    }
+
+    @Transactional(readOnly = true)
     public boolean permitsReview(long workspaceId, AgentJobType type, @Nullable JsonNode metadata) {
+        if (processingSuppressed(workspaceId, type, metadata)) return false;
         return preferences
                 .forDeveloper(workspaceId, subject(workspaceId, type, metadata))
                 .permitsAi();
@@ -52,6 +90,7 @@ public class ReviewMemberAiPolicy {
 
     @Transactional(readOnly = true)
     public boolean allowsResult(AgentJob job) {
+        if (processingSuppressed(job.getWorkspace().getId(), job.getJobType(), job.getMetadata())) return false;
         return evaluatePerson(job, subject(job.getWorkspace().getId(), job.getJobType(), job.getMetadata()));
     }
 
@@ -62,6 +101,7 @@ public class ReviewMemberAiPolicy {
     }
 
     private boolean evaluatePerson(AgentJob job, @Nullable Long personId) {
+        if (personId != null && suppression.isUserSuppressed(personId)) return false;
         var decision = preferences.forDeveloper(job.getWorkspace().getId(), personId);
         if (!decision.permitsAi()) return false;
         if (job.getConfigSnapshot() == null) return false;

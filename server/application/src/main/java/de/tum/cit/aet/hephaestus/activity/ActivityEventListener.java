@@ -41,7 +41,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class ActivityEventListener {
 
     private final ActivityEventService activityEventService;
-    private final ActivityEventRepository activityEventRepository;
     private final PullRequestReviewThreadRepository reviewThreadRepository;
     private final UserRepository userRepository;
     private final RepositoryRepository repositoryRepository;
@@ -1142,7 +1141,7 @@ public class ActivityEventListener {
         }
         String correlationId = event.context() != null ? event.context().correlationId() : null;
         try {
-            int updated = activityEventRepository.backfillCommitActors(repositoryId);
+            int updated = activityEventService.backfillCommitActors(repositoryId);
             log.info(
                     "Backfilled {} COMMIT_CREATED activity events: repoId={}, correlationId={}",
                     updated,

@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.context;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -13,12 +15,18 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 @Transactional(readOnly = true)
 public class ScmJobFolderProjector implements WorkspaceScmProjection {
+    /** The user ids a projected record may carry, each recorded as a copy of that person's data. */
+    private static final List<String> PERSON_FIELDS =
+            List.of("author_id", "merged_by_id", "resolved_by_id", "created_by_id");
+
     private final ScmJobFolderRepository rows;
     private final JsonMapper mapper;
+    private final PersonDataCopyRecorder personCopies;
 
-    public ScmJobFolderProjector(ScmJobFolderRepository rows, JsonMapper mapper) {
+    public ScmJobFolderProjector(ScmJobFolderRepository rows, JsonMapper mapper, PersonDataCopyRecorder personCopies) {
         this.rows = rows;
         this.mapper = mapper;
+        this.personCopies = personCopies;
     }
 
     @Override
@@ -84,6 +92,12 @@ public class ScmJobFolderProjector implements WorkspaceScmProjection {
                 JsonNode value = mapper.readTree(row);
                 if (!(value instanceof ObjectNode object)) {
                     throw new IllegalStateException("Workspace projection must be an object");
+                }
+                for (String actor : PERSON_FIELDS) {
+                    JsonNode id = object.path(actor);
+                    if (id.isIntegralNumber() && id.asLong() > 0) {
+                        personCopies.recordUser(id.asLong());
+                    }
                 }
                 consumer.accept(object);
             });

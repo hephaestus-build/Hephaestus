@@ -222,11 +222,12 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
                             .getPackageName()
                             .matches("^de\\.tum\\.cit\\.aet\\.hephaestus\\.integration\\.[a-z]+\\..*");
 
-                    // Same-module SPI impl: the class lives in the same top-level module as
+                    // Same-module SPI impl, including inherited interfaces: the class lives in the same top-level
+                    // module as
                     // the SPI interface it implements (e.g. activity/ActivityEventService implements
                     // activity/spi/ActivityRecorder). The module exposes its own contract; this is
                     // not an adapter pattern, it's a "this module IS the implementation" pattern.
-                    boolean implementsSpiFromSameModule = javaClass.getRawInterfaces().stream()
+                    boolean implementsSpiFromSameModule = javaClass.getAllRawInterfaces().stream()
                             .filter(i -> i.getPackageName().startsWith(BASE_PACKAGE)
                                     && i.getPackageName().contains(".spi"))
                             .anyMatch(spiInterface -> {

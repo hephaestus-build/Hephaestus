@@ -125,6 +125,9 @@ tasks.withType<JavaCompile>().configureEach {
         // Misfires on an inline tag in the Javadoc of a field Lombok generates an accessor for:
         // google/error-prone#5855.
         disable("UnrecognisedJavadocTag")
+        // Crashes on a literal after a text block once the formatter joins the line:
+        // google/error-prone#6103.
+        disable("StringConcatToTextBlock")
         error(
             "NullAway",
             "RequireExplicitNullMarking",

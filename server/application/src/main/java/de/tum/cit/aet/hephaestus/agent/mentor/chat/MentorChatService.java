@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetExhaustedException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUnpricedUsageBlockedException;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -105,6 +106,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private final LlmAdmissionService llmAdmissionService;
     private final MentorProxyCredentialRegistry proxyCredentialRegistry;
     private final MemberAiRoutingAdapter memberAiRouting;
+    private final PersonProcessingSuppression personSuppression;
     private final MemberAiPreferences memberAiPreferences;
     private final MergeReadinessContentSource mergeReadiness;
     private final ObservationHistoryContentSource observationHistory;
@@ -279,6 +281,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             throw new LlmUnpricedUsageBlockedException(mentorFunding);
         }
         User user = userRepository.getCurrentUserElseThrow();
+        if (personSuppression.isUserSuppressed(user.getId())) {
+            throw new MentorRefusedException(MentorRefusal.PERSON_ERASED);
+        }
         UUID retryOf = submitted.retryOfAssistantMessageId();
         // A retry answers a stored prompt, so it never opens a thread.
         if (retryOf != null
@@ -293,11 +298,6 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 user,
                 CurrentScmIdentityHolder.getAccountActorIds(),
                 submitted.userMessage());
-        byte @Nullable [] priorSession = chatThreadRepository
-                .findSessionJsonl(thread.getId())
-                .filter(bytes -> bytes.length > 0)
-                .orElse(null);
-
         UUID assistantMessageId = UUID.randomUUID();
         // Read model only: it makes this turn's completed calls visible to the budget gate while the
         // turn is still running. Billing comes from the turn's row, which the proxy writes per call.
@@ -313,6 +313,12 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             cookie = retry.cookie();
             request = submitted.withUserMessage(retry.prompt());
         }
+        // After admission, which fixed the row version this turn's journal write is conditional on.
+        Optional<byte[]> journal = chatThreadRepository.findSessionJsonl(thread.getId());
+        byte @Nullable [] priorSession =
+                journal.filter(bytes -> bytes.length > 0).orElse(null);
+        // Person erasure leaves an empty journal; a warm runtime may still hold the session it replaced.
+        boolean journalErased = journal.filter(bytes -> bytes.length == 0).isPresent();
         TranslatorState state = new TranslatorState(assistantMessageId);
         // Frozen onto the turn so the ledger bills the price the runner actually ran at.
         state.bindConnection(llmConfig.connectionScope(), llmConfig.connectionId());
@@ -363,8 +369,14 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             try (var ignored = turnLock.acquireSandboxLock(sandboxKey)) {
                 boolean poisoning = false;
                 try {
-                    sandbox = attachSandbox(
-                            sandboxService, spec, () -> mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig));
+                    Supplier<InteractiveSandboxSpec> freshSpec =
+                            () -> mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig);
+                    sandbox = attachSandbox(sandboxService, spec, freshSpec);
+                    if (journalErased) {
+                        // A discarded sandbox keeps no session, so this turn and its journal start fresh.
+                        discardRunner(null, sandbox);
+                        sandbox = attachSandbox(sandboxService, freshSpec.get(), freshSpec);
+                    }
                     client = startRunner(
                             sandbox,
                             request,
@@ -381,17 +393,15 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                         if (priorSession == null || state.isStreamBroken()) {
                             throw openFailure;
                         }
+                        // This turn's journal write replaces the unreadable one.
                         log.warn(
-                                "Mentor session restore failed for thread {}; clearing session_jsonl and retrying once: {}",
+                                "Mentor session restore failed for thread {}; retrying once without it: {}",
                                 request.threadId(),
                                 openFailure.toString());
-                        chatThreadRepository.clearSessionJsonl(thread.getId());
                         discardRunner(client, sandbox);
                         clientHolder.set(null);
 
                         // The discarded sandbox keeps the session it restored, so the retry starts a fresh one.
-                        Supplier<InteractiveSandboxSpec> freshSpec =
-                                () -> mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig);
                         sandbox = attachSandbox(sandboxService, freshSpec.get(), freshSpec);
                         client = startRunner(
                                 sandbox,
@@ -914,6 +924,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
 
     /** Mentor admission for web and Slack alike: the member's AI choice, then a model within it. */
     private WorkspaceAgentBinding admittedBinding(long workspaceId, @Nullable Long developerId) {
+        if (developerId != null && personSuppression.isUserSuppressed(developerId)) {
+            throw new MentorRefusedException(MentorRefusal.PERSON_ERASED);
+        }
         return memberAiRouting
                 .binding(workspaceId, AgentPurpose.MENTOR, developerId)
                 .orElseThrow(() -> new MentorRefusedException(refusalWithoutModel(workspaceId, developerId)));

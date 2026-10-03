@@ -38,6 +38,16 @@ public class AccountPurger {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void purge(Long accountId) {
+        purgeRows(accountId);
+    }
+
+    /** The person-erasure step and its receipt must commit or roll back in the same transaction. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void purgeInCurrentTransaction(Long accountId) {
+        purgeRows(accountId);
+    }
+
+    private void purgeRows(Long accountId) {
         // The account row first, as every issuance and revocation takes it: a refresh holding its share
         // lock finishes before any child row goes, and none starts while the purge runs.
         accountRepository.lockStatusForUpdate(accountId);

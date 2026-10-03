@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.database.AuthEventPartitionMaintenance;
+import de.tum.cit.aet.hephaestus.core.privacy.ExactPersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.ShedLockConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -82,6 +83,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Import({
     TestCacheConfiguration.class,
     SlackConversationProjector.class,
+    ExactPersonDataCopyRecorder.class,
     ConfigAuditRetentionJob.class,
     ShedLockConfig.class,
     AuthEventPartitionMaintenance.class,
@@ -387,7 +389,7 @@ class ProductionSchemaContractIntegrationTest {
 
     /**
      * Foreign-key triggers are off for this one rolled-back insert, so only the row's own checks decide it: a
-     * restoration carries its time, actor and reason together, or none of them.
+     * restoration keeps its time even when person erasure clears its actor or free-text reason.
      */
     @ParameterizedTest(name = "{argumentSetName}")
     @MethodSource("restorationStates")
@@ -432,8 +434,9 @@ class ProductionSchemaContractIntegrationTest {
                 Arguments.argumentSet("active", null, null, null, true),
                 Arguments.argumentSet("restored", now, 1L, "Right after all", true),
                 Arguments.argumentSet("missing time", null, 1L, "Right after all", false),
-                Arguments.argumentSet("missing actor", now, null, "Right after all", false),
-                Arguments.argumentSet("missing reason", now, 1L, null, false),
+                Arguments.argumentSet("erased actor", now, null, "Right after all", true),
+                Arguments.argumentSet("erased reason", now, 1L, null, true),
+                Arguments.argumentSet("erased attribution", now, null, null, true),
                 Arguments.argumentSet("blank reason", now, 1L, "   ", false));
     }
 
@@ -528,27 +531,35 @@ class ProductionSchemaContractIntegrationTest {
                 .isTrue();
     }
 
-    static Stream<Arguments> invalidWithdrawalRestores() {
+    static Stream<Arguments> withdrawalRestorationStates() {
         return Stream.of(
-                // A CHECK passes on UNKNOWN: a missing reason must fail on its own, not through btrim(NULL).
-                Arguments.of("restored_at = now(), restored_by_account_id = %d"),
-                Arguments.of("restored_at = now(), restored_by_account_id = %d, restoration_reason = '  '"),
-                Arguments.of("restored_at = now(), restoration_reason = 'Right after all'"),
-                Arguments.of("restored_by_account_id = %d, restoration_reason = 'Right after all'"));
+                Arguments.of("restored_at = now(), restored_by_account_id = %d", true),
+                Arguments.of("restored_at = now(), restored_by_account_id = %d, restoration_reason = '  '", false),
+                Arguments.of("restored_at = now(), restoration_reason = 'Right after all'", true),
+                Arguments.of("restored_at = now()", true),
+                Arguments.of("restored_by_account_id = %d, restoration_reason = 'Right after all'", false));
     }
 
     @ParameterizedTest
-    @MethodSource("invalidWithdrawalRestores")
-    void feedbackWithdrawalRejectsAnIncompleteRestore(String assignment) {
+    @MethodSource("withdrawalRestorationStates")
+    void feedbackWithdrawalKeepsRestorationFactsAfterAttributionErasure(String assignment, boolean accepted) {
         long account = Objects.requireNonNull(
                 accountRepository.save(new Account("Withdrawal actor")).getId());
         DispatchOwner owner = insertDispatchOwner("withdrawal-restore-" + UUID.randomUUID());
         UUID withdrawal =
                 insertWithdrawal(owner, insertFeedback(owner, "withdrawal-restore-" + UUID.randomUUID()), account);
 
-        assertThatThrownBy(() -> jdbcTemplate.update(
-                        "UPDATE feedback_withdrawal SET " + assignment.formatted(account) + " WHERE id = ?",
-                        withdrawal))
+        String update = "UPDATE feedback_withdrawal SET " + assignment.formatted(account) + " WHERE id = ?";
+        if (accepted) {
+            assertThat(jdbcTemplate.update(update, withdrawal)).isOne();
+            assertThat(jdbcTemplate.queryForObject(
+                            "SELECT restored_at IS NOT NULL FROM feedback_withdrawal WHERE id = ?",
+                            Boolean.class,
+                            withdrawal))
+                    .isTrue();
+            return;
+        }
+        assertThatThrownBy(() -> jdbcTemplate.update(update, withdrawal))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("ck_feedback_withdrawal_restoration");
     }

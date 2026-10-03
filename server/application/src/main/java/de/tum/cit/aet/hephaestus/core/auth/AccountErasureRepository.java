@@ -53,7 +53,9 @@ interface AccountErasureRepository extends Repository<Account, Long> {
     /** The append-only audit trigger permits nulling account references for erasure. */
     @Modifying
     @Query(value = """
-            UPDATE config_audit_event SET actor_account_id = NULL, acting_account_id = NULL
+            UPDATE config_audit_event
+               SET actor_account_id = CASE WHEN actor_account_id = :accountId THEN NULL ELSE actor_account_id END,
+                   acting_account_id = CASE WHEN acting_account_id = :accountId THEN NULL ELSE acting_account_id END
              WHERE actor_account_id = :accountId OR acting_account_id = :accountId
             """, nativeQuery = true)
     int unlinkConfigAuditEvents(@Param("accountId") Long accountId);

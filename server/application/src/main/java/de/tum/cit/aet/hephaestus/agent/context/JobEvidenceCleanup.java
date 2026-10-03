@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -12,14 +13,21 @@ import org.springframework.stereotype.Component;
 @ConditionalOnWorkerRole
 class JobEvidenceCleanup {
     private final JobEvidenceFiles evidenceFiles;
+    private final EvidenceFolderPersonDataCatalog personCopies;
 
-    JobEvidenceCleanup(JobEvidenceFiles evidenceFiles) {
+    JobEvidenceCleanup(JobEvidenceFiles evidenceFiles, EvidenceFolderPersonDataCatalog personCopies) {
         this.evidenceFiles = evidenceFiles;
+        this.personCopies = personCopies;
     }
 
     @EventListener(ApplicationReadyEvent.class)
     void cleanAfterRestart() {
         evidenceFiles.cleanAfterRestart();
+    }
+
+    @Scheduled(fixedDelay = 1000)
+    void eraseRequestedCopies() {
+        personCopies.removeLocalRequests();
     }
 
     @Scheduled(fixedDelay = 60000)

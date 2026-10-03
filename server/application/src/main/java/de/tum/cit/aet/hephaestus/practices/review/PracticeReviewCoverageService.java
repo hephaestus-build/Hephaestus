@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -37,6 +38,7 @@ public class PracticeReviewCoverageService {
     private final WorkspaceMembershipService membershipService;
     private final PracticeReviewRepositoryTargetRepository repositoryTargetRepository;
     private final PracticeReviewPersonTargetRepository personTargetRepository;
+    private final PersonProcessingSuppression suppression;
 
     @Transactional(readOnly = true)
     public Map<String, List<String>> generatedPaths(Workspace workspace) {
@@ -257,6 +259,7 @@ public class PracticeReviewCoverageService {
 
     private ReviewSubjectStatus subjectStatus(Workspace workspace, @Nullable ReviewSubject subject) {
         if (subject == null || subject.actorId() == null) return ReviewSubjectStatus.MISSING;
+        if (suppression.isUserSuppressed(subject.actorId())) return ReviewSubjectStatus.UNLINKED;
         if (!subject.human()) return ReviewSubjectStatus.NON_HUMAN;
         return membershipService.isPracticeReviewEligible(workspace.getId(), subject.actorId())
                 ? ReviewSubjectStatus.RESOLVED_LINKED_HUMAN

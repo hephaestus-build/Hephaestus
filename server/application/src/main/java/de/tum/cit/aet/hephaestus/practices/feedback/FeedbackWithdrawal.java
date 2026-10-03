@@ -41,8 +41,8 @@ public class FeedbackWithdrawal {
     @Column(name = "reason", nullable = false, length = MAX_REASON_LENGTH)
     private String reason;
 
-    @Column(name = "withdrawn_by_account_id", nullable = false)
-    private Long withdrawnByAccountId;
+    @Column(name = "withdrawn_by_account_id")
+    private @Nullable Long withdrawnByAccountId;
 
     @Column(name = "withdrawn_at", nullable = false)
     private Instant withdrawnAt;

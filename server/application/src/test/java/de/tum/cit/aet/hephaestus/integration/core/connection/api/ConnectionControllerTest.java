@@ -42,6 +42,7 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,9 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
@@ -79,8 +83,15 @@ class ConnectionControllerTest extends BaseUnitTest {
     private FakeStrategy gitlabStrategy;
     private ConnectionController controller;
 
+    @AfterEach
+    void clearAuthentication() {
+        SecurityContextHolder.clearContext();
+    }
+
     @BeforeEach
     void setUp() {
+        var jwt = Jwt.withTokenValue("test").header("alg", "none").subject("42").build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
         MockitoAnnotations.openMocks(this);
         objectMapper = new ObjectMapper();
         githubStrategy = new FakeStrategy(IntegrationKind.GITHUB);
@@ -176,12 +187,7 @@ class ConnectionControllerTest extends BaseUnitTest {
 
         Connection saved = newConnection(99L, workspaceId, IntegrationKind.GITLAB, "200", IntegrationState.ACTIVE);
         when(admin.createInlineConnection(
-                        eq(workspaceId),
-                        eq(IntegrationKind.GITLAB),
-                        eq("200"),
-                        any(BearerToken.class),
-                        any(),
-                        eq("alice@example.com")))
+                        eq(workspaceId), eq(IntegrationKind.GITLAB), eq("200"), any(BearerToken.class), any(), eq(42L)))
                 .thenReturn(saved);
 
         InitiateConnectionRequestDTO req = new InitiateConnectionRequestDTO(
@@ -204,7 +210,7 @@ class ConnectionControllerTest extends BaseUnitTest {
                         eq("200"),
                         any(BearerToken.class),
                         anyMap(),
-                        eq("alice@example.com"));
+                        eq(42L));
     }
 
     @Test

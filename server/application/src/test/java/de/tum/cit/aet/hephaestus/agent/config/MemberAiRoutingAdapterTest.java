@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -45,11 +46,14 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
     @Mock
     private WorkspaceRepository workspaces;
 
+    @Mock
+    private PersonProcessingSuppression suppression;
+
     private MemberAiRoutingAdapter routing;
 
     @BeforeEach
     void setUp() {
-        routing = new MemberAiRoutingAdapter(bindings, preferences, models, workspaces);
+        routing = new MemberAiRoutingAdapter(bindings, preferences, models, workspaces, suppression);
     }
 
     private WorkspaceAgentBinding ready(DataHandlingTier tier) {
@@ -261,5 +265,14 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         model.setUpstreamModelId(upstreamId);
         model.setConnection(connection);
         return model;
+    }
+
+    @Test
+    void shouldNotRouteErasedIdentityToReviewsOrHephEvenWhenAiChoiceIsOptional() {
+        when(suppression.isUserSuppressed(20L)).thenReturn(true);
+        assertThat(routing.binding(1L, AgentPurpose.PRACTICE_REVIEW, 20L)).isEmpty();
+        assertThat(routing.binding(1L, AgentPurpose.MENTOR, 20L)).isEmpty();
+        assertThat(routing.allows(1L, 20L, LlmModelResolver.ConnectionRef.NONE)).isFalse();
+        verifyNoInteractions(preferences, bindings, models);
     }
 }

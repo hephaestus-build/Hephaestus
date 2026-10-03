@@ -8,6 +8,7 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Integration · Outline",
         allowedDependencies = {
+            "core::person-data",
             // Connection registry + SPI ports (credential provider, manifest, lifecycle listener, connect strategy).
             "integration.core",
             "integration.core::spi",
