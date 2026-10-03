@@ -463,7 +463,7 @@ void test("deferred asks are one row each, with the record's facts and none of t
 	}
 });
 
-void test("every linked issue with a checkable outcome is an occasion, not only the one the body closes", async () => {
+void test("every captured linked issue is a row, and those with a checkable outcome are candidates the criteria decide", async () => {
 	const { root, script, contextDir, changeDir } = await stage(
 		"merge-confirms-the-linked-issue-outcome",
 		{
@@ -489,6 +489,8 @@ void test("every linked issue with a checkable outcome is an occasion, not only 
 						subIssuesTotal: 3,
 						subIssuesCompleted: 1,
 					},
+					{ number: 8, title: "Total only", state: "OPEN", body: "", subIssuesTotal: 2 },
+					{ number: 9, title: "None", state: "OPEN", body: "", subIssuesTotal: 0 },
 				],
 			},
 		},
@@ -501,19 +503,28 @@ void test("every linked issue with a checkable outcome is an occasion, not only 
 			contextDir,
 			changeDir,
 		);
-		assert.equal(result.metrics.linkedItems, 3);
-		assert.equal(result.metrics.checkableItems, 2);
+		assert.equal(result.metrics.linkedItems, 5);
+		assert.equal(result.metrics.checkableItems, 3);
 		assert.equal(result.metrics.untickedItems, 1);
-		const [story, tasks, subIssues] = result.hints;
-		assert.ok(story && tasks && subIssues);
-		assert.equal(story.pattern, "no checkable outcome");
+		const [story, tasks, subIssues, totalOnly, none] = result.hints;
+		assert.ok(story && tasks && subIssues && totalOnly && none);
+		// An unreported rollup is unknown: neither a checkable outcome nor proof there is none.
+		assert.equal(story.pattern, "no task list or outcome heading");
+		assert.match(story.context, /sub-issue rollup not reported/u);
+		assert.equal(Object.hasOwn(story.flags, "subIssuesTotal"), false);
 		assert.equal(story.flags.how, "named with a closing keyword in the body");
 		assert.equal(tasks.pattern, "checkable outcome");
 		assert.equal(tasks.flags.ticked, 1);
 		assert.equal(tasks.flags.unticked, 1);
 		assert.equal(tasks.flags.how, "linked through a commit or another item");
 		assert.equal(subIssues.flags.subIssuesTotal, 3);
-		assert.match(result.directions[0] ?? "", /every one is an occasion/u);
+		assert.match(subIssues.context, /1\/3 sub-issues done/u);
+		assert.match(totalOnly.context, /2 sub-issues, completed count not reported/u);
+		assert.doesNotMatch(totalOnly.context, /0\/2/u);
+		assert.equal(none.pattern, "no checkable outcome");
+		assert.equal(none.flags.subIssuesTotal, 0);
+		assert.match(result.directions[0] ?? "", /Each is a candidate: the criteria decide which/u);
+		assert.doesNotMatch(result.directions[0] ?? "", /every one is an occasion/u);
 		// An unmerged change has no occasion, whatever the items say.
 		const open = await script(
 			nodePath.join(root, "repo"),
@@ -610,9 +621,38 @@ void test("a merge request stored closed by its merge is merged, while its linke
 		assert.equal(issue.pattern, "checkable outcome");
 		assert.equal(issue.flags.how, "a provider closing candidate");
 		assert.equal(issue.flags.state, "OPEN");
-		assert.match(result.directions[0] ?? "", /every one is an occasion/u);
+		assert.match(
+			result.directions[0] ?? "",
+			/1 captured linked issue\(s\) state a checkable outcome/u,
+		);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("an uncaptured linked-work file is a collection gap, apart from a capture that holds no issue", async () => {
+	const merged = { ...openMergeRequest, state: "CLOSED", is_merged: true };
+	const absent = await stage("merge-confirms-the-linked-issue-outcome", {});
+	const empty = await stage("merge-confirms-the-linked-issue-outcome", {
+		"linked_work_items.json": { workItems: [] },
+	});
+	try {
+		const run = async (staged: typeof absent) =>
+			staged.script(
+				nodePath.join(staged.root, "repo"),
+				new Map(),
+				merged,
+				staged.contextDir,
+				staged.changeDir,
+			);
+		const uncaptured = await run(absent);
+		const capturedEmpty = await run(empty);
+		assert.match(uncaptured.directions[0] ?? "", /was not captured: a collection gap/u);
+		assert.match(capturedEmpty.directions[0] ?? "", /^The capture holds no linked issue/u);
+	} finally {
+		for (const staged of [absent, empty]) {
+			rmSync(staged.root, { recursive: true, force: true });
+		}
 	}
 });
 

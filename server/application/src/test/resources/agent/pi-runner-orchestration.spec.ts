@@ -78,7 +78,7 @@ function feedbackUnit(practiceSlug: string, observationId: string) {
 	};
 }
 
-/** An observation that decides nothing; it must show it read the change, as admission demands. */
+/** An observation that decides nothing; for a practice that reads the change, it must show it read it. */
 const undecided = (consulted: string[]) => ({
 	practiceSlug: "test-practice",
 	summary: "Nothing to assess in this change",
@@ -102,6 +102,11 @@ const undecided = (consulted: string[]) => ({
 		},
 	},
 });
+
+/** A practice index entry as the server writes it: the sources its evidence requirements name. */
+function practice(slug: string, readsSources = ["scm.pull-request.core", "scm.pull-request.diff"]) {
+	return { slug, group: "code", readsSources };
+}
 
 function readObservations(path: string) {
 	const payload: unknown = JSON.parse(readFileSync(path, "utf8"));
@@ -970,6 +975,45 @@ if (scenario !== undefined && scenario !== "") {
 								});
 								return;
 							}
+							if (scenario === "comment-undecided") {
+								// A practice that reads only what people wrote owes the change nothing; one that
+								// reads the change still grounds a decision of nothing in it.
+								const metadataOnly = undecided(["scm.pull-request.core"]);
+								const tone = await report
+									.execute("tone", {
+										observations: [
+											{
+												...metadataOnly,
+												practiceSlug: "review-tone",
+												summary: "The tone of the reviewer's note is ambiguous",
+												outcome: "UNDETERMINED",
+												evidence: {
+													citations: metadataOnly.evidence.citations,
+													undecidability: {
+														openQuestion: "Is the note a question or an order?",
+														wouldSettleIt: "The reviewer's next note on the thread.",
+													},
+												},
+											},
+										],
+									})
+									.then(() => "stored")
+									.catch((error: unknown) =>
+										error instanceof Error ? error.message : String(error),
+									);
+								record(`tone-undecided:${tone}`);
+								const code = await report
+									.execute("code-na", { observations: [metadataOnly] })
+									.then(() => "stored")
+									.catch((error: unknown) =>
+										error instanceof Error ? error.message : String(error),
+									);
+								record(`code-undecided:${code}`);
+								await report.execute("code", {
+									observations: [observation("test-practice", "Unsafe authentication call")],
+								});
+								return;
+							}
 							if (scenario !== "batch") {
 								if (scenario === "finish") {
 									// The message carrying this recording spent 1200 output tokens; the pace is read from it.
@@ -1135,6 +1179,7 @@ if (scenario !== undefined && scenario !== "") {
 		"provider-error",
 		"batch",
 		"replacement-witness",
+		"comment-undecided",
 		"draft-revision",
 		"finish",
 		"refusal-cap",
@@ -1170,6 +1215,8 @@ if (scenario !== undefined && scenario !== "") {
 				"draft-revision":
 					"replaces only an explicitly corrected valid draft and refuses an ambiguous batch atomically",
 				"replacement-witness": "refuses a replacement that relies on its superseded diff witness",
+				"comment-undecided":
+					"accepts an undecided result without the change only for a practice that does not read it",
 				finish: "asks once more, in the same session, for the practices no turn recorded",
 				"refusal-cap": "stops accepting a practice after eight refused submissions",
 				repeat: "nudges a turn that repeats one call and ends it when the call keeps coming",
@@ -1315,24 +1362,23 @@ if (scenario !== undefined && scenario !== "") {
 							],
 						}),
 					);
-					writeFileSync(
-						nodePath.join(cwd, "catalog/practices/index.json"),
-						JSON.stringify(
-							stage === "finish" ||
-								stage === "batch" ||
-								stage === "draft-revision" ||
-								stage === "compose-fold" ||
-								stage === "compose-abstention"
-								? [
-										{ slug: "test-practice", group: "code" },
-										{ slug: "second-practice", group: "code" },
-										...(stage === "compose-abstention"
-											? [{ slug: "third-practice", group: "code" }]
-											: []),
-									]
-								: [{ slug: "test-practice", group: "code" }],
-						),
-					);
+					let index = [practice("test-practice")];
+					if (
+						stage === "finish" ||
+						stage === "batch" ||
+						stage === "draft-revision" ||
+						stage === "compose-fold" ||
+						stage === "compose-abstention"
+					) {
+						index = [
+							practice("test-practice"),
+							practice("second-practice"),
+							...(stage === "compose-abstention" ? [practice("third-practice")] : []),
+						];
+					} else if (stage === "comment-undecided") {
+						index = [practice("test-practice"), practice("review-tone", ["scm.pull-request.core"])];
+					}
+					writeFileSync(nodePath.join(cwd, "catalog/practices/index.json"), JSON.stringify(index));
 					writeFileSync(
 						nodePath.join(cwd, "pi-provider.json"),
 						JSON.stringify({ apiProtocol: "openai-completions", modelId: "test-model" }),
@@ -1543,6 +1589,16 @@ if (scenario !== undefined && scenario !== "") {
 							assert.doesNotMatch(finishing, /Recorded so far/u);
 							assert.doesNotMatch(finishing, /test-practice: MET —/u);
 							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
+							break;
+						}
+						case "comment-undecided": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.ok(events.includes("tone-undecided:stored"), events.join("\n"));
+							assert.match(
+								events.find((event) => event.startsWith("code-undecided:")) ?? "",
+								/must show it read the change/u,
+							);
+							reached({ "test-practice": "EVALUATED", "review-tone": "EVALUATED" });
 							break;
 						}
 						case "batch": {
@@ -1958,11 +2014,11 @@ if (scenario !== undefined && scenario !== "") {
 								["prompt:1", "prompt:2"],
 							);
 							const reply = events.find((event) => event.startsWith("feedback-abstention:")) ?? "";
-							for (const [index, practice] of ["second-practice", "third-practice"].entries()) {
+							for (const [position, slug] of ["second-practice", "third-practice"].entries()) {
 								assert.match(
 									reply,
 									new RegExp(
-										`#${index + 1}: At least one basedOn observation must have a MET or NOT_MET outcome for the primary practice '${practice}'`,
+										`#${position + 1}: At least one basedOn observation must have a MET or NOT_MET outcome for the primary practice '${slug}'`,
 										"u",
 									),
 									child.stderr,

@@ -925,21 +925,6 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             """;
 
         @Test
-        void refusesWhenNothingWasDecidedOverACapturedChangeNobodyRead() {
-            AgentJob job = jobWithMetadata(sampleJobMetadata());
-            ObjectNode output = objectMapper.createObjectNode();
-            output.put("rawOutput", NOTHING_DECIDED);
-            job.setOutput(output);
-
-            assertThatThrownBy(() -> admit(job, NOTHING_DECIDED))
-                    .isInstanceOfSatisfying(
-                            ObservationsRefusedException.class,
-                            e -> assertThat(e.reasonCode()).isEqualTo("did_not_read_the_diff"))
-                    .hasMessageContaining("answered without reading it");
-            verifyNoInteractions(deliveryService);
-        }
-
-        @Test
         void admitsWhenNothingWasDecidedAndNoChangeWasCaptured() {
             AgentJob job = jobWithMetadata(sampleJobMetadata());
             job.setEvidenceSnapshot(admittedPracticeSnapshotWithoutChange());

@@ -13,8 +13,9 @@ const PATTERNS: [string, RegExp][] = [
 		"secret in URL path/query",
 		/["'`](?:https?:\/\/|\/)[^"'`\n]*(?:\\\(|[$#]\{)[^"'`\n)}]*\b(?:token|secret|password|api[_-]?key|auth|session|refresh)\w*/iu,
 	],
-	// Keychain write — must verify it sets an accessibility class (else iCloud-backup-eligible / always-readable).
-	["keychain write (verify kSecAttrAccessible)", /\bSecItemAdd\b|kSecValueData\b/u],
+	// Keychain write — an omitted kSecAttrAccessible defaults to WhenUnlocked; whether the effective class,
+	// synchronization and backup migration fit the stored secret is the review's.
+	["keychain write", /\bSecItemAdd\b|kSecValueData\b/u],
 	// Logging a sensitive value (token/password/credential/response body) to console/log.
 	[
 		"logs a secret / response body",
@@ -73,7 +74,7 @@ export default function avoidsInsecureDefaultsAndOverBroadPermissions(
 	const directions =
 		hints.length > 0
 			? [
-					`Found ${hints.length} insecure-default / secret-exposure candidate(s) on added lines — investigate each on the reachable auth/transport surface: a token in a URL path leaks into logs; a keychain write needs an accessibility class; logging a response body or token exposes secrets; disabled TLS / wildcard CORS / world-writable perms are over-broad. Confirm whether each is real and exploitable before deciding.`,
+					`Found ${hints.length} insecure-default / secret-exposure candidate(s) on added lines — investigate each on the reachable auth/transport surface: a token in a URL path leaks into logs; a keychain write takes its accessibility from kSecAttrAccessible, WhenUnlocked when omitted, which is not a defect by itself; logging a response body or token exposes secrets; disabled TLS / wildcard CORS / world-writable perms are over-broad. Confirm whether each is real and exploitable before deciding.`,
 				]
 			: [];
 	return {

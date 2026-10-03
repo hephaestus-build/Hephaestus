@@ -56,56 +56,43 @@ void describe("ships-tests-with-the-change", () => {
 		run = await loadScript("ships-tests-with-the-change");
 	});
 
-	async function repoWith(files: Record<string, string>): Promise<string> {
-		const repo = await createTempDir("pc-repo-");
-		for (const [file, body] of Object.entries(files)) {
-			const full = path.join(repo, file);
-			await mkdir(path.join(full, ".."), { recursive: true });
-			await writeFile(full, body);
-		}
-		return repo;
-	}
+	void it("classifies the changed source paths by convention, Xcode test target folders included", async () => {
+		const paths = [
+			"App/Latest.swift",
+			"App/Contest.swift",
+			"CourseUITests/Smoke.swift",
+			"AppTests/ScoreTests.swift",
+			"README.md",
+		];
+		const diff = new Map(paths.map((file) => [file, changedFile(file)]));
 
-	void it("classifies code vs test files in a single walk and flags an untested prod change", async () => {
-		const repo = await repoWith({
-			"src/App.swift": "struct App {}",
-			"src/util.ts": "export const x = 1;",
-			"Tests/AppTests.swift": "// test",
-		});
-		// Diff touches a production file, adds no test file.
-		const diff = new Map([["src/App.swift", changedFile("src/App.swift")]]);
+		// No checkout at all: the question is answered from the diff, with no repository census.
+		const result = await run(path.join(await createTempDir("pc-empty-"), "missing"), diff, {});
 
-		const result = await run(repo, diff, {});
-
-		assert.equal(result.metrics.repoCodeFileCount, 3);
-		assert.equal(result.metrics.repoTestFileCount, 1);
-		assert.equal(result.metrics.worktreeVisible, 1);
-		assert.equal(result.metrics.diffProductionFiles, 1);
-		assert.equal(result.metrics.diffTestFiles, 0);
-		assert.ok(result.directions.join(" ").includes("0 test file(s)"));
+		assert.deepEqual(result.metrics, { diffProductionFiles: 2, diffTestFiles: 2 });
+		assert.match(
+			result.directions[0] ?? "",
+			/^The diff changes 2 production source file\(s\) and 2 test file\(s\), by path: CourseUITests\/Smoke\.swift, AppTests\/ScoreTests\.swift\./u,
+		);
 	});
 
-	void it("excludes node_modules / dotfile / .build dirs from the census", async () => {
-		const repo = await repoWith({
-			"src/main.ts": "export const a = 1;",
-			"node_modules/dep/index.js": "module.exports = {};",
-			".build/cache.swift": "struct Cached {}",
-			".hidden/secret.go": "package x",
-		});
+	void it("judges untested production code without a test target instead of abstaining", async () => {
+		const diff = new Map([["App/Quiz.swift", changedFile("App/Quiz.swift")]]);
 
-		const result = await run(repo, new Map<string, DiffFile>(), {});
+		const result = await run(await createTempDir("pc-no-tests-"), diff, {});
 
-		// Only src/main.ts counts; the three excluded-dir files are skipped.
-		assert.equal(result.metrics.repoCodeFileCount, 1);
+		assert.deepEqual(result.metrics, { diffProductionFiles: 1, diffTestFiles: 0 });
+		const directions = result.directions.join(" ");
+		assert.match(directions, /does not decide this practice: judge the changed behaviour/u);
+		assert.doesNotMatch(directions, /cannot be assessed/u);
 	});
 
-	void it("reports the worktree as not visible when zero source files are seen", async () => {
-		const repo = await repoWith({ "README.md": "# docs only" });
+	void it("says nothing about a change with no source file", async () => {
+		const diff = new Map([["README.md", changedFile("README.md")]]);
 
-		const result = await run(repo, new Map<string, DiffFile>(), {});
+		const result = await run(await createTempDir("pc-docs-"), diff, {});
 
-		assert.equal(result.metrics.worktreeVisible, 0);
-		assert.ok(result.directions.join(" ").includes("WORKTREE NOT VISIBLE"));
+		assert.deepEqual(result.directions, []);
 	});
 });
 
@@ -133,6 +120,31 @@ void describe("issue classification across practices", () => {
 			},
 			emptyOrTitleEcho: 1,
 			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "detailed body that begins with the title",
+			metadata: {
+				title: "Add sign-in",
+				body: "Add sign-in so returning members can save a draft. Done when the draft survives reopening.",
+				labels: ["type::User Story"],
+			},
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 1,
+			looksUmbrella: 0,
+		},
+		{
+			name: "short concrete sentence",
+			metadata: { title: "Invoice PDF", body: "Text no longer overlaps." },
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 0,
+			looksUmbrella: 0,
+		},
+		{
+			name: "non-Latin body that is not the non-Latin title",
+			metadata: { title: "报告", body: "导出月度报告" },
+			emptyOrTitleEcho: 0,
+			hasDeliverableType: 0,
 			looksUmbrella: 0,
 		},
 		{
@@ -199,20 +211,56 @@ void describe("issue classification across practices", () => {
 					assert.equal(result.metrics.hasDeliverableType, hasDeliverableType, scriptName);
 					assert.equal(result.metrics.looksUmbrella, looksUmbrella, scriptName);
 				}
-				if (
-					scriptName === "issue-states-an-actionable-problem" &&
-					emptyOrTitleEcho &&
-					hasDeliverableType
-				) {
-					assert.ok(
-						result.directions.some((direction) =>
-							direction.includes("investigate whether a maintainer can actually act on it."),
-						),
-					);
-				}
+				const said = result.directions.join("\n");
+				assert.equal(
+					/body is empty|repeats the title and says nothing else/u.test(said),
+					emptyOrTitleEcho === 1,
+					`${scriptName}: ${name}`,
+				);
+				assert.doesNotMatch(said, /no quotable deliverable|nothing to build from/iu, scriptName);
 			}
 		});
 	}
+
+	void it("keeps an unreported sub-issue rollup unknown, apart from a reported zero and a total without its completed count", async () => {
+		for (const scriptName of [
+			"breaks-large-work-into-trackable-subtasks",
+			"issue-scoped-to-single-concern",
+		]) {
+			const run = await loadScript(scriptName);
+			const issue = { title: "Course checklist", body: "- [ ] Clarify\n- [ ] Reply\n- [ ] Defer" };
+			const cases: [
+				Record<string, number | null>,
+				RegExp,
+				{ subIssuesTotal?: number; subIssuesCompleted?: number },
+			][] = [
+				[{}, /sub-issue rollup not reported by the provider \(unknown, not zero\)/u, {}],
+				[
+					{ sub_issues_total: null, sub_issues_completed: null },
+					/sub-issue rollup not reported by the provider \(unknown, not zero\)/u,
+					{},
+				],
+				[
+					{ sub_issues_total: 0, sub_issues_completed: 0 },
+					/0 sub-issue\(s\), 0 completed/u,
+					{ subIssuesTotal: 0, subIssuesCompleted: 0 },
+				],
+				[
+					{ sub_issues_total: 3, sub_issues_completed: null },
+					/3 sub-issue\(s\), completed count not reported/u,
+					{ subIssuesTotal: 3 },
+				],
+			];
+			for (const [rollup, text, metrics] of cases) {
+				const result = await run("", new Map(), { ...issue, ...rollup });
+				assert.match(result.directions.join("\n"), text, scriptName);
+				assert.equal(result.metrics.subIssuesTotal, metrics.subIssuesTotal, scriptName);
+				assert.equal(result.metrics.subIssuesCompleted, metrics.subIssuesCompleted, scriptName);
+				assert.equal(result.metrics.taskCheckboxes ?? result.metrics.checkboxes, 3, scriptName);
+				assert.doesNotMatch(result.directions.join("\n"), /looks large|strong candidate/iu);
+			}
+		}
+	});
 });
 
 void it("linked-work analysis reads only explicitly supplied context, never a repository-derived fallback", async () => {
@@ -280,4 +328,29 @@ void it("issue-reference syntax in templates remains a candidate rather than an 
 		trace.directions.join("\n"),
 		/all establish the link|motivating-issue reference IS present/u,
 	);
+});
+
+void it("omits an uncaptured issue inventory count while preserving a captured empty listing", async () => {
+	const run = await loadScript("issue-scoped-to-single-concern");
+	const cases: [string | undefined, number | undefined][] = [
+		[undefined, undefined],
+		["{}", undefined],
+		['{"issues":"unreadable"}', undefined],
+		['{"issues":[]}', 0],
+		['{"issues":[{"number":7,"title":"First screen"}]}', 1],
+	];
+	for (const [source, count] of cases) {
+		const context = await createTempDir("pc-issue-inventory-");
+		if (source !== undefined) {
+			await writeFile(path.join(context, "project_inventory.json"), source);
+		}
+		const result = await run(
+			"",
+			new Map(),
+			{ title: "First screen", body: "Show the signed-in name." },
+			context,
+		);
+		assert.equal(Object.hasOwn(result.metrics, "siblingIssueCount"), count !== undefined);
+		assert.equal(result.metrics.siblingIssueCount, count);
+	}
 });
