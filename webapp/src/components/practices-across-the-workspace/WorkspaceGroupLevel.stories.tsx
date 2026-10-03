@@ -109,6 +109,7 @@ export const NoPractices: Story = {
 	play: async () => {
 		const level = within(await settledDrawerPanel());
 		await expect(level.getByText("No practices yet")).toBeVisible();
+		await expect(level.queryByText(/^Each bar counts developers/u)).toBeNull();
 	},
 };
 

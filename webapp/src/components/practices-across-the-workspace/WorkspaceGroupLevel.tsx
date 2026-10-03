@@ -136,7 +136,7 @@ function GroupPractices({
 	const { shown, ...more } = useRevealedRows(rows, PRACTICES_PAGE_SIZE);
 	return (
 		<>
-			{state.status === "ready" && (
+			{state.status === "ready" && state.group.practices.length > 0 && (
 				<p className="max-w-2xl text-sm text-muted-foreground">
 					{practicesHint(state.context.minimumOthers)}
 				</p>
