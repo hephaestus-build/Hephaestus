@@ -1,14 +1,18 @@
-import { ChevronDownIcon, ClipboardCheckIcon, ListChecksIcon } from "lucide-react";
+import { ClipboardCheckIcon, ListChecksIcon } from "lucide-react";
 
 import { cn } from "cn";
 import type { ConfigurationFact } from "@/api/types.gen";
-import { FOCUS_RING } from "@/components/common/focus";
 import { InlineLink } from "@/components/common/InlineLink";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { statusToneClass, statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
 	Empty,
 	EmptyDescription,
@@ -34,11 +38,8 @@ export interface InstanceConfigurationReadinessCardProps {
 	state: InstanceConfigurationReadinessCardState;
 }
 
-/** Groups that ask nothing of the operator start folded; the rest stay open. */
-const OPEN_BY_DEFAULT: ReadonlySet<ConfigurationStatus> = new Set([
-	"ACTION_REQUIRED",
-	"NOT_CONFIGURED",
-]);
+/** The groups that ask something of the operator start open; the rest start folded. */
+const OPEN_BY_DEFAULT: ConfigurationStatus[] = ["ACTION_REQUIRED", "NOT_CONFIGURED"];
 
 const REQUIREMENT_ORDER = statusValues(CONFIGURATION_REQUIREMENT_DEFS);
 
@@ -156,11 +157,13 @@ function ReadyBody({ facts }: { facts: ConfigurationFact[] }) {
 				<SummaryIcon className={cn("size-4 shrink-0", statusToneClass(badgeVariant))} aria-hidden />
 				{summary.text}
 			</p>
-			{groups
-				.filter((group) => group.facts.length > 0)
-				.map((group) => (
-					<FactGroup key={group.status} status={group.status} facts={group.facts} />
-				))}
+			<Accordion multiple defaultValue={OPEN_BY_DEFAULT}>
+				{groups
+					.filter((group) => group.facts.length > 0)
+					.map((group) => (
+						<FactGroup key={group.status} status={group.status} facts={group.facts} />
+					))}
+			</Accordion>
 		</>
 	);
 }
@@ -168,24 +171,22 @@ function ReadyBody({ facts }: { facts: ConfigurationFact[] }) {
 function FactGroup({ status, facts }: { status: ConfigurationStatus; facts: ConfigurationFact[] }) {
 	const def = CONFIGURATION_STATUS_DEFS[status];
 	return (
-		<Collapsible defaultOpen={OPEN_BY_DEFAULT.has(status)} render={<section />}>
-			<CollapsibleTrigger className={cn("group flex items-center gap-2 rounded-md", FOCUS_RING)}>
-				<StatusBadge def={def} />
-				<span className="tabular-nums">{facts.length}</span>
-				<ChevronDownIcon
-					className="size-4 transition-transform group-data-[panel-open]:rotate-180"
-					aria-hidden
-				/>
-			</CollapsibleTrigger>
-			<CollapsibleContent>
-				<p className="mt-2 text-sm text-muted-foreground">{def.description}</p>
+		<AccordionItem value={status}>
+			<AccordionTrigger className="items-center no-underline hover:no-underline">
+				<span className="flex items-center gap-2">
+					<StatusBadge def={def} />
+					<span className="tabular-nums">{facts.length}</span>
+				</span>
+			</AccordionTrigger>
+			<AccordionContent>
+				<p className="text-muted-foreground">{def.description}</p>
 				<ul className="mt-2 divide-y">
 					{facts.map((fact) => (
 						<FactRow key={fact.id} fact={fact} />
 					))}
 				</ul>
-			</CollapsibleContent>
-		</Collapsible>
+			</AccordionContent>
+		</AccordionItem>
 	);
 }
 
@@ -194,7 +195,7 @@ function FactRow({ fact }: { fact: ConfigurationFact }) {
 	return (
 		<li className="space-y-1 py-3 first:pt-0 last:pb-0">
 			<div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-				<code className="font-mono text-sm break-all">{fact.subject}</code>
+				<code className="font-mono text-sm break-words">{fact.subject}</code>
 				{fact.requirement === "REQUIRED" ? (
 					<span className="sr-only">{CONFIGURATION_REQUIREMENT_DEFS.REQUIRED.label}</span>
 				) : (

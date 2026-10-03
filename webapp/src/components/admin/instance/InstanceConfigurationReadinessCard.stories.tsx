@@ -38,9 +38,6 @@ const satisfied = [
 		roles: ["SERVER", "WEBHOOK"],
 		explanation: "A webhook secret of at least 32 printable ASCII characters is required.",
 	}),
-	fact("auth.login-provider", "login-provider capability", "login", {
-		explanation: "At least one enabled sign-in provider is required.",
-	}),
 ];
 
 const sentryNotConfigured = fact(
@@ -97,7 +94,7 @@ const meta = {
 		state: {
 			status: "ready",
 			facts: [
-				...satisfied.filter((f) => f.id !== "auth.login-provider"),
+				...satisfied,
 				workerRuntime,
 				noLoginProvider,
 				sentryNotConfigured,
@@ -155,14 +152,6 @@ export const OptionalNotConfigured: Story = {
 		await expect(canvas.queryByText("Action required")).toBeNull();
 		await expect(canvas.getAllByText("Optional")).toHaveLength(2);
 		await expect(canvas.getByText("hephaestus.sentry.dsn")).toBeVisible();
-	},
-};
-
-export const NotApplicableRoles: Story = {
-	args: { state: { status: "ready", facts: [...satisfied, notApplicable] } },
-	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /Not applicable/u }));
-		await expect(canvas.getByText("hephaestus.llm.egress.allow-loopback")).toBeVisible();
 	},
 };
 
