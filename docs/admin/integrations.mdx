@@ -70,8 +70,14 @@ A workspace admin cannot approve a new Outline operator through its URL.
 The current UI has no key-replacement form for an existing connection.
 **Disconnect** erases the mirror.
 
+:::caution CAUTION: Outline key secrecy and connection identity
+Keep the key out of shell history, logs, and support tickets.
+Use the same origin and a key that belongs to the same Outline team.
+Do not change the origin or team during key rotation.
+:::
+
 1. To keep the mirror, create a valid API key in Outline.
-2. As a workspace admin, use the existing connection API on the application server:
+2. As a workspace admin, send this authenticated request to the application server's existing connection API with normal CSRF protection:
 
    ```http
    POST /api/workspaces/{workspaceSlug}/connections
@@ -85,11 +91,6 @@ The current UI has no key-replacement form for an existing connection.
      }
    }
    ```
-
-   Send this as an authenticated request with normal CSRF protection.
-   Keep the key out of shell history, logs, and support tickets.
-   Use the same origin and a key that belongs to the same Outline team.
-   Do not change the origin or team during key rotation.
 
 3. Check that the response's connection ID matches the existing connection.
 4. Check webhook registration.
