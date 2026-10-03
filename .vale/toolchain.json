@@ -1,0 +1,30 @@
+{
+	"version": "3.24.0",
+	"url": "https://github.com/vale-cli/vale/releases/download/v3.24.0/",
+	"assets": {
+		"linux-x64": {
+			"name": "vale_3.24.0_Linux_64-bit.tar.gz",
+			"sha256": "867534ddb678abca7f214bc4706ead0922bd5252ffe8035fc227013f66c8b214"
+		},
+		"linux-arm64": {
+			"name": "vale_3.24.0_Linux_arm64.tar.gz",
+			"sha256": "104cbd349279e50c4cb40adb70adf345d93cc4a3a0191f9e68bdccb97086b582"
+		},
+		"darwin-x64": {
+			"name": "vale_3.24.0_macOS_64-bit.tar.gz",
+			"sha256": "eeb39e86f1daac27cc2a77fef3af1824d50559bdc22329fb25fb921c80c79472"
+		},
+		"darwin-arm64": {
+			"name": "vale_3.24.0_macOS_arm64.tar.gz",
+			"sha256": "87b513f26499f6657c15cf7175ba5b058a7c1ff2bb2d4e07265db2dd43451e44"
+		},
+		"win32-x64": {
+			"name": "vale_3.24.0_Windows_64-bit.zip",
+			"sha256": "3a8884774973b6f2826877e1c6388a5feae4704ef88a9a9c912c77ce186990f3"
+		},
+		"win32-arm64": {
+			"name": "vale_3.24.0_Windows_arm64.zip",
+			"sha256": "3ec62981d49558d89c2ee2e9836f10db86ca335fdfaa2b701a9fbeca1496a5c7"
+		}
+	}
+}

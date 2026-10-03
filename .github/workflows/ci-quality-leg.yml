@@ -29,10 +29,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # gate:contracts compares the branch with the base, which needs the history. The depths
-          # are QUOTED: unquoted, `cond && 0 || 1` always yields 1, because the number 0 is falsy in
-          # GitHub expressions and the non-empty string '0' is truthy.
-          fetch-depth: ${{ (inputs.leg == 'server' || inputs.leg == 'windows') && '0' || '1' }}
+          # The contract and prose gates compare paths with the base branch. Keep that history.
+          fetch-depth: 0
           persist-credentials: false
 
       - uses: ./.github/actions/setup-toolchain
@@ -63,6 +61,7 @@ jobs:
       - name: Quality gates
         env:
           LEG: ${{ inputs.leg }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           case "$LEG" in
             server) vp run ci:server ;;

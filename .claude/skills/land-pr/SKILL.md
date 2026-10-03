@@ -19,6 +19,8 @@ metadata:
 
 # Land PR
 
+Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
+
 ## 1. See what changed
 
 ```bash

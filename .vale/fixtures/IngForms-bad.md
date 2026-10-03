@@ -1,0 +1,1 @@
+The processing system starts.

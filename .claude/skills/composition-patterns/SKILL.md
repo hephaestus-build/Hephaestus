@@ -14,6 +14,8 @@ metadata:
 
 # React Composition Patterns
 
+Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
+
 Composition patterns for building flexible, maintainable React components. Avoid
 boolean prop proliferation by using compound components, lifting state, and
 composing internals. These patterns make codebases easier for both humans and AI

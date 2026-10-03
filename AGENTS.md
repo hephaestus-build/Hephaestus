@@ -1,5 +1,8 @@
 # Hephaestus
 
+All prose follows the [writing standard](docs/contributor/simplified-technical-english.md).
+Apply it to docs, UI text, user-facing responses, comments, and repository instructions.
+
 Hephaestus is an open-source AI mentor for software teams. It reads the work developers already do
 in GitHub, GitLab, Slack and Outline against the engineering practices their project cares about — a
 curated set of practices ships with it — and delivers practice feedback on the work itself, on the

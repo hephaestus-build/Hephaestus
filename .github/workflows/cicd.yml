@@ -208,6 +208,10 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
             webapp-image:
+              - '.vale/**'
+              - 'docs/contributor/practice-feedback-language.md'
+              - 'scripts/lib/ste-words.ts'
+              - 'scripts/lib/json.ts'
               - 'webapp/src/**'
               - '!webapp/src/**/*.test.*'
               - '!webapp/src/**/*.stories.*'
@@ -241,6 +245,8 @@ jobs:
               - '!server/**/AGENTS.md'
               - '!server/**/CLAUDE.md'
             tooling:
+              - '.vale/**'
+              - '.vale.ini'
               - 'scripts/**'
               - 'security/semgrep/**'
               - 'docker/agents/**'

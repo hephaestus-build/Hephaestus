@@ -1,0 +1,7 @@
+extends: sequence
+message: 'Name the actor, then write an active verb: for example, "The server sends the response."'
+level: suggestion
+ignorecase: true
+tokens:
+  - pattern: '(?:am|are|is|was|were|be|been|being)'
+  - tag: VBN

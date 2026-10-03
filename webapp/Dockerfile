@@ -16,6 +16,9 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
 # the install above ignored scripts. It has to resolve; there is no work tree, so it enables nothing.
 COPY scripts/ /repo/scripts/
 COPY webapp/ /repo/webapp/
+# The prose rule reads the shared words, enforced paths, and product vocabulary at lint time.
+COPY .vale/ /repo/.vale/
+COPY docs/contributor/practice-feedback-language.md /repo/docs/contributor/practice-feedback-language.md
 COPY server/application/src/main/resources/practices/default-catalog.json /repo/server/application/src/main/resources/practices/default-catalog.json
 RUN --mount=type=secret,id=sentry_auth_token,required=false \
     --mount=type=secret,id=sentry_org,required=false \

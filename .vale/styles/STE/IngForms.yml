@@ -1,0 +1,7 @@
+extends: sequence
+message: 'Use a technical name from the product vocabulary, a plain noun, or a clause with an active verb instead of "%s".'
+level: suggestion
+ignorecase: true
+tokens:
+  - pattern: '\w+ing'
+    tag: NN|NNS|JJ
