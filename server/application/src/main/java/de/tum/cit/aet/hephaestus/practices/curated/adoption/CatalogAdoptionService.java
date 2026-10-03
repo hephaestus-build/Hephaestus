@@ -44,9 +44,7 @@ public class CatalogAdoptionService {
     @Transactional
     public Practice adopt(WorkspaceContext context, String slug, String ifMatch) {
         catalogLock.acquire();
-        workspaceRepository
-                .findByIdForUpdate(context.id())
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", context.slug()));
+        lockWorkspace(context);
 
         CatalogAdoptionPlan plan;
         try {
@@ -72,9 +70,7 @@ public class CatalogAdoptionService {
     @Transactional
     public CatalogGroupAdoptionResult adoptGroup(WorkspaceContext context, String slug, String ifMatch) {
         catalogLock.acquire();
-        workspaceRepository
-                .findByIdForUpdate(context.id())
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", context.slug()));
+        lockWorkspace(context);
 
         CatalogGroupAdoptionPlan plan;
         try {
@@ -105,6 +101,13 @@ public class CatalogAdoptionService {
     }
 
     record CatalogGroupAdoptionResult(List<Practice> added, List<Practice> moved) {}
+
+    /** Serialises adoptions into one workspace; nothing here writes the workspace row itself. */
+    private void lockWorkspace(WorkspaceContext context) {
+        if (workspaceRepository.findByIdForUpdate(context.id()).isEmpty()) {
+            throw new EntityNotFoundException("Workspace", context.slug());
+        }
+    }
 
     private static void requireCurrentPlan(String ifMatch, String currentEtag) {
         EntityTagPrecondition precondition;

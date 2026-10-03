@@ -30,6 +30,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -50,7 +51,7 @@ class GraphQlPaginationHelperTest {
     private HttpGraphQlClient client;
 
     @Mock
-    private HttpGraphQlClient.RequestSpec requestSpec;
+    private GraphQlClient.RequestSpec requestSpec;
 
     private GraphQlPaginationHelper helper;
 

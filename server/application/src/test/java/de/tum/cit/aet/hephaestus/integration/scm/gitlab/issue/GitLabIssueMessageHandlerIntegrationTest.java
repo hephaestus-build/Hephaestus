@@ -44,9 +44,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -68,7 +66,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
     private static final long NATIVE_ISSUE_ID = 422296L;
     private static final int ISSUE_IID = 5;
     private static final long NATIVE_USER_ID = 18024L;
-    private static final long NATIVE_LABEL_ID = 85907L;
 
     // Fixture values
     private static final String FIXTURE_ISSUE_TITLE = "Feature: Add user authentication";
@@ -728,10 +725,6 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         workspace.setAccountLogin(FIXTURE_ORG_LOGIN);
         workspace.setAccountType(AccountType.ORG);
         savedWorkspace = workspaceRepository.save(workspace);
-    }
-
-    private Set<String> labelNames(Issue issue) {
-        return issue.getLabels().stream().map(l -> l.getName()).collect(Collectors.toSet());
     }
 
     private static long persistedId(IdentityProvider provider) {

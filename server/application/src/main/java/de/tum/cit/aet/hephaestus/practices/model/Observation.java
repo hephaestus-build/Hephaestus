@@ -115,6 +115,7 @@ public class Observation {
             },
             foreignKey = @ForeignKey(name = "fk_observation_practice_workspace"))
     @Getter(AccessLevel.NONE)
+    @SuppressWarnings("UnusedVariable") // mapping-only: Hibernate reads it to declare fk_observation_practice_workspace
     private @Nullable Practice tenantOwnedPractice;
 
     @ManyToOne(fetch = FetchType.LAZY)

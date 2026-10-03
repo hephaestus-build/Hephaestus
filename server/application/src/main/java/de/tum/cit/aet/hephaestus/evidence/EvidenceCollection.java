@@ -18,6 +18,8 @@ public enum EvidenceCollection {
     SCM_GENERAL_REVIEW_COMMENTS("scm.general-review-comments", new SourceKind("scm.general-review-comments"));
 
     private final String id;
+
+    @SuppressWarnings("ImmutableEnumChecker") // SourceKind is a record of one final String
     private final SourceKind sourceKind;
 
     EvidenceCollection(String id, SourceKind sourceKind) {

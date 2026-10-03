@@ -47,7 +47,9 @@ public class WorkerLivenessReporter {
     private final String workerId;
     private final Counter heartbeatFailures;
 
-    private volatile int consecutiveFailures;
+    /** beat() runs serially: once in start(), then only on the single scheduler thread start() creates after it. */
+    private int consecutiveFailures;
+
     private @Nullable ScheduledExecutorService scheduler;
 
     public WorkerLivenessReporter(
@@ -75,7 +77,9 @@ public class WorkerLivenessReporter {
             t.setDaemon(true);
             return t;
         });
-        scheduler.scheduleAtFixedRate(this::beat, interval.toSeconds(), interval.toSeconds(), TimeUnit.SECONDS);
+        // Periodic; stop() ends it with shutdownNow().
+        var unused =
+                scheduler.scheduleAtFixedRate(this::beat, interval.toSeconds(), interval.toSeconds(), TimeUnit.SECONDS);
         log.info("Worker liveness reporter started: workerId={}, interval={}", workerId, interval);
     }
 

@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Covers the logic that moved out of the controller — workspace-scoped lookup +
@@ -181,12 +182,6 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
     }
 
     private static void setId(Connection c, long id) {
-        try {
-            var f = Connection.class.getDeclaredField("id");
-            f.setAccessible(true);
-            f.set(c, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(c, "id", id);
     }
 }

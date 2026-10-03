@@ -97,7 +97,7 @@ public class WorkspaceScopeFilter {
 
         // Extract org from "org/repo" format and check against org filter
         if (!allowedOrganizations.isEmpty()) {
-            String org = nameWithOwner.contains("/") ? nameWithOwner.split("/")[0] : nameWithOwner;
+            String org = nameWithOwner.split("/", -1)[0];
             if (!allowedOrganizations.contains(normalize(org))) {
                 return false;
             }

@@ -39,6 +39,7 @@ import org.mockito.Mock;
 import org.springframework.graphql.ResponseError;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -68,7 +69,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
                 .thenReturn(new MrInfo("gid://gitlab/MR/42", "base", "head", "start"));
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -117,7 +118,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
                 .thenReturn(new MrInfo("gid://gitlab/MR/42", "base", "head", "start"));
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -138,7 +139,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -202,7 +203,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
                 .thenReturn(new MrInfo("gid://gitlab/MR/42", "base", "head", "start"));
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -222,7 +223,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
                 .thenReturn(new MrInfo("gid://gitlab/MR/42", "base", "head", "start"));
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -246,7 +247,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         when(mrResolver.resolveIssueGid(1L, "group/project", 7)).thenReturn("gid://gitlab/Issue/7");
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -267,7 +268,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -344,7 +345,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
 
     private void stubMutationErrors(List<String> errors) {
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -366,7 +367,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -387,9 +388,9 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
 
     private static final String MARKER = "<!-- hephaestus-summary:job-1 -->";
 
-    private HttpGraphQlClient.RequestSpec mockRequestChain() {
+    private GraphQlClient.RequestSpec mockRequestChain() {
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -437,7 +438,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
     @Test
     void findExistingSummary_matchOnFirstPage_isFound() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page = mockMrNotesPage(
                 List.of(
                         note("gid://gitlab/Note/1", "a human said hi"),
@@ -448,7 +449,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
 
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.FOUND);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         // The handle is the note's own global id — exactly what updateSummary passes to UpdateNote as `id`.
         assertNotNull(result.handle());
         assertThat(result.handle().externalId()).isEqualTo("gid://gitlab/Note/2");
@@ -463,7 +464,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
     @Test
     void findExistingSummary_walksTheNewestEndFirst() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page = mockMrNotesPage(List.of(note("gid://gitlab/Note/9", MARKER)), true, "c");
         when(spec.execute()).thenReturn(Mono.just(page));
 
@@ -478,7 +479,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
     @Test
     void findExistingSummary_everyNoteScanned_noMatch_isAbsent() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page = mockMrNotesPage(
                 List.of(note("gid://gitlab/Note/1", "unrelated")),
                 false, // hasPreviousPage=false — the walk reached the oldest note, every note was seen
@@ -487,40 +488,40 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
 
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.ABSENT);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.ABSENT);
     }
 
     @Test
     void findExistingSummary_pageBudgetExhaustedWithOlderNotesLeft_isUnknown_notAbsent() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page =
                 mockMrNotesPage(List.of(note("gid://gitlab/Note/1", "unrelated")), true, "cursor-1");
         when(spec.execute()).thenReturn(Mono.just(page));
 
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.UNKNOWN);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
         verify(spec, times(3)).execute();
     }
 
     @Test
     void findExistingSummary_blankStartCursorWithOlderNotesLeft_isUnknown_notAbsent() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page = mockMrNotesPage(List.of(note("gid://gitlab/Note/1", "unrelated")), true, "  ");
         when(spec.execute()).thenReturn(Mono.just(page));
 
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.UNKNOWN);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
         verify(spec, times(1)).execute();
     }
 
     @Test
     void findExistingSummary_secondPageHasTheMatch_isFound() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page1 =
                 mockMrNotesPage(List.of(note("gid://gitlab/Note/1", "unrelated")), true, "cursor-1");
         ClientGraphQlResponse page2 = mockMrNotesPage(List.of(note("gid://gitlab/Note/2", MARKER)), false, null);
@@ -528,7 +529,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
 
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.FOUND);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         assertNotNull(result.handle());
         assertThat(result.handle().externalId()).isEqualTo("gid://gitlab/Note/2");
         assertThat(result.handle().url())
@@ -540,7 +541,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
     void findExistingSummary_topLevelGraphQlError_isUnknown_notAbsent() {
         // A fully-scanned, match-free page plus a top-level error must not read as confirmed absence.
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ResponseError error = mock(ResponseError.class);
         ClientGraphQlResponse page = mockNotesPage(
                 MR_NOTES_PATH, List.of(note("gid://gitlab/Note/1", "unrelated")), false, null, List.of(error));
@@ -548,7 +549,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
 
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.UNKNOWN);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
 
     /**
@@ -559,7 +560,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
     void findExistingSummary_issueSubject_scansIssueNotes_isFound() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -570,7 +571,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
 
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabIssueTarget(), MARKER);
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.FOUND);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         assertNotNull(result.handle());
         assertThat(result.handle().externalId()).isEqualTo("gid://gitlab/Note/7");
         assertThat(result.handle().url())
@@ -584,21 +585,21 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
     void findExistingSummary_issueSubject_noMatch_isAbsent() {
         // Fail-closed applies only while absence is unproven; a fully-scanned thread with no marker is proven absence.
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page =
                 mockNotesPage(ISSUE_NOTES_PATH, List.of(note("gid://gitlab/Note/1", "hi")), false, null, List.of());
         when(spec.execute()).thenReturn(Mono.just(page));
 
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabIssueTarget(), MARKER);
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.ABSENT);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.ABSENT);
     }
 
     @Test
     void findExistingSummary_mergeRequestSubject_usesTheMergeRequestDocument() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -607,19 +608,19 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
 
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.FOUND);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         verify(client).documentName("GetMergeRequestNotesNewest");
     }
 
     @Test
     void findExistingSummary_transportError_isUnknown_notAbsent() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         when(spec.execute()).thenReturn(Mono.error(new RuntimeException("connection reset")));
 
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.UNKNOWN);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
 
     @Test
@@ -628,14 +629,14 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
 
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.UNKNOWN);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
 
     @Test
     void findExistingSummary_blankMarker_isUnknown() {
         ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), "  ");
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.UNKNOWN);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
 
     private static FeedbackTarget gitlabTarget() {
@@ -673,7 +674,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
                 .thenReturn(new MrInfo("gid://gitlab/MR/42", "base", "head", "start"));
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);

@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
-import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -73,9 +72,6 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
 
     @Autowired
     private AgentJobRepository agentJobRepository;
-
-    @Autowired
-    private AccountRepository accountRepository;
 
     @Autowired
     private FeedbackWithdrawalService withdrawalService;

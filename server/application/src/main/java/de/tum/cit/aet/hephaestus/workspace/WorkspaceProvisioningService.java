@@ -111,15 +111,11 @@ public class WorkspaceProvisioningService {
         WorkspaceProperties.DefaultProperties config = workspaceProperties.defaultProperties();
 
         String configuredLogin = config.login();
-        String accountLogin = null;
-        if (!isBlank(configuredLogin)) {
-            accountLogin = Objects.requireNonNull(configuredLogin).trim();
-        }
-        if (isBlank(accountLogin)) {
+        if (configuredLogin == null || configuredLogin.isBlank()) {
             throw new IllegalStateException(
                     "Failed to derive account login for default workspace bootstrap. Set hephaestus.workspace.default.login.");
         }
-        accountLogin = Objects.requireNonNull(accountLogin);
+        String accountLogin = configuredLogin.trim();
 
         if (isBlank(config.token())) {
             throw new IllegalStateException(
@@ -181,12 +177,12 @@ public class WorkspaceProvisioningService {
 
         WorkspaceProperties.GitLabDefaultProperties config = workspaceProperties.gitlabDefault();
 
-        String groupPath = config.login() != null ? config.login().trim() : null;
-        if (isBlank(groupPath)) {
+        String configuredGroupPath = config.login();
+        if (configuredGroupPath == null || configuredGroupPath.isBlank()) {
             throw new IllegalStateException(
                     "Failed to derive group path for GitLab workspace bootstrap. Set hephaestus.workspace.gitlab-default.login.");
         }
-        groupPath = Objects.requireNonNull(groupPath);
+        String groupPath = configuredGroupPath.trim();
 
         if (isBlank(config.token())) {
             throw new IllegalStateException(

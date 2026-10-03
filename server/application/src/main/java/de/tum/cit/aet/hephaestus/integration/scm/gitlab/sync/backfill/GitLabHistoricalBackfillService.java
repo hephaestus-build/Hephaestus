@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,7 +117,7 @@ public class GitLabHistoricalBackfillService {
         if (sessions.isEmpty()) return 0;
 
         int batchSize = syncSchedulerProperties.backfill().batchSize();
-        AtomicInteger processed = new AtomicInteger(0);
+        int processed = 0;
 
         for (SyncSession session : sessions) {
             Long providerId = getGitLabProviderId(session.accountLogin());
@@ -140,7 +139,7 @@ public class GitLabHistoricalBackfillService {
                     continue;
                 }
                 if (handle != null && handle.isCancellationRequested()) {
-                    return processed.get();
+                    return processed;
                 }
                 if (target.isBackfillComplete()) continue;
                 if (isOnCooldown(target.id(), handle != null)) continue;
@@ -161,7 +160,7 @@ public class GitLabHistoricalBackfillService {
                 boolean worked = backfillRepository(session.scopeId(), repo, target, issueSync, mrSync, batchSize);
 
                 if (worked) {
-                    processed.incrementAndGet();
+                    processed++;
                 }
                 reposDone++;
                 if (handle != null) {
@@ -185,7 +184,7 @@ public class GitLabHistoricalBackfillService {
             }
         }
 
-        return processed.get();
+        return processed;
     }
 
     private boolean backfillRepository(

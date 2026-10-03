@@ -66,7 +66,7 @@ public final class SchemaRowSeeder {
             case "uuid" -> UUID.randomUUID();
             case "bigint", "integer", "smallint" -> 1L;
             case "real", "double precision", "numeric" -> 0.0;
-            case "boolean" -> Boolean.FALSE;
+            case "boolean" -> false;
             case "jsonb", "json" -> "{}";
             case "timestamp with time zone", "timestamp without time zone" -> Timestamp.from(Instant.now());
             // Unique, so a UNIQUE NOT NULL column does not collide across seeded rows, and within the

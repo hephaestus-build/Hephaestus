@@ -36,6 +36,7 @@ public interface WebhookSecretSource {
      * {@link #headers()} and ignore the body, while subscription-scoped vendors (Outline)
      * parse a subscription id out of {@link #body()} to select the stored secret.
      */
+    @SuppressWarnings("ArrayRecordComponent") // raw webhook body; never compared, hashed or printed
     record SecretLookup(Map<String, String> headers, byte[] body) {
         /** Header-only lookup — the body is empty for vendors that scope by header alone. */
         public SecretLookup(Map<String, String> headers) {

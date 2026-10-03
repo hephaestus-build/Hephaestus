@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -32,7 +33,7 @@ class SandboxWorkspaceManagerTest {
     void shouldPreserveMemoryAndDiskInputsInOneArchive() throws Exception {
         var source = Files.writeString(temporary.resolve("App.java"), "class App {}");
         Path archive = manager.createInputTar(
-                Map.of("inputs/diff.patch", "diff".getBytes()), Map.of("inputs/repository/App.java", source));
+                Map.of("inputs/diff.patch", "diff".getBytes(UTF_8)), Map.of("inputs/repository/App.java", source));
         try {
             var captured = new HashMap<String, byte[]>();
             try (var tar = new TarArchiveInputStream(Files.newInputStream(archive))) {
@@ -42,7 +43,7 @@ class SandboxWorkspaceManagerTest {
                 }
             }
             assertThat(captured).containsOnlyKeys("inputs/diff.patch", "inputs/repository/App.java");
-            assertThat(captured.get("inputs/diff.patch")).isEqualTo("diff".getBytes());
+            assertThat(captured.get("inputs/diff.patch")).isEqualTo("diff".getBytes(UTF_8));
             assertThat(captured.get("inputs/repository/App.java")).isEqualTo(Files.readAllBytes(source));
         } finally {
             Files.delete(archive);

@@ -11,13 +11,11 @@ function peopleFrom(
 	rest: Partial<ReviewPeople> = {},
 ): ReviewPeople {
 	return {
-		options: members
-			.filter((member): member is typeof member & { userId: number } => member.userId != null)
-			.map((member) => ({
-				userId: member.userId,
-				label: member.userName ?? `#${member.userId}`,
-				secondary: member.userLogin,
-			})),
+		options: members.map((member) => ({
+			userId: member.userId,
+			label: member.userName ?? `#${member.userId}`,
+			secondary: member.userLogin,
+		})),
 		capped: members.length >= MEMBER_PAGE_SIZE,
 		isLoading: false,
 		isError: false,

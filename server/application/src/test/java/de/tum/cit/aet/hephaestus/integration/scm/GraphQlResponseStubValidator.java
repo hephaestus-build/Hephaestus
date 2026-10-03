@@ -92,6 +92,8 @@ public final class GraphQlResponseStubValidator {
 
         private final String schemaLocation;
         private final String operationsLocation;
+
+        @SuppressWarnings("ImmutableEnumChecker") // every constant passes an unmodifiable List.of
         private final List<String> fragmentLocations;
 
         Vendor(String schemaLocation, String operationsLocation, List<String> fragmentLocations) {
@@ -160,7 +162,7 @@ public final class GraphQlResponseStubValidator {
             SelectionSet selectionSet = rootSelection;
             GraphQLFieldDefinition definition = null;
             StringBuilder walked = new StringBuilder();
-            for (String segment : fieldPath.split("\\.")) {
+            for (String segment : fieldPath.split("\\.", -1)) {
                 Selected next = selectable(type, selectionSet).get(segment);
                 if (next == null) {
                     throw new IllegalArgumentException(

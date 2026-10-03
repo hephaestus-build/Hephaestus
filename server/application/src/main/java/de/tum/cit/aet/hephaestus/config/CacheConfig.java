@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class CacheConfig {
 
-    private static final Duration LONG_TTL = Duration.ofSeconds(3600);
+    private static final Duration LONG_TTL = Duration.ofHours(1);
 
     private static final Duration MENTOR_CONTEXT_TTL = Duration.ofMinutes(5);
 

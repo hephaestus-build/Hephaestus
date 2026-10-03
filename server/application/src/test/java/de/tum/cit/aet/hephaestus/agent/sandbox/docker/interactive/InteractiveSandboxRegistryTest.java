@@ -63,7 +63,6 @@ class InteractiveSandboxRegistryTest extends BaseUnitTest {
         var registry = new InteractiveSandboxRegistry(
                 new InteractiveSandboxProperties(900, 1, 1, 512, 5000, 64, 64, 30, 3, 50, 1048576),
                 containers,
-                new InteractiveSandboxMetrics(meters),
                 new StdinWriteWatchdog(),
                 meters,
                 creator);
@@ -90,7 +89,6 @@ class InteractiveSandboxRegistryTest extends BaseUnitTest {
         return new InteractiveSandboxRegistry(
                 properties,
                 mock(SandboxContainerManager.class),
-                new InteractiveSandboxMetrics(meters),
                 new StdinWriteWatchdog(),
                 meters,
                 mock(SandboxCreator.class));

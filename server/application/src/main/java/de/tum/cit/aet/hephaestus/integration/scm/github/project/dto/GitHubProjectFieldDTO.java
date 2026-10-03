@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.project.ProjectField;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
@@ -54,7 +55,7 @@ public record GitHubProjectFieldDTO(
         if (dataType == null) {
             return null;
         }
-        return switch (dataType.toUpperCase()) {
+        return switch (dataType.toUpperCase(Locale.ROOT)) {
             // Custom field types
             case "TEXT" -> ProjectField.DataType.TEXT;
             case "NUMBER" -> ProjectField.DataType.NUMBER;

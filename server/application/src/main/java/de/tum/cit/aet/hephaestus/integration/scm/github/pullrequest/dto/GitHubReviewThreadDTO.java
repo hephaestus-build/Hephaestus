@@ -16,6 +16,10 @@ import org.jspecify.annotations.Nullable;
  * {@link de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.GitHubPullRequestReviewCommentSyncService}.
  * This is intentional - the comments within threads need special handling for
  * nested pagination and are not directly exposed through the public API.
+ *
+ * @param commentsConnection the comments connection containing thread comments and pagination info. This is used
+ *     internally by GitHubPullRequestReviewCommentSyncService for processing comments and handling nested pagination.
+ *     It is not exposed through the public DTO API.
  */
 public record GitHubReviewThreadDTO(
         String nodeId,
@@ -28,12 +32,6 @@ public record GitHubReviewThreadDTO(
         boolean isOutdated,
         boolean isCollapsed,
         @Nullable GitHubUserDTO resolvedBy,
-        /**
-         * The comments connection containing thread comments and pagination info.
-         * This is used internally by GitHubPullRequestReviewCommentSyncService for
-         * processing comments and handling nested pagination. It is not exposed
-         * through the public DTO API.
-         */
         @Nullable GHPullRequestReviewCommentConnection commentsConnection) {
     /**
      * Creates a GitHubReviewThreadDTO from a GraphQL GHPullRequestReviewThread model.

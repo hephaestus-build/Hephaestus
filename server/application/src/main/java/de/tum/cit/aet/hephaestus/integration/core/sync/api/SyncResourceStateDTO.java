@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.sync.api;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResourceState;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResourceState.Type;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -17,7 +16,7 @@ public record SyncResourceStateDTO(
         String externalId,
 
         @NonNull @Schema(description = "Display name") String name,
-        @NonNull @Schema(description = "Resource kind") Type type,
+        @Schema(description = "Resource kind") SyncResourceState.@NonNull Type type,
 
         @NonNull @Schema(description = "Integration-defined status string")
         String state,

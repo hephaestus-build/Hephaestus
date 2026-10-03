@@ -76,7 +76,7 @@ public class AgentQueueHealthSampler {
             running.set(snapshot.getRunning());
             Instant oldest = snapshot.getOldestAvailableAt();
             oldestAgeSeconds.set(
-                    oldest != null ? Math.max(0, Duration.between(oldest, now).getSeconds()) : 0L);
+                    oldest != null ? Math.max(0, Duration.between(oldest, now).toSeconds()) : 0L);
         } catch (Exception e) {
             // Keep the last-good gauge values: a DB blip must not read as "queue is empty".
             samplerFailures.increment();

@@ -20,6 +20,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -217,7 +218,7 @@ public abstract class BaseGitHubProcessor {
                     + "This may indicate missing data in webhook or GraphQL response.");
             return Milestone.State.OPEN;
         }
-        return switch (state.toUpperCase()) {
+        return switch (state.toUpperCase(Locale.ROOT)) {
             case "OPEN" -> Milestone.State.OPEN;
             case "CLOSED" -> Milestone.State.CLOSED;
             default -> {

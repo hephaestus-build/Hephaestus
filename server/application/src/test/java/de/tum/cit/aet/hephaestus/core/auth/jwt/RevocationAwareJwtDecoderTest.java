@@ -323,7 +323,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         CacheManager cm = cacheManager();
         Cache cache = cm.getCache(RevocationAwareJwtDecoder.CACHE_NAME);
         assertNotNull(cache);
-        cache.put(jti, Boolean.TRUE); // negative cache: only the REVOKED verdict is stored
+        cache.put(jti, true); // negative cache: only the REVOKED verdict is stored
 
         RevocationAwareJwtDecoder decoder = decoder(repo, cm);
         assertThatThrownBy(() -> decoder.decode(validToken(jti))).isInstanceOf(JwtException.class);

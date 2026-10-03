@@ -689,7 +689,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
     void shouldNotInferCompleteFromSourceCapabilityAlone() {
         Map<String, byte[]> files = new LinkedHashMap<>();
         files.put("context/linked_work_items.json", "{\"workItems\":[{}]}".getBytes(StandardCharsets.UTF_8));
-        JobFolderIndex manifest = builder.augment(
+        builder.augment(
                 files,
                 Map.of("context/linked_work_items.json", LINKED_ITEMS),
                 "job-unreported-completeness",

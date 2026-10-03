@@ -348,7 +348,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * Hard-delete the {@code chat.conversation_thread} observations for a workspace whose {@code artifact_id} (the
      * {@code slack_thread} id) is one of {@code artifactIds} — the derived-content erasure the Slack module invokes
      * through {@link ConversationFeedbackErasure} when a channel's consent is
-     * withdrawn. the {@code artifactKind} + {@code artifactId} predicates keep PR/ISSUE observations
+     * withdrawn. The {@code o.artifactKind} + {@code o.artifactId} predicates keep PR/ISSUE observations
      * and other tenants' rows untouched. DB {@code ON DELETE CASCADE} clears any bound {@code feedback_observation} /
      * {@code reaction} children. Callers guard an empty {@code artifactIds}.
      *

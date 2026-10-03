@@ -42,7 +42,7 @@ class AccountHardDeleteSweeperTest extends BaseUnitTest {
 
     @Test
     void shouldContinuePurgingWhenOneAccountFails() {
-        Duration cooldown = Duration.ofHours(48);
+        Duration cooldown = Duration.ofDays(2);
         when(authProperties.deleteCooldown()).thenReturn(cooldown);
         when(accountRepository.findDeletingPastCooldown(eq(NOW.minus(cooldown)), any()))
                 .thenReturn(List.of(1L, 2L))
@@ -65,7 +65,7 @@ class AccountHardDeleteSweeperTest extends BaseUnitTest {
 
     @Test
     void shouldRecordSuccessfulEmptySweep() {
-        when(authProperties.deleteCooldown()).thenReturn(Duration.ofHours(48));
+        when(authProperties.deleteCooldown()).thenReturn(Duration.ofDays(2));
         when(accountRepository.findDeletingPastCooldown(any(), any())).thenReturn(List.of());
         AccountHardDeleteSweeper sweeper =
                 new AccountHardDeleteSweeper(accountRepository, accountPurger, authProperties, clock, metrics);
@@ -86,7 +86,7 @@ class AccountHardDeleteSweeperTest extends BaseUnitTest {
 
     @Test
     void shouldRecordSweepQueryFailure() {
-        when(authProperties.deleteCooldown()).thenReturn(Duration.ofHours(48));
+        when(authProperties.deleteCooldown()).thenReturn(Duration.ofDays(2));
         when(accountRepository.findDeletingPastCooldown(any(), any())).thenThrow(new IllegalStateException("db down"));
         AccountHardDeleteSweeper sweeper =
                 new AccountHardDeleteSweeper(accountRepository, accountPurger, authProperties, clock, metrics);

@@ -152,7 +152,10 @@ export default function Header({
 									render={<Button variant="ghost" size="icon" shape="pill" />}
 								>
 									<Avatar className="hover:brightness-90">
-										<AvatarImage src={firstNonBlank(avatarUrl)} alt={`${username}'s avatar`} />
+										<AvatarImage
+											src={firstNonBlank(avatarUrl)}
+											alt={hasText(username) ? `${username}'s avatar` : ""}
+										/>
 										<AvatarFallback>{getInitials(name, username)}</AvatarFallback>
 									</Avatar>
 								</DropdownMenuTrigger>

@@ -43,6 +43,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -242,7 +243,7 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
             when(responseHandler.handle(eq(invalidResponse), anyString(), any()))
                     .thenReturn(new HandleResult(HandleResult.Action.ABORT, null));
 
-            HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(requestSpec);
             when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
             when(requestSpec.execute()).thenReturn(Mono.just(invalidResponse));
@@ -309,7 +310,7 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
         when(projectField.toEntity(GitLabProjectResponse.class)).thenReturn(projectResponse);
         when(response.field("project")).thenReturn(projectField);
 
-        HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName(anyString())).thenReturn(requestSpec);
         when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
         when(requestSpec.execute()).thenReturn(Mono.just(response));

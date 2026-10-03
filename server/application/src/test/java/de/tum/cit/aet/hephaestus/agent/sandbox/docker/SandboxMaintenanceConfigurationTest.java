@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.InteractiveSandboxMetrics;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.InteractiveSandboxRegistry;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.StdinWriteWatchdog;
 import de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig;
@@ -64,7 +63,6 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
                     () -> new InteractiveSandboxRegistry(
                             new InteractiveSandboxProperties(300, 1, 1, 512, 5000, 64, 64, 30, 3, 50, 1048576),
                             containers,
-                            new InteractiveSandboxMetrics(meters),
                             watchdog,
                             meters,
                             mock(SandboxCreator.class)));

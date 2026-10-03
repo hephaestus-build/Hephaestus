@@ -20,6 +20,7 @@ import org.mockito.Mock;
 import org.springframework.graphql.ResponseError;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -142,7 +143,7 @@ class GitLabMrResolverTest extends BaseUnitTest {
 
     private void stubExecute(Mono<ClientGraphQlResponse> result) {
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);

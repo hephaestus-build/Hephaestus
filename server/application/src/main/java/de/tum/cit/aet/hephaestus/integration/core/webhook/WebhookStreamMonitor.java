@@ -132,7 +132,8 @@ class WebhookStreamMonitor {
         long intervalMs = properties.stream().monitorInterval().toMillis();
         // Zero initial delay: the first read happens on the scheduler thread, so it populates the
         // gauges immediately without adding NATS round-trips to application startup.
-        scheduler.scheduleWithFixedDelay(this::poll, 0, intervalMs, TimeUnit.MILLISECONDS);
+        // Periodic; stop() ends it with shutdownNow().
+        var unused = scheduler.scheduleWithFixedDelay(this::poll, 0, intervalMs, TimeUnit.MILLISECONDS);
     }
 
     @PreDestroy
@@ -215,7 +216,7 @@ class WebhookStreamMonitor {
         if (state.getMsgCount() == 0 || first == null) {
             return 0;
         }
-        return Math.max(0, Duration.between(first.toInstant(), Instant.now()).getSeconds());
+        return Math.max(0, Duration.between(first.toInstant(), Instant.now()).toSeconds());
     }
 
     private static double secondsSince(AtomicLong millis) {

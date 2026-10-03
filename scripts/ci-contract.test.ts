@@ -15,6 +15,7 @@ import { versionBranch } from "./dispatch-version-pr-ci.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
+import { exitStatus } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { planRelease, releaseOutputs } from "./plan-release.ts";
 import { resolveAliasBase } from "./resolve-alias-base.ts";
@@ -275,7 +276,7 @@ async function runStep(
 		outputs: Object.fromEntries(outputs),
 		// What the shell said, for the assertion to carry. A step's own message is the difference
 		// between a failure somebody can fix and `true !== false` on a machine they do not have.
-		diagnosis: `exit ${run.status}\n${run.stderr.trim()}`.trim(),
+		diagnosis: `exit ${exitStatus(run.status, run.signal)}\n${run.stderr.trim()}`.trim(),
 	};
 }
 
@@ -1129,7 +1130,7 @@ void describe("CI contract", () => {
 		for (const [file, kind] of [
 			["ci-quality-gates.yml", "storybook"],
 			["cd-docs.yml", "docs"],
-		]) {
+		] as const) {
 			const source = await readFile(`.github/workflows/${file}`, "utf8");
 			assert.match(source, /scripts\/publish-preview-comments\.ts/u);
 			assert.ok(source.includes(`kind: "${kind}", path: process.env.PREVIEW_COMMENT_PATH`));
@@ -2442,10 +2443,10 @@ void describe("CI contract", () => {
 		).toJS();
 		assert.ok(isRecord(ignore) && Array.isArray(ignore.vulnerabilities));
 		const now = Date.now();
-		for (const entry of ignore.vulnerabilities) {
-			const fault = exceptionFault(entry, now);
-			assert.equal(fault, undefined, `security/trivy-dependency-ignore.yaml entry ${fault}`);
-		}
+		const faults = ignore.vulnerabilities
+			.map((entry: unknown) => exceptionFault(entry, now))
+			.filter((fault) => fault !== undefined);
+		assert.deepEqual(faults, [], "security/trivy-dependency-ignore.yaml entries");
 	});
 
 	void test("rejects a dependency exception that names no subject or outlives the ceiling", () => {
@@ -3046,7 +3047,7 @@ void test("unchanged quality legs are skipped before runner allocation", async (
 		["webapp", "webapp"],
 		["extension", "extension"],
 		["windows", "tooling"],
-	]) {
+	] as const) {
 		assert.equal(
 			workflow.getIn(["jobs", leg, "if"]),
 			leg === "server"

@@ -176,7 +176,7 @@ class ReviewGateTest extends BaseUnitTest {
         return practice;
     }
 
-    private Workspace setupThroughPracticeMatching(PullRequest pr, Practice... practices) {
+    private Workspace setupThroughPracticeMatching(Practice... practices) {
         Workspace workspace = createWorkspace();
         when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
         when(practiceReviewReadiness.hasRunnableAgent(WORKSPACE_ID)).thenReturn(true);
@@ -191,7 +191,7 @@ class ReviewGateTest extends BaseUnitTest {
         if (!state.equals("MISSING")) work.setState(Issue.State.valueOf(state));
         var practice = createPractice(SIGNAL);
         practice.setReviewWhen(Map.of("state", Set.of("OPEN")));
-        setupThroughPracticeMatching(work, practice);
+        setupThroughPracticeMatching(practice);
         var decision = gate.evaluate(work, SIGNAL, TriggerMode.AUTO);
         if (admitted) {
             assertThat(decision).isInstanceOf(GateDecision.Run.class);
@@ -262,7 +262,7 @@ class ReviewGateTest extends BaseUnitTest {
             PullRequest pr = createPullRequest();
             Practice onOpened = createPractice(ScmSignals.PULL_REQUEST_OPENED);
             Practice onMerged = createPractice(ScmSignals.PULL_REQUEST_MERGED);
-            Workspace workspace = setupThroughPracticeMatching(pr, onOpened, onMerged);
+            setupThroughPracticeMatching(onOpened, onMerged);
             GateDecision decision = gate.evaluate(pr, REQUEST, TriggerMode.MANUAL);
 
             assertThat(decision).isInstanceOf(GateDecision.Run.class);
@@ -275,7 +275,7 @@ class ReviewGateTest extends BaseUnitTest {
             PullRequest pr = createPullRequest();
             pr.setDraft(true);
             Practice notOnDrafts = createPractice(ScmSignals.PULL_REQUEST_OPENED);
-            Workspace workspace = setupThroughPracticeMatching(pr, notOnDrafts);
+            setupThroughPracticeMatching(notOnDrafts);
 
             GateDecision decision = gate.evaluate(pr, REQUEST, TriggerMode.MANUAL);
 
@@ -289,7 +289,7 @@ class ReviewGateTest extends BaseUnitTest {
             PullRequest pr = createPullRequest();
             Practice silenced = createPractice(ScmSignals.PULL_REQUEST_OPENED);
             silenced.setAutonomy(PracticeAutonomy.OFF);
-            setupThroughPracticeMatching(pr, silenced);
+            setupThroughPracticeMatching(silenced);
 
             GateDecision decision = gate.evaluate(pr, REQUEST, TriggerMode.MANUAL);
 
@@ -303,7 +303,7 @@ class ReviewGateTest extends BaseUnitTest {
         void requestStaysWithinItsKind() {
             PullRequest pr = createPullRequest();
             Practice onIssues = createPractice(ScmSignals.ISSUE_OPENED);
-            setupThroughPracticeMatching(pr, onIssues);
+            setupThroughPracticeMatching(onIssues);
 
             GateDecision decision = gate.evaluate(pr, REQUEST, TriggerMode.MANUAL);
 
@@ -311,11 +311,6 @@ class ReviewGateTest extends BaseUnitTest {
         }
     }
 
-    /**
-     * Whether a draft occasions a review is a per-practice timing condition, not a workspace-wide one: a fleet-wide veto
-     * would put the draft-specific criteria of a practice like {@code ready-and-traceable-handoff} out of
-     * reach of the only artifact they apply to.
-     */
     /**
      * A request is judged in the workspace that asked. The repository's name can resolve to another
      * workspace — several monitor one repository, and the same name exists on other provider servers — and
@@ -364,6 +359,11 @@ class ReviewGateTest extends BaseUnitTest {
         }
     }
 
+    /**
+     * Whether a draft occasions a review is a per-practice timing condition, not a workspace-wide one: a fleet-wide veto
+     * would put the draft-specific criteria of a practice like {@code ready-and-traceable-handoff} out of
+     * reach of the only artifact they apply to.
+     */
     @Nested
     class DraftGateTests {
 
@@ -372,7 +372,7 @@ class ReviewGateTest extends BaseUnitTest {
         void skipDraftForAPracticeThatDoesNotWantThem() {
             PullRequest pr = createPullRequest();
             pr.setDraft(true);
-            setupThroughPracticeMatching(pr, createPractice(SIGNAL));
+            setupThroughPracticeMatching(createPractice(SIGNAL));
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -387,7 +387,7 @@ class ReviewGateTest extends BaseUnitTest {
             PullRequest pr = createPullRequest();
             pr.setDraft(true);
             Practice reviewsDrafts = createDraftPractice(SIGNAL);
-            Workspace workspace = setupThroughPracticeMatching(pr, reviewsDrafts);
+            setupThroughPracticeMatching(reviewsDrafts);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -401,7 +401,7 @@ class ReviewGateTest extends BaseUnitTest {
             PullRequest pr = createPullRequest();
             pr.setDraft(true);
             Practice reviewsDrafts = createDraftPractice(SIGNAL);
-            Workspace workspace = setupThroughPracticeMatching(pr, createPractice(SIGNAL), reviewsDrafts);
+            setupThroughPracticeMatching(createPractice(SIGNAL), reviewsDrafts);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -413,7 +413,7 @@ class ReviewGateTest extends BaseUnitTest {
         void unrestrictedTimingAlsoCoversNonDrafts() {
             PullRequest pr = createPullRequest();
             Practice reviewsDrafts = createDraftPractice(SIGNAL);
-            Workspace workspace = setupThroughPracticeMatching(pr, reviewsDrafts);
+            setupThroughPracticeMatching(reviewsDrafts);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -587,7 +587,7 @@ class ReviewGateTest extends BaseUnitTest {
         void skipWhenNoMatchingPractices() {
             PullRequest pr = createPullRequest();
             Practice practice = createPractice(ScmSignals.PULL_REQUEST_REVIEWED);
-            setupThroughPracticeMatching(pr, practice);
+            setupThroughPracticeMatching(practice);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -624,7 +624,7 @@ class ReviewGateTest extends BaseUnitTest {
         void runsWithoutAssigneeOrRoleCheck() {
             PullRequest pr = createPullRequest();
             Practice practice = createPractice(SIGNAL);
-            Workspace workspace = setupThroughPracticeMatching(pr, practice);
+            Workspace workspace = setupThroughPracticeMatching(practice);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -644,7 +644,7 @@ class ReviewGateTest extends BaseUnitTest {
             PullRequest pr = createPullRequest();
             pr.getLabels().add(createLabel("enhancement"));
             Practice practice = createPractice(SIGNAL);
-            Workspace workspace = setupThroughPracticeMatching(pr, practice);
+            setupThroughPracticeMatching(practice);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -668,7 +668,7 @@ class ReviewGateTest extends BaseUnitTest {
             PullRequest pr = createPullRequest();
             Practice measured = createPractice(SIGNAL);
             measured.setAutonomy(PracticeAutonomy.HUMAN_APPROVAL);
-            Workspace workspace = setupThroughPracticeMatching(pr, measured);
+            setupThroughPracticeMatching(measured);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -681,7 +681,7 @@ class ReviewGateTest extends BaseUnitTest {
             PullRequest pr = createPullRequest();
             Practice silenced = createPractice(SIGNAL);
             silenced.setAutonomy(PracticeAutonomy.OFF);
-            setupThroughPracticeMatching(pr, silenced);
+            setupThroughPracticeMatching(silenced);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -698,7 +698,7 @@ class ReviewGateTest extends BaseUnitTest {
             PullRequest pr = createPullRequest();
             Practice other = createPractice(ScmSignals.PULL_REQUEST_MERGED);
             other.setAutonomy(PracticeAutonomy.OFF);
-            setupThroughPracticeMatching(pr, other);
+            setupThroughPracticeMatching(other);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -714,7 +714,7 @@ class ReviewGateTest extends BaseUnitTest {
             Practice silenced = createPractice(SIGNAL);
             silenced.setAutonomy(PracticeAutonomy.OFF);
             Practice delivering = createPractice(SIGNAL);
-            Workspace workspace = setupThroughPracticeMatching(pr, silenced, delivering);
+            setupThroughPracticeMatching(silenced, delivering);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -732,7 +732,7 @@ class ReviewGateTest extends BaseUnitTest {
         @Test
         void pausedDeliveryDoesNotStopReviewCompute() {
             PullRequest pr = createPullRequest();
-            Workspace workspace = setupThroughPracticeMatching(pr, createPractice(SIGNAL));
+            Workspace workspace = setupThroughPracticeMatching(createPractice(SIGNAL));
             workspace.getReviewSettings().setDeliveryStatus(PracticeDeliveryStatus.PAUSED);
 
             assertThat(gate.evaluate(pr, SIGNAL, TriggerMode.AUTO)).isInstanceOf(GateDecision.Run.class);
@@ -742,7 +742,7 @@ class ReviewGateTest extends BaseUnitTest {
         void admitsAPullRequestTargetingAScopedBranch() {
             PullRequest pr = createPullRequest();
             pr.setBaseRefName("main");
-            setupThroughPracticeMatching(pr, createPractice(SIGNAL));
+            setupThroughPracticeMatching(createPractice(SIGNAL));
 
             assertThat(gate.evaluate(pr, SIGNAL, TriggerMode.AUTO)).isInstanceOf(GateDecision.Run.class);
         }
@@ -1061,7 +1061,7 @@ class ReviewGateTest extends BaseUnitTest {
             adopted.setSourceCuratedSlug("withdrawn");
             Practice authored = createPractice(SIGNAL);
             authored.setSlug("authored-here");
-            setupThroughPracticeMatching(pr, adopted, authored);
+            setupThroughPracticeMatching(adopted, authored);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 

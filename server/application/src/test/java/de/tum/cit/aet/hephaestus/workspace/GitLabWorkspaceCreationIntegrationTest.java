@@ -47,9 +47,6 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
     private WorkspaceRepository workspaceRepository;
 
     @Autowired
-    private WorkspaceMembershipRepository workspaceMembershipRepository;
-
-    @Autowired
     private WorkspaceLifecycleService workspaceLifecycleService;
 
     @Autowired

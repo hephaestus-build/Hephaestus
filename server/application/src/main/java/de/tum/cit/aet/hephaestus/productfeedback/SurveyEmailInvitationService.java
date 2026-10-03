@@ -139,7 +139,7 @@ class SurveyEmailInvitationService implements SurveyEmailInvitations {
     public void scheduleReminders() {
         Instant now = clock.instant();
         for (var invitation :
-                invitations.findDueReminders(now.minus(Duration.ofHours(72)), now, PageRequest.of(0, MAX_BATCH_SIZE))) {
+                invitations.findDueReminders(now.minus(Duration.ofDays(3)), now, PageRequest.of(0, MAX_BATCH_SIZE))) {
             var eligible = eligibleForSurvey(invitation.getSurveyId(), invitation.getAccountId());
             if (eligible.isEmpty()
                     || !delivery.isSubscribed(

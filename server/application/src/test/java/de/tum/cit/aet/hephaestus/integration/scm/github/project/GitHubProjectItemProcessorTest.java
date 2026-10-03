@@ -191,7 +191,7 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
     }
 
     @Nested
-    class Process {
+    class ProcessItem {
 
         @Test
         void shouldReturnNullWhenDtoIsNull() {

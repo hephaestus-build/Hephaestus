@@ -26,10 +26,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionService;
@@ -41,9 +38,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.EnumSet;
@@ -51,7 +46,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -84,21 +78,6 @@ class IssueReviewHandlerTest extends BaseUnitTest {
     private FeedbackLedgerRecorder feedbackLedgerRecorder;
 
     @Mock
-    private IssueRepository issueRepository;
-
-    @Mock
-    private RepositoryToMonitorRepository repositoryToMonitorRepository;
-
-    @Mock
-    private AccountPreferencesQuery accountPreferencesQuery;
-
-    @Mock
-    private PullRequestRepository pullRequestRepository;
-
-    @Mock
-    private WorkspaceRepository workspaceRepository;
-
-    @Mock
     private FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter;
 
     @Mock
@@ -106,11 +85,8 @@ class IssueReviewHandlerTest extends BaseUnitTest {
 
     private IssueReviewHandler handler;
 
-    private boolean silentModeEngaged;
-
     @BeforeEach
     void setUp() {
-        silentModeEngaged = false;
         var practiceCatalogInjector = new PracticeCatalogInjector(
                 objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults());
         handler = new IssueReviewHandler(
@@ -143,10 +119,6 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                 .when(feedbackResponseSuppressionFilter.evaluate(any(), any()))
                 .thenAnswer(invocation ->
                         new FeedbackResponseSuppressionFilter.SuppressionDecision(invocation.getArgument(1), 0));
-        lenient()
-                .when(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(1L, "owner/repo"))
-                .thenReturn(true);
-        lenient().when(workspaceRepository.findById(1L)).thenReturn(Optional.of(activePracticeWorkspace()));
     }
 
     private Workspace activePracticeWorkspace() {

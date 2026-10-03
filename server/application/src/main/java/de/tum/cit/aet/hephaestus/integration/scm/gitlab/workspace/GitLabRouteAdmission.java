@@ -504,7 +504,7 @@ public class GitLabRouteAdmission implements RouteAdmission {
         if (subject == null || headers == null) {
             return Optional.empty();
         }
-        String[] tokens = subject.split("\\.");
+        String[] tokens = subject.split("\\.", -1);
         try {
             long connectionId = Long.parseLong(tokens[2]);
             long workspaceId =

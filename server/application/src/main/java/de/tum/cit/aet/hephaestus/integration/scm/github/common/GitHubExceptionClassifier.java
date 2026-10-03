@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
@@ -220,7 +221,7 @@ public class GitHubExceptionClassifier {
                 case "FORBIDDEN" -> {
                     // Check if it's a rate limit error
                     String message = error.getMessage();
-                    if (message != null && message.toLowerCase().contains("rate limit")) {
+                    if (message != null && message.toLowerCase(Locale.ROOT).contains("rate limit")) {
                         rateLimitedCounter.increment();
                         return ClassificationResult.rateLimited(
                                 Duration.ofMinutes(1), "GraphQL rate limit: " + message);
@@ -246,7 +247,7 @@ public class GitHubExceptionClassifier {
         // Fallback: check all error messages for rate limit text (covers null extensions/type)
         for (ResponseError error : errors) {
             String message = error.getMessage();
-            if (message != null && message.toLowerCase().contains("rate limit")) {
+            if (message != null && message.toLowerCase(Locale.ROOT).contains("rate limit")) {
                 rateLimitedCounter.increment();
                 return ClassificationResult.rateLimited(Duration.ofMinutes(1), "GraphQL rate limit: " + message);
             }
@@ -440,7 +441,7 @@ public class GitHubExceptionClassifier {
             }
 
             // Check message for deadlock indicators
-            if (message != null && message.toLowerCase().contains("deadlock")) {
+            if (message != null && message.toLowerCase(Locale.ROOT).contains("deadlock")) {
                 return true;
             }
 
@@ -509,7 +510,7 @@ public class GitHubExceptionClassifier {
         // Check response body for rate limit message
         String body = e.getResponseBodyAsString();
         if (body != null) {
-            String lowerBody = body.toLowerCase();
+            String lowerBody = body.toLowerCase(Locale.ROOT);
             return (lowerBody.contains("rate limit")
                     || lowerBody.contains("ratelimit")
                     || lowerBody.contains("abuse")

@@ -284,7 +284,7 @@ public class FeedbackLedgerRecorder {
                 .filter(f -> summaryContributors == null
                         ? summaryDelivered || deliveredInlineKeys.contains("observation:" + f.getOccurrenceKey())
                         : landed.contains(f.getOccurrenceKey()))
-                .filter(f -> (f.getOutcome().isDecided()))
+                .filter(f -> f.getOutcome().isDecided())
                 .filter(f -> !excludedIds.contains(f.getId()))
                 // Stable order matching the composer's prioritisation, and the same ObservationOrder it uses:
                 // severity, then how much of the work the observation's citations span, then id — so the persisted
@@ -612,7 +612,7 @@ public class FeedbackLedgerRecorder {
                 .build());
         int ordinal = 0;
         List<Observation> assessed = evidence.stream()
-                .filter(f -> (f.getOutcome().isDecided()))
+                .filter(f -> f.getOutcome().isDecided())
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
         for (Observation f : assessed) {
@@ -830,7 +830,7 @@ public class FeedbackLedgerRecorder {
                 .build());
         int ordinal = 0;
         List<Observation> assessed = writtenFrom(observations, delivery).stream()
-                .filter(f -> (f.getOutcome().isDecided()))
+                .filter(f -> f.getOutcome().isDecided())
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
         for (Observation f : assessed) {

@@ -60,7 +60,6 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 /** Live integration tests — boots real Docker. Run with {@code -Pgroups=live} or {@code live-tests}. */
 @LiveDockerTest
@@ -137,12 +136,7 @@ class DockerInteractiveSandboxLiveTest {
         metrics = new InteractiveSandboxMetrics(meterRegistry);
         watchdog = new StdinWriteWatchdog();
         registry = new InteractiveSandboxRegistry(
-                interactiveProperties,
-                containerManager,
-                metrics,
-                watchdog,
-                meterRegistry,
-                new SandboxCreator(dockerOps));
+                interactiveProperties, containerManager, watchdog, meterRegistry, new SandboxCreator(dockerOps));
         proxyCredentialRegistry = new MentorProxyCredentialRegistry();
         adapter = new DockerInteractiveSandboxAdapter(
                 interactiveProperties,
@@ -176,18 +170,22 @@ class DockerInteractiveSandboxLiveTest {
                 try {
                     containerManager.forceRemove(c.id());
                 } catch (Exception ignored) {
+                    // One resource that refuses to go must not stop the sweep of the rest.
                 }
             });
         } catch (Exception ignored) {
+            // The sweep is a safety net; Docker failing here must not mask the test's own result.
         }
         try {
             networkManager.listOrphanedNetworks().forEach(n -> {
                 try {
                     networkManager.removeNetwork(n.id());
                 } catch (Exception ignored) {
+                    // One resource that refuses to go must not stop the sweep of the rest.
                 }
             });
         } catch (Exception ignored) {
+            // The sweep is a safety net; Docker failing here must not mask the test's own result.
         }
         if (dockerWaitExecutor != null) {
             dockerWaitExecutor.shutdownNow();
@@ -254,11 +252,11 @@ class DockerInteractiveSandboxLiveTest {
     }
 
     private static JsonNode echo(String payload) {
-        return (MAPPER.createObjectNode().put("type", "echo")).put("payload", payload);
+        return MAPPER.createObjectNode().put("type", "echo").put("payload", payload);
     }
 
     private static JsonNode emit(int count, String tag) {
-        return (MAPPER.createObjectNode().put("type", "emit").put("count", count)).put("tag", tag);
+        return MAPPER.createObjectNode().put("type", "emit").put("count", count).put("tag", tag);
     }
 
     @Nested
@@ -660,9 +658,9 @@ class DockerInteractiveSandboxLiveTest {
 
             String helloId = UUID.randomUUID().toString();
             sb.send(MAPPER.createObjectNode()
-                    .<ObjectNode>put("jsonrpc", "2.0")
-                    .<ObjectNode>put("id", helloId)
-                    .<ObjectNode>put("method", "hello")
+                    .put("jsonrpc", "2.0")
+                    .put("id", helloId)
+                    .put("method", "hello")
                     .set("params", MAPPER.createObjectNode()));
 
             await().atMost(RPC_TIMEOUT).untilAsserted(() -> {
@@ -696,9 +694,9 @@ class DockerInteractiveSandboxLiveTest {
 
             String helloId = UUID.randomUUID().toString();
             sb.send(MAPPER.createObjectNode()
-                    .<ObjectNode>put("jsonrpc", "2.0")
-                    .<ObjectNode>put("id", helloId)
-                    .<ObjectNode>put("method", "hello")
+                    .put("jsonrpc", "2.0")
+                    .put("id", helloId)
+                    .put("method", "hello")
                     .set("params", MAPPER.createObjectNode()));
             await().atMost(RPC_TIMEOUT)
                     .untilAsserted(() -> assertThat(frames.stream()
@@ -708,9 +706,9 @@ class DockerInteractiveSandboxLiveTest {
             String threadId = UUID.randomUUID().toString();
             String openId = UUID.randomUUID().toString();
             sb.send(MAPPER.createObjectNode()
-                    .<ObjectNode>put("jsonrpc", "2.0")
-                    .<ObjectNode>put("id", openId)
-                    .<ObjectNode>put("method", "open_thread")
+                    .put("jsonrpc", "2.0")
+                    .put("id", openId)
+                    .put("method", "open_thread")
                     .set("params", MAPPER.createObjectNode().put("threadId", threadId)));
             await().atMost(RPC_TIMEOUT).untilAsserted(() -> {
                 JsonNode openResp = frames.stream()
@@ -723,9 +721,9 @@ class DockerInteractiveSandboxLiveTest {
 
             String promptId = UUID.randomUUID().toString();
             sb.send(MAPPER.createObjectNode()
-                    .<ObjectNode>put("jsonrpc", "2.0")
-                    .<ObjectNode>put("id", promptId)
-                    .<ObjectNode>put("method", "prompt")
+                    .put("jsonrpc", "2.0")
+                    .put("id", promptId)
+                    .put("method", "prompt")
                     .set(
                             "params",
                             MAPPER.createObjectNode().put("threadId", threadId).put("text", "Hello, stub!")));

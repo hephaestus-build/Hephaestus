@@ -243,26 +243,16 @@ public class PiResultParser {
         StringBuilder sb = new StringBuilder(json.length());
         for (int i = 0; i < json.length(); i++) {
             char c = json.charAt(i);
-            if (c == '\\' && i + 1 < json.length()) {
-                char next = json.charAt(i + 1);
-                if (next == '"'
-                        || next == '\\'
-                        || next == '/'
-                        || next == 'b'
-                        || next == 'f'
-                        || next == 'n'
-                        || next == 'r'
-                        || next == 't'
-                        || next == 'u') {
-                    sb.append(c);
-                } else {
-                    continue;
-                }
-            } else {
+            boolean invalidEscape = c == '\\' && i + 1 < json.length() && !isJsonEscape(json.charAt(i + 1));
+            if (!invalidEscape) {
                 sb.append(c);
             }
         }
         return sb.toString();
+    }
+
+    private static boolean isJsonEscape(char next) {
+        return "\"\\/bfnrtu".indexOf(next) >= 0;
     }
 
     /** Find the first '{'…'}' object containing an observations array (max {@value MAX_BRACE_ATTEMPTS} attempts). */

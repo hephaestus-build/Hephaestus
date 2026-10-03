@@ -564,7 +564,6 @@ public class GitHubPullRequestSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case RATE_LIMITED -> {
                         if (retryAttempt < MAX_RETRY_ATTEMPTS && classification.suggestedWait() != null) {
@@ -592,7 +591,6 @@ public class GitHubPullRequestSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_RATE_LIMIT;
-                        break;
                     }
                     case NOT_FOUND -> {
                         log.warn(
@@ -600,7 +598,6 @@ public class GitHubPullRequestSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case AUTH_ERROR -> {
                         log.error(
@@ -608,7 +605,6 @@ public class GitHubPullRequestSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case CLIENT_ERROR -> {
                         log.error(
@@ -616,7 +612,6 @@ public class GitHubPullRequestSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     default -> {
                         log.error(
@@ -625,7 +620,6 @@ public class GitHubPullRequestSyncService {
                                 classification.message(),
                                 e);
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                 }
                 break;

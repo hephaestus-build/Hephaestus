@@ -115,7 +115,6 @@ public class GitHubCollaboratorSyncService {
             boolean hasNextPage = true;
             Set<Long> syncedUserIds = new HashSet<>();
             int pageCount = 0;
-            boolean syncCompletedNormally = false;
             int retryAttempt = 0;
 
             while (hasNextPage) {
@@ -233,7 +232,7 @@ public class GitHubCollaboratorSyncService {
             }
 
             // Mark sync as completed normally if we exhausted all pages
-            syncCompletedNormally = !hasNextPage;
+            boolean syncCompletedNormally = !hasNextPage;
 
             // Raw edges received vs collaborators.totalCount (totalSynced is post-filter).
             if (reportedTotalCount >= 0) {

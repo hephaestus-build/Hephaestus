@@ -42,7 +42,7 @@ public final class ObservationOrder {
      * rather than re-deriving the tail.
      */
     public static Comparator<Observation> worstFirst() {
-        return Comparator.comparingInt((Observation o) -> severityOrdinal(o.getSeverity()))
+        return Comparator.comparingInt((Observation o) -> severityRank(o.getSeverity()))
                 .thenComparing(Comparator.comparingInt((Observation o) -> evidenceBreadth(o.getEvidence()))
                         .reversed())
                 .thenComparing(o -> o.getId().toString());
@@ -50,7 +50,7 @@ public final class ObservationOrder {
 
     /** This run's observations, worst first: severity, then evidence breadth, then practice + title. */
     public static Comparator<ValidatedObservation> worstFirstUnstored() {
-        return Comparator.comparingInt((ValidatedObservation f) -> severityOrdinal(f.severity()))
+        return Comparator.comparingInt((ValidatedObservation f) -> severityRank(f.severity()))
                 .thenComparing(Comparator.comparingInt((ValidatedObservation f) -> evidenceBreadth(f.evidence()))
                         .reversed())
                 .thenComparing(ObservationOrder::identityKey);
@@ -99,11 +99,11 @@ public final class ObservationOrder {
     }
 
     /**
-     * Severity ordinal for sorting, treating a null band (a positive strength under ADR 0022) as the
+     * Severity rank for sorting, treating a null band (a positive strength under ADR 0022) as the
      * least severe so problems always sort ahead of strengths.
      */
-    public static int severityOrdinal(@Nullable Severity severity) {
-        return severity == null ? Integer.MAX_VALUE : severity.ordinal();
+    public static int severityRank(@Nullable Severity severity) {
+        return severity == null ? Integer.MAX_VALUE : severity.rank();
     }
 
     /**

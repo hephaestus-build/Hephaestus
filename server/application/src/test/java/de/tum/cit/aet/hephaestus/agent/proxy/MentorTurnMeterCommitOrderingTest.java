@@ -46,7 +46,7 @@ class MentorTurnMeterCommitOrderingTest extends BaseUnitTest {
     void shouldMirrorOntoTheMeterOnlyAfterCommit() {
         TransactionSynchronizationManager.initSynchronization();
         UUID turnId = UUID.randomUUID();
-        ProxyTokenUsage usage = usageOf(turnId);
+        ProxyTokenUsage usage = tokenUsage();
         when(chatMessageRepository.accumulateLlmUsage(any(), anyLong(), anyLong(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(1);
 
@@ -67,7 +67,7 @@ class MentorTurnMeterCommitOrderingTest extends BaseUnitTest {
         when(chatMessageRepository.accumulateLlmUsage(any(), anyLong(), anyLong(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(0);
 
-        accumulator.accumulate(attempt(turnId), usageOf(turnId));
+        accumulator.accumulate(attempt(turnId), tokenUsage());
         TransactionSynchronizationUtils.triggerAfterCommit();
 
         verify(credentialRegistry, never()).accumulate(any(), any());
@@ -79,7 +79,7 @@ class MentorTurnMeterCommitOrderingTest extends BaseUnitTest {
         return new ProxyRouting.BilledAttempt(LlmUsageSourceType.MENTOR_TURN, turnId, 1, BigDecimal.ZERO, null);
     }
 
-    private static ProxyTokenUsage usageOf(UUID turnId) {
+    private static ProxyTokenUsage tokenUsage() {
         return new ProxyTokenUsage(100, 50, 10, 5, 0);
     }
 }

@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -197,7 +198,7 @@ class ConversationReviewSubmitterTest extends BaseUnitTest {
                 "1700000000.000100",
                 "1700000600.000200",
                 null,
-                participants);
+                Arrays.stream(participants).boxed().toList());
     }
 
     private static ArtifactSignal pendingSignal() {

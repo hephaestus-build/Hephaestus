@@ -118,7 +118,7 @@ class SandboxArchitectureTest extends HephaestusArchitectureTest {
                     .check(classes);
         }
 
-        /** Guards against ArchUnit #324: callMethod silently passes when the parameter signature mismatches. */
+        /** Guards against TNG/ArchUnit#324: callMethod silently passes when the parameter signature mismatches. */
         @Test
         void mentorPositiveFixtureCatchesViolation() {
             JavaClasses fixtureClasses = importTestFixture("de.tum.cit.aet.hephaestus.agent.mentor");

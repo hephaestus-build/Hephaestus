@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.runtime;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
@@ -74,8 +75,8 @@ class PiResultParserTest extends BaseUnitTest {
     void extractsJsonFromMixedText() {
         String mixed = "Here:\n```json\n{\"observations\":[{\"practiceSlug\":\"t\",\"title\":\"a\","
                 + "\"presence\":\"ABSENT\",\"assessment\":\"BAD\",\"severity\":\"MAJOR\",\"confidence\":0.8}]}\n```";
-        var result = parser.parse(
-                new SandboxResult(0, Map.of("result.json", mixed.getBytes()), "done", false, Duration.ofSeconds(10)));
+        var result = parser.parse(new SandboxResult(
+                0, Map.of("result.json", mixed.getBytes(UTF_8)), "done", false, Duration.ofSeconds(10)));
         assertThat(rawOutput(result).toString()).contains("observations").contains("ABSENT");
     }
 
@@ -91,11 +92,11 @@ class PiResultParserTest extends BaseUnitTest {
                 0,
                 Map.of(
                         "result.json",
-                        observations.getBytes(),
+                        observations.getBytes(UTF_8),
                         "usage.json",
-                        usage.getBytes(),
+                        usage.getBytes(UTF_8),
                         "runner-debug.json",
-                        debug.getBytes()),
+                        debug.getBytes(UTF_8)),
                 "done",
                 false,
                 Duration.ofSeconds(10)));
@@ -190,8 +191,8 @@ class PiResultParserTest extends BaseUnitTest {
         String json = "{\"observations\":[{\"practiceSlug\":\"t\",\"title\":\"line1\\nline2\","
                 + "\"presence\":\"PRESENT\",\"assessment\":\"GOOD\",\"severity\":\"INFO\",\"confidence\":0.9,"
                 + "\"reasoning\":\"Text(\\\"\\(weather.temp)°\\\")\"}]}";
-        var result = parser.parse(
-                new SandboxResult(0, Map.of("result.json", json.getBytes()), "done", false, Duration.ofSeconds(10)));
+        var result = parser.parse(new SandboxResult(
+                0, Map.of("result.json", json.getBytes(UTF_8)), "done", false, Duration.ofSeconds(10)));
         assertThat(result.success()).isTrue();
         assertThat(rawOutput(result).toString()).contains("line1\\nline2");
     }
@@ -227,7 +228,7 @@ class PiResultParserTest extends BaseUnitTest {
         String usage = "{\"model\":\"m\",\"totalCalls\":0}";
         var result = parser.parse(new SandboxResult(
                 0,
-                Map.of("result.json", observations.getBytes(), "usage.json", usage.getBytes()),
+                Map.of("result.json", observations.getBytes(UTF_8), "usage.json", usage.getBytes(UTF_8)),
                 "done",
                 false,
                 Duration.ofSeconds(10)));

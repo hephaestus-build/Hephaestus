@@ -99,7 +99,8 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // probe below cannot see it. Scoped, not global — the row names the tenant it grants.
             "LlmModelWorkspaceGrant");
 
-    private static final Set<String> GLOBAL_ENTITIES = Set.of(
+    // Package-private so WorkspaceScopedTablesParityTest can compare it with the production allowlist.
+    static final Set<String> GLOBAL_ENTITIES = Set.of(
             "User", // Users can belong to multiple workspaces
             "UserPreferences", // Belongs to User which is global
             "NotificationSubscription", // Native account email preferences span workspaces and are erased with that

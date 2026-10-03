@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -142,7 +143,7 @@ class GitLabSubIssueSyncServiceTest extends BaseUnitTest {
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
         when(graphQlClientProvider.forScope(anyLong())).thenReturn(client);
 
-        HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName(anyString())).thenReturn(requestSpec);
         when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
 

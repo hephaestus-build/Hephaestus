@@ -16,6 +16,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit tests for {@link RegistrationToGitProviderResolver}, the {@code GitProviderRegistry} SPI impl:
@@ -141,12 +142,6 @@ class RegistrationToGitProviderResolverTest {
     }
 
     private static void setId(Object entity, Long id) {
-        try {
-            var field = entity.getClass().getDeclaredField("id");
-            field.setAccessible(true);
-            field.set(entity, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError("could not set id via reflection", e);
-        }
+        ReflectionTestUtils.setField(entity, "id", id);
     }
 }

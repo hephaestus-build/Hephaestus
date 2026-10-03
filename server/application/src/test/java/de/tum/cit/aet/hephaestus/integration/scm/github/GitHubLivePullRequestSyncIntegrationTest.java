@@ -65,9 +65,8 @@ class GitHubLivePullRequestSyncIntegrationTest extends AbstractGitHubLiveSyncInt
                 repoInfo.nodeId(), prTitle, prBody, branchName, defaultBranch(repoInfo));
 
         // 4. Sync repository first
-        repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
-                .orElseThrow();
+        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+                .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 
@@ -96,9 +95,8 @@ class GitHubLivePullRequestSyncIntegrationTest extends AbstractGitHubLiveSyncInt
         var prArtifacts = createPullRequestWithReview(repository);
 
         // 2. Sync repository first
-        repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
-                .orElseThrow();
+        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+                .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 
@@ -163,9 +161,8 @@ class GitHubLivePullRequestSyncIntegrationTest extends AbstractGitHubLiveSyncInt
                 repoInfo.nodeId(), prTitle2, "Second PR", branchName2, defaultBranch(repoInfo));
 
         // 4. Sync repository first
-        repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
-                .orElseThrow();
+        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+                .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 

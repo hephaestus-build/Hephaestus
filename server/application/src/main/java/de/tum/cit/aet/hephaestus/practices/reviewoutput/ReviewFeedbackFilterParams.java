@@ -17,15 +17,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * @param artifactKind a bare string, not an {@link ArtifactKind} — {@link QueryFilterSupport#artifactKind} has the
+ *     reason, and parses it in {@link #toFilter()}, where a malformed value becomes a 400
+ */
 public record ReviewFeedbackFilterParams(
         @RequestParam(required = false) @Nullable List<FeedbackDeliveryState> deliveryState,
         @RequestParam(required = false) @Nullable List<FeedbackSuppressionReason> suppressionReason,
         @RequestParam(required = false) @Nullable List<FeedbackChannel> channel,
         @RequestParam(required = false) @Nullable UUID agentJobId,
-        /**
-         * A bare string, not an {@link ArtifactKind} — {@link QueryFilterSupport#artifactKind} has the reason,
-         * and parses it in {@link #toFilter()}, where a malformed value becomes a 400.
-         */
+
         @Parameter(description = "Kind of reviewed work, e.g. scm.pull_request")
         @RequestParam(required = false)
         @Nullable

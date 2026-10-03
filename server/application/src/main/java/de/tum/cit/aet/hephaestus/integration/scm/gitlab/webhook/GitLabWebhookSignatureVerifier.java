@@ -110,13 +110,12 @@ public class GitLabWebhookSignatureVerifier implements WebhookSignatureVerifier 
             return verifyWhsec(request, normalized, signatureHeader);
         }
         if (tokenHeader != null && !tokenHeader.isBlank()) {
-            return verifyPlaintext(request, normalized, tokenHeader);
+            return verifyPlaintext(normalized, tokenHeader);
         }
         return new VerificationResult.MissingSignature();
     }
 
-    private VerificationResult verifyPlaintext(
-            WebhookRequest request, Map<String, String> headers, String tokenHeader) {
+    private VerificationResult verifyPlaintext(Map<String, String> headers, String tokenHeader) {
         Optional<byte[]> secret = secretSource.getSecret(new SecretLookup(headers));
         if (secret.isEmpty()) {
             log.warn("GitLab plaintext verifier: no shared secret available");
@@ -192,7 +191,7 @@ public class GitLabWebhookSignatureVerifier implements WebhookSignatureVerifier 
     /** Decoded {@code v1} MACs; like the Standard Webhooks reference verifiers, skips any other entry. */
     private static List<byte[]> v1Macs(String signatureHeader) {
         List<byte[]> macs = new ArrayList<>();
-        for (String entry : signatureHeader.split(" ")) {
+        for (String entry : signatureHeader.split(" ", -1)) {
             if (!entry.startsWith(SIGNATURE_V1_PREFIX)) continue;
             try {
                 byte[] mac = Base64.getDecoder().decode(entry.substring(SIGNATURE_V1_PREFIX.length()));

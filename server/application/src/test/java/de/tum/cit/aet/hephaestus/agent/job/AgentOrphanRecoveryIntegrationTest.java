@@ -80,7 +80,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     private TransactionTemplate transactionTemplate;
 
     private Workspace workspace;
-    private WorkspaceAgentBinding agentBinding;
     private LlmModel instanceModel;
 
     @BeforeEach
@@ -116,7 +115,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         binding.setEnabled(true);
         binding.setInstanceModel(instanceModel);
-        agentBinding = agentBindingRepository.save(binding);
+        agentBindingRepository.save(binding);
     }
 
     @Test

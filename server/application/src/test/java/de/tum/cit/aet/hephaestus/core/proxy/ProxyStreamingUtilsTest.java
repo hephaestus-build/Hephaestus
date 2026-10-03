@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.proxy;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
@@ -172,7 +173,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             upstreamHeaders.setContentType(MediaType.TEXT_EVENT_STREAM);
 
             var factory = new DefaultDataBufferFactory();
-            DataBuffer buf = factory.wrap("data: hello\n\n".getBytes());
+            DataBuffer buf = factory.wrap("data: hello\n\n".getBytes(UTF_8));
             Flux<DataBuffer> sseFlux = Flux.just(buf);
 
             ClientResponse clientResponse = mockClientResponseWithSseFlux(200, upstreamHeaders, sseFlux);
@@ -214,7 +215,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             upstreamHeaders.set("X-Request-Id", "abc123");
 
             ClientResponse clientResponse =
-                    mockClientResponse(200, upstreamHeaders, MediaType.APPLICATION_JSON, "{}".getBytes());
+                    mockClientResponse(200, upstreamHeaders, MediaType.APPLICATION_JSON, "{}".getBytes(UTF_8));
 
             StepVerifier.create(
                             ProxyStreamingUtils.consumeResponse(clientResponse, new MockHttpServletResponse(), null))
@@ -252,7 +253,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             upstreamHeaders.setContentType(sseWithCharset);
 
             var factory = new DefaultDataBufferFactory();
-            DataBuffer buf = factory.wrap("data: test\n\n".getBytes());
+            DataBuffer buf = factory.wrap("data: test\n\n".getBytes(UTF_8));
             Flux<DataBuffer> sseFlux = Flux.just(buf);
 
             ClientResponse clientResponse = mockClientResponseWithSseFlux(200, upstreamHeaders, sseFlux);
@@ -270,13 +271,14 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
         void shouldTreatNullContentTypeAsNonSse() {
             HttpHeaders upstreamHeaders = new HttpHeaders();
 
-            ClientResponse clientResponse = mockClientResponse(200, upstreamHeaders, null, "plain text".getBytes());
+            ClientResponse clientResponse =
+                    mockClientResponse(200, upstreamHeaders, null, "plain text".getBytes(UTF_8));
 
             StepVerifier.create(
                             ProxyStreamingUtils.consumeResponse(clientResponse, new MockHttpServletResponse(), null))
                     .assertNext(result -> {
                         assertThat(result.streamed()).isFalse();
-                        assertThat(result.body()).isEqualTo("plain text".getBytes());
+                        assertThat(result.body()).isEqualTo("plain text".getBytes(UTF_8));
                     })
                     .verifyComplete();
         }

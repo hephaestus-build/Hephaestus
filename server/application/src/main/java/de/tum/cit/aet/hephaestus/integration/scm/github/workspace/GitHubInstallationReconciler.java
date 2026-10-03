@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -221,7 +222,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
         if (selection == null) {
             return null;
         }
-        return switch (selection.toLowerCase()) {
+        return switch (selection.toLowerCase(Locale.ROOT)) {
             case "all" -> RepositorySelection.ALL;
             case "selected" -> RepositorySelection.SELECTED;
             default -> null;

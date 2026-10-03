@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspaceTokenRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.assertj.core.api.InstanceOfAssertFactories;
@@ -41,16 +42,10 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
     private WorkspaceRepository workspaceRepository;
 
     @Autowired
-    private WorkspaceMembershipRepository workspaceMembershipRepository;
-
-    @Autowired
     private RepositoryToMonitorRepository repositoryToMonitorRepository;
 
     @Autowired
     private WorkspaceLifecycleService workspaceLifecycleService;
-
-    @Autowired
-    private WorkspaceMembershipService workspaceMembershipService;
 
     @Autowired
     private ConnectionRepository connectionRepository;
@@ -61,7 +56,8 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
     @Test
     @WithAdminUser
     void createWorkspaceWithInvalidPayloadReturnsValidationProblemDetail() {
-        var request = new CreateWorkspaceRequestDTO("INVALID SLUG", "", "", null, null, null, null, null);
+        // Omitted, not null: the client leaves out the fields a valid request must carry.
+        var request = Map.of("workspaceSlug", "INVALID SLUG", "displayName", "", "accountLogin", "");
 
         ProblemDetail problem = webTestClient
                 .post()
@@ -94,7 +90,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 "unauthenticated",
                 AccountType.ORG,
                 owner.getId(),
-                null,
+                IntegrationKind.GITLAB,
                 null,
                 null);
 

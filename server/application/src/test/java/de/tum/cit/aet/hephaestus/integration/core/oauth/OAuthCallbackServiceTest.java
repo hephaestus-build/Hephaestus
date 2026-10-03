@@ -23,7 +23,6 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityNotFoundException;
-import java.lang.reflect.Field;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +37,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @Tag("unit")
@@ -430,13 +430,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                 };
         Connection c = new Connection(ws, kind, instanceKey, cfg);
         c.setState(state);
-        try {
-            Field idField = Connection.class.getDeclaredField("id");
-            idField.setAccessible(true);
-            idField.set(c, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(c, "id", id);
         return c;
     }
 }

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.graphql.ResponseError;
@@ -201,7 +202,7 @@ public final class GitHubGraphQlErrorUtils {
                 continue;
             }
 
-            String lowerMessage = message.toLowerCase();
+            String lowerMessage = message.toLowerCase(Locale.ROOT);
 
             // GitHub timeout responses - these come back as HTTP 200 with error in body
             // Examples: "couldn't respond in time", "Something went wrong while executing your query"

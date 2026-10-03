@@ -94,7 +94,7 @@ public final class ScmEventPayload {
             int number,
             @NonNull String title,
             @Nullable String body,
-            PullRequest.@NonNull State state,
+            Issue.@NonNull State state,
             boolean isDraft,
             boolean isMerged,
             int additions,

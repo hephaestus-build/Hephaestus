@@ -96,7 +96,7 @@ export interface SessionsSectionProps {
 export function SessionsSection({ state }: SessionsSectionProps) {
 	const today = new Date(useNow());
 	const sessions = state.status === "ready" ? state.sessions : [];
-	const otherSessionCount = sessions.filter((s) => s.current !== true).length;
+	const otherSessionCount = sessions.filter((s) => !s.current).length;
 
 	let body: ReactNode;
 	if (state.status === "loading") {
@@ -141,7 +141,7 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 					const isRevokingThis = state.revokingJti === session.jti;
 					return (
 						<div
-							key={session.jti ?? `${session.userAgent}:${session.ip}`}
+							key={session.jti}
 							role="listitem"
 							aria-label={deviceLabel}
 							className="flex items-center justify-between gap-4 rounded-lg border p-4"
@@ -156,7 +156,7 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 										>
 											{deviceLabel}
 										</span>
-										{session.current === true && <Badge variant="secondary">This device</Badge>}
+										{session.current && <Badge variant="secondary">This device</Badge>}
 									</div>
 									<p className="truncate text-xs text-muted-foreground">
 										{[
@@ -170,7 +170,7 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 								</div>
 							</div>
 
-							{session.current === true ? (
+							{session.current ? (
 								<Button variant="outline" size="sm" disabled aria-label="Current session">
 									Current
 								</Button>

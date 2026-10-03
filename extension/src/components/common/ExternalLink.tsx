@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "cn";
 import { type ButtonSize, type ButtonVariant, buttonClasses } from "~/components/common/Button";
+import { linksWithin } from "~/shared/link-target";
 
 export interface ExternalLinkProps {
 	href: string;
@@ -28,14 +29,7 @@ export function ExternalLink({
 	tone = "text",
 	className,
 }: ExternalLinkProps) {
-	let safe = false;
-	try {
-		const url = new URL(href);
-		safe = url.origin === allowedOrigin && (url.protocol === "https:" || url.protocol === "http:");
-	} catch {
-		safe = false;
-	}
-	if (!safe) {
+	if (!linksWithin(href, allowedOrigin)) {
 		return <span className={className}>{children}</span>;
 	}
 	return (

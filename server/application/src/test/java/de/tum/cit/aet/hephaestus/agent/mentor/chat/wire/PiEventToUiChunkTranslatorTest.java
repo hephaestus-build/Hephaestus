@@ -381,7 +381,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         assertThat(translator.translate(link, state))
                 .extracting(c -> c.getClass().getSimpleName())
-                .containsExactly("Error");
+                .containsExactly("TurnError");
         assertThat(state.partsSnapshot()).isEmpty();
     }
 
@@ -391,7 +391,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         assertThat(translator.translate(fixture("runner_link_observation.json"), state))
                 .extracting(c -> c.getClass().getSimpleName())
-                .containsExactly("Error");
+                .containsExactly("TurnError");
         assertThat(state.partsSnapshot())
                 .extracting(p -> p.get("type").asString())
                 .doesNotContain("data-observation");
@@ -411,7 +411,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
                 .containsExactly("DataObservation");
         assertThat(translator.translate(fixture("runner_link_observation.json"), state))
                 .extracting(c -> c.getClass().getSimpleName())
-                .containsExactly("Error");
+                .containsExactly("TurnError");
         assertThat(state.partsSnapshot())
                 .extracting(p -> p.get("type").asString())
                 .filteredOn("data-observation"::equals)
@@ -443,7 +443,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         List<UIMessageChunk> out = translator.translate(
                 agentEnd("Let me look at your pull request.", "What made you choose that approach?"), state);
 
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("Error");
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TurnError");
     }
 
     @ParameterizedTest
@@ -461,8 +461,8 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         List<UIMessageChunk> out = translator.translate(end, state);
 
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
-        assertThat(((UIMessageChunk.Error) out.get(1)).errorText())
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "TurnError");
+        assertThat(((UIMessageChunk.TurnError) out.get(1)).errorText())
                 .isEqualTo("Heph couldn't finish this reply. Please try again.");
         assertThat(state.partsSnapshot().toString()).contains("Let me check.");
     }
@@ -490,13 +490,13 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
     void piError_emitsError() throws Exception {
         JsonNode event = mapper.readTree("{\"type\":\"pi_error\",\"error\":\"upstream timeout\"}");
         List<UIMessageChunk> out = translator.translate(event, state);
-        assertThat(out).hasSize(1).first().isInstanceOf(UIMessageChunk.Error.class);
+        assertThat(out).hasSize(1).first().isInstanceOf(UIMessageChunk.TurnError.class);
     }
 
     @Test
     void watchdogFired_emitsError() throws Exception {
         JsonNode event = mapper.readTree("{\"type\":\"turn_watchdog_fired\",\"threadId\":\"t\"}");
-        assertThat(translator.translate(event, state)).hasSize(1).first().isInstanceOf(UIMessageChunk.Error.class);
+        assertThat(translator.translate(event, state)).hasSize(1).first().isInstanceOf(UIMessageChunk.TurnError.class);
     }
 
     @Test
@@ -515,7 +515,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
                 mapper.readTree("{\"type\":\"link_observations\",\"observationId\":\"" + UUID.randomUUID() + "\"}"),
                 state);
 
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "TurnError");
         assertThat(state.isStreamBroken()).isTrue();
     }
 
@@ -578,7 +578,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         translator.translate(delta, state);
         JsonNode err = mapper.readTree("{\"type\":\"pi_error\",\"error\":\"upstream timeout\"}");
         List<UIMessageChunk> out = translator.translate(err, state);
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "TurnError");
     }
 
     @Test
@@ -589,15 +589,15 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         translator.translate(delta, state);
         JsonNode watchdog = mapper.readTree("{\"type\":\"turn_watchdog_fired\"}");
         List<UIMessageChunk> out = translator.translate(watchdog, state);
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "TurnError");
     }
 
     @Test
     void turnWatchdogFired_userFriendlyText() throws Exception {
         JsonNode event = mapper.readTree("{\"type\":\"turn_watchdog_fired\",\"threadId\":\"t\"}");
         List<UIMessageChunk> out = translator.translate(event, state);
-        assertThat(out).hasSize(1).first().isInstanceOf(UIMessageChunk.Error.class);
-        UIMessageChunk.Error err = (UIMessageChunk.Error) out.get(0);
+        assertThat(out).hasSize(1).first().isInstanceOf(UIMessageChunk.TurnError.class);
+        UIMessageChunk.TurnError err = (UIMessageChunk.TurnError) out.get(0);
         // Must be human-readable, not the raw wire symbol "turn_watchdog_fired".
         assertThat(err.errorText()).doesNotContain("turn_watchdog_fired").contains("timed out");
     }
@@ -658,7 +658,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
     void malformedEvent_failsTheTurn() {
         assertThat(translator.translate(mapper.createObjectNode().put("noType", true), state))
                 .extracting(c -> c.getClass().getSimpleName())
-                .containsExactly("Error");
+                .containsExactly("TurnError");
     }
 
     @Test
@@ -700,8 +700,8 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         List<UIMessageChunk> out = translator.translate(messageEnd("it. The Closes #1"), state);
 
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
-        assertThat(((UIMessageChunk.Error) out.get(1)).errorText())
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "TurnError");
+        assertThat(((UIMessageChunk.TurnError) out.get(1)).errorText())
                 .isEqualTo(PiEventToUiChunkTranslator.REPLY_LOST_IN_TRANSIT);
         assertThat(state.isStreamBroken()).isTrue();
         JsonNode parts = state.partsSnapshot();
@@ -726,7 +726,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         List<UIMessageChunk> out = translator.translate(messageEnd("ab"), state);
 
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "TurnError");
         JsonNode parts = state.partsSnapshot();
         assertThat(parts)
                 .extracting(p -> p.get("type").asString())
@@ -742,7 +742,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         List<UIMessageChunk> out = translator.translate(agentEnd("it. The Closes #1"), state);
 
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "TurnError");
         assertThat(state.isStreamBroken()).isTrue();
         assertThat(state.partsSnapshot().get(1).get("text").asString()).isEqualTo("it. The Closes #1");
     }
@@ -763,7 +763,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         List<UIMessageChunk> out = translator.translate(messageEnd("it. The Closes #1"), state);
 
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "TurnError");
         assertThat(state.isStreamBroken()).isTrue();
     }
 
@@ -774,7 +774,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         List<UIMessageChunk> out = translator.translate(fixture("message_start_assistant.json"), state);
 
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "TurnError");
         assertThat(state.partsSnapshot())
                 .extracting(p -> p.get("type").asString())
                 .containsExactly("step-start");
@@ -784,7 +784,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
     void shouldFailWhenAgentEndCarriesAReplyThatNeverStreamed() {
         List<UIMessageChunk> out = translator.translate(agentEnd("Link the issue."), state);
 
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("Error");
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TurnError");
         assertThat(state.isStreamBroken()).isTrue();
     }
 
@@ -799,7 +799,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         List<UIMessageChunk> out = translator.translate(agentEnd("Let me check.", "Link the issue.", "Done."), state);
 
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("Error");
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TurnError");
     }
 
     @Test
@@ -826,7 +826,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         assertThat(translator.translate(agentEnd("Second.", "First."), state))
                 .extracting(c -> c.getClass().getSimpleName())
-                .containsExactly("Error");
+                .containsExactly("TurnError");
     }
 
     @Test
@@ -837,7 +837,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         assertThat(translator.translate(agentEnd("Let me check.", "Done."), state))
                 .extracting(c -> c.getClass().getSimpleName())
-                .containsExactly("Error");
+                .containsExactly("TurnError");
     }
 
     @ParameterizedTest
@@ -854,7 +854,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         List<UIMessageChunk> out = translator.translate(mapper.readTree(event), state);
         translator.translate(messageEnd("Hi"), state);
 
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "TurnError");
         assertThat(state.isStreamBroken()).isTrue();
     }
 
@@ -876,7 +876,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
                         .put("text", "Name the trade-off."),
                 state);
 
-        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "TurnError");
         assertThat(state.partsSnapshot())
                 .extracting(p -> p.get("type").asString())
                 .doesNotContain("data-observation");

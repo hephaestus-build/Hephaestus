@@ -161,7 +161,6 @@ public class GitHubTeamSyncService {
             String cursor = null;
             boolean hasNextPage = true;
             int pageCount = 0;
-            boolean syncCompletedNormally = false;
             int retryAttempt = 0;
             int reportedTotalCount = -1;
 
@@ -279,7 +278,7 @@ public class GitHubTeamSyncService {
             }
 
             // Mark sync as completed normally if we exhausted all pages
-            syncCompletedNormally = !hasNextPage;
+            boolean syncCompletedNormally = !hasNextPage;
 
             // Resolve parent references now that all teams are persisted.
             // This two-pass approach ensures correct parentId even when a child

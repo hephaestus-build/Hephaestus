@@ -670,6 +670,9 @@ export type CatalogPracticeSummary = {
   groupSlug?: string;
   name: string;
   slug: string;
+  /**
+   * the practice's rationale, so a row is triageable without opening it
+   */
   whyItMatters?: string;
 };
 
@@ -726,8 +729,8 @@ export type ChatThreadDetail = {
  * Mentor chat thread summary (no messages).
  */
 export type ChatThreadSummary = {
-  createdAt?: string;
-  id?: string;
+  createdAt: string;
+  id: string;
   title?: string;
 };
 
@@ -765,7 +768,7 @@ export type ClientTokenRequest = {
 export type ConfigAuditActorRef = {
   displayName?: string;
   email?: string;
-  id?: number;
+  id: number;
 };
 
 /**
@@ -2143,10 +2146,10 @@ export type IdentityProviderView = {
 export type IdentityView = {
   avatarUrl?: string;
   displayName?: string;
-  id?: number;
+  id: number;
   lastLoginAt?: string;
-  providerType?: string;
-  subject?: string;
+  providerType: string;
+  subject: string;
   username?: string;
 };
 
@@ -2295,7 +2298,7 @@ export type InitiateConnectionRequest = {
  */
 export type InitiateConnectionResponse = {
   connectionId?: number;
-  type?: 'REDIRECT' | 'LINKED';
+  type: 'REDIRECT' | 'LINKED';
   vendorUrl?: string;
 };
 
@@ -3221,6 +3224,9 @@ export type PagedModelTracedArtifact = {
 
 export type ParticipationCounts = {
   declined: number;
+  /**
+   * every account shown the invitation, including those who then responded or declined
+   */
   invited: number;
   responded: number;
 };
@@ -4278,6 +4284,9 @@ export type ProfileReviewRunsPage = {
 };
 
 export type Question = {
+  /**
+   * a choice question also takes one free-text answer; false when a stored question omits it
+   */
   allowOther: boolean;
   highLabel?: string;
   id: string;
@@ -4292,8 +4301,14 @@ export type QuestionSummary = {
   answered: number;
   average?: number;
   counts: Array<OptionCount>;
+  /**
+   * responses whose choices include a free-text answer; present for choice questions only
+   */
   other?: number;
   questionId: string;
+  /**
+   * Net Promoter Score, −100…100, for an NPS question
+   */
   score?: number;
 };
 
@@ -5198,7 +5213,7 @@ export type Reviewer = {
 };
 
 export type RevokeSessionsResult = {
-  revoked?: number;
+  revoked: number;
 };
 
 /**
@@ -5234,14 +5249,14 @@ export type SessionView = {
    * what signed in
    */
   client: 'WEB' | 'BROWSER_EXTENSION';
-  current?: boolean;
+  current: boolean;
   /**
    * when the token expires; for an installed client, the session's own deadline
    */
-  expiresAt?: string;
+  expiresAt: string;
   ip?: string;
   issuedAt?: string;
-  jti?: string;
+  jti: string;
   userAgent?: string;
 };
 
@@ -5390,6 +5405,9 @@ export type Survey = {
   participation: ParticipationCounts;
   purpose: 'PRODUCT' | 'RESEARCH';
   questions: Array<Question>;
+  /**
+   * the organisation a research survey was published for; absent for a product survey
+   */
   researchOrganization?: string;
   startsAt: string;
   title: string;
@@ -5426,7 +5444,13 @@ export type SurveyInvitation = {
   id: string;
   purpose: 'PRODUCT' | 'RESEARCH';
   questions: Array<Question>;
+  /**
+   * set for a research survey: the organisation whose study the answers join
+   */
   researchOrganization?: string;
+  /**
+   * the account has been shown this invitation; the webapp nudges only while false
+   */
   seen: boolean;
   title: string;
 };
@@ -6904,27 +6928,27 @@ export type WorkspaceMembership = {
   /**
    * Timestamp when the membership was created
    */
-  createdAt?: string;
+  createdAt: string;
   /**
    * Whether this linked human member can be selected for practice-review coverage
    */
-  eligibleForPracticeReview?: boolean;
+  eligibleForPracticeReview: boolean;
   /**
    * Whether the member is left out of workspace activity
    */
-  hidden?: boolean;
+  hidden: boolean;
   /**
    * Role of the user in this workspace (OWNER, ADMIN, MEMBER)
    */
-  role?: 'OWNER' | 'ADMIN' | 'MEMBER';
+  role: 'OWNER' | 'ADMIN' | 'MEMBER';
   /**
    * Unique identifier of the user
    */
-  userId?: number;
+  userId: number;
   /**
    * Login/username of the user
    */
-  userLogin?: string;
+  userLogin: string;
   /**
    * Display name of the user
    */

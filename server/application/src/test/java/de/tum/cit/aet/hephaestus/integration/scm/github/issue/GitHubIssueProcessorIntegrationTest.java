@@ -1366,7 +1366,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
             // Use helper method for proper bidirectional sync
             existing.addLabel(label);
-            existing = issueRepository.save(existing);
+            issueRepository.save(existing);
 
             assertThat(issueRepository.findByRepositoryIdAndNumber(testRepository.getId(), 21))
                     .isPresent();

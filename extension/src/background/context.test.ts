@@ -595,7 +595,6 @@ describe("the reader's own feedback on the work", () => {
 			"https://gitlab.example.test/team/app/-/issues/1#note_4",
 			"https://gitlab.evil.test/team/app/-/merge_requests/1#note_5",
 			"http://gitlab.example.test/team/app/-/merge_requests/1#note_6",
-			// oxlint-disable-next-line no-script-url -- The worker must drop one.
 			"javascript:alert(1)",
 			"not a url",
 		];

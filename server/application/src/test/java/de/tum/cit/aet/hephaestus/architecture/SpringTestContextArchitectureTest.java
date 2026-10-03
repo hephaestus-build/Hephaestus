@@ -315,18 +315,16 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final class NestedConfigurationFixture {
 
+        @SuppressWarnings("UnusedNestedClass") // ArchUnit reads it as the nested @TestConfiguration under test
         @TestConfiguration
         static class Configuration {}
     }
 
     private static final class TestBeanFixture {
 
+        @SuppressWarnings("UnusedVariable") // ArchUnit reads its @TestBean annotation; Spring never loads the fixture
         @TestBean
         @Nullable
         String dependency;
-
-        static String dependency() {
-            return "fixture";
-        }
     }
 }

@@ -57,6 +57,7 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
     private ReviewRepositoryPreparer preparer;
     private AgentJob job;
     private Repository repository;
+    private PullRequest pullRequest;
     private static final RepositoryKey KEY = new RepositoryKey(1, 2);
     private static final String HEAD = "a".repeat(40);
 
@@ -88,11 +89,11 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         provider.setType(IdentityProviderType.GITLAB);
         provider.setServerUrl("https://scm.example");
         repository.setProvider(provider);
-        var pr = new PullRequest();
-        pr.setRepository(repository);
-        pr.setNumber(42);
-        pr.setHeadRefOid(HEAD);
-        when(pullRequests.findByIdWithAuthorAndRepository(3L)).thenReturn(Optional.of(pr));
+        pullRequest = new PullRequest();
+        pullRequest.setRepository(repository);
+        pullRequest.setNumber(42);
+        pullRequest.setHeadRefOid(HEAD);
+        when(pullRequests.findByIdWithAuthorAndRepository(3L)).thenReturn(Optional.of(pullRequest));
     }
 
     private void pinNoBase(String targetBranch) {
@@ -206,8 +207,7 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
     void shouldUseTheRecordedGitlabDiffBaseIncludingAnEmptyRange(boolean empty) {
         authorize();
         String base = empty ? HEAD : "c".repeat(40);
-        var mr = pullRequests.findByIdWithAuthorAndRepository(3L).orElseThrow();
-        mr.setBaseRefOid(base);
+        pullRequest.setBaseRefOid(base);
         when(tokens.recordsReviewDiffBase()).thenReturn(true);
         when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
         when(git.commitExists(KEY, HEAD)).thenReturn(true);
@@ -220,9 +220,8 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
     @ValueSource(booleans = {true, false})
     void shouldRefuseAStaleRecordedRevisionOrMissingBase(boolean stale) {
         authorize();
-        var mr = pullRequests.findByIdWithAuthorAndRepository(3L).orElseThrow();
-        mr.setBaseRefOid("c".repeat(40));
-        mr.setHeadRefOid(stale ? "d".repeat(40) : HEAD);
+        pullRequest.setBaseRefOid("c".repeat(40));
+        pullRequest.setHeadRefOid(stale ? "d".repeat(40) : HEAD);
         when(tokens.recordsReviewDiffBase()).thenReturn(true);
         when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
         when(git.commitExists(KEY, HEAD)).thenReturn(true);

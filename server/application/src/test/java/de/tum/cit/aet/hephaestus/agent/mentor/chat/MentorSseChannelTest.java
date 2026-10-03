@@ -234,7 +234,6 @@ class MentorSseChannelTest extends BaseUnitTest {
         private boolean completed;
         private boolean failOnNextSend;
         private @Nullable Runnable completionCallback;
-        private @Nullable Runnable timeoutCallback;
         private @Nullable Consumer<Throwable> errorCallback;
 
         @Override
@@ -250,7 +249,7 @@ class MentorSseChannelTest extends BaseUnitTest {
             for (var entry : builder.build()) {
                 wire.append(entry.getData().toString());
             }
-            for (String line : wire.toString().split("\n")) {
+            for (String line : wire.toString().split("\n", -1)) {
                 if (line.startsWith("data:")) {
                     dataFrames.add(line.substring("data:".length()));
                 }
@@ -265,11 +264,6 @@ class MentorSseChannelTest extends BaseUnitTest {
         @Override
         public void onCompletion(Runnable callback) {
             this.completionCallback = callback;
-        }
-
-        @Override
-        public void onTimeout(Runnable callback) {
-            this.timeoutCallback = callback;
         }
 
         @Override

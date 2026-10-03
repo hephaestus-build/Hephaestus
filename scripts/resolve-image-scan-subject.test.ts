@@ -142,15 +142,15 @@ process.stdout.write(args.includes('--raw') ? process.env.RAW : process.env.SING
 		});
 		const emitted = readFileSync(output, "utf8");
 		const calls = readFileSync(callLog, "utf8");
-		if ("expected" in scenario) {
+		if (scenario.expected === undefined) {
+			assert.notEqual(result.status, 0);
+			assert.equal(emitted, "", "failed resolution must publish no usable scan subject");
+		} else {
 			assert.equal(result.status, 0, result.stderr);
 			assert.equal(
 				emitted,
 				`image=webapp\ndigest=${scenario.expected}\nreport-stem=webapp-${platform.replaceAll("/", "-")}\n`,
 			);
-		} else {
-			assert.notEqual(result.status, 0);
-			assert.equal(emitted, "", "failed resolution must publish no usable scan subject");
 		}
 		if ("noInspect" in scenario) {
 			assert.equal(calls, "");

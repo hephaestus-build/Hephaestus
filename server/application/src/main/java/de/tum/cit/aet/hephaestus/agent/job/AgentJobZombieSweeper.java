@@ -50,7 +50,7 @@ public class AgentJobZombieSweeper {
     private static final Duration RUNNING_BUFFER = SandboxLayout.RESULT_UPLOAD_GRACE.plusMinutes(5);
 
     /** Grace before a RUNNING job is judged orphaned, so a (re)started worker can write its first heartbeat. */
-    private static final Duration ORPHAN_STARTUP_GRACE = Duration.ofSeconds(120);
+    private static final Duration ORPHAN_STARTUP_GRACE = Duration.ofMinutes(2);
 
     /**
      * Must stay well above {@link AgentProperties#WORKER_LEASE_TTL} so a dead worker's jobs are requeued

@@ -9,9 +9,9 @@ package de.tum.cit.aet.hephaestus.core.event;
  * listeners that own SCM-<em>derived</em> rows can erase them while the artifacts they point at
  * still exist.
  *
- * <p>Lives in {@code core.event} as a deliberate dependency inversion: {@code workspace} publishes
- * while {@code practices} and {@code activity} listen. Both of those modules already depend on
- * {@code workspace} ({@code Practice.workspace}, {@code workspace.spi.WorkspacePurgeContributor}),
+ * <p>Lives in {@code core.event} as a deliberate dependency inversion: the workspace module publishes
+ * while the practices and activity modules listen. Both of those modules already depend on the
+ * workspace module ({@code Practice.workspace}, {@code workspace.spi.WorkspacePurgeContributor}),
  * so a direct {@code workspace → practices} port call would close a Spring Modulith cycle. This
  * mirrors {@code WorkspacesInitializedEvent} and the in-transaction
  * {@code RepositoryAboutToBeDeletedEvent} pattern.

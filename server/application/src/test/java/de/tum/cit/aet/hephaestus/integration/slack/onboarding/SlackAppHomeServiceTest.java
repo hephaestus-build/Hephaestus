@@ -83,7 +83,6 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
         lenient()
                 .when(monitoredChannelRepository.countByWorkspaceIdAndConsentState(7L, ConsentState.ACTIVE))
                 .thenReturn(1L);
-        lenient().when(uiLinks.workspaceHomeUrl(7L)).thenReturn("https://heph.example/w/team");
         lenient().when(uiLinks.userSettingsUrl()).thenReturn("https://heph.example/settings");
     }
 

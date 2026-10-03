@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.Collections;
+import org.hibernate.Hibernate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -495,7 +496,7 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
             // Load the issue and initialize its comments collection (simulates
             // real-world scenario where parent is in persistence context)
             Issue loadedIssue = issueRepository.findById(testIssue.getId()).orElseThrow();
-            loadedIssue.getComments().size(); // Force lazy initialization
+            Hibernate.initialize(loadedIssue.getComments());
 
             // Delete should work without TransientObjectException
             // because the processor syncs bidirectional relationship

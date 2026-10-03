@@ -62,7 +62,7 @@ export function useSessionKeepAlive() {
 			renewAtMs = Date.now() + MAX_RENEWAL_DELAY_MS;
 			schedule();
 			await queryClient.invalidateQueries({ queryKey: getCurrentUserQueryKey() });
-			// oxlint-disable-next-line typescript/no-unnecessary-condition -- Cleanup can run while identity revalidation is pending.
+			// oxlint-disable-next-line typescript/no-unnecessary-condition -- TypeScript keeps `disposed` narrowed across the `await` (microsoft/TypeScript#9998); cleanup can set it while revalidation is pending.
 			if (disposed) {
 				return;
 			}

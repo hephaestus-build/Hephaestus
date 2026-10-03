@@ -52,6 +52,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
@@ -92,7 +93,7 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
     private HttpGraphQlClient client;
 
     @Mock
-    private HttpGraphQlClient.RequestSpec requestSpec;
+    private GraphQlClient.RequestSpec requestSpec;
 
     @Mock
     private SyncExecutionHandle handle;

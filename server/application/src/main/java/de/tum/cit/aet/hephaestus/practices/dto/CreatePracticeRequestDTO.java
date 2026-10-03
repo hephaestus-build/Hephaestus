@@ -42,10 +42,9 @@ public record CreatePracticeRequestDTO(
 
         @NotNull(message = "Choose at least one review moment")
         @Size(min = 1, message = "Choose at least one review moment")
-        @Nullable
         List<SignalName> signals,
 
-        @NotNull(message = "Evidence requirements are required") @Nullable
+        @NotNull(message = "Evidence requirements are required")
         List<@Valid PracticeEvidenceRequirement> evidenceRequirements,
 
         @Schema(description = ReviewWhen.DESCRIPTION) @Nullable
@@ -95,8 +94,8 @@ public record CreatePracticeRequestDTO(
     public CreatePracticeRequestDTO(
             @Nullable String slug,
             @Nullable String name,
-            @Nullable List<SignalName> signals,
-            @Nullable List<PracticeEvidenceRequirement> evidenceRequirements,
+            List<SignalName> signals,
+            List<PracticeEvidenceRequirement> evidenceRequirements,
             @Nullable Map<String, Set<String>> reviewWhen,
             @Nullable ActorRole subject,
             @Nullable PracticePrecondition precondition,

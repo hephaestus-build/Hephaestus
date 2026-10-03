@@ -930,14 +930,12 @@ function diffLinesMatch(
 	return { text: recorded.join("\n") };
 }
 
-/**
- * The text as the artifact writes it, when the quote is a reading of it: verbatim, or with the
- * escapes a JSON string uses, or with a non-breaking space where the quote has a space. Null when
- * the text holds no such reading.
- */
+/** A quote found in the artifact, so it always has the lines it is on. */
+type LocatedQuote = ResolvedQuote & { startLine: number; endLine: number };
+
 /** Every place the quote occurs in the whole artifact, as written there, with its line range. */
-function locateAsWritten(content: string, quote: string): ResolvedQuote[] {
-	const hits: ResolvedQuote[] = [];
+function locateAsWritten(content: string, quote: string): LocatedQuote[] {
+	const hits: LocatedQuote[] = [];
 	for (const candidate of [quote, JSON.stringify(quote).slice(1, -1)]) {
 		for (const match of content.matchAll(asWrittenPattern(candidate, "g"))) {
 			const startLine = content.slice(0, match.index).split("\n").length;
@@ -950,6 +948,11 @@ function locateAsWritten(content: string, quote: string): ResolvedQuote[] {
 	return hits;
 }
 
+/**
+ * The text as the artifact writes it, when the quote is a reading of it: verbatim, or with the
+ * escapes a JSON string uses, or with a non-breaking space where the quote has a space. Null when
+ * the text holds no such reading.
+ */
 function findAsWritten(text: string, quote: string): string | null {
 	for (const candidate of [quote, JSON.stringify(quote).slice(1, -1)]) {
 		if (text.includes(candidate)) {

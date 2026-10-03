@@ -170,8 +170,8 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
                     case "SOURCE_EMPTY" -> "Nothing was captured from " + source + ".";
                     default -> source + " could not be read.";
                 };
-        // Character.toUpperCase rather than String.toUpperCase, which is locale-sensitive and banned by
-        // LocaleSafetyArchTest; a quoted name starts with a quotation mark and is left as it is.
+        // Character.toUpperCase is locale-independent; a quoted name starts with a quotation mark and is
+        // left as it is.
         return Character.toUpperCase(sentence.charAt(0)) + sentence.substring(1);
     }
 }

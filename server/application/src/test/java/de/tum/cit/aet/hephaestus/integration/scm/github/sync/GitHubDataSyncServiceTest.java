@@ -166,6 +166,7 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
     private RateLimitTracker rateLimitTracker;
 
     private GitHubDataSyncService service;
+    private IdentityProvider provider;
 
     @BeforeEach
     void setUp() {
@@ -205,11 +206,9 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
                 exceptionClassifier,
                 tokenProvider,
                 gitHubAppTokenService,
-                rateLimitTracker,
-                Runnable::run // synchronous executor — deterministic assertions
-                );
+                rateLimitTracker);
 
-        IdentityProvider provider = new IdentityProvider();
+        provider = new IdentityProvider();
         ReflectionTestUtils.setField(provider, "id", PROVIDER_ID);
 
         Repository repository = new Repository();
@@ -350,9 +349,7 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
         repository.setId(REPOSITORY_ID + 1);
         repository.setNativeId(NATIVE_ID);
         repository.setNameWithOwner("owner/renamed");
-        repository.setProvider(gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseThrow());
+        repository.setProvider(provider);
         when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq("owner/renamed"), any(), any()))
                 .thenReturn(Optional.of(repository));
         assertThat(service.syncSyncTarget(target)).isTrue();

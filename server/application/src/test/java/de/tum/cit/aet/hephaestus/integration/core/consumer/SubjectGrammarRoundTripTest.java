@@ -57,9 +57,9 @@ class SubjectGrammarRoundTripTest extends BaseUnitTest {
         if (!Files.isDirectory(dir)) {
             return Stream.empty();
         }
-        return Files.list(dir)
-                .filter(p -> p.getFileName().toString().endsWith(".json"))
-                .sorted();
+        try (Stream<Path> files = Files.list(dir)) {
+            return files.filter(p -> p.getFileName().toString().endsWith(".json")).sorted().toList().stream();
+        }
     }
 
     @ParameterizedTest(name = "GitLab fixture {0}")

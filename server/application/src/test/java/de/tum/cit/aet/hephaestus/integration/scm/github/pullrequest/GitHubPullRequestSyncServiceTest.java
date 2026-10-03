@@ -42,6 +42,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.math.BigInteger;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -190,8 +191,8 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
         comment.setId("IC_node" + databaseId);
         comment.setFullDatabaseId(BigInteger.valueOf(databaseId));
         comment.setBody(body);
-        comment.setCreatedAt(OffsetDateTime.now());
-        comment.setUpdatedAt(OffsetDateTime.now());
+        comment.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        comment.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         return comment;
     }
 
@@ -213,7 +214,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
         pr.setFullDatabaseId(BigInteger.valueOf(999L));
         pr.setNumber(PR_NUMBER);
         pr.setTitle("Test PR");
-        pr.setUpdatedAt(OffsetDateTime.now());
+        pr.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         pr.setComments(comments);
         return pr;
     }

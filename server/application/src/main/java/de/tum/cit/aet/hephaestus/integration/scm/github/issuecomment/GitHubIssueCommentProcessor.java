@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -507,7 +508,7 @@ public class GitHubIssueCommentProcessor extends BaseGitHubProcessor {
                     + "This may indicate missing data in webhook payload.");
             return Issue.State.OPEN;
         }
-        return switch (state.toUpperCase()) {
+        return switch (state.toUpperCase(Locale.ROOT)) {
             case "OPEN" -> Issue.State.OPEN;
             case "CLOSED" -> Issue.State.CLOSED;
             default -> {

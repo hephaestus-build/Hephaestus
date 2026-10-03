@@ -54,11 +54,9 @@ class SlackConsentBlocksTest extends BaseUnitTest {
 
     @Test
     void activationNotice_doesNotLinkToWorkspaceDashboard() {
-        String url = "https://heph.example/w/team";
-
-        assertThat(SlackConsentBlocks.activationNotice(url).toString())
-                .doesNotContain("Open Hephaestus", "workspace dashboard", url);
-        assertThat(SlackConsentBlocks.activationFallbackText(url)).doesNotContain("Open Hephaestus", url);
+        assertThat(SlackConsentBlocks.activationNotice().toString())
+                .doesNotContain("Open Hephaestus", "workspace dashboard", "https://");
+        assertThat(SlackConsentBlocks.activationFallbackText()).doesNotContain("Open Hephaestus", "https://");
     }
 
     @Test

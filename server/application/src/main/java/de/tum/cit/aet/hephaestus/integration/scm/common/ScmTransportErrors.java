@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.common;
 
 import java.io.IOException;
+import java.util.Locale;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.graphql.client.GraphQlTransportException;
 import reactor.netty.http.client.PrematureCloseException;
@@ -51,14 +52,14 @@ public final class ScmTransportErrors {
             // Timeout during blocking read (body consumption timeout)
             if (cause instanceof IllegalStateException
                     && message != null
-                    && message.toLowerCase().contains("timeout on blocking read")) {
+                    && message.toLowerCase(Locale.ROOT).contains("timeout on blocking read")) {
                 log.debug("Transport error detected: blocking read timeout");
                 return true;
             }
 
             // Check for IOException indicating connection issues
             if (cause instanceof IOException && message != null) {
-                String lower = message.toLowerCase();
+                String lower = message.toLowerCase(Locale.ROOT);
                 if (lower.contains("connection reset")
                         || lower.contains("broken pipe")
                         || lower.contains("connection abort")

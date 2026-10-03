@@ -78,8 +78,8 @@ public interface SummaryChannel {
         }
     }
 
-    record ExistingSummaryLookup(Kind kind, @Nullable SummaryHandle handle) {
-        public enum Kind {
+    record ExistingSummaryLookup(Presence kind, @Nullable SummaryHandle handle) {
+        public enum Presence {
             FOUND,
             ABSENT,
             UNKNOWN,
@@ -87,15 +87,15 @@ public interface SummaryChannel {
 
         public static ExistingSummaryLookup found(SummaryHandle handle) {
             Objects.requireNonNull(handle, "FOUND outcome requires a SummaryHandle");
-            return new ExistingSummaryLookup(Kind.FOUND, handle);
+            return new ExistingSummaryLookup(Presence.FOUND, handle);
         }
 
         public static ExistingSummaryLookup absent() {
-            return new ExistingSummaryLookup(Kind.ABSENT, null);
+            return new ExistingSummaryLookup(Presence.ABSENT, null);
         }
 
         public static ExistingSummaryLookup unknown() {
-            return new ExistingSummaryLookup(Kind.UNKNOWN, null);
+            return new ExistingSummaryLookup(Presence.UNKNOWN, null);
         }
     }
 

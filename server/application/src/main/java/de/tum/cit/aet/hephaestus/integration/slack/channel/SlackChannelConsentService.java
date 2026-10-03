@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEvent;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
@@ -66,7 +65,6 @@ public class SlackChannelConsentService {
     private final SlackMessageService slackMessageService;
     private final ConnectionService connectionService;
     private final UserRepository userRepository;
-    private final SlackHephaestusUiLinks uiLinks;
     private final TransactionTemplate transactionTemplate;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -85,7 +83,6 @@ public class SlackChannelConsentService {
             SlackMessageService slackMessageService,
             ConnectionService connectionService,
             UserRepository userRepository,
-            SlackHephaestusUiLinks uiLinks,
             TransactionTemplate transactionTemplate,
             ApplicationEventPublisher eventPublisher) {
         this.monitoredChannelRepository = monitoredChannelRepository;
@@ -95,7 +92,6 @@ public class SlackChannelConsentService {
         this.slackMessageService = slackMessageService;
         this.connectionService = connectionService;
         this.userRepository = userRepository;
-        this.uiLinks = uiLinks;
         this.transactionTemplate = transactionTemplate;
         this.eventPublisher = eventPublisher;
     }
@@ -113,9 +109,11 @@ public class SlackChannelConsentService {
     @Transactional(readOnly = true)
     public List<SlackChannelConsentEventDTO> listConsentEvents(long workspaceId, String slackChannelId) {
         // 404 if the channel is not allow-listed in this workspace (also enforces workspace isolation).
-        monitoredChannelRepository
+        if (monitoredChannelRepository
                 .findByWorkspaceIdAndSlackChannelId(workspaceId, slackChannelId)
-                .orElseThrow(() -> new EntityNotFoundException("Slack channel", slackChannelId));
+                .isEmpty()) {
+            throw new EntityNotFoundException("Slack channel", slackChannelId);
+        }
         return consentEventRepository
                 .findByWorkspaceIdAndSlackChannelIdOrderByCreatedAtAscIdAsc(workspaceId, slackChannelId)
                 .stream()

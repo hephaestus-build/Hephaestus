@@ -124,7 +124,7 @@ class UIMessageChunkSerializationTest extends BaseUnitTest {
                             + "\",\"text\":\"Say why.\"}}",
                 },
                 new Object[] {
-                    new UIMessageChunk.Error("container died mid-turn"),
+                    new UIMessageChunk.TurnError("container died mid-turn"),
                     "{\"type\":\"error\",\"errorText\":\"container died mid-turn\"}",
                 });
     }

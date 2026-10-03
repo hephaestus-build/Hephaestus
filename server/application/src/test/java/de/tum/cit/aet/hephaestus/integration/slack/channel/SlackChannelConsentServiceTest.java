@@ -20,7 +20,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEvent;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
@@ -83,11 +82,7 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
     @Mock
     private UserRepository userRepository;
 
-    @Mock
-    private SlackHephaestusUiLinks uiLinks;
-
     private SlackChannelConsentService service() {
-        lenient().when(uiLinks.workspaceHomeUrl(WS)).thenReturn("https://heph.example/w/team");
         return new SlackChannelConsentService(
                 monitoredChannelRepository,
                 consentEventRepository,
@@ -96,7 +91,6 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
                 slackMessageService,
                 connectionService,
                 userRepository,
-                uiLinks,
                 inlineTransactionTemplate(),
                 eventPublisher);
     }

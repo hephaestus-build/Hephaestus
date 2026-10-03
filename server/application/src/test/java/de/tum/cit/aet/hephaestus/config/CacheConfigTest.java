@@ -66,7 +66,7 @@ class CacheConfigTest extends BaseUnitTest {
     void contributorAndTemplateCachesHaveOneHourTtlAndThousandEntryLimit() {
         for (String name : List.of("contributors", "pullRequestTemplates")) {
             CacheConfig.CacheSpec spec = findSpec(name);
-            assertThat(spec.ttl()).isEqualTo(Duration.ofSeconds(3600));
+            assertThat(spec.ttl()).isEqualTo(Duration.ofHours(1));
             assertThat(spec.maxSize()).isEqualTo(1000L);
         }
     }

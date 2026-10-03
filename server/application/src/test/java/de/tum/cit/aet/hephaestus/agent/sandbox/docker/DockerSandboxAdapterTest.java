@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -39,6 +40,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
@@ -134,12 +136,12 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                 new NetworkPolicy(allowInternet, null, "test-token"),
                 ResourceLimits.DEFAULT,
                 SecurityProfile.DEFAULT,
-                Map.of(".prompt", "test prompt".getBytes()),
+                Map.of(".prompt", "test prompt".getBytes(UTF_8)),
                 "/workspace/out");
     }
 
     private void setupHappyPath() throws Exception {
-        setupExecution(0, false, Map.of("result.json", "{}".getBytes()));
+        setupExecution(0, false, Map.of("result.json", "{}".getBytes(UTF_8)));
     }
 
     private void setupExecution(int exitCode, boolean timedOut, Map<String, byte[]> result) throws Exception {
@@ -263,7 +265,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     new NetworkPolicy(false, null, "token-123"),
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
-                    Map.of(".prompt", "test".getBytes()),
+                    Map.of(".prompt", "test".getBytes(UTF_8)),
                     "/workspace/out");
 
             sandboxAdapter.execute(spec);
@@ -300,7 +302,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     new NetworkPolicy(false, null, "token-123"),
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
-                    Map.of(".prompt", "test".getBytes()),
+                    Map.of(".prompt", "test".getBytes(UTF_8)),
                     "/workspace/out");
 
             sandboxAdapter.execute(spec);
@@ -325,7 +327,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     new NetworkPolicy(false, "http://{appServerIp}:9090/v1", "tok"),
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
-                    Map.of(".prompt", "test".getBytes()),
+                    Map.of(".prompt", "test".getBytes(UTF_8)),
                     "/workspace/out");
 
             sandboxAdapter.execute(spec);
@@ -349,7 +351,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     new NetworkPolicy(false, "https://my-proxy.example.com/api", "test-token"),
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
-                    Map.of(".prompt", "test".getBytes()),
+                    Map.of(".prompt", "test".getBytes(UTF_8)),
                     "/workspace/out");
 
             sandboxAdapter.execute(spec);
@@ -399,7 +401,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     new NetworkPolicy(false, null, "tok"),
                     ResourceLimits.DEFAULT,
                     SecurityProfile.DEFAULT,
-                    Map.of(".prompt", "test".getBytes()),
+                    Map.of(".prompt", "test".getBytes(UTF_8)),
                     "/workspace/out");
 
             sandboxAdapter.execute(spec);
@@ -542,7 +544,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldCollectOutputOnTimeout() throws Exception {
-            setupTimeoutPath(Map.of("partial.json", "{}".getBytes()));
+            setupTimeoutPath(Map.of("partial.json", "{}".getBytes(UTF_8)));
 
             SandboxResult result = sandboxAdapter.execute(createSpec());
 
@@ -808,10 +810,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         void shouldIncrementFailureCounter() throws Exception {
             when(networkManager.createJobNetwork(any(), eq(false), any())).thenThrow(new SandboxException("boom"));
 
-            try {
-                sandboxAdapter.execute(createSpec());
-            } catch (SandboxException ignored) {
-            }
+            assertThatThrownBy(() -> sandboxAdapter.execute(createSpec())).isInstanceOf(SandboxException.class);
 
             assertThat(meterRegistry
                             .counter("sandbox.executions", "outcome", "failure")
@@ -827,10 +826,8 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             });
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
 
-            try {
-                sandboxAdapter.execute(createSpec());
-            } catch (SandboxCancelledException ignored) {
-            }
+            assertThatThrownBy(() -> sandboxAdapter.execute(createSpec()))
+                    .isInstanceOf(SandboxCancelledException.class);
 
             assertThat(meterRegistry
                             .counter("sandbox.executions", "outcome", "cancelled")
@@ -846,10 +843,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         void shouldRecordDurationAlways() throws Exception {
             when(networkManager.createJobNetwork(any(), eq(false), any())).thenThrow(new SandboxException("fail"));
 
-            try {
-                sandboxAdapter.execute(createSpec());
-            } catch (SandboxException ignored) {
-            }
+            assertThatThrownBy(() -> sandboxAdapter.execute(createSpec())).isInstanceOf(SandboxException.class);
 
             assertThat(meterRegistry.timer("sandbox.execution.duration").count())
                     .isEqualTo(1);
@@ -887,13 +881,8 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             });
             when(containerManager.getLogs(eq(CONTAINER_ID), anyInt())).thenReturn("");
 
-            Thread bg = new Thread(() -> {
-                try {
-                    sandboxAdapter.execute(createSpec());
-                } catch (Exception ignored) {
-                }
-            });
-            bg.start();
+            FutureTask<SandboxResult> execution = new FutureTask<>(() -> sandboxAdapter.execute(createSpec()));
+            new Thread(execution).start();
 
             assertThat(inExecution.await(5, TimeUnit.SECONDS)).isTrue();
 
@@ -901,8 +890,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
                     .isEqualTo(1.0);
 
             release.countDown();
-            bg.join(5000);
-            assertThat(bg.isAlive()).isFalse();
+            execution.get(5, TimeUnit.SECONDS);
 
             assertThat(meterRegistry.get("sandbox.containers.active").gauge().value())
                     .isZero();
@@ -926,7 +914,9 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             Thread bg = new Thread(() -> {
                 try {
                     sandboxAdapter.execute(createSpec());
-                } catch (Exception ignored) {
+                } catch (RuntimeException ignored) {
+                    // Once released, the first execution runs on against unstubbed mocks; only the
+                    // second call's rejection is under test.
                 }
             });
             bg.start();

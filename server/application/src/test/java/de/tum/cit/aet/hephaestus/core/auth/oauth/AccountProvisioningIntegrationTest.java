@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
-import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
@@ -36,9 +35,6 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private AccountProvisioningService service;
-
-    @Autowired
-    private AccountRepository accountRepository;
 
     @Autowired
     private IdentityLinkRepository identityLinkRepository;

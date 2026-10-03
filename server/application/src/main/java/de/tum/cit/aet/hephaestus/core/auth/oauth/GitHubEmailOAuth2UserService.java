@@ -55,7 +55,7 @@ public class GitHubEmailOAuth2UserService implements OAuth2UserService<OAuth2Use
         Map<String, Object> attrs = new HashMap<>(user.getAttributes());
         fetchPrimaryVerifiedEmail(userRequest).ifPresent(email -> {
             attrs.put("email", email);
-            attrs.put("email_verified", Boolean.TRUE);
+            attrs.put("email_verified", true);
         });
         return new DefaultOAuth2User(user.getAuthorities(), attrs, nameAttrKey);
     }

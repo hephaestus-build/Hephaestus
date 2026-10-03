@@ -45,7 +45,7 @@ function bucketThreads(threads: ChatThreadSummary[], now: number): ThreadGroupDa
 	const day = 24 * 60 * 60 * 1000;
 
 	for (const thread of threads) {
-		const createdAt = thread.createdAt ? new Date(thread.createdAt).getTime() : now;
+		const createdAt = new Date(thread.createdAt).getTime();
 		const ageDays = (now - createdAt) / day;
 		let bucket: BucketName;
 		if (ageDays < 1) {
@@ -158,7 +158,7 @@ function ThreadGroup({
 									render={
 										<Link
 											to="/w/$workspaceSlug/mentor/$threadId"
-											params={{ workspaceSlug, threadId: thread.id ?? "" }}
+											params={{ workspaceSlug, threadId: thread.id }}
 										/>
 									}
 								>

@@ -262,6 +262,9 @@ async function startBackend(): Promise<void> {
 		detached: true,
 	});
 	child.unref();
+	if (child.pid === undefined) {
+		throw new Error(`The server did not start; see ${logFile}`);
+	}
 	await writeFile(pidFile, `${child.pid}\n`, { mode: 0o600 });
 	for (let attempt = 0; attempt < 90; attempt += 1) {
 		if (

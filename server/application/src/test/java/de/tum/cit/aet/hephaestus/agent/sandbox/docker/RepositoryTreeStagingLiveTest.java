@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -112,18 +113,22 @@ class RepositoryTreeStagingLiveTest {
                 try {
                     containerManager.forceRemove(c.id());
                 } catch (Exception ignored) {
+                    // One resource that refuses to go must not stop the sweep of the rest.
                 }
             });
         } catch (Exception ignored) {
+            // The sweep is a safety net; Docker failing here must not mask the test's own result.
         }
         try {
             networkManager.listOrphanedNetworks().forEach(n -> {
                 try {
                     networkManager.removeNetwork(n.id());
                 } catch (Exception ignored) {
+                    // One resource that refuses to go must not stop the sweep of the rest.
                 }
             });
         } catch (Exception ignored) {
+            // The sweep is a safety net; Docker failing here must not mask the test's own result.
         }
     }
 
@@ -172,7 +177,7 @@ class RepositoryTreeStagingLiveTest {
         SandboxResult result = sandboxAdapter.execute(spec);
 
         assertThat(result.exitCode()).as("container logs: %s", result.logs()).isZero();
-        String seen = new String(result.outputFiles().get("seen.txt")).trim();
+        String seen = new String(result.outputFiles().get("seen.txt"), UTF_8).trim();
         assertThat(seen)
                 .isEqualTo("bytes=" + (LARGE_FILE_MB * 1024L * 1024L) + " files=" + TREE_FILE_COUNT
                         + " sample=content 24999");

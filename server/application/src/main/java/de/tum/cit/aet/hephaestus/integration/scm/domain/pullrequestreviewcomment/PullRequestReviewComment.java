@@ -49,11 +49,9 @@ public class PullRequestReviewComment extends BaseGitServiceEntity {
     private String path;
 
     // The SHA of the commit to which the comment applies.
-    @NonNull
     private @Nullable String commitId;
 
     // The SHA of the original commit to which the comment applies.
-    @NonNull
     private @Nullable String originalCommitId;
 
     @Column(columnDefinition = "TEXT")

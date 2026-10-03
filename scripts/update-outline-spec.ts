@@ -23,7 +23,7 @@ const MIN_SIZE_BYTES = 50_000;
 const MAX_SIZE_BYTES = 10_000_000;
 
 /** Cheapest checks first: a wrong body is usually the wrong size, and never reaches the regexes. */
-function validateSpec(content: string): { valid: boolean; reason?: string } {
+function validateSpec(content: string): { valid: true } | { valid: false; reason: string } {
 	if (content.length < MIN_SIZE_BYTES) {
 		return {
 			valid: false,

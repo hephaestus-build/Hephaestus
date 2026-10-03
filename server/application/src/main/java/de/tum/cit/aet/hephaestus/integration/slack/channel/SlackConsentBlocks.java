@@ -77,28 +77,15 @@ public final class SlackConsentBlocks {
     }
 
     public static List<LayoutBlock> activationNotice() {
-        return List.of(noticeText(ACTIVATION_LINE_1, ACTIVATION_LINE_2, ""), optOutAction());
-    }
-
-    public static List<LayoutBlock> activationNotice(String hephaestusUrl) {
-        return activationNotice();
+        return List.of(noticeText(ACTIVATION_LINE_1, ACTIVATION_LINE_2), optOutAction());
     }
 
     public static List<LayoutBlock> lateJoinNotice() {
-        return lateJoinNotice("");
+        return List.of(noticeText(LATE_JOIN_LINE_1, LATE_JOIN_LINE_2), optOutAction());
     }
 
-    public static List<LayoutBlock> lateJoinNotice(String hephaestusUrl) {
-        return List.of(noticeText(LATE_JOIN_LINE_1, LATE_JOIN_LINE_2, hephaestusUrl), optOutAction());
-    }
-
-    private static LayoutBlock noticeText(String line1, String line2, String hephaestusUrl) {
-        return section(
-                s -> s.text(markdownText(line1 + "\n\n" + line2 + "\n\n" + SHARED_LINE + uiLinkLine(hephaestusUrl))));
-    }
-
-    private static String uiLinkLine(String hephaestusUrl) {
-        return "";
+    private static LayoutBlock noticeText(String line1, String line2) {
+        return section(s -> s.text(markdownText(line1 + "\n\n" + line2 + "\n\n" + SHARED_LINE)));
     }
 
     private static LayoutBlock optOutAction() {
@@ -116,20 +103,8 @@ public final class SlackConsentBlocks {
         return FALLBACK_TEXT;
     }
 
-    public static String activationFallbackText(String hephaestusUrl) {
-        return activationFallbackText();
-    }
-
     public static String lateJoinFallbackText() {
-        return lateJoinFallbackText("");
-    }
-
-    public static String lateJoinFallbackText(String hephaestusUrl) {
-        return LATE_JOIN_FALLBACK_TEXT + fallbackLink(hephaestusUrl);
-    }
-
-    private static String fallbackLink(String hephaestusUrl) {
-        return "";
+        return LATE_JOIN_FALLBACK_TEXT;
     }
 
     /** The ephemeral opt-out confirmation shown to the member who just excluded their channel messages. */

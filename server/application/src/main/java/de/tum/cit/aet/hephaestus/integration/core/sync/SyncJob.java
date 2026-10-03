@@ -84,6 +84,7 @@ public class SyncJob {
             foreignKey = @ForeignKey(name = "fk_sync_job_connection_workspace"))
     @Getter(AccessLevel.NONE)
     @Setter(AccessLevel.NONE)
+    @SuppressWarnings("UnusedVariable") // mapping-only: Hibernate reads it to declare fk_sync_job_connection_workspace
     private @Nullable Connection tenantOwnedConnection;
 
     /**

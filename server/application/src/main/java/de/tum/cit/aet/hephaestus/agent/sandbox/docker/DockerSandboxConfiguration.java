@@ -269,11 +269,10 @@ public class DockerSandboxConfiguration {
     public InteractiveSandboxRegistry interactiveSandboxRegistry(
             InteractiveSandboxProperties properties,
             SandboxContainerManager containerManager,
-            InteractiveSandboxMetrics metrics,
             StdinWriteWatchdog watchdog,
             MeterRegistry meterRegistry,
             SandboxCreator creator) {
-        return new InteractiveSandboxRegistry(properties, containerManager, metrics, watchdog, meterRegistry, creator);
+        return new InteractiveSandboxRegistry(properties, containerManager, watchdog, meterRegistry, creator);
     }
 
     @Bean

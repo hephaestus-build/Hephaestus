@@ -29,7 +29,7 @@ public class ExportGenerationWorker {
     private static final Logger log = LoggerFactory.getLogger(ExportGenerationWorker.class);
 
     /** Retention window for a READY export before the sweep expires it and frees the payload. */
-    static final Duration RETENTION = Duration.ofHours(48);
+    static final Duration RETENTION = Duration.ofDays(2);
 
     private final AccountExportRepository accountExportRepository;
     private final ExportBundleAssembler assembler;

@@ -52,11 +52,12 @@ export function originPattern(origin: string): string {
 
 /** The origin a match pattern names, or `undefined` for a wildcard host. */
 export function patternOrigin(pattern: string): string | undefined {
-	const match = /^(?<scheme>https?):\/\/(?<host>[^/*]+)\/\*$/u.exec(pattern);
-	if (match?.groups === undefined) {
+	const { scheme, host } =
+		/^(?<scheme>https?):\/\/(?<host>[^/*]+)\/\*$/u.exec(pattern)?.groups ?? {};
+	if (scheme === undefined || host === undefined) {
 		return undefined;
 	}
-	return `${match.groups.scheme}://${match.groups.host}`;
+	return `${scheme}://${host}`;
 }
 
 export const INSTANCE_ORIGIN_MESSAGES: Record<

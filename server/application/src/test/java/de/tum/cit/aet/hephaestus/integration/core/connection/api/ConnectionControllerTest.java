@@ -34,7 +34,6 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
-import java.lang.reflect.Field;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
@@ -439,24 +438,12 @@ class ConnectionControllerTest extends BaseUnitTest {
     }
 
     private static void setIdAndTimestamps(Connection c, long id) {
-        try {
-            // The entity normally gets createdAt/updatedAt from @CreationTimestamp /
-            // @UpdateTimestamp on save. Unit tests skip the JPA layer so we set them by
-            // reflection — DTO serialisation would NPE on null Instants otherwise.
-            Field idField = Connection.class.getDeclaredField("id");
-            idField.setAccessible(true);
-            idField.set(c, id);
-
-            Field createdAt = Connection.class.getDeclaredField("createdAt");
-            createdAt.setAccessible(true);
-            createdAt.set(c, Instant.parse("2026-01-01T00:00:00Z"));
-
-            Field updatedAt = Connection.class.getDeclaredField("updatedAt");
-            updatedAt.setAccessible(true);
-            updatedAt.set(c, Instant.parse("2026-01-02T00:00:00Z"));
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        // The entity normally gets createdAt/updatedAt from @CreationTimestamp /
+        // @UpdateTimestamp on save. Unit tests skip the JPA layer so we set them by
+        // reflection — DTO serialisation would NPE on null Instants otherwise.
+        ReflectionTestUtils.setField(c, "id", id);
+        ReflectionTestUtils.setField(c, "createdAt", Instant.parse("2026-01-01T00:00:00Z"));
+        ReflectionTestUtils.setField(c, "updatedAt", Instant.parse("2026-01-02T00:00:00Z"));
     }
 
     /** Per-kind strategy stub — initiate output is dictated by the test. */

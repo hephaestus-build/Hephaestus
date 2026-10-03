@@ -147,7 +147,9 @@ class SandboxContainerManagerTest extends BaseUnitTest {
             var interruptor = new Thread(() -> {
                 try {
                     Thread.sleep(100);
-                } catch (InterruptedException ignored) {
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
                 }
                 testThread.interrupt();
             });

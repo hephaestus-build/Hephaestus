@@ -58,6 +58,10 @@ public class JobFolderIndexBuilder {
         }
     }
 
+    /**
+     * @param captureLimitations per source, what its capture could not include; empty for a source that captured
+     *     it all
+     */
     public record CaptureMetadata(
             Map<SourceKind, SourceCompleteness> reportedCompleteness,
             Map<SourceKind, SourceContentState> reportedContentStates,
@@ -65,7 +69,6 @@ public class JobFolderIndexBuilder {
             Map<SourceKind, Instant> observedAt,
             Map<SourceKind, Instant> sourceEffectiveAt,
             Map<SourceKind, SourceCaptureState> stateOverrides,
-            /** Per source, what its capture could not include; empty for a source that captured it all. */
             Map<SourceKind, List<String>> captureLimitations,
             Set<SourceKind> attemptedKinds) {
         public CaptureMetadata(

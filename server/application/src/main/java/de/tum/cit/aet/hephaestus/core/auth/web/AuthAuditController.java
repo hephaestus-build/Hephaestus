@@ -6,6 +6,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.Csv;
 import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.util.Arrays;
@@ -84,9 +86,7 @@ public class AuthAuditController {
             @NonNull Instant occurredAt,
             @NonNull String eventType,
             @NonNull String result,
-            // @NonNull so springdoc marks it required and the client types it `boolean`: the column is
-            // NOT NULL, and an optional flag would make every reader write `e.elevated… && …`.
-            @NonNull boolean elevatedViaInstanceAdmin,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean elevatedViaInstanceAdmin,
             @Nullable Long accountId,
             @Nullable Long actingAccountId,
             @Nullable Long viewedUserId,

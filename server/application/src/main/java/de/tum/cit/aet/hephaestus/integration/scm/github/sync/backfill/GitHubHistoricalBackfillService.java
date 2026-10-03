@@ -47,6 +47,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -460,9 +461,6 @@ public class GitHubHistoricalBackfillService {
         // Use longer timeout for backfill - responses include embedded reviews/threads/comments
         Duration timeout = syncProperties.backfillGraphqlTimeout();
 
-        int totalIssuesSynced = 0;
-        int totalPRsSynced = 0;
-
         // Backfill issues using CREATED_AT DESC (newest first) - pass repositoryId, not the entity
         BackfillBatchResult issueResult = backfillIssues(
                 client,
@@ -475,7 +473,7 @@ public class GitHubHistoricalBackfillService {
                 target.issueSyncCursor(),
                 batchSize,
                 observer);
-        totalIssuesSynced = issueResult.itemsSynced();
+        int totalIssuesSynced = issueResult.itemsSynced();
 
         // Persist issue backfill progress after each batch, for admin visibility.
         if (issueResult.itemsSynced() > 0) {
@@ -514,7 +512,7 @@ public class GitHubHistoricalBackfillService {
                 target.pullRequestSyncCursor(),
                 batchSize,
                 observer);
-        totalPRsSynced = prResult.itemsSynced();
+        int totalPRsSynced = prResult.itemsSynced();
 
         // Persist pull request backfill progress after each batch, for admin visibility.
         if (prResult.itemsSynced() > 0) {
@@ -580,7 +578,7 @@ public class GitHubHistoricalBackfillService {
      * @param repositoryId   the repository ID (passed to transaction for fresh fetch)
      * @param repoNameForLog repository name for logging (avoids accessing detached entity)
      * @param syncTargetId   the sync target ID for cursor persistence
-     * @param cursor         the starting cursor (null for first page)
+     * @param startCursor    the starting cursor (null for first page)
      * @param maxPages       maximum pages to process in this batch
      * @param observer       notified after each page lands, so progress moves during the batch
      * @return result containing items synced and whether more pages exist
@@ -775,7 +773,7 @@ public class GitHubHistoricalBackfillService {
      * @param repositoryId   the repository ID (passed to transaction for fresh fetch)
      * @param repoNameForLog repository name for logging (avoids accessing detached entity)
      * @param syncTargetId   the sync target ID for cursor persistence
-     * @param cursor         the starting cursor (null for first page)
+     * @param startCursor    the starting cursor (null for first page)
      * @param maxPages       maximum pages to process in this batch
      * @param observer       notified after each page lands, so progress moves during the batch
      * @return result containing items synced and whether more pages exist
@@ -1538,7 +1536,7 @@ public class GitHubHistoricalBackfillService {
 
             // Check message content for 5xx indicators, transport errors, or timeouts
             if (message != null) {
-                String lowerMessage = message.toLowerCase();
+                String lowerMessage = message.toLowerCase(Locale.ROOT);
                 if (message.contains("502")
                         || message.contains("503")
                         || message.contains("504")

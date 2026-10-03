@@ -42,7 +42,7 @@ public record CreateWorkspaceRequestDTO(
         @Nullable
         String accountLogin,
 
-        @NotNull(message = "Account type is required") @Schema(description = "Type of account (USER or ORG)") @Nullable
+        @NotNull(message = "Account type is required") @Schema(description = "Type of account (USER or ORG)")
         AccountType accountType,
 
         @Schema(
@@ -57,7 +57,6 @@ public record CreateWorkspaceRequestDTO(
                 description = "Integration kind to provision. SLACK flows through OAuth, not this endpoint.",
                 allowableValues = {"GITHUB", "GITLAB"},
                 example = "GITLAB")
-        @Nullable
         IntegrationKind kind,
 
         @Size(max = 512, message = "Personal access token must not exceed 512 characters")
@@ -75,6 +74,7 @@ public record CreateWorkspaceRequestDTO(
         @Nullable
         @ScmServerUrl
         String serverUrl) {
+    @Override
     @Deprecated(forRemoval = true)
     public @Nullable Long ownerUserId() {
         return ownerUserId;
@@ -82,14 +82,12 @@ public record CreateWorkspaceRequestDTO(
 
     @AssertTrue(message = "Personal access token is required")
     @Schema(hidden = true)
-    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private boolean isTokenProvided() {
         return personalAccessToken != null && !personalAccessToken.isBlank();
     }
 
     @AssertTrue(message = "kind must be GITHUB or GITLAB; SLACK flows through OAuth")
     @Schema(hidden = true)
-    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private boolean isKindSupported() {
         return kind == IntegrationKind.GITHUB || kind == IntegrationKind.GITLAB;
     }

@@ -101,7 +101,7 @@ public record GitHubDiscussionCommentDTO(
                 extractReplies(comment, result);
             }
         }
-        return result;
+        return List.copyOf(result);
     }
 
     /**

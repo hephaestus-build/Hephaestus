@@ -1385,14 +1385,14 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         request.addHeader("X-Gitlab-Token", token);
         request.addHeader("X-Gitlab-Instance", instance);
         request.addHeader("Idempotency-Key", deliveryPrefix + "-" + deliveryKey);
-        String[] segments = route.split("/");
+        String[] segments = route.split("/", -1);
         return Objects.requireNonNull(ingress)
                 .ingest(connectionId, segments[0], segments[1], request)
                 .getStatusCode();
     }
 
     private static String routeOf(GitLabWebhookClient.WebhookConfig hook) {
-        String[] segments = hook.url().split("/");
+        String[] segments = hook.url().split("/", -1);
         return segments[segments.length - 2] + "/" + segments[segments.length - 1];
     }
 

@@ -25,6 +25,7 @@ import io.nats.client.api.StreamInfo;
 import io.nats.client.api.StreamState;
 import java.io.IOException;
 import java.time.Duration;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -115,13 +116,13 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
     @Test
     void publishesTheAgeOfTheOldestStoredMessageAsEffectiveRetention() throws Exception {
         WebhookStreamMonitor monitor = monitor();
-        give(1_000, ZonedDateTime.now().minusDays(9), caughtUp(CONSUMER, 999));
+        give(1_000, ZonedDateTime.now(ZoneOffset.UTC).minusDays(9), caughtUp(CONSUMER, 999));
 
         monitor.poll();
 
         assertThat(gauge("webhook.stream.oldest.message.age"))
                 .as("max-age is a ceiling and max-bytes a floor; this is the retention the deployment gets")
-                .isCloseTo(Duration.ofDays(9).toSeconds(), within(60d));
+                .isCloseTo((double) Duration.ofDays(9).toSeconds(), within(60d));
     }
 
     @Test
@@ -226,7 +227,7 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
 
     /** Puts the stream at {@code firstSequence} with exactly the consumers given. */
     private void give(long firstSequence, ConsumerInfo... consumers) throws Exception {
-        give(firstSequence, ZonedDateTime.now(), consumers);
+        give(firstSequence, ZonedDateTime.now(ZoneOffset.UTC), consumers);
     }
 
     private void give(long firstSequence, ZonedDateTime firstTime, ConsumerInfo... consumers) throws Exception {

@@ -281,7 +281,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                     // Apply repository filter to derive org names only from allowed repositories
                     .filter(workspaceScopeFilter::isRepositoryAllowed)
                     .map(RepositoryToMonitor::getNameWithOwner)
-                    .map(s -> s.split("/")[0])
+                    .map(s -> s.split("/", -1)[0])
                     .distinct()
                     .toList();
             return new TeamSyncState(ws.getId(), ws.getTeamsSyncedAt(), orgNames);

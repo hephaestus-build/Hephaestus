@@ -49,6 +49,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
@@ -280,7 +281,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
         @Test
         void listsTheGroupsDirectInheritedAndInvitedGroupsMembers() {
             HttpGraphQlClient client = mockClient();
-            HttpGraphQlClient.RequestSpec request = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec request = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(request);
             when(request.variable(anyString(), any())).thenReturn(request);
             ClientGraphQlResponse page = mockMembersPage(List.of(), LAST_PAGE);
@@ -379,7 +380,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             when(responseHandler.handle(eq(invalidResp), anyString(), any()))
                     .thenReturn(new HandleResult(HandleResult.Action.ABORT, null));
 
-            HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(requestSpec);
             when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
             when(requestSpec.execute()).thenReturn(Mono.just(invalidResp));
@@ -461,7 +462,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             ClientGraphQlResponse page1 = mockMembersPage(List.of(member), new GitLabPageInfo(true, "cursor1"));
 
             HttpGraphQlClient client = mockClient();
-            HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(requestSpec);
             when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
             when(requestSpec.execute()).thenReturn(Mono.just(page1));
@@ -495,7 +496,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
         @Test
         void graphQlException_returnsNegative() {
             HttpGraphQlClient client = mockClient();
-            HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(requestSpec);
             when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
             when(requestSpec.execute()).thenReturn(Mono.error(new RuntimeException("network error")));
@@ -812,7 +813,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
 
     private void mockSequentialExecute(
             HttpGraphQlClient client, ClientGraphQlResponse first, ClientGraphQlResponse... rest) {
-        HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName(anyString())).thenReturn(requestSpec);
         when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
 

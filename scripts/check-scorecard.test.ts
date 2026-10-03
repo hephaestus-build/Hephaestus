@@ -20,7 +20,7 @@ const assessment = () => ({
 });
 
 /**
- * The audit #1653 recorded, restated so that lowering a minimum is a deliberate edit here too, with
+ * The minimums the Scorecard audit recorded, restated so that lowering one is a deliberate edit, with
  * the scoring each check is charged under, so that reclassifying one is a deliberate edit as well.
  */
 const enforced: Record<string, { score: number; scoredOver: string }> = {

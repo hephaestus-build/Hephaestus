@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.spi;
 
 import java.net.URI;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -57,13 +58,13 @@ public record NetworkPolicy(
             throw new IllegalArgumentException("llmProxyUrl must be absolute: " + url);
         }
         String scheme = uri.getScheme();
-        if (scheme == null || !ALLOWED_SCHEMES.contains(scheme.toLowerCase())) {
+        if (scheme == null || !ALLOWED_SCHEMES.contains(scheme.toLowerCase(Locale.ROOT))) {
             throw new IllegalArgumentException("llmProxyUrl must use http or https: " + url);
         }
     }
 
     private static void requireHttpSchemePrefix(String url) {
-        String lower = url.toLowerCase();
+        String lower = url.toLowerCase(Locale.ROOT);
         if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
             throw new IllegalArgumentException(
                     "llmProxyUrl must start with http:// or https:// (templated form): " + url);

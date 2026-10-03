@@ -208,7 +208,7 @@ public class ScopedRateLimitTracker implements RateLimitTracker, RateLimitObserv
                 "Pausing due to critical rate limit: scopeId={}, remaining={}, waitSeconds={}, resetAt={}",
                 scopeId,
                 currentRemaining,
-                waitTime.getSeconds(),
+                waitTime.toSeconds(),
                 reset);
 
         Thread.sleep(waitTime.toMillis());
@@ -421,7 +421,7 @@ public class ScopedRateLimitTracker implements RateLimitTracker, RateLimitObserv
                     if (reset == null) {
                         return 0.0;
                     }
-                    long seconds = Duration.between(Instant.now(), reset).getSeconds();
+                    long seconds = Duration.between(Instant.now(), reset).toSeconds();
                     return Math.max(0, seconds);
                 })
                 .tags(tags)

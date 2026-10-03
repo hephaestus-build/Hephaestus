@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -41,11 +40,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import tools.jackson.databind.ObjectMapper;
 
 class ReviewGateIntegrationTest extends BaseIntegrationTest {
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Autowired
     private ReviewGate gate;
@@ -79,9 +75,6 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
-
-    @Autowired
-    private LabelRepository labelRepository;
 
     private Workspace workspace;
     private WorkspaceLlmModel workspaceModel;

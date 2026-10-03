@@ -26,11 +26,11 @@ public record InteractiveSandboxSpec(
     private static final Pattern ENV_KEY = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
 
     public InteractiveSandboxSpec {
-        sessionId = Objects.requireNonNull(sessionId, "sessionId must not be null");
-        userId = Objects.requireNonNull(userId, "userId must not be null");
-        workspaceId = Objects.requireNonNull(workspaceId, "workspaceId must not be null");
-        image = Objects.requireNonNull(image, "image must not be null");
-        resourceLimits = Objects.requireNonNull(resourceLimits, "resourceLimits must not be null");
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        Objects.requireNonNull(userId, "userId must not be null");
+        Objects.requireNonNull(workspaceId, "workspaceId must not be null");
+        Objects.requireNonNull(image, "image must not be null");
+        Objects.requireNonNull(resourceLimits, "resourceLimits must not be null");
         if (userId.isBlank()) {
             throw new IllegalArgumentException("userId must not be blank");
         }

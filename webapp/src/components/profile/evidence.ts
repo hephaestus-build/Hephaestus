@@ -131,7 +131,7 @@ function foldObjectSources(locations: EvidenceLocation[]): EvidenceLocation[] {
 	for (const location of locations) {
 		const index = folded.findIndex((kept) => quotesTheSameSourceAs(kept, location));
 		const kept = folded[index];
-		if (kept === undefined) {
+		if (kept?.snippet === undefined || location.snippet === undefined) {
 			folded.push(location);
 			continue;
 		}

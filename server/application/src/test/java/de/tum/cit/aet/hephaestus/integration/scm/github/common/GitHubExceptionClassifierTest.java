@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
@@ -127,7 +128,7 @@ class GitHubExceptionClassifierTest {
             ClassificationResult result = classifier.classifyWithDetails(exception);
             assertThat(result.category()).isEqualTo(Category.RATE_LIMITED);
             assertThat(result.suggestedWait()).isNotNull();
-            assertThat(result.suggestedWait().getSeconds()).isGreaterThanOrEqualTo(119);
+            assertThat(result.suggestedWait().toSeconds()).isGreaterThanOrEqualTo(119);
         }
 
         @Test
@@ -465,7 +466,7 @@ class GitHubExceptionClassifierTest {
 
     private WebClientResponseException createWebClientResponseExceptionWithBody(
             int statusCode, String statusText, String body) {
-        return WebClientResponseException.create(statusCode, statusText, HttpHeaders.EMPTY, body.getBytes(), null);
+        return WebClientResponseException.create(statusCode, statusText, HttpHeaders.EMPTY, body.getBytes(UTF_8), null);
     }
 
     private WebClientResponseException createWebClientResponseExceptionWithHeaders(

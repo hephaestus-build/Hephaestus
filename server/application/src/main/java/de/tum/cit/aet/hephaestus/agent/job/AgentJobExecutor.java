@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
@@ -158,7 +157,6 @@ public class AgentJobExecutor {
     private final AgentJobRepository jobRepository;
     private final ReviewMemberAiPolicy memberAiPolicy;
     private final JobTypeHandlerRegistry handlerRegistry;
-    private final JobEvidenceFiles evidenceFiles;
     private final PracticePiAdapter practiceAgent;
     private final WorkerJwtIssuer workerJwtIssuer;
 
@@ -188,7 +186,6 @@ public class AgentJobExecutor {
     private final Set<UUID> localRunningJobs = ConcurrentHashMap.newKeySet();
 
     private final Optional<WorkerCapacityState> capacityState;
-    private final Optional<WorkerProperties> workerProperties;
     /** Null only when the worker role is off; stamped on claimed jobs to fence terminal writes. */
     private final @Nullable String workerId;
     /** Poll-thread-owned, hence unsynchronized. */
@@ -200,7 +197,6 @@ public class AgentJobExecutor {
             AgentJobRepository jobRepository,
             ReviewMemberAiPolicy memberAiPolicy,
             JobTypeHandlerRegistry handlerRegistry,
-            JobEvidenceFiles evidenceFiles,
             PracticePiAdapter practiceAgent,
             WorkerJwtIssuer workerJwtIssuer,
             SandboxManager sandboxManager,
@@ -219,7 +215,6 @@ public class AgentJobExecutor {
         this.jobRepository = jobRepository;
         this.memberAiPolicy = memberAiPolicy;
         this.handlerRegistry = handlerRegistry;
-        this.evidenceFiles = evidenceFiles;
         this.practiceAgent = practiceAgent;
         this.workerJwtIssuer = workerJwtIssuer;
         this.sandboxManager = sandboxManager;
@@ -233,7 +228,6 @@ public class AgentJobExecutor {
         this.llmBudgetService = llmBudgetService;
         this.llmAdmissionService = llmAdmissionService;
         this.capacityState = capacityState;
-        this.workerProperties = workerProperties;
         this.workerId = workerProperties.map(WorkerProperties::resolvedWorkerId).orElse(null);
 
         this.concurrencyRejected = Counter.builder(AgentMetrics.AGENT_JOB_CONCURRENCY_REJECTED)
@@ -675,7 +669,7 @@ public class AgentJobExecutor {
         } catch (InsufficientEvidenceException e) {
             // The evidence it carries was never staged for an attempt, so nothing else releases it.
             try (PreparedJobInputs refused = e.preparedInputs()) {
-                persistRefusedEvidence(jobId, job.getJobType(), job.getRetryCount(), refused);
+                persistRefusedEvidence(jobId, job.getRetryCount(), refused);
                 ObjectNode output = objectMapper.createObjectNode().put("outcome", "INSUFFICIENT_EVIDENCE");
                 Integer updated = transactionTemplate.execute(status -> jobRepository.transitionToEvidenceRefused(
                         jobId, workerId, job.getRetryCount(), Instant.now(), output));
@@ -802,7 +796,6 @@ public class AgentJobExecutor {
                     workDeadline);
             persistProvenanceDigests(
                     jobId,
-                    job.getJobType(),
                     agentSpec.promptDigest(),
                     sandboxSpec.inputFiles(),
                     preparedInputs.filesOnDisk(),
@@ -817,11 +810,9 @@ public class AgentJobExecutor {
         }
     }
 
-    private void persistRefusedEvidence(
-            UUID jobId, AgentJobType jobType, int retryCount, PreparedJobInputs preparedInputs) {
+    private void persistRefusedEvidence(UUID jobId, int retryCount, PreparedJobInputs preparedInputs) {
         persistProvenanceDigests(
                 jobId,
-                jobType,
                 null,
                 Map.of(),
                 preparedInputs.filesOnDisk(),
@@ -837,7 +828,6 @@ public class AgentJobExecutor {
      */
     private void persistProvenanceDigests(
             UUID jobId,
-            AgentJobType jobType,
             @Nullable String promptDigest,
             Map<String, byte[]> inputFiles,
             Map<String, Path> inputPaths,

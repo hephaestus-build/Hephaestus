@@ -107,7 +107,7 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
         try {
             boolean active = repository.findActive(jti, clock.instant()).isPresent();
             if (!active) {
-                cache.put(jti, Boolean.TRUE);
+                cache.put(jti, true);
                 throw revokedException();
             }
             return jwt;

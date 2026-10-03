@@ -242,7 +242,6 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
                 transactionTemplate,
                 teamMembershipListener);
         collaboratorSync = new GitLabCollaboratorSyncService(
-                repositories,
                 collaborators,
                 clients,
                 responseHandler,

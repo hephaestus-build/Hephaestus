@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstan
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabDescendantGroupResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupResponse;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -209,7 +210,7 @@ public class GitLabTeamProcessor {
         if (visibility == null) {
             return Team.Privacy.VISIBLE;
         }
-        return switch (visibility.toLowerCase()) {
+        return switch (visibility.toLowerCase(Locale.ROOT)) {
             case "private" -> Team.Privacy.SECRET;
             case "public", "internal" -> Team.Privacy.VISIBLE;
             default -> Team.Privacy.VISIBLE;

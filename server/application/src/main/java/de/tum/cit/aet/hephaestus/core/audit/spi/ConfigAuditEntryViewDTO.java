@@ -1,8 +1,9 @@
 package de.tum.cit.aet.hephaestus.core.audit.spi;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import java.time.Instant;
 import java.util.List;
-import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -23,9 +24,7 @@ public record ConfigAuditEntryViewDTO(
         String entityId,
         ConfigAuditAction action,
         ConfigAuditActorKind actorKind,
-        // @NonNull so springdoc marks it required and the client types it `boolean`: the column is NOT
-        // NULL, and an optional flag would make every reader guard on it forever.
-        @NonNull boolean elevatedViaInstanceAdmin,
+        @Schema(requiredMode = RequiredMode.REQUIRED) boolean elevatedViaInstanceAdmin,
         @Nullable Long actorAccountId,
         @Nullable Long actingAccountId,
         @Nullable ConfigAuditActorRefDTO actor,

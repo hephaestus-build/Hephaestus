@@ -80,9 +80,12 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
     private void stubCommits(List<CommitDetails> commits) {
         doAnswer(invocation -> {
                     Function<List<String>, Set<String>> captured = invocation.getArgument(1);
-                    captured.apply(commits.stream().map(CommitDetails::sha).toList());
+                    Set<String> existing = captured.apply(
+                            commits.stream().map(CommitDetails::sha).toList());
                     Consumer<CommitDetails> consumer = invocation.getArgument(2);
-                    commits.forEach(consumer);
+                    commits.stream()
+                            .filter(commit -> !existing.contains(commit.sha()))
+                            .forEach(consumer);
                     return null;
                 })
                 .when(gitRepositoryManager)

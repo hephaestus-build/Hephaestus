@@ -53,25 +53,22 @@ class FxRateFetchSchedulerTest extends BaseUnitTest {
      */
     private final List<FxRate> table = new ArrayList<>();
 
-    private final FxRateRepository repository = mock(FxRateRepository.class, invocation -> {
-        switch (invocation.getMethod().getName()) {
-            case "save", "saveAndFlush" -> {
-                FxRate row = invocation.getArgument(0);
-                table.removeIf(existing -> existing.getRateDate().equals(row.getRateDate()) && existing != row);
-                if (!table.contains(row)) table.add(row);
-                return row;
-            }
-            case "findByRateDate" -> {
-                LocalDate date = invocation.getArgument(0);
-                return table.stream().filter(r -> r.getRateDate().equals(date)).findFirst();
-            }
-            case "findAll" -> {
-                return List.copyOf(table);
-            }
-            default -> {
-                return Optional.empty();
-            }
+    private final FxRateRepository repository = mock(FxRateRepository.class, invocation -> switch (invocation
+            .getMethod()
+            .getName()) {
+        case "save", "saveAndFlush" -> {
+            FxRate row = invocation.getArgument(0);
+            // rate_date is unique, so the saved row replaces whichever row held its date.
+            table.removeIf(existing -> existing.getRateDate().equals(row.getRateDate()));
+            table.add(row);
+            yield row;
         }
+        case "findByRateDate" -> {
+            LocalDate date = invocation.getArgument(0);
+            yield table.stream().filter(r -> r.getRateDate().equals(date)).findFirst();
+        }
+        case "findAll" -> List.copyOf(table);
+        default -> Optional.empty();
     });
 
     private FxRate storedRate(LocalDate date, String usdPerEur) {

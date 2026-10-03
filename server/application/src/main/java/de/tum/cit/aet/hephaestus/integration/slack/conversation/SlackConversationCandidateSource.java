@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.conversation.ConversationCandidateSource;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationThreadCandidate;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -46,7 +47,7 @@ public class SlackConversationCandidateSource implements ConversationCandidateSo
                 row.getSlackThreadTs(),
                 row.getLastTs(),
                 row.getLastReviewedTs(),
-                row.getParticipantMemberIds());
+                Arrays.stream(row.getParticipantMemberIds()).boxed().toList());
     }
 
     @Override

@@ -437,6 +437,11 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     public record SyncReviewerData(
             SyncUserData user, @Nullable String reviewState) {}
 
+    /**
+     * @param approved GitLab's {@code approved}; null where the read did not capture it
+     * @param closingIssueNumbers the iids of GitLab's closing candidates for the MR, from the REST closes-issues route;
+     *     null when this sync did not read them, which leaves the stored set alone
+     */
     public record SyncMergeRequestData(
             @Nullable String globalId,
             @Nullable String iid,
@@ -446,7 +451,6 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             boolean draft,
             @Nullable Boolean mergeable,
             @Nullable String detailedMergeStatus,
-            /** GitLab's {@code approved}; null where the read did not capture it. */
             @Nullable Boolean approved,
             @Nullable String webUrl,
             @Nullable String createdAt,
@@ -485,10 +489,6 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             @Nullable List<SyncUserData> syncParticipants,
             @Nullable Integer milestoneIid,
             GitLabHeadPipeline headPipeline,
-            /**
-             * The iids of GitLab's closing candidates for the MR, from the REST closes-issues route;
-             * null when this sync did not read them, which leaves the stored set alone.
-             */
             @Nullable List<Integer> closingIssueNumbers,
             GitLabApprovalClient.@Nullable Snapshot approvalRows) {}
 
@@ -1404,7 +1404,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
     private static Issue.State convertState(@Nullable String state) {
         if (state == null) return Issue.State.OPEN;
-        return switch (state.toLowerCase()) {
+        return switch (state.toLowerCase(Locale.ROOT)) {
             case "opened" -> Issue.State.OPEN;
             case "closed" -> Issue.State.CLOSED;
             case "merged" -> Issue.State.MERGED;
@@ -1465,7 +1465,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     @Nullable
     private static String mapDetailedMergeStatus(@Nullable String detailedStatus) {
         if (detailedStatus == null) return null;
-        return switch (detailedStatus.toLowerCase()) {
+        return switch (detailedStatus.toLowerCase(Locale.ROOT)) {
             case "mergeable" -> "CLEAN";
             case "broken_status", "ci_must_pass", "ci_still_running" -> "UNSTABLE";
             case "checking" -> "UNKNOWN";

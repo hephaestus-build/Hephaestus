@@ -16,13 +16,11 @@ import type { ObservationsSearch } from "./review-search";
 import type { ReviewPeople } from "./ReviewPersonFacet";
 
 const PEOPLE: ReviewPeople = {
-	options: workspaceMembers
-		.filter((member): member is typeof member & { userId: number } => member.userId != null)
-		.map((member) => ({
-			userId: member.userId,
-			label: member.userName ?? `#${member.userId}`,
-			secondary: member.userLogin,
-		})),
+	options: workspaceMembers.map((member) => ({
+		userId: member.userId,
+		label: member.userName ?? `#${member.userId}`,
+		secondary: member.userLogin,
+	})),
 	capped: false,
 	isLoading: false,
 	isError: false,

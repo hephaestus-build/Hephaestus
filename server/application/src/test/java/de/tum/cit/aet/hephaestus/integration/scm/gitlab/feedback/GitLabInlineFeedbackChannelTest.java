@@ -41,6 +41,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -201,7 +202,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
     void shouldKeepFailedDispositionWhenLaterFeedbackIsSuppressed() {
         stubResolvedMr();
         stubDiscussionsReturning(List.of());
-        HttpGraphQlClient.RequestSpec diffSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec diffSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("CreateDiffNote")).thenReturn(diffSpec);
         when(diffSpec.variable(any(), any())).thenReturn(diffSpec);
         ClientGraphQlResponse failedResponse = mock(ClientGraphQlResponse.class);
@@ -253,7 +254,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
         Map<String, Object> disc = discussion("gid://Disc/OLD", List.of(botNote));
         stubDiscussionsReturning(List.of(disc));
 
-        HttpGraphQlClient.RequestSpec updateSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec updateSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("UpdateNote")).thenReturn(updateSpec);
         when(updateSpec.variable(any(), any())).thenReturn(updateSpec);
         ClientGraphQlResponse updateResponse = emptyErrors("updateNote.errors");
@@ -287,9 +288,9 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
         stubDiscussionsReturning(List.of(disc));
 
         // Both paths are stubbed leniently only to assert they are NEVER taken for a human-replied thread.
-        HttpGraphQlClient.RequestSpec updateSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec updateSpec = mock(GraphQlClient.RequestSpec.class);
         lenient().when(client.documentName("UpdateNote")).thenReturn(updateSpec);
-        HttpGraphQlClient.RequestSpec destroySpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec destroySpec = mock(GraphQlClient.RequestSpec.class);
         lenient().when(client.documentName("DestroyNote")).thenReturn(destroySpec);
 
         InlineResult result = channel.postInlineFeedback(
@@ -323,7 +324,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
         stubDiscussionsReturning(List.of(goneA, goneB));
         // This run posts a single, different piece of feedback.
         stubCreateDiffNoteSuccess("gid://Note/NEW", "gid://Disc/NEW");
-        HttpGraphQlClient.RequestSpec destroySpec = stubDestroy();
+        GraphQlClient.RequestSpec destroySpec = stubDestroy();
 
         channel.postInlineFeedback(
                 gitlabTarget(),
@@ -340,14 +341,14 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
         stubDiscussionsReturning(List.of());
 
         // CreateDiffNote returns a "line_code" error → the channel must fall back to CreateMergeRequestNote.
-        HttpGraphQlClient.RequestSpec diffSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec diffSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("CreateDiffNote")).thenReturn(diffSpec);
         when(diffSpec.variable(any(), any())).thenReturn(diffSpec);
         ClientGraphQlResponse diffResponse = mock(ClientGraphQlResponse.class);
         stubField(diffResponse, "createDiffNote.errors", List.of("line_code is invalid"));
         when(diffSpec.execute()).thenReturn(Mono.just(diffResponse));
 
-        HttpGraphQlClient.RequestSpec noteSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec noteSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("CreateMergeRequestNote")).thenReturn(noteSpec);
         when(noteSpec.variable(any(), any())).thenReturn(noteSpec);
         ClientGraphQlResponse noteResponse = mock(ClientGraphQlResponse.class);
@@ -380,7 +381,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
         stubDiscussionsReturning(List.of());
 
         // CreateDiffNote throws a rate-limit error on the FIRST call → the channel must stop the whole batch.
-        HttpGraphQlClient.RequestSpec diffSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec diffSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("CreateDiffNote")).thenReturn(diffSpec);
         when(diffSpec.variable(any(), any())).thenReturn(diffSpec);
         when(diffSpec.execute()).thenReturn(Mono.error(new RuntimeException("429 Too Many Requests")));
@@ -415,7 +416,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
         // CreateDiffNote throws a rate-limit error on the FIRST piece of feedback (ck-a) → the batch stops before
         // ck-keep
         // is processed, so ck-keep never reaches seenKeys.
-        HttpGraphQlClient.RequestSpec diffSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec diffSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("CreateDiffNote")).thenReturn(diffSpec);
         when(diffSpec.variable(any(), any())).thenReturn(diffSpec);
         when(diffSpec.execute()).thenReturn(Mono.error(new RuntimeException("429 Too Many Requests")));
@@ -443,7 +444,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
         Map<String, Object> humanReply = note("gid://Note/H", "Thanks, fixed it!", false);
         Map<String, Object> discB = discussion(null, List.of(botNoteB, humanReply));
         stubDiscussionsReturning(List.of(discA, discB));
-        HttpGraphQlClient.RequestSpec destroySpec = stubDestroy();
+        GraphQlClient.RequestSpec destroySpec = stubDestroy();
 
         channel.clearStaleFeedback(gitlabTarget(), "MARKER");
 
@@ -478,7 +479,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
     @Test
     void findPostedIsInconclusiveWhenThePageBudgetEndsWithMorePages() {
         when(gitLabProvider.forScope(1L)).thenReturn(client);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("GetMergeRequestDiscussions")).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
         ClientGraphQlResponse response = discussionsResponse(List.of(), new GitLabPageInfo(true, "next"));
@@ -528,7 +529,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
 
     /** Stubs a single page of discussions (pageInfo.hasNextPage=false), the common case. */
     private void stubDiscussionsReturning(List<Map<String, Object>> discussions) {
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("GetMergeRequestDiscussions")).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
         ClientGraphQlResponse response = discussionsResponse(discussions, new GitLabPageInfo(false, null));
@@ -552,7 +553,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
 
     /** Stubs a successful CreateDiffNote returning the given note + discussion ids; captures the posted body. */
     private ArgumentCaptor<String> stubCreateDiffNoteSuccess(String noteId, String discussionId) {
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("CreateDiffNote")).thenReturn(spec);
         ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -570,8 +571,8 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
         return bodyCaptor;
     }
 
-    private HttpGraphQlClient.RequestSpec stubDestroy() {
-        HttpGraphQlClient.RequestSpec destroySpec = mock(HttpGraphQlClient.RequestSpec.class);
+    private GraphQlClient.RequestSpec stubDestroy() {
+        GraphQlClient.RequestSpec destroySpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("DestroyNote")).thenReturn(destroySpec);
         when(destroySpec.variable(eq("noteId"), any())).thenReturn(destroySpec);
         ClientGraphQlResponse destroyResponse = emptyErrors("destroyNote.errors");

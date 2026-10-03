@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -209,7 +210,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                         .doesNotContain("[remote", "credential", "extraHeader", "url");
                 Process log =
                         new ProcessBuilder("git", "-C", staging.toString(), "rev-list", "--count", "HEAD").start();
-                assertThat(new String(log.getInputStream().readAllBytes()).trim())
+                assertThat(new String(log.getInputStream().readAllBytes(), UTF_8).trim())
                         .isEqualTo("2");
                 assertThat(log.waitFor()).isZero();
             }
@@ -267,7 +268,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
                 tree.append(
                         "README.md",
                         FileMode.REGULAR_FILE,
-                        inserter.insert(Constants.OBJ_BLOB, "Repository\n".getBytes()));
+                        inserter.insert(Constants.OBJ_BLOB, "Repository\n".getBytes(UTF_8)));
                 CommitBuilder commit = new CommitBuilder();
                 commit.setTreeId(inserter.insert(tree));
                 commit.setParentId(walk.parseCommit(ObjectId.fromString(sha)));

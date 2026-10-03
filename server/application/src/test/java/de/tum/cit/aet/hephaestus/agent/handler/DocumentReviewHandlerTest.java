@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -223,7 +224,7 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
                     .thenReturn(List.of(practice));
             when(workspaceContextBuilder.prepare(any(), any()))
                     .thenReturn(new PreparedEvidence(
-                            Map.of(SandboxLayout.CONTEXT_PREFIX + "document.md", "# Runbook".getBytes()),
+                            Map.of(SandboxLayout.CONTEXT_PREFIX + "document.md", "# Runbook".getBytes(UTF_8)),
                             mock(JobFolderIndex.class)));
             when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any()))
                     .thenReturn(new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(

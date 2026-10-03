@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -15,16 +17,16 @@ import org.jspecify.annotations.Nullable;
  */
 public record WorkspaceOnboardingDTO(
         @NonNull String workspaceName,
-        @NonNull boolean enabled,
-        @NonNull boolean needsSetup,
-        @NonNull boolean aiChoiceRequired,
+        @Schema(requiredMode = RequiredMode.REQUIRED) boolean enabled,
+        @Schema(requiredMode = RequiredMode.REQUIRED) boolean needsSetup,
+        @Schema(requiredMode = RequiredMode.REQUIRED) boolean aiChoiceRequired,
         @Nullable MemberAiChoice aiChoice,
         @NonNull List<WorkspaceAiOptionDTO> aiOptions,
         @NonNull List<WorkspaceOnboardingLinkDTO> links) {
     public record WorkspaceAiOptionDTO(
             @NonNull MemberAiChoice choice,
-            @NonNull boolean practiceReviewsReady,
-            @NonNull boolean mentorReady,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean practiceReviewsReady,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean mentorReady,
             @NonNull List<WorkspaceAiModelDTO> models) {}
 
     /** A model this answer would use here. */
@@ -35,12 +37,12 @@ public record WorkspaceOnboardingDTO(
             @NonNull DataHandlingTier dataHandlingTier) {}
 
     public record WorkspaceOnboardingLinkDTO(
-            @NonNull long connectionId,
+            @Schema(requiredMode = RequiredMode.REQUIRED) long connectionId,
             @NonNull String displayName,
             @NonNull String providerType,
             @Nullable String registrationId,
             @Nullable String teamName,
-            @NonNull boolean required,
-            @NonNull boolean available,
-            @NonNull boolean linked) {}
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean required,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean available,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean linked) {}
 }

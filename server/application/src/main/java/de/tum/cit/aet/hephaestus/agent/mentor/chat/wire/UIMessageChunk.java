@@ -34,7 +34,7 @@ import tools.jackson.databind.JsonNode;
     @JsonSubTypes.Type(value = UIMessageChunk.ToolInputAvailable.class, name = "tool-input-available"),
     @JsonSubTypes.Type(value = UIMessageChunk.ToolOutputAvailable.class, name = "tool-output-available"),
     @JsonSubTypes.Type(value = UIMessageChunk.ToolOutputError.class, name = "tool-output-error"),
-    @JsonSubTypes.Type(value = UIMessageChunk.Error.class, name = "error"),
+    @JsonSubTypes.Type(value = UIMessageChunk.TurnError.class, name = "error"),
     @JsonSubTypes.Type(value = UIMessageChunk.DataMentorStatus.class, name = "data-mentor-status"),
     @JsonSubTypes.Type(value = UIMessageChunk.DataObservation.class, name = "data-observation"),
 })
@@ -185,8 +185,11 @@ public sealed interface UIMessageChunk {
     /** Pi tool execution: tool failed; {@code errorText} surfaces to the client UI. */
     record ToolOutputError(String toolCallId, String errorText) implements UIMessageChunk {}
 
-    /** Fatal error during the turn; emitter completes after this chunk. */
-    record Error(String errorText) implements UIMessageChunk {}
+    /**
+     * Fatal error during the turn; emitter completes after this chunk. The AI SDK calls it {@code error}, which
+     * is its type id above; the Java name avoids shadowing {@code java.lang.Error}.
+     */
+    record TurnError(String errorText) implements UIMessageChunk {}
 
     /**
      * Hephaestus-specific data part — cold-start banner, container warming etc. Matches the

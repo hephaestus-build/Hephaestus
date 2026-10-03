@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -60,9 +61,9 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
         PracticeRevision current = service.forReview(practice);
         assertThat(current.getRevisionNumber()).isEqualTo(5);
         assertThat(current.getReviewRuleFingerprint()).startsWith("v5:");
-        assertThat(historical.getReviewRuleFingerprint()).startsWith("v4:");
         assertThat(service.forReview(practice)).isSameAs(current);
         verify(revisionRepository).save(current);
+        verify(revisionRepository, never()).save(historical);
     }
 
     @Test

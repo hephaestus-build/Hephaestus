@@ -386,7 +386,7 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
             // Verify label was created in repository
             assertThat(labelRepository.findByNativeIdAndProviderId(FIXTURE_LABEL_ID, gitProviderId()))
-                    .isPresent();
+                    .hasValueSatisfying(label -> assertThat(label.getColor()).isEqualTo(FIXTURE_LABEL_COLOR));
         }
 
         @Test

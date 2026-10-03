@@ -68,8 +68,8 @@ derives URL segments from the filenames there and the router owns that naming.
 ## Linting
 
 **oxlint lints, oxfmt formats.** The rule set is layered as the root `AGENTS.md` § Lint and format
-says; `oxlint.app.jsonc` owns the application compiler, Vitest and Storybook rules shared with the
-extension; `.oxlintrc.json` here holds the design-system checks and what this tree decides differently, each with the reason beside
+says; `oxlint.app.jsonc` owns what this tree shares with the extension — the compiler, Vitest and
+Storybook rules among it; `.oxlintrc.json` here holds the design-system checks and what this tree decides differently, each with the reason beside
 it, and every restriction states itself at the call site when it fires. None of that is repeated
 here. What follows is what no diagnostic will ever tell you.
 

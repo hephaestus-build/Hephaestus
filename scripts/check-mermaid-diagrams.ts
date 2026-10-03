@@ -104,8 +104,8 @@ for (const { label, source, requiresAccessibleName } of diagrams) {
 		await mermaid.parse(source);
 	} catch (error) {
 		failed = true;
-		const message = error instanceof Error ? error.message : String(error);
-		console.error(`${label}\n  ${message.split("\n")[0]}\n`);
+		const [firstLine = ""] = (error instanceof Error ? error.message : String(error)).split("\n");
+		console.error(`${label}\n  ${firstLine}\n`);
 	}
 }
 

@@ -167,12 +167,6 @@
 		// Reads `.catch` by name, so zod's `.catch(undefined)` on every search-param schema is reported
 		// as a promise chain.
 		"promise/prefer-await-to-then": "off",
-		// Cyclomatic complexity counts every `&&`, `??` and `?.` in JSX, so at the default 20 it grades
-		// how many optional props a page has. Forty is the line between that and a function doing
-		// several components' work.
-		"complexity": ["error", { "max": 40 }],
-		// `webapp/AGENTS.md` § File naming: a file that exports a component is PascalCase.
-		"unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }],
 		// TanStack Router signals redirects and 404s by throwing them; everything else must be an Error.
 		"typescript/only-throw-error": [
 			"error",
@@ -195,11 +189,6 @@
 			"error",
 			{ "forbid": [{ "propName": "asChild", "message": "Base UI slots through `render={<X/>}`." }] }
 		],
-		// Maps a role to a tag without asking whether the tag's other semantics fit — `<output>` for
-		// `status` carries a form association, `<li>` for `listitem` is only valid inside a list,
-		// `<fieldset>` for `group` is a form control group, `<img>` cannot replace an inline SVG — and
-		// half of what it reports is vendored registry markup.
-		"jsx-a11y/prefer-tag-over-role": "off",
 		// Base UI passes the control through `render=` and keeps the label in the wrapper's children,
 		// where no jsx-a11y rule can see it. It also does not model `<datalist>`, where a valueless
 		// `<option>` is the correct spelling. Expect this from any rule that inspects children.
@@ -366,12 +355,10 @@
 			"rules": { "unicorn/filename-case": "off" }
 		},
 		{
-			// A test that asserts a `javascript:` URL is rejected has to name one. And jest-dom is not
-			// registered in the Vitest project (`vite.config.ts` sets up `setup-msw.ts` alone), so its
-			// matchers throw `Invalid Chai property` at runtime with `tsc` perfectly happy.
+			// jest-dom is not registered in the Vitest project (`vite.config.ts` sets up `setup-msw.ts`
+			// alone), so its matchers throw `Invalid Chai property` at runtime with `tsc` perfectly happy.
 			"files": ["**/*.test.ts", "**/*.test.tsx"],
 			"rules": {
-				"no-script-url": "off",
 				"vitest/no-restricted-matchers": [
 					"error",
 					{
@@ -384,11 +371,6 @@
 					}
 				]
 			}
-		},
-		{
-			// Playwright names its fixture callback `use`, which the React plugin reads as the hook.
-			"files": ["e2e/**"],
-			"rules": { "react-hooks/rules-of-hooks": "off" }
 		}
 	]
 }

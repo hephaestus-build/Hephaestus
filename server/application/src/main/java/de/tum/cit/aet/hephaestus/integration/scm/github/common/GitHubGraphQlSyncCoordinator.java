@@ -77,7 +77,7 @@ public class GitHubGraphQlSyncCoordinator {
 
         Category category = classification.category();
 
-        switch (category) {
+        return switch (category) {
             case RETRYABLE -> {
                 if (retryAttempt < maxRetryAttempts) {
                     log.warn(
@@ -91,9 +91,9 @@ public class GitHubGraphQlSyncCoordinator {
                         ExponentialBackoff.sleep(retryAttempt + 1);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        return false;
+                        yield false;
                     }
-                    return true;
+                    yield true;
                 }
                 log.error(
                         "Failed {} after {} retries due to GraphQL error: {}={}, error={}",
@@ -102,7 +102,7 @@ public class GitHubGraphQlSyncCoordinator {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             case RATE_LIMITED -> {
                 if (retryAttempt < maxRetryAttempts && classification.suggestedWait() != null) {
@@ -113,9 +113,9 @@ public class GitHubGraphQlSyncCoordinator {
                         Thread.sleep(waitMs);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        return false;
+                        yield false;
                     }
-                    return true;
+                    yield true;
                 }
                 log.error(
                         "Aborting {} due to GraphQL rate limit: {}={}, error={}",
@@ -123,7 +123,7 @@ public class GitHubGraphQlSyncCoordinator {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             case NOT_FOUND -> {
                 log.warn(
@@ -132,7 +132,7 @@ public class GitHubGraphQlSyncCoordinator {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             case AUTH_ERROR -> {
                 log.error(
@@ -141,7 +141,7 @@ public class GitHubGraphQlSyncCoordinator {
                         scopeLabel,
                         scopeValue,
                         classification.message());
-                return false;
+                yield false;
             }
             case CLIENT_ERROR -> {
                 boolean isResourceLimit = classification.message() != null
@@ -161,7 +161,7 @@ public class GitHubGraphQlSyncCoordinator {
                             scopeValue,
                             classification.message());
                 }
-                return false;
+                yield false;
             }
             default -> {
                 log.error(
@@ -171,9 +171,9 @@ public class GitHubGraphQlSyncCoordinator {
                         scopeValue,
                         category,
                         classification.message());
-                return false;
+                yield false;
             }
-        }
+        };
     }
 
     public boolean waitForRateLimitIfNeeded(

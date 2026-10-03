@@ -14,7 +14,7 @@
  *       {@code app_role}, contact email, preferences. <em>Not</em> the same as the
  *       git-provider actor mirror ({@code integration.scm.domain.user.User}).</li>
  *   <li><b>{@link de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink IdentityLink}</b>
- *       — federated-login association per Issue #1200's spec; includes {@code team_id}
+ *       — federated-login association; includes {@code team_id}
  *       for future Slack identities. Unique on {@code (git_provider_id, subject, team_id)}.
  *       Lookup is <em>always</em> by {@code (provider, subject)}, never email (nOAuth defense).
  *       Mirrors to the SCM actor via the optional {@code external_actor_id} FK.</li>

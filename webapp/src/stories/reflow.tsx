@@ -233,6 +233,6 @@ export async function expectPanelContentInset(panel: HTMLElement) {
 		return Math.abs(rect.left - box.left) <= BORDER || Math.abs(box.right - rect.right) <= BORDER;
 	});
 	await expect(
-		flush.map((element) => `${element.tagName.toLowerCase()}.${element.className.split(" ")[0]}`),
+		flush.map((element) => `${element.tagName.toLowerCase()}.${element.classList.item(0) ?? ""}`),
 	).toEqual([]);
 }

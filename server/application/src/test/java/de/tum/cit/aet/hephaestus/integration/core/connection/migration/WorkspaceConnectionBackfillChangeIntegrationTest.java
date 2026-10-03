@@ -346,6 +346,7 @@ class WorkspaceConnectionBackfillChangeIntegrationTest extends BaseIntegrationTe
         return "ENC:" + Base64.getEncoder().encodeToString(combined);
     }
 
+    @SuppressWarnings("ArrayRecordComponent") // raw credential column; never compared or hashed
     private record ConnectionRow(
             long id, long workspaceId, IntegrationKind kind, String instanceKey, byte[] credentialBlob) {}
 }

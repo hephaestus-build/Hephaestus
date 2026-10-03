@@ -73,10 +73,7 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     // Issue IDs from different fixtures
     private static final Long ISSUE_20_ID = 3578496080L; // opened, labeled, assigned, closed, reopened
-    private static final Long ISSUE_22_ID =
-            3578518416L; // milestoned, demilestoned, locked, unlocked, pinned, unpinned, transferred
     private static final Long ISSUE_23_ID = 3578523639L; // deleted
-    private static final Long ISSUE_25_ID = 3578528003L; // typed, untyped
 
     // Exact fixture values from issues.opened.json for correctness verification
     private static final int FIXTURE_ISSUE_NUMBER = 20;

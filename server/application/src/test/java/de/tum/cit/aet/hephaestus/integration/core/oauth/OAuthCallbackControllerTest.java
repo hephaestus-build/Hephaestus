@@ -27,7 +27,6 @@ import de.tum.cit.aet.hephaestus.integration.core.webhook.IntegrationKindRouting
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.servlet.http.HttpServletRequest;
-import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -45,6 +44,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Pure unit tests for {@link OAuthCallbackController} — no Spring context, no MockMvc.
@@ -514,13 +514,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     }
 
     private static void setId(Connection c, long id) {
-        try {
-            Field idField = Connection.class.getDeclaredField("id");
-            idField.setAccessible(true);
-            idField.set(c, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(c, "id", id);
     }
 
     /**

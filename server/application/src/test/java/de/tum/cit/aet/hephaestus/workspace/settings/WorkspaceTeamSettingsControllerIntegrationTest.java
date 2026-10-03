@@ -692,7 +692,7 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
      * @return the persisted repository
      */
     private Repository createRepository(String nameWithOwner) {
-        String[] parts = nameWithOwner.split("/");
+        String[] parts = nameWithOwner.split("/", -1);
         String repoName = parts.length > 1 ? parts[1] : nameWithOwner;
 
         Repository repo = new Repository();

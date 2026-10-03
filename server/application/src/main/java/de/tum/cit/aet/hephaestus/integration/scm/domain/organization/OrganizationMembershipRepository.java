@@ -37,7 +37,7 @@ public interface OrganizationMembershipRepository
     /**
      * Drop the whole membership mirror for one organization — the org-tier half of
      * {@code workspace.ScmWorkspaceContentEraser}, run only after the eraser has established that no
-     * non-purged workspace is still bound to this organization. The {@code organization} row itself
+     * non-purged workspace is still bound to this organization. The organization row itself
      * is global and survives; only the person↔org edges this instance mirrored are removed.
      * Idempotent.
      */

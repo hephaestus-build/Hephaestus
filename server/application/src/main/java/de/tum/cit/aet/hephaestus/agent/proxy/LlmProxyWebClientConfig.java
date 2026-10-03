@@ -54,7 +54,7 @@ class LlmProxyWebClientConfig {
         boolean allowLoopback = llmProperties.egress().allowLoopback();
         HttpClient httpClient = HttpClient.create(llmProxyConnectionProvider)
                 .runOn(llmProxyLoopResources)
-                .responseTimeout(Duration.ofSeconds(300))
+                .responseTimeout(Duration.ofMinutes(5))
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
                 .resolver(WebClientConnectors.resolverGroup(allowLoopback))
                 .doOnConnected(conn ->

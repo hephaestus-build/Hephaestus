@@ -314,6 +314,7 @@ class LlmProxyService {
      * @param withoutUsageRequest the body as the caller sent it; {@code null} when we added nothing, so
      *     a rejection is the caller's own and there is nothing to retry
      */
+    @SuppressWarnings("ArrayRecordComponent") // raw request bytes sent upstream; never compared, hashed or printed
     record PreparedBody(byte[] body, byte @Nullable [] withoutUsageRequest) {
         byte[] withoutUsageRequestOrBody() {
             return withoutUsageRequest != null ? withoutUsageRequest : body;

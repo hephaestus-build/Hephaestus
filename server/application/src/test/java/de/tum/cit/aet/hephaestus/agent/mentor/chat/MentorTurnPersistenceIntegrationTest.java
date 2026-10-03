@@ -541,9 +541,8 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         CountDownLatch release = new CountDownLatch(1);
         try {
             var holder = pool.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
-                chatThreadRepository
-                        .lockForTurnAdmission(thread.getId(), workspace.getId())
-                        .orElseThrow();
+                assertThat(chatThreadRepository.lockForTurnAdmission(thread.getId(), workspace.getId()))
+                        .isPresent();
                 try {
                     admission.call();
                 } catch (Exception e) {
@@ -747,9 +746,10 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
                 persistence.persistInFlight(thread, "hello", assistantId, null, admittedMentorConfig());
 
         // 3-byte and 4-byte UTF-8 characters exercise any layer that round-trips through String.
-        byte[] expectedBytes = ("{\"type\":\"user_message\",\"text\":\"hello €\"}\n"
-                        + "{\"type\":\"assistant_message\",\"text\":\"hi 😀\",\"stopReason\":\"stop\"}\n")
-                .getBytes(StandardCharsets.UTF_8);
+        byte[] expectedBytes = """
+                                {"type":"user_message","text":"hello €"}
+                                {"type":"assistant_message","text":"hi 😀","stopReason":"stop"}
+                                """.getBytes(StandardCharsets.UTF_8);
 
         TranslatorState state = new TranslatorState(assistantId);
         state.observeSessionJsonl(expectedBytes);
@@ -1163,9 +1163,9 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         failed.putObject("usage").put("input", 0).put("output", 0);
 
         var chunks = new PiEventToUiChunkTranslator().translate(end, state);
-        assertThat(chunks).singleElement().isInstanceOf(UIMessageChunk.Error.class);
+        assertThat(chunks).singleElement().isInstanceOf(UIMessageChunk.TurnError.class);
         persistence.interrupt(
-                cookie, state, new IllegalStateException(((UIMessageChunk.Error) chunks.get(0)).errorText()));
+                cookie, state, new IllegalStateException(((UIMessageChunk.TurnError) chunks.get(0)).errorText()));
 
         ChatMessage assistant = chatMessageRepository.findById(assistantId).orElseThrow();
         assertThat(assistant.getStatus()).isEqualTo(ChatMessage.Status.interrupted);
@@ -1270,7 +1270,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         UUID staleTurn = persistInFlightTurn("stale-turn");
         Instant now = Instant.now();
         setCreatedAt(tenMinuteTurn, now.minus(Duration.ofMinutes(10)));
-        setCreatedAt(maxDurationTurn, now.minus(Duration.ofMinutes(180)));
+        setCreatedAt(maxDurationTurn, now.minus(Duration.ofHours(3)));
         setCreatedAt(staleTurn, now.minus(Duration.ofMinutes(200)));
 
         MentorInFlightReaper sweeper = reaperWithAnUnsafeWindow();

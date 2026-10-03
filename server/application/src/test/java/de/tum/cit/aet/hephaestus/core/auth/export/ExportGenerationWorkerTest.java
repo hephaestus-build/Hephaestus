@@ -67,7 +67,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
         assertThat(export.getStatus()).isEqualTo(AccountExport.Status.READY);
         assertThat(export.getPayload()).containsExactly(1, 2, 3);
         assertThat(export.getCompletedAt()).isEqualTo(NOW);
-        assertThat(export.getExpiresAt()).isEqualTo(NOW.plus(Duration.ofHours(48)));
+        assertThat(export.getExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(2)));
         assertThat(registry.get("privacy.job.completed")
                         .tags("job", "export_generation", "outcome", "success")
                         .counter()

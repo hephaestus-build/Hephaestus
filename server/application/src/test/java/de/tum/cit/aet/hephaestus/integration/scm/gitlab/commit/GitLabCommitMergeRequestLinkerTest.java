@@ -48,6 +48,7 @@ import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -283,7 +284,7 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
     @Test
     void unexpectedException_recordsFailureAndAbortsWithError() {
         HttpGraphQlClient client = mockClient();
-        HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName(anyString())).thenReturn(requestSpec);
         when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
         when(requestSpec.execute()).thenThrow(new RuntimeException("boom"));
@@ -446,7 +447,7 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
     void nullUpdatedAfter_passesNullVariable() {
         ClientGraphQlResponse page = mockMrsPage(List.of(), new GitLabPageInfo(false, null));
         HttpGraphQlClient client = mockClient();
-        HttpGraphQlClient.RequestSpec requestSpec = mockSequentialExecute(client, page);
+        GraphQlClient.RequestSpec requestSpec = mockSequentialExecute(client, page);
 
         SyncResult result = linker.linkCommits(SCOPE_ID, repository, null);
 
@@ -462,9 +463,9 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
         return client;
     }
 
-    private HttpGraphQlClient.RequestSpec mockSequentialExecute(
+    private GraphQlClient.RequestSpec mockSequentialExecute(
             HttpGraphQlClient client, ClientGraphQlResponse first, ClientGraphQlResponse... rest) {
-        HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName(anyString())).thenReturn(requestSpec);
         when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
 

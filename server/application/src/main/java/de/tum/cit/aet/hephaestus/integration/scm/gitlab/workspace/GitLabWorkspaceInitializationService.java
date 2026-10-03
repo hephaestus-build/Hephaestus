@@ -146,7 +146,7 @@ public class GitLabWorkspaceInitializationService {
      * the monitoring executor, in that order.
      */
     public void initializeAsync(Long workspaceId) {
-        monitoringExecutor.submit(() -> {
+        monitoringExecutor.execute(() -> {
             try {
                 Workspace workspace = workspaceRepository.findById(workspaceId).orElse(null);
                 if (workspace == null) {

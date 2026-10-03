@@ -71,7 +71,11 @@ void test("missing/malformed evidence and action failures never approve coverage
 			"1e3",
 			"9007199254740992",
 		]) {
-			assert.equal(visualVerdict({ ...tested, [key]: value }).pass, false, `${key}: ${value}`);
+			assert.equal(
+				visualVerdict({ ...tested, [key]: value }).pass,
+				false,
+				`${key}: ${String(value)}`,
+			);
 		}
 	}
 	for (const outcome of ["failure", "cancelled", "skipped", ""]) {
@@ -103,7 +107,6 @@ void test("summary links only to a safe Chromatic build URL", () => {
 		/Open Chromatic build/u,
 	);
 	for (const url of [
-		// eslint-disable-next-line no-script-url -- Adversarial input must never become a summary link.
 		"javascript:alert(1)",
 		"https://evil.example/build",
 		"https://www.chromatic.com.evil.example/build",

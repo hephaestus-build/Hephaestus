@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.runtime.worker.protocol;
 
 /**
- * Hub → worker frame requesting prompt cancellation of a specific running job (#1138).
+ * Hub → worker frame requesting prompt cancellation of a specific running job.
  *
  * <p>Job-scoped (carries a {@code jobId}) so the owning worker — and only the owning worker — stops
  * its container. The authoritative {@code agent_job} status transition is performed by the hub

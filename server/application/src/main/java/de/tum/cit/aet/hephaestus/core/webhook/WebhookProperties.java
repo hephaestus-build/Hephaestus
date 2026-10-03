@@ -46,7 +46,6 @@ public record WebhookProperties(
             message =
                     "hephaestus.webhook.stream.max-bytes, and every max-bytes-by-stream entry, must be at least "
                             + "4 x hephaestus.webhook.http.max-payload-bytes; a smaller stream rejects payloads the receiver accepted")
-    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private boolean isStreamAbleToHoldWhatTheReceiverAccepts() {
         if (stream == null || http == null) {
             return true;
@@ -63,7 +62,6 @@ public record WebhookProperties(
      * token every legacy GitLab hook carries and is readable by an administrator of any instance holding one.
      */
     @AssertTrue(message = "hephaestus.webhook.routing secrets must differ from hephaestus.webhook.secret")
-    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private boolean isRoutingKeyIndependentOfSharedSecret() {
         if (routing == null || secret == null || secret.isBlank()) {
             return true;
@@ -142,6 +140,20 @@ public record WebhookProperties(
      * inside that window a shed webhook is recoverable from the provider API and outside it, by
      * nothing (ADR 0008: webhook deliveries are not redeliverable).
      *
+     * @param maxBytesByStream per-stream {@link #maxBytes} overrides keyed by stream name — {@code github} dwarfs the
+     *     rest
+     * @param storageBudget what the broker may hold for all webhook streams together, which must stay at or below
+     *     the free space on its volume. Keeping the per-stream bounds inside it is what keeps a full stream a stream
+     *     that refuses messages rather than a broker that cannot write at all.
+     * @param allowDestructiveLimitUpdates lets startup apply a limit change that would delete messages the stream
+     *     already holds. Off by default: bounding a stream that has outgrown the new limit deletes the excess
+     *     immediately, so it is a decision an operator makes rather than one a deploy makes for them.
+     * @param limitUpdateTimeout how long startup waits for one stream limit update. Bounding a stream that has
+     *     outgrown the new limit deletes the excess before the broker answers, so the work is proportional to the
+     *     bytes being shed rather than to the size of the request — tens of GB take far longer than the request
+     *     timeout the health probes want. This is deliberately separate from the consumer request timeout so a
+     *     slow admin call cannot slow a readiness answer.
+     * @param monitorInterval how often the stream monitor reads stream and consumer state
      * @see <a href="https://docs.hephaestus.build/admin/webhook-ingestion-operations">Webhook
      *     ingestion operations</a>
      */
@@ -156,29 +168,10 @@ public record WebhookProperties(
             @DefaultValue("180d") Duration maxAge,
             @DefaultValue Map<String, Duration> maxAgeByStream,
             @DefaultValue("1GB") DataSize maxBytes,
-            /** Per-stream {@link #maxBytes} overrides keyed by stream name — {@code github} dwarfs the rest. */
             @DefaultValue Map<String, DataSize> maxBytesByStream,
-            /**
-             * What the broker may hold for all webhook streams together, which must stay at or below the
-             * free space on its volume. Keeping the per-stream bounds inside it is what keeps a full
-             * stream a stream that refuses messages rather than a broker that cannot write at all.
-             */
             @DefaultValue("16GB") DataSize storageBudget,
-            /**
-             * Lets startup apply a limit change that would delete messages the stream already holds.
-             * Off by default: bounding a stream that has outgrown the new limit deletes the excess
-             * immediately, so it is a decision an operator makes rather than one a deploy makes for them.
-             */
             @DefaultValue("false") boolean allowDestructiveLimitUpdates,
-            /**
-             * How long startup waits for one stream limit update. Bounding a stream that has outgrown
-             * the new limit deletes the excess before the broker answers, so the work is proportional to
-             * the bytes being shed rather than to the size of the request — tens of GB take far longer
-             * than the request timeout the health probes want. This is deliberately separate from the
-             * consumer request timeout so a slow admin call cannot slow a readiness answer.
-             */
             @DefaultValue("5m") Duration limitUpdateTimeout,
-            /** How often the stream monitor reads stream and consumer state. */
             @DefaultValue("60s") Duration monitorInterval) {
         /**
          * Lower bound for {@link #duplicateWindow}: the maximum per-vendor timestamp replay

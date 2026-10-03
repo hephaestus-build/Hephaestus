@@ -216,10 +216,11 @@ public class MentorTurnPersistence {
     }
 
     private void lockForAdmission(ChatThread thread) {
-        chatThreadRepository
+        if (chatThreadRepository
                 .lockForTurnAdmission(thread.getId(), thread.getWorkspace().getId())
-                .orElseThrow(() ->
-                        new EntityNotFoundException("ChatThread", thread.getId().toString()));
+                .isEmpty()) {
+            throw new EntityNotFoundException("ChatThread", thread.getId().toString());
+        }
     }
 
     private TurnPersistenceCookie persistAssistant(

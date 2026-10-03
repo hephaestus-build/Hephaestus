@@ -127,7 +127,6 @@ public class GitHubProjectSyncService {
     private static final String GET_ORGANIZATION_PROJECTS_DOCUMENT = "GetOrganizationProjects";
     private static final String GET_PROJECT_WITH_FIELDS_DOCUMENT = "GetProjectWithFields";
     private static final String GET_PROJECT_ITEMS_DOCUMENT = "GetProjectItems";
-    private static final String GET_PROJECT_ITEM_FIELD_VALUES_DOCUMENT = "GetProjectItemFieldValues";
     private static final String GET_PROJECT_STATUS_UPDATES_DOCUMENT = "GetProjectStatusUpdates";
 
     /**
@@ -429,7 +428,6 @@ public class GitHubProjectSyncService {
                                 safeOrgLogin,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case RATE_LIMITED -> {
                         if (retryAttempt < MAX_RETRY_ATTEMPTS && classification.suggestedWait() != null) {
@@ -457,7 +455,6 @@ public class GitHubProjectSyncService {
                                 safeOrgLogin,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_RATE_LIMIT;
-                        break;
                     }
                     case NOT_FOUND -> {
                         log.warn(
@@ -465,7 +462,6 @@ public class GitHubProjectSyncService {
                                 safeOrgLogin,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case AUTH_ERROR -> {
                         log.error(
@@ -480,7 +476,6 @@ public class GitHubProjectSyncService {
                                 safeOrgLogin,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     default -> {
                         log.error(
@@ -490,7 +485,6 @@ public class GitHubProjectSyncService {
                                 classification.message(),
                                 e);
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                 }
                 break;
@@ -931,7 +925,6 @@ public class GitHubProjectSyncService {
                                 projectId,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case RATE_LIMITED -> {
                         if (retryAttempt < MAX_RETRY_ATTEMPTS && classification.suggestedWait() != null) {
@@ -953,7 +946,6 @@ public class GitHubProjectSyncService {
                         }
                         log.error("Aborting project item sync due to rate limiting: projectId={}", projectId);
                         abortReason = SyncResult.Status.ABORTED_RATE_LIMIT;
-                        break;
                     }
                     case NOT_FOUND -> {
                         log.warn(
@@ -961,7 +953,6 @@ public class GitHubProjectSyncService {
                                 projectId,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case AUTH_ERROR -> throw e;
                     case CLIENT_ERROR -> {
@@ -970,7 +961,6 @@ public class GitHubProjectSyncService {
                                 projectId,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     default -> {
                         log.error(
@@ -980,7 +970,6 @@ public class GitHubProjectSyncService {
                                 classification.message(),
                                 e);
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                 }
                 break;

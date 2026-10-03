@@ -11,6 +11,7 @@ import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeoutException;
@@ -152,7 +153,7 @@ public class GitLabExceptionClassifier {
             }
             if (errorType == null) continue;
 
-            String type = errorType.toString().toUpperCase();
+            String type = errorType.toString().toUpperCase(Locale.ROOT);
             switch (type) {
                 case "NOT_FOUND" -> {
                     notFoundCounter.increment();
@@ -165,7 +166,7 @@ public class GitLabExceptionClassifier {
                 }
                 case "FORBIDDEN" -> {
                     String message = error.getMessage();
-                    if (message != null && message.toLowerCase().contains("rate limit")) {
+                    if (message != null && message.toLowerCase(Locale.ROOT).contains("rate limit")) {
                         rateLimitedCounter.increment();
                         return ClassificationResult.rateLimited(
                                 Duration.ofMinutes(1), "GraphQL rate limit: " + message);
@@ -324,7 +325,7 @@ public class GitLabExceptionClassifier {
                 return true;
             }
 
-            if (message != null && message.toLowerCase().contains("deadlock")) return true;
+            if (message != null && message.toLowerCase(Locale.ROOT).contains("deadlock")) return true;
 
             current = current.getCause();
         }
@@ -368,7 +369,7 @@ public class GitLabExceptionClassifier {
 
         String body = e.getResponseBodyAsString();
         if (body != null) {
-            String lower = body.toLowerCase();
+            String lower = body.toLowerCase(Locale.ROOT);
             return lower.contains("rate limit") || lower.contains("ratelimit") || lower.contains("throttled");
         }
         return false;

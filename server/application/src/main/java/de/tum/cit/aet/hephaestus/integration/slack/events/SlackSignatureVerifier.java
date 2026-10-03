@@ -21,24 +21,18 @@ public class SlackSignatureVerifier {
     private static final String HMAC_ALG = "HmacSHA256";
 
     private final byte[] signingSecret;
-    private final boolean configured;
 
     public SlackSignatureVerifier(@Value("${hephaestus.integration.slack.signing-secret:}") String signingSecret) {
-        this.configured = signingSecret != null && !signingSecret.isBlank();
-        if (!configured) {
+        if (signingSecret.isBlank()) {
             throw new IllegalStateException(
                     "Slack integration is enabled but hephaestus.integration.slack.signing-secret is blank");
         }
-        this.signingSecret = configured ? signingSecret.getBytes(StandardCharsets.UTF_8) : new byte[0];
-    }
-
-    public boolean isConfigured() {
-        return configured;
+        this.signingSecret = signingSecret.getBytes(StandardCharsets.UTF_8);
     }
 
     public Verification check(
             @Nullable String timestamp, @Nullable String signature, byte @Nullable [] rawBody, long nowEpochSeconds) {
-        if (!configured || timestamp == null || signature == null || rawBody == null) {
+        if (timestamp == null || signature == null || rawBody == null) {
             return Verification.missingSignature();
         }
         final long ts;

@@ -119,7 +119,7 @@ function context(): ContentScriptContext {
 			return frames.length;
 		},
 	};
-	// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The controller and provider entrypoint use only these lifecycle members.
+	// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- WXT's `ContentScriptContext` is a class with private members, so no fake satisfies it; the controller and provider entrypoint use only these.
 	return fake as unknown as ContentScriptContext;
 }
 

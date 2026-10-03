@@ -262,7 +262,7 @@ class SyncEventHubTest extends BaseUnitTest {
                     throw new IOException(e);
                 }
             }
-            for (String line : wire.toString().split("\n")) {
+            for (String line : wire.toString().split("\n", -1)) {
                 if (line.startsWith("data:")) {
                     dataFrames.add(line.substring("data:".length()));
                 } else if (line.startsWith("event:")) {

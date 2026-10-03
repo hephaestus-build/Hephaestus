@@ -27,7 +27,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObser
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -78,15 +77,6 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class ReviewOutputServiceTest extends BaseUnitTest {
-    @BeforeEach
-    void allowMemberAiForUnrelatedScenarios() {
-        lenient().when(memberAiPolicy.permitsReview(anyLong(), any(), any())).thenReturn(true);
-        lenient().when(memberAiPolicy.allowsResult(any())).thenReturn(true);
-    }
-
-    @Mock
-    private ReviewMemberAiPolicy memberAiPolicy;
-
     /** The pinned change: {@code BASE..HEAD}, in a checkout whose HEAD tree is {@code TREE}. */
     private static final String BASE = "a".repeat(40);
 
@@ -139,13 +129,13 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     private Set<String> changedPaths = Set.of("src/Auth.java");
 
     private Practice testPractice;
+    private PracticeRevision testRevision;
     private AgentJob testJob;
 
     @BeforeEach
     void setUp() {
-        lenient()
-                .when(citedSourceAccess.permitsReviewResult(any()))
-                .thenAnswer(invocation -> memberAiPolicy.allowsResult(invocation.getArgument(0)));
+        // The developer's AI choice permits the result unless a scenario withdraws it.
+        lenient().when(citedSourceAccess.permitsReviewResult(any())).thenReturn(true);
         service = new ReviewOutputService(
                 practiceRevisionRepository,
                 observationRepository,
@@ -201,22 +191,22 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         EvidenceSnapshotFixtures.admittedPractice(snapshot, "pr-description-quality", 11L);
         testJob.setEvidenceSnapshot(snapshot);
 
-        PracticeRevision revision = mock(PracticeRevision.class);
-        lenient().when(revision.getId()).thenReturn(11L);
-        lenient().when(revision.getReviewRuleFingerprint()).thenReturn("v5:" + "a".repeat(64));
-        lenient().when(revision.getSlug()).thenReturn("pr-description-quality");
-        lenient().when(revision.getPractice()).thenReturn(testPractice);
-        lenient().when(revision.getAutomatedReviewPolicy()).thenReturn(testPractice.getAutomatedReviewPolicy());
+        testRevision = mock(PracticeRevision.class);
+        lenient().when(testRevision.getId()).thenReturn(11L);
+        lenient().when(testRevision.getReviewRuleFingerprint()).thenReturn("v5:" + "a".repeat(64));
+        lenient().when(testRevision.getSlug()).thenReturn("pr-description-quality");
+        lenient().when(testRevision.getPractice()).thenReturn(testPractice);
+        lenient().when(testRevision.getAutomatedReviewPolicy()).thenReturn(testPractice.getAutomatedReviewPolicy());
         // Evidence requirements bound absence claims; every source that applies to the
         // artifact is staged for citation regardless.
-        lenient().when(revision.getSignals()).thenReturn(testPractice.getSignals());
-        lenient().when(revision.getEvidenceRequirements()).thenReturn(testPractice.getEvidenceRequirements());
-        lenient().when(revision.getReviewWhen()).thenReturn(testPractice.getReviewWhen());
-        lenient().when(revision.getSubject()).thenReturn(testPractice.getSubject());
-        lenient().when(revision.getPrecondition()).thenReturn(testPractice.getPrecondition());
+        lenient().when(testRevision.getSignals()).thenReturn(testPractice.getSignals());
+        lenient().when(testRevision.getEvidenceRequirements()).thenReturn(testPractice.getEvidenceRequirements());
+        lenient().when(testRevision.getReviewWhen()).thenReturn(testPractice.getReviewWhen());
+        lenient().when(testRevision.getSubject()).thenReturn(testPractice.getSubject());
+        lenient().when(testRevision.getPrecondition()).thenReturn(testPractice.getPrecondition());
         lenient()
                 .when(practiceRevisionRepository.findByIdAndWorkspaceId(11L, 1L))
-                .thenReturn(Optional.of(revision));
+                .thenReturn(Optional.of(testRevision));
 
         captured(HEAD, "src/Auth.java", 10, "insecure();", "allowAll();");
         lenient()
@@ -317,9 +307,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseAPendingReviewPinnedToAnEarlierObservationStandard() {
-        PracticeRevision old =
-                practiceRevisionRepository.findByIdAndWorkspaceId(11L, 1L).orElseThrow();
-        when(old.getReviewRuleFingerprint()).thenReturn("v4:" + "a".repeat(64));
+        when(testRevision.getReviewRuleFingerprint()).thenReturn("v4:" + "a".repeat(64));
 
         assertThatThrownBy(() ->
                         service.prepare(testJob, List.of(validObservation("pr-description-quality", Outcome.MET))))
@@ -385,11 +373,9 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
     @Test
     void shouldAdmitContextualAssessmentWithoutParsingPolarityFromCriteria() {
-        PracticeRevision revision =
-                practiceRevisionRepository.findByIdAndWorkspaceId(11L, 1L).orElseThrow();
         var observation = validObservation("pr-description-quality", Outcome.MET);
         publishVerified(testJob, List.of(observation));
-        verify(revision, never()).getCriteria();
+        verify(testRevision, never()).getCriteria();
         verify(observationRepository)
                 .insertIfAbsent(
                         any(),
@@ -749,7 +735,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
     @Test
     void shouldNotAdmitObservationsAfterDeveloperChoosesNoAi() {
-        when(memberAiPolicy.allowsResult(testJob)).thenReturn(false);
+        when(citedSourceAccess.permitsReviewResult(testJob)).thenReturn(false);
         assertThatThrownBy(() ->
                         service.prepare(testJob, List.of(validObservation("pr-description-quality", Outcome.MET))))
                 .isInstanceOfSatisfying(
@@ -1103,9 +1089,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                             : requirement)
                     .toList();
             practice.setEvidenceRequirements(requirements);
-            PracticeRevision revision =
-                    practiceRevisionRepository.findByIdAndWorkspaceId(11L, 1L).orElseThrow();
-            lenient().when(revision.getEvidenceRequirements()).thenReturn(requirements);
+            lenient().when(testRevision.getEvidenceRequirements()).thenReturn(requirements);
         }
 
         @Test

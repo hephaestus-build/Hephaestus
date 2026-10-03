@@ -396,7 +396,7 @@ public class GitLabGroupSyncService {
 
                 List<Repository> reconciled = new ArrayList<>();
                 directProjectsListed = reconcileDirectProjects(
-                        scopeId, groupFullPath, topLevelOrganization, provider, providerId, seenNativeIds, reconciled);
+                        scopeId, groupFullPath, topLevelOrganization, provider, seenNativeIds, reconciled);
                 projectsReconciled = reconciled.size();
                 syncedRepositories.addAll(reconciled);
             }
@@ -468,7 +468,6 @@ public class GitLabGroupSyncService {
             String groupFullPath,
             Organization topLevelOrganization,
             IdentityProvider provider,
-            Long providerId,
             Set<Long> seenNativeIds,
             List<Repository> reconciled) {
         String safeGroupPath = sanitizeForLog(groupFullPath);

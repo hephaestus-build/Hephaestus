@@ -40,6 +40,7 @@ import org.mockito.Mock;
 import org.springframework.graphql.ResponseError;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -70,7 +71,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
         when(prNodeIdResolver.resolve(1L, "owner", "repo", 42)).thenReturn("PR_node123");
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitHubProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -158,7 +159,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
         when(prNodeIdResolver.resolve(1L, "owner", "repo", 42)).thenReturn("PR_node123");
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitHubProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -180,7 +181,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitHubProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -224,7 +225,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitHubProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -248,7 +249,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
         when(prNodeIdResolver.resolve(1L, "owner", "repo", 42)).thenReturn("PR_node123");
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitHubProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -267,7 +268,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
         when(prNodeIdResolver.resolve(1L, "owner", "repo", 42)).thenReturn("PR_node123");
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitHubProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -339,7 +340,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
         when(prNodeIdResolver.resolveIssue(1L, "owner", "repo", 42)).thenReturn("I_node789");
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitHubProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -358,9 +359,9 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
 
     private HttpGraphQlClient graphQlClient = mock(HttpGraphQlClient.class);
 
-    private HttpGraphQlClient.RequestSpec mockRequestChain() {
+    private GraphQlClient.RequestSpec mockRequestChain() {
         graphQlClient = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitHubProvider.forScope(1L)).thenReturn(graphQlClient);
         when(graphQlClient.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -403,7 +404,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
     void findExistingSummary_pagesFromTheNewestEnd_neverForwards() {
         // The just-posted marker is newest; a forward walk could run out of budget before reaching it on a busy PR.
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse response = mockCommentsPageResponse(
                 "repository.pullRequest.comments", List.of(comment("IC_1", "unrelated")), false, null);
         when(spec.execute()).thenReturn(Mono.just(response));
@@ -422,14 +423,14 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
         FeedbackTarget issueTarget =
                 new FeedbackTarget(new IntegrationRef(IntegrationKind.GITHUB, 1L, null), "owner/repo/issues/42", null);
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse response = mockCommentsPageResponse(
                 "repository.issue.comments", List.of(comment("IC_1", "<!-- marker:job-1 -->body")), false, null);
         when(spec.execute()).thenReturn(Mono.just(response));
 
         ExistingSummaryLookup result = channel.findExistingSummary(issueTarget, "<!-- marker:job-1 -->");
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.FOUND);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         verify(graphQlClient).documentName("GetIssueCommentsNewest");
         verify(spec).variable("last", 100);
     }
@@ -437,7 +438,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
     @Test
     void findExistingSummary_markerOnTheNewestPage_isFoundInOneRequest() {
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse newestPage = mockCommentsPageResponse(
                 "repository.pullRequest.comments",
                 List.of(comment("IC_1", "unrelated"), comment("IC_2", "<!-- marker:job-1 -->body")),
@@ -447,7 +448,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
 
         ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.FOUND);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         assertNotNull(result.handle());
         assertThat(result.handle().externalId()).isEqualTo("IC_2");
         assertThat(result.handle().url()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
@@ -457,7 +458,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
     @Test
     void findExistingSummary_walkedBackToTheOldestComment_noMatch_isAbsent() {
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse newestPage = mockCommentsPageResponse(
                 "repository.pullRequest.comments", List.of(comment("IC_2", "unrelated")), true, "start-cursor-1");
         ClientGraphQlResponse oldestPage = mockCommentsPageResponse(
@@ -469,7 +470,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
 
         ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.ABSENT);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.ABSENT);
         verify(spec, times(2)).execute();
         verify(spec).variable("before", "start-cursor-1");
     }
@@ -478,7 +479,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
     void findExistingSummary_pageBudgetExhaustedWithOlderCommentsLeft_isUnknown_notAbsent() {
         // A marker older than the scanned pages must NOT be reported ABSENT — the caller would post a duplicate.
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page1 = mockCommentsPageResponse(
                 "repository.pullRequest.comments", List.of(comment("IC_3", "unrelated")), true, "start-cursor-1");
         ClientGraphQlResponse page2 = mockCommentsPageResponse(
@@ -495,7 +496,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
 
         ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.UNKNOWN);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
         verify(spec, times(3)).execute();
         verify(spec).variable("before", "start-cursor-2");
     }
@@ -503,7 +504,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
     @Test
     void findExistingSummary_matchOnAnOlderPage_isFound() {
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse newestPage = mockCommentsPageResponse(
                 "repository.pullRequest.comments", List.of(comment("IC_2", "unrelated")), true, "start-cursor-1");
         ClientGraphQlResponse olderPage = mockCommentsPageResponse(
@@ -512,7 +513,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
 
         ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.FOUND);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         assertNotNull(result.handle());
         assertThat(result.handle().externalId()).isEqualTo("IC_1");
         verify(spec, times(2)).execute();
@@ -521,14 +522,14 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
     @Test
     void findExistingSummary_missingCursorMidWalk_isUnknown_notAbsent() {
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse response = mockCommentsPageResponse(
                 "repository.pullRequest.comments", List.of(comment("IC_1", "unrelated")), true, null);
         when(spec.execute()).thenReturn(Mono.just(response));
 
         ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.UNKNOWN);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
         verify(spec, times(1)).execute();
     }
 
@@ -538,24 +539,24 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
 
         ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.UNKNOWN);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
 
     @Test
     void findExistingSummary_transportError_isUnknown_notAbsent() {
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
-        HttpGraphQlClient.RequestSpec spec = mockRequestChain();
+        GraphQlClient.RequestSpec spec = mockRequestChain();
         when(spec.execute()).thenThrow(new RuntimeException("boom"));
 
         ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.UNKNOWN);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
 
     @Test
     void findExistingSummary_blankMarker_isUnknown() {
         ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "  ");
 
-        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.UNKNOWN);
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
 }

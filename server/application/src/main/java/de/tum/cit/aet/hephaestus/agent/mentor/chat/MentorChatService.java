@@ -237,7 +237,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             } catch (RuntimeException ignored) {
                 // Best-effort: the channel may already be closed.
             }
-            if (t instanceof Error) throw (Error) t;
+            if (t instanceof Error) {
+                throw t;
+            }
         }
     }
 
@@ -414,10 +416,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                                 MentorTurnPromptFactory.forRunner(request, contextInputs),
                                 MentorTurnEvidence.forRunner(objectMapper, contextInputs));
                         state.markLlmCallStarted();
-                        prompt.whenComplete((result, ex) -> {
-                            if (ex != null) {
-                                turn.done.completeExceptionally(ex);
-                            }
+                        prompt.exceptionally(ex -> {
+                            turn.done.completeExceptionally(ex);
+                            return null;
                         });
 
                         awaitTurn(prompt, turn.done, Duration.ofSeconds(llmConfig.timeoutSeconds()));
@@ -664,7 +665,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     /** Bounds traversal of cyclic or unreasonably deep cause chains. */
     private static final int MAX_CAUSE_DEPTH = 32;
 
-    /** The AI SDK reducer rejects an error chunk that follows an unmatched text-start (vercel/ai #11700). */
+    /** The AI SDK reducer rejects an error chunk that follows an unmatched text-start (vercel/ai#11700). */
     private void closeOpenBlocks(TranslatorState state, MentorChannel channel) {
         try {
             translator.closeOpenBlocks(state).forEach(channel::send);
@@ -683,9 +684,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             if (cur instanceof MentorRunnerException mre && mre.poisonsSandbox()) {
                 return true;
             }
-            Throwable next = cur.getCause();
-            if (next == cur) break;
-            cur = next;
+            cur = cur.getCause();
         }
         return false;
     }
@@ -724,7 +723,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     complete(finish, state, channel, cookie, turn);
                     return;
                 }
-                if (chunk instanceof UIMessageChunk.Error err) {
+                if (chunk instanceof UIMessageChunk.TurnError err) {
                     if (turn.terminal.compareAndSet(null, Terminal.FAILED_IN_STREAM)) {
                         sendTerminal(channel, chunk);
                         interruptOrLeaveForReaper(cookie, state, new IllegalStateException(err.errorText()));
@@ -784,7 +783,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         }
         if (recorded.isEmpty()) {
             turn.terminal.set(Terminal.FAILED_IN_STREAM);
-            sendTerminal(channel, new UIMessageChunk.Error(REPLY_NOT_SAVED));
+            sendTerminal(channel, new UIMessageChunk.TurnError(REPLY_NOT_SAVED));
             turn.done.complete(null);
             return;
         }

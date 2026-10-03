@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 
+import java.util.Locale;
+
 /**
  * Sealed interface hierarchy for type-safe GitHub webhook actions.
  * Each event type has its own enum with only the valid actions for that event.
@@ -24,12 +26,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static Repository fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "created" -> CREATED;
                 case "deleted" -> DELETED;
                 case "edited" -> EDITED;
@@ -69,12 +71,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static Issue fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "opened" -> OPENED;
                 case "closed" -> CLOSED;
                 case "reopened" -> REOPENED;
@@ -124,12 +126,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static PullRequest fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "opened" -> OPENED;
                 case "closed" -> CLOSED;
                 case "reopened" -> REOPENED;
@@ -164,12 +166,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static PullRequestReview fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "submitted" -> SUBMITTED;
                 case "edited" -> EDITED;
                 case "dismissed" -> DISMISSED;
@@ -188,12 +190,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static PullRequestReviewComment fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "created" -> CREATED;
                 case "edited" -> EDITED;
                 case "deleted" -> DELETED;
@@ -211,12 +213,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static PullRequestReviewThread fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "resolved" -> RESOLVED;
                 case "unresolved" -> UNRESOLVED;
                 default -> UNKNOWN;
@@ -234,12 +236,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static IssueComment fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "created" -> CREATED;
                 case "edited" -> EDITED;
                 case "deleted" -> DELETED;
@@ -258,12 +260,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static Label fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "created" -> CREATED;
                 case "edited" -> EDITED;
                 case "deleted" -> DELETED;
@@ -284,12 +286,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static Milestone fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "created" -> CREATED;
                 case "closed" -> CLOSED;
                 case "opened" -> OPENED;
@@ -312,12 +314,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static Installation fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "created" -> CREATED;
                 case "deleted" -> DELETED;
                 case "suspend" -> SUSPEND;
@@ -337,12 +339,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static InstallationRepositories fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "added" -> ADDED;
                 case "removed" -> REMOVED;
                 default -> UNKNOWN;
@@ -358,12 +360,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static InstallationTarget fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "renamed" -> RENAMED;
                 default -> UNKNOWN;
             };
@@ -381,12 +383,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static Organization fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "member_added" -> MEMBER_ADDED;
                 case "member_removed" -> MEMBER_REMOVED;
                 case "renamed" -> RENAMED;
@@ -408,12 +410,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static Team fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "created" -> CREATED;
                 case "deleted" -> DELETED;
                 case "edited" -> EDITED;
@@ -433,12 +435,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static Membership fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "added" -> ADDED;
                 case "removed" -> REMOVED;
                 default -> UNKNOWN;
@@ -456,12 +458,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static Member fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "added" -> ADDED;
                 case "removed" -> REMOVED;
                 case "edited" -> EDITED;
@@ -481,12 +483,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static SubIssue fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "sub_issue_added" -> SUB_ISSUE_ADDED;
                 case "sub_issue_removed" -> SUB_ISSUE_REMOVED;
                 case "parent_issue_added" -> PARENT_ISSUE_ADDED;
@@ -521,12 +523,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static IssueDependency fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "blocked_by_added" -> BLOCKED_BY_ADDED;
                 case "blocked_by_removed" -> BLOCKED_BY_REMOVED;
                 case "blocking_added" -> BLOCKING_ADDED;
@@ -557,12 +559,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static ProjectV2 fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "created" -> CREATED;
                 case "edited" -> EDITED;
                 case "closed" -> CLOSED;
@@ -592,12 +594,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static ProjectV2Item fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "created" -> CREATED;
                 case "edited" -> EDITED;
                 case "deleted" -> DELETED;
@@ -625,12 +627,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static ProjectV2StatusUpdate fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "created" -> CREATED;
                 case "edited" -> EDITED;
                 case "deleted" -> DELETED;
@@ -661,12 +663,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static Discussion fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "created" -> CREATED;
                 case "edited" -> EDITED;
                 case "deleted" -> DELETED;
@@ -697,12 +699,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static DiscussionComment fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "created" -> CREATED;
                 case "edited" -> EDITED;
                 case "deleted" -> DELETED;
@@ -721,12 +723,12 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static CheckSuite fromString(String action) {
             if (action == null || action.isBlank()) return UNKNOWN;
-            return switch (action.toLowerCase()) {
+            return switch (action.toLowerCase(Locale.ROOT)) {
                 case "completed" -> COMPLETED;
                 case "requested" -> REQUESTED;
                 case "rerequested" -> REREQUESTED;
@@ -741,7 +743,7 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
     }
 
@@ -755,7 +757,7 @@ public sealed interface GitHubEventAction {
 
         @Override
         public String value() {
-            return name().toLowerCase();
+            return name().toLowerCase(Locale.ROOT);
         }
 
         public static Push fromString(String action) {

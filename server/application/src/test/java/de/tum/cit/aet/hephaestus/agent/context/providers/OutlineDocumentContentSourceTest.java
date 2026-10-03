@@ -99,10 +99,6 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
         return ProjectedDocument.withoutAuthors(collection, slug, title, body, false);
     }
 
-    private static ProjectedDocument tombstone(String collection, String slug, String title) {
-        return ProjectedDocument.withoutAuthors(collection, slug, title, null, true);
-    }
-
     private static final Instant CREATED = Instant.parse("2025-11-01T08:00:00Z");
     private static final Instant UPDATED = Instant.parse("2026-02-03T09:30:00Z");
 
@@ -140,28 +136,6 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
                 authorMemberId,
                 collaborators,
                 false,
-                null,
-                null,
-                null);
-    }
-
-    private static ProjectedDocument archivedDoc(String collection, String slug, String title, String body) {
-        return new ProjectedDocument(
-                collection,
-                slug,
-                title,
-                body,
-                false,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                true,
                 null,
                 null,
                 null);

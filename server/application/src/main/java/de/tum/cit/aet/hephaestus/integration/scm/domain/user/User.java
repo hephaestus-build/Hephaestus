@@ -19,6 +19,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -120,7 +121,7 @@ public class User extends BaseGitServiceEntity {
             if (value == null) {
                 return null;
             }
-            return Type.valueOf(value.toUpperCase());
+            return Type.valueOf(value.toUpperCase(Locale.ROOT));
         }
 
         @JsonValue

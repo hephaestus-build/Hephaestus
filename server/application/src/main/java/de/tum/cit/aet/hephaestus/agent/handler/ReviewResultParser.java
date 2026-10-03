@@ -107,7 +107,7 @@ public class ReviewResultParser {
                 continue;
             }
             try {
-                valid.add(validateEntry(entry, i));
+                valid.add(validateEntry(entry));
             } catch (EntryValidationException e) {
                 discarded.add(new DiscardedEntry(i, String.valueOf(e.getMessage())));
             }
@@ -116,7 +116,7 @@ public class ReviewResultParser {
         return new ParseResult(Collections.unmodifiableList(valid), Collections.unmodifiableList(discarded));
     }
 
-    private ValidatedObservation validateEntry(JsonNode entry, int index) {
+    private ValidatedObservation validateEntry(JsonNode entry) {
         List<String> unknownFields = entry.properties().stream()
                 .map(Entry::getKey)
                 .filter(field -> !OBSERVATION_FIELDS.contains(field))
@@ -241,7 +241,7 @@ public class ReviewResultParser {
 
     /**
      * The orchestrator protocol emits phase markers (e.g. {@code [PHASE0]...}) before its JSON object; this
-     * finds the first {@code '{'} that starts a valid object containing an "observations" array.
+     * finds the first opening brace that starts a valid object containing an {@code "observations"} array.
      */
     @Nullable
     private JsonNode extractJsonFromText(String text) {

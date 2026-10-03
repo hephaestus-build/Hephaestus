@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalog;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState.Unavailable;
@@ -67,6 +68,8 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
     Path root;
 
     private final JsonMapper mapper = new JsonMapper();
+    private final ArtifactSourceCatalog catalog =
+            new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()).current();
     private final ArtifactSourceCatalogRegistry policies = mock(ArtifactSourceCatalogRegistry.class);
     private final DocumentProjection documents = mock(DocumentProjection.class);
     private final ReviewRepositoryPreparer repositories = mock(ReviewRepositoryPreparer.class);
@@ -80,8 +83,7 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
     private final PracticeRepository practices = mock(PracticeRepository.class);
 
     private WorkspaceFolderRenderer renderer() {
-        when(policies.current())
-                .thenReturn(new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()).current());
+        when(policies.current()).thenReturn(catalog);
         return new WorkspaceFolderRenderer(
                 scm,
                 mapper,
@@ -121,8 +123,7 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
     void rendersEveryPermittedDocumentAndReportsEvictionWithoutRelevanceCaps() throws Exception {
         var source = renderer();
         var kind = new SourceKind("outline.documents");
-        when(policies.isSourceUsePermitted(
-                        policies.current().version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+        when(policies.isSourceUsePermitted(catalog.version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .thenReturn(true);
         var pages = new ArrayList<DocumentProjection.ProjectedDocument>();
         for (int n = 0; n < 26; n++) {
@@ -163,8 +164,7 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
     void refusedRepositoriesHaveTypedReasonsAndNoBytes() throws Exception {
         var source = renderer();
         var tree = new SourceKind("scm.repository.tree");
-        when(policies.isSourceUsePermitted(
-                        policies.current().version(), tree, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+        when(policies.isSourceUsePermitted(catalog.version(), tree, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .thenReturn(true);
         var permitted = new Repository();
         permitted.setId(2L);
@@ -193,8 +193,7 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
     void rendersPinnedCommitsWithParentsAndFileChangesForExistingPrecomputeConsumers() throws Exception {
         var source = renderer();
         var kind = PullRequestContentSource.CORE;
-        when(policies.isSourceUsePermitted(
-                        policies.current().version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+        when(policies.isSourceUsePermitted(catalog.version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .thenReturn(true);
         var job = job();
         var key = new RepositoryKey(1L, 2L);
@@ -240,8 +239,7 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
     void refusedDocumentOriginIsUnavailableNotAnExhaustiveEmptyCorpus() throws Exception {
         var source = renderer();
         var kind = new SourceKind("outline.documents");
-        when(policies.isSourceUsePermitted(
-                        policies.current().version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+        when(policies.isSourceUsePermitted(catalog.version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .thenReturn(true);
         var captured = source.capture(new ContextRequest.PracticeReviewRequest(job()), Set.of(kind));
         try {
@@ -268,8 +266,7 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
                 new SourceKind("hephaestus.feedback-history"),
                 PullRequestContentSource.CORE);
         for (var kind : selected)
-            when(policies.isSourceUsePermitted(
-                            policies.current().version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+            when(policies.isSourceUsePermitted(catalog.version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                     .thenReturn(true);
         var repo = new Repository();
         repo.setId(2L);
@@ -370,8 +367,7 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
     void repositorySnapshotsAreCopiedOnlyWhenComplete(boolean complete) throws Exception {
         var source = renderer();
         var kind = new SourceKind("scm.repository.tree");
-        when(policies.isSourceUsePermitted(
-                        policies.current().version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+        when(policies.isSourceUsePermitted(catalog.version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .thenReturn(true);
         var repo = new Repository();
         repo.setId(2L);
@@ -415,8 +411,7 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
     void unsafeRepositorySnapshotRefusesRenderingAndDeletesBothCopies(String failure) throws Exception {
         var source = renderer();
         var kind = new SourceKind("scm.repository.tree");
-        when(policies.isSourceUsePermitted(
-                        policies.current().version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+        when(policies.isSourceUsePermitted(catalog.version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .thenReturn(true);
         var repo = new Repository();
         repo.setId(2L);

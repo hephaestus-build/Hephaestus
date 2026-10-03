@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -27,6 +28,6 @@ public enum RepositorySelection {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return RepositorySelection.valueOf(value.toUpperCase());
+        return RepositorySelection.valueOf(value.toUpperCase(Locale.ROOT));
     }
 }

@@ -355,7 +355,7 @@ class MermaidErdGenerator {
 	async connect() {
 		try {
 			await this.client.connect();
-			this.logger.info(`Connected to database: ${this.client.database}`);
+			this.logger.info(`Connected to database: ${this.client.database ?? "(the user's default)"}`);
 		} catch (error) {
 			throw new Error(`Failed to connect to database: ${messageOf(error)}`, { cause: error });
 		}

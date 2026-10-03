@@ -249,8 +249,7 @@ public class AgentJobService {
             return refuse(signalKey, SignalStateReason.BUDGET_EXHAUSTED);
         }
 
-        return submitForBinding(
-                workspace, jobType, artifactKindFor(jobType, request), submission, signalKey, admission);
+        return submitForBinding(workspace, jobType, artifactKindFor(jobType), submission, signalKey, admission);
     }
 
     /**
@@ -473,10 +472,6 @@ public class AgentJobService {
             case CONVERSATION_REVIEW -> ArtifactKinds.CONVERSATION_THREAD;
             case DOCUMENT_REVIEW -> ArtifactKinds.DOCUMENT;
         };
-    }
-
-    private static ArtifactKind artifactKindFor(AgentJobType jobType, JobSubmissionRequest request) {
-        return artifactKindFor(jobType);
     }
 
     /**

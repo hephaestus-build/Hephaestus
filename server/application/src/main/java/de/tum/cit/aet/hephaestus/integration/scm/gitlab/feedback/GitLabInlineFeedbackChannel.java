@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -770,7 +771,7 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
 
     private static boolean isLineCodeError(List<String> errors) {
         return errors.stream()
-                .anyMatch(e ->
-                        e.toLowerCase().contains("line code") || e.toLowerCase().contains("line_code"));
+                .anyMatch(e -> e.toLowerCase(Locale.ROOT).contains("line code")
+                        || e.toLowerCase(Locale.ROOT).contains("line_code"));
     }
 }

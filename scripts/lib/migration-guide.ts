@@ -45,9 +45,9 @@ export function renderMigrationGuide(migration: string): string {
 			"migration-guide: expected exactly one ### Next release before ## Automatic vs Manual Migrations",
 		);
 	}
-	const parts = template.split(marker);
-	if (parts.length !== 2) {
+	const [head, tail, ...rest] = template.split(marker);
+	if (head === undefined || tail === undefined || rest.length > 0) {
 		throw new Error("migration-guide: template must contain exactly one version history marker");
 	}
-	return `${parts[0]}${migration.slice(from, to)}${parts[1]}`;
+	return `${head}${migration.slice(from, to)}${tail}`;
 }

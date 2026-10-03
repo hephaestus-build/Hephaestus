@@ -20,6 +20,7 @@ public enum AuditLedger {
     /** {@code connection_audit} — integration connection lifecycle. */
     CONNECTION_AUDIT;
 
+    @SuppressWarnings("ImmutableEnumChecker") // an unmodifiable set of strings, never exposed mutably
     private final Set<String> vocabulary;
 
     AuditLedger(Enum<?>... rowTypes) {

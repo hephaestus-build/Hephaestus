@@ -14,8 +14,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,8 +35,6 @@ import tools.jackson.databind.node.ObjectNode;
 @Component
 @ConditionalOnProperty(name = "hephaestus.integration.outline.enabled", havingValue = "true", matchIfMissing = false)
 public class OutlineDocumentContentSource implements ContentSource {
-
-    private static final Logger log = LoggerFactory.getLogger(OutlineDocumentContentSource.class);
 
     /** Mentor-path output key. Whitelisted in {@code MentorContextKeys#ALLOWED_OUTPUT_KEYS}. */
     public static final String OUTPUT_KEY = ContentSource.OUTPUT_PREFIX + "outline_docs.json";
@@ -205,7 +201,7 @@ public class OutlineDocumentContentSource implements ContentSource {
         String raw = (title == null ? "" : title) + " " + (body == null ? "" : body);
         String cleaned = URL_NOISE.matcher(raw).replaceAll(" ");
         Set<String> terms = new LinkedHashSet<>();
-        for (String token : NON_TERM.split(cleaned)) {
+        for (String token : NON_TERM.split(cleaned, -1)) {
             if (token.length() < 3) {
                 continue;
             }

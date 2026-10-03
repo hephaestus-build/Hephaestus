@@ -437,9 +437,11 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
 
         @Test
         void shouldReadEveryHashNumberFromTheBodyWhateverWordsSurroundIt() throws Exception {
-            pullRequestWithBody("- [ ] Related issue is linked (e.g., `Closes #12`)\n"
-                    + "Implemented the requested fix: `Closes #42`.\n"
-                    + "Related to #7 — see context.");
+            pullRequestWithBody("""
+                                - [ ] Related issue is linked (e.g., `Closes #12`)
+                                Implemented the requested fix: `Closes #42`.
+                                Related to #7 — see context.\
+                                """);
             when(issueRepository.findByRepositoryIdAndNumber(eq(REPO_ID), anyInt()))
                     .thenAnswer(inv -> {
                         int number = inv.getArgument(1);

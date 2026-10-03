@@ -1136,7 +1136,7 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
         }
 
         private static String camelCase(String constant) {
-            String[] words = constant.toLowerCase(Locale.ROOT).split("_");
+            String[] words = constant.toLowerCase(Locale.ROOT).split("_", -1);
             StringBuilder result = new StringBuilder(words[0]);
             for (int i = 1; i < words.length; i++) {
                 result.append(words[i].substring(0, 1).toUpperCase(Locale.ROOT)).append(words[i].substring(1));

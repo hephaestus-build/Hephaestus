@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionService;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
@@ -33,19 +32,16 @@ import tools.jackson.databind.json.JsonMapper;
 public class JobTypeHandlerConfiguration {
 
     private final JsonMapper objectMapper;
-    private final PracticeReviewProperties reviewProperties;
     private final WorkspaceContextBuilder workspaceContextBuilder;
     private final TaskEnvelopeWriter taskEnvelopeWriter;
     private final FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter;
 
     JobTypeHandlerConfiguration(
             JsonMapper objectMapper,
-            PracticeReviewProperties reviewProperties,
             WorkspaceContextBuilder workspaceContextBuilder,
             TaskEnvelopeWriter taskEnvelopeWriter,
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter) {
         this.objectMapper = objectMapper;
-        this.reviewProperties = reviewProperties;
         this.workspaceContextBuilder = workspaceContextBuilder;
         this.taskEnvelopeWriter = taskEnvelopeWriter;
         this.feedbackResponseSuppressionFilter = feedbackResponseSuppressionFilter;

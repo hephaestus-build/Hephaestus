@@ -59,16 +59,34 @@ public abstract class BaseGitServiceEntity {
     @ToString.Exclude
     protected IdentityProvider provider;
 
+    /**
+     * Same row: ids are only unique per table, so two entities are equal when they share an id and the
+     * entity that owns the table. A lazy reference is a Hibernate proxy, so neither side's own class is
+     * compared and the other side's id is read through its getter, which a proxy answers without loading.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        BaseGitServiceEntity that = (BaseGitServiceEntity) o;
-        return id != null && id.equals(that.id);
+        if (!(o instanceof BaseGitServiceEntity that)) return false;
+        return id != null && id.equals(that.getId()) && tableEntity(this) == tableEntity(that);
     }
 
     @Override
     public int hashCode() {
-        return getClass().hashCode();
+        return tableEntity(this).hashCode();
+    }
+
+    /**
+     * The entity whose table holds this row: the direct subclass of this one. A single-table subclass such as
+     * {@code PullRequest} shares that table, and its ids, with its parent {@code Issue}. A proxy's class extends
+     * the entity it stands for, so the walk never loads it, where {@code Hibernate.getClassLazy} loads a proxy
+     * whose entity has subclasses to learn which one it is.
+     */
+    private static Class<?> tableEntity(BaseGitServiceEntity entity) {
+        Class<?> type = entity.getClass();
+        while (type.getSuperclass() != BaseGitServiceEntity.class) {
+            type = type.getSuperclass();
+        }
+        return type;
     }
 }

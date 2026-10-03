@@ -558,7 +558,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                     .isEqualTo("FIRST");
         }
 
-        private final class ProviderA implements ContentSource {
+        private static final class ProviderA implements ContentSource {
 
             @Override
             public boolean supports(ContextRequest request) {
@@ -571,7 +571,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             }
         }
 
-        private final class ProviderB implements ContentSource {
+        private static final class ProviderB implements ContentSource {
 
             @Override
             public boolean supports(ContextRequest request) {

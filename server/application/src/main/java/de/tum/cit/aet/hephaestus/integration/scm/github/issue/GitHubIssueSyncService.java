@@ -460,7 +460,6 @@ public class GitHubIssueSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case RATE_LIMITED -> {
                         // Rate limited - wait for reset time if available, then retry
@@ -491,7 +490,6 @@ public class GitHubIssueSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_RATE_LIMIT;
-                        break;
                     }
                     case NOT_FOUND -> {
                         // Resource not found - skip and continue
@@ -500,7 +498,6 @@ public class GitHubIssueSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case AUTH_ERROR -> {
                         // Authentication error - abort sync
@@ -509,7 +506,6 @@ public class GitHubIssueSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     case CLIENT_ERROR -> {
                         // Client error - abort sync
@@ -518,7 +514,6 @@ public class GitHubIssueSyncService {
                                 safeNameWithOwner,
                                 classification.message());
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                     default -> {
                         // Unknown error - log and abort
@@ -528,7 +523,6 @@ public class GitHubIssueSyncService {
                                 classification.message(),
                                 e);
                         abortReason = SyncResult.Status.ABORTED_ERROR;
-                        break;
                     }
                 }
                 break;

@@ -24,9 +24,9 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 
 class AgentBindingServiceTest extends BaseUnitTest {
@@ -49,8 +49,18 @@ class AgentBindingServiceTest extends BaseUnitTest {
     @Mock
     private ConfigAuditPort configAudit;
 
-    @InjectMocks
     private AgentBindingService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new AgentBindingService(
+                bindingRepository,
+                workspaceRepository,
+                llmModelRepository,
+                workspaceLlmModelRepository,
+                llmModelResolver,
+                configAudit);
+    }
 
     private WorkspaceContext context() {
         WorkspaceContext ctx = mock(WorkspaceContext.class);

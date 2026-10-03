@@ -151,9 +151,9 @@ class ReleaseCheckServiceTest {
         var limited = service.check();
         assertThat(limited.failure()).isEqualTo(ReleaseCheckFailure.RATE_LIMITED);
         assertThat(limited.retryUntil()).isEqualTo(NOW.plusSeconds(7200));
-        clock.advance(Duration.ofSeconds(3600));
+        clock.advance(Duration.ofHours(1));
         assertThat(service.check()).isEqualTo(limited);
-        clock.advance(Duration.ofSeconds(3600));
+        clock.advance(Duration.ofHours(1));
         when(client.fetchLatest(null)).thenReturn(found("1.2.3"));
         assertThat(service.check().status()).isEqualTo(ReleaseCheckStatus.CURRENT);
         assertThat(service.status().retryUntil()).isNull();

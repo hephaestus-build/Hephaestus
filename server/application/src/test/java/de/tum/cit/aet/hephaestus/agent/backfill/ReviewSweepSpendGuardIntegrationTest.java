@@ -133,7 +133,6 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
     private ConnectionRepository scmConnections;
 
     private Workspace workspace;
-    private long pullRequestId;
 
     @BeforeEach
     void setUp() {
@@ -201,7 +200,7 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
         monitor.setNameWithOwner(repository.getNameWithOwner());
         repositoryToMonitorRepository.save(monitor);
 
-        pullRequestId = persistPullRequest(provider, repository, author);
+        persistPullRequest(provider, repository, author);
     }
 
     /**
@@ -295,7 +294,7 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
         scheduleRepository.save(schedule);
     }
 
-    private long persistPullRequest(IdentityProvider provider, Repository repository, User author) {
+    private void persistPullRequest(IdentityProvider provider, Repository repository, User author) {
         Instant now = Instant.now();
         Long providerId = Objects.requireNonNull(provider.getId());
         pullRequestRepository.upsertCore(
@@ -332,9 +331,5 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
                 "sweepbasesha",
                 null,
                 null);
-        return pullRequestRepository
-                .findByRepositoryIdAndNumber(repository.getId(), 12)
-                .orElseThrow()
-                .getId();
     }
 }

@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.architecture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.tenancy.WorkspaceScopedTables;
-import java.lang.reflect.Field;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
@@ -35,10 +35,9 @@ class WorkspaceScopedTablesParityTest {
     @Test
     @DisplayName("GLOBAL_TABLES (prod) and GLOBAL_ENTITIES (arch) describe the same set")
     void productionAndArchAllowlistsMatch() {
-        Set<String> archEntitiesSnakeCase =
-                readPrivateSet(DataIsolationArchitectureTest.class, "GLOBAL_ENTITIES").stream()
-                        .map(WorkspaceScopedTablesParityTest::toSnakeCase)
-                        .collect(Collectors.toUnmodifiableSet());
+        Set<String> archEntitiesSnakeCase = DataIsolationArchitectureTest.GLOBAL_ENTITIES.stream()
+                .map(WorkspaceScopedTablesParityTest::toSnakeCase)
+                .collect(Collectors.toUnmodifiableSet());
 
         Set<String> productionTablesExcludingLiquibase = WorkspaceScopedTables.GLOBAL_TABLES.stream()
                 .filter(t -> !t.equals("databasechangelog"))
@@ -52,20 +51,9 @@ class WorkspaceScopedTablesParityTest {
                 .containsExactlyInAnyOrderElementsOf(archEntitiesSnakeCase);
     }
 
-    @SuppressWarnings("unchecked")
-    private static Set<String> readPrivateSet(Class<?> owner, String fieldName) {
-        try {
-            Field f = owner.getDeclaredField(fieldName);
-            f.setAccessible(true);
-            return (Set<String>) f.get(null);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new AssertionError("Could not read " + owner.getSimpleName() + "." + fieldName, e);
-        }
-    }
-
     /** Converts CamelCase entity name to snake_case table name. Matches Hibernate's
      * {@code SpringPhysicalNamingStrategy} default. */
     private static String toSnakeCase(String camel) {
-        return camel.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase();
+        return camel.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase(Locale.ROOT);
     }
 }

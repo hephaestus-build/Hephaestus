@@ -134,9 +134,7 @@ export function LinkedAccountsSection({
 	}
 
 	const linkedProviderTypes = new Set(
-		identities
-			.map((identity) => identity.providerType?.toUpperCase())
-			.filter((type): type is string => Boolean(type)),
+		identities.map((identity) => identity.providerType.toUpperCase()),
 	);
 
 	// Providers the account can still link: not already represented among the linked identities
@@ -182,18 +180,13 @@ export function LinkedAccountsSection({
 			) : (
 				<ItemGroup>
 					{identities.map((identity) => {
-						const identityId = identity.id;
 						const Icon = getProviderIcon(identity.providerType);
 						const name =
 							firstNonBlank(identity.displayName, identity.username, identity.subject) ?? "Account";
 						const lastLogin = asDate(identity.lastLoginAt);
 
 						return (
-							<Item
-								key={identityId ?? `${identity.providerType}:${identity.subject}`}
-								variant="outline"
-								role="listitem"
-							>
+							<Item key={identity.id} variant="outline" role="listitem">
 								<ItemMedia variant="icon">
 									<Icon />
 								</ItemMedia>
@@ -210,18 +203,16 @@ export function LinkedAccountsSection({
 										<ItemDescription>Last sign-in {formatDate(lastLogin)}</ItemDescription>
 									)}
 								</ItemContent>
-								{identityId != null && (
-									<ItemActions>
-										<UnlinkControl
-											identityId={identityId}
-											name={name}
-											providerType={identity.providerType}
-											isOnlyIdentity={isOnlyIdentity}
-											isUnlinking={unlinkingId === identityId}
-											onConfirm={() => onUnlink(identityId)}
-										/>
-									</ItemActions>
-								)}
+								<ItemActions>
+									<UnlinkControl
+										identityId={identity.id}
+										name={name}
+										providerType={identity.providerType}
+										isOnlyIdentity={isOnlyIdentity}
+										isUnlinking={unlinkingId === identity.id}
+										onConfirm={() => onUnlink(identity.id)}
+									/>
+								</ItemActions>
 							</Item>
 						);
 					})}

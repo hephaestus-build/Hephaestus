@@ -22,7 +22,6 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -116,7 +115,6 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
                 jobs,
                 policy,
                 mock(JobTypeHandlerRegistry.class),
-                mock(JobEvidenceFiles.class),
                 mock(PracticePiAdapter.class),
                 mock(WorkerJwtIssuer.class),
                 mock(SandboxManager.class),

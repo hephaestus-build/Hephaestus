@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -188,7 +189,7 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
                     .thenReturn(new PreparedEvidence(
                             Map.of(
                                     SandboxLayout.CONTEXT_PREFIX + "conversation_thread.json",
-                                    "{\"messages\":[]}".getBytes()),
+                                    "{\"messages\":[]}".getBytes(UTF_8)),
                             mock(JobFolderIndex.class)));
             when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any()))
                     .thenReturn(new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(

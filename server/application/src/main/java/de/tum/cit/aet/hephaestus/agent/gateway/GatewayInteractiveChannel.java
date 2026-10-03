@@ -97,6 +97,7 @@ public final class GatewayInteractiveChannel implements AutoCloseable {
         try {
             closeTransport();
         } catch (IOException ignored) {
+            // The exit code is recorded above; a pipe or socket that fails to close is already torn down.
         }
     }
 

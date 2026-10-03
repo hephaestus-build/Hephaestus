@@ -95,6 +95,7 @@ final class MentorSseChannel implements MentorChannel {
             try {
                 emitter.complete();
             } catch (RuntimeException ignored) {
+                // Best-effort: the client is already flagged gone and the container ends the timed-out request.
             }
         });
         emitter.onError(throwable -> {
@@ -215,10 +216,12 @@ final class MentorSseChannel implements MentorChannel {
                 try {
                     emitter.send(SseEmitter.event().data("[DONE]"));
                 } catch (IOException | IllegalStateException ignored) {
+                    // The client is gone; the outcome below already says whether the finish chunk reached it.
                 }
                 try {
                     emitter.complete();
                 } catch (RuntimeException ignored) {
+                    // Best-effort: the container may already have ended a request whose client went away.
                 }
             }
             return finishDelivered.get() ? DeliveryOutcome.DELIVERED : DeliveryOutcome.NOT_DELIVERED;
@@ -227,15 +230,17 @@ final class MentorSseChannel implements MentorChannel {
         }
     }
 
-    /** Error path: best-effort emit an {@link UIMessageChunk.Error} chunk + {@code [DONE]}. */
+    /** Error path: best-effort emit an {@link UIMessageChunk.TurnError} chunk + {@code [DONE]}. */
     @Override
     public void completeWithError(String errorText) {
         cancelHeartbeat();
         try {
-            send(new UIMessageChunk.Error(errorText));
-        } catch (RuntimeException ignored) {
+            send(new UIMessageChunk.TurnError(errorText));
+        } catch (ClientDisconnectedException ignored) {
+            // send() flagged the disconnect; there is no client left to show the error to.
+        } finally {
+            completeWithDone();
         }
-        completeWithDone();
     }
 
     /** 409 conflict path: emit a status hint + an error chunk + {@code [DONE]}. */
@@ -245,10 +250,12 @@ final class MentorSseChannel implements MentorChannel {
         try {
             send(UIMessageChunk.DataMentorStatus.of(
                     UIMessageChunk.DataMentorStatus.State.CONFLICT, "another turn is in flight for this thread"));
-            send(new UIMessageChunk.Error("Another mentor turn is already in flight for this thread."));
-        } catch (RuntimeException ignored) {
+            send(new UIMessageChunk.TurnError("Another mentor turn is already in flight for this thread."));
+        } catch (ClientDisconnectedException ignored) {
+            // send() flagged the disconnect; there is no client left to show the conflict to.
+        } finally {
+            completeWithDone();
         }
-        completeWithDone();
     }
 
     /** Ends the response if no terminal did, so a turn can never leave the client waiting on an open stream. */

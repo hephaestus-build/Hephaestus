@@ -13,13 +13,14 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * DTO for GitHub pull_request_review_thread webhook events.
+ *
+ * @param updatedAt when the event happened: the resolution's own time, which the GraphQL thread never carries
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GitHubPullRequestReviewThreadEventDTO(
         @JsonProperty("action") String action,
         @JsonProperty("thread") GitHubThreadDTO thread,
         @JsonProperty("pull_request") GitHubPullRequestDTO pullRequest,
-        /** When the event happened: the resolution's own time, which the GraphQL thread never carries. */
         @JsonProperty("updated_at") @Nullable Instant updatedAt,
         @JsonProperty("repository") GitHubRepositoryRefDTO repository,
         @JsonProperty("sender") GitHubUserDTO sender)

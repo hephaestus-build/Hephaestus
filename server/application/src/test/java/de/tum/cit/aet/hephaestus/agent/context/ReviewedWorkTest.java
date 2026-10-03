@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -58,7 +59,7 @@ class ReviewedWorkTest extends BaseUnitTest {
         byte[] manifest = mapper.writeValueAsBytes(ReviewedWorkFixtures.issueManifest(CAPTURED_AT, "body"));
 
         assertThat(ReviewedWork.captured(manifest, Map.of(), 7, mapper)).isEmpty();
-        assertThat(ReviewedWork.captured(manifest, Map.of(METADATA, "{\"body\":\"x\"}".getBytes()), 7, mapper))
+        assertThat(ReviewedWork.captured(manifest, Map.of(METADATA, "{\"body\":\"x\"}".getBytes(UTF_8)), 7, mapper))
                 .isEmpty();
     }
 

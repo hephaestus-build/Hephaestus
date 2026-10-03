@@ -68,11 +68,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.test.util.ReflectionTestUtils;
-import tools.jackson.databind.ObjectMapper;
 
 class AgentJobEventListenerTest extends BaseUnitTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final RepositoryRef REPO_REF = new RepositoryRef(100L, "owner/repo", "main");
     private static final Long PR_ID = 456L;
     private static final int PR_NUMBER = 42;

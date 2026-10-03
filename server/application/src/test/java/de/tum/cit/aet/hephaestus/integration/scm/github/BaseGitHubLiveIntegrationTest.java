@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.testconfig.LiveGitHubTest;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInstance;
@@ -118,6 +119,7 @@ public abstract class BaseGitHubLiveIntegrationTest extends BaseIntegrationTest 
     protected String nextEphemeralSlug(String suffix) {
         var prefix = environment.getProperty("integration-tests.ephemeral-prefix", "hephaestus-it");
         var timestamp = SUFFIX_FORMATTER.format(Instant.now());
-        return (prefix + "-" + timestamp + (suffix == null || suffix.isBlank() ? "" : "-" + suffix)).toLowerCase();
+        return (prefix + "-" + timestamp + (suffix == null || suffix.isBlank() ? "" : "-" + suffix))
+                .toLowerCase(Locale.ROOT);
     }
 }

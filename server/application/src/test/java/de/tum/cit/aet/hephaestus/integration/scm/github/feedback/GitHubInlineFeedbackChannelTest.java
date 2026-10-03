@@ -36,6 +36,7 @@ import org.mockito.Mock;
 import org.springframework.graphql.ResponseError;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -221,8 +222,7 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
         stubReviewThreads(
                 List.of(thread("THREAD_foo", "RC_old_foo", "earlier feedback\n" + ckTag("ck-foo"), false, false)));
         // Only ck-bar is genuinely new and should be posted.
-        HttpGraphQlClient.RequestSpec addSpec =
-                stubAddReview("REVIEW_2", List.of(comment("RC_bar", "src/Bar.java", 20)));
+        GraphQlClient.RequestSpec addSpec = stubAddReview("REVIEW_2", List.of(comment("RC_bar", "src/Bar.java", 20)));
 
         InlineResult result = channel.postInlineFeedback(
                 target,
@@ -305,7 +305,7 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
         stubReviewThreads(List.of(
                 thread("THREAD_a", "RC_a", "feedback A\n" + ckTag("ck-a"), false, false),
                 thread("THREAD_b", "RC_b", "feedback B\n" + ckTag("ck-b"), true, false)));
-        HttpGraphQlClient.RequestSpec minimizeSpec = stubMinimize();
+        GraphQlClient.RequestSpec minimizeSpec = stubMinimize();
 
         channel.clearStaleFeedback(target, "marker");
 
@@ -346,7 +346,7 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
 
         // A human review thread (no ck tag) must never be minimized.
         stubReviewThreads(List.of(thread("THREAD_h", "RC_h", "please rename this variable", false, false)));
-        HttpGraphQlClient.RequestSpec minimizeSpec = stubMinimize();
+        GraphQlClient.RequestSpec minimizeSpec = stubMinimize();
 
         channel.clearStaleFeedback(target, "marker");
 
@@ -364,7 +364,7 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
         stubReviewThreads(List.of(
                 thread("THREAD_a", "RC_a", "feedback A\n" + ckTag("ck-a"), false, false),
                 thread("THREAD_b", "RC_b", "feedback B\n" + ckTag("ck-b"), false, false)));
-        HttpGraphQlClient.RequestSpec minimizeSpec = stubMinimize();
+        GraphQlClient.RequestSpec minimizeSpec = stubMinimize();
 
         InlineResult result = channel.postInlineFeedback(
                 target, List.of(new InlineFeedback(new DiffAnchor("src/Foo.java", 10, null), "fix", "marker", "ck-a")));
@@ -387,7 +387,7 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
                 thread("THREAD_a", "RC_a", "feedback A\n" + ckTag("ck-a"), false, false),
                 thread("THREAD_b", "RC_b", "feedback B\n" + ckTag("ck-b"), false, false)));
         stubAddReview("REVIEW_9", List.of(comment("RC_c", "src/Baz.java", 30)));
-        HttpGraphQlClient.RequestSpec minimizeSpec = stubMinimize();
+        GraphQlClient.RequestSpec minimizeSpec = stubMinimize();
 
         InlineResult result = channel.postInlineFeedback(
                 target,
@@ -413,7 +413,7 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
 
         // ck-foo has a live prior thread; this run still emits ck-foo but with a blank body (nothing to re-post).
         stubReviewThreads(List.of(thread("THREAD_foo", "RC_foo", "earlier\n" + ckTag("ck-foo"), false, false)));
-        HttpGraphQlClient.RequestSpec minimizeSpec = stubMinimize();
+        GraphQlClient.RequestSpec minimizeSpec = stubMinimize();
 
         InlineResult result = channel.postInlineFeedback(
                 target,
@@ -464,7 +464,7 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
         when(prNodeIdResolver.resolve(1L, "owner", "repo", 42)).thenReturn("PR_node123");
 
         stubReviewThreads(List.of(thread("THREAD_foo", "RC_old_foo", "earlier\n" + ckTag("ck-foo"), false, false)));
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("AddPullRequestReviewWithThreads")).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
         when(spec.execute()).thenReturn(Mono.error(new RuntimeException("boom")));
@@ -506,7 +506,7 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
 
     /** Stubs {@code pages} empty pages of review threads; the last one reports more after it or not. */
     private void stubReviewThreadPages(int pages, boolean moreAfterLast) {
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("GetPullRequestReviewThreads")).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
         List<Mono<ClientGraphQlResponse>> responses = new ArrayList<>();
@@ -527,21 +527,21 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
 
     /** Stubs GetPullRequestReviewThreads to return a single page of the given thread nodes. */
     private void stubReviewThreads(List<Map<String, Object>> nodes) {
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("GetPullRequestReviewThreads")).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
 
         ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
         lenient().when(response.getErrors()).thenReturn(List.of());
         stubField(response, "repository.pullRequest.reviewThreads.nodes", nodes);
-        stubField(response, "repository.pullRequest.reviewThreads.pageInfo.hasNextPage", Boolean.FALSE);
+        stubField(response, "repository.pullRequest.reviewThreads.pageInfo.hasNextPage", false);
         stubField(response, "repository.pullRequest.reviewThreads.pageInfo.endCursor", null);
         when(spec.execute()).thenReturn(Mono.just(response));
     }
 
     /** Stubs AddPullRequestReviewWithThreads to return the given review id + posted comment nodes. */
-    private HttpGraphQlClient.RequestSpec stubAddReview(String reviewId, List<Map<String, Object>> commentNodes) {
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+    private GraphQlClient.RequestSpec stubAddReview(String reviewId, List<Map<String, Object>> commentNodes) {
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("AddPullRequestReviewWithThreads")).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
 
@@ -555,7 +555,7 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
 
     /** Stubs AddPullRequestReviewWithThreads to return a non-empty {@code errors} list (batch GraphQL failure). */
     private void stubAddReviewWithErrors() {
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("AddPullRequestReviewWithThreads")).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
 
@@ -568,7 +568,7 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
 
     /** Like {@link #stubAddReview} but captures the {@code threads} variable so the body can be asserted. */
     private ThreadsCaptor stubAddReviewCapturingThreads(String reviewId) {
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName("AddPullRequestReviewWithThreads")).thenReturn(spec);
         ThreadsCaptor captor = new ThreadsCaptor();
         when(spec.variable(any(), any())).thenAnswer(inv -> {
@@ -586,8 +586,8 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
         return captor;
     }
 
-    private HttpGraphQlClient.RequestSpec stubMinimize() {
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+    private GraphQlClient.RequestSpec stubMinimize() {
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         // lenient: the non-bot-thread test verifies minimize is NEVER called, so these stubs go unused there.
         lenient().when(client.documentName("MinimizeComment")).thenReturn(spec);
         lenient().when(spec.variable(any(), any())).thenReturn(spec);

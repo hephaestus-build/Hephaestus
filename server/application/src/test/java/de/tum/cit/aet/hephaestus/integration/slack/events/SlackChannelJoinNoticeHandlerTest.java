@@ -4,13 +4,11 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
@@ -53,9 +51,6 @@ class SlackChannelJoinNoticeHandlerTest extends BaseUnitTest {
     private SlackMessageService messageService;
 
     @Mock
-    private SlackHephaestusUiLinks uiLinks;
-
-    @Mock
     private SlackChannelConsentService consentService;
 
     private SlackChannelJoinNoticeHandler handler;
@@ -63,8 +58,7 @@ class SlackChannelJoinNoticeHandlerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         handler = new SlackChannelJoinNoticeHandler(
-                workspaceResolver, consentGate, participantConsentGate, messageService, uiLinks, consentService);
-        lenient().when(uiLinks.workspaceHomeUrl(WORKSPACE_ID)).thenReturn("https://heph.example/w/team");
+                workspaceResolver, consentGate, participantConsentGate, messageService, consentService);
     }
 
     private JsonNode joinEvent(String userId, String channelId) {
@@ -91,7 +85,7 @@ class SlackChannelJoinNoticeHandlerTest extends BaseUnitTest {
                         eq(CHANNEL),
                         eq(JOINER),
                         anyList(),
-                        eq(SlackConsentBlocks.lateJoinFallbackText("https://heph.example/w/team")));
+                        eq(SlackConsentBlocks.lateJoinFallbackText()));
     }
 
     @Test

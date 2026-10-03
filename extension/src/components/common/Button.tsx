@@ -30,9 +30,11 @@ export function buttonClasses(variant: ButtonVariant = "default", size: ButtonSi
 	);
 }
 
-export interface ButtonProps extends ComponentProps<"button"> {
+export interface ButtonProps extends Omit<ComponentProps<"button">, "type"> {
 	variant?: ButtonVariant;
 	size?: ButtonSize;
+	/** A form's submit button says so; every other button does nothing on Enter. */
+	type?: "button" | "submit";
 }
 
 /**
@@ -48,8 +50,7 @@ export function Button({
 }: ButtonProps) {
 	return (
 		<button
-			// oxlint-disable-next-line react/button-has-type -- The prop defaults to "button" above.
-			type={type}
+			type={type === "submit" ? "submit" : "button"}
 			data-variant={variant}
 			className={cn(buttonClasses(variant, size), className)}
 			{...props}

@@ -20,8 +20,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -38,6 +38,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.util.FileSystemUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -228,7 +229,7 @@ class MentorLiveLlmTest {
                 driver, threadId, "What number did I ask you to remember? Reply with only the digits.");
         System.out.printf("[multi-turn] turn 2 (%d chars): %s%n", t2Text.length(), trim(t2Text, 200));
         // Accept either the numeric or spelled-out form so the assertion is model-agnostic.
-        String t2Lower = t2Text.toLowerCase();
+        String t2Lower = t2Text.toLowerCase(Locale.ROOT);
         assertThat(t2Lower)
                 .as("turn 2 must recall the planted number — if this fails, the Pi SDK's session-bound "
                         + "agent._state.messages is not being fed through between turns on the same warm "
@@ -280,7 +281,7 @@ class MentorLiveLlmTest {
                 "List every fruit I have added so far, in the order I added them. "
                         + "Reply with just the fruit names separated by commas. No commentary.");
         System.out.printf("[5-turn] turn 5 summary (%d chars): %s%n", summary.length(), trim(summary, 200));
-        String lower = summary.toLowerCase();
+        String lower = summary.toLowerCase(Locale.ROOT);
         for (String fruit : fruits) {
             assertThat(lower)
                     .as(
@@ -307,7 +308,7 @@ class MentorLiveLlmTest {
                 new RunnerDriver(activeSandbox()),
                 threadId,
                 "What framework am I using? Reply with only the framework name.");
-        assertThat(followUp.toLowerCase())
+        assertThat(followUp.toLowerCase(Locale.ROOT))
                 .as("Pi SDK rehydrated agent state from injected .sessions/<id>.jsonl")
                 .contains("spring");
     }
@@ -463,15 +464,10 @@ class MentorLiveLlmTest {
     }
 
     private static void deleteRecursive(Path root) {
-        if (root == null || !Files.exists(root)) return;
-        try (var stream = Files.walk(root)) {
-            stream.sorted(Comparator.reverseOrder()).forEach(p -> {
-                try {
-                    Files.deleteIfExists(p);
-                } catch (IOException ignored) {
-                }
-            });
+        try {
+            FileSystemUtils.deleteRecursively(root);
         } catch (IOException ignored) {
+            // A leftover temp directory does not affect the next test, which stages its own.
         }
     }
 

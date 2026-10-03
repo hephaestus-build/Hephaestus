@@ -19,7 +19,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { hasText } from "@/lib/text";
 
 import { READERS } from "./feedback-copy";
-import { studyOf, SURVEY_PURPOSE_DEFS } from "./survey-purpose-defs";
+import { isResearch, studyOf, SURVEY_PURPOSE_DEFS } from "./survey-purpose-defs";
 import { type SurveyResponseDraft, surveyEstimate } from "./survey-questions";
 import { SurveyQuestionnaire } from "./SurveyQuestionnaire";
 
@@ -56,7 +56,6 @@ export function ProductSurveyDialog({
 	const closes = survey.endsAt
 		? `closes ${formatDistance(survey.endsAt, now, { addSuffix: true })}`
 		: undefined;
-	const research = survey.purpose === "RESEARCH";
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
@@ -85,14 +84,14 @@ export function ProductSurveyDialog({
 						<DialogTitle className="break-words">{survey.title}</DialogTitle>
 						<DialogDescription className="break-words">{survey.description}</DialogDescription>
 						<p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-							{research && <StatusBadge def={SURVEY_PURPOSE_DEFS.RESEARCH} />}
+							{isResearch(survey) && <StatusBadge def={SURVEY_PURPOSE_DEFS.RESEARCH} />}
 							<span>
 								{surveyEstimate(survey.questions)}
 								{hasText(closes) ? ` · ${closes}` : ""}
 							</span>
 						</p>
 						<p className="text-xs text-muted-foreground">
-							{research ? (
+							{isResearch(survey) ? (
 								<>
 									Part of {studyOf(survey)}, which you agreed to join. Your answers go to that
 									study, linked to your account, and are kept apart from product feedback. Skip

@@ -30,6 +30,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -573,7 +574,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         if (state == null) {
             return Issue.State.OPEN;
         }
-        return switch (state.toLowerCase()) {
+        return switch (state.toLowerCase(Locale.ROOT)) {
             case "opened" -> Issue.State.OPEN;
             case "closed" -> Issue.State.CLOSED;
             default -> {
@@ -666,14 +667,14 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
      * to the human-readable form stored in {@code issue_type.name} ({@code "Test Case"}).
      */
     private static String humaniseTypeName(String enumValue) {
-        String[] parts = enumValue.split("_");
+        String[] parts = enumValue.split("_", -1);
         StringBuilder sb = new StringBuilder(enumValue.length());
         for (int i = 0; i < parts.length; i++) {
             if (parts[i].isEmpty()) continue;
             if (i > 0) sb.append(' ');
             sb.append(Character.toUpperCase(parts[i].charAt(0)));
             if (parts[i].length() > 1) {
-                sb.append(parts[i].substring(1).toLowerCase());
+                sb.append(parts[i].substring(1).toLowerCase(Locale.ROOT));
             }
         }
         return sb.toString();

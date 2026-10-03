@@ -41,9 +41,6 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
     @Mock
     private FeedbackDeliveryService feedbackService;
 
-    @Mock
-    private PullRequestCommentPoster commentPoster;
-
     private final JsonMapper objectMapper = JsonMapper.builder().build();
 
     private PracticeCatalogInjector practiceCatalogInjector() {
@@ -178,6 +175,4 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
             assertThatThrownBy(() -> registry.getHandler(null)).isInstanceOf(NullPointerException.class);
         }
     }
-
-    /** Resolves every workspace to the unset defaults — HUMAN_APPROVAL autonomy, reach on the work. */
 }

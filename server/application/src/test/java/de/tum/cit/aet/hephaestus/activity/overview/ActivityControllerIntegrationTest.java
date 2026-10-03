@@ -811,9 +811,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     onUnlabeled.getId(),
                     DAY.plusSeconds(60),
                     monitored);
-            teamSettingsService
-                    .addLabelFilter(workspace, platform.getId(), platformLabel.getId())
-                    .orElseThrow();
+            assertThat(teamSettingsService.addLabelFilter(workspace, platform.getId(), platformLabel.getId()))
+                    .isPresent();
 
             assertThat(summary(uri -> uri.queryParam("teamId", platform.getId()))
                             .commentReviews())
@@ -841,9 +840,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     inGadgets.getId(),
                     DAY.plusSeconds(60),
                     gadgets);
-            teamSettingsService
-                    .updateRepositoryVisibility(workspace, web.getId(), monitored.getId(), true)
-                    .orElseThrow();
+            assertThat(teamSettingsService.updateRepositoryVisibility(workspace, web.getId(), monitored.getId(), true))
+                    .isPresent();
 
             assertThat(summary(uri -> uri.queryParam("teamId", platform.getId()))
                             .pullRequestsOpened())
@@ -903,9 +901,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         @Test
         void shouldAddUpToTheSummaryWhenEveryPageOfATeamsWorkIsWalked() {
             Label platformLabel = label("platform", monitored);
-            teamSettingsService
-                    .addLabelFilter(workspace, platform.getId(), platformLabel.getId())
-                    .orElseThrow();
+            assertThat(teamSettingsService.addLabelFilter(workspace, platform.getId(), platformLabel.getId()))
+                    .isPresent();
             seedMixedActivity(monitored);
             record(zoe, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -150L, DAY, unmonitored);
 
@@ -1078,8 +1075,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         @Test
         void shouldListOpenReviewRequestsByOthersInMonitoredRepositoriesWhenAMemberIsAsked() {
             PullRequest requested = pullRequest(zoe, monitored, requesting(ada));
-            pullRequest(zoe, monitored, requesting(ada).andThen(draft()));
-            pullRequest(zoe, monitored, requesting(ada).andThen(closed()));
+            pullRequest(zoe, monitored, requesting(ada).andThen(OpenWork::draft));
+            pullRequest(zoe, monitored, requesting(ada).andThen(OpenWork::closed));
             pullRequest(zoe, unmonitored, requesting(ada));
             pullRequest(ada, monitored, requesting(ada));
 
@@ -1091,8 +1088,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         @Test
         void shouldListOwnOpenPullRequestsIncludingDraftsWhenAMemberIsAsked() {
             PullRequest open = pullRequest(ada, monitored, work -> work);
-            PullRequest drafted = pullRequest(ada, monitored, draft());
-            pullRequest(ada, monitored, closed());
+            PullRequest drafted = pullRequest(ada, monitored, OpenWork::draft);
+            pullRequest(ada, monitored, OpenWork::closed);
             pullRequest(ada, unmonitored, work -> work);
             pullRequest(zoe, monitored, work -> work);
 
@@ -1401,19 +1398,15 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             };
         }
 
-        private static Function<PullRequest, PullRequest> draft() {
-            return work -> {
-                work.setDraft(true);
-                return work;
-            };
+        private static PullRequest draft(PullRequest work) {
+            work.setDraft(true);
+            return work;
         }
 
-        private static Function<PullRequest, PullRequest> closed() {
-            return work -> {
-                work.setState(Issue.State.CLOSED);
-                work.setClosedAt(DAY);
-                return work;
-            };
+        private static PullRequest closed(PullRequest work) {
+            work.setState(Issue.State.CLOSED);
+            work.setClosedAt(DAY);
+            return work;
         }
     }
 

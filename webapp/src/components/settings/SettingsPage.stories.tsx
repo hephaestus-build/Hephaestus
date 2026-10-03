@@ -63,6 +63,7 @@ const defaultLinkedAccountsProps = {
 		{
 			id: 1,
 			providerType: "GITHUB",
+			subject: "583231",
 			username: "octocat",
 			displayName: "The Octocat",
 			lastLoginAt: new Date("2026-05-20T10:00:00Z"),

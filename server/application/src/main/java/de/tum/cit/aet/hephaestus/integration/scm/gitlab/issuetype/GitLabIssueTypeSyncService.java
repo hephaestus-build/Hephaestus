@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncExcepti
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -176,7 +177,7 @@ public class GitLabIssueTypeSyncService {
      */
     static IssueType.Color mapIconToColor(@Nullable String name, @Nullable String iconName) {
         if (name == null) return IssueType.Color.GRAY;
-        return switch (name.toLowerCase()) {
+        return switch (name.toLowerCase(Locale.ROOT)) {
             case "issue" -> IssueType.Color.BLUE;
             case "task" -> IssueType.Color.GREEN;
             case "incident" -> IssueType.Color.RED;

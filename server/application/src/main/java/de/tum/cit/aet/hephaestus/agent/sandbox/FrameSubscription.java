@@ -151,7 +151,7 @@ public final class FrameSubscription implements Disposable {
             log.debug("onDispose callback failed for subscription {}: {}", subscriptionId, e.toString());
         }
         Thread t = dispatcherThread;
-        if (awaitDispatcher && t != null && t != Thread.currentThread()) {
+        if (awaitDispatcher && t != null && !isCurrentThread(t)) {
             try {
                 t.join(DISPATCHER_JOIN_TIMEOUT_MS);
             } catch (InterruptedException ie) {
@@ -159,6 +159,11 @@ public final class FrameSubscription implements Disposable {
             }
         }
         return true;
+    }
+
+    @SuppressWarnings("ReferenceEquality") // thread identity: the dispatcher must not join itself
+    private static boolean isCurrentThread(Thread thread) {
+        return thread == Thread.currentThread();
     }
 
     private void dispatchLoop() {

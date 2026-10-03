@@ -2542,7 +2542,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             try {
                 for (int i = 0; i < threads; i++) {
                     final String criteria = "concurrent edit " + i;
-                    pool.submit(() -> {
+                    pool.execute(() -> {
                         try {
                             startGate.await();
                             practiceService.updatePractice(

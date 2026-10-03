@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -24,7 +25,6 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
@@ -140,9 +140,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
     private JobTypeHandlerRegistry handlerRegistry;
 
     @Mock
-    private JobEvidenceFiles evidenceFiles;
-
-    @Mock
     private PracticePiAdapter practiceAgent;
 
     @Mock
@@ -184,7 +181,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 jobRepository,
                 memberAiPolicy,
                 handlerRegistry,
-                evidenceFiles,
                 practiceAgent,
                 workerJwtIssuer,
                 sandboxManager,
@@ -331,7 +327,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -725,7 +720,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
             JobTypeHandler handler = mock(JobTypeHandler.class);
             when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
             when(handler.prepareInputs(any()))
-                    .thenReturn(PreparedJobInputsFixtures.filesOnly(Map.of("task.json", "{}".getBytes())));
+                    .thenReturn(PreparedJobInputsFixtures.filesOnly(Map.of("task.json", "{}".getBytes(UTF_8))));
             when(practiceAgent.buildSandboxSpec(any())).thenReturn(minimalSpec());
             when(jobRepository.updateProvenanceDigests(any(), any(), anyInt(), any()))
                     .thenReturn(0);
@@ -826,7 +821,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
             var released = new AtomicBoolean();
             PreparedJobInputs inputs = PreparedJobInputsFixtures.inputs(
                     new PreparedEvidence(
-                            Map.of(SandboxLayout.MANIFEST_PATH, "{}".getBytes()),
+                            Map.of(SandboxLayout.MANIFEST_PATH, "{}".getBytes(UTF_8)),
                             Map.of(),
                             List.of(() -> released.set(true)),
                             manifest),
@@ -1225,7 +1220,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1287,7 +1281,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1349,7 +1342,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1404,7 +1396,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1466,7 +1457,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1525,7 +1515,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1582,7 +1571,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -1627,7 +1615,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2097,7 +2084,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2176,7 +2162,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2224,7 +2209,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2285,7 +2269,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                         jobRepository,
                         memberAiPolicy,
                         handlerRegistry,
-                        evidenceFiles,
                         practiceAgent,
                         workerJwtIssuer,
                         sandboxManager,
@@ -2331,7 +2314,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                         jobRepository,
                         memberAiPolicy,
                         handlerRegistry,
-                        evidenceFiles,
                         practiceAgent,
                         workerJwtIssuer,
                         sandboxManager,
@@ -2374,7 +2356,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2418,7 +2399,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2479,7 +2459,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2519,7 +2498,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     jobRepository,
                     memberAiPolicy,
                     handlerRegistry,
-                    evidenceFiles,
                     practiceAgent,
                     workerJwtIssuer,
                     sandboxManager,
@@ -2693,13 +2671,13 @@ class AgentJobExecutorTest extends BaseUnitTest {
         JobTypeHandler handler = mock(JobTypeHandler.class);
         when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
         when(handler.prepareInputs(any()))
-                .thenReturn(PreparedJobInputsFixtures.filesOnly(Map.of("code.py", "print('hi')".getBytes())));
+                .thenReturn(PreparedJobInputsFixtures.filesOnly(Map.of("code.py", "print('hi')".getBytes(UTF_8))));
 
         PracticeSandboxSpec agentSpec = new PracticeSandboxSpec(
                 "ghcr.io/agent:latest",
                 List.of("/bin/agent"),
                 Map.of("KEY", "value"),
-                Map.of("config.json", "{}".getBytes()),
+                Map.of("config.json", "{}".getBytes(UTF_8)),
                 "/output",
                 SecurityProfile.DEFAULT,
                 new NetworkPolicy(false, null, "test-token"),

@@ -194,7 +194,7 @@ export function HephFeedbackCard({
 					    widening the page. */}
 					<ul className="grid grid-cols-[minmax(0,max-content)] gap-x-7 gap-y-1.5 sm:grid-cols-[repeat(2,max-content)]">
 						{reviewedWork.map((group) => (
-							<ReviewedWorkCell key={`${group.kind} ${group.provider}`} group={group} />
+							<ReviewedWorkCell key={`${group.kind} ${group.provider ?? ""}`} group={group} />
 						))}
 					</ul>
 				</div>

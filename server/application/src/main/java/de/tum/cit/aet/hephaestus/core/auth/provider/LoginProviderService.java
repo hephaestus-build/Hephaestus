@@ -421,7 +421,7 @@ public class LoginProviderService {
         String trimmed = scopes.trim();
         if (type == LoginProvider.ProviderType.GITLAB || type == LoginProvider.ProviderType.OUTLINE) {
             String replacement = type == LoginProvider.ProviderType.GITLAB ? "'read_user'" : "'read'";
-            for (String scope : trimmed.split("\\s+")) {
+            for (String scope : trimmed.split("\\s+", -1)) {
                 if (scope.equalsIgnoreCase("openid")) {
                     throw new ResponseStatusException(
                             HttpStatus.UNPROCESSABLE_CONTENT,

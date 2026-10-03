@@ -356,9 +356,7 @@ export const listLinkedIdentitiesResponseTransformer = async (data: any): Promis
 };
 
 const sessionViewSchemaResponseTransformer = (data: any) => {
-  if (data.expiresAt) {
-    data.expiresAt = new Date(data.expiresAt);
-  }
+  data.expiresAt = new Date(data.expiresAt);
   if (data.issuedAt) {
     data.issuedAt = new Date(data.issuedAt);
   }
@@ -781,9 +779,7 @@ export const getLlmUsageReportResponseTransformer = async (data: any): Promise<G
 };
 
 const workspaceMembershipSchemaResponseTransformer = (data: any) => {
-  if (data.createdAt) {
-    data.createdAt = new Date(data.createdAt);
-  }
+  data.createdAt = new Date(data.createdAt);
   return data;
 };
 
@@ -813,9 +809,7 @@ export const updateMemberVisibilityResponseTransformer = async (data: any): Prom
 };
 
 const chatThreadSummarySchemaResponseTransformer = (data: any) => {
-  if (data.createdAt) {
-    data.createdAt = new Date(data.createdAt);
-  }
+  data.createdAt = new Date(data.createdAt);
   return data;
 };
 

@@ -299,7 +299,7 @@ function RouteComponent() {
 		(provider) => provider.providerType?.toUpperCase() === "SLACK",
 	);
 	const slackIdentity = linkedIdentitiesQuery.data?.find(
-		(identity) => identity.providerType?.toUpperCase() === "SLACK",
+		(identity) => identity.providerType.toUpperCase() === "SLACK",
 	);
 	const slackAvailable = hasText(slackProvider?.registrationId) || slackIdentity !== undefined;
 

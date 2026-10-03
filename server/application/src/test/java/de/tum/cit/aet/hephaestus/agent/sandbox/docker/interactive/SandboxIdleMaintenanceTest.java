@@ -32,12 +32,7 @@ class SandboxIdleMaintenanceTest extends BaseUnitTest {
         var watchdog = new StdinWriteWatchdog();
         var meters = new SimpleMeterRegistry();
         var registry = new InteractiveSandboxRegistry(
-                properties,
-                mock(SandboxContainerManager.class),
-                new InteractiveSandboxMetrics(meters),
-                watchdog,
-                meters,
-                mock(SandboxCreator.class));
+                properties, mock(SandboxContainerManager.class), watchdog, meters, mock(SandboxCreator.class));
         var idle = session("idle-user", Duration.ofMinutes(6));
         var active = session("active-user", Duration.ZERO);
 

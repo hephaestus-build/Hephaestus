@@ -245,6 +245,12 @@ class SandboxGatewaySessionsTest {
                         new InputStream() {
                             @Override
                             public int read() throws IOException {
+                                byte[] single = new byte[1];
+                                return read(single, 0, 1) < 0 ? -1 : single[0] & 0xFF;
+                            }
+
+                            @Override
+                            public int read(byte[] buffer, int offset, int length) throws IOException {
                                 reading.countDown();
                                 try {
                                     if (!disconnect.await(5, TimeUnit.SECONDS)) throw new IOException("Read timed out");

@@ -201,7 +201,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
      * client IP so an unauthenticated flood is still capped. The namespace prefix guarantees two
      * endpoints never share a bucket even for the same principal.
      */
-    String resolveBucketKey(Endpoint endpoint, HttpServletRequest request) {
+    private String resolveBucketKey(Endpoint endpoint, HttpServletRequest request) {
         if (endpoint.accountScoped) {
             Optional<String> sub = currentSubject();
             if (sub.isPresent()) {

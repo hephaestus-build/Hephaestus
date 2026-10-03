@@ -141,7 +141,7 @@ public class OutlineWebhookSignatureVerifier implements WebhookSignatureVerifier
         }
         String timestamp = null;
         String signature = null;
-        for (String part : header.split(",")) {
+        for (String part : header.split(",", -1)) {
             int eq = part.indexOf('=');
             if (eq <= 0) {
                 continue;

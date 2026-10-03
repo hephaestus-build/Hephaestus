@@ -41,7 +41,6 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.activity.ConnectionActivi
 import de.tum.cit.aet.hephaestus.integration.core.sync.activity.ConnectionActivityRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import java.lang.reflect.Field;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -57,6 +56,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.core.task.TaskRejectedException;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Unit coverage for {@link SyncStatusService}: connection-health derivation across every
@@ -670,12 +670,6 @@ class SyncStatusServiceTest extends BaseUnitTest {
     }
 
     private static void setConnectionId(Connection connection, long id) {
-        try {
-            Field field = Connection.class.getDeclaredField("id");
-            field.setAccessible(true);
-            field.set(connection, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(connection, "id", id);
     }
 }

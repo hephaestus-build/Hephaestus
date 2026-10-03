@@ -234,7 +234,7 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
                         .max(Comparator.comparing(ArtifactSignal::getOccurredAt))
                         .orElseThrow());
         for (ArtifactSignal signal : settling) {
-            if (signal == reviewed) {
+            if (signal.key().equals(reviewed.key())) {
                 submitter.resubmit(signal);
             } else {
                 recorder.markRefused(signal.key(), SignalStateReason.COALESCED);

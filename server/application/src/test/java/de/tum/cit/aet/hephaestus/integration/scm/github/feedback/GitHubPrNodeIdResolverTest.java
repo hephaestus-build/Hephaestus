@@ -21,6 +21,7 @@ import org.mockito.Mock;
 import org.springframework.graphql.ResponseError;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -34,7 +35,7 @@ class GitHubPrNodeIdResolverTest extends BaseUnitTest {
     private HttpGraphQlClient client;
 
     @Mock
-    private HttpGraphQlClient.RequestSpec spec;
+    private GraphQlClient.RequestSpec spec;
 
     private GitHubPrNodeIdResolver resolver;
 

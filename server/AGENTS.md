@@ -30,9 +30,11 @@ are not here: write code that reads like the file you are editing.
 - **Handwritten javac warnings fail compilation.** Application and test sources use `-Werror`;
   generated clients stay in their separate module. Missing dependency annotation metadata belongs
   on the needed compile-only classpath, not in lint suppressions or annotation processors.
-- **Error Prone fails compilation** on an unnecessary fully qualified name or a wildcard import.
-  Lombok expands `@Builder.Default` to its fully qualified name before Error Prone runs, so import
-  `lombok.Builder.Default` and write `@Default`.
+- **Error Prone's default checks fail compilation**, as do unnecessary fully qualified names and
+  wildcard imports. Suppress only a false positive: `@SuppressWarnings("Check") // why` on the
+  smallest scope. Lombok expands `@Builder.Default` to its fully qualified name before Error Prone
+  runs, so import `lombok.Builder.Default` and write `@Default`; a nested `Type`, `Builder`, `Key` or
+  `Id` is not imported but written `Outer.Type` (BadImport).
 - **One build invocation per checkout at a time.** Gradle owns the module `build/` directories.
 - **Tests always execute when requested.** Test result caching and up-to-date skipping are disabled;
   PostgreSQL, containers and provider state are not content-addressed inputs. Compilation remains
@@ -144,8 +146,9 @@ or on "the only" result, and never write cleanup that another test depends on ha
   no error anywhere. Domain types the API deliberately exposes (`ProblemDetail`, `PracticeDefinition`, …)
   are there for this reason.
 - DTOs are records. All bare components are non-null under `@NullMarked`; add JSpecify `@NonNull` when
-  that component must also appear in the generated schema's `required` list. A component the API may
-  omit is `@Nullable`, never bare.
+  that component must also appear in the generated schema's `required` list. A primitive takes
+  `@Schema(requiredMode = RequiredMode.REQUIRED)` instead, since a nullness annotation on it fails the
+  build. A component the API may omit is `@Nullable`, never bare.
 - **Never wrap a DTO component in `Optional<>`.** springdoc unwraps it to the value type but still marks
   it required, so the generated TypeScript declares it non-optional and its response transformer
   converts it unconditionally — a value the server never sends is typed as one it always sends. Use
@@ -183,7 +186,7 @@ envelope to JetStream, all gated with `@ConditionalOnWebhookRole`. Configuration
   become `~` and nested GitLab groups join with `~`. Producer and consumer must agree —
   `SubjectGrammarRoundTripTest` enforces it for every committed fixture.
 - **ArchUnit guards the primitives**: `HexEncodingArchTest` (only `HexFormat.of()`),
-  `LocaleSafetyArchTest` (no naked `toLowerCase`/`toUpperCase`). `application/build.gradle.kts` sets
+  `LocaleSafetyArchTest` (no `Locale.getDefault()`). `application/build.gradle.kts` sets
   per-package JaCoCo branch floors, checked by the unit coverage task and `verification`: `test:server:unit`,
   `test:server:verification` and the _App Server: Unit and architecture_ CI job. Raise a floor when
   its package clears the next step.

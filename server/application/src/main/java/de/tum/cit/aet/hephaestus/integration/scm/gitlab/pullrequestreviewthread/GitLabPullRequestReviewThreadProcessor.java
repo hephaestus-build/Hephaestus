@@ -75,10 +75,13 @@ public class GitLabPullRequestReviewThreadProcessor {
      * root diff note's {@code position} and are copied onto the thread so
      * downstream consumers can index review threads by file/line/side without
      * joining through comments.
+     *
+     * @param resolved whether GitLab says the discussion is resolved; null when the read did not say, which changes
+     *     nothing
+     * @param resolvedAt when GitLab says the discussion was resolved; the discussion states it, the sync copies it
      */
     public record ThreadData(
             String discussionGlobalId,
-            /** Whether GitLab says the discussion is resolved; null when the read did not say, which changes nothing. */
             @Nullable Boolean resolved,
             @Nullable User resolvedBy,
             @Nullable String filePath,
@@ -89,7 +92,6 @@ public class GitLabPullRequestReviewThreadProcessor {
             @Nullable String originalCommitSha,
             @Nullable Boolean outdated,
             @Nullable Instant createdAt,
-            /** When GitLab says the discussion was resolved; the discussion states it, the sync copies it. */
             @Nullable Instant resolvedAt) {
         /** The same discussion, resolved by {@code user}. */
         public ThreadData withResolvedBy(@Nullable User user) {
@@ -129,6 +131,9 @@ public class GitLabPullRequestReviewThreadProcessor {
     /**
      * Groups the webhook-level data needed to find or create a webhook thread. {@code line} is the
      * {@link #anchoredLine anchored line}, resolved by the caller from the note's position.
+     *
+     * @param discussionGlobalId the discussion's GID where the webhook named its discussion; then {@code noteNativeId}
+     *     is its hash
      */
     public record WebhookThreadData(
             long noteNativeId,
@@ -136,7 +141,6 @@ public class GitLabPullRequestReviewThreadProcessor {
             @Nullable Integer line,
             @Nullable Instant createdAt,
             @Nullable Instant updatedAt,
-            /** The discussion's GID where the webhook named its discussion; then {@code noteNativeId} is its hash. */
             @Nullable String discussionGlobalId) {}
 
     /**

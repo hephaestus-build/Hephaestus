@@ -264,13 +264,13 @@ public class WorkspaceStatementInspector implements StatementInspector {
 
         String setClause = dml.group(2);
         if (setClause != null) {
-            for (String assignment : COMMA_SPLIT_PATTERN.split(setClause)) {
+            for (String assignment : COMMA_SPLIT_PATTERN.split(setClause, -1)) {
                 if (!BOUND_ASSIGNMENT_PATTERN.matcher(assignment).matches()) return false;
             }
         }
 
         Set<String> predicateColumns = new HashSet<>();
-        for (String conjunct : AND_SPLIT_PATTERN.split(dml.group(3).strip())) {
+        for (String conjunct : AND_SPLIT_PATTERN.split(dml.group(3).strip(), -1)) {
             Matcher predicate = KEY_PREDICATE_PATTERN.matcher(conjunct);
             if (!predicate.matches()) return false;
             if (!predicateColumns.add(predicate.group(1).toLowerCase(Locale.ROOT))) return false;

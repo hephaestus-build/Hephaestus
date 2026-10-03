@@ -7,6 +7,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.nats.client.Message;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -208,7 +209,7 @@ public class IntegrationPoisonHandler {
         }
         String subject = msg.getSubject();
         return ConsumerSubjectMath.kindFromSubjectPrefix(subject)
-                .map(k -> k.name().toLowerCase())
+                .map(k -> k.name().toLowerCase(Locale.ROOT))
                 .orElse(UNKNOWN_KIND_TAG);
     }
 }

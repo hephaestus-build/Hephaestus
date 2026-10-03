@@ -5,6 +5,10 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import org.jspecify.annotations.Nullable;
 
+/**
+ * @param autonomy null means the group holds no autonomy and follows the workspace default — a real state, so it is
+ *     serialized
+ */
 record PracticeGroupSnapshot(
         String slug,
         String name,
@@ -12,7 +16,6 @@ record PracticeGroupSnapshot(
         boolean visibleInPracticeDashboards,
         @Nullable String icon,
         @Nullable String color,
-        /** Null means the group holds no autonomy and follows the workspace default — a real state, so it is serialized. */
         @Nullable PracticeAutonomy autonomy)
         implements ConfigAuditSnapshot {
     static PracticeGroupSnapshot of(PracticeGroup group) {

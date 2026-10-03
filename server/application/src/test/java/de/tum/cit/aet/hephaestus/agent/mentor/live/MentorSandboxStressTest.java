@@ -13,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,6 +30,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.util.FileSystemUtils;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -62,7 +62,7 @@ class MentorSandboxStressTest {
     private static final Path RUNNER =
             Path.of("src", "main", "resources", "agent", "pi-mentor-runner.ts").toAbsolutePath();
     /** Per-session deadline: cold-start + handshake + prompt + settlement against live LLM. */
-    private static final Duration SESSION_BUDGET = Duration.ofSeconds(120);
+    private static final Duration SESSION_BUDGET = Duration.ofMinutes(2);
 
     private final List<Path> stagedWorkspaces = new CopyOnWriteArrayList<>();
     private final List<StdioAttachedSandbox> sandboxes = new CopyOnWriteArrayList<>();
@@ -81,14 +81,10 @@ class MentorSandboxStressTest {
         }
         sandboxes.clear();
         for (Path ws : stagedWorkspaces) {
-            try (var stream = Files.walk(ws)) {
-                stream.sorted(Comparator.reverseOrder()).forEach(p -> {
-                    try {
-                        Files.deleteIfExists(p);
-                    } catch (IOException ignored) {
-                    }
-                });
+            try {
+                FileSystemUtils.deleteRecursively(ws);
             } catch (IOException ignored) {
+                // A leftover temp directory does not affect the next test, which stages its own.
             }
         }
         stagedWorkspaces.clear();
@@ -265,6 +261,8 @@ class MentorSandboxStressTest {
                         long[] sample = readProcStatus(session.runnerPid);
                         session.samples.add(sample);
                     } catch (IOException ignored) {
+                        // The runner can exit between the liveness check and the /proc read; that sample is
+                        // simply missing, and a periodic task that threw would stop sampling altogether.
                     }
                 },
                 0,
@@ -335,6 +333,8 @@ class MentorSandboxStressTest {
                     try {
                         r.samples.add(readProcStatus(r.runnerPid));
                     } catch (IOException ignored) {
+                        // The runner can exit between the liveness check and the /proc read; that sample is
+                        // simply missing, and a periodic task that threw would stop sampling altogether.
                     }
                 },
                 0,
@@ -409,7 +409,6 @@ class MentorSandboxStressTest {
                 long turnMs = (System.nanoTime() - promptStart) / 1_000_000;
                 r.perTurnMs.add(turnMs);
             }
-            r.allTurnsDoneNanos = System.nanoTime();
             r.rssAfterAllTurnsKb = currentRss(r.runnerPid);
         } finally {
             sampleFuture.cancel(false);
@@ -634,9 +633,9 @@ class MentorSandboxStressTest {
         long threads = -1L;
         for (String line : Files.readAllLines(status)) {
             if (line.startsWith("VmRSS:")) {
-                rssKb = Long.parseLong(line.split("\\s+")[1]);
+                rssKb = Long.parseLong(line.split("\\s+", -1)[1]);
             } else if (line.startsWith("Threads:")) {
-                threads = Long.parseLong(line.split("\\s+")[1]);
+                threads = Long.parseLong(line.split("\\s+", -1)[1]);
             }
             if (rssKb > 0 && threads > 0) break;
         }
@@ -723,7 +722,7 @@ class MentorSandboxStressTest {
         } catch (JacksonException e) {
             throw new IllegalStateException("failed to encode shim literals", e);
         }
-        return ("""
+        return """
             import path from "node:path";
             import fs from "node:fs";
             const WORKSPACE_REAL = __WORKSPACE__;
@@ -737,7 +736,7 @@ class MentorSandboxStressTest {
             const origMkdir = fs.mkdirSync; fs.mkdirSync = (p, opts) => origMkdir(rewrite(p), opts);
             const origReadFile = fs.readFileSync; fs.readFileSync = (p, opts) => origReadFile(rewrite(p), opts);
             await import(__RUNNER_URL__);
-            """).replace("__WORKSPACE__", workspaceLit).replace("__RUNNER_URL__", runnerLit);
+            """.replace("__WORKSPACE__", workspaceLit).replace("__RUNNER_URL__", runnerLit);
     }
 
     /** Per-runner metric capture for the multi-session test. K threads opened in one runner. */
@@ -749,7 +748,6 @@ class MentorSandboxStressTest {
         long spawnStartNanos;
         long readyNanos;
         long allThreadsOpenedNanos;
-        long allTurnsDoneNanos;
         long rssAfterOpenKb;
         long rssAfterAllTurnsKb;
         long rssOneSessionFloorKb;

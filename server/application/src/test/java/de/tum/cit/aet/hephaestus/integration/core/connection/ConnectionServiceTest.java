@@ -26,10 +26,10 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -46,6 +46,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.QueryTimeoutException;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -285,6 +286,7 @@ class ConnectionServiceTest extends BaseUnitTest {
     @Test
     void transition_toUninstalled_clearsProviderWebhookConfig() {
         Connection gitLab = connection(
+                56L,
                 IntegrationKind.GITLAB,
                 new ConnectionConfig.GitLabConfig(
                         "https://gitlab.example",
@@ -294,6 +296,7 @@ class ConnectionServiceTest extends BaseUnitTest {
                         Set.of(),
                         null));
         Connection outline = connection(
+                57L,
                 IntegrationKind.OUTLINE,
                 new ConnectionConfig.OutlineConfig("https://outline.example", "subscription-1", "secret-1", Set.of()));
 
@@ -311,8 +314,8 @@ class ConnectionServiceTest extends BaseUnitTest {
 
     @Test
     void findReferenced_resolvesAnExplicitSuspendedConnection() {
-        Connection connection =
-                connection(IntegrationKind.SLACK, new ConnectionConfig.SlackConfig("team-1", "Acme", null, Set.of()));
+        Connection connection = connection(
+                58L, IntegrationKind.SLACK, new ConnectionConfig.SlackConfig("team-1", "Acme", null, Set.of()));
         connection.setState(IntegrationState.SUSPENDED);
         IntegrationRef ref = new IntegrationRef(
                 IntegrationKind.SLACK, workspace.getId(), connection.getInstanceKey(), connection.getId());
@@ -647,9 +650,9 @@ class ConnectionServiceTest extends BaseUnitTest {
         return connection;
     }
 
-    private Connection connection(IntegrationKind kind, ConnectionConfig config) {
-        Connection connection = new Connection(workspace, kind, kind.name().toLowerCase(), config);
-        setId(connection, 55L + kind.ordinal());
+    private Connection connection(long id, IntegrationKind kind, ConnectionConfig config) {
+        Connection connection = new Connection(workspace, kind, kind.name().toLowerCase(Locale.ROOT), config);
+        setId(connection, id);
         connection.setState(IntegrationState.ACTIVE);
         lenient()
                 .when(connectionRepository.findByIdAndWorkspaceId(connection.getId(), workspace.getId()))
@@ -668,13 +671,7 @@ class ConnectionServiceTest extends BaseUnitTest {
     }
 
     private static void setId(Connection connection, long id) {
-        try {
-            Field idField = Connection.class.getDeclaredField("id");
-            idField.setAccessible(true);
-            idField.set(connection, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(connection, "id", id);
     }
 
     /** A GitHub App connection runs on no stored token: the write refuses one rather than overwriting its identity. */

@@ -10,6 +10,7 @@ import java.net.UnknownHostException;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.resources.ConnectionProvider;
 import reactor.netty.resources.LoopResources;
@@ -39,7 +40,9 @@ class LlmProxyWebClientConfigTest extends BaseUnitTest {
                     .bodyToMono(String.class)
                     .block(BLOCK));
 
-            Throwable root = rootCause(thrown);
+            assertThat(thrown).isNotNull();
+
+            Throwable root = NestedExceptionUtils.getMostSpecificCause(thrown);
             assertThat(root)
                     .as("guard must reject at DNS resolution, not surface a plain connect failure")
                     .isInstanceOf(UnknownHostException.class)
@@ -49,13 +52,5 @@ class LlmProxyWebClientConfigTest extends BaseUnitTest {
             provider.dispose();
             loop.disposeLater().block(BLOCK);
         }
-    }
-
-    private static Throwable rootCause(Throwable t) {
-        Throwable cur = t;
-        while (cur != null && cur.getCause() != null && cur.getCause() != cur) {
-            cur = cur.getCause();
-        }
-        return cur;
     }
 }

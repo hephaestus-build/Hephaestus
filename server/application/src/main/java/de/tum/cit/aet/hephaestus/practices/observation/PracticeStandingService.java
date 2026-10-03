@@ -171,7 +171,7 @@ public class PracticeStandingService {
         }
         standings.sort(Comparator.<StandingSnapshot.PracticeStanding>comparingInt(
                         standing -> standing.dto().standing().rank())
-                .thenComparingInt(standing -> worstSeverityOrdinal(standing.dto())));
+                .thenComparingInt(standing -> worstSeverityRank(standing.dto())));
         Map<String, StandingSnapshot.PracticeStanding> practices = new LinkedHashMap<>();
         standings.forEach(standing -> practices.put(standing.dto().slug(), standing));
         return new StandingSnapshot(practices, eligiblePracticesByGroup);
@@ -266,7 +266,7 @@ public class PracticeStandingService {
             return new PracticeEvidence(
                     practice,
                     bucket(byOutcome, Outcome.NOT_MET).stream()
-                            .sorted(Comparator.comparingInt(PracticeStandingService::severityOrdinal))
+                            .sorted(Comparator.comparingInt(PracticeStandingService::severityRank))
                             .toList(),
                     bucket(byOutcome, Outcome.MET),
                     Stream.concat(
@@ -364,18 +364,21 @@ public class PracticeStandingService {
                 .collect(Collectors.toMap(ObservationFeedbackBody::getObservationId, ObservationFeedbackBody::getBody));
     }
 
-    private static int worstSeverityOrdinal(PracticeStandingDTO practiceStanding) {
+    private static final int UNRANKED = Integer.MAX_VALUE;
+
+    private static int worstSeverityRank(PracticeStandingDTO practiceStanding) {
         return practiceStanding.toWorkOn().stream()
-                .mapToInt(observation -> observation.severity() == null
-                        ? Severity.values().length
-                        : observation.severity().ordinal())
+                .mapToInt(observation -> rankOf(observation.severity()))
                 .min()
-                .orElse(Severity.values().length);
+                .orElse(UNRANKED);
     }
 
-    private static int severityOrdinal(Observation observation) {
-        return observation.getSeverity() == null
-                ? Severity.values().length
-                : observation.getSeverity().ordinal();
+    private static int severityRank(Observation observation) {
+        return rankOf(observation.getSeverity());
+    }
+
+    /** Ranks a missing severity after every severity. */
+    private static int rankOf(@Nullable Severity severity) {
+        return severity == null ? UNRANKED : severity.rank();
     }
 }

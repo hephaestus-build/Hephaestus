@@ -33,7 +33,6 @@ public record DockerSandboxProperties(
         String owner) {
 
     @AssertTrue(message = "cert-path must be set when tls-verify is enabled")
-    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private boolean isTlsCertificatePathConfigured() {
         return !tlsVerify || (certPath != null && !certPath.isBlank());
     }

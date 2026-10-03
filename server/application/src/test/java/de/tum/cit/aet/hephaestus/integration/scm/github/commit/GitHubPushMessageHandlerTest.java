@@ -103,9 +103,12 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
     private void stubCommitRange(List<CommitDetails> commits) {
         doAnswer(invocation -> {
                     Function<List<String>, Set<String>> captured = invocation.getArgument(3);
-                    captured.apply(commits.stream().map(CommitDetails::sha).toList());
+                    Set<String> existing = captured.apply(
+                            commits.stream().map(CommitDetails::sha).toList());
                     Consumer<CommitDetails> consumer = invocation.getArgument(4);
-                    commits.forEach(consumer);
+                    commits.stream()
+                            .filter(commit -> !existing.contains(commit.sha()))
+                            .forEach(consumer);
                     return null;
                 })
                 .when(gitRepositoryManager)
@@ -116,7 +119,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
 
     private static GitHubRepositoryRefDTO createRepoRef(@Nullable Long id, String fullName) {
         return new GitHubRepositoryRefDTO(
-                id, "node_" + id, fullName.split("/")[1], fullName, false, "https://github.com/" + fullName, null);
+                id, "node_" + id, fullName.split("/", -1)[1], fullName, false, "https://github.com/" + fullName, null);
     }
 
     private static GitHubPushEventDTO.PushCommit createPushCommit(

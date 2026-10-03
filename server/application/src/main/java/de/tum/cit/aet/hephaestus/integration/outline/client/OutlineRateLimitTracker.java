@@ -260,7 +260,7 @@ public class OutlineRateLimitTracker {
                     if (reset == null) {
                         return 0.0;
                     }
-                    return Math.max(0, Duration.between(Instant.now(), reset).getSeconds());
+                    return Math.max(0, Duration.between(Instant.now(), reset).toSeconds());
                 })
                 .tags(tags)
                 .description("Seconds until the Outline API rate-limit window resets")

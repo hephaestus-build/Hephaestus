@@ -421,7 +421,7 @@ public final class ConfigurationReadinessEvaluator {
             String scheme = uri.getScheme();
             return ("nats".equalsIgnoreCase(scheme) || "tls".equalsIgnoreCase(scheme))
                     && uri.getHost() != null
-                    && (port == -1 || port > 0 && port <= 65535)
+                    && (port == -1 || (port > 0 && port <= 65535))
                     && (uri.getPath().isEmpty() || "/".equals(uri.getPath()))
                     && uri.getQuery() == null
                     && uri.getFragment() == null;

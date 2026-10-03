@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.discussioncomment.dto.GitHubDiscussionCommentDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -27,6 +26,7 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
+import org.hibernate.Hibernate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -63,9 +63,6 @@ class GitHubDiscussionCommentProcessorIntegrationTest extends BaseIntegrationTes
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
-
-    @Autowired
-    private UserRepository userRepository;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -456,7 +453,7 @@ class GitHubDiscussionCommentProcessorIntegrationTest extends BaseIntegrationTes
             // real-world scenario where parent is in persistence context)
             Discussion loadedDiscussion =
                     discussionRepository.findById(testDiscussion.getId()).orElseThrow();
-            loadedDiscussion.getComments().size(); // Force lazy initialization
+            Hibernate.initialize(loadedDiscussion.getComments());
 
             // Delete should work without TransientObjectException
             // because the processor syncs bidirectional relationship

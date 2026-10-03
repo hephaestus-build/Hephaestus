@@ -66,7 +66,7 @@ public class CitedSourceAccess {
     public void bind(AgentJob job, ObjectNode citation, String digest) {
         String path = citation.path("artifactPath").asString();
         if (path.startsWith("context/people/")) {
-            long person = sourceNumber(path.split("/")[2]);
+            long person = sourceNumber(path.split("/", -1)[2]);
             if (!memberPolicy.allowsPerson(job, person))
                 throw new JobDeliveryException("The cited person no longer permits this processor");
         }
@@ -118,7 +118,7 @@ public class CitedSourceAccess {
                             } else {
                                 entry.put("type", path.endsWith("observations.jsonl") ? "observation" : "feedback")
                                         .put("id", record.path("id").asString())
-                                        .put("person", sourceNumber(path.split("/")[2]));
+                                        .put("person", sourceNumber(path.split("/", -1)[2]));
                             }
                         }
                         return rows;
@@ -127,9 +127,9 @@ public class CitedSourceAccess {
             records.addAll(selected);
             if (records.isEmpty()) throw new JobDeliveryException("The cited folder record has no source identity");
         } else if (path.startsWith("context/people/") && path.endsWith("/person.json")) {
-            records.addObject().put("type", "person").put("person", sourceNumber(path.split("/")[2]));
+            records.addObject().put("type", "person").put("person", sourceNumber(path.split("/", -1)[2]));
         } else if (path.startsWith("context/docs/")) {
-            String[] parts = path.split("/");
+            String[] parts = path.split("/", -1);
             if (parts.length != 4 || !parts[3].endsWith(".md")) throw new JobDeliveryException("Invalid document path");
             String sourceId = files.inspect(job, path, digest, input -> {
                         var reader = new BufferedReader(input);
@@ -154,7 +154,7 @@ public class CitedSourceAccess {
         } else if (path.startsWith("context/scm/")
                 || path.startsWith("repos/")
                 || citation.path("sourceKind").asString("").startsWith("scm.")) {
-            String[] parts = path.split("/");
+            String[] parts = path.split("/", -1);
             String repo =
                     path.startsWith("repos/") ? parts[1] : path.startsWith("context/scm/") ? parts[2] : "reviewed";
             long id = repo.equals("reviewed")

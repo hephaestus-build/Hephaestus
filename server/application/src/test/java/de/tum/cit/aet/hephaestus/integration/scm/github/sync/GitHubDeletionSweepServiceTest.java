@@ -46,6 +46,7 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -77,7 +78,7 @@ class GitHubDeletionSweepServiceTest extends BaseUnitTest {
     private HttpGraphQlClient client;
 
     @Mock
-    private HttpGraphQlClient.RequestSpec requestSpec;
+    private GraphQlClient.RequestSpec requestSpec;
 
     @Mock
     private SyncExecutionHandle handle;

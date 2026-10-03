@@ -73,27 +73,6 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
     void updateLastSyncAt(@Param("id") Long id, @Param("lastSyncAt") Instant lastSyncAt);
 
     /**
-     * Upsert a repository from a provisioning snapshot (e.g., GitHub App installation webhook).
-     * <p>
-     * Uses PostgreSQL's {@code ON CONFLICT} on the {@code (provider_id, name_with_owner)} unique
-     * constraint to atomically insert or update, so concurrent NATS event processing and GraphQL sync
-     * cannot fail with an optimistic locking error.
-     * <p>
-     * On conflict, only lightweight fields from the snapshot are updated; fields populated by
-     * the full GraphQL sync (description, pushed_at, default_branch, etc.) are preserved.
-     * <p>
-     * {@code visibility} is derived from {@code isPrivate} and {@code html_url} is derived
-     * from {@code nameWithOwner} (with a {@code https://github.com/} prefix) inside the SQL
-     * to keep the parameter count within architecture limits.
-     *
-     * @param nativeId       the provider's original numeric ID for the repository
-     * @param providerId     the IdentityProvider entity ID
-     * @param nameWithOwner  the full name (e.g., "owner/repo")
-     * @param name           the short repository name
-     * @param isPrivate      whether the repository is private
-     * @param organizationId the organization ID (nullable)
-     */
-    /**
      * Finds all repositories belonging to a specific organization (by login) and provider.
      * Used by GitLab team sync to find repos owned by a subgroup.
      */
@@ -132,6 +111,27 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
     List<Repository> findAllByWorkspaceMonitorsOnProvider(
             @Param("workspaceId") Long workspaceId, @Param("providerId") Long providerId);
 
+    /**
+     * Upsert a repository from a provisioning snapshot (e.g., GitHub App installation webhook).
+     * <p>
+     * Uses PostgreSQL's {@code ON CONFLICT} on the {@code (provider_id, name_with_owner)} unique
+     * constraint to atomically insert or update, so concurrent NATS event processing and GraphQL sync
+     * cannot fail with an optimistic locking error.
+     * <p>
+     * On conflict, only lightweight fields from the snapshot are updated; fields populated by
+     * the full GraphQL sync (description, pushed_at, default_branch, etc.) are preserved.
+     * <p>
+     * {@code visibility} is derived from {@code isPrivate} and {@code html_url} is derived
+     * from {@code nameWithOwner} (with a {@code https://github.com/} prefix) inside the SQL
+     * to keep the parameter count within architecture limits.
+     *
+     * @param nativeId       the provider's original numeric ID for the repository
+     * @param providerId     the IdentityProvider entity ID
+     * @param nameWithOwner  the full name (e.g., "owner/repo")
+     * @param name           the short repository name
+     * @param isPrivate      whether the repository is private
+     * @param organizationId the organization ID (nullable)
+     */
     @Transactional
     @Modifying
     @Query(value = """

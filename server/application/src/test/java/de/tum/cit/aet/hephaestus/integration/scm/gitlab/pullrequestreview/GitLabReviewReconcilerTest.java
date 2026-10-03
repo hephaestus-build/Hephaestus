@@ -135,7 +135,6 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
         PullRequestReview review = approval(APPROVED_AT);
         when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         Instant unapprovedAt = APPROVED_AT.plusSeconds(600);
-        Instant reapprovedAt = APPROVED_AT.plusSeconds(1_200);
 
         PullRequestReview dismissed = reconciler.recordUnapproval(pr, approver, unapprovedAt, provider);
 

@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -456,7 +457,7 @@ class ProductionSchemaContractIntegrationTest {
     @ParameterizedTest
     @EnumSource(FeedbackSuppressionReason.class)
     void feedbackAcceptsEverySuppressionReasonTheServerRecords(FeedbackSuppressionReason reason) {
-        String key = "reason-" + reason.ordinal() + "-"
+        String key = "reason-" + reason.name().toLowerCase(Locale.ROOT).replace('_', '-') + "-"
                 + UUID.randomUUID().toString().substring(0, 8);
         UUID feedbackId = insertFeedback(insertDispatchOwner(key), key);
 

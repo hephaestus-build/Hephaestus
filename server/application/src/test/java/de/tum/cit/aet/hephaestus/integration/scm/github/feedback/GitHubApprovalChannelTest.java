@@ -28,6 +28,7 @@ import org.mockito.Mock;
 import org.springframework.graphql.ResponseError;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -57,7 +58,7 @@ class GitHubApprovalChannelTest extends BaseUnitTest {
         when(prNodeIdResolver.resolve(1L, "owner", "repo", 42)).thenReturn("PR_node123");
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitHubProvider.forScope(1L)).thenReturn(client);
         when(client.documentName("ApprovePullRequest")).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
@@ -109,7 +110,7 @@ class GitHubApprovalChannelTest extends BaseUnitTest {
         when(prNodeIdResolver.resolve(1L, "owner", "repo", 42)).thenReturn("PR_node123");
 
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
-        HttpGraphQlClient.RequestSpec spec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
         when(gitHubProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);

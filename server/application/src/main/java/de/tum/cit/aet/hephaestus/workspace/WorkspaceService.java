@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.connection.identity.AuthenticatedGitProviderUserService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.identity.GitLabWorkspaceInstance;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspaceFeaturesRequestDTO;
@@ -71,7 +70,6 @@ public class WorkspaceService {
 
     // Core repositories
     private final WorkspaceRepository workspaceRepository;
-    private final UserRepository userRepository;
     private final CurrentAccountUsers currentAccountUsers;
     private final AuthenticatedGitProviderUserService authenticatedGitProviderUserService;
     private final GitLabWorkspaceInstance gitLabWorkspaceInstance;
@@ -87,7 +85,6 @@ public class WorkspaceService {
 
     public WorkspaceService(
             WorkspaceRepository workspaceRepository,
-            UserRepository userRepository,
             CurrentAccountUsers currentAccountUsers,
             AuthenticatedGitProviderUserService authenticatedGitProviderUserService,
             GitLabWorkspaceInstance gitLabWorkspaceInstance,
@@ -98,7 +95,6 @@ public class WorkspaceService {
             ApplicationEventPublisher eventPublisher,
             PlatformTransactionManager transactionManager) {
         this.workspaceRepository = workspaceRepository;
-        this.userRepository = userRepository;
         this.currentAccountUsers = currentAccountUsers;
         this.authenticatedGitProviderUserService = authenticatedGitProviderUserService;
         this.gitLabWorkspaceInstance = gitLabWorkspaceInstance;

@@ -286,7 +286,7 @@ function ScaleChoice({
 function MultilineInput({ type: _type, ...props }: ComponentProps<"input">) {
 	return (
 		<textarea
-			// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The primitive's input props; every one the textarea receives is valid on it too.
+			// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- `@shadcn/react`'s questionnaire types its freeform slot for an `<input>`; every prop it passes is valid on a textarea.
 			{...(props as ComponentProps<"textarea">)}
 			rows={3}
 			aria-keyshortcuts="Control+Enter Meta+Enter"

@@ -458,15 +458,16 @@ class LlmProxyServiceTest extends BaseUnitTest {
             authenticate(routing);
             when(resolver.resolveProxyCredential(any()))
                     .thenReturn(credential("openai-completions", LlmAuthMode.BEARER));
-            HttpServletResponse response;
-            if (outcome.equals("CLIENT_DISCONNECTED")) {
-                response = mock(HttpServletResponse.class);
+            var servletResponse = new MockHttpServletResponse();
+            HttpServletResponse response = servletResponse;
+            boolean clientDisconnected = outcome.equals("CLIENT_DISCONNECTED");
+            if (clientDisconnected) {
+                var disconnected = mock(HttpServletResponse.class);
                 var output = mock(ServletOutputStream.class);
-                when(response.getOutputStream()).thenReturn(output);
-                when(response.getStatus()).thenReturn(200);
+                when(disconnected.getOutputStream()).thenReturn(output);
+                when(disconnected.getStatus()).thenReturn(200);
                 doThrow(new IOException("private-client-detail")).when(output).write(any(byte[].class));
-            } else {
-                response = new MockHttpServletResponse();
+                response = disconnected;
             }
             var result = service.proxy(
                     request("POST", "/internal/llm/chat/completions"),
@@ -475,7 +476,9 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     "{\"stream\":true,\"messages\":[]}".getBytes(StandardCharsets.UTF_8));
             if (status == 200) {
                 assertThat(result).isNull();
-                assertThat(response.getStatus()).isEqualTo(200);
+                if (!clientDisconnected) {
+                    assertThat(servletResponse.getStatus()).isEqualTo(200);
+                }
             } else {
                 assertThat(result).isNotNull();
                 assertThat(result.getStatusCode().value()).isEqualTo(status);

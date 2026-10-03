@@ -403,13 +403,6 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
 
         @Test
         void integrationTestsExtendBaseClasses() {
-            Set<String> baseClassNames = Set.of(
-                    "AbstractWorkspaceIntegrationTest",
-                    "AbstractGitHubLiveSyncIntegrationTest",
-                    "BaseGitHubLiveIntegrationTest",
-                    "BaseIntegrationTest",
-                    "RealAuthIntegrationTest");
-
             Set<String> validBaseClasses = Set.of(
                     "de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest",
                     "de.tum.cit.aet.hephaestus.integration.scm.github.AbstractGitHubLiveSyncIntegrationTest",

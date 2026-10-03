@@ -62,17 +62,26 @@ public final class LiveSandboxGateway implements AutoCloseable {
 
     @Override
     public void close() {
+        RuntimeException failure = null;
         try {
             tomcat.stop();
             tomcat.destroy();
         } catch (LifecycleException exception) {
-            throw new IllegalStateException("Could not stop test gateway", exception);
-        } finally {
-            try {
-                FileSystemUtils.deleteRecursively(directory);
-            } catch (IOException exception) {
-                throw new UncheckedIOException(exception);
+            failure = new IllegalStateException("Could not stop test gateway", exception);
+        } catch (RuntimeException exception) {
+            failure = exception;
+        }
+        try {
+            FileSystemUtils.deleteRecursively(directory);
+        } catch (IOException exception) {
+            if (failure == null) {
+                failure = new UncheckedIOException(exception);
+            } else {
+                failure.addSuppressed(exception);
             }
+        }
+        if (failure != null) {
+            throw failure;
         }
     }
 }

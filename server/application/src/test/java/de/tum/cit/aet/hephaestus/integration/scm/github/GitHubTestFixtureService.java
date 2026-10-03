@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -125,7 +126,7 @@ public class GitHubTestFixtureService {
      * Retries up to 3 times with exponential backoff on failure.
      */
     public void deleteRepository(String fullName) {
-        String[] parts = fullName.split("/");
+        String[] parts = fullName.split("/", -1);
         int maxRetries = 3;
         int retryDelayMs = 1000;
 
@@ -268,7 +269,7 @@ public class GitHubTestFixtureService {
         Map<String, Object> body =
                 Map.of("title", title, "description", description != null ? description : "", "state", "open");
 
-        String[] parts = fullName.split("/");
+        String[] parts = fullName.split("/", -1);
         MilestoneResponse response = restClient
                 .post()
                 .uri("/repos/{owner}/{repo}/milestones", parts[0], parts[1])
@@ -289,7 +290,7 @@ public class GitHubTestFixtureService {
      * Closes a milestone via REST API.
      */
     public void closeMilestone(String fullName, int milestoneNumber) {
-        String[] parts = fullName.split("/");
+        String[] parts = fullName.split("/", -1);
         restClient
                 .patch()
                 .uri("/repos/{owner}/{repo}/milestones/{number}", parts[0], parts[1], milestoneNumber)
@@ -304,7 +305,7 @@ public class GitHubTestFixtureService {
      * Deletes a milestone via REST API.
      */
     public void deleteMilestone(String fullName, int milestoneNumber) {
-        String[] parts = fullName.split("/");
+        String[] parts = fullName.split("/", -1);
         restClient
                 .delete()
                 .uri("/repos/{owner}/{repo}/milestones/{number}", parts[0], parts[1], milestoneNumber)
@@ -317,7 +318,7 @@ public class GitHubTestFixtureService {
      * Lists milestones to check if one exists.
      */
     public List<MilestoneResponse> listMilestones(String fullName, String state) {
-        String[] parts = fullName.split("/");
+        String[] parts = fullName.split("/", -1);
         return restClient
                 .get()
                 .uri(uri -> uri.path("/repos/{owner}/{repo}/milestones")
@@ -563,7 +564,7 @@ public class GitHubTestFixtureService {
      */
     public String createCommitOnBranch(
             String repositoryFullName, String branchName, String commitMessage, String filePath, String fileContent) {
-        String[] parts = repositoryFullName.split("/");
+        String[] parts = repositoryFullName.split("/", -1);
         String owner = parts[0];
         String repo = parts[1];
 
@@ -607,7 +608,7 @@ public class GitHubTestFixtureService {
             }
             """;
 
-        String base64Content = Base64.getEncoder().encodeToString(fileContent.getBytes());
+        String base64Content = Base64.getEncoder().encodeToString(fileContent.getBytes(UTF_8));
 
         Map<String, Object> input = Map.of(
                 "branch",
@@ -717,14 +718,10 @@ public class GitHubTestFixtureService {
      * Adds a repository to a team.
      */
     public void addRepositoryToTeam(String orgLogin, String teamSlug, String fullName, String permission) {
+        String[] parts = fullName.split("/", -1);
         restClient
                 .put()
-                .uri(
-                        "/orgs/{org}/teams/{team_slug}/repos/{owner}/{repo}",
-                        orgLogin,
-                        teamSlug,
-                        fullName.split("/")[0],
-                        fullName.split("/")[1])
+                .uri("/orgs/{org}/teams/{team_slug}/repos/{owner}/{repo}", orgLogin, teamSlug, parts[0], parts[1])
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("permission", permission))
                 .retrieve()
@@ -738,7 +735,7 @@ public class GitHubTestFixtureService {
      * Adds a collaborator to a repository.
      */
     public void addCollaborator(String fullName, String username, String permission) {
-        String[] parts = fullName.split("/");
+        String[] parts = fullName.split("/", -1);
         restClient
                 .put()
                 .uri("/repos/{owner}/{repo}/collaborators/{username}", parts[0], parts[1], username)
@@ -753,7 +750,7 @@ public class GitHubTestFixtureService {
      * Removes a collaborator from a repository.
      */
     public void removeCollaborator(String fullName, String username) {
-        String[] parts = fullName.split("/");
+        String[] parts = fullName.split("/", -1);
         restClient
                 .delete()
                 .uri("/repos/{owner}/{repo}/collaborators/{username}", parts[0], parts[1], username)
@@ -827,7 +824,7 @@ public class GitHubTestFixtureService {
      * Gets repository info including node ID and default branch.
      */
     public RepositoryInfo getRepositoryInfo(String fullName) {
-        String[] parts = fullName.split("/");
+        String[] parts = fullName.split("/", -1);
         String query = """
             query GetRepository($owner: String!, $name: String!) {
                 repository(owner: $owner, name: $name) {
@@ -875,7 +872,7 @@ public class GitHubTestFixtureService {
      * Lists labels in a repository.
      */
     public List<LabelInfo> listLabels(String fullName) {
-        String[] parts = fullName.split("/");
+        String[] parts = fullName.split("/", -1);
         String query = """
             query ListLabels($owner: String!, $name: String!) {
                 repository(owner: $owner, name: $name) {
@@ -922,7 +919,7 @@ public class GitHubTestFixtureService {
     }
 
     private void createInitialCommit(String fullName) {
-        String[] parts = fullName.split("/");
+        String[] parts = fullName.split("/", -1);
         String owner = parts[0];
         String repo = parts[1];
         String readmeContent = "# " + repo + "\n\nTemporary repository for integration testing.";
@@ -940,7 +937,10 @@ public class GitHubTestFixtureService {
         // Create initial commit via REST (file creation)
         // Use separate path variables to avoid URL encoding issues with slash
         Map<String, Object> body = Map.of(
-                "message", "Initial commit", "content", Base64.getEncoder().encodeToString(readmeContent.getBytes()));
+                "message",
+                "Initial commit",
+                "content",
+                Base64.getEncoder().encodeToString(readmeContent.getBytes(UTF_8)));
 
         restClient
                 .put()

@@ -18,12 +18,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import tools.jackson.databind.ObjectMapper;
 
 /** Access and response-shape coverage for the caller-scoped practice-group trend endpoint. */
 class PracticeGroupTrendControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String URI = "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/trend";
 
     @Autowired

@@ -21,7 +21,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncStateChangedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -34,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -166,13 +166,7 @@ class ConnectionActivityRecorderTest extends BaseUnitTest {
     }
 
     private static void setConnectionId(Connection connection, long id) {
-        try {
-            Field field = Connection.class.getDeclaredField("id");
-            field.setAccessible(true);
-            field.set(connection, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(connection, "id", id);
     }
 
     /** Mutable {@link Clock} test double — advances only when {@link #advance(Duration)} is called. */

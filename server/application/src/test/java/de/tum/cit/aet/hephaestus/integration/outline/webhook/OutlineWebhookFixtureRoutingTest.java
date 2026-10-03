@@ -93,9 +93,9 @@ class OutlineWebhookFixtureRoutingTest extends BaseUnitTest {
         if (!Files.isDirectory(FIXTURE_DIR)) {
             return Stream.empty();
         }
-        return Files.list(FIXTURE_DIR)
-                .filter(p -> p.getFileName().toString().endsWith(".json"))
-                .sorted();
+        try (Stream<Path> files = Files.list(FIXTURE_DIR)) {
+            return files.filter(p -> p.getFileName().toString().endsWith(".json")).sorted().toList().stream();
+        }
     }
 
     @ParameterizedTest(name = "{0}")

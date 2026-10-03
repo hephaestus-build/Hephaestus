@@ -72,7 +72,7 @@ public sealed interface ContextRequest
         }
 
         public MentorChatRequest {
-            threadId = Objects.requireNonNull(threadId, "threadId must not be null");
+            Objects.requireNonNull(threadId, "threadId must not be null");
             if (workspaceId <= 0) {
                 throw new IllegalArgumentException("workspaceId must be positive, got " + workspaceId);
             }

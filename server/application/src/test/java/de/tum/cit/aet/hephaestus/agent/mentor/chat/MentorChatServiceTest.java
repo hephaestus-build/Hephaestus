@@ -139,13 +139,9 @@ class MentorChatServiceTest extends BaseUnitTest {
     void shouldWaitTheTurnBudgetAfterAcknowledgement() throws Exception {
         var acknowledgement = new CompletableFuture<JsonNode>();
         var terminal = new CompletableFuture<Void>();
-        scheduler.schedule(
-                () -> {
-                    acknowledgement.complete(mapper.createObjectNode());
-                    scheduler.schedule(() -> terminal.complete(null), 20, TimeUnit.MILLISECONDS);
-                },
-                100,
-                TimeUnit.MILLISECONDS);
+        // The acknowledgement alone outlasts the budget; the terminal event follows it within the budget.
+        acknowledgement.completeOnTimeout(mapper.createObjectNode(), 100, TimeUnit.MILLISECONDS);
+        terminal.completeOnTimeout(null, 120, TimeUnit.MILLISECONDS);
 
         MentorChatService.awaitTurn(acknowledgement, terminal, Duration.ofMillis(50));
 
@@ -191,17 +187,16 @@ class MentorChatServiceTest extends BaseUnitTest {
 
     @Test
     void shouldDiscardTheRuntimeUnderItsLockWhenThePromptAcknowledgementIsLost() {
-        scheduler.shutdownNow();
-        scheduler = mock(ScheduledExecutorService.class);
+        ScheduledExecutorService runnerTimeouts = mock(ScheduledExecutorService.class);
         var timeoutTask = new AtomicReference<Runnable>();
-        when(scheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
+        when(runnerTimeouts.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
                 .thenAnswer(inv -> {
                     if (inv.getArgument(1, Long.class) == MentorRunnerClient.DEFAULT_PROMPT_TIMEOUT.toMillis()) {
                         timeoutTask.set(inv.getArgument(0, Runnable.class));
                     }
                     return mock(ScheduledFuture.class);
                 });
-        service = serviceWithExecutor(turnExec);
+        service = serviceWithExecutor(turnExec, runnerTimeouts);
         scheduleResponses(
                 sandbox, prompt -> Objects.requireNonNull(timeoutTask.get()).run());
 
@@ -216,15 +211,14 @@ class MentorChatServiceTest extends BaseUnitTest {
 
     @Test
     void shouldDiscardTheRuntimeUnderItsLockWhenOpeningTheThreadTimesOut() {
-        scheduler.shutdownNow();
-        scheduler = mock(ScheduledExecutorService.class);
+        ScheduledExecutorService runnerTimeouts = mock(ScheduledExecutorService.class);
         var timeoutTask = new AtomicReference<Runnable>();
-        when(scheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
+        when(runnerTimeouts.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
                 .thenAnswer(inv -> {
                     timeoutTask.set(inv.getArgument(0, Runnable.class));
                     return mock(ScheduledFuture.class);
                 });
-        service = serviceWithExecutor(turnExec);
+        service = serviceWithExecutor(turnExec, runnerTimeouts);
         sandbox.onSend = frame -> {
             if ("hello".equals(frame.path("method").asString())) {
                 sandbox.push(jsonRpcResult(
@@ -296,6 +290,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     private MentorChatService service;
     private MentorSandboxPreparer preparer;
     private RecordingEmitter emitter;
+    private User user;
     private SimpleMeterRegistry meterRegistry;
     private MemberAiPreferences.Decision aiDecision = new MemberAiPreferences.Decision(false, null);
 
@@ -347,7 +342,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                         new LlmPriceSnapshot(
                                 FundingSource.INSTANCE, PricingState.NO_CHARGE, 3L, null, null, null, null, null)));
 
-        User user = new User();
+        user = new User();
         user.setId(USER_ID);
         user.setLogin("octo");
         when(userRepository.getCurrentUserElseThrow()).thenReturn(user);
@@ -388,8 +383,12 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     private MentorChatService serviceWithExecutor(ExecutorService executor) {
+        return serviceWithExecutor(executor, scheduler);
+    }
+
+    private MentorChatService serviceWithExecutor(ExecutorService executor, ScheduledExecutorService runnerTimeouts) {
         var turnExecutorBean = new MentorChatExecutorConfig.MentorTurnExecutor(executor);
-        var schedulerBean = new MentorChatExecutorConfig.MentorRunnerTimeoutScheduler(scheduler);
+        var schedulerBean = new MentorChatExecutorConfig.MentorRunnerTimeoutScheduler(runnerTimeouts);
         return new MentorChatService(
                 userRepository,
                 chatThreadRepository,
@@ -418,15 +417,14 @@ class MentorChatServiceTest extends BaseUnitTest {
     void shouldPreserveVerifiedActorAcrossAsyncWebTurnAndClearWorkerIdentity() throws Exception {
         turnExec = Executors.newSingleThreadExecutor();
         service = serviceWithExecutor(turnExec);
-        User expected = userRepository.getCurrentUserElseThrow();
         var observedActorId = new AtomicReference<Optional<Long>>(Optional.empty());
         when(userRepository.getCurrentUserElseThrow()).thenAnswer(invocation -> {
             observedActorId.set(CurrentScmIdentityHolder.getUserId());
-            return expected;
+            return user;
         });
         scheduleHappyPathResponses(sandbox).run();
 
-        CurrentScmIdentityHolder.set(USER_ID, expected.getLogin(), Set.of(USER_ID));
+        CurrentScmIdentityHolder.set(USER_ID, user.getLogin(), Set.of(USER_ID));
         try {
             runTurnSync();
         } finally {
@@ -836,11 +834,10 @@ class MentorChatServiceTest extends BaseUnitTest {
 
     @Test
     void shouldInterruptTheTurnWhenItsInStreamErrorCannotBeWritten() {
-        User developer = userRepository.getCurrentUserElseThrow();
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         HookedChannel channel =
                 new HookedChannel(new MentorSseChannel(WORKSPACE_ID, THREAD_ID, emitter, mapper, scheduler), chunk -> {
-                    if (chunk instanceof UIMessageChunk.Error) {
+                    if (chunk instanceof UIMessageChunk.TurnError) {
                         throw new IllegalStateException("Failed to serialise UIMessageChunk");
                     }
                 });
@@ -972,8 +969,7 @@ class MentorChatServiceTest extends BaseUnitTest {
 
     @Test
     void shouldSendNoChunkAfterTheFailureItFollows() throws Exception {
-        User developer = userRepository.getCurrentUserElseThrow();
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         CountDownLatch sending = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         HookedChannel channel =
@@ -1102,8 +1098,7 @@ class MentorChatServiceTest extends BaseUnitTest {
 
     @Test
     void shouldNotFinishAfterAChunkThatFailedToSend() {
-        User developer = userRepository.getCurrentUserElseThrow();
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         AtomicBoolean failed = new AtomicBoolean();
         HookedChannel channel =
                 new HookedChannel(new MentorSseChannel(WORKSPACE_ID, THREAD_ID, emitter, mapper, scheduler), chunk -> {

@@ -275,11 +275,18 @@ public class JobEvidenceFiles {
     public Path repositoryForVerification(AgentJob job, String root, String headSha256, String refsSha256) {
         if (!root.matches("repos/[a-zA-Z0-9_-]+/")) throw new IllegalArgumentException("Invalid repository root");
         String headPath = root + ".git/HEAD";
-        inspect(job, headPath, headSha256, reader -> Boolean.TRUE)
-                .orElseThrow(() -> new IllegalStateException("Captured repository is unavailable"));
-        inspect(job, root + ".git/hephaestus-captured-refs", refsSha256, reader -> Boolean.TRUE)
-                .orElseThrow(() -> new IllegalStateException("Captured repository refs are unavailable"));
+        if (!existsWithDigest(job, headPath, headSha256)) {
+            throw new IllegalStateException("Captured repository is unavailable");
+        }
+        if (!existsWithDigest(job, root + ".git/hephaestus-captured-refs", refsSha256)) {
+            throw new IllegalStateException("Captured repository refs are unavailable");
+        }
         return directory(job).resolve(root);
+    }
+
+    /** False when the artifact is absent; a present artifact whose bytes differ from {@code sha} throws. */
+    private boolean existsWithDigest(AgentJob job, String artifactPath, String sha) {
+        return inspect(job, artifactPath, sha, reader -> Boolean.TRUE).isPresent();
     }
 
     /** @param artifactSha256 digest of the raw bytes read, or null when the cited artifact does not exist */
@@ -465,7 +472,8 @@ public class JobEvidenceFiles {
         try {
             Files.createFile(ended);
             Files.setLastModifiedTime(ended, FileTime.from(clock.instant()));
-        } catch (FileAlreadyExistsException ignored) {
+        } catch (FileAlreadyExistsException alreadyEnded) {
+            // The marker's timestamp is when the attempt first ended; the retention grace counts from it.
         }
         return ended;
     }

@@ -704,7 +704,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         ExecutorService primaryThreads = Executors.newFixedThreadPool(2);
         try {
             Future<Boolean> admission = primaryThreads.submit(() -> transactions.execute(status -> {
-                pullRequestRepository.findByIdWithAllForGate(pr.getId()).orElseThrow();
+                assertThat(pullRequestRepository.findByIdWithAllForGate(pr.getId()))
+                        .isPresent();
                 primaryLoaded.countDown();
                 awaitUninterruptibly(releasePrimaryReader);
                 return reviewedWorkChanges.linkedCaptureCurrent(
@@ -718,10 +719,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                         awaitUninterruptibly(releasePrimaryWriter);
                     }),
                     primaryThreads);
-            writer.whenComplete((result, failure) -> {
-                if (failure != null) primaryWritten.completeExceptionally(failure);
-            });
-            primaryWritten.get(30, TimeUnit.SECONDS);
+            // The writer only completes after primaryWritten unless it failed, so this surfaces that failure.
+            CompletableFuture.anyOf(primaryWritten, writer).get(30, TimeUnit.SECONDS);
             releasePrimaryReader.countDown();
             assertThat(aBackendWaitsOnALock()).isTrue();
             releasePrimaryWriter.countDown();
@@ -857,9 +856,9 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         ExecutorService threads = Executors.newFixedThreadPool(2);
         try {
             Future<?> editing = threads.submit(() -> transactions.executeWithoutResult(status -> {
-                pullRequestRepository
-                        .findForUpdateByRepositoryIdAndNumber(repository.getId(), pr.getNumber())
-                        .orElseThrow();
+                assertThat(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(
+                                repository.getId(), pr.getNumber()))
+                        .isPresent();
                 upsert(false, HEAD, "Adds the thing because reviewers could not tell why");
                 listener.onPullRequestUpdated(new ScmDomainEvent.PullRequestUpdated(
                         ScmEventPayload.PullRequestData.from(reload()), Set.of("body"), liveContext()));
@@ -1153,7 +1152,6 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                     agentJobRepository,
                     memberAiPolicy,
                     handlers,
-                    mock(JobEvidenceFiles.class),
                     mock(PracticePiAdapter.class),
                     mock(WorkerJwtIssuer.class),
                     sandbox,

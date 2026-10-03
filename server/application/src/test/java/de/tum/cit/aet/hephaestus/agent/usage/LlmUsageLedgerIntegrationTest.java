@@ -174,18 +174,6 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 BigDecimal.ZERO);
     }
 
-    private LlmPriceSnapshot workspacePriced(String perMInput, String perMOutput) {
-        return new LlmPriceSnapshot(
-                FundingSource.WORKSPACE,
-                PricingState.PRICED,
-                null,
-                84L,
-                new BigDecimal(perMInput),
-                new BigDecimal(perMOutput),
-                BigDecimal.ZERO,
-                BigDecimal.ZERO);
-    }
-
     private double blockedCount(String cap) {
         return meterRegistry
                 .counter("llm.budget.blocked", "surface", "agent_job", "cap", cap)

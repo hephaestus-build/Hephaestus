@@ -77,8 +77,8 @@ class AgentJobBackoffTest extends BaseUnitTest {
         Duration maxUp = AgentJobBackoff.compute(3, MAX_POSITIVE_JITTER);
         Duration maxDown = AgentJobBackoff.compute(3, MAX_NEGATIVE_JITTER);
 
-        assertThat(maxUp.getSeconds()).isCloseTo((long) (base.getSeconds() * 1.10), Offset.offset(1L));
-        assertThat(maxDown.getSeconds()).isCloseTo((long) (base.getSeconds() * 0.90), Offset.offset(1L));
+        assertThat(maxUp.toSeconds()).isCloseTo((long) (base.toSeconds() * 1.10), Offset.offset(1L));
+        assertThat(maxDown.toSeconds()).isCloseTo((long) (base.toSeconds() * 0.90), Offset.offset(1L));
     }
 
     /**

@@ -62,8 +62,6 @@ import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.UnexpectedRollbackException;
 
@@ -77,7 +75,6 @@ import org.springframework.transaction.UnexpectedRollbackException;
  * <h2>Thread Safety</h2>
  * This class is thread-safe. All methods can be called from multiple threads:
  * <ul>
- *   <li>{@code syncSyncTargetAsync()} submits work to the virtual thread executor</li>
  *   <li>{@code syncSyncTarget()} is safe for concurrent calls (each operates on independent data)</li>
  *   <li>{@code syncAllRepositories()} synchronizes on scope level (one call per scope)</li>
  * </ul>
@@ -127,8 +124,6 @@ public class GitHubDataSyncService {
     private final GitHubAppTokenService gitHubAppTokenService;
     private final RateLimitTracker rateLimitTracker;
 
-    private final AsyncTaskExecutor monitoringExecutor;
-
     public GitHubDataSyncService(
             SyncSchedulerProperties syncSchedulerProperties,
             IdentityProviderRepository gitProviderRepository,
@@ -155,8 +150,7 @@ public class GitHubDataSyncService {
             GitHubExceptionClassifier exceptionClassifier,
             InstallationTokenProvider tokenProvider,
             GitHubAppTokenService gitHubAppTokenService,
-            RateLimitTracker rateLimitTracker,
-            @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor) {
+            RateLimitTracker rateLimitTracker) {
         this.syncSchedulerProperties = syncSchedulerProperties;
         this.gitProviderRepository = gitProviderRepository;
         this.syncTargetProvider = syncTargetProvider;
@@ -183,7 +177,6 @@ public class GitHubDataSyncService {
         this.tokenProvider = tokenProvider;
         this.gitHubAppTokenService = gitHubAppTokenService;
         this.rateLimitTracker = rateLimitTracker;
-        this.monitoringExecutor = monitoringExecutor;
     }
 
     private Optional<Repository> fetchRepositoryMetadata(SyncTarget target, IdentityProvider provider) {
@@ -211,11 +204,6 @@ public class GitHubDataSyncService {
             // A rename between the two requests is incomplete metadata, not proof of absence.
             return Optional.empty();
         }
-    }
-
-    /** Submits {@link #syncSyncTarget} to the monitoring executor. */
-    public void syncSyncTargetAsync(SyncTarget syncTarget) {
-        monitoringExecutor.submit(() -> syncSyncTarget(syncTarget));
     }
 
     /**
@@ -500,7 +488,7 @@ public class GitHubDataSyncService {
                         log.info(
                                 "Pausing sync for rate limit: scopeId={}, waitSeconds={}",
                                 scopeId,
-                                waitTime.getSeconds());
+                                waitTime.toSeconds());
                         try {
                             Thread.sleep(waitTime.toMillis());
                         } catch (InterruptedException ie) {

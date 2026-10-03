@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -756,7 +757,7 @@ public class GitLabTeamSyncService {
         if (accessLevel == null) {
             return TeamMembership.Role.MEMBER;
         }
-        return switch (accessLevel.toUpperCase()) {
+        return switch (accessLevel.toUpperCase(Locale.ROOT)) {
             case "NO_ACCESS", "MINIMAL_ACCESS" -> null;
             case "GUEST", "PLANNER", "REPORTER", "DEVELOPER" -> TeamMembership.Role.MEMBER;
             case "MAINTAINER", "OWNER", "ADMIN" -> TeamMembership.Role.MAINTAINER;

@@ -118,12 +118,10 @@ public class WorkspaceActivationService {
                 .toList();
 
         CompletableFuture.allOf(activationFutures.toArray(CompletableFuture[]::new))
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("Workspace activation completed with errors", ex);
-                    } else {
-                        log.info("Completed workspace activations: count={}", workspacesToActivate.size());
-                    }
+                .thenRun(() -> log.info("Completed workspace activations: count={}", workspacesToActivate.size()))
+                .exceptionally(ex -> {
+                    log.error("Workspace activation completed with errors", ex);
+                    return null;
                 });
     }
 

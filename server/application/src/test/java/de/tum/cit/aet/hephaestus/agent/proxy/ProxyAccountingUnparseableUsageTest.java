@@ -51,11 +51,11 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     void shouldNotCountAParseableBody() {
         ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
                 LlmUsageSourceType.AGENT_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker-1");
-        byte[] body = ("""
+        byte[] body = """
             {"usage":{"prompt_tokens":10,"completion_tokens":5,\
             "prompt_tokens_details":{"cached_tokens":4},\
             "completion_tokens_details":{"reasoning_tokens":2}}}\
-            """).getBytes(StandardCharsets.UTF_8);
+            """.getBytes(StandardCharsets.UTF_8);
 
         accounting.recordUsage(attempt, body, false);
 
@@ -71,9 +71,9 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     void shouldCountInvalidTokenTotals() {
         ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
                 LlmUsageSourceType.AGENT_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker-1");
-        byte[] body = ("""
+        byte[] body = """
             {"usage":{"prompt_tokens":3,"prompt_tokens_details":{"cached_tokens":4}}}
-            """).getBytes(StandardCharsets.UTF_8);
+            """.getBytes(StandardCharsets.UTF_8);
 
         accounting.recordUsage(attempt, body, false);
 

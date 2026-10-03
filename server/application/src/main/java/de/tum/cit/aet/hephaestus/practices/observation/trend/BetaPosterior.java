@@ -92,6 +92,7 @@ final class BetaPosterior {
         return mass;
     }
 
+    @SuppressWarnings("ArrayRecordComponent") // numeric grids for integration; never compared, hashed or printed
     record Difference(double mean, double variance, double[] currentMass, double[] previousMass, int gridSize) {
         double probabilityAbove(double boundary) {
             return probabilityWhere(boundary, true);

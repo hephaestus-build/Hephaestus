@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 
 class LlmModelResolverTest extends BaseUnitTest {
@@ -34,7 +33,6 @@ class LlmModelResolverTest extends BaseUnitTest {
     @Mock
     private LlmModelWorkspaceGrantRepository grants;
 
-    @InjectMocks
     private LlmModelResolver resolver;
 
     private LlmConnection connection;
@@ -42,6 +40,8 @@ class LlmModelResolverTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        resolver = new LlmModelResolver(
+                instanceConnections, workspaceConnections, instanceModels, workspaceModels, grants);
         connection = new LlmConnection();
         connection.setId(10L);
         connection.setEnabled(true);

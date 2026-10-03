@@ -83,9 +83,7 @@ describe("active sessions on the settings page", () => {
 		let signedOutOthers = false;
 		server.use(
 			http.get("*/user/sessions", () => HttpResponse.json(sessions), { once: true }),
-			http.get("*/user/sessions", () =>
-				HttpResponse.json(sessions.filter((s) => s.current === true)),
-			),
+			http.get("*/user/sessions", () => HttpResponse.json(sessions.filter((s) => s.current))),
 			http.delete("*/user/sessions", () => {
 				signedOutOthers = true;
 				return new HttpResponse(null, { status: 204 });

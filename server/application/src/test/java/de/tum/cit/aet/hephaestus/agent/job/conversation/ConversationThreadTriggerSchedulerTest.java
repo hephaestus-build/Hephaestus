@@ -68,7 +68,7 @@ class ConversationThreadTriggerSchedulerTest extends BaseUnitTest {
             lastTs = (now.getEpochSecond() - Duration.ofMinutes(20).toSeconds()) + ".000200";
             when(candidateSource.settledCandidates(anyInt()))
                     .thenReturn(List.of(new ConversationThreadCandidate(
-                            WORKSPACE_ID, THREAD_ID, "C1", "#design", THREAD_TS, lastTs, null, new long[] {5L})));
+                            WORKSPACE_ID, THREAD_ID, "C1", "#design", THREAD_TS, lastTs, null, List.of(5L))));
             when(candidateSource.liveTurnCount(anyLong(), any(), any())).thenReturn(8L);
             when(candidateSource.liveTurnCountSince(anyLong(), any(), any(), any()))
                     .thenReturn(4L);

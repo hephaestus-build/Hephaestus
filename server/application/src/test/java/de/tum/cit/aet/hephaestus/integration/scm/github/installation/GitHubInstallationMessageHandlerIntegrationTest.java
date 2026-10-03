@@ -64,10 +64,11 @@ class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTes
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
-        gitProviderRepository
+        if (gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseGet(() -> gitProviderRepository.save(
-                        new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+                .isEmpty()) {
+            gitProviderRepository.save(new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com"));
+        }
         // A local provider boundary keeps the shared Spring context and all transactional
         // provisioning collaborators real, without requiring an App private key or network.
         handler = new GitHubInstallationMessageHandler(

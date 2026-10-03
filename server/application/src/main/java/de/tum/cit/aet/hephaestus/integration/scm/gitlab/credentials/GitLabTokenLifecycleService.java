@@ -82,14 +82,17 @@ public class GitLabTokenLifecycleService {
             rotationAttempted = true;
             var rotated = client.rotateToken(
                     workspaceId, today.plusDays(properties.tokenRotation().validityDays()));
-            connections
+            boolean stored = connections
                     .rotateBearerToken(
                             workspaceId,
                             IntegrationKind.GITLAB,
                             new BearerToken(
                                     rotated.token(),
                                     rotated.expiresAt().atStartOfDay().toInstant(ZoneOffset.UTC)))
-                    .orElseThrow();
+                    .isPresent();
+            if (!stored) {
+                throw new IllegalStateException("No active GitLab connection to store the rotated token on");
+            }
             var currentConfig = (GitLabConfig) connection.getConfig();
             connection.setConfig(
                     currentConfig.withTokenMetadata(new GitLabTokenMetadata(rotated.expiresAt(), clock.instant())));

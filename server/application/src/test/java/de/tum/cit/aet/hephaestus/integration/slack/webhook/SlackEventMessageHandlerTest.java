@@ -65,7 +65,6 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     void dmMessageRoutesToMentorService() {
         dmHandler.onMessage(
                 nats(
-                        "slack.T1.U1.message_im",
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"text\":\"help\",\"ts\":\"100.2\",\"thread_ts\":\"100.1\"}}"));
 
         verify(mentorService).handleDm("T1", "D1", "U1", "help", "100.2", "100.1");
@@ -75,7 +74,6 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     void dmMessageWithoutThreadTsFallsBackToMessageTs() {
         dmHandler.onMessage(
                 nats(
-                        "slack.T1.U1.message_im",
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"text\":\"help\",\"ts\":\"100.2\"}}"));
 
         verify(mentorService).handleDm("T1", "D1", "U1", "help", "100.2", "100.2");
@@ -85,7 +83,6 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     void dmMessageFallsBackToAuthorizationTeamId() {
         dmHandler.onMessage(
                 nats(
-                        "slack.T1.U1.message_im",
                         "{\"authorizations\":[{\"team_id\":\"T1\"}],\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"text\":\"help\",\"ts\":\"100.2\"}}"));
 
         verify(mentorService).handleDm("T1", "D1", "U1", "help", "100.2", "100.2");
@@ -95,7 +92,6 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     void botDmIsIgnored() {
         dmHandler.onMessage(
                 nats(
-                        "slack.T1.U1.message_im",
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"bot_id\":\"B1\",\"text\":\"help\",\"ts\":\"100.1\"}}"));
 
         verify(mentorService, never()).handleDm(any(), any(), any(), any(), any(), any());
@@ -105,7 +101,6 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     void channelMessagesNeverRouteToMentorDm() {
         dmHandler.onMessage(
                 nats(
-                        "slack.T1.C1.message_im",
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"channel\",\"channel\":\"C1\",\"user\":\"U1\",\"text\":\"hello\",\"ts\":\"100.1\"}}"));
 
         verify(mentorService, never()).handleDm(any(), any(), any(), any(), any(), any());
@@ -113,9 +108,8 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
 
     @Test
     void appHomeOpenedRendersHomeOnlyForHomeTab() {
-        appHomeHandler.onMessage(nats(
-                "slack.T1.U1.app_home_opened",
-                "{\"team_id\":\"T1\",\"event\":{\"type\":\"app_home_opened\",\"tab\":\"home\",\"user\":\"U1\"}}"));
+        appHomeHandler.onMessage(
+                nats("{\"team_id\":\"T1\",\"event\":{\"type\":\"app_home_opened\",\"tab\":\"home\",\"user\":\"U1\"}}"));
 
         verify(appHomeService).onHomeOpened("T1", "U1");
         verify(mentorService).prepare("T1", "U1");
@@ -125,7 +119,6 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     void appHomeOpenedMessagesTabRoutesToAgentMessagesLifecycle() {
         appHomeHandler.onMessage(
                 nats(
-                        "slack.T1.U1.app_home_opened",
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"app_home_opened\",\"tab\":\"messages\",\"user\":\"U1\",\"channel\":\"D1\"}}"));
 
         verify(assistantEventHandler).onMessagesOpened(eq("T1"), any(JsonNode.class));
@@ -137,7 +130,6 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     void memberJoinedRoutesToJustInTimeNotice() {
         joinHandler.onMessage(
                 nats(
-                        "slack.T1.C1.member_joined_channel",
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"member_joined_channel\",\"channel\":\"C1\",\"user\":\"U1\"}}"));
 
         verify(joinNoticeHandler).onMemberJoined(eq("T1"), any(JsonNode.class), eq(true));
@@ -147,7 +139,6 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     void staleMemberJoinedReplaySuppressesTheNoticeButStillRegisters() {
         joinHandler.onMessage(
                 nats(
-                        "slack.T1.C1.member_joined_channel",
                         "{\"team_id\":\"T1\",\"event_time\":1,\"event\":{\"type\":\"member_joined_channel\",\"channel\":\"C1\",\"user\":\"U1\"}}"));
 
         // The durable bot-self-join registration must survive a stale redelivery; only the
@@ -157,12 +148,10 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
 
     @Test
     void uninstallEventsRouteToTeardown() {
-        appUninstalledHandler.onMessage(nats(
-                "slack.T1.workspace.app_uninstalled",
-                "{\"team_id\":\"T1\",\"event_id\":\"Ev1\",\"event\":{\"type\":\"app_uninstalled\"}}"));
+        appUninstalledHandler.onMessage(
+                nats("{\"team_id\":\"T1\",\"event_id\":\"Ev1\",\"event\":{\"type\":\"app_uninstalled\"}}"));
         tokensRevokedHandler.onMessage(
                 nats(
-                        "slack.T1.workspace.tokens_revoked",
                         "{\"team_id\":\"T1\",\"event_id\":\"Ev2\",\"event\":{\"type\":\"tokens_revoked\",\"tokens\":{\"bot\":[\"U9\"]}}}"));
 
         verify(uninstallService).onUninstall("T1", "app_uninstalled", "Ev1");
@@ -175,13 +164,12 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
         // oauth entries; the app is still installed and the bot token is valid, so nothing may be purged.
         tokensRevokedHandler.onMessage(
                 nats(
-                        "slack.T1.workspace.tokens_revoked",
                         "{\"team_id\":\"T1\",\"event_id\":\"Ev3\",\"event\":{\"type\":\"tokens_revoked\",\"tokens\":{\"oauth\":[\"U1\"],\"bot\":[]}}}"));
 
         verify(uninstallService, never()).onUninstall(anyString(), anyString(), anyString());
     }
 
-    private static Message nats(String ignoredSubject, String body) {
+    private static Message nats(String body) {
         Message message = mock(Message.class);
         when(message.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
         return message;

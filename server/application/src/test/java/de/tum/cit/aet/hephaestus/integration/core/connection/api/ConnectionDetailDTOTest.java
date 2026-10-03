@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestR
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import java.lang.reflect.Field;
 import java.lang.reflect.RecordComponent;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,6 +20,7 @@ import java.util.Locale;
 import java.util.Set;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -149,18 +149,8 @@ class ConnectionDetailDTOTest {
 
     /** id/createdAt/updatedAt normally come from JPA; the DTO would NPE on null Instants. */
     private static void stampPersistenceFields(Connection c) {
-        try {
-            Field id = Connection.class.getDeclaredField("id");
-            id.setAccessible(true);
-            id.set(c, 1L);
-            Field createdAt = Connection.class.getDeclaredField("createdAt");
-            createdAt.setAccessible(true);
-            createdAt.set(c, Instant.parse("2026-01-01T00:00:00Z"));
-            Field updatedAt = Connection.class.getDeclaredField("updatedAt");
-            updatedAt.setAccessible(true);
-            updatedAt.set(c, Instant.parse("2026-01-02T00:00:00Z"));
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(c, "id", 1L);
+        ReflectionTestUtils.setField(c, "createdAt", Instant.parse("2026-01-01T00:00:00Z"));
+        ReflectionTestUtils.setField(c, "updatedAt", Instant.parse("2026-01-02T00:00:00Z"));
     }
 }

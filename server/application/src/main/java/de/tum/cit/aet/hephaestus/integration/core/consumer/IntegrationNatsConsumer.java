@@ -34,11 +34,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -133,13 +133,6 @@ public class IntegrationNatsConsumer {
     /** Virtual-thread executor for scope setup and installation kicks. */
     private final ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
-    /** Delay timer for the scope-reconcile retry. Single daemon thread — it only ever submits to the executor. */
-    private final ScheduledExecutorService retryScheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "integration-consumer-retry");
-        thread.setDaemon(true);
-        return thread;
-    });
-
     private @Nullable Connection natsConnection;
 
     private final NatsConnectionProperties connectionProperties;
@@ -206,7 +199,7 @@ public class IntegrationNatsConsumer {
             return;
         }
         log.info("Workspaces initialized; starting installation consumer: workspaceCount={}", event.workspaceCount());
-        virtualThreadExecutor.submit(() -> {
+        virtualThreadExecutor.execute(() -> {
             try {
                 ensureNatsConnectionEstablished();
                 setupInstallationConsumer();
@@ -238,7 +231,6 @@ public class IntegrationNatsConsumer {
         scopeConsumers.clear();
         scopeReconcileAttempts.clear();
         stats.setActiveScopeConsumerCount(0);
-        retryScheduler.shutdownNow();
 
         ScopeConsumer installation = installationConsumer;
         if (installation != null) {
@@ -586,7 +578,7 @@ public class IntegrationNatsConsumer {
     /** Runs the scope's reconcile on a virtual thread, repeating it while requests arrive during a pass. */
     private void submitScopeSetup(Long scopeId) {
         try {
-            virtualThreadExecutor.submit(() -> {
+            virtualThreadExecutor.execute(() -> {
                 do {
                     try {
                         ensureNatsConnectionEstablished();
@@ -656,12 +648,10 @@ public class IntegrationNatsConsumer {
         }
     }
 
+    /** A retry due after shutdown is rejected by the stopped executor, and would return early anyway. */
     private void submitDelayed(Runnable task, long delayMs) {
-        try {
-            retryScheduler.schedule(task, delayMs, TimeUnit.MILLISECONDS);
-        } catch (RejectedExecutionException e) {
-            log.debug("Scope reconcile retry not scheduled: consumer fleet is shutting down");
-        }
+        CompletableFuture.delayedExecutor(delayMs, TimeUnit.MILLISECONDS, virtualThreadExecutor)
+                .execute(task);
     }
 
     /** Package-private + overridable so the reconcile's partial-failure path is unit-testable without a broker. */

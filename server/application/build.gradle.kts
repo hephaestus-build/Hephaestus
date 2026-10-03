@@ -120,7 +120,11 @@ tasks.withType<JavaCompile>().configureEach {
         listOf("-Werror", "-Xlint:all,-processing", "-XDaddTypeAnnotationsToSymbol=true")
     )
     options.errorprone {
-        disableAllChecks.set(true)
+        // Google Javadoc style only: a doc that is just @param or @return tags is complete here.
+        disable("MissingSummary")
+        // Misfires on an inline tag in the Javadoc of a field Lombok generates an accessor for:
+        // google/error-prone#5855.
+        disable("UnrecognisedJavadocTag")
         error(
             "NullAway",
             "RequireExplicitNullMarking",

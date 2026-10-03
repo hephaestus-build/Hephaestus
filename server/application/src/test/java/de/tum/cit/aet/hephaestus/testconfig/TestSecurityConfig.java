@@ -101,12 +101,8 @@ public class TestSecurityConfig {
                 username = "admin";
                 userId = "admin-user-id";
                 roles = new String[] {"app_admin"};
-            } else if ("mock-jwt-token-for-test-user".equals(token)) {
-                username = "testuser";
-                userId = "test-user-id";
-                roles = new String[] {};
             } else {
-
+                // Any other token, "mock-jwt-token-for-test-user" included, is the default test user.
                 username = "testuser";
                 userId = "test-user-id";
                 roles = new String[] {};

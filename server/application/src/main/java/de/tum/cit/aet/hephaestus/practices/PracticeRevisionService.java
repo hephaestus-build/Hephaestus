@@ -30,9 +30,10 @@ public class PracticeRevisionService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public PracticeRevision append(Practice practice) {
-        practiceRepository
-                .findByIdForUpdate(practice.getId())
-                .orElseThrow(() -> new EntityNotFoundException("Practice", String.valueOf(practice.getId())));
+        // Lock only: the revision snapshots the caller's practice, not the row as stored.
+        if (practiceRepository.findByIdForUpdate(practice.getId()).isEmpty()) {
+            throw new EntityNotFoundException("Practice", String.valueOf(practice.getId()));
+        }
         return appendLocked(practice);
     }
 

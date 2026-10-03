@@ -15,6 +15,19 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
+/**
+ * @param stateOverrides capture states only the collector can establish, such as evidence withheld for consent
+ *     or an artifact absent upstream. The manifest otherwise infers absence from missing files, which cannot
+ *     distinguish an empty source from one that was not permitted to be read.
+ * @param filesOnDisk content staged by path instead of retained in byte arrays. The attempt folder receives a
+ *     read-only copy, which is streamed into the workspace archive.
+ * @param cleanup releases whatever backs {@code filesOnDisk}, or null when nothing needs releasing. It joins the
+ *     attempt's cleanups, which run after final admission or when the attempt ends without one.
+ * @param captureLimitations per source, what the capture could not include — the same codes the collector would
+ *     use to say why it reported {@link SourceCompleteness#PARTIAL}. Reported here rather than inferred, because
+ *     only the collector knows the difference between a tree with nothing more in it and a tree whose walk it
+ *     stopped.
+ */
 public record EvidenceContribution(
         Map<String, byte[]> files,
         Map<SourceKind, SourceCompleteness> completeness,
@@ -22,28 +35,9 @@ public record EvidenceContribution(
         Map<SourceKind, Instant> observedAt,
         Map<SourceKind, Instant> sourceEffectiveAt,
         Map<SourceKind, SourceContentState> contentStates,
-        /**
-         * Capture states only the collector can establish, such as evidence withheld for consent or an
-         * artifact absent upstream. The manifest otherwise infers absence from missing files, which
-         * cannot distinguish an empty source from one that was not permitted to be read.
-         */
         Map<SourceKind, SourceCaptureState> stateOverrides,
-        /**
-         * Content staged by path instead of retained in byte arrays. The attempt folder receives a
-         * read-only copy, which is streamed into the workspace archive.
-         */
         Map<String, Path> filesOnDisk,
-        /**
-         * Releases whatever backs {@link #filesOnDisk}, or null when nothing needs releasing. It joins the
-         * attempt's cleanups, which run after final admission or when the attempt ends without one.
-         */
         @Nullable AutoCloseable cleanup,
-        /**
-         * Per source, what the capture could not include — the same codes the collector would use to say
-         * why it reported {@link de.tum.cit.aet.hephaestus.evidence.SourceCompleteness#PARTIAL}. Reported here rather than inferred, because
-         * only the collector knows the difference between a tree with nothing more in it and a tree whose
-         * walk it stopped.
-         */
         Map<SourceKind, List<String>> captureLimitations,
         List<EvidenceDirectory> directories,
         List<WorkspaceRefusal> refusals) {

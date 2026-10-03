@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import org.jspecify.annotations.NonNull;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -9,7 +9,7 @@ import org.jspecify.annotations.Nullable;
  */
 @Schema(description = "Result of GitLab PAT validation")
 public record GitLabPreflightResponseDTO(
-        @NonNull @Schema(description = "Whether the token is valid")
+        @Schema(description = "Whether the token is valid", requiredMode = RequiredMode.REQUIRED)
         boolean valid,
 
         @Nullable @Schema(description = "Username of the token owner (personal tokens) or group name (group tokens)")

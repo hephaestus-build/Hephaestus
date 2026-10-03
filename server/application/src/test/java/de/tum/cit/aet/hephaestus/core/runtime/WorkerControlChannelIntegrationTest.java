@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerSession;
@@ -22,7 +23,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -150,18 +150,13 @@ class WorkerControlChannelIntegrationTest extends BaseIntegrationTest {
         WorkerJwtIssuer.IssuedWorkerJwt jwt = jwtIssuer.issue(workerId);
         denylist.revoke(jwt.jti(), jwt.expiresAt());
 
-        AtomicReference<Throwable> failure = new AtomicReference<>();
-        try {
-            HttpClient.newBuilder()
-                    .build()
-                    .newWebSocketBuilder()
-                    .header("Authorization", "Bearer " + jwt.token())
-                    .buildAsync(URI.create("ws://localhost:" + port + "/api/workers/connect"), new CapturingListener())
-                    .get(10, TimeUnit.SECONDS);
-        } catch (Throwable t) {
-            failure.set(t);
-        }
-        assertThat(failure.get())
+        Throwable failure = catchThrowable(() -> HttpClient.newBuilder()
+                .build()
+                .newWebSocketBuilder()
+                .header("Authorization", "Bearer " + jwt.token())
+                .buildAsync(URI.create("ws://localhost:" + port + "/api/workers/connect"), new CapturingListener())
+                .get(10, TimeUnit.SECONDS));
+        assertThat(failure)
                 .as("revoked-JWT upgrade must fail; 401 manifests as a build-async error")
                 .isNotNull();
     }

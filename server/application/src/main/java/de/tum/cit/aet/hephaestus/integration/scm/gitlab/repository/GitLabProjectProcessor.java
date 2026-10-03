@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPus
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.Locale;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -192,7 +193,7 @@ public class GitLabProjectProcessor {
         if (visibility == null) {
             return Repository.Visibility.UNKNOWN;
         }
-        return switch (visibility.toLowerCase()) {
+        return switch (visibility.toLowerCase(Locale.ROOT)) {
             case "public" -> Repository.Visibility.PUBLIC;
             case "private" -> Repository.Visibility.PRIVATE;
             case "internal" -> Repository.Visibility.INTERNAL;
