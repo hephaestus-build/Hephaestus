@@ -234,7 +234,12 @@ Then:
 
 1. Open `https://<APP_HOSTNAME>` — the login page should offer **Sign in with GitHub**.
 2. Sign in as the bootstrap admin. You should see instance-admin navigation.
-3. Create your first workspace and connect it to GitHub.
+3. Open **Instance administration → Overview** and read **Configuration readiness**. Anything under
+   **Action required** needs a change; each item links to its section in
+   [Configuration readiness](./configuration-readiness). **Not configured** lists optional settings you
+   have not set, such as email or error monitoring. Leave them off until you want them. The values of
+   your settings are never shown.
+4. Create your first workspace and connect it to GitHub.
 
 ## 6. Connect GitHub data
 
@@ -279,6 +284,23 @@ would be noise. The manual dev trigger answers with the reason, so use it to tel
 For operators in Germany that is a § 5 DDG / Art. 13 GDPR obligation **before** opening the
 instance to users. See [Legal Pages](./legal-pages).
 :::
+
+## 9. First practice review
+
+With GitHub connected (step 6) and a model bound to practice reviews ([Connect an AI
+Provider](./ai-providers)), run one review and keep its feedback from reaching anyone until you have
+read it:
+
+1. Follow [First successful review](./practice-review#first-successful-review). When you reach
+   **Practices → Review settings → How much**, set the **Workspace default** to **Review before
+   sending**, so each piece of feedback waits for your approval.
+2. Open a small pull or merge request whose author is an eligible linked member.
+3. Open **Practices → Practice reviews**. Feedback from the review appears under **Needs you**,
+   awaiting approval. Nothing is posted to the pull or merge request until you approve it.
+4. Open the feedback, read it and the observations behind it, then approve it or reject it.
+
+Once the first piece of feedback reads the way you want, widen coverage or give practices more
+autonomy as [Practice review](./practice-review) describes.
 
 ## Upgrades
 
