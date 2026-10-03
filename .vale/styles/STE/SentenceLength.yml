@@ -1,0 +1,6 @@
+extends: occurrence
+message: 'Split this sentence. Write no more than 25 words per descriptive sentence.'
+level: error
+scope: sentence
+max: 25
+token: '\b[\p{L}\p{N}]+(?:[-’''][\p{L}\p{N}]+)*\b'

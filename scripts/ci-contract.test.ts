@@ -3363,3 +3363,48 @@ void test("supported-release failures use the shared tracking issue reporter", a
 	assert.equal(workflow.getIn(["concurrency", "group"]), "rescan-supported-release");
 	assert.equal(workflow.getIn(["concurrency", "cancel-in-progress"]), false);
 });
+
+void test("the prose gate ratchets on Linux and Windows with the base history", async () => {
+	const tasks = await loadTasks();
+	for (const entry of ["quality", "ci:tooling", "ci:windows", "affected:docs", "affected:webapp"]) {
+		assert.ok(taskClosure(tasks, [entry]).has("gate:prose"), `${entry} must run the prose gate`);
+	}
+	assert.equal(asRecord(tasks["gate:prose"], "gate:prose").cache, false);
+	assert.match(
+		commandsOf(tasks["gate:prose"]).join(" "),
+		/node --test scripts\/check-prose\.test\.ts.*node scripts\/check-prose\.ts/u,
+	);
+	const workflow = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+	const steps = workflow.getIn(["jobs", "quality", "steps"]);
+	assert.ok(isSeq(steps));
+	const checkout = steps.items.find(
+		(item) => isMap(item) && String(item.get("uses")).startsWith("actions/checkout@"),
+	);
+	assert.ok(isMap(checkout));
+	assert.equal(checkout.getIn(["with", "fetch-depth"]), 0);
+	const source = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const filter = step(source, ["jobs", "detect-changes"], "dorny/paths-filter");
+	const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
+	for (const file of [".vale/**", ".vale.ini"]) {
+		assert.ok(asArray(filters.tooling, "tooling paths").includes(file));
+	}
+	const dockerfile = await readFile("webapp/Dockerfile", "utf8");
+	for (const file of [".vale/", "docs/contributor/practice-feedback-language.md"]) {
+		assert.ok(
+			buildStageCopySources(dockerfile).includes(file),
+			`Copy ${file} before the webapp lint runs`,
+		);
+	}
+	for (const file of [
+		".vale/**",
+		"docs/contributor/practice-feedback-language.md",
+		"scripts/lib/ste-words.ts",
+		"scripts/lib/json.ts",
+	]) {
+		assert.ok(asArray(filters["webapp-image"], "image paths").includes(file));
+	}
+	assert.equal(
+		namedStep(workflow, ["jobs", "quality"], "Quality gates").getIn(["env", "PR_BASE_SHA"]),
+		`\${{ github.event.pull_request.base.sha }}`,
+	);
+});

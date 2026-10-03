@@ -24,6 +24,8 @@
 	],
 
 	"rules": {
+		// The writing standard uses an exact path ratchet. Unlisted files need a prose review.
+		"hephaestus/ste-ui-text": "error",
 		// -- Design system ---------------------------------------------------------------------------
 		// No `settings.shadcn`: `components.json` names the theme CSS and the registry path.
 		// `shadcn/require-static-classes` stays off: it cannot resolve an imported vocabulary map or a

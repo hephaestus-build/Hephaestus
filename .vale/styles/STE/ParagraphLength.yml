@@ -1,0 +1,6 @@
+extends: metric
+message: 'Split this paragraph. Write no more than 6 sentences about one subject.'
+level: error
+scope: paragraph
+formula: sentences
+condition: '> 6.0'

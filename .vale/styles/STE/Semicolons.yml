@@ -1,0 +1,6 @@
+extends: existence
+message: 'Write two sentences instead of a semicolon. Keep each sentence about one action or fact.'
+level: error
+tokens:
+  - ';'
+nonword: true

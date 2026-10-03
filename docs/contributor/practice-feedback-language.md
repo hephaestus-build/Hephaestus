@@ -7,6 +7,11 @@ description: The normative product vocabulary for observations, feedback, practi
 
 Use these product terms in user-facing interfaces, documentation, and release notes.
 
+This page is the project's list of technical names and technical verbs for
+[Simplified Technical English](./simplified-technical-english.md).
+The tables define names; the verb table defines actions.
+The prose checks read the first column, so keep each term in bold.
+
 This page owns the vocabulary for **observations and the feedback built from them**. The
 [practice review glossary](./practice-review-glossary.mdx) owns the vocabulary for **the review
 operation, the evidence contract, and the exact API, Java, and persistence names**, including
@@ -220,3 +225,41 @@ A developer's **AI choice** is a ceiling held by the account across its workspac
 | **No AI** (`NO_AI`) | Stop new AI requests for this person's work in practice reviews and Heph. It does not stop source synchronisation, storage, authorised reads, or requests already sent. |
 
 A choice is a boundary, not a selection of today's models. A workspace can add or remove models without asking the member again. **Not declared** sits outside both explicit AI ceilings and can serve only someone who has not chosen where a choice is optional. **Members who haven't chosen** is the admin label for that row. An AI answer with no ready model here is **not set up here yet**; a broken account integration is **unavailable right now**. Keep both visible without silently changing the person's answer. The [user privacy guide](/user/privacy#your-ai-choice) owns the member-facing data boundary.
+
+## Software technical names
+
+Use these names for software concepts, not as substitutes for ordinary words.
+The review glossary owns review-specific names; its link above remains their source.
+
+| Term | Meaning |
+| --- | --- |
+| **Workspace** | One team's tenant and its connected work. |
+| **Instance** | One deployment that hosts workspaces. |
+| **Integration** | A connection to GitHub, GitLab, Slack, or Outline. |
+| **Runtime role** | The server, worker, or webhook part of one application. |
+| **Server** | The service that handles application requests. |
+| **Worker** | The runtime role that executes background work. |
+| **Webhook** | A provider's HTTP event request. |
+| **API** | An interface for software calls. |
+| **UI** | The interface that a person uses. |
+| **Pull request** | A GitHub request to merge a branch. |
+| **Merge request** | A GitLab request to merge a branch. |
+| **Repository** | A version-controlled project. |
+| **Changeset** | A file that supplies a release note and version change. |
+| **Writing standard** | The policy for prose in this project. |
+| **Loading state** | The UI state while data is not yet available. |
+
+## Technical verbs
+
+Use each verb only for the action in its definition.
+Use its normal grammatical forms when necessary.
+
+| Term | Meaning |
+| --- | --- |
+| **Authenticate** | Verify an identity before access. |
+| **Authorize** | Give an identity permission for an action. |
+| **Configure** | Set the parameters of a software system. |
+| **Deploy** | Install a software version in an environment. |
+| **Merge** | Combine a branch with another branch. |
+| **Regenerate** | Produce an artifact again from its source. |
+| **Sync** | Reconcile local data with its source. |

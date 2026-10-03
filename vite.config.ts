@@ -58,7 +58,7 @@ const loadSources = "'load-tests/**/*.js'";
 const docsSources = "'docs/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 // Two passes: a negation applies to the whole invocation, so `!*/**` would also drop the nested set.
 const rootConfigSources = "'*.{json,jsonc,ts,code-workspace}' '!*/**'";
-const nestedConfigSources = "'{.changeset,.vscode,scripts}/*.{cjs,json}'";
+const nestedConfigSources = "'{.changeset,.vscode,scripts,.vale}/*.{cjs,json}'";
 // `as const` keeps the command a literal type, so `cached` can still read what it runs.
 const configFormatCommand = (mode: "--check" | "--write") =>
 	`vp fmt ${mode} ${rootConfigSources} && vp fmt ${mode} ${nestedConfigSources}` as const;
@@ -98,6 +98,7 @@ const policyGates = [
 	"gate:agent-runtime-pins",
 	"gate:changesets",
 	"gate:instructions",
+	"gate:prose",
 	"gate:contracts",
 	"gate:preview-stack",
 	"gate:env",
@@ -237,6 +238,9 @@ export default defineConfig({
 			"gate:contracts": run(
 				"node scripts/validate-source-use-contracts.ts && node scripts/check-source-use-contract-immutability.ts && node --test scripts/check-source-use-contract-immutability.test.ts",
 			),
+			"gate:prose": run("node --test scripts/check-prose.test.ts && node scripts/check-prose.ts"),
+			"lint:prose": run("node scripts/check-prose.ts"),
+			"report:prose": run("node scripts/report-prose.ts"),
 			"gate:instructions": run(
 				"node scripts/check-agent-instructions.ts && node --test scripts/check-agent-instructions.test.ts",
 			),
@@ -374,9 +378,9 @@ export default defineConfig({
 
 			// Scoped selections for check:affected
 			"affected:agents": group(agentGates),
-			"affected:docs": group([...docsGates, "gate:instructions"]),
+			"affected:docs": group([...docsGates, "gate:instructions", "gate:prose"]),
 			"affected:server": group(serverGates),
-			"affected:webapp": group(webappGates),
+			"affected:webapp": group([...webappGates, "gate:prose"]),
 			"affected:extension": group(extensionGates),
 
 			// The credential-free builds and suites that verification adds to quality

@@ -1,5 +1,8 @@
 # Webapp
 
+All prose follows the [writing standard](../docs/contributor/simplified-technical-english.md).
+Apply it to docs, UI text, user-facing responses, comments, and repository instructions.
+
 React 19 SPA on TanStack Router/Query, Tailwind 4, shadcn primitives over **Base UI**
 (`@base-ui/react`) — not Radix. Vitest + Storybook for tests, oxlint for lint and oxfmt for format,
 Vite for the build. React Compiler runs at build time.

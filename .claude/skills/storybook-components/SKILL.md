@@ -13,6 +13,9 @@ metadata:
 
 # Storybook + component API
 
+Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
+
+
 Load the one file that answers your question.
 
 | File | The question it answers |

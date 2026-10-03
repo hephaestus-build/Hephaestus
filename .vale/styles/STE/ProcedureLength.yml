@@ -1,0 +1,6 @@
+extends: occurrence
+message: 'Split this step. Write no more than 20 words per instruction sentence.'
+level: error
+scope: sentence.list
+max: 20
+token: '\b[\p{L}\p{N}]+(?:[-’''][\p{L}\p{N}]+)*\b'
