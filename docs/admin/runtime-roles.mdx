@@ -20,16 +20,13 @@ All three default-on boots the monolith role set. Heph also requires a connected
 On startup the JVM logs which roles wired:
 
 ```text
-INFO  RuntimeRoleStartupLogger : Runtime roles enabled: [server, worker, webhook]
+INFO  RuntimeRoleStartupLogger : Runtime roles enabled: [SERVER, WORKER, WEBHOOK]
 ```
 
-If you accidentally disable all three, the WARN spells out the recovery:
-
-```text
-WARN  RuntimeRoleStartupLogger : All runtime roles disabled — this JVM will
-      accept no work. Set at least one of hephaestus.runtime.server.enabled=true,
-      hephaestus.runtime.worker.enabled=true, or hephaestus.runtime.webhook.enabled=true.
-```
+Under `prod`, disabling all roles prevents startup. Disabling NATS for a server or webhook role
+also prevents startup; a worker-only process must disable NATS. The warning for a JVM with no roles
+is a non-production diagnostic, not a production recovery mode. The startup event also records
+`event.name=runtime.roles.configured` and the three `runtime.*.enabled` booleans.
 
 ## Monolith vs split-pod
 
@@ -134,10 +131,9 @@ scheduled jobs on the worker. Stalled writes are checked on a separate thread so
 cannot delay their timeout. API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or
 startup sync-job recovery.
 
-Only worker containers bind their HTTP and management endpoints to loopback: that is the `worker`
-overlay's doing, and a single-container install running all three roles still serves `/api/**` and
-the management endpoints on `SERVER_PORT`. On that topology the gateway is a second, narrower door
-rather than the only one.
+The worker application HTTP endpoint binds to loopback. Every role has a separate private
+management listener on port **9090**, including a single-JVM topology; management does not run on
+`SERVER_PORT`. See [Observability](./observability#scrape-metrics) for network restrictions.
 
 One row reads differently from what a bare `docker compose up` produces, because the shipped compose
 file sets the env var the base default leaves off:
@@ -150,9 +146,8 @@ file sets the env var the base default leaves off:
 `hephaestus.agent.enabled` (`AGENT_ENABLED`) gates three things that must agree, or a split
 deployment silently does half its job. They do **not** share a gate:
 
-- **Submission** (turning pull request, issue and bot-command events into queued jobs) needs only
-  this flag. It wires on *any* pod where the flag is `true`, including a `prod,worker` pod — a worker
-  with the flag on submits as well as executes.
+- **Submission** (turning pull request, issue and bot-command events into queued jobs) needs
+  this flag **and** the server role. A worker-only container executes jobs; it does not submit these reviews.
 - **Orphan recovery** (reclaiming a dead worker's stuck jobs) needs this flag **and** the server
   role, so it does not double-run on a dedicated worker pod.
 - **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.
@@ -219,8 +214,8 @@ HEPHAESTUS_WORKER_DRAIN_TIMEOUT=5m
 AGENT_ENABLED=true
 ```
 
-Drop the last line for a drain-only or standby pod: without it the worker boots, registers, and claims
-nothing.
+Without the last line, the worker boots and registers but claims no practice-review jobs.
+It can still serve Heph: `AGENT_ENABLED` does not gate interactive sessions.
 
 No LLM env vars are needed: the LLM proxy runs in-process on this pod (it follows the worker/sandbox
 capability, not `AGENT_ENABLED`) and reads providers

@@ -71,7 +71,8 @@ them.
 ## Credential encryption
 
 Set both encryption keys to exactly 32 printable, non-space ASCII characters and keep them with the
-database backup. The supported self-host setup generates them. Do not change the general encryption
+database backup. The supported self-host setup generates the master key and copies it into an empty credential-key
+setting. These are separate settings even when their initial values match. Do not change the general encryption
 key on an existing installation. Rotate the credential key with the documented online procedure.
 
 ## External URL
@@ -85,12 +86,17 @@ Server and webhook roles require `hephaestus.webhook.secret` with at least 32 pr
 characters. The supported self-host setup generates an independent value; never reuse another
 application key.
 
+The REQUIRED fact `webhook.routing-secret` applies to server and webhook roles on every production
+deployment, even without GitLab. Set `WEBHOOK_ROUTING_SECRET` to at least 32 printable, non-space
+ASCII characters, different from `WEBHOOK_SECRET`. Use the same value on both roles.
+
 ## NATS
 
 Server and webhook roles require NATS and an explicit `nats://` or `tls://` URI with a host, an optional
 valid port, and no query, fragment, or non-root path. A worker-only process must disable NATS because
-its job queue is PostgreSQL-backed. Every deployment requires `NATS_USERNAME` and `NATS_PASSWORD`;
-the supported self-host setup generates both. This check validates syntax and role consistency, not
+its job queue is PostgreSQL-backed. The supported Compose deployment requires `NATS_USERNAME` and `NATS_PASSWORD`;
+setup generates both. This credential requirement comes from Compose, not a readiness fact.
+Readiness validates syntax and role consistency, not
 connectivity or JetStream health.
 
 ## Login
@@ -100,11 +106,15 @@ GitHub or GitLab sign-in provider in the database-backed provider catalogue. Env
 entries are seeds, not the readiness authority. Slack and Outline are link-only providers and do not
 satisfy sign-in readiness. Worker and webhook roles do not load login providers.
 
+Compose does not forward custom auth session or user-view rate-limit variables. To change the
+properties below, supply an explicit application-server environment or mounted configuration override.
+A value placed only in the stack's `.env` does not change these limits.
+
 ### Recent sign-in for sensitive actions
 
 Changing an account's role, forcing an account out of all its sessions, viewing as a user,
 changing a login provider, registering an LLM connection, and linking an identity all require a
-sign-in from the last few minutes. `HEPHAESTUS_AUTH_STEP_UP_MAX_AGE` sets that window; it defaults to
+sign-in from the last few minutes. `hephaestus.auth.step-up-max-age` sets that window; it defaults to
 `5m` and must be a positive duration shorter than the absolute session lifetime, or the gate can
 never bind.
 
@@ -115,18 +125,17 @@ confirmed — review it and submit it again.
 
 ### Session deadlines
 
-The access cookie lasts `24h` by default (`HEPHAESTUS_AUTH_ACCESS_TTL`). The browser renews it
+The access cookie lasts `24h` by default (`hephaestus.auth.access-ttl`). The browser renews it
 approximately hourly while active, before expiry, or when returning to a tab whose renewal is due.
 Hidden or inactive tabs do not continuously renew it. This is a renewable credential lifetime, not a precise
 last-request idle timeout: after the cookie expires, signing in is required. Tokens stay in HttpOnly,
 Secure, host-only, SameSite=Lax cookies in production; they are never stored in browser local storage.
 
-A session ends at `hephaestus.auth.session-max-lifetime` (default `7d`, configurable with
-`HEPHAESTUS_AUTH_SESSION_MAX_LIFETIME`) no matter how active it is;
+A session ends at `hephaestus.auth.session-max-lifetime` (default `7d`) no matter how active it is;
 renewing an access token rolls within that deadline and never past it. Reads through a
 [user view](/contributor/instance-admin#read-only-user-views) are budgeted per instance
-administrator: `HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY` per
-`HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_PERIOD`, 120 per minute by default. Every read about the
+administrator: `hephaestus.auth.rate-limit.user-view.capacity` per
+`hephaestus.auth.rate-limit.user-view.period`, 120 per minute by default. Every read about the
 viewed member counts, so one page usually spends several. While the rate-limit store is
 unavailable, views are refused rather than left unbudgeted.
 
@@ -205,6 +214,10 @@ outside Docker, the application logs that it cannot identify its container, and 
 resources a crash leaves behind must be removed by hand; until then that session cannot start a
 new sandbox, and the error names the network. Networks created before this record
 existed are kept for the same reason.
+
+The REQUIRED fact `sandbox.docker-legacy-configuration` rejects old Docker settings outside
+`hephaestus.sandbox.docker.*` on workers. Move them to the property names above; the old settings
+are not read.
 
 #### Removing leftover sandbox networks
 

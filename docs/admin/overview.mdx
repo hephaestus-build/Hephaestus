@@ -25,12 +25,13 @@ container.
 - **Workspace admin** — configures one workspace: its repositories, its practices, its members, its
   AI model and spending cap.
 
-A person can be both. Every page below says which one it is written for.
+A person can be both. [Instance admin](./instance-admin) covers the operator console;
+[Integrations](./integrations) covers workspace connections.
 
 ## Set it up in this order
 
 1. **[Install](./install)** — the supported Compose stack, the required `.env` values, and TLS.
-2. **[Connect a source](./github-integration)** — the GitHub App or the GitLab connection that brings
+2. **[Connect a source](./integrations)** — the GitHub App or the GitLab connection that brings
    repository activity in. [Integrations & reference deployment](./production-setup) covers Slack and
    Outline.
 3. **[Connect an AI provider](./ai-providers)** — any OpenAI-compatible endpoint, plus the spending

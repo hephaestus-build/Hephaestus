@@ -174,9 +174,8 @@ diagnostics use `integration.request.failed` with the API operation, host, excep
 status when available; they stay at debug level and do not include raw transport/decoding messages.
 
 Credential-field masking and known-token masking are defense in depth, not a guarantee that arbitrary
-private text is safe to log. Keep raw requests, provider responses, signed URLs, and private execution
-archives out of logs. Restrict log access and retention as part of the instance's data-protection
-policy. Do not publish raw diagnostic archives merely because common token patterns are masked.
+private text is safe to log. Keep raw requests, provider responses, signed URLs, and private runtime text out of logs. Restrict log access and retention as part of the instance's data-protection
+policy. Do not publish raw runtime diagnostics merely because common token patterns are masked.
 
 ## Agent-job lifecycle
 

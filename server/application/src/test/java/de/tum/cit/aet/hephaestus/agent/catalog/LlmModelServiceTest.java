@@ -163,8 +163,8 @@ class LlmModelServiceTest extends BaseUnitTest {
                 value = {
                     "PRICED, 3.00, NULL, NULL, an input rate and an output rate, a price missing its output rate",
                     "PRICED, -1.00, 2.00, NULL, zero or greater, a negative rate",
-                    "PRICED, 0, 0, NULL, choose Free instead, an all-zero price that would bill as verified $0 forever",
-                    "NO_CHARGE, NULL, NULL, NULL, note, a free model with no explanation",
+                    "PRICED, 0, 0, NULL, choose No metered API cost instead, an all-zero price that would bill as verified $0 forever",
+                    "NO_CHARGE, NULL, NULL, NULL, explanation, a model with no metered API cost and no explanation",
                     "UNPRICED, 1.00, NULL, NULL, clear them or set a price, rates carried by a model with no price",
                 })
         void updatePriceRejectsAnInvalidRateCombination(
@@ -197,7 +197,7 @@ class LlmModelServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void freeModeWithNoteAndNoRatesSucceeds() {
+        void noMeteredApiCostWithExplanationAndNoRatesSucceeds() {
             when(priceRepository.findByModelIdAndEffectiveToIsNull(7L)).thenReturn(Optional.empty());
             when(priceRepository.save(any(LlmModelPrice.class))).thenAnswer(invocation -> invocation.getArgument(0));
             UpdateLlmModelPriceRequestDTO request = new UpdateLlmModelPriceRequestDTO(
