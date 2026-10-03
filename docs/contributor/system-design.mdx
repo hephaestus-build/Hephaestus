@@ -57,12 +57,14 @@ sequenceDiagram
     participant S as Server
     participant P as GitHub or GitLab
     B->>S: Start sign-in
-    S->>P: OAuth authorization redirect
-    P->>S: Authorization-code callback
+    S-->>B: Redirect to provider
+    B->>P: Authenticate and authorize
+    P-->>B: Redirect with authorization code
+    B->>S: OAuth callback with code and state
     S->>P: Exchange code and resolve identity
-    S->>B: HttpOnly cookie session
+    S-->>B: HttpOnly cookie session and redirect to webapp
     B->>S: GET /user
-    S->>B: Current account and access
+    S-->>B: Current account and access
 ```
 
 Spring Security `oauth2Login` federates sign-in. Hephaestus issues its own cookie-session JWTs;
