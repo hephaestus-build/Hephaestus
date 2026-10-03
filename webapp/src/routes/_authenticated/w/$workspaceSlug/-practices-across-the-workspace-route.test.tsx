@@ -212,6 +212,31 @@ describe("Practices across the workspace", () => {
 		// The profile's own group level, with its tabs, over the group across the workspace.
 		await screen.findByRole("tab", { name: /About this group/u }, ROUTE_RENDER_WAIT);
 
+		// A practice over it: the path names the group once, then the reader's own profile.
+		await userEvent.click(
+			await screen.findByRole(
+				"button",
+				{ name: "Open practice Scope the change to one concern" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		await waitFor(() => {
+			expect(router.state.location.search).toMatchObject({
+				detail: [
+					"practice-group:review-ready-work",
+					"own-group:review-ready-work",
+					"practice:scope-to-one-concern",
+				],
+			});
+		});
+		await screen.findByRole("button", { name: "Your profile" }, ROUTE_RENDER_WAIT);
+
+		router.history.back();
+		await waitFor(() => {
+			expect(router.state.location.search).toMatchObject({
+				detail: ["practice-group:review-ready-work", "own-group:review-ready-work"],
+			});
+		});
 		router.history.back();
 		await waitFor(() => {
 			expect(router.state.location.search).toMatchObject({

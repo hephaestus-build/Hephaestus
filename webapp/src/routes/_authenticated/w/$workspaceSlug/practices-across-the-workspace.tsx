@@ -143,8 +143,10 @@ function PracticesAcrossTheWorkspace() {
 				case "practice": {
 					return "Practice";
 				}
+				// The same group again, now through the reader's own profile: the crumb names the lens
+				// that changed rather than the group a second time.
 				case "own-group": {
-					return "Your group";
+					return "Your profile";
 				}
 				case "practice-group": {
 					return group?.groupName ?? "Group";
