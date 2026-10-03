@@ -94,7 +94,7 @@ function webappFilesTheExtensionImports(): string[] {
 		}
 	}
 	return [...new Set([...bundled, ...typed])]
-		.map((file) => path.relative(repository, file))
+		.map((file) => path.relative(repository, file).split(path.sep).join(path.posix.sep))
 		.toSorted();
 }
 
