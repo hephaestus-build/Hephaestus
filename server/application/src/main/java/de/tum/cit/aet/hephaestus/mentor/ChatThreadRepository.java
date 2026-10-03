@@ -49,18 +49,25 @@ public interface ChatThreadRepository extends JpaRepository<ChatThread, UUID> {
     @Query("SELECT t.sessionJsonl FROM ChatThread t WHERE t.id = :threadId")
     Optional<byte[]> findSessionJsonl(@Param("threadId") UUID threadId);
 
-    /** Projection write: avoids dirty-checking the entity. {@code persistInFlight} guarantees the row exists. */
-    @Modifying
-    @Transactional
+    /**
+     * The row version a turn's journal write is conditional on. PostgreSQL gives every write to the row a
+     * new {@code xmin}, including a person erasure clearing the journal, so a turn admitted before that
+     * write cannot store the session it was running back over it.
+     */
     @WorkspaceAgnostic("Caller has already resolved thread ownership via findByIdAndWorkspaceId")
-    @Query("UPDATE ChatThread t SET t.sessionJsonl = :bytes WHERE t.id = :threadId")
-    int updateSessionJsonl(@Param("threadId") UUID threadId, @Param("bytes") byte[] bytes);
+    @Query(value = "SELECT CAST(xmin AS text) FROM chat_thread WHERE id = :threadId", nativeQuery = true)
+    Optional<String> findSessionVersion(@Param("threadId") UUID threadId);
 
+    /** Writes only when the row is still at {@code version}; returns 0 when anything wrote it since. */
     @Modifying
     @Transactional
     @WorkspaceAgnostic("Caller has already resolved thread ownership via findByIdAndWorkspaceId")
-    @Query("UPDATE ChatThread t SET t.sessionJsonl = NULL WHERE t.id = :threadId")
-    int clearSessionJsonl(@Param("threadId") UUID threadId);
+    @Query(
+            value =
+                    "UPDATE chat_thread SET session_jsonl = :bytes WHERE id = :threadId AND CAST(xmin AS text) = :version",
+            nativeQuery = true)
+    int updateSessionJsonl(
+            @Param("threadId") UUID threadId, @Param("bytes") byte[] bytes, @Param("version") String version);
 
     /**
      * Bulk-delete every thread for a workspace. Cascades to {@code chat_message} +

@@ -16,7 +16,8 @@ import tools.jackson.databind.ObjectMapper;
     "chat_message",
     "chat_thread",
     "chat_message_feedback_copy",
-    "chat_thread_feedback_runtime_copy"
+    "chat_thread_feedback_runtime_copy",
+    "chat_thread_runtime_journal"
 })
 public class MentorPersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
@@ -28,6 +29,7 @@ public class MentorPersonDataCatalog implements PersonDataCatalog {
         return List.of(
                 new MentorFeedbackCopyPersonDataStore(jdbc, mapper, copySources, false),
                 new MentorFeedbackCopyPersonDataStore(jdbc, mapper, copySources, true),
+                new MentorRuntimeJournalPersonDataStore(jdbc, mapper),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

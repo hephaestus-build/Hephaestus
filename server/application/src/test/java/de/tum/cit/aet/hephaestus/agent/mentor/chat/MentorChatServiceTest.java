@@ -372,7 +372,8 @@ class MentorChatServiceTest extends BaseUnitTest {
                     assistantId,
                     Instant.now(),
                     admitted.upstreamModelId(),
-                    priceSnapshot);
+                    priceSnapshot,
+                    "test-session-version");
         });
         when(workspaceContextBuilder.build(any())).thenReturn(new LinkedHashMap<>());
         when(interactiveSandboxService.attach(any())).thenReturn(sandbox);
@@ -522,7 +523,28 @@ class MentorChatServiceTest extends BaseUnitTest {
                 .findFirst()
                 .orElseThrow();
         assertThat(open.path("params").path("session").asString()).isEqualTo("{\"type\":\"session\"}\n");
-        verify(chatThreadRepository, never()).clearSessionJsonl(any());
+        verify(interactiveSandboxService, times(1)).attach(any());
+    }
+
+    @Test
+    void shouldDiscardTheWarmRuntimeAndOpenAFreshSessionWhenErasureEmptiedTheJournal() {
+        FakeSandbox warmSandbox = sandbox;
+        FakeSandbox freshSandbox = new FakeSandbox();
+        when(interactiveSandboxService.isWarm(any())).thenReturn(true);
+        when(chatThreadRepository.findSessionJsonl(THREAD_ID)).thenReturn(Optional.of(new byte[0]));
+        when(interactiveSandboxService.attach(any())).thenReturn(warmSandbox, freshSandbox);
+        scheduleHappyPathResponses(freshSandbox).run();
+
+        runTurnSync();
+
+        assertThat(warmSandbox.closed).isTrue();
+        assertThat(warmSandbox.methodsSent()).doesNotContain("open_thread");
+        JsonNode open = freshSandbox.sentFrames().stream()
+                .filter(frame -> "open_thread".equals(frame.path("method").asString("")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(open.path("params").path("session").asString("")).isEmpty();
+        assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
     }
 
     @Test
@@ -802,7 +824,8 @@ class MentorChatServiceTest extends BaseUnitTest {
                                     inv.getArgument(3, UUID.class),
                                     Instant.now(),
                                     admitted.upstreamModelId(),
-                                    Objects.requireNonNull(admitted.priceSnapshot())),
+                                    Objects.requireNonNull(admitted.priceSnapshot()),
+                                    "test-session-version"),
                             "Plan issue 12");
                 });
         scheduleHappyPathResponses(sandbox).run();
@@ -1595,7 +1618,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void runTurn_staleSessionRestoreFailure_clearsSessionAndRetriesOnceWithoutIt() throws Exception {
+    void runTurn_staleSessionRestoreFailure_retriesOnceWithoutIt() throws Exception {
         FakeSandbox staleSessionSandbox = sandbox;
         FakeSandbox cleanSandbox = new FakeSandbox();
         when(chatThreadRepository.findSessionJsonl(THREAD_ID))
@@ -1619,7 +1642,6 @@ class MentorChatServiceTest extends BaseUnitTest {
 
         runTurnSync();
 
-        verify(chatThreadRepository).clearSessionJsonl(THREAD_ID);
         verify(interactiveSandboxService, times(2)).attach(any());
         assertThat(staleSessionSandbox.closed).isTrue();
         verify(persistence).complete(any(), any(), any(UIMessageChunk.Finish.class));

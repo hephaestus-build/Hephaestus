@@ -29,26 +29,19 @@ import tools.jackson.databind.ObjectMapper;
     "observation_restoration_actor"
 })
 public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConversationCopySource {
-    private static final String REVIEWED_WORK_SCOPE = """
-            agent_job_id = ANY(:derivedJobs) OR about_user_id = ANY(:users)
-            OR (artifact_kind IN ('scm.issue','scm.pull_request') AND artifact_id = ANY(:artifacts))
-            OR (artifact_kind='chat.conversation_thread' AND artifact_id = ANY(:conversations))
-            OR (artifact_kind='docs.document' AND artifact_id = ANY(:documents))
-            """;
-    private static final String OBSERVATION_IDS = "SELECT id FROM observation WHERE (" + REVIEWED_WORK_SCOPE + ")";
-    private static final String FEEDBACK_IDS = "SELECT id FROM feedback WHERE (" + REVIEWED_WORK_SCOPE
-            + ") OR recipient_user_id = ANY(:users) OR id IN (SELECT feedback_id FROM feedback_observation WHERE observation_id IN ("
-            + OBSERVATION_IDS + "))";
+    // Observations and feedback belong to the developer they are about. Rows about another developer
+    // stay even when they derive from shared work; the agent and evidence catalogs erase hidden copies.
+    private static final String OBSERVATION_IDS = "SELECT id FROM observation WHERE about_user_id = ANY(:users)";
+    private static final String FEEDBACK_IDS =
+            "SELECT id FROM feedback WHERE about_user_id = ANY(:users) OR recipient_user_id = ANY(:users)"
+                    + " OR id IN (SELECT feedback_id FROM feedback_observation WHERE observation_id IN ("
+                    + OBSERVATION_IDS + "))";
     private static final String JOB_IDS =
             """
-            SELECT j.id FROM agent_job j WHERE j.id = ANY(:derivedJobs)
-            OR j.metadata->>'slack_thread_id' IN (SELECT unnest(CAST(:conversations AS bigint[]))::text)
-            OR j.metadata->>'docs_document_id' IN (SELECT unnest(CAST(:documents AS bigint[]))::text)
-            OR j.metadata->>'author_id' IN (SELECT unnest(CAST(:users AS bigint[]))::text)
+            SELECT j.id FROM agent_job j
+            WHERE j.metadata->>'author_id' IN (SELECT unnest(CAST(:users AS bigint[]))::text)
             OR j.metadata->>'actor_user_id' IN (SELECT unnest(CAST(:users AS bigint[]))::text)
             OR j.metadata->>'about_user_id' IN (SELECT unnest(CAST(:users AS bigint[]))::text)
-            OR j.metadata->>'pull_request_id' IN (SELECT unnest(CAST(:artifacts AS bigint[]))::text)
-            OR j.metadata->>'issue_id' IN (SELECT unnest(CAST(:artifacts AS bigint[]))::text)
             """ + " OR j.id IN (SELECT agent_job_id FROM observation WHERE id IN (" + OBSERVATION_IDS
                     + ")) OR j.id IN (SELECT agent_job_id FROM feedback WHERE id IN (" + FEEDBACK_IDS + "))";
 

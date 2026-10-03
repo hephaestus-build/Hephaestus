@@ -31,7 +31,7 @@ final class MentorFeedbackCopyPersonDataStore extends JdbcPersonDataStore {
                         : "id,thread_id,created_at,role,parts,status,parent_message_id",
                 runtime ? "id" : "id,thread_id",
                 runtime
-                        ? "session_jsonl=NULL"
+                        ? "session_jsonl=''::bytea"
                         : "parts='[{\"type\":\"text\",\"text\":\"This feedback was erased.\"}]'::jsonb,metadata=NULL",
                 runtime ? -245 : -240);
         this.jdbc = jdbc;

@@ -351,7 +351,8 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                 assistant.getId(),
                 Instant.now(),
                 "test-model",
-                org.mockito.Mockito.mock(LlmPriceSnapshot.class));
+                org.mockito.Mockito.mock(LlmPriceSnapshot.class),
+                "test-session-version");
     }
 
     /** A stored link; one with no text is how replies stored links before they carried the feedback. */

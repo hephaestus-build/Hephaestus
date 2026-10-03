@@ -96,7 +96,13 @@ class MentorTurnCrashBillingTest extends BaseUnitTest {
 
     private MentorTurnPersistence.TurnPersistenceCookie cookie() {
         return new MentorTurnPersistence.TurnPersistenceCookie(
-                UUID.randomUUID(), UUID.randomUUID(), assistantId, Instant.now(), "gpt-x", PRICE);
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                assistantId,
+                Instant.now(),
+                "gpt-x",
+                PRICE,
+                "test-session-version");
     }
 
     private void proxyRecorded(MentorTurnLlmUsage usage) {
