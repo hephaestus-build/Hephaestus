@@ -190,7 +190,7 @@ function FactGroup({ status, facts }: { status: ConfigurationStatus; facts: Conf
 	const def = CONFIGURATION_STATUS_DEFS[status];
 	return (
 		<AccordionItem value={status}>
-			<AccordionTrigger className="items-center no-underline hover:no-underline">
+			<AccordionTrigger headingLevel={2} className="items-center no-underline hover:no-underline">
 				<span className="flex items-center gap-2">
 					<StatusBadge def={def} />
 					<span className="tabular-nums">{facts.length}</span>

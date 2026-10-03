@@ -47,6 +47,11 @@ const SIGNED_IN: Surface[] = [
 		path: "/workspaces/new/gitlab",
 		title: "Connect GitLab · Hephaestus",
 	},
+	{
+		name: "Integration callback",
+		path: "/integrations",
+		title: "Connecting an integration · Hephaestus",
+	},
 	{ name: "Settings", path: "/settings", title: "User settings · Hephaestus" },
 	{
 		name: "Practice profile",
@@ -69,6 +74,11 @@ const SIGNED_IN: Surface[] = [
 		name: "Practice updates",
 		path: "/w/e2e/admin/practices/releases",
 		title: "Practice updates · Admin · Hephaestus",
+	},
+	{
+		name: "Review settings",
+		path: "/w/e2e/admin/practices/review",
+		title: "Review settings · Admin · Hephaestus",
 	},
 	{
 		name: "Practice reviews",
@@ -127,6 +137,11 @@ const SIGNED_IN: Surface[] = [
 		title: "Workspaces · Instance admin · Hephaestus",
 	},
 	{
+		name: "View as user",
+		path: "/admin/workspaces/e2e/users",
+		title: "View as user · Instance admin · Hephaestus",
+	},
+	{
 		name: "Instance audit log",
 		path: "/admin/audit",
 		title: "Audit log · Instance admin · Hephaestus",
@@ -177,8 +192,14 @@ const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-
 // 400% zoom of a 1280px window is 320 CSS px wide and 200% is 640 (WCAG 2.2 SC 1.4.4 and 1.4.10).
 const NARROW_WIDTHS = [320, 640];
 
-const publicTest = base.extend({ storageState: { cookies: [], origins: [] } });
+// The theme follows the system, so the scheme is pinned: a machine set to dark would otherwise
+// have the "light" scan measure the dark theme twice.
+const publicTest = base.extend({
+	colorScheme: "light",
+	storageState: { cookies: [], origins: [] },
+});
 const signedInTest = base.extend({
+	colorScheme: "light",
 	storageState: async ({ adminSession }, use) => use(adminSession),
 });
 
@@ -193,6 +214,7 @@ async function useDarkTheme(page: Page) {
 		document.documentElement.classList.replace("light", "dark");
 		document.documentElement.dataset.colorMode = "dark";
 	});
+	await expect(page.locator("html")).toHaveClass(/dark/u);
 }
 
 /** What axe reports on the page as it is now, one line per node. */

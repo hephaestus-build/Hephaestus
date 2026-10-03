@@ -121,6 +121,9 @@ export const ActionRequired: Story = {
 		await expect(
 			canvas.getByRole("link", { name: /Read the guide for login-provider capability/u }),
 		).toHaveAttribute("href", `${GUIDE}#login`);
+		// The page's `<h1>` sits above this card, so each status group is a level-2 heading.
+		await expect(canvas.getAllByRole("heading", { level: 2 })).not.toHaveLength(0);
+		await expect(canvas.queryAllByRole("heading", { level: 3 })).toHaveLength(0);
 	},
 };
 
