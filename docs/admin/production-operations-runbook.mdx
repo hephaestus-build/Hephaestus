@@ -247,13 +247,14 @@ can create a preview, download an export or start erasure. Requests and replies 
 privacy contact in the instance notice; this page is not a data-subject request portal.
 
 1. Verify the requester's identity and authority under your privacy procedure. Enter the account ID
-   or exact provider-instance ID and native user ID. For Slack, also enter the native Slack workspace
-   ID. Add all verified identities that belong to the request. Do not match names, logins or email
+   or the exact provider instance and provider user ID. For Slack, also enter the native Slack
+   workspace ID. Add all verified identities that belong to the request. Do not match names, logins or email
    addresses. A conflicting account link stops resolution; repair the verified link or correct the
    supplied exact IDs before creating another preview. Cached Slack-to-SCM actor stamps are not
    identity proof. If collected work has such a stamp, include the verified exact keys for both
    providers, or repair the conflicting association; the page does not infer an identity from it.
-2. Select **Preview data**. Check the resolved identity scope and every store count, including zeros.
+2. Select **Preview data**. Check the resolved identities and the store counts; stores with no rows
+   are listed under **stores hold no rows**.
    The preview expires after 48 hours. Export and erasure use its frozen row keys; changed data needs
    a new preview, not an SQL supplement.
 3. For an access request, select **Download JSON export** and transfer the file securely. The file
@@ -263,11 +264,12 @@ privacy contact in the instance notice; this page is not a data-subject request 
 4. For erasure, follow [Un-deliver external feedback, then purge](#un-deliver-external-feedback-then-purge)
    for each provider locator in the preview. An unconfirmed write can have no comment ID: inspect
    the linked reviewed work for both summary and inline feedback, including preserved discussions.
-   Confirm that the external copies have been removed.
    The application does not automatically delete comments already posted on a provider.
-5. Type **ERASE** and start erasure. Keep the opaque request URL to check progress after a reload.
+5. Select **Erase data…**. In the dialog, confirm that the listed provider copies were removed, type
+   **ERASE** and select **Erase data**. The page follows the job until it finishes; keep the request
+   URL to return to it after a reload.
    The job records progress one store at a time. If it stops, correct the operational failure and
-   select **Resume erasure** on the same request. Do not create a second request to bypass a failed
+   select **Resume erasure…** on the same request. Do not create a second request to bypass a failed
    job. Worker evidence owners must acknowledge removal of every attempt and copy before database
    evidence is cleared; an unavailable owner is a failure, not proof of erasure.
 6. Check **Erasure complete** and the per-store receipt before replying. The receipt retains the
@@ -284,11 +286,10 @@ result changes after inspection, export and erasure reject the stale preview. Cr
 and inspect the current locators before confirming removal again. An unconfirmed write or legacy comment with no
 exact inspection locator stops the request and names its dispatch or review; it is not treated as never delivered.
 
-The preview also includes reviews whose captured evidence contains the person's exact native identity,
-not only reviews addressed to that person. Their derived observations and feedback are included in
-erasure, including feedback copied into someone else's Heph conversation. The other developer's
-profile, replies and unrelated reviews stay. Repository history alone does not select another
-developer's derived feedback. Check this shared-evidence scope before starting erasure.
+Observations and feedback belong to the developer they are about. The person's own are exported and
+erased, including copies of their feedback in someone else's Heph conversation. Another developer's
+observations and feedback stay, even when the person commented on that work; the review's captured
+inputs and Heph's hidden memory in the affected workspaces are erased instead.
 
 Exact provider-key suppression is held separately from the audit receipt. It prevents the erased
 identity from being processed again and is not a reversible workspace consent choice. Provider sync

@@ -12,8 +12,7 @@ recover attribution.
 
 Pending integration authorizations must be started again after the upgrade. Older signed OAuth states are rejected rather than interpreting their historical display-login attribution as an account reference.
 
-New pending integration authorizations are tied to the initiating account and removed by person erasure. Existing nonce rows remain without account attribution; no old identity is inferred. Erasure revokes sign-in sessions as soon as the job starts, including when a later store step needs a retry.
-
+New pending integration authorizations are tied to the initiating account and removed by person erasure. Existing nonce rows remain without account attribution; no old identity is inferred.
 
 Heph's hidden conversation memory resets once on upgrade. Old runtime journals have no complete
 exact-person provenance, so the migration clears them without matching text, names, logins or emails.
