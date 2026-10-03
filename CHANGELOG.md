@@ -1,5 +1,756 @@
 # Changelog
 
+## 0.81.0
+
+### Minor Changes
+
+- Administrators can set how hard a reasoning model thinks. Every model, shared or a workspace's own, has
+  a **Reasoning effort** — None, Minimal, Low, Medium, High, Extra high or Max — sent with every call a
+  practice review or the mentor makes, or **Provider default**, which sends nothing and leaves the
+  provider's own default in place. A model marked as supporting reasoning before keeps the medium effort
+  it was already sent. The reasoning tokens a review spends are now recorded with its usage instead of
+  reading zero.
+- A practice review now reads three more facts from the record, on GitHub and GitLab alike: what the
+  checks said about the pull request's head (GitHub's status check rollup, GitLab's head pipeline),
+  which issues the provider records as closing candidates for the pull request — including links made in the
+  provider's UI that no `#N` in the text names — and review-thread resolution times when available. The
+  schema migration that stores them applies automatically.
+
+  **Operators:** GitHub Apps created from an earlier manifest need the `check_suite` and `status`
+  event subscriptions added under the app's Permissions & events, and the Checks and Commit statuses
+  read permissions if the app predates them; GitLab group webhooks registered by an earlier release
+  need Pipeline events enabled, or the hook deleted so it is registered again. Until then the head's
+  check state arrives only with the scheduled sync.
+
+  A practice set to **Review before sending** can still deliver feedback to the developer's practice
+  pages and Heph, subject to channel rules. Only feedback posted on the work waits for approval.
+
+- Practice reviews can inspect the captured repository and reachable Git history with native tools.
+  Binary assets and hidden or vendored source are no longer omitted individually. Snapshots above
+  `GIT_MAX_SNAPSHOT_BYTES` are refused whole. The repository is read-only, has no upstream credentials,
+  and supports verified historical citations.
+
+  A review now uses one model session for grouped practice checks and feedback composition. It records
+  valid observations independently, stages linked issues as citable text, and records per-turn calls,
+  tools and refusals. Practice-page feedback requires recurring negative observations across work;
+  a single occurrence does not create a card about a recurring lapse.
+
+  Bundled criteria now use a common decision-procedure format and can exclude assessed cells that do
+  not apply to the practice. The new **State how to verify the change** practice checks verification
+  guidance. Catalog updates do not rewrite workspace-adopted copies.
+
+  Private execution archives are no longer collected. Reviews retain verified citation results rather
+  than archives of complete inputs, model requests and session transcripts. Practice reviews always
+  use an internal network; internet access remains a Heph-only setting.
+
+  **Operators:** deploy matching server and agent images, remove the retired repository size limits, `SANDBOX_DOCKER_CLI`, `HEPHAESTUS_FABRIC_GC_RETENTION_DAYS` and the execution-capture setting, and review the expanded repository-history scope with your privacy owner before updating installed policies to source contract 1.2.0. Existing policy revisions are not rewritten at startup. The migration guide has the steps.
+
+- A workspace now opens on your **Practice profile**, or on the new **Activity** page where it does not review practices. **Activity** shows what needs you — review requests, and your pull or merge requests returned to you or approved — with the ones waiting on someone else, including requests other reviewers have already covered, folded away; the issues assigned to you; your pull requests, reviews, comments and issues over the last 7 days, 30 days, 90 days or 12 months, each with its own bar chart; and a timeline with one row per pull request or issue, which you can copy as Markdown for a standup or a 1:1. Icons and colours are GitHub's or GitLab's own, and GitLab workspaces now show GitLab's own state colours throughout the app, where some places used GitHub's before. **Workspace activity** replaces the leaderboard: everyone's activity, or one team's, with members listed by name and searchable, and each member one click away. Nothing is scored or ranked anymore — the leaderboard, leagues, league points, XP, levels and the weekly Slack leaderboard digest are gone, and activity is visible only to people with a role in the workspace, never through a public workspace.
+
+  **Operators:** the upgrade deletes league points, XP and the leaderboard and league settings from the database, and a rollback cannot bring them back; take a backup before upgrading, and export that history first if you want to keep it (the migration guide has the commands). Delete `LEADERBOARD_NOTIFICATION_ENABLED`, `LEADERBOARD_SCHEDULE_DAY` and `LEADERBOARD_SCHEDULE_TIME` from your environment.
+
+- Workspace admins can mark an observation as incorrect, with a reason, from its page under **Practice reviews → Observations**, and restore it later with a second reason. An observation marked incorrect stays in the review record and in the developer's review history, labelled with the reason, but no longer counts toward their standing, practice page, Heph's context or new feedback, and any feedback about it that had not reached anyone yet is stopped. No new attempt to post feedback citing it is made, including approved and retried deliveries; while a delivery citing it is in progress the correction asks to be retried, and a comment that attempt had already sent may still arrive, in which case Hephaestus finds it and corrects it like any other. For comments already on a pull request or merge request, Hephaestus tries to add a correction notice to each summary and records the outcome on the observation page: updated, pending, inline comments remaining (these cannot be edited), or unresolved, including when the provider accepted a comment without saying which one it is.
+- The practice "Confirm the outcome before closing the issue" now ships as needing human review. It asked
+  whether an issue's checklist and sub-issues were finished when the issue was closed, but a review only sees
+  the issue as it is later, after boxes may have been ticked, unticked or added, sub-issues finished or
+  attached, or the issue reopened and closed again, so it could record a lapse the developer never made or a
+  clean close that was not. The instance catalog shows it as needing human review, including where an
+  administrator customized it to ask for a review; a customization set to guidance only stays guidance only.
+  Every workspace copy recorded as coming from the catalog entry, including an edited one, is no longer
+  reviewed from the upgrade on: a review already under way records no new result for it, the upgraded server
+  switches it off at startup with the change in the configuration audit log, and it cannot be switched back
+  on. If that repair cannot finish, the server's health reports it. A copy made and edited before Hephaestus
+  recorded where copies came from has no such record, is treated as the workspace's own and is still
+  reviewed. Results recorded before the upgrade stay as they were, and the practice page no longer shows a
+  phrase for this practice.
+
+  **Operators:** after upgrading, find workspace practices with the slug `issue-closed-with-unmet-outcome`
+  and no recorded source, decide with each workspace whether it is an old catalog copy, and switch those off;
+  see the migration guide.
+
+- A Chrome extension shows the practice review of the pull request, merge request or issue you are viewing on GitHub.com or GitLab, including self-hosted GitLab, in the page itself: the comments Hephaestus posted there for you, each a link to the comment, when the work was reviewed, and what the review concluded about your own work. On a repository's list, a row's Hephaestus button previews that work in one line. Asking for a review is confirmed in the extension's own window. On sites you allow, it sends your Hephaestus only the address of the work you open, or of the row you press. It is not yet published in the Chrome Web Store.
+
+  Operators who distribute the extension allow it by listing its extension id in the new optional `HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS`. Hephaestus now records the address of each comment it posts on a pull request, merge request or issue; comments posted before this release may have none.
+
+  A review requested for work whose repository several workspaces monitor now follows the requesting workspace's own settings. Installed-client sign-in and development account switching also work before an account has accepted the transparency notice; workspace data still requires it.
+
+- Practice observations now distinguish whether a practice was assessed from whether the specified behavior was present and whether that behavior is desirable or undesirable in context. Not applicable and undetermined observations no longer masquerade as presence values. Invalid combinations are rejected instead of silently rewritten, and positive and negative outcomes are derived from presence and assessment. Severity belongs only to negative outcomes.
+
+  **Operators:** This changes the observation API and runtime output contract. Upgrade the server, sandbox runtime and webapp together; update custom consumers to read `assessmentStatus` and nullable `presence`, `assessment` and `severity`, plus the read-only `outcome`. Standing observations expose their descriptive `kind` separately. Back up the database before upgrading. The migration preserves existing outcomes by translating historical absence assessments and stops rather than inventing a severity for an inconsistent historical bad observation. See the migration guide before upgrading.
+
+- Practice reviews of a pull request now read its commits — each commit's subject, body, timestamps and file count, in history order — so feedback about commit messages and commit scope no longer comes back inconclusive because no commit list reached the review. **Operators:** a pull request review now needs the repository checkout for every practice, not only the code practices; an installation that enables `GIT_CHECKOUT_ENABLED` together with `AGENT_ENABLED`, as the install guide requires, needs no change.
+- Practice reviews can evaluate a verified empty code-change range under source contract 1.1.0. Each practice still determines whether the work presents an occasion; an empty capture does not automatically produce praise, criticism or a not-applicable observation. Missing, failed and incomplete required captures remain blocked.
+
+  New reviews use the updated source policy. Recorded 1.0.0 evidence retains its original policy and digest; this runtime does not re-derive those historical readiness decisions.
+
+  **Operators:** Pause new reviews before upgrading, then review and explicitly update stored custom and overridden practice policies to source contract 1.1.0 through the normal administration API before resuming them. Adopt the updated bundled catalogue through its existing adoption flow. Historical policies are not silently reinterpreted.
+
+- A **Feedback** button in the header is now the one place to reach the Hephaestus team: **Share an idea**, **Report a bug** or **Send feedback**, with a dialog that asks for what that kind needs, and a link to the public issue tracker for those who prefer the open. Surveys wait in the same menu with their length; each new one is announced once and never opens by itself. A survey asks one question at a time, marks optional questions, takes **Something else** where its author allows it, keeps your draft when you close it, and lets you undo an accidental decline. Page and browser details go with a report only when you tick the box — ticked by default for a bug.
+
+  Instance administrators can publish a survey for research as well as for product improvement. A **product** survey is read by the Hephaestus team and is never research. Where the instance names a research organisation, a **research** survey is offered only to members who currently take part in that study, is labelled as research with a link to leave the study, and its answers are that study's data. Results pages show invited, responded and declined counts, a summary per question with averages and a Net Promoter Score, every response, and a CSV export. The inbox badges ideas, bugs and feedback and lets you resolve or reopen them.
+
+- Practice reviews assess each evidenced behavior in context, distinguishing useful actions, harmful actions, missing needed behavior and bounded avoidance. Developer practice pages retain both kinds of positive observation, and review guidance ties verification instructions to the change they actually exercise.
+
+  Review history retains individual observations without inferred resolved or regressed statuses. Automatic cross-review progress footers are removed: a shared location or a missing observation does not establish that the same concern changed.
+
+  Reactions and delivery receipts apply to the exact observation they reference. Different behaviors at the same location remain independent, so addressing or delivering one does not silently suppress another.
+
+  **Operators:** Upgrade the server and review runtime together after draining in-flight reviews and feedback dispatches. Adopt the updated bundled practice definitions, review customized criteria for contextual behavior assessment, and remove `PRACTICE_REVIEW_PROGRESS_FOOTER` or `hephaestus.practice-review.progress-footer` from deployment overrides.
+
+- Comments Hephaestus posts on pull requests, merge requests and issues no longer ask for reactions or
+  replies it never read. They end with a link to answer or dispute the feedback in Hephaestus, which opens
+  your own reviews of that work. A dispute now holds: a later review of the same work does not raise the same
+  point about the same place again until you withdraw the dispute, and the setting that turned this off by
+  default is gone. Workspace admins see each dispute, with your explanation, on its observation under
+  Practice reviews, can filter for disputed observations, and can mark the observation incorrect or withdraw
+  the feedback. The dispute forms say that admins read your explanation.
+- Hephaestus can now send email. Set `SPRING_MAIL_HOST` (plus `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`,
+  `SPRING_MAIL_PASSWORD` for an authenticated relay) and `HEPHAESTUS_EMAIL_FROM` on the application
+  server to turn it on; leave the host unset and nothing changes. Authenticated SMTP requires TLS. Instance admins verify the relay with
+  **Instance settings → Email → Send test email**, which reports relay acceptance, configuration problems, or why a test was withheld.
+  People whose account has a verified email address receive a confirmation when they delete their
+  account, naming its scheduled deletion deadline. These confirmations are queued in the same transaction
+  as the account change and retried until that deadline when the relay is unavailable. Permanent SMTP
+  send rejections are not retried. SMTP can deliver
+  duplicates after a failed acknowledgement; relay acceptance does not guarantee inbox delivery.
+  Silent Mode withholds email through the shared outbound guard. The local development stack gains a Mailpit inbox at
+  `http://localhost:8025` by default (configurable with `MAILPIT_UI_PORT`). When you choose to activate email, the relay operator becomes a recipient of
+  personal data; complete the processor checklist before setting the host. No relay configuration is required to upgrade.
+
+  Optional email subscriptions start off and belong to each account. Administrators can opt in to an email for each new
+  product-feedback submission; people can choose product and research survey invitations
+  separately. Every optional email offers unsubscribe without sign-in. Survey invitations require an
+  explicit administrator action, respect current eligibility and keep relay acceptance separate from
+  in-app participation counts. Administrators may request one reminder after 72 hours and subscribe to
+  end-of-survey summaries without receiving individual answers. Workspace administrators can opt in to
+  Slack credential-revocation and GitHub suspension alerts, with recovery notices. Account linking,
+  unlinking and administrator-access changes also send
+  security notices to the affected account's verified address. Shared SMTP attempt budgets reserve
+  capacity for essential mail; configure them to fit your relay before inviting a large audience.
+
+  Turning a subscription back on does not restart optional email requested before the new opt-in.
+  You can turn subscriptions off, including after losing administrator access or a verified
+  contact, and while the instance's relay is unconfigured. Survey pauses and schedule edits remain
+  consistent with concurrent invitation requests and summary scheduling. Retry batches share turns
+  across failed notifications instead of repeatedly retrying only the oldest batch.
+
+  Workspace connection alerts name the affected workspace and link to its current settings. Incomplete
+  notification-preference updates are rejected instead of clearing choices, and the API documents the
+  required version precondition. Slow preference saves show a saving indicator while choices remain
+  unchanged until the server confirms them.
+
+  Webhook receivers now wait briefly for monitoring to stop during shutdown and no longer report
+  intentional cancellation as a broker outage.
+
+  Self-hosted instances can run without email: personal settings hide unused email choices rather
+  than showing setup warnings, while existing subscriptions remain available to turn off. Instance
+  administrators retain setup guidance; survey invitations cannot be queued until sending is configured.
+  Surveys and product feedback continue to work in the application without SMTP.
+
+  Research participation now has one control in User settings, also linked from Slack. Account exports
+  report that consent decision rather than an unrelated historical preference.
+
+  **Operators:** custom clients must use the dedicated research-consent endpoint instead of the removed
+  `participateInResearch` field on `/user/settings`. The shipped webapp already uses the consent endpoint;
+  no SMTP setup is required to upgrade. See the migration note for custom-client details.
+
+- Operators can set up encrypted off-host PostgreSQL backups with WAL archiving. The self-host stack now includes pgBackRest backup and restore overlays and example systemd timers. Configure a dedicated S3 bucket, keep an off-host copy of the encryption passphrase, use a separate read-only key for restores, and test backup failure alerts before unattended delivery.
+- Each practice group in a review now gets independent limits for model calls and output tokens per practice. Operators can set them with `PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` (default 12) and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` (default 16000). The model binding's timeout remains the whole-review safety ceiling, so later practices may not be reached when an earlier group takes a long time. A group that shows no sign of life for five minutes stops instead of waiting for that ceiling. When a long review fills the model's context, the next practice group gets the captured work again.
+- Feedback on your Practice profile resolves by itself once three pieces of your reviewed work in a
+  row come back clean on that practice, and the card names them. You can also mark a card addressed
+  or not applicable yourself, and press the same answer again to reopen it. A newer card about a
+  practice replaces the one still open about it, read or not. If your workspace changes how a practice
+  reviews work, its open card closes and says why. A closed card leaves the page 30 days after it
+  closed.
+- Practice reviews now report whether a practice was met, not met, not applicable, or undetermined. Practice authors define the review occasion and evidence directly, without a nested occasion list. Automatic review conditions use each work type’s recorded state, rather than a shared draft flag. Changing when a practice is reviewed does not invalidate assessments of its unchanged standard.
+
+  A met or not-met result recorded under an earlier assessment scheme, or with no scheme recorded, judged a single behavior rather than the whole practice: your review history still lists it as recorded, but a review's summary counts it as undetermined. A catalog update for a practice whose adopted version cannot be proved no longer preselects the offered version: choose current or offered for each changed field. A workspace copy made by an earlier release can compare updates against a recorded version matched by its saved source fingerprint; because that version may not show the original guidance or delivery, you also choose each changed field there.
+
+  **Operators:** This pre-1.0 release removes the previous practice and observation API fields. Back up the database before upgrading, stop running reviews, and deploy the server, review runtime, webapp, and browser extension together. If observations serve a research or audit purpose, export the original observation fields first. The upgrade stops without changing anything if a stored practice definition carries a field the new contract does not read. Keep automated reviews paused until every active practice's criteria describe its positive standard. Update custom catalogue files and API clients to the new contract. Read the migration guide before upgrading; restoring the verified backup is the recovery path.
+
+- Practice reviews now refuse bot authors and bot reviewers with a clear reason. Workspace admins can mark generated paths for each GitHub or GitLab repository in Review settings. Reviews keep that content as generated output, not hand-written work, and show the patterns and changed paths used for the review.
+- Connecting a GitHub App installation to a workspace now confirms, through GitHub, that the person who installed the app owns the account it is installed on, and an installation can be connected to only one workspace at a time. If another workspace already holds it, the refusal names that workspace to its administrators. People who install the app from GitHub or from the workspace wizard land on the Hephaestus home page, and their workspace appears as before. **Operators:** turn on **Request user authorization (OAuth) during installation** on the GitHub App, set its callback URL to `https://<your host>/oauth/callback/github`, and set `GH_APP_CLIENT_ID` and `GH_APP_CLIENT_SECRET` to the App's client credentials.
+- Each GitLab workspace now gets its own group webhook, which delivers only for that workspace. Events from nested subgroups, from projects created in or moved into the group, and group membership changes are picked up without waiting for the next sync, and a workspace connected to a subgroup no longer depends on how another workspace's group is named. What such a webhook reports is checked with GitLab before it is stored: projects, subgroups, user profiles and memberships are recorded as GitLab reports them to the workspace's own connection, so a webhook cannot rename, move or delete another workspace's project or subgroup, change a user's profile, or grant or remove access that GitLab does not show. A project moved out of the group, deleted, or no longer visible to the connection stops being monitored by that workspace, and a deleted subgroup's team is removed by the next scheduled sync. The group webhook registered by earlier versions is left in place and keeps working as before; delete it on GitLab once the new one shows up.
+
+  **Operators:** set `WEBHOOK_ROUTING_SECRET` on the application server and the webhook receiver before upgrading; see the migration guide.
+
+- GitLab reconciliation now removes comments deleted on GitLab, including merge request diff notes, only after a complete note listing for each issue or merge request. Incomplete listings keep the mirror unchanged.
+
+  GitLab tokens are checked daily and rotated before expiry when permitted. Workspace owners and administrators who enable Workspace alerts receive an email when a token needs replacement and when it recovers. Refused tokens show a degraded connection with replacement guidance, and the connection page shows the observed token expiry without exposing the token. Use a dedicated token: rotation immediately revokes the old token.
+
+- Heph starts getting ready as soon as you open it, in the webapp or in the Hephaestus app in Slack, so your first message no longer waits for Heph to start up. Heph now stays ready for 15 minutes after your last message instead of 5. Going back to an earlier conversation while Heph is ready no longer makes it forget what was said there. Operators can see how long developers wait for the first words of a reply, split into turns that found Heph ready and turns that had to wait, in the new `mentor_turn_first_token_seconds` metric; a custom proxy setup that pins Heph traffic to one replica should keep its affinity for as long as `hephaestus.mentor.idle-ttl-seconds`, now 900 seconds by default.
+- Heph no longer has a workspace switch: it is offered to every member of a workspace where a Heph model is ready under **AI models**, on the web and in Slack direct messages, and each member's AI choice still decides whether it answers them. Workspace admins turn Heph off or on by turning its model rows off or on there. The floating Heph panel appears only where a Heph model is ready, and workspace settings now show where each capability is decided.
+
+  **Operators:** the **Chat with Heph** switch is removed. Before upgrading, turn it off in any workspace that should not offer Heph; the upgrade carries that over by turning off the Heph model rows of every workspace where it is off, so no workspace gains Heph. The restore-clone lockdown now turns off every Heph model row; after lifting it, turn them back on under **AI models**.
+
+- A member who finishes workspace setup can now open Heph as soon as a workspace admin turns on **Chat
+  with Heph**. Before, the web app also needed a hidden per-account grant that only a database edit
+  could add, so members were turned away from Heph. Heph now works the same way on the web
+  and in Slack direct messages: it is available to every member of a workspace that has it on, and
+  each member's AI choice still decides whether it answers. Turning Heph off or on takes effect
+  without signing in again. A link to Heph in a workspace that has it off now says so instead of
+  silently returning to the workspace home. When Heph can't answer a member, it now gives the actual
+  reason on the web and in Slack alike: they chose No AI, they still have to make a required AI
+  choice, or no Heph model in the workspace is within their choice. Before, every one of these was
+  reported as Heph not being set up for their AI choice. In Slack, Heph no longer starts a
+  conversation or shows that it is reviewing their feedback before it declines. Instance admins can
+  still administer a workspace they are not a member of, but no longer get Heph there.
+
+  **Operators:** Hephaestus no longer reads per-account `mentor_access` grants. If you used them to
+  open Heph to only some members of a workspace, every member of that workspace can now use it. Before
+  upgrading, turn off **Chat with Heph** in any workspace you are not ready to open to all members.
+
+- **Operators:** the limit on one message from a Heph sandbox is now set with `hephaestus.mentor.max-frame-bytes` and counts UTF-8 bytes. If you set `hephaestus.mentor.max-frame-chars`, rename it before upgrading, as the migration guide describes.
+- Heph conversations now run their sandboxes on connected workers. Web chat and Slack keep their admission, context and thread history on the application server. When all workers are full, Heph reports that it is busy and you can retry. A worker drain ends its conversations; your next message restores the saved thread on an available worker.
+
+  **Operators:** You must run at least one connected worker for Heph and upgrade the server and workers together. Set its `HEPHAESTUS_HUB_URL` and `HEPHAESTUS_WORKER_REGISTRATION_TOKEN`. Heph has no in-process sandbox fallback. The application server can run with `hephaestus.runtime.worker.enabled=false` without a Docker client.
+
+- Sandbox cleanup no longer removes a conversation's sandbox while the application container that started it is still running, however long the sandbox takes to start. Previously a reply from Heph that had to start a fresh sandbox could fail when cleanup, on any application container sharing the Docker host, ran before the sandbox's container existed. Each conversation sandbox now records the application container that started it, and automatic cleanup removes its network, storage and containers only once that container has stopped or restarted. Cleanup also no longer disconnects the model proxy from a network a sandbox is attached to.
+
+  **Operators:** cleanup now keeps mentor sandbox networks whose owner it cannot establish, including those from before this upgrade, for you to remove by hand; a leftover from an application that cannot identify its own container blocks its conversation until you do. See the migration guide. Practice review sandboxes are cleaned up as before.
+
+- Instance administrators can use **View as user** to open the normal workspace app as a member, including one who has never signed in: their profile, activity, practice pages, feedback, and saved Heph conversations. The view is read-only. Each view needs a stated reason and a recent sign-in, and every read is recorded with that reason. It cannot change anything for the member, does not complete their setup, and does not count as them having seen their feedback. When the administrator's recent sign-in lapses during a view, the app asks them to confirm access and returns to the same page. Profile pages and league stats show the right developer when two members share a username on different providers. Every read about the viewed member counts against the user-view rate limit (120 per minute per administrator by default), and views are refused while the rate-limit store is unavailable.
+- Instance administrators can now answer a person's access or erasure request under **Instance
+  administration → Person data**, without database access. Find the person by account ID or by exact
+  provider user IDs from GitHub, GitLab, Slack or Outline, including people who never signed in.
+  Names, logins and email addresses are never used to match.
+
+  The preview counts the person's rows in every store and lists feedback still posted on a provider, so
+  you can remove it there first. **Download JSON export** returns one file with the person's
+  observations, feedback and delivery state, Heph conversations, activity, memberships, profile,
+  preferences and collected Slack messages. It holds no credentials and no other person's feedback or
+  profile. Erasure uses exactly the previewed rows, records per-store counts and the acting
+  administrator but no erased content, and can resume after a failure.
+
+  After erasure, Hephaestus does not review, give feedback on, record activity for or chat with the
+  erased identities again, even when provider sync mirrors their upstream records. Observations and
+  feedback about other developers stay with them. Hidden Heph memory in the person's workspaces is
+  reset; visible conversations stay. Git history is not rewritten: the export lists repositories whose
+  history may contain the person's commits, and the repository owner removes authorship at the source.
+
+  **Operators:** Heph's hidden conversation memory resets once on upgrade. Visible messages, titles and
+  times stay. Users may need to repeat earlier context to Heph.
+
+- Workspace administrators can now review catalog updates field by field and accept or decline each practice without changing other workspaces. Accepting creates a new practice revision; declining leaves the definition in use and does not offer the same version again. Instance administrators can make the same field-by-field choice for customized bundled practices. Feedback delivery choices now live in each practice definition, so custom practices can use them and updates show when they change.
+
+  Older adoptions record whether their comparison base came from a matching bundled practice or their current definition. Review an approximate base with care: content that was never saved cannot be recovered exactly.
+
+- A new Practice profile page shows you how your recent work stands across practice groups, what held
+  and what changed, and the feedback written from it. At the top, Heph sums up what happened since the
+  review before the latest one, from your own reviews: the practices you keep holding, each with a
+  line on what you keep doing; every standing, trend, group or feedback that moved; and the pull
+  requests, issues, conversations and documents the reviews looked at. With fewer than two reviews so
+  far, it covers the last 90 days. **What needs your attention** lists at most two practices you can
+  act on today, and each row links straight to the card that says what to do about it.
+
+  The feedback cards are split into newest, open, resolved and all. Every practice group is a row in a
+  table ordered by standing, which you can reverse. Opening a group shows what it is about, its next
+  step and its practices; the reviews and observations behind a practice open one level deeper when
+  you select it, and you can respond to each observation there. A path above each panel's title names
+  where you are, and each step in it takes you back there. Each observation carries the next step the
+  review wrote for it even when nothing was posted on the work itself, and an observation that found
+  nothing, had nothing to judge or could not decide shows where the review looked and why it stopped
+  there.
+
+- Practice reviews can read permitted work across connected repositories, Slack channels, Outline collections and developer history from one frozen workspace folder. Reviews no longer lose context to record-count caps or history windows. Access refusals are explicit, a workspace folder above 512 MiB stops before launch, and every accepted quote is checked against the files the review read. The folder is removed after admission or after an unsuccessful attempt's retention period, and a worker restart removes the folders of finished or unknown attempts.
+
+  **Operators:** Upgrade the server and review runtime together. Apply updated bundled practice definitions, and move customized automated-review policies to source contract `1.3.0` through practice authoring. Historical approvals and observations keep their original contract; old policies do not silently gain the wider capture scope.
+
+- The lists behind the Practice reviews overview are its tabs: **Reviews**, now at `…/practices/reviews/runs`, **Observations**, and **Feedback**, which was **Delivery**. **Reviews** can be filtered by more than one status at once and by **Result processing**. **Observations** can be filtered by **Outcome** and **Origin**, and the filter that was **Result** is now **Behaviour**. **Feedback** can be filtered by **Practice** and listed oldest first.
+- Reviews, observations, feedback, reviewed work and practices open as panels over the Practice reviews page you are on, and links in a panel open the next record over it, so you keep your place; the page's address names the open panels, so you can share it. Feedback counts on reviews and observations now include every delivery state, so feedback that waits for approval no longer reads as "No feedback composed". These addresses no longer open, and nothing redirects from them; open the record from its list instead. Under `/w/<workspace>/admin/practices/`: `reviews/<review>`, `reviews/delivery`, `reviews/delivery/<feedback>`, `reviews/findings`, `reviews/findings/<observation>`, `reviews/observations/<observation>`, `reviews/targets/<kind>/<work>`, `runs`, `settings`, `autonomy`, `backfill`, `new`, `available`, `available/<practice>` and `<practice>`. For instance admins: `/admin/catalog/practices/new`, `/admin/catalog/practices/<practice>`, `/admin/catalog/groups/new` and `/admin/catalog/groups/<group>`.
+- Practice reviews opens on an overview. Feedback that waits for your approval comes first, oldest first. **Review N pieces of feedback** opens the oldest; the arrows beside its place in the queue, such as **2 of 7**, step through the rest, and approving or rejecting one moves on to the next without leaving the panel, closing it once nothing else waits. Feedback opened from a list, a review or an observation opens on its own. One line below counts the reviews that failed or timed out, the reviews whose results could not be processed or delivered, and the feedback that failed to deliver. Then you see what the reviews did over the last 7 days, 30 days, 90 days or 12 months, stage by stage and against the period before, and how each practice turned out. Feedback is counted as awaiting approval, prepared, delivered, unconfirmed, withheld and failed to deliver, and each count opens the list of exactly the rows it counts. The upgrade adds an index on observations, which speeds up the overview and the date filter on the Observations list.
+- The bundled catalog covers more of the work a developer does. Three practices follow a change from
+  the issue to the merge: whether the change names the issue it implements, whether the merge leaves
+  that issue's stated outcome confirmed, and whether a review ask the author deferred was turned into
+  tracked work or explicitly waived. A new group, Building iOS apps well, reviews SwiftUI code — I/O kept
+  out of views, state owned where it belongs, an interface a screen reader can use, structured
+  concurrency, a preview with each new view, permissions declared truthfully, and colors that hold in
+  both appearances — and runs only on changes that touch Swift files. "Log through the platform logger,
+  not print" joins the code-craftsmanship group for every language the review reads. The tracking group is now named "Tracking work from issue to merge", and "Point the issue at its context" sits with the other issue-writing practices in "Writing issues a maintainer can act on".
+
+  Two more lifecycle practices follow the work to its landing: "Merge only after someone else approved"
+  judges the merge against the approvals that stood at that moment and is reviewed when the person who
+  merged is the author the review is about, and "Plan the work in an issue before starting it" reads the
+  linked issue's opening against the change's first commit. "Classify the issue the way the project
+  classifies issues" now judges an issue against the labelling convention the project actually keeps
+  instead of waiting for the issue to ask to be routed. A lapse the same developer has already heard about
+  on three or more recent pieces of work is named in one line on the work and explained on the practice
+  page, and two security practices run only on changes that touch a security surface.
+
+  **Operators:** the pull request record a review reads now carries `merged_by`, linked issues carry their
+  opening and closing time, and the project inventory carries the label scheme; no configuration changes.
+
+- Operators can scrape Prometheus metrics without a user token from every runtime role on management port 9090. The supported Compose stacks keep this port on the private container network, without a host publish or proxy route. The public application port refuses the metrics endpoint. The observability guide now includes scrape configuration and alert rules for integration poison events, stale stream polls, LLM budget limits and failed agent jobs.
+
+  Liveness and readiness remain available on the application port at `/livez` and `/readyz`. The supported Compose stacks update their health checks automatically.
+
+  **Operators:** If you use a custom deployment, before upgrading, restrict port 9090 to trusted private services. Outside Compose, management binds to loopback (`127.0.0.1`) by default. For a remote scraper, set `MANAGEMENT_SERVER_ADDRESS` to a trusted private interface and restrict ingress with firewall policy. Update custom management probes to port 9090 (or a `MANAGEMENT_PORT` distinct from both the application and sandbox gateway ports). Update application-port health checks from `/actuator/health/liveness` and `/actuator/health/readiness` to `/livez` and `/readyz`. Do not publish or proxy the management port to the internet.
+
+- Instance administrators see which release, commit and image digest the server reports from its verified release lock, and whether a newer release is published. To learn that, the server asks `api.github.com` once a day, unauthenticated and without any instance data; set `HEPHAESTUS_RELEASE_CHECK_ENABLED=false` on an air-gapped host to switch it off. The overview keeps a newer release apart from a failed, rate-limited, disabled or never-completed check, says whether the newer release carries schema migrations, and links its notes and the upgrade guide. Every runtime role reports the same identity under `release` in `/actuator/info`.
+- Signing in or linking an identity now associates the account with its existing synced user; existing matching links are backfilled during the upgrade.
+
+  **Operators:** Read-only user views replace impersonation. Remove clients of the impersonation endpoints and the write-override header, drop the impersonation lifetime setting, and replace the impersonation rate-limit settings with `HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY` and `HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_PERIOD`. Administrators who were inside an impersonation session sign in again.
+
+- Slack conversation and Outline document practice reviews follow the workspace's people selection without requiring review of every monitored repository.
+
+  **Operators:** A selected repository list, including an empty list, now limits repository work only. If you used it to stop all reviews, turn **Start practice reviews** off before upgrading. Existing channel and document collection permissions, people selections and AI choices still apply.
+
+- Workspace administrators can see which monitored GitHub or GitLab repository or Slack channel failed to sync. Recent sync and historical backfill errors stay visible independently until their own sync paths recover.
+- **Review this now** is on Activity: in a workspace that reviews practices, each of your own open pull or merge requests and each issue assigned to you can be reviewed on the spot, and if no review starts, a message says why. The **Review activity** page is gone from the sidebar. The reviews of your own work are under **Reviews of your work**, opened from the chip beside the title of your Practice profile, and you now read a review's details only where it recorded something about your work. Workspace admins find every piece of work Hephaestus recorded, reviewed or not, on the new **Work** tab under **Administration → Practices → Practice reviews**: opening one shows its observations and feedback, what was noticed and whether a review started, with the reason when none did, what every practice made of it, and **Review this now**.
+- Practice reviews spend fewer model calls. A review turn now ends as soon as each of its practices has a recorded result. The reviewing model can also batch its searches and reads into one step. The leads the practice scripts find now appear with the practice they belong to, and no longer drop out of large reviews. File searches outside the checked-out repository work again. The agent image now runs on Debian 13 with Pi 1.0.
+- Your Practice profile now lists the reviews of your work. Choose the chip beside the title,
+  **Latest review** or **Review running**, to see each review that recorded something about your work,
+  newest first. Each review shows the practices it found to improve, how many practices it reached and the
+  feedback it left you, linked to its comment on your work in GitHub or GitLab. Narrow the list by kind of
+  work or timeframe, ask for another review with **Review this now** where you may, and open a review to
+  see what each practice saw in your work and everything recorded about it. Dates from an earlier year
+  show the year.
+
+  Review lists, here and in workspace administration, name a pull request or issue by its current title.
+
+- The application server no longer holds the Docker socket. AI sandboxes, for practice reviews and Heph alike, run only on the worker container, and a sandbox without internet access can reach that worker's sandbox gateway and nothing else: not the application server, the database, the message broker or the internet. Each release now checks this on the supported install before it is published.
+
+  **Operators:** The single-host install now runs the `application-worker` container as well. Run `./setup.sh` again before upgrading: it adds the worker registration token to `.env` and leaves your other values alone. The application server no longer joins the Docker group; only the worker needs `DOCKER_GROUP_ID`. Plan memory for three Java containers rather than two (5 GB, 3 GB and 2 GB by default), and set `SANDBOX_MAX_CONCURRENT` for the worker if you had raised it. `SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` is gone: each worker joins its sandboxes' networks as itself, so remove it from `.env`.
+
+- Instance administration → Overview now shows configuration readiness. Settings that need action come first, each with a link to its section of the configuration guide. Optional settings you have not set are listed as optional, not as problems, and no setting's value is ever shown. The install guide points to this view after first boot and ends with your first practice review, whose feedback waits for your approval.
+- The sidebar counts the feedback waiting for your approval beside **Practice reviews**, and beside **Practices** while that section is folded, so a decision you owe is seen from anywhere in the workspace. Under **Practices**, **Practice reviews** is now first and **Review** is now **Review settings**.
+- Instance settings and connection lifecycle history now record the acting administrator by stable account reference instead of a display login.
+
+  **Operators:** The upgrade drops the old administrator login attribution for silent-mode and instance model settings. It retains the settings and their change times. Old logins are not matched to accounts. It also clears `actor_ref` and free-text `detail` from existing `ADMIN` and `USER` connection audit rows. Event types, state changes and times remain. New connection history uses typed account references; provider and system event references remain. Take a verified backup before upgrading if you need the historical attribution for your retention policy.
+
+  Membership-history subject references that have no exact contributor ID are also cleared. Role
+  changes and their times are kept. Person erasure preserves another administrator's attribution on
+  shared history rows and removes only the erased person's actor or impersonator reference.
+
+  Pending integration authorizations must be started again after the upgrade. Older signed OAuth states are rejected rather than interpreting their historical display-login attribution as an account reference.
+
+  New pending integration authorizations are tied to the initiating account and removed by person erasure. Existing nonce rows remain without account attribution; no old identity is inferred. Erasure revokes sign-in sessions as soon as the job starts, including when a later store step needs a retry.
+
+  Restored clones still engage Silent Mode before boot. The offline restore lock leaves the account
+  reference empty; it does not invent an administrator from an operator label. The lock reason and
+  change time stay.
+
+- **Needs you** on Activity shows GitHub review requests to a team you are in under **Waiting on others → Requested from your team**, each naming the team it asks ("via payments"), without counting them as yours. When a GitLab author asks for your review again after you approved or requested changes, the merge request is under **Review requested**. A review request is covered only by another reviewer's approval or request for changes; your own earlier review never covers it.
+- Webhook monitoring no longer reports false losses for filtered consumers on shared streams. It now
+  reports each stream's current pending and unacknowledged work instead.
+
+  **Operators:** replace alerts on the removed `webhook.stream.unacknowledged.deletions` and
+  `webhook.stream.unacknowledged.gap` metrics with sustained backlog alerts. See the webhook ingestion
+  operations guide for the new metrics and their limits.
+
+- Workspace admins can withdraw a card from a developer's Practice profile when what it says is wrong but the
+  observations behind it are right, and restore it later. Each action needs a reason and stays listed on the
+  feedback's page. A withdrawn card the developer had not seen never appears; one they had seen becomes a short
+  notice that it was withdrawn, and what it said is left out of the feedback given to later reviews and Heph.
+  The observations are unchanged, notes posted on the work are not changed, and nothing is sent again on
+  restore.
+- Choose once whether your work may use in-house AI, approved cloud AI, or no AI for practice reviews and Heph. Your answer applies across your workspaces and can change in User settings. Workspace setup compares what each answer permits and shows which models are ready there. Where declared, it shows the model maker and the service that receives requests, including Logos, separately from who operates the model. Workspace owners can ask members to choose on their first visit and can set required account links separately.
+
+### Patch Changes
+
+- A feedback card that closed because your workspace changed its practice no longer counts clean work
+  toward a resolution it cannot reach. The tab that lists finished cards is now **Resolved and closed**,
+  since it holds closed cards as well as resolved ones.
+- A practice review now reads a pull request's or merge request's closing link as a candidate that may
+  close the issue on an eligible merge, and whether the issue is closed only from its recorded state.
+  Before, the evidence a review read could describe an open issue as already closed by an open merge
+  request. A merge request stored as closed by its merge now counts as merged when a review checks that
+  the linked issue's outcome was confirmed.
+- Practice reviews no longer treat issue numbers inside HTML comments in a pull request or merge
+  request description as linked work items. This excludes commented template examples.
+- Saving a customized practice group in the instance practice catalog, or keeping a customization after a Hephaestus update changed that group, no longer fails. Groups customized under an earlier release keep their saved history.
+- Disconnecting a GitHub, GitLab, Slack, or Outline connection no longer marks it disconnected when erasing its mirrored data fails. The connection stays connected with its credentials, so the disconnect can be retried until the data is gone, and nothing is removed at the provider until the disconnect has completed. A provider that cannot be reached still does not block the disconnect. Disconnecting a connection whose integration is disabled on the instance is now refused instead of leaving its data behind.
+- A practice review no longer ends without observations when the model cites a pull request record as if it were a changed line, and no longer loses a practice group when the model cites the change by the line numbers of its diff view instead of the changed file. When the model quotes a binary file, the review now points it to the commit that adds the file, which it can cite, and no longer to a file list that is then refused as well.
+- A new AI provider connection now uses the Responses API unless you clear the checkbox. For models
+  and providers that support it, this API can preserve reasoning between tool calls. Support depends on
+  the provider, model, and deployment. Existing connections keep their API; to change it, create a
+  Responses API connection and recreate the model entries and bindings on that connection.
+- Hephaestus now describes a practice as a way of working everywhere it speaks about one: the practice
+  editor, the Slack home tab, feedback on practice pages and the review guidance it writes from. The
+  wording of the review criteria of 29 bundled practices changed to match, so workspaces that adopted
+  them are offered an update in their practice catalog; accepting it is optional.
+- A GitLab issue's latest review now stays current when the next scheduled sync finds nothing new. Previously, a review of an issue that was created, edited or closed in GitLab could disappear from the developer's practice standing a few minutes later, without anyone touching the issue. Real edits to the issue's text, state, type, milestone, labels or assignees still retire the review as before.
+- The bundled "Plan the work in an issue before starting it" practice now reviews a partial merge request
+  or pull request that explicitly names its issue with `Related to #N`. It compares the issue's opening
+  time with the first commit without claiming that the partial change closes the issue. Unresolved or
+  excluded references leave the outcome undetermined or not applicable, and oversized linked-issue
+  captures are withheld rather than silently truncated. Workspaces that already adopted the practice
+  keep their version until an administrator accepts the offered update.
+- When you answer feedback on an open pull or merge request, by editing its title or description or by pushing a fix, Hephaestus now reviews the practices that feedback was about again once your changes settle. The new result replaces the earlier one on your practice page and in conversation with Heph. Previously only a Draft/Ready toggle or a manual review request did this. Several edits and pushes in quick succession still lead to one review, only practices whose latest result on that work was a problem are reviewed again, and a label or assignee change does not start one. Practice authors can also choose "Title or description edited" as an occasion for a practice.
+- A practice review now finishes when a practice does not apply to the work or the evidence cannot settle it, instead of failing after its observations were recorded.
+- Practice reviews cancel context compaction when its turn expires and wait for the session to stop
+  before starting another turn. A slow compaction no longer causes later turns to be refused as busy.
+- A practice review reads the record as it was made. A GitLab approval now carries the moment the
+  reviewer gave it, read from the approval's own note, where it used to carry the merge time and so
+  looked given at the merge. The description's own words are told apart from the merge request
+  template the project ships, so a template's example issue, checklist or heading is no longer read
+  as something the author wrote. Whether the work was planned in an issue first, what became of each
+  review ask, and which linked issues state an outcome are now laid out fact by fact before the
+  review decides, and the practices that read them say which fact decides.
+- A practice review now reads the whole review record. The commits of a change are staged as a record
+  a review can quote — each with its message and the files it touched — so feedback about commit
+  subjects and cohesion cites the commit, not the pull request title. Inline comments carry their
+  thread, reply and side, threads carry their id and opening time, every submitted review decision is
+  kept with its summary text, and the pull request record names its labels, assignees, milestone and
+  whether it merged. A GitLab note on a removed line keeps its line. The practices that judge review
+  engagement, unresolved threads at merge and merging after approval read the record as rows the
+  review decides on, and a review is told which record files were not captured so it does not look
+  for them. Hephaestus's own inline notes are no longer fed back to a review as a reviewer's comments.
+- Practice reviews handle feedback submissions one item at a time, so one invalid item does not
+  discard valid items in the same call. The review reserves context for composition and reports
+  refused submissions with their reasons. Bounded recovery handles empty submissions and repeated
+  commands without extending the review deadline. Delivery remains subject to approval and channel rules.
+- Practice reviews handle drafts, pushes and merges consistently across GitHub and GitLab.
+
+  - A GitLab merge request opened ready for review is reviewed once, not twice. Students no longer earn
+    double activity points for opening it.
+  - New commits pushed to a GitLab merge request are now reviewed, as they already were on GitHub. Pushes are
+    grouped for review at the latest commit after ten quiet minutes or sixty minutes from the first
+    push. Cooldown and capacity can delay execution. A push during cooldown waits instead of being dropped.
+  - A draft is reviewed only for the practices set to review drafts.
+  - Feedback from a review that ends after the work was merged now reaches the developer's practice page
+    and conversations. The setting for merged work now controls only comments on the merged work itself.
+  - A lapse that a later review of the same work found fixed no longer counts toward a developer's
+    recurring lapses.
+
+- GitLab merge requests are reviewed when a separate worker runs practice reviews. If you run the
+  worker outside the reference Compose files, give it the application server's `GITLAB_ENABLED` and
+  `GITLAB_DEFAULT_SERVER_URL`.
+- Practice reviews now accept evidence quotes copied exactly from annotated diffs. Line numbers,
+  file paths and quoted content remain verified against the captured change.
+  The review runtime preserves quoted whitespace and asks for a correction when indentation or
+  punctuation differs, rather than accepting quotes that admission would later refuse.
+  Quotes from metadata and other text artifacts are also checked at their cited lines before admission.
+- "Say which acceptance criteria are done" now uses process review framing for the author's done and deferred statements. Catalogue adoption applies the updated criteria; existing workspace criteria and their history are preserved.
+- Replace the web application's styling utility dependencies with shadcn's maintained class-merging library, preserving component style overrides without requiring upgrade steps.
+- An issue edited soon after its last review is now reviewed once the workspace's review cooldown has passed. Previously, a fix made in answer to feedback inside that window was skipped for good, so the issue kept the old feedback until someone edited it again. Several edits made during the window still lead to one review of the issue as it stands when the window ends.
+- An observation's summary on your practice page is now always the whole phrase the review wrote. A
+  summary that ran too long used to be cut at a comma or colon, which could end it mid-quote; it is
+  now sent back to be rewritten, and one that stays too long is not recorded.
+- The Slack integration page no longer shows a connection as Connected, or promises that the weekly digest will post, when its stored bot token can't be read. It now says the token is unreadable and that you can fix it by restoring the original server key or reconnecting Slack. The test message stays unavailable until then, and your saved digest settings are kept.
+
+  The Disconnect Slack confirmation explains what happens to data stored in Hephaestus and messages already sent in Slack, without claiming whether Slack will still show the app as installed.
+
+- You can respond to feedback that was posted only as line comments on a pull request or merge request, even when there is no summary comment.
+- Approved feedback is now posted to the pull request, merge request or issue when you approve it. Before, approved feedback was never posted: it was recorded as withheld because the approval looked stale. Feedback approved before this release stays withheld and cannot be approved again. To send feedback on that work, open it under **Administration → Practices → Practice reviews → Work**, use **Review this now**, and approve the new proposal.
+- Approved feedback on a GitHub or GitLab issue is now posted on that issue. It used to stay prepared,
+  approved and sending without ever appearing, because it was addressed as if the issue were a pull
+  request. Feedback that fails before it is sent, because GitHub or GitLab was rate limited or could not
+  find the pull request, merge request or issue, is now retried and marked failed if it still cannot be
+  sent, instead of being held indefinitely.
+
+  Upgrading requires no action. Feedback this fault left with an uncertain delivery outcome before the
+  upgrade stays held; Hephaestus does not resend it automatically. A missing comment on the reviewed work
+  does not prove the feedback was never delivered. Check the provider before any operator-approved recovery.
+
+- **Merge only after someone else approved** no longer credits an approval from an automated account, such as a bot or service account, as another person's review: a merge whose only approvals came from automation now counts as merged without review. A bot's request for changes likewise no longer counts against a person's approval. Workspaces that adopted this practice can accept the change under **Review updates**; until a workspace administrator does, their reviews keep using the earlier criteria, and an instance catalog entry you customized keeps its own wording.
+- Reviews no longer post, or queue for approval, generic praise for practices they wrote no note about; those practices still count on the developer's practice page. Automatically posted comments no longer open with the review's free-form introduction, and a comment about a problem is no longer held for approval because a practice that needs approval did not apply. Review records now list only the observations a posted comment was written from, and a line comment that failed to post is recorded as failed.
+- Database upgrades now stop before baseline synchronization when an installation has not completed v0.77.4. The error names the required release and links the synchronization instructions. Release checks retain the v0.77.4 upgrade path and verify that v0.76.0 is refused.
+
+  **Operators:** Before upgrading to 1.0, follow the upgrade-path table. Databases older than v0.77.4 must run v0.77.4 once before baseline synchronization; databases already synchronized on v0.78.0 or later upgrade directly.
+
+- Bouncy Castle is updated to 2.73.12, which fixes a name-constraints bypass through a trailing dot
+  (CVE-2026-8763) and a denial of service through lazy ASN.1 sequences (CVE-2026-13506).
+- Updates the server's cryptography dependency to fix certificate name-constraint validation and nested ASN.1 parsing vulnerabilities. No operator action is required.
+- Screen readers no longer announce GitHub, GitLab, Slack and Outline logos as extra images next to text that already names the provider.
+- Remove an unused documentation dependency and simplify internal styling and mentor text handling without changing displayed content or requiring upgrade steps.
+- You can adopt "Record the outcome of a closed issue" to review whether its body and discussion account for completed, dropped or deferred work. Later comments can correct the record. The existing before-close practice remains unavailable for automatic review.
+
+  Queued closure reviews now stop before model calls when capture finds their submitted evidence has changed.
+
+  Human issue comments remain review evidence when they quote a Hephaestus marker. Hephaestus’s delivered comments are excluded by their recorded provider identities, not their text.
+
+- Practice reviews now follow changes to closed issues, including later outcome confirmations and repairs. Updates assess the current issue record without repeating its historical closure assessment.
+- Practice-review instructions check that an observation's derived outcome agrees with its evidenced rationale. Appropriate omissions do not justify negative observations or automatic positive credit. Severity follows each practice's consequence-based criteria, and a missing changed test file does not establish that tests were not run.
+- When connecting Slack or Outline asks you to confirm a recent sign-in, the page now offers **Confirm access** with an account you have already linked and brings you back to where you started, such as the accounts step of onboarding or Settings, so you can connect again. Previously its sign-in link sent a signed-in developer straight to the workspace instead.
+- Connecting a Slack workspace that another Hephaestus workspace already uses now says so in plain words instead of showing an error code, and names that workspace only to people who administer it.
+- Reconnecting an integration now opens its sync history on the first page without briefly showing the previous connection's jobs.
+- Study-enabled instances reject research organisation names that cannot fit in the consent record before users sign in. Upgrade checks now answer the research question with the organisation shown in the current notice.
+- Bundled practices use consistent evidence and outcome boundaries. Reviews no longer skip security or dependency changes merely because familiar keywords are missing, treat missing capture as a judgment about your work, or use a pull request's creation time to claim that planning preceded development. Review-size guidance uses the actual review burden rather than a universal line or file limit.
+
+  Issue classification remains available as guidance but needs human review: the captured issue metadata does not establish the project policy that requires particular labels, owners or milestones. Hephaestus no longer infers that policy from label frequency.
+
+- Heph receives a bounded summary of your workspace's stored work and recorded review outcomes on each turn, including whether reviewed text and code still match the stored work. Unavailable evidence and provider freshness remain unknown.
+- Practice summaries no longer count observations with an outdated or unknown review basis, and practice standing histories do not restore older claims when newer claims are hidden. The browser extension distinguishes an unknown review basis from a changed practice standard.
+- Simplify internal styling dependencies without changing component appearance or requiring upgrade steps.
+- Environment examples no longer list the unused PRACTICE_REVIEW_FOR_ALL setting. Configure practice
+  reviews through workspace administration. AI price validation uses No metered API cost, matching
+  the option in the model editor.
+- The landing FAQ explains your AI choice, private Practice profile, and approval before feedback is
+  sent on the work. Slack reminders count pieces of feedback.
+- Hephaestus is easier to use with a keyboard or a screen reader. Every page has its own title, a screen reader announces the page you reach, and the sidebar is a navigation landmark. The skip link shows when it gets focus instead of hiding under the sidebar, dialogs open on their first field, and a panel you reach with Tab shows that it has focus. Heph's mark and the landing figure stop moving after a few seconds. A pressed button is visible in the dark theme, and two colours that were too faint there are readable. The header and filter toolbars no longer scroll sideways in Firefox at a narrow width, and the practice list no longer hides what a catalog label means in a tooltip: the explanation is on the practice itself.
+- Workspaces connected to multiple integrations keep receiving events from each one when another integration's event subscription needs a retry. Stopping a workspace also accounts for every active subscription, including one that initially failed to stop.
+- Bundled practices distinguish missing evidence from missing behavior and use context-specific expectations for test changes, review explanations, generated files, dependency updates and documented decisions. Shared review guidance no longer assumes a fixed set of available sources or treats an unavailable quotation as proof of absence. A new authoring guide explains how to define and evaluate custom practices.
+
+  Existing workspace practices remain independent copies. Review and adopt revised criteria deliberately; these changes do not enable automatic feedback.
+
+- Practice reviews preserve nonblank citation file identifiers exactly instead of stripping meaningful surrounding spaces. Progress replies describe recorded results without calling them exhaustive review, and context-budget reminders request supported claims without a per-practice observation quota.
+- Private feedback preparation now rejects guidance attached to a practice that has no negative observation, so it can be corrected before delivery instead of disappearing from conversation. Feedback on the work can still reinforce a demonstrated strength.
+- Practice feedback keeps actionable advice about deferred work. Your review details show the authored next step without substituting a whole provider comment when no next step is available.
+- Practice feedback and Heph's replies use more direct writing guidance, preserving evidence and uncertainty while avoiding repetitive openings and assumptions about how a developer worked.
+- Practice feedback and Heph are now told to describe what recurs in your work as a practice, a way of working or a repeated pattern, including when they refer to earlier feedback or earlier replies that used older wording.
+- Your Practice profile no longer shows lapses your work does not contain for five practices:
+
+  - **State how to verify the change** no longer treats the `Closes #12` example in a merge request
+    template as the issue your change adopts. It accepts a sentence that says where to look and what
+    is now there, a declared prerequisite such as your own API key, and a generate-and-build route for
+    a project rename. It still flags a check that needs a secret nobody says how to provide.
+  - **Keep each commit to one logical change** judges what each commit holds, not how its subject is
+    punctuated. "Add cast fetching, and adjust movie fetching" is one change. A README commit that also
+    renames the source tree or adds views is two.
+  - **Validate inputs and edge cases at the boundary** stops flagging values Swift already makes
+    optional, slashes inside strings, framework callbacks and guards that sit in another file. It still
+    flags a slice such as `cast[0..<2]` behind only an `isEmpty` check.
+  - **Avoid crashing on recoverable problems** judges only the crash operators you write, such as
+    `!`, `try!` and `fatalError`. A `try!` or `fatalError` inside a preview, and data you ship with
+    the app, are not lapses. An unchecked subscript is judged once, under the input practice.
+  - **Respond to each review comment** no longer counts Hephaestus's own notes, praise, or advice a
+    reviewer posted with their approval for a later iteration as open threads. It also accepts the
+    reviewer's own "thank you for incorporating the changes" as a closed loop.
+
+  Workspaces that adopted these practices receive the change as an offered practice update.
+
+- Container image builds now apply available operating-system security updates even when the same commit is rebuilt, while retaining the cache for application dependencies.
+- When an issue on GitHub is marked as blocked by another issue, or unmarked, Hephaestus now records the change as soon as the `issue_dependencies` webhook arrives. Before, it waited for the scheduled sync. A sub-issue or blocking issue in another repository is no longer stored in the wrong repository. Before, it could overwrite the issue with the same number there. The GitHub guide now lists every fine-grained token permission that Hephaestus uses, and what stays empty without each one.
+- On GitHub, review requests to several people within the same second are all stored, so Heph and **Needs you** see every one; before, all but the first went missing until the pull request changed again.
+- GitLab approvals no longer inherit a merge request's update time or a webhook's arrival time. For a merged merge request, Hephaestus recovers the approval dates GitLab reports; when an approval cannot be dated reliably, Hephaestus keeps its time unknown rather than claiming it happened before the merge, and keeps the approved commit unknown when GitLab does not say which one it was.
+- GitLab bot and service accounts are now recognised as bots from what GitLab reports about them, whatever their username, so an approval by an automated account no longer counts as a person's review. An account already known to be a bot stays one when a later update does not say, and an account GitLab reports as a person is corrected to one.
+- GitLab inline review discussions now keep their resolved or reopened state in practice reviews and in conversations with Heph, including discussions Hephaestus first saw through a comment webhook, and an older read of a merge request's discussions no longer overwrites a newer one. GitLab documents an event when all discussions on a merge request become resolved, and Hephaestus picks that up right away; other resolution changes appear the next time Hephaestus reads the merge request's discussions.
+- A GitLab workspace on a subgroup now includes everyone GitLab lists with access to the group: people who reach it through a parent group or a group invited to it, tutors listed in a team subgroup, and students who are members of one project only. Their merge requests are reviewed when marked ready, and a merge request marked ready before the member sync picked up its author is reviewed once it has, instead of being passed over. People keep the highest role GitLab lists for them, and someone only a subgroup or a project lists is a member but not an administrator. Someone who loses access leaves the workspace at once when GitLab reports it, or otherwise at the next sync that GitLab answers in full; a pending e-mail invitation no longer stops that sync, and removing a direct membership someone also holds through a parent or invited group keeps them. The workspace owner is kept. A member hidden from workspace activity who loses access is hidden again if they return. A merge request opened under **Administration → Practices → Practice reviews → Work** now tells an author who is not a workspace member yet apart from a repository or base branch outside review coverage, and the review screen's **People** count no longer includes the owner's linked profile from another provider.
+- Practice reviews of a merged GitLab merge request now know who merged it. Hephaestus keeps the merge commit GitLab reports and reads who merged the merge request, and when, from GitLab after the merge. A practice about merging, such as merging only after approval, is reviewed when you merged your own merge request; when someone else merged, it is not attributed to you. Until Hephaestus learns who merged, the review waits and shows "Who merged this is not known yet" instead of running without that practice. An approval given after a new push counts as an approval of the new commits rather than of the commits before the push.
+- On GitLab, removing everyone assigned to an issue or merge request, or a merge request's last reviewer, now takes effect as soon as GitLab reports it; before, the old assignees and reviewers stayed until a later sync corrected them.
+- A GitLab project that is renamed or moved inside the connected group keeps a single monitored repository, with its sync progress and practice review selection, even when work on the new path arrives before the rename itself or a sync finds the new path first. A workspace that already monitors a project twice is repaired the next time a sync or a project event reports that project, and the remaining entry keeps the review selection of both. Adding a GitLab project by hand no longer creates a second entry for an already synced project the workspace monitors under another path. Syncs and project events no longer add a monitored repository once the GitLab connection is disconnected, or for a project outside the connected GitLab instance and group. Adding a repository by hand to a workspace with no active GitHub or GitLab connection is refused with a request to connect one first.
+- Heph and the activity pages no longer report GitLab approvals or requests for changes that nobody gave. A merge request in a project that requires no approvals is not called approved until someone approves it. A standing request for changes is shown even when the approval rules are met. A comment on a merge request no longer turns the commenter's approval into a request for changes. Approvals that still leave required approvals missing are now recorded as the reviewer's own approvals. On upgrade, approvals that were wrongly turned into requests for changes are withdrawn. Merge requests that were marked approved with no approval behind them show no decision until the next sync reads them again.
+- GitLab webhooks you have given a signing token (GitLab 19.0 and later) are now verified by their
+  signature. Before, the signature was not recognised and such a hook was accepted on its secret token
+  alone. A delivery whose signature is blank, malformed or wrong is now rejected even when its secret
+  token is correct, so `WEBHOOK_SECRET` must be that hook's `whsec_…` signing token. Hooks Hephaestus
+  creates still use only a secret token and keep working unchanged.
+- The GitLab workspace wizard now waits until it knows your server's GitLab instance and creates the
+  workspace there, instead of briefly showing gitlab.com and validating your token against the wrong
+  server. GitLab workspaces are created only on the instance Hephaestus syncs from
+  (`GITLAB_DEFAULT_SERVER_URL`); any other instance is refused before your token is sent or stored.
+  The new workspace belongs to your GitLab account on that instance, so link it first. When GitLab
+  refuses your token or does not return your groups, the wizard says so instead of showing an empty
+  list. A GitHub workspace you create now belongs to your GitHub account, even if you linked GitLab
+  first.
+
+  The workspace connections API (`POST /workspaces/{slug}/connections`) no longer adds GitLab
+  connections; GitLab is connected by creating a GitLab workspace.
+
+- The build no longer resolves a vulnerable FreeMarker while generating provider clients. It is used only to generate code at build time and never reached a running Hephaestus, so no deployment is affected.
+- Chatting with Heph reads more easily: your newest message moves to the top so the reply reads down from it, and the view follows the reply only while you stay at the end. When Heph has to start up before its first reply, the chat now says so instead of only "Thinking…", and screen readers announce it.
+
+  New chat in the floating panel starts a separate conversation and keeps your previous chat available in the sidebar.
+
+- Heph's review-discussion guidance gives stored work precedence over its earlier explanations.
+- Heph now finds the stored review detail of a developer's pull request or merge request, and the evidence of an observation, from the exact reference listed beside each item, instead of guessing a path from a number. When it asks for a path that does not exist, it is told where to find the right one.
+- Heph keeps more of your recent discussion word for word when shortening long conversations.
+- Heph reads a developer's review history as a short overview and looks up an observation's evidence only when a question needs it. It shortens a long conversation before answering, and says so with an error when it cannot, instead of sending the whole conversation again. When Heph has already shortened a conversation and its answer still runs out of time, asking again continues from the shortened conversation instead of starting over.
+- Hephaestus now refreshes a GitLab merge request's readiness — its pipeline, merge status and approvals — after activity on it: opening, updating or pushing, and approving or withdrawing an approval. Newer pipeline and approval information is kept when an older notification or read arrives late, and a push that resets approvals no longer leaves the merge request reported as approved. The readiness Heph reads tells a commit GitLab reports without a pipeline apart from a skipped pipeline and from checks Hephaestus could not read.
+
+  For GitHub and GitLab alike, what Heph reads for merge advice now also includes your merge request's description and the text of the issues the provider records it as closing, both shortened when long, so an open condition can inform the next step. A closing link does not mean the issue's conditions are met.
+
+- Heph can now read the stored review discussion of a developer's closed or merged pull request or merge request — approvals, notes, inline threads and the issues it closes — and says whether that work was merged, when and by whom. What it reads is Hephaestus's stored copy, not a live check with GitHub or GitLab. Its merge readiness list still shows only open work.
+- Heph now sees earlier review results beside the latest one for the same practice on the same pull request, merge
+  request, or issue, so after you fix your work it can tell what the earlier review found from what the later one
+  found. It also sees results where a practice did not apply or could not be decided, when they were measured under the
+  practice's current review rules and may be used in conversation, so it can tell them apart from a review it cannot
+  see. What Heph sees is a bounded recent sample, not your full history; your practice page shows your current standing.
+- Heph now considers reviewer conditions and the latest recorded checks and merge status before suggesting
+  that you merge a pull request or merge request. It includes conditions in general comments and inline
+  threads, and tells you when its record is incomplete or may lag GitHub or GitLab.
+- The thumbs up or thumbs down you give one of Heph's replies now stays selected when you reopen the conversation. Previously your choice was saved but appeared cleared after a reload.
+- Heph's replies no longer lose words while they stream, and Heph only shows a reply as finished once it has been saved. A reply that cannot reach you intact, or cannot be saved, now ends with a clear error instead of passing as a finished answer, and when you reopen the conversation that reply is marked as interrupted and incomplete.
+- Heph no longer answers that no note was proposed, rejected or delivered for your pull request or merge request
+  just because it cannot see one. It sees only the records of your feedback it may use in conversation — not feedback
+  waiting for a reviewer, a reviewer's decision, or feedback it may no longer use even if it reached you — so when it
+  sees no note for a piece of work, it now says it cannot tell what happened there instead, and still tells you what
+  reviews observed on that work. Changing your work no longer by itself removes delivered feedback from Heph's view;
+  when the work or the practice has changed since the review the feedback is based on, Heph treats it as possibly out
+  of date.
+- Heph now sees which version of a pull request, merge request or issue each recorded review read, and whether your work still matches it, so it can tell you when a repair has not been reviewed yet. Marking feedback as addressed counts as your reply, not as a new review.
+- Heph can check recent retained practice reviews on work you authored, including reviews that recorded no observations.
+- Heph only shows feedback about an observation that is really about you and that it may still raise. Feedback naming an observation that does not exist, belongs to someone else, or may no longer be raised is no longer shown in the conversation, in the web app or in Slack.
+- When Heph raises practice feedback in a conversation, the feedback now appears in its reply, in the app and in
+  Slack, and is recorded as delivered only once that reply reached you. Conversation feedback recorded earlier
+  without a record that it was shown is now marked unconfirmed rather than delivered, and is not raised again.
+- Heph can now tell a practice that simply went well from a recorded delivery failure. For your most recent
+  feedback, it sees what Hephaestus recorded as delivered to you and where — on your pull request or merge request, on
+  your practice page, or in conversation — whether feedback prepared for your practice page has been opened, and when a
+  delivery was recorded as failed.
+- Heph now tells your own replies on a pull request or merge request from what others wrote, and an automated account's approval from a person's. It no longer takes an edit to your description for new commits, and it names something you did well only when it can point to it.
+- Issue feedback now shows earlier observations as historical when the issue changes, even if a later review cannot finish. Edits also retain the person who made the change without treating that person as the developer under review.
+- Practice reviews of issues, Slack conversations and documents read the reviewed item again. Since the workspace folder change they could stop with missing evidence even though the issue, thread or document was available.
+- Updates the server's JSON library to fix a denial-of-service vulnerability, in which a request with an
+  oversized duration or date value could hold a server thread for minutes. No operator action is required.
+- Practice edits now keep the work a practice applies to and the person it judges. Changing either setting requires an explicit edit. Catalog previews show both settings before a practice is added. The new review fingerprint can mark older catalog copies as having an update available and older review results as stale after the next definition edit.
+
+  Previously saved practices are not repaired automatically. Check practices edited before this fix if their gate or person judged may have changed without notice.
+
+- **Confirm the linked issue's outcome** credits the issue as Hephaestus captured it: a checklist ticked or a closing sentence added after the merge counts. The review does not say whether that happened before or after the merge unless independently dated evidence shows it.
+- When you edit the title or description of a closed issue that merged work linked, Hephaestus reviews the issue's outcome confirmation for that merged work again if the issue differs from what the earlier review read. Feedback from the earlier review that has not reached you yet is withheld only when the new review finds the practice met; earlier feedback stays in your history.
+- Heph distinguishes the review results available in a conversation from the observations a completed review may have recorded.
+- Heph uses the workspace's configured mentor timeout for each turn, including compaction, and stops an unresponsive runtime before another turn can reuse it.
+- When a Heph reply stops early, the server and sandbox logs say why: the browser disconnected, the connection timed out or failed, or the reply was aborted. Each entry names the workspace and conversation and carries no conversation content.
+- Heph can read the practice criteria used for a recorded observation when discussing its result. Criteria that cannot be loaded in full are marked unavailable.
+- Heph, practice reviews and feedback speak of practices, and ask for a missing rationale instead of supplying one the work does not show.
+- Heph is explicitly instructed to use the current practice vocabulary, including when discussing older feedback or conversation history.
+- Heph offers a next step when it answers your question or there is work left to do.
+- Heph reports a failed reply in web and Slack chats when the model cannot respond after its retries, so you can try again.
+- Mentor usage and cost include reported calls before an automatic retry. If that turn's accounting is unavailable, its usage and cost remain unknown.
+- When your workspace withholds a comment because the pull request or merge request has merged, eligible feedback for your practice page and conversations with Heph is prepared promptly.
+- Practice criteria, rationale and examples can be updated with multiline Markdown without being rejected as blank. Whitespace-only updates remain invalid, and omitted fields remain unchanged.
+- "Log through the platform logger, not print" now treats `NSLog`, the `os_log` functions and Android's `Log` calls as platform logging, whatever tag a `Log` call uses, rather than as print statements.
+- Observation severity now appears for missing desirable behaviour as well as present undesirable behaviour, and never for positive outcomes.
+- Workspace members can no longer read other developers' observations on a pull request through the
+  API. Observations are shown only to the developer they are about, and to workspace admins in
+  Practice reviews.
+- The Outline collection picker stays open while adding collections, preventing a dismissed batch from interrupting a newly opened picker. It closes on success and can be dismissed again after a failure.
+- Practice definitions reject unknown fields instead of silently ignoring them. Switching reviewed work types preserves the visible precondition draft, and renaming or moving a practice, or editing its criteria or evidence capture, refreshes the displayed automated review validation.
+- On a practice group's page, the response you choose on an observation stays pressed while it
+  saves, instead of showing your previous answer until the page catches up, and your Practice
+  profile shows the same answer straight away. When the reviews loaded so far hold nothing for
+  the practice you picked, the page says so and offers the earlier reviews, rather than saying no
+  review has reached the practice yet.
+- Practice reviews get more accurate starting points. An issue whose body begins with or mentions its title is no longer treated as empty, an unreported sub-issue count is no longer read as zero, and untested code is judged even in a project without a test target. A pull request with a single commit is judged for commit cohesion, and a linked issue the change only mentions is no longer treated as one it must confirm. The iOS practices no longer call a scaled custom font fixed, a system photo picker a library permission, or a keychain item without an explicit accessibility class unsafe. Reviewer-comment and commit-history practices are framed by what people wrote rather than by the code, and a bare approval with no comment no longer counts as reviewer speech to judge. A missing issue link is reported even when the same change also lacks a test, and "Break large work into trackable subtasks" judges largeness by independent deliverables rather than by counting items. Updated criteria are offered for each workspace to adopt; its existing criteria and history are preserved. Advisory and review-admission corrections apply when the instance is updated.
+- When your account links more than one GitHub or GitLab identity, your profile, practice pages, feedback and Heph now use the identity on the instance the workspace is connected to, instead of the one you linked first. Your earlier conversations with Heph in that workspace stay listed.
+- Practice reviews get clearer guidance about what the captured record can show. A review thread whose resolution or merge time is not recorded, a manifest line that only looks like a dependency change, a Maven or XcodeGen dependency edit, or a lockfile elsewhere in the repository is presented as something to check rather than as settled. A SwiftUI image in template mode is no longer suggested as a place where untrusted input is rendered. "Log through the platform logger, not print" now judges only logger versus print. A fully captured decision record that leaves its alternatives unfinished is judged as written rather than treated as missing evidence.
+- Practice reviews, the practice editor and instance administration name things the way you know them,
+  never by internal codes.
+
+  - The moments a practice watches for, the evidence a review could not read and the integrations that
+    report them are named in words, such as "Marked ready for review", "Code changes" and "GitHub".
+  - A practice set to "Human review needed" or "Guidance only" reads as skipped for that reason on a
+    review's practice list, no longer as evidence the review could not read.
+  - A document is shown with the name of its Outline collection rather than the collection's link id.
+  - A piece of work is named the way its provider writes it: "Pull request #1423" on GitHub, "Merge
+    request !1423" on GitLab. The Work list shows that number again.
+  - Why a review did not start reads the same everywhere, in plain words, whether you asked for the review
+    or are reading about someone else's work.
+  - The practice editor explains what to change when it cannot save a practice, naming the moment, evidence
+    source or person it means, and names the person a practice judges as "Author", "Reviewer" and so on.
+  - A kind of work, moment or evidence source that this version does not recognise yet is called "Other
+    work", "A moment this version no longer offers" or "Another source" instead of an internal code.
+  - The instance admin workspace and user tables show statuses, roles and providers in words, and an
+    account with full access is an "Instance admin" in the table, the role dialog and its confirmation.
+  - A Hephaestus default or offered update shows its feedback-delivery choices as sentences, and the
+    catalogue filters and the practice editor say "kind of work" throughout.
+  - Reviewing past work says what was reviewed rather than what was "measured".
+
+- Practice setup keeps its work filters and catalog actions separate when space is limited, so each control can be clicked reliably.
+- Precompute now resolves the Node executable before clearing its environment, so a version-manager shim cannot prevent review preparation from running.
+- Practice reviews preserve the exact text of submitted evidence quotations, including indentation and line endings. Local citation checks now use the same strict text-matching rules as server admission rather than accepting altered indentation, display coordinates or substituted punctuation. Valid indented quotations are no longer damaged before submission.
+
+  Review tools also state their durable-submission boundary: citation-format experiments are not practice observations. Time-budget reminders request only supported claims, never an observation quota.
+
+  Source lines that resemble diff headers remain source content for evidence and secret checks, and inline feedback retains the correct source location. Citation coordinates outside the supported positive 32-bit range are rejected before matching.
+
+- Renaming a practice keeps its identifier. Reviews reject unsupported evidence fields, and historical practice revisions cannot be assigned a new assessment fingerprint.
+- Practice reviews preserve the severity of supported observations instead of silently lowering it based on the practice's name. Custom practices follow their own review criteria; feedback approval and delivery controls remain unchanged.
+- Privacy information now explains the wider review context, member AI and Slack choices, private feedback, and operator-assisted person export and erasure, including remaining provider and backup copies. Operators have a complete data-protection checklist and a DPIA screen that indicates a full assessment. The revised TUM notice still requires its legal owner's approval before release.
+- A host on pull-based deployment no longer fills its disk with a checkout for every release or commit it has applied. After each successful apply, it removes the checkouts and release locks it no longer needs. It keeps the release it runs, the one before it for a rollback, the tooling it runs, and any checkout that is locked with `git worktree lock` or that holds files of its own, such as an older proxy's `acme.json`. Docker volumes, and the certificates in them, are never touched. Pruning starts with the second apply after this upgrade, because that is the first apply the new reconciler makes.
+- Queued practice reviews now dispatch correctly in a workspace that binds a separate model for each AI data-handling tier. Each tier's concurrency limit applies only to reviews in that tier, so a busy tier no longer holds back reviews in another one, and a second tier binding no longer stops queued reviews from being picked up.
+- Delayed pull request and merge request updates no longer repeat practice feedback for work that was already reviewed at the same revision. Real title, description and code repairs still receive a new review after the quiet period.
+- Workspace administrators can reconnect Slack from the Slack integration page to replace an unreadable or outdated token without disconnecting. Choosing the Slack workspace already connected keeps its channels, their messages and its retention settings.
+- GitLab reviews use the recorded merge-request diff base rather than an advanced target branch, including legitimately empty changes. Unavailable revision objects remain explicit evidence gaps. Reviews stopped before model execution now record result processing as complete without claiming feedback was delivered.
+- Recurring feedback now gives a brief reminder without promising separate guidance on your practice page.
+- Captured issue mentions retain bounded source context and are identified as text candidates, including template examples. Review instructions also distinguish displayed diff annotations from exact source quotations; evidence admission remains strict.
+
+  Issue-closure reviews distinguish current checklists and sub-issue counts from evidence of their state at closure. A current snapshot alone does not establish a historical outcome or a developer-wide pattern.
+
+- Practice reviews retry a temporarily busy result upload rather than treating it as completed. Missing files in historical citations are reported as missing evidence instead of failed repository operations. Repository citations show the full commit identity without requiring a hover.
+
+  Long-running repository preparation no longer loses its temporary files to stale-file cleanup.
+
+- Reopening a saved conversation with Heph shows its earlier messages again. Previously, reloading the page or coming back to a conversation showed only Heph's greeting and the error "Couldn't load this conversation's earlier messages."
+- When a worker replaces its connection to the server, the old connection is always closed. Before, it could stay open.
+- Practice reviews can recover when a sandbox workspace download stops early. A stopped review can upload its result for ten minutes after its work deadline, and upload retries no longer mistake a conflict for success. Precompute cites captured records at their task-declared paths when a workspace layout changes.
+- Practice reviews reject observations and refusal updates from attempts that were cancelled, retried, or reassigned while a submission was being processed. A fetch into a repository mirror is serialized against the reviews reading that mirror, so concurrent operations on one repository cannot bypass each other.
+- Your review history shows when an observation was marked incorrect and why, while keeping the original result. Profile reviews refresh after an observation is corrected or restored.
+- Practice reviews can correct a result before it is recorded. Each practice receives one final result per review; ambiguous repeated results are refused before feedback is prepared.
+- Saving practice review coverage now keeps exactly the repositories, base branches and people you select. Changing a selection that kept some repositories or people no longer drops them or fails to save, and switching back to all repositories and all people, then to a selection again, stores the new selection.
+- The review-ask deferral practice now explicitly requires a deferred ask before crediting tracked follow-up work. Fully addressed asks remain outside its review occasion.
+- Failed practice reviews no longer appear completed merely because the runtime saved a draft. Admission refusals retain their recorded reason, while observations already accepted by the server remain available.
+- When a review writes new practice feedback, it no longer reads the wording of earlier feedback about work that has
+  changed since. It still sees that the earlier feedback was given, so new feedback is less likely to repeat claims
+  about work you have already fixed. When an automatic review's note on your pull request, merge request, or issue has
+  no line comments and reads word for word like the note already recorded as delivered there for you, it is not posted
+  again; it is recorded as withheld, and the review's feedback for your practice page and for Heph can still be
+  prepared. Two reviews of the same work finishing at the same time can still each post a note.
+  While a Slack channel's consent is paused, new reviews no longer read the earlier feedback and results from its
+  conversations; they read them again once the channel is resumed.
+- Grouped push reviews can finish without a database lock conflict. Waiting for an earlier model turn
+  to stop now uses the review's time budget, and a finished composition deadline prevents another call.
+
+  Practice reviews retain separate duplicate-code candidates and no longer mistake a version or a
+  number with a suffix for a closing issue reference. Model settings explain that reasoning support and
+  defaults depend on the provider and model, with instructions available to screen readers.
+
+  The initial review brief now counts line numbers, headings and truncation notices against its size
+  limit, so newline-heavy files cannot expand the prompt beyond the configured bound.
+
+- Review details distinguish completed result processing from feedback publication, including when feedback still awaits approval.
+
+  Retrying result processing keeps the review status and prepared feedback up to date without requiring a page reload.
+
+- A fully captured practice-review trace can be complete even when the review fails. Trace completeness now records finalized, closed capture with no dropped events; the review's exit status, errors and evidence-admission result remain separate. Interrupted or incomplete capture is still reported as incomplete, and historical traces retain their recorded completeness.
+- Practice reviews spend fewer model calls on recordings that are refused and sent again. A refused observation now names every problem at once, with what the corrected one needs, and no longer leads the model to record a different verdict just to be accepted. A review also no longer sends the model to cite files it cannot cite, fills in what it already knows instead of refusing it, and stops a model that keeps sending an identical refused recording. In-app feedback no longer describes a pattern across your work when the only other occurrence is an earlier review of the same merge request.
+- Sign-in sessions in your settings show dates the way the rest of Hephaestus does, and a session list that fails to load offers **Retry**.
+- Silent mode no longer stops feedback from reaching a developer's own Practice profile. Silent mode
+  still holds back everything that would leave the instance, such as comments on pull requests,
+  merge requests and issues and feedback in conversations; the feedback about a developer's ways of working
+  is still written and shows on their Practice profile.
+- Slack Home reflects your current AI choice and explains when Heph is off or unavailable for you, while keeping account settings and channel-message privacy controls accessible.
+- Heph checks your current AI choice and eligible mentor model before sending a Slack invitation to discuss feedback.
+- Heph’s Slack replies keep distinct work links and the text of its answer intact.
+- Every status badge in the practice administration, review and trace pages now says what it means
+  when you hover or focus it, and a piece of reviewed work is named the same way on every page: its
+  number, its title and where it lives.
+- The privacy statement of the TUM-operated instance no longer mentions the retired leaderboard, leagues or Slack leaderboard digest, and describes Activity instead: counts and lists of your pull or merge requests, reviews, issues and comments, and of the review requests waiting on you or your team, shown only to members of your workspace and never ranked.
+- Improve light- and dark-mode consistency in mentor controls, attachments, development sign-in and feature flags. Keep message actions visible when navigating by keyboard or using a device without hover, restore larger action targets for coarse pointers, and give unranked league icons a defined neutral color.
+
+  Use theme-aware colors for environment indicators and merged-work previews. Let reviewed-work popovers grow with wrapped repository names instead of clipping them to an assumed row height, and give their copy action an accessible name.
+
+  Report review-link copying as successful only after it completes, show pending and failure feedback, and retain readable work with unusable links without making it clickable. Copy repository labels as text rather than interpreting them as HTML. Let long empty-state descriptions grow without losing their actions, and announce the selected mentor vote to assistive technology.
+
+  Keep action spacing consistent across forms, tables and mentor controls using shared button sizes. Restore the outlined sidebar action’s theme-colored border and preserve its visible keyboard focus ring.
+
+  Keep dropdown menus within the available screen width, including the feedback menu on narrow screens.
+
+  Set small labels, counters and badges on one shared type size instead of nine slightly different ones, so the smallest text — avatar initials and count badges among it — is legible everywhere it appears. Round small controls on one shared corner scale. Give the message editor the same surface as the composer below it in dark mode.
+
+  Draw the dashed edge on placeholder cards and on repositories hidden from contributions — it was declared but never rendered. Bring review-activity and issue cards onto the same card look as the rest of the app, and give every search field with a leading icon the same input group, so the icon, padding and focus ring match everywhere.
+
+  Open Heph in a side panel that behaves like every other panel: the page stays readable behind it, it takes focus, and Escape, a press outside or a swipe closes it. It is full width on a phone.
+
+- Try again now asks Heph to answer your question again after a reply fails, instead of reporting that another reply is already in progress. The conversation keeps your question once and shows the new answer after a reload.
+- Copy in the web application now uses typographic apostrophes and quotation marks (’ “ ”) instead of typewriter ones. In the Outline **Add collections** dialog, the search box has focus as soon as the dialog opens, and pressing ↓ then Enter selects a collection without clicking or typing first.
+- Unavailable GitHub and GitLab repositories keep their monitored work and show “Repository not found or not accessible”. After repeated unavailable responses, sync checks them once a day instead of fetching them on every pass. Restoring access resumes sync automatically; workspace admins can use Sync now to check immediately.
+- Updates the HTTP client inside the practice review agent image to fix a TLS certificate validation
+  bypass and a WebSocket denial of service, and updates build tooling for four further advisories. No
+  operator action is required.
+- Database migration and schema checks now work with strict dependency verification on fresh Gradle installations.
+- The maintenance page now runs from the same signed, scanned webapp image as the application, rather than a separate unpatched Nginx image. Its files and startup remain separate from the application. Release locks select the same verified webapp version for both services.
+- Prevent changed or reused provider usernames from granting another developer's workspace access, exposing their account preferences, or attributing Slack and Outline activity to them. Workspace membership responses and exports report the strongest role across linked identities while keeping the selected developer independent of role changes and newly linked accounts.
+
+  Slack consent changes and feedback notifications use the verified developer. Suspended accounts and accounts awaiting deletion cannot start Slack mentor turns or receive Slack feedback notifications.
+
+  Account settings preserve provider-synced profile details. When a profile must be created and its saved username now belongs to another identity on the same provider, settings report a conflict rather than changing that other developer's profile.
+
+  Workspace admins cannot demote owners. Manual role changes and membership removals preserve the last workspace owner.
+
+  GitHub installations no longer attach to an existing workspace solely because an account name matches. Reinstallation and automatic PAT promotion require the same recorded GitHub organization identity; personal-account and legacy workspaces without that identity stay separate. Existing installation bindings continue working across account renames. Workspace creation requires a connected SCM account, and administrator elevation cannot reveal another developer's private mentor conversations through a matching display name.
+
+- Webhook stream monitoring finishes its active poll during shutdown before broker resources are released, avoiding polling against a closed connection.
+- After a server restart, webhook events for repositories a workspace already monitors, and its Slack and Outline activity, are processed while the startup sync runs instead of after it, including events that queued up while the server was down.
+
+  When a GitLab group is connected, Hephaestus registers the group webhook only after it has listed every project in the group and is ready to receive their events, then runs the full sync while those events are processed. If it cannot list every project or cannot get ready, it leaves the webhook unregistered, and the integration's sync status shows the webhook as missing; the next scheduled sync, or **Sync now**, tries again. A deployment with NATS disabled no longer registers GitLab group webhooks, because nothing there would receive their events.
+
+  A group webhook that is already registered is unchanged: events for projects Hephaestus does not monitor yet, such as newly created ones, are still not picked up.
+
+- Practice reviews now see the same labels on related issues and pull requests in a repository as on the issue under review. An unlabelled issue is recorded as having no labels rather than leaving them out.
+
 ## 0.80.0
 
 ### Minor Changes

@@ -1,7 +1,0 @@
-#### 🔴 Run the worker container on a single host
-
-The application server now runs without the worker role and without the Docker socket; AI sandboxes run only in `application-worker`, which the single-host install now starts. Before upgrading, run `./setup.sh` in `docker/self-host`: it adds `HEPHAESTUS_WORKER_REGISTRATION_TOKEN` to `.env` and does not change other values. Without that token `docker compose` refuses to start the stack. The worker joins the host's Docker group through `DOCKER_GROUP_ID`; the application server no longer needs it.
-
-The worker adds a container with a 3 GB memory limit (`APPLICATION_WORKER_MEM_LIMIT`); check the host against the install guide's sizing, and lower `APPLICATION_SERVER_MEM_LIMIT`, `APPLICATION_WORKER_MEM_LIMIT` or `WEBHOOK_SERVER_MEM_LIMIT` before starting if it needs smaller limits. `SANDBOX_MAX_CONCURRENT` and the five-minute drain on shutdown now apply to the worker.
-
-`SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` is removed. It let any named container join every sandbox network; now only the worker that starts a sandbox joins its network, as the container Docker identifies by its default hostname. Remove the variable from `.env`. A worker configured with `hephaestus.sandbox.docker.app-server-container-id` directly refuses to start. A worker running outside Docker joins no sandbox network, so practice reviews without internet access are refused there.
