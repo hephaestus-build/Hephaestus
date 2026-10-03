@@ -5,7 +5,7 @@ title: Testing Guide
 description: Choose the right test type and integrate with the Gradle-powered pipeline.
 ---
 
-Choose the tier by the behaviour under test; [Gradle recipes](#gradle-recipes) lists the commands.
+Choose the tier by the behavior under test. [Gradle recipes](#gradle-recipes) lists the commands.
 JUnit tags select tests independently of filenames. Use descriptive `*Test` and `*IntegrationTest`
 names for readers.
 
@@ -17,7 +17,7 @@ names for readers.
 
 ## Integration tests
 
-- Extend `BaseIntegrationTest` for cross-component behaviour.
+- Extend `BaseIntegrationTest` for cross-component behavior.
 - Reuse the shared PostgreSQL Testcontainer.
 - For webhook tests, deserialize recorded fixtures into the handler's event DTO.
 
@@ -26,11 +26,17 @@ names for readers.
 Test controllers at the HTTP boundary so access-control configuration is exercised. Reuse the
 domain's integration-test base and fixture factories.
 
-- Extend `AbstractWorkspaceIntegrationTest` (or a service-specific base) so every controller IT automatically cleans the database, provides helper factories such as `persistUser`, and exposes `workspaceService` for setup.
-- Use `WebTestClient`. The full Spring Boot context is already running, so access-control rules (`401` unauthenticated vs `403` non-admin) are verified exactly as the frontend receives them.
+- Extend `AbstractWorkspaceIntegrationTest` or a service-specific base.
+  Each controller IT then cleans the database automatically.
+  It provides helper factories such as `persistUser` and exposes `workspaceService` for setup.
+- Use `WebTestClient`.
+  The full Spring Boot context already runs.
+  Thus, tests verify access-control rules exactly as the frontend receives them (`401` unauthenticated versus `403` non-admin).
 - Reach for the custom security annotations (`@WithAdminUser`, `@WithUser`) together with `TestAuthUtils.withCurrentUser()` so the generated JWT matches our resource-server configuration.
 - Assert on status code, payload shape, and repository side effects. A minimal test covers "happy path", "validation failure", and at least one access-control branch.
-- Keep factories close to the domain: prefer `createWorkspace("slug", "Display", ...)` over manually seeding repositories, which keeps each test focused on behaviour instead of boilerplate.
+- Keep factories close to the domain.
+  Prefer `createWorkspace("slug", "Display", ...)` to manual repository seeds.
+  This keeps each test focused on behavior instead of boilerplate.
 
 Example skeleton:
 
@@ -60,16 +66,26 @@ class FooControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
 ## Cross-tenant isolation tests
 
-Tenancy bugs are silent data leaks: the endpoint answers `200` with plausible data, so nothing fails loudly. Every **new workspace-scoped read path** gets an isolation case in `CrossTenantIsolationIntegrationTest` (in `workspace/`), whose fixture and rationale are documented in its class Javadoc — two workspaces sharing an `account_login`, one overlapping member.
+Tenancy bugs silently leak data. The endpoint answers `200` with plausible data, so nothing fails visibly.
+Every **new workspace-scoped read path** gets an isolation case in `CrossTenantIsolationIntegrationTest` (in `workspace/`).
+Its class Javadoc documents the fixture and reason: two workspaces share an `account_login` and have one overlapping member.
 
 Checklist for a new read path:
 
 - **List endpoint** — assert A's collection under A's slug never contains B's rows (`length()` + value, not just "my row is present").
-- **Detail endpoint (anti-IDOR)** — assert B's entity id through A's slug returns `404`, and pair it with a positive control (A's own id returns `2xx`) so the `404` can't pass against a broken endpoint.
-- **Query keyed on anything but `workspace_id`** (an org login, a login string, an external native id) is a red flag — scope by `workspace_id`, or add the provider/workspace predicate, before shipping.
-- **`@WorkspaceAgnostic` repository?** The SQL statement inspector is **off** for it, so the integration test is the only automated guard — do not skip it.
+- **Detail endpoint (anti-IDOR)** — assert that B's entity id through A's slug returns `404`.
+  Add a positive control: A's own id returns `2xx`.
+  Thus, the `404` cannot pass against a broken endpoint.
+- **Query keyed on anything but `workspace_id`** is a warning sign.
+  Examples are an org login, a login string, or an external native id.
+  Before shipment, scope by `workspace_id` or add the provider/workspace predicate.
+- **`@WorkspaceAgnostic` repository?** The SQL statement inspector is **off** for it.
+  Thus, the integration test is the only automated guard.
+  Do not skip it.
 
-The `hephaestus.tenancy.enforcement: throw` setting in `application-test.yml` fails any test that reads a `workspace_id`-bearing table without a `workspace_id` predicate — a free safety net, but it cannot see `@WorkspaceAgnostic` queries or string-keyed scoping, which is why the HTTP-level assertions still matter.
+The `hephaestus.tenancy.enforcement: throw` setting in `application-test.yml` fails tests that read a `workspace_id`-bearing table without a `workspace_id` predicate.
+This safety net cannot see `@WorkspaceAgnostic` queries or string-keyed scopes.
+Thus, HTTP-level assertions remain necessary.
 
 ## Webhook fixtures and tooling
 
@@ -87,19 +103,20 @@ Its URL does not need to answer. Cause the event, and then save each delivery's 
 `gh api repos/<owner>/<repo>/hooks/<hook_id>/deliveries/<delivery_id>`. Delete the webhook and whatever you
 created when you are done. The `issue_dependencies` fixtures were recorded this way.
 
-A fixture ending in `.derived.json` is not a recording: it is a recorded payload with the fields the
-test organization had no event to record filled in from the provider's documented payload. Replace it
+A fixture ending in `.derived.json` is not a recording.
+It starts with a recorded payload.
+For fields without a recordable event in the test organization, it uses the provider's documented payload. Replace it
 with a recording when one exists.
 
 Each row lists every field the fixture adds, changes or removes against its recorded base.
 
 | Fixture | Recorded base | Fields that differ |
 |---|---|---|
-| `github/pull_request.review_requested.reviewer.derived.json` | `pull_request.review_requested`, a team request | `requested_team` replaced by `requested_reviewer`, a user, since GitHub sends one or the other ([octokit/webhooks example](https://github.com/octokit/webhooks/blob/main/payload-examples/api.github.com/pull_request/review_requested.payload.json)); `pull_request.requested_reviewers` lists that user and the Copilot reviewer bot as [`/users/copilot-pull-request-reviewer[bot]`](https://api.github.com/users/copilot-pull-request-reviewer%5Bbot%5D) reports it. `pull_request.requested_teams` is as recorded. |
-| `gitlab/merge_request.update.reviewers.derived.json` | `merge_request.update` | Adds `reviewers` with each `state` (`approved`, `requested_changes`, `reviewed`, `unreviewed`) and `re_requested: false`, `assignees`, and `changes.assignees` (none before); removes `changes.labels` and `changes.updated_by_id`; moves `object_attributes.updated_at` and `changes.updated_at` on to 19:05:00. No `changes.reviewers`: nobody's state changes in this hook, which carries all four states because before 19.3 a review or a request for changes runs no merge request hook of its own. |
-| `gitlab/merge_request.update.review_rerequested.derived.json` | `merge_request.update` | The re-request's own hook: adds `reviewers` as in `reviewers.derived` but with `user1` `unreviewed` and `re_requested: true`, `assignees`, and `changes.reviewers` from the `reviewers.derived` list to this one, as the only `changes` entry; moves `object_attributes.updated_at` on to 19:08:00, which the re-request's system note touches before the hook runs ([`request_review_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/app/services/merge_requests/request_review_service.rb#L10-28)). |
-| `gitlab/merge_request.update.reviewers_removed.derived.json` | `merge_request.update` | Adds `changes.reviewers` from the `review_rerequested` list to none and `changes.assignees` from `ga84xah` to none, with no `reviewers` or `assignees` key, as GitLab leaves them out when there are none ([`issuable.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/lib/gitlab/data_builder/issuable.rb#L28-34)); removes `changes.labels` and `changes.updated_by_id`; moves `object_attributes.updated_at` on to 19:15:00, `changes.updated_at` from 19:08:00. |
-| `gitlab/merge_request.update.reviewers_stateless.derived.json` | `merge_request.update` | A hook from GitLab before 18.6, whose reviewers carry `User#hook_attrs` only ([`issuable.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/lib/gitlab/data_builder/issuable.rb#L31)): adds `reviewers` as in `reviewers.derived` without `state` and `re_requested` and without `user3`, `assignees`, and `changes.reviewers` from the four to the three; removes `changes.labels` and `changes.updated_by_id`; moves `object_attributes.updated_at` on to 19:06:00 and `changes.updated_at` from 19:05:00 to 19:06:00. |
+| `github/pull_request.review_requested.reviewer.derived.json` | `pull_request.review_requested`, a team request | `requested_team` replaced by `requested_reviewer`, a user, since GitHub sends one or the other ([octokit/webhooks example](https://github.com/octokit/webhooks/blob/main/payload-examples/api.github.com/pull_request/review_requested.payload.json)). `pull_request.requested_reviewers` lists that user and the Copilot reviewer bot as [`/users/copilot-pull-request-reviewer[bot]`](https://api.github.com/users/copilot-pull-request-reviewer%5Bbot%5D) reports it. `pull_request.requested_teams` is as recorded. |
+| `gitlab/merge_request.update.reviewers.derived.json` | `merge_request.update` | Adds `reviewers` with each `state` (`approved`, `requested_changes`, `reviewed`, `unreviewed`) and `re_requested: false`, `assignees`, and `changes.assignees` (none before). Removes `changes.labels` and `changes.updated_by_id`. Moves `object_attributes.updated_at` and `changes.updated_at` on to 19:05:00. No `changes.reviewers`: nobody's state changes in this hook. It carries all four states. Before 19.3, a review or request for changes runs no merge request hook of its own. |
+| `gitlab/merge_request.update.review_rerequested.derived.json` | `merge_request.update` | The re-request's own hook: adds `reviewers` as in `reviewers.derived` but with `user1` `unreviewed` and `re_requested: true`, `assignees`, and `changes.reviewers` from the `reviewers.derived` list to this one, as the only `changes` entry. Moves `object_attributes.updated_at` on to 19:08:00, which the re-request's system note touches before the hook runs ([`request_review_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/app/services/merge_requests/request_review_service.rb#L10-28)). |
+| `gitlab/merge_request.update.reviewers_removed.derived.json` | `merge_request.update` | Adds `changes.reviewers` from the `review_rerequested` list to none and `changes.assignees` from `ga84xah` to none, with no `reviewers` or `assignees` key, as GitLab leaves them out when there are none ([`issuable.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/lib/gitlab/data_builder/issuable.rb#L28-34)). Removes `changes.labels` and `changes.updated_by_id`. Moves `object_attributes.updated_at` on to 19:15:00, `changes.updated_at` from 19:08:00. |
+| `gitlab/merge_request.update.reviewers_stateless.derived.json` | `merge_request.update` | A hook from GitLab before 18.6, whose reviewers carry `User#hook_attrs` only ([`issuable.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/lib/gitlab/data_builder/issuable.rb#L31)): adds `reviewers` as in `reviewers.derived` without `state` and `re_requested` and without `user3`, `assignees`, and `changes.reviewers` from the four to the three. Removes `changes.labels` and `changes.updated_by_id`. Moves `object_attributes.updated_at` on to 19:06:00 and `changes.updated_at` from 19:05:00 to 19:06:00. |
 
 The GitLab fixtures other than `reviewers_stateless` follow GitLab 18.6 and later, which states each reviewer's `state` and `re_requested` ([`reviewers_hook_attrs`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/app/models/concerns/issuable.rb#L589-597)) and lists `changes.reviewers` whenever those attributes change ([`hook_reviewer_changes`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/app/models/concerns/issuable.rb#L599-609)). From 19.3 a submitted review runs merge request hooks of its own as well ([`update_reviewer_state_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v19.3.0-ee/app/services/merge_requests/update_reviewer_state_service.rb#L67-75)).
 The GitLab fields follow [merge request events](https://docs.gitlab.com/user/project/integrations/webhook_events/#merge-request-events).
@@ -118,19 +135,19 @@ From `server/`:
 ./gradlew :application:bootJar                          # Executable JAR, without running tests
 ```
 
-Generation and compilation dependencies are automatic. Test tasks always execute when requested;
-compilation remains incremental and cacheable. `--no-build-cache` prevents output restoration;
-combine it with `clean` when measuring a cold build.
+Generation and compilation dependencies are automatic. Test tasks always execute when requested.
+Compilation remains incremental and cacheable. `--no-build-cache` prevents output restoration.
+Combine it with `clean` when measuring a cold build.
 
 The shared integration PostgreSQL container keeps its ephemeral data directory on tmpfs. Database
-cleanup still truncates every application table transactionally; SQL constraints and isolation checks
+cleanup still truncates every application table transactionally. SQL constraints and isolation checks
 remain enabled. This container does not prove storage durability across container restarts.
 
 `vp run test:server:selection` asks Gradle/JUnit to discover tests without executing them. It proves
 that non-live tests belong to a required tier and that integration shards are disjoint and complete.
 Required PR verification and `vp run verify` run this proof before the real suites. Discovery writes
-only to `application/build/test-selection/`, leaving execution reports and coverage untouched;
-those discovery reports are not evidence that tests passed.
+only to `application/build/test-selection/`, leaving execution reports and coverage untouched.
+Those discovery reports are not evidence that tests passed.
 
 ## Live external-service tests
 
@@ -141,7 +158,7 @@ and are excluded from every other tier. From `server/`, explicitly opt in with:
 ./gradlew :application:liveTest
 ```
 
-Use `--tests ClassName` to select a suite; an unmatched filter fails.
+Use `--tests ClassName` to select a suite. An unmatched filter fails.
 
 ### Meta-annotation cheat sheet
 
@@ -149,27 +166,28 @@ Use one of these composite annotations on the test class (or method) rather than
 
 | Annotation        | Gate                                 | Use for                                                                                                                                                                                                     |
 | ----------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@LiveLlmTest`    | `HEPHAESTUS_LIVE_LLM_API_KEY`        | Tests that drive a real OpenAI-compatible endpoint. Set `HEPHAESTUS_LIVE_LLM_BASE_URL`, `HEPHAESTUS_LIVE_LLM_API_KEY`, and `HEPHAESTUS_LIVE_LLM_MODEL` explicitly. Read via `LiveLlmCredentials.fromEnv()`. |
-| `@LiveGitHubTest` | `GH_APP_INSTALLATION_ID`             | Tests that hit github.com via the installed GitHub App. `BaseGitHubLiveIntegrationTest` runs an extra runtime check on private-key material.                                                                |
+| `@LiveLlmTest`    | `HEPHAESTUS_LIVE_LLM_API_KEY`        | Tests that drive a real OpenAI-compatible endpoint. Set `HEPHAESTUS_LIVE_LLM_BASE_URL`, `HEPHAESTUS_LIVE_LLM_API_KEY`, and `HEPHAESTUS_LIVE_LLM_MODEL` explicitly. Read through `LiveLlmCredentials.fromEnv()`. |
+| `@LiveGitHubTest` | `GH_APP_INSTALLATION_ID`             | Tests that hit github.com through the installed GitHub App. `BaseGitHubLiveIntegrationTest` runs an extra runtime check on private-key material.                                                                |
 | `@LiveGitLabTest` | `HEPHAESTUS_LIVE_GITLAB_TOKEN`       | Reserved for GitLab-side replay/live-sync tests.                                                                                                                                                            |
 | `@LiveDockerTest` | none — runtime probe in `@BeforeAll` | Tests that need a Docker daemon. Combine with `@LiveLlmTest` when the sandbox payload also needs LLM credentials.                                                                                           |
 
-The annotations use `Execution(SAME_THREAD)`; Gradle also runs one test JVM at a time.
+The annotations use `Execution(SAME_THREAD)`. Gradle also runs one test JVM at a time.
 
 ### Authoring a new live test
 
-1. Pick the right meta-annotation. If the env var doesn't exist yet, add a new annotation alongside the existing four — don't reuse one with a misleading name.
+1. Pick the correct meta-annotation. If the environment variable does not exist yet, add an annotation alongside the existing four.
+   Do not reuse one with a misleading name.
 2. Put the test under `server/application/src/test/java/.../live/`. The directory marker keeps live and non-live tests in different code-review buckets.
 3. Read credentials from `LiveLlmCredentials.fromEnv()` or the provider helpers. Never inline secrets or commit local credential files.
-4. Per-test wall-clock timeouts: 90s is reasonable for a single mentor turn; 5 minutes for a full practice run.
+4. Per-test wall-clock timeouts: 90s is reasonable for a single mentor turn. 5 minutes for a full practice run.
 
 ### GitHub live API tests
 
-We ship a focused suite that exercises the live GitHub App installation and verifies end-to-end sync behaviour (repository metadata, labels, milestones, and teams).
+We ship a focused suite that exercises the live GitHub App installation and verifies end-to-end sync behavior (repository metadata, labels, milestones, and teams).
 
 ### Prerequisites
 
-1. **Sandbox installation** – the `Hephaestus IntegrationTests` GitHub App must be installed in a sandbox organisation you control. The tests create and delete repositories, milestones, labels, and teams on each run.
+1. **Sandbox installation** – the `Hephaestus IntegrationTests` GitHub App must be installed in a sandbox organization you control. The tests create and delete repositories, milestones, labels, and teams on each run.
 2. **Credentials** – provide both a GitHub App private key and a Personal Access Token with the following scopes:
    - `repo` (full)
    - `admin:org`
@@ -181,7 +199,7 @@ We ship a focused suite that exercises the live GitHub App installation and veri
    cp application-live-local.example.yml application-live-local.yml
    ```
 
-   Fill in the placeholders with the sandbox organisation slug, the installation id, and either an inline PEM key (`github.app.privateKey`) or a readable `privateKeyLocation`. Keep this file out of version control – it is already listed in `.gitignore`.
+   Fill in the placeholders with the sandbox organization slug, the installation id, and either an inline PEM key (`github.app.privateKey`) or a readable `privateKeyLocation`. Keep this file out of version control – it is already listed in `.gitignore`.
 
    Alternatively, export the matching environment variables:
 
@@ -195,19 +213,20 @@ We ship a focused suite that exercises the live GitHub App installation and veri
 
    `GH_APP_INSTALLATION_ID` must be exported even when the other credentials come from the local
    file: `@LiveGitHubTest` checks the environment before Spring loads that file. Missing credentials
-   skip the suite; a successful Gradle exit alone does not prove live tests executed.
+   skip the suite. A successful Gradle exit alone does not prove live tests executed.
 
-The run prints the GitHub artefacts it provisions. Clean-up is handled automatically, but if a failure interrupts execution you can safely delete any `hephaestus-it-*` repositories, milestones, or teams that remain in the sandbox.
+The run prints the GitHub artifacts it provisions. Clean-up is handled automatically, but if a failure interrupts execution you can safely delete any `hephaestus-it-*` repositories, milestones, or teams that remain in the sandbox.
 
 ### Authoring new GitHub sync tests
 
 1. Extend `AbstractGitHubLiveSyncIntegrationTest` (or fall back to `BaseGitHubLiveIntegrationTest` when repositories are not needed). These bases set up credential checks, provide the `workspaceRepository`, and expose helpers such as `createEphemeralRepository`, `registerRepositoryToMonitor`, `createEphemeralTeam`, and `seedOrganizationMembers`.
-2. Use the supplied helpers to create and track temporary GitHub artefacts. They automatically register clean-up handlers via `@AfterEach`, so add new resources to the provided lists instead of implementing manual deletion logic.
-3. Keep tests deterministic: rely on `databaseTestUtils.cleanDatabase()` in `@BeforeEach` (already invoked by the base), and generate unique slugs via `nextEphemeralSlug("suffix")` when naming repositories, branches, or teams.
-4. If a scenario needs extra Spring configuration, extend `application-live-local.yml` in `server/application/src/test/resources/`. The checked-in `.example` file documents every property; copy it on demand and keep secrets out of version control.
+2. Use the supplied helpers to create and track temporary GitHub artifacts. They automatically register clean-up handlers through `@AfterEach`, so add new resources to the provided lists instead of implementing manual deletion logic.
+3. Keep tests deterministic. Rely on `databaseTestUtils.cleanDatabase()` in `@BeforeEach`, which the base already invokes.
+   Generate unique slugs through `nextEphemeralSlug("suffix")` for repositories, branches, or teams.
+4. If a scenario needs extra Spring configuration, extend `application-live-local.yml` in `server/application/src/test/resources/`. The checked-in `.example` file documents every property. Copy it on demand and keep secrets out of version control.
 
 ### Troubleshooting
 
 - **Skipping because of missing credentials** – export `GH_APP_INSTALLATION_ID`, then check the console for the base class's App id, private-key and PAT checks.
-- **GitHub API rate-limit failures** – the suite creates several entities per run. Prefer a dedicated sandbox organisation so you do not clash with production automation limits.
-- **Longer runtimes** – each suite bootstraps a Testcontainers PostgreSQL instance and provisions GitHub resources. Expect higher runtimes than the pure Testcontainers integration tests; avoid running them on every PR and instead use them before releases or when touching the GitHub sync layer.
+- **GitHub API rate-limit failures** – the suite creates several entities per run. Prefer a dedicated sandbox organization so you do not clash with production automation limits.
+- **Longer runtimes** – each suite bootstraps a Testcontainers PostgreSQL instance and provisions GitHub resources. Expect higher runtimes than the pure Testcontainers integration tests. Avoid running them on every PR and instead use them before releases or when touching the GitHub sync layer.

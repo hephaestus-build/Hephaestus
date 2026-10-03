@@ -8,48 +8,122 @@ description: Mentor replica affinity, conversation checkpoints, and how to disab
 ## Heph session ownership
 
 `DockerInteractiveSandboxAdapter.attach` attaches the worker to the interactive sandbox.
-The runner connects to the worker gateway over WebSocket; attachment is not a `docker exec -i`
-process handle.
+The runner connects to the worker gateway over WebSocket.
+Attachment is not a `docker exec -i` process handle.
 
-Web chat and Slack DMs retain their front ends, admission, budget checks, persistence and
-`fetch_context` on the server. `WorkerInteractiveSandboxService` places a session on a connected
-worker with spare mentor capacity. The worker hub carries bounded session commands, acknowledgements,
-runner frames and terminal session events; the runner itself opens an outbound WebSocket to the
-worker's Sandbox Gateway. The worker owns attachment, idle eviction, Docker resources and session
-metrics. No server-side Docker fallback exists.
+Web chat and Slack DMs retain their front ends on the server.
+The server also retains admission, budget checks, persistence, and `fetch_context`. `WorkerInteractiveSandboxService` places a session on a connected worker with spare mentor capacity.
+The worker hub carries bounded session commands, acknowledgements, runner frames and terminal session events.
+The runner itself opens an outbound WebSocket to the worker's Sandbox Gateway.
 
-Each live developer/workspace session stays on its worker. The server transfers only a scoped proxy
-credential and its non-secret route; the worker resolves provider keys and binds each turn before
-sending the prompt. Proxy usage is committed to PostgreSQL, not reconstructed from runner claims.
-Drain and control-connection loss retire sessions. The next turn restores `session_jsonl` on an
-available worker; absence of spare capacity is a retryable “Heph is busy” result.
+The worker owns attachment, idle eviction, Docker resources and session metrics.
+No server-side Docker fallback exists.
 
-A prepare acknowledgement or `runner_ready` does not prove SDK readiness. The server records
-`mentor.turn.runtime_ready` only after `open_thread` completes, at the real runtime boundary.
+Each live developer/workspace session stays on its worker.
+The server transfers only a scoped proxy credential and its non-secret route.
+The worker resolves provider keys and binds each turn before sending the prompt.
+Proxy usage is committed to PostgreSQL, not reconstructed from runner claims.
+
+Drain and control-connection loss retire sessions.
+The next turn restores `session_jsonl` on an available worker.
+Absence of spare capacity is a retryable “Heph is busy” result.
+
+A prepare acknowledgement or `runner_ready` does not prove SDK readiness.
+The server records `mentor.turn.runtime_ready` only after `open_thread` completes, at the real runtime boundary.
 
 ## Why mentor traffic is sticky
 
-A Heph runtime container opens its gateway frames WebSocket to the **owning worker**, not to the application server. The worker owns the sandbox registry and idle eviction; the server relays JSON-RPC frames through the authenticated hub and retains `chat_thread.session_jsonl` in PostgreSQL. A saved session travels with `open_thread`, so the next turn can restore it after worker eviction, drain or restart. Preparation and a following web turn keep the same server affinity and worker placement; Slack preparation and a DM handled by different server replicas may still open separate placements. The reference single-server deployment avoids that case.
+A Heph runtime container opens its gateway frames WebSocket to the **owning worker**, not to the application server.
+The worker owns the sandbox registry and idle eviction.
+The server relays JSON-RPC frames through the authenticated hub and retains `chat_thread.session_jsonl` in PostgreSQL.
+A saved session travels with `open_thread`, so the next turn can restore it after worker eviction, drain or restart.
 
-Traefik pins workspace traffic to the originating replica via a cookie scoped to `/api/workspaces` — narrower than the full `/api` router (auth and public endpoints stay round-robin), broad enough to cover the actual mentor URL `/api/workspaces/{slug}/mentor/chat`. Labels live on the `https-application-server` service in `docker/compose.app.yaml`. Inspect with `curl -i`:
+Preparation and a following web turn keep the same server affinity and worker placement.
+Slack preparation and a DM handled by different server replicas may still open separate placements.
+The reference single-server deployment avoids that case.
 
-- Cookie: `__Secure-hep_workspace_aff` — `Secure`, `HttpOnly`, `SameSite=Lax`, `maxAge` follows `hephaestus.mentor.idle-ttl-seconds` (900 s default). Traefik writes the cookie only when it picks a replica, so the affinity lasts that long from the first request rather than from the last one.
+Traefik pins workspace traffic to the originating replica through a cookie scoped to `/api/workspaces`.
+This scope is narrower than the full `/api` router.
+Auth and public endpoints stay round-robin.
+The scope covers the actual mentor URL `/api/workspaces/{slug}/mentor/chat`.
+
+Labels live on the `https-application-server` service in `docker/compose.app.yaml`.
+Inspect with `curl -i`:
+
+- Cookie: `__Secure-hep_workspace_aff` — `Secure`, `HttpOnly`, `SameSite=Lax`.
+  `maxAge` follows `hephaestus.mentor.idle-ttl-seconds` (900 s default). Traefik writes the cookie only when it picks a replica.
+  Thus, affinity lasts that long from the first request, not from the last request.
 - Response header: `X-Hephaestus-Replica: <container-id-prefix>` — emitted by `ReplicaIdentityFilter` from `$HOSTNAME`, CORS-exposed for the webapp.
 
-Labels are HTTPS-only; the HTTP router redirects to HTTPS, so pinning it would just double-issue cookies. The `cookie.path` attribute requires Traefik >= 3.3. Previews (`docker/preview/compose.app.yaml`) are single-replica and omit the labels.
+Labels are HTTPS-only.
+The HTTP router redirects to HTTPS, so pinning it would just double-issue cookies.
+The `cookie.path` attribute requires Traefik >= 3.3.
+Previews (`docker/preview/compose.app.yaml`) are single-replica and omit the labels.
 
 ## Conversation size and checkpoints
 
-Heph keeps the model's real context window and gives Pi a mentor-only working policy in Pi's own settings: compact once the conversation passes 49,152 estimated tokens, scaled down for a smaller window, and keep Pi's native target for recent messages unsummarised (20,000 tokens by Pi's default), held to half the trigger on a small window for nominal summary headroom. The target is neither a bound nor a promise about any message: Pi cuts at a message boundary, keeps a tool call with its results, and may split a long active turn, so the current question and the context it fetched are more likely to stay verbatim but can still be summarised. Pi compacts between tool batches on that trigger. Before a prompt, the runner checks the restored conversation by Pi's estimate — which, unlike Pi's own check, counts what came after the last reply — and compacts it inside the accepted turn, so the summary is billed to that turn and spends its budget. If that compaction fails, or leaves the conversation past the trigger, the turn ends with an error instead of sending the history. Pi never cuts inside a tool batch, so a tool result larger than the retention target stays whole; context resources stay small for that reason: `observations_history.json` lists observations without their evidence, and `observations_history/<id>.json` reads one listed observation's evidence on demand, each bounded in size. The trigger also caps Pi's summary output, at the model's own output limit, so a compacted conversation is not guaranteed to stay under the trigger, and the system prompt and tool definitions come on top of the conversation.
+Heph keeps the model's real context window.
+Pi's own settings supply a mentor-only working policy.
+Pi compacts once the conversation passes 49,152 estimated tokens.
+A smaller window reduces this trigger.
 
-The server stores only what the runner sent before a turn's outcome (`session_persisted`). The runner sends the session after every completed compaction and, when the watchdog ends a turn, once the abort has settled and before the failure; a failed or aborted compaction sends none, so the stored session stays the last good one. A timed-out turn whose abort has not settled after ten seconds still fails, and the runner refuses a new prompt until Pi settles; an abort that fails outright makes the runner refuse every later prompt with a code that has the server discard the sandbox. A turn that compacted is accounted from the proxy's record of its calls, because Pi reports a compaction's summary calls as one total, and nothing for one that failed partway; the reply's Finish, its stored row and its ledger entry all carry that one account, read once the row is no longer in flight.
+Pi keeps its native target for recent messages that stay unsummarized: 20,000 tokens by default.
+On a small window, the target is half the trigger to leave nominal summary headroom.
+The target is neither a bound nor a promise about any message.
+Pi cuts at a message boundary.
+
+It keeps a tool call with its results and can split a long active turn.
+Thus, the current question and its fetched context are more likely to stay verbatim.
+But Pi can still summarize them.
+Pi compacts between tool batches on that trigger.
+
+Before a prompt, the runner checks the restored conversation by Pi's estimate.
+Unlike Pi's own check, this counts what came after the last reply.
+The runner compacts the conversation inside the accepted turn.
+Thus, the summary is billed to that turn and spends its budget.
+
+If compaction fails or leaves the conversation past the trigger, the turn ends with an error.
+It does not send the history.
+Pi never cuts inside a tool batch, so a tool result larger than the retention target stays whole.
+Context resources stay small for that reason. `observations_history.json` lists observations without their evidence. `observations_history/<id>.json` reads one listed observation's evidence on demand.
+
+Each resource has a size bound.
+The trigger also caps Pi's summary output at the model's own output limit.
+Thus, compaction does not guarantee that the conversation stays under the trigger.
+The system prompt and tool definitions add to the conversation.
+
+The server stores only what the runner sent before a turn's outcome (`session_persisted`).
+The runner sends the session after every completed compaction.
+When the watchdog ends a turn, it sends the session after the abort settles and before the failure.
+A failed or aborted compaction sends none, so the stored session stays the last good one.
+
+A timed-out turn still fails if its abort has not settled after ten seconds.
+The runner refuses a new prompt until Pi settles.
+If an abort fails outright, the runner refuses every later prompt.
+Its refusal code tells the server to discard the sandbox.
+
+A turn that compacted uses the proxy's call record for accounting.
+Pi reports summary calls for a compaction as one total.
+It reports nothing for a compaction that failed partway.
+The reply's Finish, its stored row, and its ledger entry carry that one account.
+
+The account is read once the row is no longer in flight.
 
 ## Known limitations
 
-- **Two browsers, same user.** Two browsers can pin to two replicas, each spawning its own `(userId, workspaceId)` sandbox — `InteractiveSandboxRegistry` is per-JVM.
-- **Slack has no affinity.** Slack events reach the server through shared durable NATS consumers, so with more than one application-server replica the `app_home_opened` that prepares a sandbox and the DM that follows can land on different replicas; the DM then starts its own. A single replica, the reference topology, always reuses it.
-- **Rolling deploys.** A worker drain ends its Heph sessions with a terminal stream result. The next turn restores the saved thread on an available worker. The `SseEmitter` timeout remains 10 minutes (`MentorChatController.EMITTER_TIMEOUT_MS`); it is not the worker-drain deadline.
+- **Two browsers, same user.** Two browsers can pin to two replicas.
+  Each replica starts its own `(userId, workspaceId)` sandbox.
+  `InteractiveSandboxRegistry` is per-JVM.
+- **Slack has no affinity.** Slack events reach the server through shared durable NATS consumers.
+  With multiple application-server replicas, `app_home_opened` and the next DM can reach different replicas.
+  `app_home_opened` prepares a sandbox. The DM then starts its own. A single replica, the reference topology, always reuses it.
+- **Rolling deploys.** A worker drain ends its Heph sessions with a terminal stream result. The next turn restores the saved thread on an available worker. The `SseEmitter` timeout remains 10 minutes (`MentorChatController.EMITTER_TIMEOUT_MS`). It is not the worker-drain deadline.
 
 ## Disabling affinity for debugging
 
-Delete the `traefik.http.services.https-application-server.loadbalancer.sticky.*` labels from `docker/compose.app.yaml` and redeploy. Existing sessions stay pinned until the cookie expires; new sessions round-robin. Expect transient 5xx on reconnects that land on a cold replica.
+Delete the `traefik.http.services.https-application-server.loadbalancer.sticky.*` labels from `docker/compose.app.yaml`.
+Redeploy.
+Existing sessions stay pinned until the cookie expires.
+New sessions round-robin.
+
+Expect transient 5xx on reconnects that land on a cold replica.

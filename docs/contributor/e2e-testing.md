@@ -5,8 +5,13 @@ description: Running the live practice-review path end to end locally, and the P
 
 # Live practice-review E2E
 
-This setup runs the complete local path: workspace creation, SCM sync, job execution in Docker, LLM
-calls through the application proxy, observation persistence, and feedback delivery to a PR or MR.
+This setup runs the complete local path:
+
+- Workspace creation and SCM sync.
+- Job execution in Docker.
+- LLM calls through the application proxy.
+- Observation persistence.
+- Feedback delivery to a PR or MR.
 
 The opt-in `e2e` profile enables these local-only capabilities:
 
@@ -31,13 +36,17 @@ the host firewall or an isolated development network.
 For an isolated simulator, set `hephaestus.e2e.scm-origin` (environment variable
 `HEPHAESTUS_E2E_SCM_ORIGIN`) to its exact `http://127.0.0.1:<port>` origin, without a trailing
 slash. Startup rejects this setting unless `e2e` is active and `prod` is absent. Workspace
-validation and GitLab preflight allow only that origin; other destinations retain the normal
-HTTPS and private-address restrictions. GitLab workspace creation accepts only
+validation and GitLab preflight allow only that origin. Other destinations retain the normal
+HTTPS and private-address restrictions.
+
+GitLab workspace creation accepts only
 `GITLAB_DEFAULT_SERVER_URL`, so set it to the same origin, and the creating account needs an
 identity link on that origin. Preflight clients do not follow redirects and cannot send requests to a
-different origin. A Git fetch to that origin runs in the application's own process
-through JGit, so it reaches the simulator exactly as the provider API calls do and the simulator has to
-serve Git smart HTTP on the same loopback origin. This does not enable a GitHub simulator or supply
+different origin.
+
+A Git fetch to that origin runs through JGit in the application's own process.
+Thus, it reaches the simulator exactly as the provider API calls do.
+The simulator must serve Git smart HTTP on the same loopback origin. This does not enable a GitHub simulator or supply
 missing provider APIs or historical replay.
 
 ## Setup
@@ -65,14 +74,13 @@ vp run dev:e2e:setup \
 The script is idempotent. It creates or validates the workspace and connection, configures the model,
 disables the review cooldown, and leaves three focused practices active. It requires an explicit cost
 declaration: use `PRICED` with contract rates, or `NO_CHARGE` with `E2E_LLM_PRICE_NOTE`. Set
-`E2E_PR_ID` to select a specific internal artifact ID; otherwise the newest MR or PR in the monitored
-repository is selected. For GitLab, use the narrowest suitable group or subgroup because initial sync
+`E2E_PR_ID` to select a specific internal artifact ID. Otherwise, the script selects the newest MR or PR in the monitored repository. For GitLab, use the narrowest suitable group or subgroup because initial sync
 covers every project below that path.
 
 Other useful options are `--provider`, `--server-url`, and `--app-url`. The model connection uses
-the Responses API; use `E2E_LLM_PROTOCOL=openai-completions` for an endpoint that serves Chat
+the Responses API. Use `E2E_LLM_PROTOCOL=openai-completions` for an endpoint that serves Chat
 Completions alone, or `E2E_LLM_AUTH_MODE=API_KEY` when required by the provider.
-Existing resources are reused only when their immutable SCM and model-routing fields match.
+The script reuses existing resources only when their immutable SCM and model-routing fields match.
 
 ## Running the review
 
@@ -94,12 +102,17 @@ characters, then expose the webhook receiver through a trusted tunnel. GitLab gr
 requires the appropriate group role and license.
 
 The agent runs in a Docker sandbox (`ghcr.io/hephaestus-build/agent-pi`) and calls the LLM through
-the in-app proxy, so provider keys never enter the sandbox. A practice review always runs on an
-internal Docker network that only the worker which started it joins, so practice reviews need the
-worker role running in a Docker container under its default hostname, as `application-worker` does;
-a host-run server refuses them. Only the Heph binding may set `allowInternet=true`, which lets its
+the in-app proxy, so provider keys never enter the sandbox.
+
+A practice review always runs on an internal Docker network.
+Only the worker that started it joins this network.
+Thus, practice reviews need the worker role in a Docker container under its default hostname, as `application-worker` does.
+A host-run server refuses them.
+
+Only the Heph binding may set `allowInternet=true`, which lets its
 sandbox reach a host-run proxy through `host.docker.internal`.
-Feedback is posted back to the MR, and the observations behind it are shown under the workspace's **Practices → Practice reviews** view.
+Hephaestus posts feedback back to the MR.
+The workspace's **Practices → Practice reviews** view shows the observations behind it.
 
 Live runner JUnit tests call the upstream provider directly. They do not cover application proxying,
 budget admission, durable usage accounting, sandbox execution, or SCM delivery.
@@ -107,11 +120,11 @@ budget admission, durable usage accounting, sandbox execution, or SCM delivery.
 ## Browser tests (Playwright)
 
 `webapp/e2e/` holds a `@playwright/test` harness (`vp run --filter webapp test:e2e`) that drives the
-SPA over plain http via the dev-login — see the `README.md` in that directory. It uses the same
+SPA over plain http through the dev-login — see the `README.md` in that directory. It uses the same
 `cookie-secure=false` + `XSRF-TOKEN` wiring this page relies on.
 
 ## Caveats
 
-- `Plan & scope issues` is evaluated in PR context; use a PR or MR.
-- **Delivery needs a PR row with `author_id`** — synced MRs have it; a hand-seeded PR may not.
+- `Plan & scope issues` is evaluated in PR context. Use a PR or MR.
+- **Delivery needs a PR row with `author_id`** — synced MRs have it. A hand-seeded PR may not.
 - The sandbox runtime needs `/var/run/docker.sock`.

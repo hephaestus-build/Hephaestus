@@ -20,12 +20,12 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 
 ### Platform overview
 
-- React 19 on Vite. Read the pinned versions from `webapp/package.json`; they move faster than this page.
-- React Compiler is enabled in `webapp/vite.shared.ts`, which every build of app source pulls in. Leave it on.
+- React 19 on Vite. Read the pinned versions from `webapp/package.json`. They move faster than this page.
+- `webapp/vite.shared.ts` enables React Compiler. Every build of app source imports it. Leave it on.
 - Routing uses TanStack Router file routes in `src/routes/**` with the generated `routeTree.gen.ts`.
-- TanStack Query v5 is initialised in `src/runtime/tanstack-query/root-provider.tsx`. OpenAPI helpers live in `src/api/@tanstack/react-query.gen.ts`.
+- TanStack Query v5 initializes in `src/runtime/tanstack-query/root-provider.tsx`. OpenAPI helpers live in `src/api/@tanstack/react-query.gen.ts`.
 - There is no global store: where each kind of state lives is the table in `webapp/AGENTS.md` § Data fetching.
-- Tailwind CSS 4 powers styling. Tokens sit in `src/styles/theme-tokens.css`, which the Chrome extension imports too; `src/styles.css` is the entry stylesheet. shadcn/ui primitives live in `src/components/ui/**`, which is a registry install over Base UI — check a change there against upstream and record a deliberate divergence in the file, because re-vendoring overwrites it.
+- Tailwind CSS 4 supplies styles. Tokens live in `src/styles/theme-tokens.css`. The Chrome extension also imports this file. `src/styles.css` is the entry stylesheet. shadcn/ui primitives live in `src/components/ui/**`, a registry install over Base UI. Check a change there against upstream. Record a deliberate difference in the file, because a new vendor import overwrites it.
 - Storybook, Chromatic, Vitest, oxlint, and oxfmt cover tooling.
 
 ### Building features
@@ -34,16 +34,16 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - Keep presentational components in `src/components/**`. They should take props, stay pure, and avoid side effects.
 - Fetch data by spreading generated `...Options()` helpers into `useQuery` or `useMutation`. The helpers provide typing, query keys, and retry defaults. A hand-written query key is a lint error (`hephaestus/no-manual-query-key`), because it stops matching the generated one silently.
 - Invalidate caches with the generated `...QueryKey()` helpers or the same keys passed to `useQuery`. Use optimistic updates only when the UI must respond instantly, such as mentor chat streaming.
-- The React Compiler rules and the clock rules are `webapp/AGENTS.md` § React Compiler and § The time of day; both are enforced by lint.
-- Stay inside the `--color-*` token scale declared in `src/styles/theme-tokens.css` and, for provider colours, `src/styles.css`. Reach for shadcn/ui primitives before adding new component libraries. `@apply` lives in `styles.css` for base and wrapper rules, not in components.
+- The React Compiler rules and the clock rules are `webapp/AGENTS.md` § React Compiler and § The time of day. Lint enforces both.
+- Stay inside the `--color-*` token scale declared in `src/styles/theme-tokens.css` and, for provider colors, `src/styles.css`. Reach for shadcn/ui primitives before adding new component libraries. `@apply` lives in `styles.css` for base and wrapper rules, not in components.
 - Co-locate `*.stories.tsx` files. Show the states the component can actually reach, with realistic data. Run `vp run --filter webapp chromatic:ci` whenever stories change.
 - Defer analytics work to effects that run after paint.
 
 ### Onboarding and choice screens
 
-- Use the shared questionnaire and native fieldset so one question has one accessible answer group. Do not pre-select a first answer; a saved answer may appear checked when the member returns. See [W3C grouping controls](https://www.w3.org/WAI/tutorials/forms/grouping/) and [GOV.UK radios](https://design-system.service.gov.uk/components/radios/).
-- Give the three AI answers equal prominence. State each consequence before the member chooses; do not make a logo stand in for a data-handling promise. A workspace may name a model it has configured, but the account-wide answer is not a model picker. See [EDPB guidance on deceptive design](https://www.edpb.europa.eu/system/files/documents/2023-02/edpb_03-2022_guidelines_on_deceptive_design_patterns_in_social_media_platform_interfaces_v2_en_0.pdf).
-- Keep account linking separate from the AI answer. A member can save either without the other, and an answer that is not set up in this workspace remains selectable with a clear consequence. Give disabled actions a visible reason, and test narrow screens and keyboard use.
+- Use the shared questionnaire and native fieldset so one question has one accessible answer group. Do not pre-select a first answer. A saved answer may appear checked when the member returns. See [W3C grouping controls](https://www.w3.org/WAI/tutorials/forms/grouping/) and [GOV.UK radios](https://design-system.service.gov.uk/components/radios/).
+- Give the three AI answers equal prominence. State each consequence before the member chooses. Do not make a logo stand in for a data-handling promise. A workspace may name a model it has configured, but the account-wide answer is not a model picker. See [EDPB guidance on deceptive design](https://www.edpb.europa.eu/system/files/documents/2023-02/edpb_03-2022_guidelines_on_deceptive_design_patterns_in_social_media_platform_interfaces_v2_en_0.pdf).
+- Keep account linking separate from the AI answer. A member can save either without the other. An answer not set up in this workspace remains selectable, with a clear consequence. Give disabled actions a visible reason. Test narrow screens and keyboard use.
 - Use the product terms in [practice-feedback language](./practice-feedback-language.md#member-onboarding-and-ai-choices). The current behavior and data boundaries belong in the [user privacy guide](/user/privacy#your-ai-choice), not in a second screen-by-screen specification here.
 
 ### Quality gates
@@ -61,7 +61,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - Feature packages sit directly under `de.tum.cit.aet.hephaestus` — `practices/`, `evidence/`, `agent/`, `integration/`, `mentor/`, `workspace/`, `activity/` and the rest. Shared wiring sits in `config/` and `core/`. Cross-cutting integration traits (webhook ingress, oauth ingress, SPI, registry) live under `integration/` directly. `ls` the package root rather than trusting a list here.
 - Controllers return DTOs located near the controller. `ActivitySummaryDTO` in `activity/overview/dto/` is the reference example.
 - Repositories return `Optional<T>` instead of `null`.
-- Services take their collaborators through the constructor, over `private final` fields; field injection with `@Autowired` is not used. If a service depends on many collaborators, split the responsibility.
+- Services take their collaborators through the constructor, over `private final` fields. Do not use field injection with `@Autowired`. If a service depends on many collaborators, split the responsibility.
 - Set up loggers with `LoggerFactory.getLogger`. Use structured log messages.
 - Annotate the smallest unit of write work with `@Transactional`.
 
@@ -91,8 +91,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - `server/AGENTS.md` § Webhook receiver owns the layout, the role gate, the subject grammar, the
   ArchUnit guards and the JaCoCo floors.
 - The provider-specific verifiers and subject parsers are Spring-free and live with their provider,
-  under `integration/scm/github/webhook/` and `integration/scm/gitlab/webhook/`. All are exercised by
-  JUnit unit tests plus parameterised tests over the captured fixtures in
+  under `integration/scm/github/webhook/` and `integration/scm/gitlab/webhook/`. JUnit unit tests exercise all of them, plus parameterized tests over captured fixtures in
   `server/application/src/test/resources/{github,gitlab}/`.
 - HMAC verification uses `MessageDigest.isEqual` (constant-time, length-tolerant).
 
@@ -114,14 +113,14 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 ## Observability and security
 
 - Sentry is configured in both the webapp and the application server. Capture exceptions with context tags instead of console logs.
-- Store shared secrets in LastPass and load them via `.env` or the respective `application-*.yml` files. Never commit real secrets.
+- Store shared secrets in LastPass and load them through `.env` or the respective `application-*.yml` files. Never commit real secrets.
 - Rotate API keys when you onboard new external services. Document the process in `docs/runbooks/`.
 - Sanitise logged user data. Log IDs rather than emails.
 
 ## Performance reminders
 
 - Batch network calls and paginate large results.
-- Cache expensive computations when you reuse them. TanStack Query handles client caching. Use memoised services or projections on the server.
+- Cache expensive computations when you reuse them. TanStack Query handles client caching. Use memoized services or projections on the server.
 - Measure before tuning. Add logging or metrics when you touch critical latency paths.
 - Profile React work with the DevTools profiler and Chrome Performance panel. Profile Java code with JFR and async-profiler.
 
