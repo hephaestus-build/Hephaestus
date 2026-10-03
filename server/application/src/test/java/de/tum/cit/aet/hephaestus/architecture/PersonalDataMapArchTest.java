@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Inheritance;
 import jakarta.persistence.InheritanceType;
@@ -133,24 +135,29 @@ class PersonalDataMapArchTest {
     void everyPersonalStoreHasImplementedExportAndErasureCitations() throws IOException {
         String map = Files.readString(MAP);
         Set<String> declared = new TreeSet<>();
-        Pattern declarations = Pattern.compile("@PersonDataStores\\s*\\(\\{(.*?)\\}\\)", Pattern.DOTALL);
-        Pattern names = Pattern.compile("\"([a-z0-9_]+)\"");
+        List<String> inventory = implementationRows(map);
         for (Path source : productionSources()) {
-            Matcher annotation = declarations.matcher(Files.readString(source));
-            if (!annotation.find()) continue;
-            Matcher name = names.matcher(annotation.group(1));
+            if (!Files.readString(source).contains("@PersonDataStores")) continue;
+            Class<?> owner = sourceClass(source);
+            PersonDataStores declaration = owner.getDeclaredAnnotation(PersonDataStores.class);
+            assertThat(declaration)
+                    .as("runtime store declaration on %s", source)
+                    .isNotNull();
+            assertThat(PersonDataCatalog.class.isAssignableFrom(owner))
+                    .as("store owner implements PersonDataCatalog: %s", source)
+                    .isTrue();
             String citation = "`server/application/" + source.toString().replace('\\', '/') + "`";
-            while (name.find()) {
-                String store = name.group(1);
+            for (String store : declaration.value()) {
                 assertThat(declared.add(store))
                         .as("single contributor owner for %s", store)
                         .isTrue();
-                List<String> rows = map.lines()
-                        .filter(line -> line.startsWith("| ") && line.contains("`" + store + "`"))
+                List<String> rows = inventory.stream()
+                        .filter(line -> inventoryStores(line).contains(store))
                         .toList();
                 assertThat(rows)
                         .as("export and erasure implementation citations for %s", store)
-                        .anySatisfy(row -> {
+                        .singleElement()
+                        .satisfies(row -> {
                             String[] cells = row.split("\\|", -1);
                             assertThat(cells.length).isGreaterThanOrEqualTo(4);
                             assertThat(cells[2]).contains(citation);
@@ -158,11 +165,65 @@ class PersonalDataMapArchTest {
                         });
             }
         }
+        Set<String> documented = new TreeSet<>();
+        for (String row : inventory) {
+            for (String store : inventoryStores(row)) {
+                assertThat(documented.add(store))
+                        .as("single inventory row for %s", store)
+                        .isTrue();
+            }
+        }
+        assertThat(documented)
+                .as("the implementation inventory matches the runtime declarations")
+                .containsExactlyInAnyOrderElementsOf(declared);
         Set<String> required = tableNames();
         required.removeAll(NOT_PERSONAL_DATA);
         assertThat(declared)
                 .as("every personal table must have a full contributor, not an operator path")
                 .containsAll(required);
+    }
+
+    @Test
+    void proseAndImplementationCitationsDoNotDeclareStoreOwnership() {
+        String map = "| Store | Person export implementation | Person erasure implementation |\n"
+                + "|---|---|---|\n"
+                + "| `owned_store` | `Owner.java` mentions `unowned_store` | `Owner.java` |\n"
+                + "\n### Notes\n"
+                + "| `unowned_store` | `Owner.java` | `Owner.java` |\n";
+        assertThat(implementationRows(map)).hasSize(1);
+        assertThat(inventoryStores(implementationRows(map).getFirst())).containsExactly("owned_store");
+    }
+
+    private static List<String> implementationRows(String map) {
+        String header = "| Store | Person export implementation | Person erasure implementation |";
+        int start = map.indexOf(header);
+        assertThat(start).as("dedicated person-store implementation inventory").isNotNegative();
+        return map.substring(start + header.length())
+                .stripLeading()
+                .lines()
+                .takeWhile(line -> line.startsWith("|"))
+                .filter(line -> line.startsWith("| `"))
+                .toList();
+    }
+
+    private static List<String> inventoryStores(String row) {
+        Matcher spans = CODE_SPAN.matcher(row.split("\\|", -1)[1]);
+        return spans.results().map(match -> match.group(1)).toList();
+    }
+
+    private static Class<?> sourceClass(Path source) {
+        String className = "de.tum.cit.aet.hephaestus."
+                + PRODUCTION_SOURCES
+                        .relativize(source)
+                        .toString()
+                        .replace('/', '.')
+                        .replace('\\', '.')
+                        .replace(".java", "");
+        try {
+            return Class.forName(className, false, PersonalDataMapArchTest.class.getClassLoader());
+        } catch (ClassNotFoundException exception) {
+            throw new IllegalStateException("Cannot inspect a production class", exception);
+        }
     }
 
     /**
@@ -226,25 +287,13 @@ class PersonalDataMapArchTest {
     }
 
     private static boolean usesParentSingleTable(Path source) {
-        String className = "de.tum.cit.aet.hephaestus."
-                + PRODUCTION_SOURCES
-                        .relativize(source)
-                        .toString()
-                        .replace('/', '.')
-                        .replace('\\', '.')
-                        .replace(".java", "");
-        try {
-            Class<?> parent = Class.forName(className, false, PersonalDataMapArchTest.class.getClassLoader())
-                    .getSuperclass();
-            while (parent != null && parent.isAnnotationPresent(Entity.class)) {
-                var inheritance = parent.getDeclaredAnnotation(Inheritance.class);
-                if (inheritance != null) return inheritance.strategy() == InheritanceType.SINGLE_TABLE;
-                parent = parent.getSuperclass();
-            }
-            return false;
-        } catch (ClassNotFoundException exception) {
-            throw new IllegalStateException("Cannot inspect an entity's inheritance", exception);
+        Class<?> parent = sourceClass(source).getSuperclass();
+        while (parent != null && parent.isAnnotationPresent(Entity.class)) {
+            var inheritance = parent.getDeclaredAnnotation(Inheritance.class);
+            if (inheritance != null) return inheritance.strategy() == InheritanceType.SINGLE_TABLE;
+            parent = parent.getSuperclass();
         }
+        return false;
     }
 
     /** Hibernate's default strategy when an entity declares no {@code @Table} name. */

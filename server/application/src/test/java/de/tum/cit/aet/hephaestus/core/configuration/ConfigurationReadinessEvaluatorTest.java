@@ -5,10 +5,17 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +56,20 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
                         "auth.state-cookie-key",
                         "auth.login-provider");
         assertThat(facts.toString()).doesNotContain(SECRET_MARKER);
+    }
+
+    @Test
+    void shouldLinkEveryFactToASectionTheGuideDefines() throws IOException {
+        Set<String> sections = guideSections();
+
+        List<ConfigurationFactDTO> facts = evaluateReadiness(validProperties(), true);
+
+        assertThat(facts).isNotEmpty().allSatisfy(fact -> {
+            assertThat(fact.documentationUrl()).startsWith(ConfigurationReadinessEvaluator.DOC + "#");
+            assertThat(sections)
+                    .as("section of the guide linked by %s", fact.id())
+                    .contains(fact.documentationUrl().substring(ConfigurationReadinessEvaluator.DOC.length() + 1));
+        });
     }
 
     @Test
@@ -285,6 +306,22 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         assertStatus(facts, "security.credential-encryption", ConfigurationStatus.ACTION_REQUIRED);
         assertStatus(facts, "security.value-encryption", ConfigurationStatus.ACTION_REQUIRED);
         assertStatus(facts, "webhook.shared-secret", ConfigurationStatus.ACTION_REQUIRED);
+    }
+
+    /** The heading anchors the documentation site generates: lower-cased, punctuation dropped, spaces to hyphens. */
+    private static Set<String> guideSections() throws IOException {
+        Pattern heading = Pattern.compile("^#{2,6} (.+)$");
+        Set<String> anchors = new HashSet<>();
+        for (String line : Files.readAllLines(Path.of("..", "..", "docs", "admin", "configuration-readiness.mdx"))) {
+            Matcher match = heading.matcher(line);
+            if (match.matches()) {
+                anchors.add(match.group(1)
+                        .toLowerCase(Locale.ROOT)
+                        .replaceAll("[^a-z0-9 -]", "")
+                        .replace(' ', '-'));
+            }
+        }
+        return anchors;
     }
 
     private static Map<String, Object> role(boolean worker, boolean webhook) {
