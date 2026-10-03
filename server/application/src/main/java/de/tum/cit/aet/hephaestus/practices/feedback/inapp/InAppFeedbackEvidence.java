@@ -213,8 +213,9 @@ public class InAppFeedbackEvidence {
 
     /**
      * {@link #workResolutions} for the feedback of several developers at once, each piece read against its own
-     * recipient's work: one read of the workspace's observations rather than one per developer. Reading from the oldest piece of anyone's feedback changes no answer, since only work reviewed
-     * after a piece was prepared can resolve it.
+     * recipient's work: one read of the workspace's observations rather than one per developer. Reading from the
+     * oldest piece of anyone's feedback changes no answer, since only work reviewed after a piece was prepared can
+     * resolve it.
      */
     public Map<UUID, WorkResolution> workResolutionsOfRecipients(
             Long workspaceId,
