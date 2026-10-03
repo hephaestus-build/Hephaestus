@@ -44,7 +44,7 @@ final class LlmPriceValidation {
             boolean anyPositive = rates.stream().anyMatch(rate -> rate != null && rate.signum() > 0);
             if (!anyPositive) {
                 throw new IllegalArgumentException(
-                        "A price requires at least one rate greater than zero. For a free model, choose Free instead.");
+                        "A price requires at least one rate greater than zero. For a model without usage charges, choose No metered API cost instead.");
             }
             boolean anyTooLarge =
                     rates.stream().anyMatch(rate -> rate != null && rate.compareTo(MAX_RATE_EXCLUSIVE) >= 0);
@@ -59,7 +59,7 @@ final class LlmPriceValidation {
             }
             if (pricingMode == PricingMode.NO_CHARGE && !StringUtils.hasText(note)) {
                 throw new IllegalArgumentException(
-                        "A note explaining why this model is free (e.g. self-hosted, no cost) is required.");
+                        "An explanation of why this model has no metered API cost (e.g. self-hosted) is required.");
             }
         }
     }

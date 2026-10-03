@@ -63,7 +63,7 @@ required.
 
 | Field | Required | What it is |
 | --- | --- | --- |
-| **Display name** | yes | Free text, ≤ 128 characters. The only field you can rename later. |
+| **Display name** | yes | Free text, ≤ 128 characters. Editable after creation. Display name, service declaration, API key, and enabled state can change; routing identity and slug cannot. |
 | **Base URL** | yes | The provider's OpenAI-compatible root, ≤ 2048 characters — e.g. `https://api.openai.com/v1`, or `https://<resource>.openai.azure.com/openai/v1` for Azure. Must be HTTPS, must carry no credentials, query string or fragment. **Immutable after create.** |
 | **API shape** | yes | `openai-responses` (Responses API) or `openai-completions` (Chat Completions). In the form this is the *"Use the Responses API"* checkbox, ticked for a new connection. Prefer the Responses API: a review or the mentor calls tools across many turns, and the Responses API can preserve reasoning between tool calls for models and providers that support it. OpenAI, the Vercel AI Gateway, OpenRouter and vLLM offer this API, but support depends on the model and deployment. Clear the checkbox for an endpoint that supports only Chat Completions. **Immutable after create.** |
 | **Authentication** | no | `BEARER` → `Authorization: Bearer <key>`, or `API_KEY` → `api-key: <key>`. Defaults to `BEARER`; Azure needs `API_KEY`. **Immutable after create.** |
@@ -204,7 +204,7 @@ Four rates, all **US dollars per 1,000,000 tokens**, stored as `NUMERIC(18,8)`:
 Rules the server enforces, verbatim as you will see them:
 
 - *A price requires at least an input rate and an output rate (per 1M tokens).*
-- *A price requires at least one rate greater than zero. For a free model, choose Free instead.*
+- *A price requires at least one rate greater than zero. For a model without usage charges, choose No metered API cost instead.*
 - *Rates must be zero or greater.* — and below `10000000` per 1M tokens, which is not the column's
   limit but the point past which a rate cannot survive a round-trip through the browser's binary64
   unchanged.
@@ -276,7 +276,7 @@ slug is API surface; the title is what the UI shows.
 | Status | `type` | When |
 | --- | --- | --- |
 | 409 | `llm-connection-in-use` | Deleting a connection that still has models. Delete the models first. |
-| 409 | `llm-model-in-use` | Deleting a model still bound to an agent configuration. Re-bind that workspace first. |
+| 409 | `llm-model-in-use` | Deleting a model still bound to an assignment. Re-bind that workspace first. |
 | 409 | `llm-connection-slug-conflict` | The slug you typed is taken. |
 | 409 | `llm-model-slug-conflict` | The model slug is taken on this connection. |
 | 409 | `llm-model-upstream-id-conflict` | Two catalog entries would point at the same upstream id on one connection. Refused because pricing would then match either one nondeterministically — a `NO_CHARGE` twin could silently shadow a `PRICED` model for billing. |
@@ -388,3 +388,15 @@ tier. A rollback is supported before onboarding settings, member choices, declar
 tier-specific assignments have been saved. Once used, rollback is deliberately refused: losing a
 saved refusal could restore unrestricted processing. Recover through a [verified pre-upgrade backup](./backup-restore),
 not by deleting member choices to bypass the safeguard.
+
+## Replace an unavailable model
+
+When a provider withdraws a model, register its replacement disabled, set its price and data-handling
+declaration, test the connection, then enable it. Update each affected practice-review and Heph
+assignment, including the separate AI-choice tiers. Do not rename the old model's provider ID to
+the replacement: historical usage must keep its model identity.
+
+Disable the old model so new requests cannot select it. An assignment to a disabled model remains
+visible but cannot run; it does not silently select a different handling tier. Remove or replace
+assignments before deleting a model, since deletion of an assigned model is refused. Provider
+unavailability does not remove recorded feedback or earlier conversations.

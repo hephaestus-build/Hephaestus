@@ -18,7 +18,7 @@ prebuilt archive instead; Liquibase's share of startup is unaffected.
 
 `builder-noble-java-tiny` applies the Spring Boot buildpack. With `BP_JVM_CDS_ENABLED=true` the launcher runs once at build time (the "CDS training run") to load the bean-graph classes, archives them to `/workspace/application.jsa`, and bakes `-XX:SharedArchiveFile=/workspace/application.jsa` into the launcher. At runtime the JVM mmaps the archive instead of class-loading from JARs.
 
-The training run boots under the `cds-training` profile (`application-cds-training.yml`), which disables Liquibase + JDBC-metadata probing and identifies PostgreSQL without opening a connection so context refresh succeeds without a reachable Postgres. Coolify's runtime `SPRING_PROFILES_ACTIVE=prod` overrides the buildpack-baked default (Paketo writes `env.launch/<KEY>.default`, which yields to the runtime env).
+The training run boots under the `cds-training` profile (`application-cds-training.yml`), which disables Liquibase + JDBC-metadata probing and identifies PostgreSQL without opening a connection so context refresh succeeds without a reachable Postgres. Compose's runtime `SPRING_PROFILES_ACTIVE=prod` overrides the buildpack-baked default (Paketo writes `env.launch/<KEY>.default`, which yields to the runtime env).
 
 The [build-only profile boundary](./runtime-roles.mdx#build-only-profiles) keeps runtime bootstrap out of training and rejects a production/build-profile combination. Authentication types remain available for class loading without configured deployment secrets.
 
@@ -54,12 +54,12 @@ type is added, so no JVM is spawned per probe.
 
 ## Rollback
 
-Re-add a `Dockerfile` for `server/application` and switch the `application-server-image` job in `.github/workflows/cicd.yml` from `use-buildpacks: true` to `docker-file`. The Dockerfile path builds from the checkout, not from the packaged JAR, so the build-once guarantee lapses until that path also downloads `application-artifact`. Coolify re-deploys the prior image SHA. Detection: Sentry release-tagged error spike, or Prometheus alert on `application_ready_time_seconds > 15` for three consecutive deploys.
+Re-add a `Dockerfile` for `server/application` and switch the `application-server-image` job in `.github/workflows/cicd.yml` from `use-buildpacks: true` to `docker-file`. The Dockerfile path builds from the checkout, not from the packaged JAR, so the build-once guarantee lapses until that path also downloads `application-artifact`. Use the [production operations runbook](production-operations-runbook.mdx) for rollback. Detection: Sentry release-tagged error spike, or Prometheus alert on `application_ready_time_seconds > 15` for three consecutive deploys.
 
 ## Operational checklist
 
 - **Graceful shutdown** — `application.yml` sets `timeout-per-shutdown-phase` from `SHUTDOWN_TIMEOUT` (default 20s). Set the deploy substrate's stop grace period above it so SIGTERM can drain in-flight requests. The Paketo launcher `exec`s the JVM; signal forwarding is native, no `tini`.
-- **JVM memory** — do NOT set `MaxRAMPercentage`, `-Xmx`, or `-Xss` in Coolify env. Paketo's memory calculator handles them. Override only `BPL_JVM_HEAD_ROOM` if needed.
+- **JVM memory** — do NOT set `MaxRAMPercentage`, `-Xmx`, or `-Xss` in the Compose environment. Paketo's memory calculator handles them. Override only `BPL_JVM_HEAD_ROOM` if needed.
 
 ## Sources
 

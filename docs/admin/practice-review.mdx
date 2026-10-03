@@ -26,8 +26,7 @@ Use this short path before tuning coverage, campaigns, or per-practice overrides
 3. On **Practices → Review settings → When and where**, turn on **Start practice reviews**, then turn on at least
    one way in under **How reviews start** — **Start from work activity**, **Start requested reviews**, or
    both. The screen says *"Nothing can start a review"* when both are off.
-4. On **Practices → Review settings → How much**, set the **Workspace default** to **Review before sending** for the
-   first test. Back on **When and where**, keep coverage at **All monitored repositories** and **All
+4. On **Practices → Review settings → How much**, keep the **Workspace default** at **Review before sending**, its default. Back on **When and where**, keep coverage at **All monitored repositories** and **All
    eligible linked members**, and leave **Send feedback** on.
 5. Open a small pull or merge request whose author is an eligible linked member, then open it under
    **Practices → Practice reviews → Work**. The work distinguishes ingestion, admission, observation,
@@ -131,13 +130,13 @@ moment, you are asked to try again and nothing changes.
 Comments already on the pull request or merge request are not changed at once. The page shows what became of
 them, and each state is recorded:
 
-| State                  | Meaning                                                                                                                                                                                                                                                                                                                |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pending                | A delivery citing it is still being settled, a comment Hephaestus tried to post in the last day has not been confirmed either way yet, or an edit will be retried. Silent Mode keeps it here.                                                                                                                          |
-| Nothing posted         | No comment about it was found on the work.                                                                                                                                                                                                                                                                             |
-| Updated                | Each summary comment opens with a correction notice naming the practice, not your reason.                                                                                                                                                                                                                              |
-| Inline comments remain | Summaries are updated, but inline comments cannot be edited; remove or answer them yourself.                                                                                                                                                                                                                           |
-| Unresolved             | A summary could not be edited, the provider accepted a comment without saying which one it is, or a comment Hephaestus tried to post more than a day ago is still unconfirmed. Check the work and correct it on the provider; Hephaestus keeps checking every few hours and updates the state if it finds the comment. |
+| State | Sentence shown while the correction is in force |
+| --- | --- |
+| Pending | Hephaestus is still bringing the comments it posted about this observation in line with the correction, or still checking whether a comment it tried to post arrived. |
+| Nothing posted | No comment about it was found on the work. |
+| Updated | Every summary comment Hephaestus posted about it now opens with a correction notice, or has since been deleted. |
+| Inline comments remain | Inline comments Hephaestus posted about it are still on the work unchanged, because they cannot be edited from here; any summary comment now carries a correction notice. Remove or answer the inline comments on the pull request or merge request. |
+| Unresolved | Hephaestus cannot correct every comment about it: a summary could not be edited, the provider accepted a comment without saying which one it is, or a comment it tried to post has not been confirmed. Check the pull request or merge request and correct it there; Hephaestus keeps checking and updates this if it finds the comment. |
 
 **Restore observation** reverses the correction with a second reason, removes any notice it added and
 re-sends nothing. Every correction stays listed on the page.
@@ -147,7 +146,7 @@ re-sends nothing. Every correction stays listed on the page.
 Sometimes the observations are right and the feedback written from them is not. Open the feedback under
 **Practices → Practice reviews → Feedback** and choose **Withdraw feedback** at the bottom of the panel, with a
 reason. Only a card on a
-developer's Practice profile that is waiting or already shown can be withdrawn; notes posted on the work or
+developer's Practice profile that is waiting or already shown can be withdrawn; feedback posted on the work or
 raised in a conversation cannot be taken back here.
 
 - The feedback's text, delivery and observations stay exactly as they were.
@@ -181,6 +180,18 @@ place again, and that withheld feedback is listed with the reason. A different p
 other work, is not held back. Nothing already posted on the work or said in a conversation is unsaid: a
 summary comment gets a correction notice where the provider allows an edit, and inline comments and
 conversation replies stay as they were.
+
+### Approve or reject feedback
+
+Feedback on the work awaits approval by default. Open it under **Needs you** and check the exact
+proposed summary and inline comments against their observations. **Approve and close** approves
+that package and closes the panel; approval still passes current delivery checks. It does not
+approve a pull request for merge.
+
+**Reject feedback** requires one reason: **Incorrect**, **Missing important context**,
+**Not useful to the recipient**, **Already covered elsewhere**, **Wrong delivery place**, or
+**Something else**. Add the requested explanation. The decision records your identity and reason.
+Rejecting feedback does not mark its observations incorrect; use **Mark as incorrect** for that.
 
 ## What starts a review
 
@@ -434,7 +445,11 @@ run themselves once a sync finds the work again, and are dropped if it does not 
    worker could claim now, so alert on held rather than reading depth.
 4. **Is practice review, or the workspace, switched off?** The switch is **Start practice reviews** on
    Administration → Practices → **Review settings → When and where** — *not* on the Workspace settings page. A
-   workspace paused from Workspace settings runs nothing regardless of its AI configuration.
+   workspace suspended through the API runs nothing regardless of its AI configuration; Workspace settings has no pause control.
+   The developer's **No AI** choice also stops reviews about them (`MEMBER_AI_DECLINED`). A choice
+   with no matching model stops admission without switching to a looser choice. Check that member's
+   AI choice separately from workspace coverage and the model's availability.
+
 5. **Can anything still start a review?** Same screen, **How reviews start**. With both **Start from work
    activity** and **Start requested reviews** off, the workspace is on and nothing reaches it; the screen
    says *"Nothing can start a review"*.
@@ -447,10 +462,13 @@ run themselves once a sync finds the work again, and are dropped if it does not 
      shown. The work waits: once a membership sync admits the author, it is reviewed without anyone asking
      again, provided that happens within `SIGNAL_LEDGER_PENDING_LAPSE_AFTER` (seven days by default).
    - *"The author, repository, or base branch is outside the workspace's review coverage"* — the repository
-     or base branch is not selected, the author is a member the person selection leaves out, or the author
-     is a bot. That decision is final for this work; widening coverage affects work that happens next.
+     or base branch is not selected, the author is a member the person selection leaves out. That decision is final for this work; widening coverage affects work that happens next.
+   A bot author has its own refusal: bot work is not reviewed as a member's work. Generated paths
+   are excluded from change evidence; changing generated files alone does not establish a shortfall
+   in authored code.
+
 7. **Is sending paused?** Same screen, **Sending feedback**. Reviews and in-app feedback continue, but no
-   comments or mentor messages leave Hephaestus. Resuming does not release automatic feedback withheld by
+   comments or feedback in Heph leave Hephaestus. Resuming does not release automatic feedback withheld by
    the pause.
 8. **Is `AGENT_ENABLED=true` on every role that needs it?** It defaults to `false` and gates submission,
    execution *and* orphan recovery independently of the worker role. Set on the worker only, nothing is

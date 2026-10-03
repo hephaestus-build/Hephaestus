@@ -25,7 +25,8 @@ the protected secrets managed by TUM.
 The reference stack (not the self-host one — that stack is [listed on the install page](./install))
 consists of:
 
-- **Application server** (Spring Boot; also hosts the interactive mentor sandboxes and the LLM proxy)
+- **Application server** (Spring Boot API, sync, review admission, and Heph conversations)
+- **Application worker** (practice-review and Heph sandboxes, LLM proxy; the only container with Docker access)
 - **Webhook server** (same Spring Boot artifact, `webhook` profile → NATS JetStream)
 - **React webapp** (served via nginx)
 - **PostgreSQL 18** is the only supported major version; the release Compose stack ships it
@@ -37,24 +38,25 @@ consists of:
 
 The required base values — `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`,
 `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`,
-`HEPHAESTUS_AUTH_STATE_COOKIE_KEY`, `WEBHOOK_SECRET`, `POSTGRES_PASSWORD`, the GitHub OAuth pair, and
+`HEPHAESTUS_AUTH_STATE_COOKIE_KEY`, `WEBHOOK_SECRET`, `WEBHOOK_ROUTING_SECRET`, `POSTGRES_PASSWORD`, one login provider, and
 `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` — are documented once in the
 [Install guide](./install#2-configure-env), along with their lifecycle constraints. The self-host
 installer generates its internal secrets; operators of the reference deployment must provision
 equivalent values through its protected secret-management system. Rotate integration credential keys
 with the [credential-key rotation procedure](./credential-key-rotation).
 
-These variables exist only in the reference deployment, so they live here:
+These deployment settings complement the install table. `LEGAL_PROFILE` and
+`HEPHAESTUS_RESEARCH_ORGANIZATION` also ship in the self-host `.env.example`:
 
 | Variable | Purpose |
 | --- | --- |
 | `LEGAL_PROFILE` | Selects a bundled imprint/privacy profile. Use `tumaet` only for the canonical AET deployment; self-hosters leave empty and mount `/legal-overrides/`. See [Legal Pages](./legal-pages). |
 | `HEPHAESTUS_RESEARCH_ORGANIZATION` | Names the organisation running an optional academic-research study. Set it and first-login setup asks each account whether to take part, showing this name; leave it empty — the default — and the question is never asked. See [Legal Pages](./legal-pages#the-optional-research-question). |
 | `HEPHAESTUS_INTEGRATION_OAUTH_SUCCESS_REDIRECT` / `HEPHAESTUS_INTEGRATION_OAUTH_FAILURE_REDIRECT` | Post-callback landing URLs for integration OAuth. Success defaults to `/integrations?status=success`, failure to the success base + `?status=error`. Set absolute URLs when the SPA host differs from the API host. |
-| `SPRINGDOC_API_DOCS_ENABLED` / `SPRINGDOC_SWAGGER_UI_ENABLED` | Publish the OpenAPI description at `/v3/api-docs` and the interactive Swagger UI. Both default to `false`. |
+| `springdoc.api-docs.enabled` / `springdoc.swagger-ui.enabled` | Publish the OpenAPI description at `/v3/api-docs` and the interactive Swagger UI. Both default to `false`. |
 
 :::danger The API description is unauthenticated wherever it is enabled
-`SPRINGDOC_API_DOCS_ENABLED` does not put the description behind a login — it decides whether the
+`springdoc.api-docs.enabled` does not put the description behind a login — it decides whether the
 endpoint exists. Whenever springdoc registers, `/v3/api-docs/**` and `/swagger-ui/**` answer any
 request, so switching it on publishes the instance's complete route list, admin routes included, to
 anyone who asks. Leave both off in production; generate the spec at build time instead.
@@ -66,6 +68,7 @@ These are **not**, and a value in `docker/.env` for them is silently ignored:
 
 - **`HEPHAESTUS_AUTH_ISSUER`** — the `application-server` service hardcodes it to `https://${APP_HOSTNAME}`.
   Change `APP_HOSTNAME` to change the issuer.
+- **`SPRINGDOC_API_DOCS_ENABLED` and `SPRINGDOC_SWAGGER_UI_ENABLED`** — Compose does not forward them. Leave the endpoints disabled; an explicit service environment override is needed to enable them.
 - **The two OAuth redirect variables** — no Compose file passes them through, so the defaults stay in force.
 
 To override any of them, add them to the `application-server` service's own `environment:` block.
@@ -87,9 +90,11 @@ its own corner treatment, so do not round the asset before uploading it.
 | Variable | Purpose |
 | --- | --- |
 | `HEPHAESTUS_INTEGRATION_SLACK_ENABLED` | Enables the Slack OAuth admin surface (per-workspace connect). Off by default. |
+| `SLACK_OAUTH_CLIENT_ID` / `SLACK_OAUTH_CLIENT_SECRET` | Seed the Slack account-linking provider. If unset, they fall back to the workspace-install OAuth credentials below. Compose forwards the integration credentials, not these separate overrides. |
+| `SLACK_OAUTH_DISPLAY_NAME` | Account-linking button label; defaults to `Slack`. An explicit application-server environment override is needed to change it in Compose. |
 | `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID` | Slack app client ID used by the OAuth flow |
 | `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET` | Slack app client secret used by the OAuth flow |
-| `HEPHAESTUS_INTEGRATION_SLACK_REDIRECT_URI` | Required when Slack is enabled and the app has multiple Slack redirect URLs. Use the public application-server callback URL, including any proxy path prefix — e.g. `https://<host>/api/oauth/callback/slack`. |
+| `HEPHAESTUS_INTEGRATION_SLACK_REDIRECT_URI` | Required whenever Slack is enabled. Use the public application-server callback URL, including any proxy path prefix — e.g. `https://<host>/api/oauth/callback/slack`. |
 | `HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET` | Required when Slack is enabled: verifies Slack Events API and interactivity POSTs on the webhook server |
 
 Per-workspace bot tokens are issued via OAuth and encrypted at rest in the `connection` table; there
@@ -227,10 +232,10 @@ GitLab login, GitLab workspaces, webhook auto-registration, and practice review 
 | `GITLAB_OAUTH_BASE_URL` | GitLab instance the login button federates to. Defaults to `https://gitlab.com`; set to your self-hosted instance (e.g. `https://gitlab.lrz.de`) |
 | `GITLAB_OAUTH_DISPLAY_NAME` | Login-button label (defaults to `GitLab`; e.g. `gitlab.lrz.de`) |
 | `GITLAB_DEFAULT_SERVER_URL` | The one GitLab instance workspaces are created on, synced from and checked out from (not login). Falls back to `GITLAB_OAUTH_BASE_URL`. Give the application server and every worker the same value |
-| `GITLAB_ENABLED` | Enables GitLab on the application server and every worker; the webhook receiver does not read it. A worker without it cannot check out a merge request: each GitLab review it claims fails preparation with `SCM Git preparation is unavailable` and ends with insufficient evidence |
+| `GITLAB_ENABLED` | Enables GitLab on the application server and every worker; the webhook receiver does not read it. A worker without it cannot check out a merge request: each GitLab review it claims fails preparation with `SCM Git preparation is unavailable` and stops before it can record an observation |
 | `GITLAB_WORKSPACE_CREATION` | Enables GitLab workspace creation in the UI and API |
 | `WEBHOOK_SECRET` | Instance-wide secret for GitHub webhook verification and operator-created GitLab hooks on the shared `POST /webhooks/gitlab` endpoint (`X-Gitlab-Token`). Group hooks Hephaestus registers use the connection endpoint and a signed route credential instead; see `WEBHOOK_ROUTING_SECRET` below. A hook you give a signing token yourself (GitLab 19.0 and later) is verified by its signature alone, so this value must then be that `whsec_…` signing token |
-| `WEBHOOK_ROUTING_SECRET` | Signs the token of each GitLab group hook Hephaestus registers, so a hook can only ever deliver for the one GitLab connection it was registered for. At least 32 characters, different from `WEBHOOK_SECRET` and from every encryption key; give the application server and the webhook receiver the same value. Without it no GitLab group hook is registered |
+| `WEBHOOK_ROUTING_SECRET` | Signs the token of each GitLab group hook Hephaestus registers, so a hook can only ever deliver for the one GitLab connection it was registered for. At least 32 characters, different from `WEBHOOK_SECRET` and from every encryption key; give the application server and the webhook receiver the same value. Required for every production deployment, including GitHub-only instances; Compose and readiness reject a missing value |
 | `WEBHOOK_ROUTING_PREVIOUS_SECRET` | Only while rotating `WEBHOOK_ROUTING_SECRET`: the value it had before. Hooks signed with it keep delivering until the next registration replaces them with hooks signed with the new value; then remove it |
 | `WEBHOOK_EXTERNAL_URL` | Public webhook base URL registered on GitLab. The reference Compose files deliberately leave it unset so auto-registration derives it from the application host URL; add it to the `application-server` service's `environment:` block if you need to override that. |
 
