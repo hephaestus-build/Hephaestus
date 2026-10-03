@@ -157,8 +157,13 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
     /**
      * The one piece of feedback an observation's detail page is about, per observation: the newest one
      * addressed to this developer on the lanes the caller names that actually said something —
-     * {@code DELIVERED} or {@code FAILED}, with a body — carrying its text, its id and the developer's standing
+     * {@code DELIVERED}, or {@code FAILED} with a body — carrying its text, its id and the developer's standing
      * answer to it.
+     *
+     * <p><b>{@code DELIVERED} feedback qualifies without a body.</b> A package that landed only as line notes
+     * records no summary text, yet the developer can read those notes and answer them; requiring a body would
+     * hide the handle. Its text is then null. A {@code FAILED} row with no body said nothing anyone saw, so it
+     * never shadows an older delivered one.
      *
      * <p><b>Text and handle come from one row</b>, so on an observation carried by more than one piece of
      * feedback the developer always rates the words they just read. The channel set is the caller's to state
@@ -196,8 +201,7 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
           AND f.workspace_id = :workspaceId
           AND f.recipient_user_id = :recipientUserId
           AND f.channel IN (:channels)
-          AND f.delivery_state IN ('DELIVERED', 'FAILED')
-          AND f.body IS NOT NULL
+          AND (f.delivery_state = 'DELIVERED' OR (f.delivery_state = 'FAILED' AND f.body IS NOT NULL))
         ORDER BY fo.observation_id, f.created_at DESC, f.id DESC
         """, nativeQuery = true)
     List<ObservationFeedback> findLatestFeedbackByObservationIds(
@@ -219,6 +223,8 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
         @Nullable
         UUID getFeedbackId();
 
+        /** Null when delivered feedback recorded no text, as a package that landed only as line notes does. */
+        @Nullable
         String getBody();
     }
 

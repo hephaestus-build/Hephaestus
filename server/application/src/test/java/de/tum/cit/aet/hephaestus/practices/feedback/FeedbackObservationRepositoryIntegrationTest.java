@@ -261,6 +261,39 @@ class FeedbackObservationRepositoryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("findLatestFeedbackByObservationIds answers delivered feedback that landed only as line notes, "
+            + "which a newer failed unit with nothing to show does not shadow, and never prepared or suppressed units")
+    void shouldCarryTheHandleOfDeliveredFeedbackWhenItHasNoSummaryText() {
+        Observation inlineOnly = saveObservation("obs-inline-only");
+        Observation prepared = saveObservation("obs-latest-prepared");
+        Observation suppressed = saveObservation("obs-latest-suppressed");
+
+        Feedback landed =
+                saveFeedback(null, 40, FeedbackDeliveryState.DELIVERED, null, Instant.parse("2026-01-01T00:00:00Z"));
+        bind(landed, inlineOnly);
+        bind(
+                saveFeedback(null, 4040, FeedbackDeliveryState.FAILED, null, Instant.parse("2026-02-01T00:00:00Z")),
+                inlineOnly);
+        bind(saveFeedback(41, FeedbackDeliveryState.PREPARED, "Not yet delivered"), prepared);
+        bind(saveFeedback(42, FeedbackDeliveryState.SUPPRESSED, "Withheld"), suppressed);
+
+        Map<UUID, ObservationFeedback> latest = feedbackObservationRepository
+                .findLatestFeedbackByObservationIds(
+                        workspace.getId(),
+                        recipient.getId(),
+                        List.of(inlineOnly.getId(), prepared.getId(), suppressed.getId()),
+                        IN_CONTEXT_ONLY)
+                .stream()
+                .collect(Collectors.toMap(ObservationFeedback::getObservationId, feedback -> feedback));
+
+        assertThat(latest).doesNotContainKeys(prepared.getId(), suppressed.getId());
+        assertThat(latest.get(inlineOnly.getId())).isNotNull().satisfies(feedback -> {
+            assertThat(feedback.getBody()).isNull();
+            assertThat(feedback.getFeedbackId()).isEqualTo(landed.getId());
+        });
+    }
+
+    @Test
     @DisplayName("deleting the parent Feedback cascades the join row away (ON DELETE CASCADE)")
     void deletingFeedbackCascadesJoinRow() {
         Feedback feedback = saveFeedback(0, FeedbackDeliveryState.DELIVERED, "Body");
