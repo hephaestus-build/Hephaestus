@@ -167,6 +167,7 @@ A Git revert alone neither restores the database nor selects the previous image.
 **CAUTION:** Never run `clearCheckSums` in production or staging.
 It does not repair schema drift and removes checksum evidence.
 Reserve it for disposable developer databases after you understand the mismatch.
+
 1. If you can discard local data, prefer this command:
 
    ```bash
