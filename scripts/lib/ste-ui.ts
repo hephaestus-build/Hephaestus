@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -7,12 +7,15 @@ import { asArray, asRecord, asString, parseJson } from "./json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
 import { steRoot } from "./ste-words.ts";
 
+export const uiIgnorePatterns = ["**/api/**", "**/routeTree.gen.ts", "**/*.test.*", "**/mocks/**"];
+
 /** Use oxlint's AST and the registered rule, not a second JSX parser for reports. */
 export async function uiAlerts(files: string[], vocabulary = false) {
 	if (files.length === 0) {
 		return [];
 	}
 	const root = fileURLToPath(steRoot);
+	await mkdir(path.join(root, ".cache", "ste"), { recursive: true });
 	const directory = await mkdtemp(path.join(root, ".cache", "ste", "ui-"));
 	try {
 		const config = path.join(directory, "oxlint.json");
@@ -21,7 +24,7 @@ export async function uiAlerts(files: string[], vocabulary = false) {
 			JSON.stringify({
 				jsPlugins: [path.join(root, "webapp", "tools", "oxlint", "index.ts")],
 				categories: { correctness: "off" },
-				ignorePatterns: ["**/api/**", "**/routeTree.gen.ts", "**/*.test.*", "**/mocks/**"],
+				ignorePatterns: uiIgnorePatterns,
 				rules: {
 					"hephaestus/ste-ui-text": [vocabulary ? "warn" : "error", { allPaths: true, vocabulary }],
 				},
@@ -44,8 +47,14 @@ export async function uiAlerts(files: string[], vocabulary = false) {
 		const output = asRecord(parseJson(result.stdout), "oxlint result");
 		return asArray(output.diagnostics, "UI diagnostics").map((value) => {
 			const diagnostic = asRecord(value, "UI diagnostic");
+			const code = asString(diagnostic.code, "UI rule");
+			if (!code.includes("ste-ui-text")) {
+				throw new Error(
+					`UI prose check returned ${code}. Fix the source or tool before the prose check.`,
+				);
+			}
 			return {
-				code: asString(diagnostic.code, "UI rule"),
+				code,
 				message: asString(diagnostic.message, "UI message"),
 				severity: asString(diagnostic.severity, "severity"),
 				filename: asString(diagnostic.filename, "UI filename"),

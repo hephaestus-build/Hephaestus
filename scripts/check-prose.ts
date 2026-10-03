@@ -7,7 +7,7 @@ import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asStringArray, parseJson } from "./lib/json.ts";
-import { uiAlerts } from "./lib/ste-ui.ts";
+import { uiAlerts, uiIgnorePatterns } from "./lib/ste-ui.ts";
 import { steRoot } from "./lib/ste-words.ts";
 import { prepareVale, valeAlerts } from "./lib/vale.ts";
 
@@ -27,6 +27,14 @@ export function parsePaths(source: string): readonly string[] {
 		if (/\.tsx?$/u.test(file) && !/^webapp\/src\/.*\.tsx?$/u.test(file)) {
 			throw new Error(
 				`STE UI path is outside webapp/src: ${file}. Add a prose path or a UI source path.`,
+			);
+		}
+		if (
+			/\.tsx?$/u.test(file) &&
+			uiIgnorePatterns.some((pattern) => path.matchesGlob(file, pattern))
+		) {
+			throw new Error(
+				`STE UI path is excluded from prose checks: ${file}. Add a maintained UI source path.`,
 			);
 		}
 	}

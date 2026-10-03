@@ -16,7 +16,6 @@ metadata:
 
 Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
 
-
 Comprehensive performance optimization guide for React applications, maintained by Vercel.
 Contains 45 rules across 8 categories, prioritized by impact.
 

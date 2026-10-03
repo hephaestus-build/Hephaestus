@@ -34,6 +34,10 @@ await test("STE paths are explicit, unique, and grow only", () => {
 		'["docs/**"]',
 		'["a.md", "a.md"]',
 		'["server/data.json"]',
+		'["webapp/src/api/client.ts"]',
+		'["webapp/src/routeTree.gen.ts"]',
+		'["webapp/src/components/test.test.tsx"]',
+		'["webapp/src/mocks/data.ts"]',
 	]) {
 		assert.throws(() => parsePaths(source));
 	}
@@ -177,6 +181,8 @@ await test("the UI report uses the registered oxlint rule and skips machine prop
 		const alerts = await uiAlerts([file]);
 		assert.equal(alerts.length, 1);
 		assert.match(alerts[0]?.message ?? "", /Write "use" instead of "utilize"/u);
+		await writeFile(file, "<p>");
+		await assert.rejects(uiAlerts([file]));
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}

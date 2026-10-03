@@ -21,7 +21,6 @@ metadata:
 
 Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
 
-
 Diagnose every failing check in one pass, then push once. Fixing 2 of 5 failures burns a push cycle
 and a full CI run.
 

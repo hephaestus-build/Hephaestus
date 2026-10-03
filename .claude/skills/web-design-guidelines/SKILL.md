@@ -11,7 +11,6 @@ metadata:
 
 Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
 
-
 The rules are not in this file — fetch them, then review the named files against what you fetched:
 
 ```
