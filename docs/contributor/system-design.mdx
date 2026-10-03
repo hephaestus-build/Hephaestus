@@ -21,7 +21,8 @@ flowchart LR
     Worker --> Sandbox[Review and Heph sandboxes]
     Sandbox --> Proxy[Worker LLM proxy]
     Proxy --> Models[Configured model services]
-    Server -->|Permitted feedback delivery| Providers
+    Worker -->|Automatic review feedback| Providers
+    Server -->|Approved feedback and Heph replies| Providers
 ```
 
 One JAR boots in the server, worker, and webhook roles. The supported Compose deployment runs each
@@ -73,7 +74,8 @@ records native auth. [Instance administration](./instance-admin) owns recent-sig
 
 The webhook role verifies and durably buffers provider events. Server consumers sync the work and
 record occurrences. Eligible occasions become PostgreSQL-backed jobs; workers claim and execute
-them in isolated sandboxes. Results pass server admission before observations and feedback are stored.
+them in isolated sandboxes. The worker admits observations through the shared Java admission service
+before composition and feedback delivery.
 Feedback on the work awaits workspace-admin approval by default. Delivery rechecks policy and
 Silent Mode independently from measurement.
 
@@ -100,4 +102,4 @@ a completed turn. [Chat with Heph](/user/ai-mentor) owns the member-facing behav
 A workspace that reviews practices opens on the member's private Practice profile. Other workspaces
 open on Activity. Activity and Workspace activity count and list work without ranking developers.
 Members read reviews of their own work from the Practice profile. Workspace admins inspect the wider
-history under Practice reviews. These surfaces do not grant access to private feedback text.
+history under Practice reviews. Workspace review history does not grant access to a member's private Practice profile or Heph feedback.

@@ -43,7 +43,7 @@
 
 ## Current runtime boundary
 
-Heph and practice-review sandboxes run on connected workers. The server retains admission and
+Heph and practice-review sandboxes run on connected workers. The server retains Heph admission and
 conversation persistence; workers resolve provider keys and enforce the scoped proxy route.
 [Runtime roles](../admin/runtime-roles.mdx) owns deployment behavior. The current purpose name is
 **Practice reviews**, and the zero-usage-charge price label is **No metered API cost**.
