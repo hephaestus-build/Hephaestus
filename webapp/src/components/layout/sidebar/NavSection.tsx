@@ -7,6 +7,7 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 	SidebarMenuSub,
+	useSidebar,
 } from "@/components/ui/sidebar";
 
 /**
@@ -34,7 +35,6 @@ export interface NavSectionProps {
 	active: boolean;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	collapsed: boolean;
 	/**
 	 * A count owed somewhere in the section, shown on the section itself while its entries are out of
 	 * sight — closed, or the sidebar down to icons — so it is seen however the sidebar is folded.
@@ -54,11 +54,13 @@ export function NavSection({
 	active,
 	open,
 	onOpenChange,
-	collapsed,
 	badge,
 	landingLink,
 	children,
 }: NavSectionProps) {
+	// Down to icons on a wide screen; on a phone the sidebar is a sheet with its full labels.
+	const { isMobile, state } = useSidebar();
+	const collapsed = !isMobile && state === "collapsed";
 	const shown = collapsed || !open ? badge : undefined;
 	const name = (
 		<span>

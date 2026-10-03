@@ -28,7 +28,6 @@ import {
 	SidebarMenuItem,
 	SidebarMenuSubButton,
 	SidebarMenuSubItem,
-	useSidebar,
 } from "@/components/ui/sidebar";
 
 export interface NavAdminProps {
@@ -48,7 +47,6 @@ export function NavAdmin({
 	awaitingApproval,
 }: NavAdminProps) {
 	const matchRoute = useMatchRoute();
-	const { isMobile, state: sidebarState } = useSidebar();
 
 	const onWorkspaceSettings = Boolean(
 		matchRoute({ to: "/w/$workspaceSlug/admin/settings", fuzzy: false }),
@@ -149,7 +147,6 @@ export function NavAdmin({
 					active={onSection}
 					open={practicesOpen}
 					onOpenChange={setPracticesOpen}
-					collapsed={!isMobile && sidebarState === "collapsed"}
 					badge={awaiting}
 					// The section opens on what the reviews need from the admin; setup is the occasional visit.
 					landingLink={
@@ -219,7 +216,6 @@ export function NavAdmin({
 					active={onIntegrationsSection}
 					open={integrationsOpen}
 					onOpenChange={setIntegrationsOpen}
-					collapsed={!isMobile && sidebarState === "collapsed"}
 					landingLink={
 						<Link
 							to="/w/$workspaceSlug/admin/integrations"

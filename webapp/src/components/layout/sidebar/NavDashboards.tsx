@@ -9,7 +9,6 @@ import {
 	SidebarMenuItem,
 	SidebarMenuSubButton,
 	SidebarMenuSubItem,
-	useSidebar,
 } from "@/components/ui/sidebar";
 
 import { NavSection, useSectionOpen } from "./NavSection";
@@ -35,7 +34,6 @@ export function NavDashboards({
 	const onTeams = Boolean(matchRoute({ to: "/w/$workspaceSlug/teams", fuzzy: true }));
 	const onPracticePages = onPracticeProfile || onAcrossTheWorkspace;
 	const [practicesOpen, setPracticesOpen] = useSectionOpen(onPracticePages);
-	const { isMobile, state: sidebarState } = useSidebar();
 
 	return (
 		<SidebarGroup>
@@ -48,7 +46,6 @@ export function NavDashboards({
 						active={onPracticePages}
 						open={practicesOpen}
 						onOpenChange={setPracticesOpen}
-						collapsed={!isMobile && sidebarState === "collapsed"}
 						landingLink={
 							<Link
 								to="/w/$workspaceSlug/practice-profile"
