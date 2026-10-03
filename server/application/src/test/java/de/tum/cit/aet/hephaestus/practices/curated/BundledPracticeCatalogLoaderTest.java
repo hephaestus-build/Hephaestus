@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
+import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -110,6 +111,62 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                         .singleElement()
                         .satisfies(check -> assertThat(check.reasonCodes())
                                 .containsExactly(SourceReadinessReason.SOURCE_INCOMPLETE));
+            }
+        }
+    }
+
+    @Test
+    void shouldReviewOnlyAClosedIssueWhoseWholeDiscussionWasCaptured() {
+        String slug = "closed-issue-outcome-recorded";
+        var definition = definitionOf(loader.catalog(), slug);
+        assertThat(ReviewWhen.matches(definition.reviewWhen(), Map.of("state", "CLOSED")))
+                .isTrue();
+        assertThat(ReviewWhen.matches(definition.reviewWhen(), Map.of("state", "OPEN")))
+                .isFalse();
+        Practice practice = new Practice();
+        practice.setSlug(slug);
+        practice.setSignals(definition.signals());
+        practice.setEvidenceRequirements(definition.evidenceRequirements());
+        practice.setReviewWhen(definition.reviewWhen());
+        practice.setSubject(definition.subject());
+        practice.setAutomatedReviewPolicy(definition.automatedReviewPolicy());
+        Instant now = Instant.parse("2026-10-02T10:00:00Z");
+        var builder = new JobFolderIndexBuilder(
+                objectMapper,
+                catalogs,
+                new PracticePreconditionEvaluator(objectMapper),
+                new AutomatedReviewFence(Map.of()),
+                Clock.fixed(now, ZoneOffset.UTC));
+        for (String partialKind : List.of("", "scm.issue.comments")) {
+            var captures = catalogs.current().sources().stream()
+                    .map(source -> new SourceCapture(
+                            source.kind(),
+                            new SourceCaptureState.Available(
+                                    SourceContentState.NON_EMPTY,
+                                    source.kind().value().equals(partialKind)
+                                                    || !source.completenessPolicy()
+                                                            .supportsComplete()
+                                            ? SourceCompleteness.PARTIAL
+                                            : SourceCompleteness.COMPLETE,
+                                    new SourceCaptureFacts(now, null, null, null)),
+                            List.of(new SourceArtifact(
+                                    "context/" + source.kind().value() + ".json",
+                                    "application/json",
+                                    "a".repeat(64),
+                                    2))))
+                    .toList();
+            var manifest = new JobFolderIndex(
+                    catalogs.current().version(),
+                    catalogs.catalogDigest(),
+                    definition.artifactKind().value(),
+                    now,
+                    captures);
+            var ready = builder.checkAutomatedReviewReadinessAsOfNow(manifest, List.of(practice))
+                    .readyPractices();
+            if (partialKind.isEmpty()) {
+                assertThat(ready).containsExactly(practice);
+            } else {
+                assertThat(ready).isEmpty();
             }
         }
     }

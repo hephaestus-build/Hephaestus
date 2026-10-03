@@ -145,13 +145,25 @@ Issue practices bind to three lifecycle occasions:
 
 The snapshot is the title, body, native type, labels, assignees, milestone, state, and state reason — the
 fields the issue evidence a bundled practice reads is built from. Labels and assignees are sorted while the
-digest is built, so provider ordering does not change the revision.
+digest is built, so provider ordering does not change the revision. A closed issue's snapshot also covers its
+mirrored discussion: each comment's id, author, body and edit time. Empty comments and comments identified
+by Hephaestus's recorded provider delivery identities are left out. A human comment that quotes a
+Hephaestus marker remains evidence. Live comment changes update the closed issue's snapshot in the comment
+transaction. Sync batches collect changed issue ids and read each discussion once before commit, then use that revision for
+snapshot advancement and signal recording. GitHub and GitLab persist comment pages as batches.
+Each snapshot change locks the issue row
+`FOR NO KEY UPDATE` (which a new comment's foreign-key `FOR KEY SHARE` does not conflict with) and reads the
+issue again before computing the digest, so concurrent writers record the committed body and comments.
 
 Updates review the current snapshot of both open and closed issues. A later outcome confirmation or repair
-in a closed issue's body can therefore occasion another update review, through the same coalescing and
-current-snapshot fences. It does not repeat the close occasion or establish what the body said at the close;
-only practices bound to updates are selected. A closed issue's title or body change also retains the separate
-repair occasion for assessments of merged pull or merge requests that close it.
+in a closed issue's body or discussion can therefore occasion another update review, through the same
+coalescing and current-snapshot fences. It does not repeat the close occasion or establish what the record said
+at the close; only practices bound to updates are selected. A closed issue's title or body change also retains
+the separate repair occasion for assessments of merged pull or merge requests that close it.
+
+A close review is admitted with the issue's snapshot token. If the token has moved by the time its evidence is
+captured, capture stops before writing evidence files and the review records no observation. An issue edit,
+a change to its closed discussion, or a reopen can move the token. The update occasion reviews the current record. Publication checks the same token again under the issue row lock.
 
 Only `scm.issue.updated` keys on the whole snapshot. The other two deliberately do not, because a past-work
 campaign or a recurring sweep re-derives their keys from the artifact as it stands: an opening keys on the prose and a
@@ -234,7 +246,10 @@ See [Signal state reasons](./practice-review-glossary.mdx#signal-state-reasons) 
 Issue-update jobs retain the admitted revision. Capture compares it against the issue's canonical digest and
 reports the source unavailable (`SourceAbsenceReason.NOT_FOUND`) on a missing or mismatched revision, rather
 than making an observation about the developer. This check does not fence edits after capture or invalidate
-earlier observations and feedback.
+earlier observations and feedback. Closure jobs use the same source-unavailable reason when their admitted
+snapshot token is missing or no longer current. The recorded source and practice readiness checks explain
+why capture stopped; no observation is recorded. The final publication check still rejects a token that
+moves after capture.
 
 #### Push and edit coalescing
 

@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -100,6 +101,9 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PracticeReviewProperties reviewProperties;
+
+    @Autowired
+    private IssueEvidenceRevision revisions;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -193,6 +197,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
                 submitter,
                 fixture.workspaceResolver(),
                 reviewProperties,
+                revisions,
                 transactions);
     }
 
@@ -464,8 +469,9 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
         }
 
         @Bean
-        IssueSignalResubmitter coalescerSubmitter(AgentJobService jobs, Fixture fixture, SignalRecorder recorder) {
-            return new IssueSignalResubmitter(jobs, fixture.issues(), fixture.gate(), recorder);
+        IssueSignalResubmitter coalescerSubmitter(
+                AgentJobService jobs, Fixture fixture, SignalRecorder recorder, IssueEvidenceRevision revisions) {
+            return new IssueSignalResubmitter(jobs, fixture.issues(), fixture.gate(), recorder, revisions);
         }
     }
 }

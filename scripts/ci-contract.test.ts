@@ -487,6 +487,23 @@ void describe("CI contract", () => {
 		}
 	});
 
+	void test("the webapp image copies the catalogue imported by preview fixtures", async () => {
+		const config = asRecord(parseJsonc(await readFile("webapp/tsconfig.json", "utf8")), "tsconfig");
+		const options = asRecord(config.compilerOptions, "compiler options");
+		const paths = asRecord(options.paths, "paths");
+		const resources = asArray(paths["@bundled-practices"], "bundled practices");
+		const sources = buildStageCopySources(await readFile("webapp/Dockerfile", "utf8"));
+		for (const resource of resources) {
+			const file = path.posix.join("webapp", asString(resource, "catalogue path"));
+			assert.ok(
+				sources.some((source) =>
+					source.endsWith("/") ? file.startsWith(source) : file === source,
+				),
+				`The webapp image must contain ${file} for type-aware lint`,
+			);
+		}
+	});
+
 	void test("task names follow the vocabulary in AGENTS.md", async () => {
 		const tasks = await loadTasks();
 		const instructions = await readFile("AGENTS.md", "utf8");
