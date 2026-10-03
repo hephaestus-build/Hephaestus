@@ -160,7 +160,7 @@ function GroupPractices({
 					description: "Once your workspace reviews a practice in this group, it appears here.",
 				}}
 				rowLink={(row) => ({
-					text: "View practice",
+					text: "Open practice",
 					onOpen: () => onOpenPractice(row.key),
 				})}
 			/>

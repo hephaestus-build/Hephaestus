@@ -78,9 +78,9 @@ export const Default: Story = {
 		const table = within(
 			level.getByRole("table", { name: "Practices of Packaging work for review" }),
 		);
-		await expect(table.getAllByRole("button", { name: /^View practice /u })).toHaveLength(5);
+		await expect(table.getAllByRole("button", { name: /^Open practice /u })).toHaveLength(5);
 		await userEvent.click(
-			table.getByRole("button", { name: "View practice Scope the change to one concern" }),
+			table.getByRole("button", { name: "Open practice Scope the change to one concern" }),
 		);
 		await expect(args.onOpenPractice).toHaveBeenCalledWith("scope-to-one-concern");
 		await expect(table.getAllByText("Held back so no one can be singled out.")).toHaveLength(2);

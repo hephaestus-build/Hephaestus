@@ -162,7 +162,7 @@ describe("Practices across the workspace", () => {
 		expect(overviewReads()).toHaveLength(1);
 		expect(profileReads()).toStrictEqual([]);
 		await userEvent.click(
-			within(level).getByRole("button", { name: "View practice Scope the change to one concern" }),
+			within(level).getByRole("button", { name: "Open practice Scope the change to one concern" }),
 		);
 
 		// The practice opens over its group on this page, the profile's own practice level with the
