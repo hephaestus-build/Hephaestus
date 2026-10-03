@@ -7,6 +7,8 @@ provider identities, including people who never created an account. Names, login
 are not used to match. JSON exports and erasure use the same preview scope, and erasure can resume from
 its last completed store. Posted provider feedback must be removed with the operator runbook first.
 Completed audit receipts retain operational facts and counts, not the erased content.
+The selected scope stays visible while an export downloads or erasure starts. The controls prevent
+a second action until the current action and its status refresh finish.
 
 Shared records retain other people's attribution. Erasure clears the person's typed approval,
 withdrawal, invalidation and restoration attribution while keeping the event and its time.

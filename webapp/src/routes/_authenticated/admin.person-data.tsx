@@ -63,8 +63,8 @@ function PersonDataRoute() {
 	const erase = useMutation({
 		...adminErasePersonDataMutation(),
 		onError,
-		onSuccess: () => {
-			void request.refetch();
+		onSuccess: async () => {
+			await request.refetch();
 		},
 	});
 	const download = useMutation({
@@ -121,6 +121,12 @@ function PersonDataRoute() {
 			void request.refetch();
 		}
 	};
+	let pendingAction: "export" | "erase" | undefined;
+	if (download.isPending) {
+		pendingAction = "export";
+	} else if (erase.isPending) {
+		pendingAction = "erase";
+	}
 	const currentRequest = request.data;
 	const error: unknown =
 		providers.error ?? request.error ?? preview.error ?? erase.error ?? download.error;
@@ -134,8 +140,6 @@ function PersonDataRoute() {
 	} else if (
 		providers.isPending ||
 		preview.isPending ||
-		erase.isPending ||
-		download.isPending ||
 		(requestId !== undefined && request.isPending)
 	) {
 		state = { status: "loading" };
@@ -143,6 +147,7 @@ function PersonDataRoute() {
 		state = {
 			status: "ready",
 			request: currentRequest,
+			pendingAction,
 			onExport: () => download.mutate(currentRequest.id),
 			onErase: (externalCopiesRemoved) =>
 				erase.mutate({ path: { id: currentRequest.id }, body: { externalCopiesRemoved } }),

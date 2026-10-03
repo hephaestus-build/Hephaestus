@@ -28,62 +28,64 @@ class ExactPersonDataCopyRecorderTest {
     }
 
     @Test
-    void capturesOnlyExactKeysAndKeepsTheCopiedValue() {
+    void capturesOnlyExactKeys() {
         recorder.recordIdentity(second);
-        var captured = recorder.capture(() -> {
+        try (var capture = recorder.begin()) {
             recorder.recordIdentity(second);
             recorder.recordIdentity(first);
             recorder.recordIdentity(first);
-            return "copied bytes";
-        });
-        assertThat(captured.value()).isEqualTo("copied bytes");
-        assertThat(captured.identities()).containsExactly(first, second);
-        assertThatThrownBy(() -> captured.identities().clear()).isInstanceOf(UnsupportedOperationException.class);
+            assertThat(capture.identities()).containsExactly(first, second);
+            assertThatThrownBy(() -> capture.identities().clear()).isInstanceOf(UnsupportedOperationException.class);
+        }
         verifyNoInteractions(jdbc);
     }
 
     @Test
     void nestedCaptureReturnsItsOwnKeysAndMergesIntoItsParent() {
-        var outer = recorder.capture(() -> {
+        try (var outer = recorder.begin()) {
             recorder.recordIdentity(first);
-            var inner = recorder.capture(() -> {
+            try (var inner = recorder.begin()) {
                 recorder.recordIdentity(second);
-                return 7;
-            });
-            assertThat(inner.identities()).containsExactly(second);
-            return inner.value();
-        });
-        assertThat(outer.identities()).containsExactly(first, second);
-        assertThat(outer.value()).isEqualTo(7);
+                assertThat(inner.identities()).containsExactly(second);
+            }
+            assertThat(outer.identities()).containsExactly(first, second);
+        }
     }
 
     @Test
     void failureRestoresTheParentAndDoesNotLeakIntoTheNextCapture() {
-        var outer = recorder.capture(() -> {
+        try (var outer = recorder.begin()) {
             recorder.recordIdentity(first);
-            assertThatThrownBy(() -> recorder.capture(() -> {
-                        recorder.recordIdentity(second);
-                        throw new IllegalStateException("producer failed");
-                    }))
+            assertThatThrownBy(() -> {
+                        try (var inner = recorder.begin()) {
+                            recorder.recordIdentity(second);
+                            assertThat(inner.identities()).containsExactly(second);
+                            throw new IllegalStateException("producer failed");
+                        }
+                    })
                     .isInstanceOf(IllegalStateException.class);
-            return "parent";
-        });
-        assertThat(outer.identities()).containsExactly(first, second);
-        assertThat(recorder.capture(() -> "next").identities()).isEmpty();
+            recorder.recordIdentity(first);
+            assertThat(outer.identities()).containsExactly(first, second);
+        }
+        try (var next = recorder.begin()) {
+            assertThat(next.identities()).isEmpty();
+        }
     }
 
     @Test
     void independentThreadsCannotAttributeEachOthersContent() {
-        var captured = recorder.capture(() -> {
+        try (var outer = recorder.begin()) {
             recorder.recordIdentity(first);
-            return CompletableFuture.supplyAsync(() -> recorder.capture(() -> {
-                        recorder.recordIdentity(second);
-                        return "other thread";
-                    }))
+            var other = CompletableFuture.supplyAsync(() -> {
+                        try (var inner = recorder.begin()) {
+                            recorder.recordIdentity(second);
+                            return inner.identities();
+                        }
+                    })
                     .join();
-        });
-        assertThat(captured.identities()).containsExactly(first);
-        assertThat(captured.value().identities()).containsExactly(second);
+            assertThat(outer.identities()).containsExactly(first);
+            assertThat(other).containsExactly(second);
+        }
     }
 
     @Test
@@ -91,15 +93,17 @@ class ExactPersonDataCopyRecorderTest {
         var observations = new java.util.ArrayList<List<PersonCopyIdentity>>();
         try (var outer = recorder.begin()) {
             outer.onChange(() -> observations.add(outer.identities()));
-            recorder.capture(() -> {
+            try (var inner = recorder.begin()) {
                 recorder.recordIdentity(second);
                 assertThat(observations).containsExactly(List.of(second));
+                assertThat(inner.identities()).containsExactly(second);
                 recorder.recordRepository(7);
                 assertThat(outer.repositoryIds()).containsExactly(7L);
-                return "bytes written only after the receipt";
-            });
+            }
         }
-        assertThat(recorder.capture(() -> "next").identities()).isEmpty();
+        try (var next = recorder.begin()) {
+            assertThat(next.identities()).isEmpty();
+        }
     }
 
     @Test
@@ -118,10 +122,5 @@ class ExactPersonDataCopyRecorderTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new PersonCopyIdentity("GITLAB", "https://git.example", " ", null))
                 .isInstanceOf(IllegalArgumentException.class);
-        var source = new java.util.ArrayList<>(List.of(first));
-        var captured =
-                new de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder.Captured<>("bytes", source);
-        source.clear();
-        assertThat(captured.identities()).containsExactly(first);
     }
 }

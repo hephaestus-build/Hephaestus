@@ -192,3 +192,23 @@ export const Narrow: Story = {
 	args: { state: ready },
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 };
+
+export const Downloading: Story = {
+	args: { state: { ...ready, pendingAction: "export" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Personal-data preview")).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Downloading…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Erase this person's data" })).toBeDisabled();
+		await expect(canvas.getByLabelText("Account ID (optional)")).toBeDisabled();
+		await expect(canvas.getByLabelText("Type ERASE to confirm permanent erasure")).toBeDisabled();
+	},
+};
+export const StartingErasure: Story = {
+	args: { state: { ...ready, pendingAction: "erase" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Personal-data preview")).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Starting erasure…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Download JSON export" })).toBeDisabled();
+		await expect(canvas.getByRole("checkbox")).toHaveAttribute("aria-disabled", "true");
+	},
+};

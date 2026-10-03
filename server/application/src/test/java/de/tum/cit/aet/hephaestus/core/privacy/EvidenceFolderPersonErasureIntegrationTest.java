@@ -176,22 +176,24 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
             var read = new org.springframework.transaction.support.TransactionTemplate(transactions);
             read.setReadOnly(true);
             read.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
-            read.executeWithoutResult(status -> recorder.capture(() -> {
-                recorder.recordIdentity(identity);
-                assertThat(jdbc.queryForObject(
-                                "SELECT payload->'identities'->0->>'subject' FROM person_evidence_copy WHERE job_id=?",
-                                String.class,
-                                job.getId()))
-                        .isEqualTo("42");
-                var person = new PersonScope(
-                        null,
-                        List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)),
-                        List.of());
-                assertThat(catalog.contributors().getFirst().select(person).rows())
-                        .hasSize(1);
-                assertThat(root.resolve("jobs")).doesNotExist();
-                return "no bytes exist before this receipt";
-            }));
+            read.executeWithoutResult(status -> {
+                try (var capture = recorder.begin()) {
+                    recorder.recordIdentity(identity);
+                    assertThat(capture.identities()).containsExactly(identity);
+                    assertThat(jdbc.queryForObject(
+                                    "SELECT payload->'identities'->0->>'subject' FROM person_evidence_copy WHERE job_id=?",
+                                    String.class,
+                                    job.getId()))
+                            .isEqualTo("42");
+                    var person = new PersonScope(
+                            null,
+                            List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)),
+                            List.of());
+                    assertThat(catalog.contributors().getFirst().select(person).rows())
+                            .hasSize(1);
+                    assertThat(root.resolve("jobs")).doesNotExist();
+                }
+            });
         } finally {
             files.abortPersonCapture(job);
         }

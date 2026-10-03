@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import java.util.*;
-import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -57,13 +56,6 @@ public class ExactPersonDataCopyRecorder implements PersonDataCopyRecorder {
         var frame = new CaptureFrame(active.get());
         active.set(frame);
         return frame;
-    }
-
-    @Override
-    public <T> Captured<T> capture(Supplier<T> producer) {
-        try (var capture = begin()) {
-            return new Captured<>(producer.get(), capture.identities());
-        }
     }
 
     private final class CaptureFrame implements Capture {

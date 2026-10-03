@@ -172,13 +172,10 @@ public class PersonDataService {
                     PersonDataRequest r = lockAdmittedErasure(id);
                     if (r == null) return false;
                     var completed = completed(r);
-                    if (!completed.keySet().stream()
-                            .allMatch(key -> registry.stores().stream()
-                                    .anyMatch(s -> s.store().equals(key))))
+                    if (!inventory.containsAll(completed.keySet()))
                         throw new IllegalStateException("Erasure contributor inventory changed");
                     if (!completed.containsKey(store.store())) {
-                        long count =
-                                store.erase(Objects.requireNonNull(selections(r).get(store.store())));
+                        long count = store.erase(Objects.requireNonNull(frozen.get(store.store())));
                         completed.put(
                                 store.store(),
                                 new PersonDataStoreReceipt(count, Instant.now(), r.getAdministratorAccountId()));

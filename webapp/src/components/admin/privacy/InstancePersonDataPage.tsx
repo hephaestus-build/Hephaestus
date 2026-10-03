@@ -14,6 +14,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import {
 	Table,
 	TableBody,
@@ -40,6 +41,7 @@ export type InstancePersonDataPageState =
 	| {
 			status: "ready";
 			request: PersonDataRequest;
+			pendingAction?: "export" | "erase";
 			onExport: () => void;
 			onErase: (externalCopiesRemoved: boolean) => void;
 			onRefresh: () => void;
@@ -71,7 +73,18 @@ export function InstancePersonDataPage({
 	const [confirmation, setConfirmation] = useState("");
 	const [externalCopiesRemoved, setExternalCopiesRemoved] = useState(false);
 	const pending =
-		state.status === "loading" || (state.status === "ready" && state.request.state === "ERASING");
+		state.status === "loading" ||
+		(state.status === "ready" &&
+			(state.request.state === "ERASING" || state.pendingAction !== undefined));
+	let eraseLabel = "Erase this person's data";
+	if (state.status === "ready") {
+		if (state.request.state === "FAILED") {
+			eraseLabel = "Resume erasure";
+		}
+		if (state.pendingAction === "erase") {
+			eraseLabel = "Starting erasure…";
+		}
+	}
 	const updateIdentity = (index: number, patch: Partial<PersonIdentityInput>) =>
 		onChange({
 			...selection,
@@ -308,8 +321,9 @@ export function InstancePersonDataPage({
 						{state.request.state === "PREVIEW" || state.request.state === "FAILED" ? (
 							<div className="space-y-3">
 								{state.request.state === "PREVIEW" ? (
-									<Button variant="outline" onClick={state.onExport}>
-										Download JSON export
+									<Button variant="outline" disabled={pending} onClick={state.onExport}>
+										{state.pendingAction === "export" ? <Spinner /> : null}
+										{state.pendingAction === "export" ? "Downloading…" : "Download JSON export"}
 									</Button>
 								) : (
 									<p>
@@ -320,6 +334,7 @@ export function InstancePersonDataPage({
 								<div className="flex items-center gap-2">
 									<Checkbox
 										id="external-copies-removed"
+										disabled={pending}
 										checked={externalCopiesRemoved}
 										onCheckedChange={setExternalCopiesRemoved}
 									/>
@@ -333,6 +348,7 @@ export function InstancePersonDataPage({
 									</Label>
 									<Input
 										id="person-erasure-confirmation"
+										disabled={pending}
 										autoComplete="off"
 										value={confirmation}
 										onChange={(event) => setConfirmation(event.target.value)}
@@ -341,17 +357,23 @@ export function InstancePersonDataPage({
 								<Button
 									variant="destructive"
 									disabled={
+										pending ||
 										confirmation !== "ERASE" ||
 										(state.request.externalDeliveries.length > 0 && !externalCopiesRemoved)
 									}
 									onClick={() => state.onErase(externalCopiesRemoved)}
 								>
-									{state.request.state === "FAILED" ? "Resume erasure" : "Erase this person's data"}
+									{state.pendingAction === "erase" ? <Spinner /> : null}
+									{eraseLabel}
 								</Button>
 							</div>
 						) : null}
 						{state.request.state === "ERASING" || state.request.state === "FAILED" ? (
-							<Button variant="outline" onClick={state.onRefresh}>
+							<Button
+								variant="outline"
+								disabled={state.pendingAction !== undefined}
+								onClick={state.onRefresh}
+							>
 								Refresh job status
 							</Button>
 						) : null}

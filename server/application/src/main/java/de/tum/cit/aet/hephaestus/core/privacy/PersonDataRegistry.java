@@ -11,19 +11,21 @@ public class PersonDataRegistry {
     private final List<PersonDataContributor> stores;
 
     public PersonDataRegistry(List<PersonDataCatalog> catalogs) {
+        List<PersonDataContributor> registered = new ArrayList<>();
         for (PersonDataCatalog catalog : catalogs) {
+            var contributors = List.copyOf(catalog.contributors());
             PersonDataStores declaration =
                     org.springframework.core.annotation.AnnotatedElementUtils.findMergedAnnotation(
                             catalog.getClass(), PersonDataStores.class);
             if (declaration == null
                     || !new TreeSet<>(Arrays.asList(declaration.value()))
-                            .equals(new TreeSet<>(catalog.contributors().stream()
+                            .equals(new TreeSet<>(contributors.stream()
                                     .map(PersonDataContributor::store)
                                     .toList())))
                 throw new IllegalStateException("Person data catalog does not implement its store declaration");
+            registered.addAll(contributors);
         }
-        stores = catalogs.stream()
-                .flatMap(c -> c.contributors().stream())
+        stores = registered.stream()
                 .sorted(Comparator.comparingInt(PersonDataContributor::getOrder)
                         .thenComparing(PersonDataContributor::store))
                 .toList();
