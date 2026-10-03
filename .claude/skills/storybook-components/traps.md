@@ -40,7 +40,7 @@ The `Webapp: Stories` job runs the webapp package's `export:assets` immediately 
 It fails if any exported asset is dirty afterwards.
 Thus, the job can fail after printing a clean pass line. If a change moves or renames a story that exports an asset, run
 `vp run --filter webapp export:assets`.
-Commit the result.
+For that change, commit the result.
 `/fix-ci` lists the paths.
 
 ## 6. A hand-rolled stateful wrapper swallows the spy in `meta.args`
