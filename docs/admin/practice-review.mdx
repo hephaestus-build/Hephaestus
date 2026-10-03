@@ -1,61 +1,72 @@
 ---
 id: practice-review
 title: Practice Review
-description: Turn practice review on, decide how much autonomy it has and how wide it runs, know what it costs, and find out why a workspace stopped hearing from it.
+description: Enable practice review, set autonomy and coverage, control costs, and diagnose a quiet workspace.
 ---
 
-Practice review reads a workspace's connected work — pull requests, merge requests, issues, documents,
-and settled Slack threads — against the practices that workspace has installed. It records grounded
-observations first, and composes feedback only for pull or merge requests and issues — document and
-settled-thread reviews record what they found and stop there. Feedback reaches the work itself, the
-developer's private practice pages, or a later mentor conversation. This page is how you
-switch it on, keep it from costing more than intended, and find out why it went quiet.
+Practice review checks connected workspace work against its installed practices.
+This work includes pull requests, merge requests, issues, documents, and settled Slack threads.
+It first records grounded observations.
+It composes feedback only for pull or merge requests and issues.
+Document and settled-thread reviews record their results and stop there.
 
-Many review gates refuse work without raising a user-facing error, so a workspace can simply go quiet.
-Every refusal is recorded; **Practices → Practice reviews → Work**, which lists every piece of work
-Hephaestus recorded, is the first place to inspect it.
+Feedback reaches the work, the developer's private practice pages, or a later mentor conversation.
+This page explains setup, cost controls, and diagnosis of quiet workspaces.
+Many review gates refuse work without a user-facing error.
+Thus, a workspace can become quiet.
+Every refusal has a record.
+
+1. First, inspect **Practices → Practice reviews → Work**, which lists every piece of work that Hephaestus recorded.
 
 ## First successful review
 
-Use this short path before tuning coverage, campaigns, or per-practice overrides:
+Use this path before changes to coverage, campaigns, or per-practice overrides.
 
-1. Connect GitHub or GitLab and confirm a recent pull or merge request appears under **Practices → Practice
-   reviews → Work**.
-   If it does not, fix ingestion first; practice-review settings cannot make missing work appear.
-2. Under **AI models**, assign a ready model to practice reviews.
-3. On **Practices → Review settings → When and where**, turn on **Start practice reviews**, then turn on at least
-   one way in under **How reviews start** — **Start from work activity**, **Start requested reviews**, or
-   both. The screen says *"Nothing can start a review"* when both are off.
-4. On **Practices → Review settings → How much**, keep the **Workspace default** at **Review before sending**, its default. Back on **When and where**, keep coverage at **All monitored repositories** and **All
-   eligible linked members**, and leave **Send feedback** on.
-5. Open a small pull or merge request whose author is an eligible linked member, then open it under
-   **Practices → Practice reviews → Work**. The work distinguishes ingestion, admission, observation,
-   composition, withholding, and delivery; do not use the presence of a provider comment as the success test.
+1. Connect GitHub or GitLab.
+2. Confirm that a recent pull or merge request appears under **Practices → Practice reviews → Work**.
+3. If it does not, repair ingestion first.
+   Practice-review settings cannot make missing work appear.
+4. Under **AI models**, assign a ready model to practice reviews.
+5. Open **Practices → Review settings → When and where**.
+6. Turn on **Start practice reviews**.
+7. Under **How reviews start**, enable **Start from work activity**, **Start requested reviews**, or both.
+   The screen says *"Nothing can start a review"* if both are off.
+8. Open **Practices → Review settings → How much**.
+9. Keep **Workspace default** at **Review before sending**, its default.
+10. Return to **When and where**.
+11. Keep coverage at **All monitored repositories** and **All eligible linked members**.
+12. Leave **Send feedback** on.
+13. Open a small pull or merge request whose author is an eligible linked member.
+14. Open that work under **Practices → Practice reviews → Work**.
 
-Once that works, narrow coverage, add practice overrides, or configure past-work reviews. The rest of
-this page is reference and troubleshooting for those decisions.
+The work distinguishes ingestion, admission, observation, composition, withholding, and delivery.
+A provider comment is not the success test.
+After this path works, you can narrow coverage, add practice overrides, or configure past-work reviews.
+The rest of this page gives reference information and diagnosis for those decisions.
 
 ### Follow one review end to end
 
-Suppose a developer opens **Update dependencies** with no explanation in its description:
+Suppose a developer opens **Update dependencies** with no explanation in its description.
+The review follows this sequence:
 
-1. The provider event creates an occurrence, listed under **What we noticed** when you open the work under
-   **Practices → Practice reviews → Work**.
-2. Coverage decides whether to look at all: the repository, the base branch and the author must all be
-   admitted. Then the review gate selects practices whose occasions match that pull request, and capture must
-   satisfy each selected practice's evidence requirements before that practice can run.
-3. A practice about explaining why a change is needed can record that the explanation is absent, bounded
-   to the description it searched. This is the observation; it is retained even if nobody is contacted.
-4. Composition considers that observation alongside recent observations and feedback. It may propose a
-   public summary, private process feedback, mentor context, or no feedback.
-5. Server-side policy admits or refuses each proposal. Feedback waiting for a decision is listed first on
-   **Practices → Practice reviews**, under **Needs you**. A workspace owner or administrator opens it,
-   reads the exact in-context feedback and the observations behind it, then approves and sends it or
-   rejects it. A provider
-   comment exists only after approval and a successful release-time policy check.
+1. The provider event creates an occurrence.
+   It appears under **What we noticed** on **Practices → Practice reviews → Work**.
+2. Coverage admits the repository, base branch, and author before the review proceeds.
+3. The review gate selects practices whose occasions match the pull request.
+4. Capture satisfies each selected practice's evidence requirements before that practice runs.
+5. A practice about why a change is needed can observe the absence of an explanation in the searched description.
+   That bounded observation remains even if nobody receives feedback.
+6. Composition considers the observation with recent observations and feedback.
+   It can propose a public summary, private process feedback, mentor context, or no feedback.
+7. Server-side policy admits or refuses each proposal.
+   Feedback awaiting a decision appears first under **Needs you** on **Practices → Practice reviews**.
+8. A workspace owner or administrator reads the exact in-context feedback and its observations.
+9. That person approves and sends the feedback, or rejects it.
 
-This is the smallest useful diagnostic slice: occurrence → readiness → observation → composition →
-delivery. Stop at the first missing stage rather than changing downstream settings at random.
+A provider comment exists only after approval and a successful release-time policy check.
+The smallest useful diagnostic sequence is occurrence → readiness → observation → composition → delivery.
+
+1. Stop at the first missing stage instead of random changes to downstream settings.
 
 ### Use the right screen
 
@@ -75,133 +86,181 @@ delivery. Stop at the first missing stage rather than changing downstream settin
 
 ### Read the Practice reviews overview
 
-**Practices → Practice reviews** opens on an overview. The time range at the top of the page — the
-last 7 days, 30 days, 90 days or 12 months — decides everything on it except the feedback waiting for
-your approval, which waits however long ago it was composed. The number beside **Practice reviews** in
-the sidebar counts that feedback, so you see it from anywhere in the workspace. While the **Practices**
-section of the sidebar is folded, the number sits on **Practices** instead; with the sidebar down to
-icons, the **Practices** tooltip says it.
+**Practices → Practice reviews** opens an overview.
+Its time range is the last 7 days, 30 days, 90 days, or 12 months.
+The range controls everything except feedback awaiting approval.
+That feedback remains regardless of its composition date.
 
-- **Needs you** lists the feedback that waits for your approval, oldest first. **Review N pieces of
-  feedback** opens the oldest as a queue: the panel shows where you are, such as **2 of 7**, and the
-  arrows beside it step back and forward through the queue. Approving or rejecting a piece moves on to
-  the next, or back to one you stepped past, and closes the panel once nothing else waits. Feedback
-  opened any other way — from the **Feedback**
-  list, a review or an observation — opens on its own, without the queue. Below that, one line counts
-  what went wrong in the range: reviews that failed or timed out, reviews whose results could not be
-  processed or delivered, and feedback that failed to deliver. A review whose automatic delivery
-  failed counts in both of the last two. Each count opens the list of exactly those. When
-  nothing needs you, one line says so.
-- **What the reviews did** has a tile for each stage: **Reviews**, **Observations** and **Feedback**.
-  Each shows its total, the change against the period of the same length before, its volume over the
-  range, and what it split into. Reviews still queued or running are counted apart, since they have no
-  result yet. Observations marked incorrect are listed apart from the outcomes they overlap. Feedback is
-  grouped as awaiting approval, prepared, delivered, unconfirmed, withheld, and failed to deliver.
-  Delivered includes feedback that reached the developer in part; unconfirmed is conversation feedback
-  with no record that it was shown, so it is neither delivered nor withheld and is never prepared
-  again; withheld includes feedback that a reviewer rejected or that newer feedback replaced. Each
-  count opens the list of exactly the rows it counts.
-- **Practices** lists each practice with an observation, or feedback about one, in the range, busiest
-  first. For each it shows how many observations it recorded, how many of those were negative outcomes
-  and how many were marked incorrect, and how much of the feedback citing it was delivered. Only
-  observations an admin found wrong are marked, so one that is not marked is not confirmed correct
-  either. A last line counts
-  the practices that are turned on, that Hephaestus can review, and that recorded nothing in the range. Open a practice to see its
-  autonomy, its counts and its most recent observations, and to edit it.
+The number beside **Practice reviews** in the sidebar counts feedback awaiting approval.
+You can see it anywhere in the workspace.
+If the **Practices** sidebar section is folded, the number appears on **Practices**.
+If the sidebar shows only icons, the **Practices** tooltip gives the number.
 
-The lists behind the overview are **Reviews**, **Observations** and **Feedback**. Each has its own date
-filter: its tab opens without one, and a count on the overview opens its list filtered to the
-overview's range. **Reviews** filters by status and by
-**Result processing**, **Observations** by **Origin** among its other filters, and **Feedback** by
-**Practice** — the practices its observations are about — and can list the oldest first.
+**Needs you** lists feedback awaiting approval, oldest first.
+**Review N pieces of feedback** opens the oldest in a queue.
+The panel shows your position, such as **2 of 7**.
+The adjacent arrows move backward or forward through the queue.
+Approval or rejection moves to the next piece or returns to a piece you skipped.
+The panel closes when nothing else awaits a decision.
 
-A review, an observation, a piece of feedback, a piece of reviewed work or a practice opens as a panel
-over the page you are on. Links inside a panel open the next record over it, and the path at the top
-takes you back. The address of the page names the open panels, so you can share it.
+Feedback opened from the **Feedback** list, a review, or an observation opens alone, without the queue.
+Below the queue, one line counts these problems in the selected range:
+
+- Reviews that failed or timed out.
+- Reviews whose results could not be processed or delivered.
+- Feedback that failed to deliver.
+
+A review with failed automatic delivery counts in both of the latter two groups.
+Each count opens exactly the corresponding list.
+If nothing needs you, one line states this.
+
+**What the reviews did** has a tile for **Reviews**, **Observations**, and **Feedback**.
+Each shows its total, change from the preceding period of equal length, volume through the range, and subdivisions.
+Queued or active reviews count separately because they have no result yet.
+Observations marked incorrect appear separately from the outcomes they overlap.
+
+Feedback groups are awaiting approval, prepared, delivered, unconfirmed, withheld, and failed to deliver.
+Delivered includes feedback that reached the developer only in part.
+Unconfirmed is conversation feedback with no record that it appeared.
+It is neither delivered nor withheld, and it is never prepared again.
+Withheld includes feedback rejected by a reviewer or replaced by newer feedback.
+Each count opens exactly the rows it counts.
+
+**Practices** lists practices with an observation, or feedback about one, in the range, busiest first.
+Each row counts observations, negative outcomes, and observations marked incorrect.
+It shows how much feedback that cites the practice was delivered.
+Only observations an admin judged incorrect have that mark.
+An unmarked observation is not confirmed correct.
+
+A final line counts enabled, reviewable practices that recorded nothing in the range.
+
+1. Open a practice to see its autonomy, counts, and most recent observations, or to edit it.
+
+The overview's lists are **Reviews**, **Observations**, and **Feedback**.
+Each has its own date filter.
+A tab opens without a date filter.
+An overview count opens the corresponding list filtered to that range.
+**Reviews** filters by status and **Result processing**.
+**Observations** filters by **Origin**, among other filters.
+
+**Feedback** filters by **Practice**, meaning the practices covered by its observations.
+It can list the oldest first.
+A review, observation, piece of feedback, reviewed work, or practice opens as a panel over the current page.
+Links inside a panel open the next record over it.
+The path at the top returns to earlier records.
+The page address identifies open panels, so you can share it.
 
 ### Correct an observation that was wrong
 
-Open the observation under **Practices → Practice reviews → Observations** and choose **Mark as
-incorrect** at the bottom of the panel, with a reason the developer will read. The review record stays as it was, and the observation
-stops counting toward the developer's standing, Practice profile and Heph's context. Feedback about it that
-has not reached anyone is withheld. If Hephaestus is delivering feedback that cites the observation at that
-moment, you are asked to try again and nothing changes.
+1. Open the observation under **Practices → Practice reviews → Observations**.
+2. Select **Mark as incorrect** at the bottom of the panel.
+3. Supply a reason that the developer will read.
 
-Comments already on the pull request or merge request are not changed at once. The page shows what became of
-them, and each state is recorded:
+The review record stays unchanged.
+The observation no longer contributes to the developer's standing, Practice profile, or Heph's context.
+Feedback about it that has reached nobody is withheld.
+If Hephaestus is delivering feedback that cites it at that moment, it asks you to retry and changes nothing.
+
+Comments already on the pull request or merge request do not change immediately.
+The page shows their resulting state, and each state has a record.
+The table contains the exact UI text:
 
 | State | Sentence shown while the correction is in force |
 | --- | --- |
-| Pending | Hephaestus is still bringing the comments it posted about this observation in line with the correction, or still checking whether a comment it tried to post arrived. |
-| Nothing posted | No comment about it was found on the work. |
-| Updated | Every summary comment Hephaestus posted about it now opens with a correction notice, or has since been deleted. |
-| Inline comments remain | Inline comments Hephaestus posted about it are still on the work unchanged, because they cannot be edited from here; any summary comment now carries a correction notice. Remove or answer the inline comments on the pull request or merge request. |
-| Unresolved | Hephaestus cannot correct every comment about it: a summary could not be edited, the provider accepted a comment without saying which one it is, or a comment it tried to post has not been confirmed. Check the pull request or merge request and correct it there; Hephaestus keeps checking and updates this if it finds the comment. |
+| Pending | `Hephaestus is still bringing the comments it posted about this observation in line with the correction, or still checking whether a comment it tried to post arrived.` |
+| Nothing posted | `No comment about it was found on the work.` |
+| Updated | `Every summary comment Hephaestus posted about it now opens with a correction notice, or has since been deleted.` |
+| Inline comments remain | `Inline comments Hephaestus posted about it are still on the work unchanged, because they cannot be edited from here; any summary comment now carries a correction notice. Remove or answer the inline comments on the pull request or merge request.` |
+| Unresolved | `Hephaestus cannot correct every comment about it: a summary could not be edited, the provider accepted a comment without saying which one it is, or a comment it tried to post has not been confirmed. Check the pull request or merge request and correct it there; Hephaestus keeps checking and updates this if it finds the comment.` |
 
-**Restore observation** reverses the correction with a second reason, removes any notice it added and
-re-sends nothing. Every correction stays listed on the page.
+**Restore observation** reverses the correction with a second reason.
+It removes any notice the correction added and resends nothing.
+Every correction stays listed on the page.
 
 ### Withdraw feedback whose words were wrong
 
-Sometimes the observations are right and the feedback written from them is not. Open the feedback under
-**Practices → Practice reviews → Feedback** and choose **Withdraw feedback** at the bottom of the panel, with a
-reason. Only a card on a
-developer's Practice profile that is waiting or already shown can be withdrawn; feedback posted on the work or
-raised in a conversation cannot be taken back here.
+Observations can be correct while their feedback is incorrect.
+Only a developer's Practice profile card that awaits display or has appeared can be withdrawn.
+You cannot recall feedback posted on the work or raised in a conversation here.
 
-- The feedback's text, delivery and observations stay exactly as they were.
-- A card the developer had not seen yet never appears. One they had seen is replaced for a while by a notice
-  that it was withdrawn, without your reason.
-- The feedback given to later reviews and Heph keeps the record that the card existed, without what it
-  said. Context already handed to a review or said in a conversation is not recalled.
-- A card Hephaestus was showing at the very moment you withdrew it may already have reached the developer.
+1. Open the feedback under **Practices → Practice reviews → Feedback**.
+2. Select **Withdraw feedback** at the bottom of the panel.
+3. Supply a reason.
 
-**Restore feedback** reverses it with a second reason. The card returns through the ordinary checks every
-card passes, and nothing is sent again. Every withdrawal and restore stays listed on the page, and
-withdrawing again after a restore adds a new entry.
+Withdrawal has these effects:
+
+- The feedback's text, delivery, and observations stay unchanged.
+- A card that the developer had not seen never appears.
+- A previously seen card temporarily shows a withdrawal notice without your reason.
+- Later reviews and Heph receive the record that the card existed, without its text.
+- Context already given to a review or used in a conversation is not recalled.
+- A card on display at the withdrawal moment might already have reached the developer.
+
+**Restore feedback** reverses withdrawal with a second reason.
+The card returns through its ordinary checks.
+Nothing is sent again.
+Every withdrawal and restoration stays listed.
+A new withdrawal after restoration adds a new entry.
 
 ### Act on a dispute
 
-A developer disputes feedback from their own reviews, which every comment on the work links to, or by
-rating a Practice profile card **Not accurate**. The dispute shows on each observation the feedback was
-written from, with the developer's explanation: a **Disputed** mark in the **Observations** list, the
-**Developer response** filter there, and the explanation at the top of the observation's panel and of
-the feedback's panel. The explanation is the developer's, written to you; the text of Practice profile and
-conversation feedback stays hidden from you as before.
+Developers dispute feedback from their own reviews, linked by every comment on the work.
+They can also rate a Practice profile card **Not accurate**.
+The dispute appears on each observation that the feedback used, with the developer's explanation.
+It adds a **Disputed** mark in the **Observations** list and the **Developer response** filter.
+The explanation appears at the top of the observation and feedback panels.
+It is the developer's explanation addressed to you.
 
-Decide what the dispute is about:
+Practice profile and conversation feedback text remain hidden from you.
 
-- The observation was wrong: **Mark as incorrect**, as above.
-- The observations were right and the Practice profile card said something wrong: **Withdraw feedback**.
-- Neither: leave it. The dispute stays on the observation until the developer withdraws it.
+1. Decide what the dispute concerns.
+2. If the observation was incorrect, use **Mark as incorrect**.
+3. If the observations were correct but the Practice profile card was incorrect, use **Withdraw feedback**.
+4. If neither applies, leave the dispute unchanged.
 
-While a dispute stands, a later review of the same work does not raise the same point about the same
-place again, and that withheld feedback is listed with the reason. A different point, or the same one on
-other work, is not held back. Nothing already posted on the work or said in a conversation is unsaid: a
-summary comment gets a correction notice where the provider allows an edit, and inline comments and
-conversation replies stay as they were.
+The dispute stays on the observation until the developer withdraws it.
+While it stands, later reviews of the same work do not raise the same point about the same place again.
+The withheld feedback lists that reason.
+A different point, or the same point on other work, is not withheld.
+
+Nothing already posted on the work or said in conversation is recalled.
+A summary comment gets a correction notice where the provider permits an edit.
+Inline comments and conversation replies stay unchanged.
 
 ### Approve or reject feedback
 
-Feedback on the work awaits approval by default. Open it under **Needs you** and check the exact
-proposed summary and inline comments against their observations. **Approve and close** approves
-that package and closes the panel; approval still passes current delivery checks. It does not
-approve a pull request for merge.
+Feedback on the work awaits approval by default.
 
-**Reject feedback** requires one reason: **Incorrect**, **Missing important context**,
-**Not useful to the recipient**, **Already covered elsewhere**, **Wrong delivery place**, or
-**Something else**. Add the requested explanation. The decision records your identity and reason.
-Rejecting feedback does not mark its observations incorrect; use **Mark as incorrect** for that.
+1. Open it under **Needs you**.
+2. Check the exact proposed summary and inline comments against their observations.
+3. Select **Approve and close** to approve that package and close the panel.
+
+Approval still passes current delivery checks.
+It does not approve a pull request for merge.
+**Reject feedback** requires one reason:
+
+- **Incorrect**.
+- **Missing important context**.
+- **Not useful to the recipient**.
+- **Already covered elsewhere**.
+- **Wrong delivery place**.
+- **Something else**.
+
+1. Add the requested explanation.
+
+The decision records your identity and reason.
+Rejection does not mark observations incorrect.
+Use **Mark as incorrect** for that.
 
 ## What starts a review
 
-Five doors start reviews. Provider reconciliation is shown too because it records an occurrence but stops
-before a review starts.
+Five entry paths start reviews.
+Provider reconciliation also records an occurrence, but stops before a review starts.
 
 ```mermaid
 flowchart LR
     accTitle: Events that do and do not start practice reviews
-    accDescr: Live events, manual requests, campaigns, and recurring checks start reviews. Provider reconciliation records an occurrence but does not start a pull request or issue review.
+    accDescr: Live events, manual requests, campaigns, and recurring checks start reviews. Provider reconciliation records an occurrence. It does not start a pull request or issue review.
     Event[A live event from GitHub or GitLab] --> Live[Live event]
     Command[The /hephaestus review comment command] --> Hand[Requested by hand]
     Button[The Review this now button] --> Hand
@@ -215,306 +274,406 @@ flowchart LR
     Sync --> Stop[Recorded only. No review starts.]
 ```
 
-The labels on the right are the ones **What we noticed** prints when you open a piece of work under
-**Practices → Practice reviews → Work**, so you can read it back against this diagram directly. Two things in it will bite you if you assume otherwise:
+The labels on the right match **What we noticed** on **Practices → Practice reviews → Work**.
+Two distinctions matter:
 
-- **The comment command and the button are indistinguishable afterwards.** Both record
-  `Requested by hand`. If you need to know which was used, the answer is not in the data.
-- **Reconciling with the provider records the occurrence but starts no review.** For pull requests and
-  issues this is a deliberate dead end: a sync tells us something happened, not when, and paying to review
-  it later would spend money on a stale event. (Settled Slack threads are the exception — the thread sweep
-  both records and starts.)
+- **The comment command and button have indistinguishable records.**
+  Both record `Requested by hand`.
+  The data does not identify which one was used.
+- **Provider reconciliation records an occurrence but starts no review.**
+  For pull requests and issues, a sync establishes that something happened, not when.
+  A later review would spend money on a stale event.
+  Settled Slack threads are the exception.
+  Their thread sweep records the occurrence and starts the review.
 
-All five spend from the workspace's AI budget.
+All five entry paths spend from the workspace's AI budget.
 
-| Door                                                       | Who may use it                                                                               | Rate limit                                                      |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Live event                                                 | Nobody — it is automatic, per the practices' occasions                                       | The per-workspace cooldown between reviews of the same work     |
-| `/hephaestus review` in a **GitLab merge request** comment | The work's author or assignees, or a workspace admin                                         | Per-person hourly allowance, **and** the same per-work cooldown |
-| **Review this now** in the app                             | The same people. It is offered only where the reader may ask; the server refuses anyone else | Per-person hourly allowance, **and** the same per-work cooldown |
-| **Past work** campaign                                     | A workspace admin, and only after confirming a priced estimate                               | Bounded by the campaign's own scope                             |
-| **Keep checking new work** schedule                        | A workspace admin                                                                            | One campaign at a time per workspace                            |
+| Door | Who may use it | Rate limit |
+| --- | --- | --- |
+| Live event | Nobody. It is automatic, per the practices' occasions | Per-workspace cooldown between reviews of the same work |
+| `/hephaestus review` in a **GitLab merge request** comment | The work's author or assignees, or a workspace admin | Per-person hourly allowance and the same per-work cooldown |
+| **Review this now** in the app | The same people. Only authorized readers see it, and the server refuses others | Per-person hourly allowance and the same per-work cooldown |
+| **Past work** campaign | A workspace admin, only after confirmation of a priced estimate | The campaign's own scope |
+| **Keep checking new work** schedule | A workspace admin | One campaign at a time per workspace |
 
-Two switches sit in front of the whole table. **Start from work activity** governs the first row;
-**Start requested reviews** governs the other four together, so turning it off stops the button,
-the comment command, campaigns and schedules at once.
+Two switches control the whole table.
+**Start from work activity** controls the first row.
+**Start requested reviews** controls the other four.
+If it is off, the button, comment command, campaigns, and schedules all stop.
 
-Every door goes through coverage. Asking by hand does not widen it: a review requested on work whose author
-is not a covered person is refused just as a live event would be. The button appears only on pull requests
-and issues: on a developer's **Activity**, beside their own open pull requests and assigned issues; on
-their **Reviews of your work**, beside work a review recorded something about; and for workspace admins,
-on any pull or merge request or issue opened under **Practices → Practice reviews → Work**. Documents and
-Slack threads are reviewed on the occasion their source produces, with nothing to point at and ask about,
-and there is no comment command on GitHub pull requests at all.
+Every entry path passes coverage checks.
+A manual request does not broaden coverage.
+A request about an uncovered author is refused, as a live event would be.
+The button appears only on pull requests and issues in these places:
+
+- A developer's **Activity**, beside their own open pull requests and assigned issues.
+- Their **Reviews of your work**, beside work with recorded review results.
+- For workspace admins, any pull or merge request or issue under **Practices → Practice reviews → Work**.
+
+Documents and Slack threads use their source's occasion, without a manual review target.
+There is no comment command on GitHub pull requests.
 
 ## Deployment
 
-The workspace steps are the five above, and they are not enough on their own. The deployment must enable
-the agent runtime on both the submitting server and the claiming worker, and enable repository checkout
-wherever evidence capture runs; until it does, every workspace on the instance is quiet however it is
-configured. Workspace coverage is not configured by an instance population flag; instance Silent Mode
-is the separate emergency brake for external delivery. Variables, Compose forwarding, storage
-requirements, queue metrics, retention, and fixed limits are in
-[Practice review operations](./practice-review-operations.mdx).
+The workspace setup above is not sufficient on its own.
+The deployment must enable the agent runtime on both the submitting server and claiming worker.
+It must enable repository checkout wherever evidence capture runs.
+Until then, every workspace on the instance stays quiet, regardless of configuration.
 
-Review conditions belong to each practice, not workspace coverage. Choose permitted states in the
-practice editor, such as draft status for pull or merge requests or archive status for documents.
-Selecting every value leaves that condition unrestricted.
+No instance population flag configures workspace coverage.
+Instance Silent Mode is the separate emergency brake for external delivery.
+[Practice review operations](./practice-review-operations.mdx) covers variables, Compose forwarding, storage, queue metrics, retention, and fixed limits.
+
+Review conditions belong to each practice, not workspace coverage.
+
+1. In the practice editor, select permitted states, such as pull/merge-request draft status or document archive status.
+
+Selection of every value leaves that condition unrestricted.
 
 ## Autonomy, coverage, and delivery
 
-Three independent controls answer different questions; confusing them is the most common misconfiguration.
+Three independent controls answer different questions.
+Confusion between them is the most common misconfiguration.
 
-- **Who authorizes release** — **Off**, **Review before sending**, or **Send automatically**. **Off** stops
-  the review. **Review before sending** keeps measurement running and queues each new in-context feedback
-  item for a workspace owner or administrator to approve or reject; the developer's own practice pages and
-  the mentor are written regardless, because nobody but the developer reads them and only on request.
-  **Send automatically** lets new feedback onto the work proceed without that decision, subject to the same
-  delivery policy. Changing the setting never releases an existing proposal.
-- **Coverage**, under **What gets reviewed**, combines all or selected monitored repositories with all or
-  selected people for repository work. An empty repository selection covers no repository work. Slack
-  conversations and Outline documents have no repository; they follow the people selection and their own
-  collection permissions. An empty people selection covers nobody, across every kind of work. To stop all
-  new practice reviews, turn **Start practice reviews** off. The people side is linked human workspace
-  membership — see [Who counts as a person](#who-counts-as-a-person).
-- **Send feedback**, under **Sending feedback**, controls whether feedback may leave Hephaestus. It stops
-  comments on connected work and the mentor; it does not stop measurement, does not discard configuration, and
-  does not blank the developer's own feedback pages here, which are not something leaving. Pausing is the
-  immediate workspace brake. Feedback already approved but not sent when the pause takes effect is
-  withheld permanently, just like automatic feedback, so resuming cannot release old work. Proposals that
-  have not been decided stay in the approval queue; after resume, a workspace owner or administrator may
-  still inspect and decide each one under the current policy.
+- **Who authorizes release** uses **Off**, **Review before sending**, or **Send automatically**.
+  **Off** stops the review.
+  **Review before sending** continues measurement.
+  It queues each new in-context piece of feedback for a workspace owner or administrator to approve or reject.
+  The developer's practice pages and mentor still receive feedback on request.
+  Only the developer reads those channels.
+  **Send automatically** permits new feedback on the work without that decision, subject to the same delivery policy.
+  A setting change never releases an existing proposal.
+- **Coverage**, under **What gets reviewed**, selects all or selected monitored repositories and people for repository work.
+  An empty repository selection covers no repository work.
+  Slack conversations and Outline documents have no repository.
+  They follow the people selection and their own collection permissions.
+  An empty people selection covers nobody across every work kind.
+  People coverage uses linked human workspace membership.
+  See [Who counts as a person](#who-counts-as-a-person).
+- **Send feedback**, under **Sending feedback**, controls whether feedback can leave Hephaestus.
+  It stops comments on connected work and feedback in the mentor.
+  It does not stop measurement, discard configuration, or remove the developer's own feedback pages.
+  Those pages are not external delivery.
+  Pause is the immediate workspace brake.
+  Feedback approved but unsent at pause is permanently withheld, as automatic feedback is.
+  Resume cannot release that old work.
+  Undecided proposals stay in the approval queue.
+  After resume, an owner or administrator can still inspect and decide each proposal under current policy.
 
-Changing coverage, **Post feedback after merge**, or the workspace default autonomy invalidates admitted,
-unsent automatic feedback — narrowing as much as widening. That feedback does not re-enter delivery; a
-later review creates new feedback. Undecided proposals remain explicit workflow items and are checked
-against current policy if a workspace owner or administrator later approves them. Changing the cooldown
-does not advance the revision. Group and practice overrides are checked separately at delivery; they never
-promote an existing proposal to automatic delivery.
+1. To stop all new practice reviews, turn **Start practice reviews** off.
+
+Changes to coverage, **Post feedback after merge**, or workspace default autonomy invalidate admitted, unsent automatic feedback.
+This applies to narrower and broader settings.
+That feedback never re-enters delivery.
+A later review creates new feedback.
+Undecided proposals remain explicit workflow items and pass current policy checks on later approval.
+
+A cooldown change does not advance the revision.
+Delivery checks group and practice overrides separately.
+Those overrides never promote an existing proposal to automatic delivery.
 
 ### Who counts as a person
 
-The people side of coverage contains linked human workspace members, and the count beside **People** on
-the review screen is how many are in scope. Only a member's account on the connected GitHub or GitLab
-instance counts: the GitHub profile of whoever created a GitLab workspace makes them a member, but never a
-person reviewed there. A covered person must appear as eligible on the **Members** screen. Manage a missing
-person in the connected organization, group, or team roster and let membership sync pick them up; signing in
-to Hephaestus alone does not create workspace membership.
+People coverage contains linked human workspace members.
+The **People** count on the review screen shows how many are in scope.
+Only the member's account on the connected GitHub or GitLab instance counts.
+The GitHub profile of a GitLab workspace creator establishes membership, not a reviewed person there.
+A covered person must appear as eligible on **Members**.
 
-A GitLab workspace's members are everyone with access to its group, as GitLab's own member list of the
-group shows it, with **Include inherited** on:
+1. Manage a missing person in the connected organization, group, or team roster.
+2. Let membership sync add them.
 
-- direct members of the group;
-- members of any parent group, so a workspace on a course subgroup includes the students enrolled in the
-  course's parent group;
-- members of a group invited to the group, at no more than the role the invitation grants;
-- members of a subgroup, such as a tutor listed only in a team subgroup;
-- people with the Developer or Reporter role on a project in the group or one of its subgroups, such as a
-  student added to one project only.
+Sign-in to Hephaestus alone does not create workspace membership.
+GitLab workspace members include everyone with group access shown in GitLab's group member list with **Include inherited** on:
 
-Someone GitLab lists more than once holds their highest role; Maintainer and Owner make a workspace
-administrator, and someone only a subgroup or a project lists is a member. An invitation sent to an e-mail
-address counts once it is accepted. A person leaves the workspace when GitLab stops listing them: at once
-when GitLab reports that they have lost access to the group and every subgroup, otherwise at the next
-membership sync (`MONITORING_SYNC_CRON`) whose listing GitLab returns in full. A listing GitLab cannot return
-in full changes nobody. The workspace owner keeps the workspace whatever the roster says. Removing someone's
-direct membership in the group does not remove them from the workspace while they still reach the group
-through a parent or invited group.
+- Direct group members.
+- Parent-group members, including students in a course's parent group for a workspace on its subgroup.
+- Members of an invited group, limited to the invitation's role.
+- Subgroup members, such as tutors listed only in a team subgroup.
+- Project members with Developer or Reporter roles in the group or its subgroups, including a student on one project only.
 
-The person a practice evaluates must be covered. That is normally the pull-request or issue author;
-reviewer practices use the reviewer. Outside contributors, unlinked reviewers, unidentified people, and
-bots therefore remain outside coverage, and no feedback is prepared about them.
-Read the **People** count before concluding that reviews are broken — if it is lower than your
-contributor list, the difference is the people who are not members.
+If GitLab lists someone repeatedly, their highest role applies.
+Maintainer and Owner roles make workspace administrators.
+Someone listed only by a subgroup or project is a member.
+An email invitation counts after acceptance.
+The workspace owner retains the workspace regardless of the roster.
+
+A person leaves when GitLab stops listing them.
+Removal is immediate if GitLab reports loss of access to the group and every subgroup.
+Otherwise, removal occurs at the next membership sync (`MONITORING_SYNC_CRON`) with a complete GitLab listing.
+An incomplete listing changes nobody.
+Removal of direct membership does not remove a person with access through a parent or invited group.
+
+The person a practice evaluates must be covered.
+Usually this is the pull-request or issue author.
+Reviewer practices use the reviewer.
+Outside contributors, unlinked reviewers, unidentified people, and bots remain outside coverage.
+Hephaestus prepares no feedback about them.
+
+1. Before a diagnosis of broken reviews, read the **People** count.
+
+If it is below your contributor count, the difference is nonmembers.
 
 ### You set this once, not a hundred times
 
-**Autonomy** is answered once for the **workspace**, and every group and every practice follows that answer
-until you say otherwise. A group can override the workspace, and a practice can override its group:
+The workspace's **Autonomy** answer applies to every group and practice until an override.
+A group can override the workspace.
+A practice can override its group:
 
 > practice → its group → the workspace
 
-Anything you have not decided shows as **inherited**, with the level it came from, and can be reset back to
-inheriting at any time. Start with the one workspace answer, then override the handful of groups where it
-is wrong; a workspace runs dozens of practices across a dozen groups, and a setting you have to apply per
-row is a setting nobody applies. Coverage does not work this way and is not inherited — it is set once for
-the whole workspace, on **When and where**.
+An undecided value shows as **inherited**, with its source level.
+You can reset an override to inheritance at any time.
+Workspaces can have dozens of practices across a dozen groups.
+A setting that needs individual row changes is unlikely to be applied.
 
-**Review settings → How much** shows, above the list, how many practices sit at each setting — once for the
-workspace and again for each group. Read that line before changing anything; it is the fastest way to see
-whether an override somebody made long ago is still doing what you think. **Set by hand** filters the list
-down to the overrides.
+1. Start with one workspace answer.
+2. Override the few groups where that answer is inappropriate.
 
-The exact refusal semantics of all three controls, and the order the delivery gates run in, are in the
-[practice review glossary](/contributor/practice-review-glossary).
+Coverage does not use inheritance.
+It is set once for the whole workspace on **When and where**.
+Above its list, **Review settings → How much** counts practices at each setting for the workspace and each group.
+That line is the fastest way to check an old override.
+**Set by hand** filters the list to overrides.
+
+1. Before a change, read that count line.
+
+The [practice review glossary](/contributor/practice-review-glossary) defines exact refusal semantics and delivery-gate order for all three controls.
 
 ## What costs money
 
-A review can make many model calls. These controls limit which reviews can start and what they can spend.
+A review can make many model calls.
+These controls limit admission and spend:
 
-1. **The monthly AI budget.** There are two, and they are never added together: the *instance* budget caps
-   a workspace's spend on shared models you registered, and the *workspace's own* budget caps its spend on
-   its own connected provider. Each pauses only the work it funds. Setting either to exactly `0` is the
-   supported way to hard-stop that purse mid-month; clearing the field removes the cap.
-2. **The cooldown.** The minimum gap between reviews of the same work for the same occasion. New commits
-   become eligible for one review at the latest commit after ten quiet minutes, or after sixty minutes
-   from the first pending push. The cooldown can delay that review further. This is a grouping delay,
-   not an hourly rate cap; queue and concurrency limits also affect when a review starts.
-3. **The per-person hourly allowance** on hand-requested reviews.
-4. **Coverage and autonomy**, which decide how much work is eligible in the first place.
+- **The monthly AI budget** has two separate caps, which are never added together.
+  The *instance* budget caps shared-model spend for models you registered.
+  The *workspace's own* budget caps its connected-provider spend.
+  Each pauses only the work it funds.
+  Exactly `0` stops that budget's spend mid-month.
+  An empty field removes the cap.
+- **The cooldown** is the minimum gap between reviews of the same work for the same occasion.
+  New commits become eligible for one review at the latest commit after ten quiet minutes.
+  They also become eligible sixty minutes after the first pending push.
+  The cooldown can delay that review further.
+  This groups changes and is not an hourly rate cap.
+  Queue and concurrency limits also affect review start time.
+- **The per-person hourly allowance** limits hand-requested reviews.
+- **Coverage and autonomy** determine eligible work.
 
-A budget pause is a **hold**, not a cancellation: queued jobs are released automatically when the cap is
-raised or the month rolls over. A job still over cap seven days after it was queued is cancelled rather
-than held forever.
+A budget pause is a **hold**, not cancellation.
+Queued jobs resume automatically after a cap increase or a new month.
+A job still over cap seven days after queue entry is canceled instead of held forever.
 
-**Practice reviews go silent when a budget is exhausted, and the mentor does not.** A queued review is
-refused before it runs and nothing is posted, so no end user sees an error; a user who sends a mentor
-message into an exhausted purse gets a reply naming the cap and who can lift it. Staff for the difference —
-you will hear about the mentor and you will have to go looking for the reviews.
+**Practice reviews go silent when a budget is exhausted, and the mentor does not.**
+A queued review is refused before execution and posts nothing.
+No end user sees an error.
+A mentor request to an exhausted budget receives a reply that names the cap and who can raise it.
+Operators hear about mentor failures but must actively inspect review failures.
 
-Full budget mechanics, including what an unverifiable month does, are on
-[Integrations & Reference Deployment](./production-setup#instance-wide-llm-settings).
+[Integrations & Reference Deployment](./production-setup#instance-wide-llm-settings) explains full budget mechanics, including an unverifiable month.
 
 ## Reviewing past work
 
-Two instruments, and the difference between them is the difference between a purchase and a standing
-order. The campaign is on
-**Administration → Practices → Review settings → Past work**; the recurring check is on the same page's
-**When and where** section, beside the other things that start a review.
+A campaign is a bounded decision.
+A recurring check is ongoing authorization.
+**Past work** is under **Administration → Practices → Review settings → Past work**.
+The recurring check is on **When and where**, beside other review triggers.
 
-**A campaign — *Past work*.** You choose a kind of work and a lookback window, press
-**Estimate this backfill**, and see how many pieces of work are in range and what they are estimated to
-cost. Nothing is reviewed until you confirm. It is one bounded, priced, named decision, and it finishes.
+**A campaign — *Past work*.** A campaign is bounded, priced, named, and ends.
+No review starts until confirmation.
 
-**A schedule — *Keep checking new work*.** You choose a kind of work, a cadence, and how far back each
-check reaches. This exists because work that never raised a notification is otherwise never reviewed and
-nothing says so.
+1. Choose a kind of work and a lookback window.
+2. Select **Estimate this backfill**.
+3. Review the work count and estimated cost.
+4. Confirm the campaign.
 
-:::warning A recurring check authorizes spending *and* speaking
-A schedule opens each of its campaigns **directly in a running state**, using the authority of whoever
-created the schedule. A cost estimate is still computed for each run, but nobody is asked to approve it,
-and there is no cap specific to sweeping — the only thing that stops it is the workspace's AI budget, the
-schedule's own scope, or switching it off. The screen says as much before you commit: *"Every check can
-start reviews, so this authorises the AI spend for all of them — not just the first."*
+:::caution A recurring check authorizes spending *and* speaking
+A schedule starts every campaign **directly in a running state** under its creator's authority.
+Each run has a cost estimate, but nobody approves it.
+There is no sweep-specific cap.
+Only the workspace AI budget, schedule scope, or a disabled schedule stops it.
+Before confirmation, the screen states:
 
-**A swept review is a normal review.** Its observations are recorded as live, so they compose feedback and
-deliver it: provider comments, practice-page cards, mentor context, exactly as an event-triggered review
-would. The sweep is only a different way of *finding* current work that never raised a notification.
-Treat creating one as an ongoing decision about spending and about what your team hears from Hephaestus,
-not a one-off.
+> Every check can start reviews, so this authorises the AI spend for all of them — not just the first.
 
-Stop it by **Pause** or **Remove** on the schedule, or by cancelling the campaign it opened. Windows
-overlap on purpose so that work missed once gets a second chance; work already reviewed is not paid for
-twice.
+**A swept review is a normal review.**
+It records live observations, composes feedback, and delivers provider comments, practice-page cards, and mentor context.
+It behaves as an event-triggered review would.
+The sweep finds current work that had no notification.
+A schedule is an ongoing decision about spend and feedback, not a one-time action.
+
+1. To stop it, select **Pause** or **Remove** on the schedule, or cancel its campaign.
+
+Windows intentionally overlap so previously missed work gets another opportunity.
+Previously reviewed work does not incur a second review charge.
 :::
 
-**A campaign, by contrast, is measured and never delivered.** Backfilled runs do not enter the composition
-stage at all, and the in-app lane separately refuses a pattern supported only by backfilled observations.
-They land in the read models and under **Practices → Practice reviews**, never as comments, practice-page cards, or mentor
-briefs. That is by construction, not a setting you can change: a campaign changes what you can read about
-past work and does not contact the people whose work it measured.
+**A schedule — *Keep checking new work*.** The schedule reviews work that raised no notification and would otherwise silently remain unreviewed.
+
+1. Choose a kind of work.
+2. Choose a cadence.
+3. Choose how far back each check reaches.
+
+**A campaign, by contrast, is measured and never delivered.**
+Backfilled runs never enter composition.
+The in-app channel also refuses a pattern supported only by backfilled observations.
+Results appear in read models and under **Practices → Practice reviews**.
+They never become comments, practice-page cards, or mentor briefs.
+
+This behavior cannot be changed by a setting.
+A campaign changes what you can read about past work.
+It does not contact the people whose work it measured.
 
 ## When a workspace goes quiet
 
-Work down this list. Step 0 usually ends the investigation; steps 1 to 7 are per workspace and
-8 to 10 are instance-wide, so if several workspaces went quiet at once, start at the bottom.
+Step 0 usually ends diagnosis.
+Steps 1–7 are workspace-specific.
+Steps 8–10 apply to the instance.
+If several workspaces became quiet simultaneously, start with steps 8–10.
 
-**0. Open the work and read what was recorded.** **Practices → Practice reviews → Work** lists every piece
-of work Hephaestus recorded, reviewed or not, named the way its provider writes it — *Pull request #1423*
-on GitHub, *Merge request !1423* on GitLab — with how many of the moments recorded on it started a
-review. Open one and you get three things: its observations and
-feedback; under **What we noticed**, what was recorded about it, how it was discovered and whether a
-review started, with the reason one did not; and under **Every practice**, what every practice made of it,
-each with a sentence saying what would change the answer. A quiet workspace with rows here is configured
-differently from a quiet workspace with none. The sentences the work prints are the same reasons the rest
-of this list enumerates — reading them first tells you which step to jump to.
+**0. Open the work.**
 
-If the work says the review model is not set up, or the practices that watch this are set to off, or the
-budget was used up, you are done; go fix that. If it says nothing was recorded at all, the problem is
-upstream of practice review — check the integration's sync. If it says the work is not showing on the
-provider, nothing is misconfigured: a sync marked that work as gone and the reviews are being held. They
-run themselves once a sync finds the work again, and are dropped if it does not within a week.
+1. Open **Practices → Practice reviews → Work**.
+2. Read what was recorded.
 
-1. **Is a review model bound and enabled?** Administration → **AI models**, the **Practice reviews** card.
-2. **Is the bound model still usable?** A model is usable only if the model *and* its connection are
-   enabled, the protocol is supported, and — for a shared instance model offered to *selected* workspaces
-   rather than to all of them — this workspace still has a grant. Revoking a grant or disabling a
-   connection stops every workspace bound to it, and the binding stays in place looking correct.
-3. **Is a budget exhausted?** Administration → **AI usage** names which budget stopped new reviews and who
-   can lift it. `agent.queue.held` counts jobs parked on a cap; `agent.queue.depth` counts only what a
-   worker could claim now, so alert on held rather than reading depth.
-4. **Is practice review, or the workspace, switched off?** The switch is **Start practice reviews** on
-   Administration → Practices → **Review settings → When and where** — *not* on the Workspace settings page. A
-   workspace suspended through the API runs nothing regardless of its AI configuration; Workspace settings has no pause control.
-   The developer's **No AI** choice also stops reviews about them (`MEMBER_AI_DECLINED`). A choice
-   with no matching model stops admission without switching to a looser choice. Check that member's
-   AI choice separately from workspace coverage and the model's availability.
+The list includes all recorded work, reviewed or not.
+Names follow the provider, such as *Pull request #1423* on GitHub or *Merge request !1423* on GitLab.
+Each row counts the recorded moments that started a review.
+The work view includes:
 
-5. **Can anything still start a review?** Same screen, **How reviews start**. With both **Start from work
-   activity** and **Start requested reviews** off, the workspace is on and nothing reaches it; the screen
-   says *"Nothing can start a review"*.
-6. **Is the work covered?** Same screen, **What gets reviewed**. Both counts have to be non-zero, and the
-   author of the quiet work has to be one of the covered people. **What we noticed** on the work tells a
-   missing author from excluded work:
-   - *"The author is unknown or not a workspace member yet"* — the repository and base branch are covered,
-     but the author is not a member on the connected instance, or has no known account at all. Check the
-     author on the **Members** screen and, for GitLab, in the group's member list with inherited members
-     shown. The work waits: once a membership sync admits the author, it is reviewed without anyone asking
-     again, provided that happens within `SIGNAL_LEDGER_PENDING_LAPSE_AFTER` (seven days by default).
-   - *"The author, repository, or base branch is outside the workspace's review coverage"* — the repository
-     or base branch is not selected, the author is a member the person selection leaves out. That decision is final for this work; widening coverage affects work that happens next.
-   A bot author has its own refusal: bot work is not reviewed as a member's work. Generated paths
-   remain in the captured evidence but are marked as generated. They are not judged as hand-written
-   work; see [Generated paths](#generated-paths) for the full policy.
+- Observations and feedback.
+- **What we noticed**: records, discovery method, review start, and any reason for no start.
+- **Every practice**: each practice's result and a sentence that states what would change it.
 
-7. **Is sending paused?** Same screen, **Sending feedback**. Reviews and in-app feedback continue, but no
-   comments or feedback in Heph leave Hephaestus. Resuming does not release automatic feedback withheld by
-   the pause.
-8. **Is `AGENT_ENABLED=true` on every role that needs it?** It defaults to `false` and gates submission,
-   execution *and* orphan recovery independently of the worker role. Set on the worker only, nothing is
-   submitted; set on the server only, jobs queue and are never claimed. Confirm by presence, not value: if
-   the flag never reached a pod, `agent.queue.depth`, `agent.queue.oldest_age_seconds` and
-   `agent.queue.running` are **absent** from that pod's metrics rather than reading zero.
-9. **Are jobs being claimed at all?** Watch `agent.queue.oldest_age_seconds`. It should rise and fall.
-   Climbing monotonically means the server is submitting and no worker is claiming.
-10. **Is instance-wide silent mode engaged?** Instance admin → **Instance settings**. While it is on, no
-    workspace's feedback leaves the instance — no comments on the work, no feedback in conversations and
-    no email — while reviews still run and in-app feedback still reaches each developer's Practice
-    profile. A banner says so on every instance-admin page.
+A quiet workspace with rows differs from a quiet workspace with none.
+The sentences give the same reasons as the checks below.
+They identify the relevant next step.
 
-The per-workspace review list, the **Reviews** tab under Administration → **Practices → Practice
-reviews**, shows each review's status; open a review to see the model it ran on and its error message —
-the fastest way to tell "never submitted" from "submitted and failed".
+1. If the work reports an unset model, disabled practices, or an exhausted budget, repair that configuration.
+2. If it reports no records, check the integration's sync.
+
+The latter problem is upstream of practice review.
+If the work is not visible on the provider, a sync marked it as gone.
+This is not misconfiguration.
+Reviews remain held until a sync finds the work again.
+They run automatically after its return, or are dropped if it stays absent for a week.
+
+1. **Check the review model binding and enabled state.**
+   Open Administration → **AI models**, the **Practice reviews** card.
+2. **Check whether the bound model remains usable.**
+   The model and connection must be enabled, and the protocol must be supported.
+   A shared model for selected workspaces also requires this workspace's grant.
+   Grant revocation or connection disablement stops every bound workspace, although the binding still appears correct.
+3. **Check for an exhausted budget.**
+   Administration → **AI usage** identifies the budget and who can raise it.
+   `agent.queue.held` counts capped jobs.
+   `agent.queue.depth` counts only jobs a worker can claim now.
+   Use held jobs for alerts, not depth.
+4. **Check whether practice review or the workspace is off.**
+   **Start practice reviews** is under Administration → Practices → **Review settings → When and where**, not Workspace settings.
+   An API-suspended workspace runs nothing, regardless of AI configuration.
+   Workspace settings has no pause control.
+   A developer's **No AI** stops reviews about them (`MEMBER_AI_DECLINED`).
+   A choice with no matching model stops admission without a looser choice.
+   Check the member's AI choice separately from coverage and model availability.
+5. **Check whether anything can start a review.**
+   On the same screen, inspect **How reviews start**.
+   If **Start from work activity** and **Start requested reviews** are both off, the enabled workspace receives no reviews.
+   The screen says *"Nothing can start a review"*.
+6. **Check work coverage.**
+   On the same screen, inspect **What gets reviewed**.
+   Both counts must be nonzero, and the author must be a covered person.
+   **What we noticed** distinguishes an unknown author from excluded work:
+
+   - *"The author is unknown or not a workspace member yet"*.
+     The repository and base branch are covered.
+     The author is not a member on the connected instance, or has no known account.
+     Check **Members**, and for GitLab the group's list with inherited members shown.
+     Work waits for membership sync to admit the author.
+     It then runs without another request if admission occurs within `SIGNAL_LEDGER_PENDING_LAPSE_AFTER` (default seven days).
+   - *"The author, repository, or base branch is outside the workspace's review coverage"*.
+     The repository or base branch is unselected, or the people selection excludes the member.
+     This decision is final for the work.
+     Broader coverage affects later work.
+
+   Bot authors have a separate refusal.
+   Bot work is not reviewed as a member's work.
+   Generated paths remain in captured evidence, marked as generated, and are not judged as hand-written work.
+   See [Generated paths](#generated-paths).
+
+7. **Check whether delivery is paused.**
+   On the same screen, inspect **Sending feedback**.
+   Reviews and in-app feedback continue, but comments and feedback in Heph do not leave Hephaestus.
+   Resume does not release automatic feedback withheld by the pause.
+8. **Check `AGENT_ENABLED=true` on every role that needs it.**
+   It defaults to `false` and separately gates submission, execution, and orphan recovery, independently of the worker role.
+   If enabled only on the worker, no submission occurs.
+   If enabled only on the server, jobs queue without claims.
+   Confirm presence, not value.
+   If the flag never reached a pod, its metrics omit `agent.queue.depth`, `agent.queue.oldest_age_seconds`, and `agent.queue.running`.
+   These metrics are **absent**, not zero.
+9. **Check whether workers claim jobs.**
+   Watch `agent.queue.oldest_age_seconds`.
+   It should rise and fall.
+   A continual increase means the server submits jobs but no worker claims them.
+10. **Check instance-wide silent mode.**
+    Open Instance admin → **Instance settings**.
+    While engaged, it blocks external comments, conversation feedback, and email for every workspace.
+    Reviews continue, and in-app feedback still reaches developers' Practice profiles.
+    Every instance-admin page shows a banner.
+
+The **Reviews** tab under Administration → **Practices → Practice reviews** lists per-workspace review status.
+
+1. Open a review to see its model and error message.
+
+This is the fastest distinction between no submission and failed submission.
 
 ## Generated paths
 
-In **Review settings**, set generated paths separately for each monitored GitHub or GitLab repository.
-Enter one pattern per line. Clear the list and save to stop marking paths as generated. This setting is
-independent of repository and branch coverage. Changing coverage does not clear generated paths.
-Slack conversations and Outline documents have no repository paths, so this setting does not apply.
+Generated paths are separate for each monitored GitHub or GitLab repository.
+The setting is independent of repository and branch coverage.
+A coverage change does not clear generated paths.
+Slack conversations and Outline documents have no repository paths, so the setting does not apply.
 
-Patterns use case-sensitive, repository-root Ant-style globs: `*` matches within one path segment,
-`?` matches one character, and `**` matches zero or more directories. For example, `webapp/src/api/**`
-marks all files below the committed API client, and `**/*.generated.ts` matches that suffix at any depth.
-Use `/` separators. A bare filename matches only at the repository root. There is no negation, leading
-`/`, parent traversal, URI variable, or automatic import from `.gitattributes` or other tools. Each
-repository accepts at most 100 patterns, with at most 512 characters per pattern.
+1. In **Review settings**, set generated paths for the repository.
+2. Enter one pattern per line.
+3. To stop the classification, clear the list.
+4. Save the change.
 
-**Generated content is kept, not removed.** The review receives the matched changed paths as trusted
-workspace policy. It must not judge those paths as hand-written work or count them toward hand-written
-review size. The `excludes-generated-and-build-artifacts` practice does not treat intentionally
-committed output on those paths as unwanted artifacts; it can still assess artifacts outside them.
-If a practice requires hand-written changes and none remain, the result is **Not applicable**, not a
-strength or a problem. Other evidence, such as the title, body, commits and review comments, remains
-available. Mark only paths your repository generates intentionally; a broad pattern can hide useful
-practice feedback.
+Patterns use case-sensitive, repository-root Ant-style globs:
 
-Under **Practice reviews**, open a review to see the generated-path patterns and matched changed paths
-used for that run. Both names of a renamed file are checked separately. Patterns are fixed when a
-review is admitted, and matched paths are recorded when evidence is captured. Later settings changes
-do not rewrite old review records. A review without a captured classification does not claim that no
-paths matched.
+- `*` matches within one path segment.
+- `?` matches one character.
+- `**` matches zero or more directories.
 
-The matcher follows [Spring's AntPathMatcher semantics](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/util/AntPathMatcher.html),
-not `.gitignore` or `.gitattributes` syntax. GitHub also supports [marking generated files for diff presentation](https://docs.github.com/en/repositories/working-with-files/managing-files/customizing-how-changed-files-appear-on-github),
-but Hephaestus uses the workspace admin's explicit per-repository setting.
+`webapp/src/api/**` marks all files below the committed API client.
+`**/*.generated.ts` matches that suffix at any depth.
+A bare filename matches only at the repository root.
+Each repository accepts at most 100 patterns, each with at most 512 characters.
+The matcher has no negation, leading `/`, parent traversal, or URI variable.
+It does not automatically import `.gitattributes` or other tools' settings.
+
+1. Use `/` separators.
+
+**Generated content is kept, not removed.**
+The review receives matched changed paths as trusted workspace policy.
+It must not judge them as hand-written work or count them toward hand-written review size.
+The `excludes-generated-and-build-artifacts` practice does not treat intentionally committed output on those paths as unwanted artifacts.
+It can still assess artifacts outside them.
+
+If a practice requires hand-written changes and none remain, the result is **Not applicable**, not a strength or problem.
+Other evidence, including the title, body, commits, and review comments, remains available.
+A broad pattern can hide useful practice feedback.
+
+1. Mark only paths that your repository intentionally generates.
+2. Under **Practice reviews**, open a review to see its generated-path patterns and matched changed paths.
+
+Both names of a renamed file have separate checks.
+Review admission fixes the patterns.
+Evidence capture records matched paths.
+Later setting changes do not rewrite old records.
+A review with no captured classification does not claim that no paths matched.
+
+The matcher follows [Spring's AntPathMatcher semantics](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/util/AntPathMatcher.html), not `.gitignore` or `.gitattributes` syntax.
+GitHub also supports [marking generated files for diff presentation](https://docs.github.com/en/repositories/working-with-files/managing-files/customizing-how-changed-files-appear-on-github).
+Hephaestus uses the workspace admin's explicit per-repository setting.

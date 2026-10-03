@@ -9,6 +9,11 @@
 	"docs/admin/legal-pages.mdx",
 	"docs/admin/liquibase-baseline-runbook.md",
 	"docs/admin/overview.mdx",
+	"docs/admin/practice-catalog.mdx",
+	"docs/admin/practice-review-operations.mdx",
+	"docs/admin/practice-review.mdx",
+	"docs/admin/product-feedback.mdx",
 	"docs/admin/release-image-lock.md",
+	"docs/admin/writing-practices.mdx",
 	"docs/contributor/simplified-technical-english.md"
 ]
