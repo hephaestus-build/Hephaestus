@@ -25,6 +25,8 @@ minimumReleaseAgeExclude:
   - "@earendil-works/pi-mcp@1.0.0"
   - "@earendil-works/pi-telemetry@1.0.0"
   - "@earendil-works/pi-tui@1.0.0"
+  # Renovate security update: dompurify@3.4.16
+  - dompurify@3.4.16
 
 allowBuilds:
   "@google/genai": false
@@ -56,7 +58,7 @@ overrides:
   "@vitest/browser": "catalog:"
   "@vitest/runner": "catalog:"
   "browserslist@<=4.28.6": 4.28.9
-  dompurify: 3.4.14
+  dompurify: 3.4.16
   "js-yaml@>=4.0.0": 4.3.2
   lodash: 4.18.1
   lodash-es: 4.18.1
