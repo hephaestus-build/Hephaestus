@@ -167,7 +167,12 @@ A Git revert alone neither restores the database nor selects the previous image.
 **CAUTION:** Never run `clearCheckSums` in production or staging.
 It does not repair schema drift and removes checksum evidence.
 Reserve it for disposable developer databases after you understand the mismatch.
-If you can discard local data, prefer `vp run dev:reset`.
+
+1. If you can discard local data, prefer this command:
+
+   ```bash
+   vp run dev:reset
+   ```
 
 Contributor [release gates](../contributor/database-migration#baseline-release-gates) define the release checks.
 Operators record the deployment actions in their deployment record.

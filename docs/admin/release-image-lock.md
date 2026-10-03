@@ -19,24 +19,25 @@ identity, release identity, schema, and equality with the release evidence manif
 The certificate identity belongs to the release, not necessarily the current repository.
 A lock signed before the `ls1intum` → `hephaestus-build` transfer permanently names the old repository in its Fulcio certificate.
 `security/release-identities.json` in the repository maps each version to its signing identity and image namespace.
-The verifier and every workflow use that map. For releases
-before that map's `hephaestus-build` boundary, substitute
-`https://github.com/ls1intum/Hephaestus/.github/workflows/release.yml@refs/heads/main` below and
-`--owner ls1intum` in the attestation check.
+The verifier and every workflow use that map.
 
-```bash
-VERSION=vX.Y.Z
-gh release download "$VERSION" --repo hephaestus-build/Hephaestus \
-  --pattern "release-$VERSION.json" \
-  --pattern "release-$VERSION.json.sigstore.json"
-cosign verify-blob \
-  --bundle "release-$VERSION.json.sigstore.json" \
-  --certificate-identity \
-    'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
-  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  "release-$VERSION.json"
-gh attestation verify "release-$VERSION.json" --owner hephaestus-build
-```
+1. For releases before that map's `hephaestus-build` boundary, substitute `https://github.com/ls1intum/Hephaestus/.github/workflows/release.yml@refs/heads/main` below.
+2. For those releases, substitute `--owner ls1intum` in the attestation check.
+3. Run the verification commands:
+
+   ```bash
+   VERSION=vX.Y.Z
+   gh release download "$VERSION" --repo hephaestus-build/Hephaestus \
+     --pattern "release-$VERSION.json" \
+     --pattern "release-$VERSION.json.sigstore.json"
+   cosign verify-blob \
+     --bundle "release-$VERSION.json.sigstore.json" \
+     --certificate-identity \
+       'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
+     --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+     "release-$VERSION.json"
+   gh attestation verify "release-$VERSION.json" --owner hephaestus-build
+   ```
 
 ## Rollback
 
