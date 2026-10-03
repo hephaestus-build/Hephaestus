@@ -73,7 +73,7 @@ export const Withheld: Story = {
 	args: { split: WITHHELD, yourStanding: "NOT_OBSERVED" },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("img")).toBeNull();
-		await expect(canvas.getByText("Held back: too few developers to compare yet.")).toBeVisible();
+		await expect(canvas.getByText("Held back so no one can be singled out.")).toBeVisible();
 		await expect(canvas.queryByText(/developers observed/u)).toBeNull();
 		await expect(canvas.getByText("None yet (Not observed yet)")).toBeVisible();
 	},

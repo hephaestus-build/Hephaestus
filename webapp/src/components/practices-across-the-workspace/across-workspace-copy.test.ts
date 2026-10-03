@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	groupsHint,
+	practicesHint,
 	type SplitContext,
 	splitDescription,
 	tilesHint,
@@ -43,7 +44,7 @@ describe("splitDescription", () => {
 describe("a split held back", () => {
 	it("gives one short reason and the reader's word, never the total", () => {
 		expect(splitDescription({ shape: "WITHHELD" }, "MIXED", context)).toBe(
-			"Held back: too few developers to compare yet. You: Mixed feedback.",
+			"Held back so no one can be singled out. You: Mixed feedback.",
 		);
 	});
 
@@ -76,7 +77,14 @@ describe("the hints", () => {
 
 	it("takes the part size from K", () => {
 		expect(groupsHint(3)).toContain(
-			"A bar shows only when each of its parts holds at least 3 other developers",
+			"A bar shows only if each of its parts holds at least 3 other developers",
 		);
+	});
+
+	it("says a practice's bar is also held back beside its group's, with no promise about later", () => {
+		expect(practicesHint(3)).toContain(
+			"The bar must also single no one out beside the group's bar.",
+		);
+		expect(splitDescription({ shape: "WITHHELD" }, "MIXED", context)).not.toMatch(/yet/u);
 	});
 });

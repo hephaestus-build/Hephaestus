@@ -67,13 +67,13 @@ export const Default: Story = {
 		// A split and a held back track fill the same width, the whole bar column.
 		const split = canvas.getAllByRole("img")[0]?.getBoundingClientRect().width;
 		const heldBack = canvas
-			.getByText("Held back: too few developers to compare yet.")
+			.getByText("Held back so no one can be singled out.")
 			.parentElement?.getBoundingClientRect().width;
 		await expect(split).toBe(heldBack);
 		await expect(
 			canvas.getByRole("img", { name: /4 Needs attention, 9 Mixed feedback, 9 Going well/u }),
 		).toBeVisible();
-		await expect(canvas.getByText("Held back: too few developers to compare yet.")).toBeVisible();
+		await expect(canvas.getByText("Held back so no one can be singled out.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Open group Handling failure well" }));
 		await expect(onOpen).toHaveBeenCalledOnce();
 	},
@@ -89,9 +89,7 @@ export const Withheld: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByText("Held back: too few developers to compare yet.")).toHaveLength(
-			4,
-		);
+		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(4);
 		await expect(canvas.queryByRole("img")).toBeNull();
 	},
 };

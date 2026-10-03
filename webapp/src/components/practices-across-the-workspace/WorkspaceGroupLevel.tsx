@@ -11,7 +11,7 @@ import { DrawerBody } from "@/components/ui/drawer";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { useRevealedRows } from "@/hooks/use-revealed-rows";
 
-import type { SplitContext } from "./across-workspace-copy";
+import { practicesHint, type SplitContext } from "./across-workspace-copy";
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 import { SplitLegend, WorkspaceSplitBar } from "./WorkspaceSplitBar";
 
@@ -139,6 +139,11 @@ function GroupPractices({
 	const { shown, ...more } = useRevealedRows(rows, PRACTICES_PAGE_SIZE);
 	return (
 		<>
+			{state.status === "ready" && (
+				<p className="max-w-2xl text-sm text-muted-foreground">
+					{practicesHint(state.context.minimumOthers)}
+				</p>
+			)}
 			{/* What the bars show, the page's own legend, above the table it explains. */}
 			<SplitLegend />
 			<WorkspaceComparisonTable

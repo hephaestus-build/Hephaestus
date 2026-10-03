@@ -74,7 +74,15 @@ export function tilesHint(
  * shows from K + 1 developers, the reader counted, so it stands for K others whoever reads it.
  */
 export function groupsHint(minimumOthers: number): string {
-	return `Each bar counts developers by their standing in the group, and You marks yours. A bar shows only when each of its parts holds at least ${minimumOthers} other developers; otherwise the whole bar is held back, so no one can be singled out.`;
+	return `Each bar counts developers by their standing in the group. You marks your standing. A bar shows only if each of its parts holds at least ${minimumOthers} other developers. If not, the whole bar is held back, so no one can be singled out.`;
+}
+
+/**
+ * The line over a group's practices on when their bars show: by the same rule as a group's, and
+ * only while a practice's bar set against its group's singles no one out.
+ */
+export function practicesHint(minimumOthers: number): string {
+	return `Each bar counts developers by their standing in the practice. You marks your standing. A bar shows only if each of its parts holds at least ${minimumOthers} other developers. The bar must also single no one out beside the group's bar. If not, it is held back.`;
 }
 
 export const standingLabel = (standing: PracticeGroupStandingValue): string =>
@@ -128,10 +136,11 @@ export function developerCount(count: number): string {
 }
 
 /**
- * What a split held back says under its empty track, the same in every row: the observed total is
- * said once, above the table, rather than again on each row.
+ * What a split held back says under its empty track, the same in every row and for every reason
+ * the privacy rule holds one back: a part too small, or a practice too close to its group. More
+ * data does not lift the second, so the words promise nothing about later.
  */
-export const HELD_BACK = "Held back: too few developers to compare yet";
+export const HELD_BACK = "Held back so no one can be singled out";
 
 /** The reference group a split is a part of: "24 developers observed in this workspace so far". */
 function referenceGroup(context: SplitContext): string {

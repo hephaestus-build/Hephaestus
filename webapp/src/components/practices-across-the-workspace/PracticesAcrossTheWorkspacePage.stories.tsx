@@ -55,7 +55,7 @@ export const Default: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Each bar counts developers by their standing in the group, and You marks yours. A bar shows only when each of its parts holds at least 3 other developers; otherwise the whole bar is held back, so no one can be singled out.",
+				"Each bar counts developers by their standing in the group. You marks your standing. A bar shows only if each of its parts holds at least 3 other developers. If not, the whole bar is held back, so no one can be singled out.",
 			),
 		).toBeVisible();
 		const table = groupsTable(canvas);
@@ -87,9 +87,7 @@ export const GroupOpen: Story = {
 export const AllHeldBack: Story = {
 	args: { state: { status: "ready", overview: TOTAL_ONLY_WORKSPACE } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByText("Held back: too few developers to compare yet.")).toHaveLength(
-			8,
-		);
+		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(8);
 	},
 };
 
@@ -104,9 +102,7 @@ export const Withheld: Story = {
 		await expect(
 			canvas.getAllByText("Needs more data before the workspace shows here."),
 		).toHaveLength(4);
-		await expect(canvas.getAllByText("Held back: too few developers to compare yet.")).toHaveLength(
-			8,
-		);
+		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(8);
 		await expect(canvas.queryAllByRole("img", { name: /developers observed/u })).toHaveLength(0);
 	},
 };
