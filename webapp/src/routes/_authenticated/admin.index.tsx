@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Building2, Gauge, Users } from "lucide-react";
 
 import {
+	adminGetConfigurationReadinessOptions,
 	adminGetInstanceSettingsOptions,
 	adminCheckReleaseMutation,
 	adminGetReleaseOptions,
@@ -10,6 +11,10 @@ import {
 	adminListAuthEventsOptions,
 	adminListWorkspacesOptions,
 } from "@/api/@tanstack/react-query.gen";
+import {
+	InstanceConfigurationReadinessCard,
+	type InstanceConfigurationReadinessCardState,
+} from "@/components/admin/instance/InstanceConfigurationReadinessCard";
 import {
 	InstanceReleaseCard,
 	type InstanceReleaseCardState,
@@ -33,6 +38,7 @@ function AdminOverviewPage() {
 		...adminCheckReleaseMutation(),
 		onSuccess: (data) => queryClient.setQueryData(adminGetReleaseQueryKey(), data),
 	});
+	const readinessQuery = useQuery(adminGetConfigurationReadinessOptions());
 	const settingsQuery = useQuery(adminGetInstanceSettingsOptions());
 	const workspacesQuery = useQuery(adminListWorkspacesOptions());
 	const eventsQuery = useQuery(adminListAuthEventsOptions({ query: { page: 0, size: 8 } }));
@@ -63,6 +69,28 @@ function AdminOverviewPage() {
 		};
 	}
 
+	const retryReadiness = () => {
+		void readinessQuery.refetch();
+	};
+	let readinessState: InstanceConfigurationReadinessCardState;
+	if (readinessQuery.data) {
+		// A failed refresh keeps the last facts, so the card must be told they may be out of date.
+		readinessState =
+			readinessQuery.data.length > 0
+				? {
+						status: "ready",
+						facts: readinessQuery.data,
+						refreshFailure: readinessQuery.isRefetchError
+							? { error: readinessQuery.error, onRetry: retryReadiness }
+							: undefined,
+					}
+				: { status: "empty" };
+	} else if (readinessQuery.isPending) {
+		readinessState = { status: "loading" };
+	} else {
+		readinessState = { status: "error", error: readinessQuery.error, onRetry: retryReadiness };
+	}
+
 	return (
 		<PageLayout>
 			<PageHeader
@@ -76,6 +104,8 @@ function AdminOverviewPage() {
 				isLoading={settingsQuery.isLoading}
 				isError={settingsQuery.isError}
 			/>
+
+			<InstanceConfigurationReadinessCard state={readinessState} />
 
 			<InstanceReleaseCard state={releaseState} />
 
