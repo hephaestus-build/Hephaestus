@@ -464,8 +464,8 @@ run themselves once a sync finds the work again, and are dropped if it does not 
    - *"The author, repository, or base branch is outside the workspace's review coverage"* — the repository
      or base branch is not selected, the author is a member the person selection leaves out. That decision is final for this work; widening coverage affects work that happens next.
    A bot author has its own refusal: bot work is not reviewed as a member's work. Generated paths
-   are excluded from change evidence; changing generated files alone does not establish a shortfall
-   in authored code.
+   remain in the captured evidence but are marked as generated. They are not judged as hand-written
+   work; see [Generated paths](#generated-paths) for the full policy.
 
 7. **Is sending paused?** Same screen, **Sending feedback**. Reviews and in-app feedback continue, but no
    comments or feedback in Heph leave Hephaestus. Resuming does not release automatic feedback withheld by

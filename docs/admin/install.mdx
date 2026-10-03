@@ -105,7 +105,7 @@ node scripts/prepare-release-lock.ts "v$VERSION"
 cd docker/self-host
 ```
 
-`setup.sh` creates or updates `.env` with mode `0600` and generates the database password, both
+`setup.sh` creates or updates `.env` with mode `0600` and generates the database password and
 the master encryption key (`HEPHAESTUS_SECURITY_ENCRYPTION_KEY`), copies it into an empty
 `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`, and generates the OAuth state-cookie key, webhook secret,
 routing secret, the message-broker credentials, and the token the worker registers with.
