@@ -3,8 +3,13 @@ package de.tum.cit.aet.hephaestus.practices.observation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.handler.FeedbackLedgerRecorder;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DiffNote;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
+import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
@@ -19,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackUsefulness;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
@@ -35,6 +41,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -47,6 +54,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import tools.jackson.databind.ObjectMapper;
 
@@ -54,6 +62,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String BASE_URI = "/workspaces/{workspaceSlug}/practices/observations";
+    private static final String RESPONSE_URI = "/workspaces/{workspaceSlug}/practices/feedback/{feedbackId}/response";
     private static final String DIFF_EVIDENCE_JSON =
             "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":\"context/diff.patch\",\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":42,\"endLine\":42,\"quote\":\"example\",\"quoteRedacted\":false}]}";
 
@@ -83,6 +92,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
 
     @Autowired
     private ReactionRepository reactionRepository;
+
+    @Autowired
+    private FeedbackLedgerRecorder ledgerRecorder;
 
     private Workspace workspace;
     private Practice practiceA;
@@ -1232,6 +1244,109 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("Split this PR so each change reviews on its own.")
                     .jsonPath("$.feedbackResponse.feedbackId")
                     .isEqualTo(onTheWork.getId().toString());
+        }
+
+        @Test
+        @WithUser
+        @DisplayName("feedback that landed only as a line note can be answered, and the answer taken back, from the "
+                + "observation it was written from")
+        void shouldOfferTheResponseHandleWhenFeedbackLandedOnlyAsALineNote() {
+            UUID observationId = insertObservation(
+                    practiceA,
+                    developer,
+                    "Detailed observation",
+                    "NOT_MET",
+                    "MAJOR",
+                    0.85f,
+                    "scm.pull_request",
+                    42L,
+                    Instant.now());
+            DiffNote note = new DiffNote(
+                    "src/Main.java",
+                    42,
+                    null,
+                    "Explain why the retry is needed.",
+                    "note:1",
+                    List.of("key-" + observationId));
+            ledgerRecorder.recordWithoutConversation(
+                    agentJob,
+                    new DeliveryContent(null, List.of(note), List.of(), List.of()),
+                    ArtifactKinds.PULL_REQUEST,
+                    List.of(new InlineFeedbackChannel.DeliveredSignal(
+                            "note:1",
+                            FeedbackAnchor.DiffAnchor.singleLine("src/Main.java", 42),
+                            InlineFeedbackChannel.Disposition.POSTED,
+                            "note-1",
+                            "discussion-1",
+                            "https://gitlab.example.com/a/b/-/merge_requests/1#note_1")),
+                    null,
+                    null);
+            Feedback landed = feedbackRepository
+                    .findByAgentJobIdAndPositionAndWorkspaceId(agentJob.getId(), 0, workspace.getId())
+                    .orElseThrow();
+            assertThat(landed.getDeliveryState()).isEqualTo(FeedbackDeliveryState.DELIVERED);
+            assertThat(landed.getBody()).isNull();
+
+            webTestClient
+                    .get()
+                    .uri(BASE_URI + "/{observationId}", workspace.getWorkspaceSlug(), observationId)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.deliveredFeedback")
+                    .doesNotExist()
+                    .jsonPath("$.feedbackResponse.feedbackId")
+                    .isEqualTo(landed.getId().toString())
+                    .jsonPath("$.feedbackResponse.resolution")
+                    .doesNotExist();
+
+            webTestClient
+                    .put()
+                    .uri(RESPONSE_URI, workspace.getWorkspaceSlug(), landed.getId())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(new FeedbackResponseRequestDTO(null, FeedbackResolution.ADDRESSED, null))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody(Void.class);
+            webTestClient
+                    .get()
+                    .uri(BASE_URI + "/{observationId}", workspace.getWorkspaceSlug(), observationId)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.feedbackResponse.feedbackId")
+                    .isEqualTo(landed.getId().toString())
+                    .jsonPath("$.feedbackResponse.resolution")
+                    .isEqualTo("ADDRESSED");
+
+            webTestClient
+                    .delete()
+                    .uri(RESPONSE_URI, workspace.getWorkspaceSlug(), landed.getId())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isNoContent()
+                    .expectBody(Void.class);
+            webTestClient
+                    .get()
+                    .uri(BASE_URI + "/{observationId}", workspace.getWorkspaceSlug(), observationId)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.id")
+                    .isEqualTo(observationId.toString())
+                    .jsonPath("$.feedbackResponse.feedbackId")
+                    .isEqualTo(landed.getId().toString())
+                    .jsonPath("$.feedbackResponse.resolution")
+                    .doesNotExist();
         }
 
         @Test
