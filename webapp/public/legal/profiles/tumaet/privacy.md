@@ -29,7 +29,7 @@ The TUM Data Protection Officer is reachable at the Office of the Data Protectio
 
 ## 2. What Hephaestus is and who runs it
 
-Hephaestus is a self-hosted web platform that gives software-engineering contributors feedback on their collaborative work. People can sign in with a GitHub or LRZ-GitLab account when that provider is enabled. Who may create a workspace depends on the deployment and can be limited to instance administrators; workspace administrators are not restricted to TUM units. The workspace administrator chooses which Git repositories the workspace synchronises, the catalogue of practices the platform checks for, the LLM provider used for AI-assisted feedback, whether practice reviews are auto-triggered on new pull/merge requests, and whether to enable optional features (Slack integration and selected Outline collections). Practice-review sandboxing of repository code, Slack channel monitoring, and Outline document context are off by default and have to be turned on by the administrator.
+Hephaestus is a self-hosted web platform that gives software-engineering contributors feedback on their collaborative work. People can sign in with a GitHub or LRZ-GitLab account when that provider is enabled. Who may create a workspace depends on the deployment and can be limited to instance administrators; workspace administrators are not restricted to TUM units. The workspace administrator chooses which Git repositories the workspace synchronises, the catalogue of practices the platform checks for, the LLM provider used for AI-assisted feedback, whether practice reviews are auto-triggered on new pull/merge requests, and whether to enable optional features (Slack integration and selected Outline collections). Practice reviews require operator activation and eligible workspace models. Heph uses eligible models and connected worker capacity separately. Slack channel monitoring and Outline document context require separate workspace activation. Sandboxes run on workers, not the application server.
 
 For each workspace's processing, the workspace administrator and TUM/AET act as **joint controllers under Art. 26 GDPR**. The essence of that arrangement, as required by Art. 26(2) Satz 2 GDPR, is set out in section 10. TUM/AET is the single point of contact for data-subject rights.
 
@@ -39,20 +39,25 @@ The platform synchronises activity authored in connected repositories, whether o
 
 | Category                                                                                                                                                                                                                                                                                                                  | Why                                                                                                                                   | Legal basis                                                                                                                                                                                                                                                                                          | Retention                                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Identity at sign-in** — federated user identifier (GitHub user ID, or `sub` from LRZ-GitLab), username, email, display name, avatar URL — federated by the Hephaestus application server (Spring Security) and stored in the application database                                                                       | Authenticate and authorise the user; let them link their workspaces and preferences                                                   | TUM members: Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG. Voluntary sign-in by non-TUM contributors: Art. 6(1)(b) GDPR                                                                                                                                            | While the account exists; removed when the user deletes the account in-app or on a verified erasure request — see section 7                                                                                                                                                                                                                                                                       |
+| **Identity at sign-in** — federated user identifier (GitHub user ID, or `sub` from LRZ-GitLab), username, email, display name, avatar URL — federated by the Hephaestus application server (Spring Security) and stored in the application database                                                                       | Authenticate and authorise the user; let them link their workspaces and preferences                                                   | TUM members: Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG. Voluntary sign-in by non-TUM contributors: Art. 6(1)(b) GDPR                                                                                                                                            | Account deletion revokes access immediately; after a default 48-hour cooldown, scheduled cleanup clears account contact details and removes linked identities and account-bound records. Wider person erasure is separate; see section 7                                                                                                                                                                                                                                                                       |
 | **Repository activity authored by you** in repositories a workspace administrator has connected (pull/merge requests, issues, reviews, review comments, commit metadata, author username, avatar, profile URL) | Detect engineering practices and produce feedback for the contributor | TUM-operated workspaces: Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG. Workspaces opened by external administrators rely on the basis available to them — typically Art. 6(1)(a) consent or, for private bodies, Art. 6(1)(f). For voluntary sign-in: Art. 6(1)(b) | The active mirror is retained while at least one workspace tracks the source repository and is removed when the last workspace stops monitoring it or on verified erasure. Already-buffered GitHub or GitLab webhook payloads can remain in the transport broker for up to 180 days and cannot be selectively erased. Derived review copies follow the automated practice-review retention below. |
 | **Account preferences** — notification preferences, UI options, and the **Comments and Slack reminders** practice-feedback delivery setting                                                                                                                                                                               | Personalised feedback surfaces; remember whether new practice-feedback comments and related Slack reminders should be delivered       | Art. 6(1)(e) i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG                                                                                                                                                                                                                            | Retained with the mirrored contributor profile until that profile is removed or on verified erasure. Deleting the sign-in account alone does not remove contributor-linked preferences; see section 7                                                                                                                                                                                             |
 | **Optional academic-research participation** — your grant, refusal or withdrawal; the version and digest of the archived first-layer notice; and, only while consent is current, Hephaestus usage, feedback interactions and optional survey responses | Conduct academic research into software-engineering feedback and invite consenting users to occasional surveys | Art. 6(1)(a) GDPR (consent). This is separate from the terms and platform-operation basis. It is off until you opt in and is never required to use Hephaestus | Research processing stops when you withdraw in account settings; withdrawal does not switch the processing to another legal basis. Account erasure removes the link between you and each ledger event. The non-account-linked event and archived notice remain as evidence of how consent was managed |
 | **Workspace memberships** — workspace membership | Provide workspace access | Art. 6(1)(e) i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG                                                                                                                                                                                                                            | Retained with the relevant workspace records; removed when those records or the workspace are purged, or on verified erasure                                                                                                                                                                                                                                                                      |
 | **Activity** — counts and lists of the pull/merge requests, reviews, issues and comments you authored in the workspace's repositories; the open pull/merge requests and issues that await you, including review requests addressed to you and each reviewer's review state (for example approved or changes requested); and your team memberships synchronised from GitHub teams and LRZ-GitLab subgroups | Show members of the same workspace what each member worked on and what awaits them, listed by name and never scored or ranked; let members narrow this view to one team; on GitHub, show you the review requests addressed to one of your teams | Art. 6(1)(e) i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG                                                                                                                                                                                                                            | Follows the repository-activity mirror above: retained while at least one workspace tracks the source repository and removed when the last workspace stops monitoring it or on verified erasure. Synchronised team and subgroup memberships are removed with the organisation's or group's mirror once no workspace is connected to it, or on verified erasure |
-| **Product feedback and surveys** — feedback type and message, current page path, survey answers or dismissal, account, and workspace where applicable | Improve this Hephaestus instance and avoid showing a dismissed or completed survey again | Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG | Stored in this instance's database until account deletion or verified erasure; workspace-scoped records are also removed when the workspace is purged. Product-feedback and product-survey responses are not reused for research. |
+| **Product feedback and surveys** — feedback type and message, page path and browser identification you choose to attach, receiving release, survey invitations, answers or dismissal, account, and workspace where applicable | Improve this Hephaestus instance and avoid showing a dismissed or completed survey again | Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG | Stored in this instance's database until account deletion or verified erasure; workspace-scoped records are also removed when the workspace is purged. Product-feedback and product-survey responses are not reused for research. |
 | **Mentor conversation data** — your messages with the in-app conversational mentor, its replies, and the surrounding project context used to answer | Answer requests in the mentor chat | TUM contributors: Art. 6(1)(e) i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG. Non-TUM voluntary sign-in: Art. 6(1)(b) | Active conversation records are removed when the relevant workspace or integration is purged or on verified erasure. Deleting the sign-in account alone does not remove contributor-linked conversations; see section 7. Already-transmitted prompts follow the provider's retention terms, and buffered Slack or Outline context can remain in the transport broker for up to 72 hours. |
-| **Automated practice-review data** — the content and surrounding discussion of the pull/merge request or issue, including the diff for a pull/merge request, and the resulting observations | Generate practice feedback | TUM contributors: Art. 6(1)(e) i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG. Non-TUM contributors: the basis applicable to the workspace, as described for repository activity above | Mirrored artefacts and observations are retained while at least one workspace tracks the source repository. Diagnostic job payload is removed 14 days after the job reaches a terminal state; the job row is deleted after 90 days by default. Replay directories and unreferenced content-addressed evidence blobs become eligible for collection after 30 days and are removed by a subsequent successful sweep. Turning off **Comments and Slack reminders** changes delivery only; use the rights process in section 7 to object to processing or request erasure. |
+| **Automated practice-review data** — the content and surrounding discussion of the pull/merge request or issue, including the diff for a pull/merge request, and the resulting observations | Generate practice feedback | TUM contributors: Art. 6(1)(e) i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG. Non-TUM contributors: the basis applicable to the workspace, as described for repository activity above | Mirrored source content remains while monitored; observations and feedback follow their workspace and verified person-erasure paths. Diagnostic job payload becomes eligible for removal 14 days after a terminal state; unreferenced job rows become eligible after 90 days. Pending delivery delays both, and references from observations or feedback delay row removal. Cleanup needs an enabled retention service and successful runs. Worker attempt folders are removed after evidence admission; ended attempts have a one-hour cleanup grace, and restart cleanup removes abandoned folders. No 30-day replay-cache guarantee applies. Turning off **Comments and Slack reminders** changes delivery only; use the rights process in section 7 to object to processing or request erasure. |
 | **LLM usage accounting** — token counts, cost, model, workspace, and an opaque source identifier; no prompt or response text | Enforce workspace and instance budgets and report provider spend | Art. 6(1)(e) i.V.m. Art. 2 BayHIG, Art. 4(1) BayDSG | Eligible for deletion once older than this instance's accounting retention window, 400 days. A daily sweep begins removing a record at the first sweep after it becomes eligible and continues in later sweeps until none remain. The source identifier is not a foreign key and cannot resolve a source row after that row is deleted. |
-| **Slack integration data** — Slack workspace, channel and user IDs; Slack identity links; Slack App Home privacy choices; messages you send in Hephaestus DMs and mentor replies; when a workspace administrator activates channel monitoring, new messages in the monitored Slack channel after the visible announcement | Provide the Slack mentor, privacy controls, and channel-message context for software-practice mentoring | TUM-operated workspaces: Art. 6(1)(e) i.V.m. Art. 2 BayHIG, Art. 4(1) BayDSG. External workspaces rely on the administrator's basis, typically Art. 6(1)(a) or Art. 6(1)(f). DM mentor use is voluntary | Slack channel messages are forward-only and can be excluded per person from App Home or settings; opt-out deletes already collected channel-message data for that person from the active mirror. Diagnostic and evidence copies follow the automated practice-review retention above. Already-buffered Slack payloads can remain in the transport broker for up to 72 hours and cannot be selectively erased. DM mentor data follows the account and conversation retention rules. |
+| **Slack integration data** — Slack workspace, channel and user IDs; Slack identity links; Slack App Home privacy choices; messages you send in Hephaestus DMs and mentor replies; when a workspace administrator activates channel monitoring, new messages in the monitored Slack channel after the visible announcement | Provide the Slack mentor, privacy controls, and channel-message context for software-practice mentoring | TUM-operated workspaces: Art. 6(1)(e) i.V.m. Art. 2 BayHIG, Art. 4(1) BayDSG. External workspaces rely on the administrator's basis, typically Art. 6(1)(a) or Art. 6(1)(f). DM mentor use is voluntary | Slack channel messages are forward-only and can be excluded per person from App Home or settings; opt-out deletes already collected channel-message data for that person from the active mirror. Diagnostic and evidence copies follow the automated practice-review retention above. Already-buffered Slack payloads can remain in the transport broker for up to 72 hours and cannot be selectively erased. Channel threads become eligible for daily removal 30 days after their latest message by default, with a configurable window capped at 180 days. Active threads can contain older messages; cleanup failures can delay removal. This window does not apply to mentor DMs, which follow the conversation-erasure rules. |
 | **Selected Outline project documents** — document title, body, author attribution, collection, revision, and link from collections explicitly selected by the workspace administrator | Supply project documentation linked to a reviewed change or user-requested mentor conversation, so the system does not guess missing design context | TUM-operated workspaces: Art. 6(1)(e) i.V.m. Art. 2 BayHIG, Art. 4(1) BayDSG. External workspaces rely on the administrator's applicable basis. Connecting an individual Outline identity for attribution is voluntary | Retained only while the corresponding Outline connection and selected collection remain active. Disconnect or workspace purge removes the active mirror. Diagnostic and evidence copies follow the automated practice-review retention above. Already-buffered Outline payloads can remain in the transport broker for up to 72 hours and cannot be selectively erased. Covered by the verified rights process in section 7. |
 
 Hephaestus does not ask you to provide special-category data (Art. 9(1) GDPR) or criminal-offence data (Art. 10 GDPR). Free-text repository content or mentor messages may nevertheless contain such data. Please do not enter third-party personal or sensitive data; that content may be read by the platform and forwarded to the workspace's LLM provider.
+
+Authentication and settings-change history are separate from project work. Authentication events
+include IP address and browser information and expire in monthly 12-month partitions. Settings-change
+history uses a 365-day window; account erasure detaches actors without removing change facts. The
+operator must confirm the configured retention and diagnostics scope before release.
 
 The platform produces no automated decisions within the meaning of Art. 22 GDPR. Observations are advisory; they do not feed any grading, assessment, HR, or access-control pipeline operated by Hephaestus. A human acting on an observation is accountable for that decision under their own process, outside the platform.
 
@@ -124,7 +129,21 @@ The controller, recipients and rights contacts in this statement apply when you 
 
 ## 5. Recipients
 
-Within Hephaestus your data is visible to AET operators (platform administration and support) and, depending on the workspace, to other workspace members (your username, avatar, the feedback attached to pull/merge requests or issues you authored, per-practice summaries of your activity, and the counts and lists of your pull/merge requests, reviews, issues and comments, and of the open work that awaits you, including review requests addressed to you or one of your teams and each reviewer's review state, in the workspace's repositories, shown only to members of that workspace and never ranked). Workspaces marked publicly viewable by their administrator can be read by anyone on the open web; the upstream open-source contributor list at `/contributors` is also public.
+Within a workspace, members can see Activity, including work and review-request lists and team
+memberships. Activity is never ranked, and it does not check each viewer's source-platform permissions.
+Your Practice profile, practice-page feedback and Heph conversations are private to you through normal
+member access. Workspace admins can read observations, delivery metadata and your dispute explanation,
+but not private practice-page or conversation feedback text. Ratings and other private response notes
+are not shared with them. Feedback posted on GitHub, GitLab or Slack is visible to that destination's
+audience. Outline is a context source, not a feedback-delivery destination.
+
+A public workspace exposes its members, teams, repositories and practices without sign-in; Activity,
+practice profiles, feedback and conversations stay non-public. The instance's contributor list is
+public. Instance administrators can use **View as user** to read your activity, practice pages,
+feedback and existing Heph conversations, including before your first sign-in. Each read records the
+administrator, their stated reason and what they read. This read-only path cannot send messages or
+make choices for you. Operators can access stored data for operation and verified rights requests.
+Instance administrators can read product-feedback and survey submissions.
 
 External processors engaged under data-processing agreements (Auftragsverarbeitungsverträge) at the appropriate level:
 
@@ -139,23 +158,75 @@ approved envelope; the connected origin is shown in the workspace integration se
 
 The **Leibniz-Rechenzentrum (LRZ) der Bayerischen Akademie der Wissenschaften** (Boltzmannstraße 1, 85748 Garching bei München, Germany) is an institute of the Bayerische Akademie der Wissenschaften and operates gitlab.lrz.de as a separate controller, not as a TUM processor. When a workspace synchronises from gitlab.lrz.de, or when you sign in via LRZ-GitLab OIDC, personal data is exchanged with LRZ infrastructure. The transmission rests on the inter-public-body cooperation under Art. 5(1) Nr. 1 BayDSG; Art. 28 GDPR does not apply because LRZ does not process on TUM's instructions, and Art. 26 GDPR does not apply because the two bodies do not jointly determine purposes and means. LRZ privacy information: [www.lrz.de/datenschutz/](https://www.lrz.de/datenschutz/); LRZ DPO: [datenschutz@lrz.de](mailto:datenschutz@lrz.de).
 
+Avatar images can load directly from their source-platform host, including on public directory pages.
+Your browser sends that host network metadata such as your IP address and the image address. The
+operator must confirm `[image hosts, their role, lawful basis and any transfer safeguard]` for the
+deployment. These requests are separate from optional browser error reporting.
+
 The full per-recipient AVV ledger is maintained internally in the AET processor checklist.
 
 ## 6. Third-country transfers
 
-Core platform infrastructure (application server, PostgreSQL) runs on AET-administered infrastructure at TUM in Germany. Microsoft Azure OpenAI is configured in an EU region by default on the TUM-operated deployment, keeping that processing within the EU. Where a recipient is established in the United States (GitHub, Microsoft, OpenAI, Slack), transfers rely on the EU-U.S. Data Privacy Framework adequacy decision (Commission Implementing Decision (EU) 2023/1795) where the recipient is on the active DPF list, with Standard Contractual Clauses Module 2 (Commission Implementing Decision (EU) 2021/914) as a contractual fall-back. An Outline origin outside the EEA is not approved until TUM/AET records its transfer safeguard.
+Core platform infrastructure (application server, PostgreSQL) runs on AET-administered infrastructure at TUM in Germany. Microsoft Azure OpenAI is configured in an EU region by default on the TUM-operated deployment, with processing geography to be verified against the actual deployment type and contract. Where a recipient is established in the United States (GitHub, Microsoft, OpenAI, Slack), transfers rely on the EU-U.S. Data Privacy Framework adequacy decision (Commission Implementing Decision (EU) 2023/1795) where the recipient is on the active DPF list, with Standard Contractual Clauses Module 2 (Commission Implementing Decision (EU) 2021/914) as a contractual fall-back. An Outline origin outside the EEA is not approved until TUM/AET records its transfer safeguard.
 
 ## 7. Your rights
 
 Under the GDPR you have the right of access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction (Art. 18), data portability (Art. 20), and to object to processing carried out on the basis of Art. 6(1)(e) (Art. 21). To exercise any of these rights, contact [ls1.admin@in.tum.de](mailto:ls1.admin@in.tum.de) or the TUM Data Protection Officer. We respond within the timeframe set out in Art. 12(3) GDPR (one month from receipt, extendable by two further months for complex or numerous requests, with notice to you).
 
-**Access and portability (Art. 15, Art. 20).** Signed-in users can export their account data themselves: the "Export my data" control in the account settings produces a structured, machine-readable JSON file containing your identity attributes and federated identity links, workspace memberships, account preferences and feature flags, and your authentication and account events of the last twelve months (sign-ins and sign-outs, session refreshes, identity links, and similar, including IP address and browser user-agent string). Personal data not covered by that self-service export — contributor profile records, AI-assistant conversations, practice observations, activity records, product-feedback submissions and survey responses, and any attributable data still present in the bounded evidence-cache or container-output windows — is compiled by AET operators on a verified request into the same structured format and delivered to your verified address. Hephaestus does not write an HTTP access log. Source-side content (commits, pull/merge requests, issues, reviews on GitHub or gitlab.lrz.de) is exported by those source platforms, not by Hephaestus. Identity verification for operator-fulfilled requests is the same as for erasure (below).
+**Access and portability (Art. 15, Art. 20).** Open **User settings → Danger Zone → Export my data →
+Request export** and select **Download** when ready. The JSON contains account and linked identity
+attributes, memberships, preferences, account features, your AI choice and authentication history;
+it excludes credentials and session secrets. The download expires 48 hours after preparation.
+Use **Retry export** after a failed attempt, or contact us if it remains unavailable.
 
-Three practical points about how erasure (Art. 17) works on this platform:
+For the wider data held about you, contact us whether or not you have signed in. An instance
+administrator uses **Person data** to resolve your account or exact provider identities, preview
+per-store scope and download one JSON file. It includes selected profiles, local source content,
+conversations, observations and feedback (including invalidated or never-delivered records), activity,
+product-feedback and surveys. It excludes credentials, other people's profiles, raw Git objects and
+hidden runtime journals. We must also assess retained copies outside that export and your rights
+under Art. 15(4). Art. 20 portability applies where its consent/contract and automated-processing
+conditions are met; providing JSON does not make every public-task record portable under Art. 20.
+Original work on connected platforms needs their separate export process.
 
-- **The in-app "delete account" control** removes your Hephaestus account and your federated identity links, together with account-bound product-feedback submissions and survey responses. It does **not** by itself delete the contributor profile row in the application database or its dependent records (account preferences, workspace memberships, AI-assistant conversations, practice observations about you, activity records).
-- **Operator-executed erasure of those database records** is performed manually by AET operators on a verified request, typically by **anonymising** the contributor profile (replacing identity fields with sentinel values and severing the link to your federated identity) so the records cease to be personal data. Where supported by foreign-key constraints, dependent records are also removed. Identity verification: for signed-in contributors, via email from your account-registered address or in-app re-authentication; for non-signed-in contributors whose repository activity has been ingested, via proof of control of the GitHub or LRZ-GitLab account associated with the contributions (for example, a short authenticated gist or commit). To start the request, email [ls1.admin@in.tum.de](mailto:ls1.admin@in.tum.de) or the TUM DPO.
-- **Source-side content on GitHub or gitlab.lrz.de** (your commits, pull/merge requests, issues, reviews) is not modified by deletion in Hephaestus and remains subject to the source platform's own retention rules. Prompts already transmitted to the LLM provider remain subject to that provider's retention window (for the default Azure OpenAI deployment, the enterprise abuse-monitoring window per Microsoft's published Azure OpenAI data-privacy documentation; eligible customers can apply for Microsoft's modified abuse monitoring (Limited Access program) to suppress prompt storage and human review). Hephaestus replay directories and unreferenced content-addressed evidence blobs become eligible for collection after 30 days by default and are removed by a subsequent successful sweep; these caches do not support immediate selective erasure. Buffered Slack and Outline payloads can remain for up to 72 hours, and buffered GitHub and GitLab payloads for up to 180 days; erasure cannot selectively remove broker messages. LRZ retains a backup or visibility window for deleted gitlab.lrz.de content on its infrastructure under its own published retention policy; see [www.lrz.de/datenschutz/](https://www.lrz.de/datenschutz/).
+**Account deletion.** Open **User settings → Danger Zone → Delete account** and confirm. Access on all
+devices is revoked immediately. After the default 48-hour cooldown, scheduled cleanup removes linked
+sign-in identities, account features, AI choice, exports and account-bound product-feedback and survey
+records, and clears account contact details. If email is configured and your address is verified, a
+confirmation states the cleanup date. There is no self-service undo; contact us promptly after a
+mistake. This narrower action does not erase contributor profiles, conversations, observations,
+feedback and all retained copies.
+
+**Wider person erasure.** Send [ls1.admin@in.tum.de](mailto:ls1.admin@in.tum.de) or the TUM DPO your
+workspace, relevant provider instance and native user ID; for Slack, include its workspace ID.
+If you do not know the native IDs, provide source-profile and work links; we resolve stable IDs
+from the provider. You do not need database IDs or a Hephaestus account to make a request. We verify control of the relevant account or source
+identity before acting. Names, logins and email addresses are not matching keys. Do not send
+passwords, tokens or unnecessary identity documents. People who never signed in use the same contact
+path. Request correction or restriction through that path too; the product has no general self-service
+restriction control.
+
+The administrator previews the exact selected rows and provider-feedback locations. A change to
+that scope requires a fresh preview. Before erasure, the operator must remove or correct listed
+external feedback through the separate provider procedure and confirm that step. The job erases or
+anonymises selected stores, cancels affected running reviews, waits for workers to confirm evidence-folder
+removal and clears affected hidden Heph runtime memory. Another person's visible replies or feedback
+are preserved; inseparable copied context can be cleared. An offline worker or failed step leaves a
+resumable request, not a completed erasure. Completed receipts keep operational counts and times,
+not erased content or subject keys. Exact native identity keys remain separately to prevent renewed
+product processing, even if source sync mirrors records that still exist upstream. Ask us for scope,
+completion status, residual copies and any lawful exceptions.
+
+**Copies beyond active person records.** Deletion in Hephaestus does not alter your original work,
+posted provider comments or Git history. The repository owner must handle Git authorship at source;
+local mirrors are not rewritten. Already-sent AI prompts follow provider terms and cannot be recalled.
+Buffered Slack and Outline events can remain up to 72 hours, GitHub and GitLab events up to 180 days;
+byte limits can shorten those windows, and individual broker messages cannot be selectively erased.
+Container logs rotate by size rather than age. Backups and delivered email follow operator, relay
+and recipient retention; immediate selective backup erasure is not available. Restoring a backup
+requires reapplying completed erasures and suppression before returning it to service. Provider-side
+copies follow their own rights and retention procedures. We assess these copies separately and
+explain remaining retention when answering your request.
 
 ## 8. Right to lodge a complaint
 
@@ -182,6 +253,86 @@ You may also address the workspace administrator directly, in particular for que
 
 ## 11. Obligation to provide data, and changes to this statement
 
-Providing personal data is neither legally nor contractually required, but the platform cannot be used without authenticating through one of the federated identity providers, and that requires the identity attributes listed in section 3. If your workspace has AI-assisted feedback active, the corresponding processing of repository activity is part of how the workspace operates. For signed-in contributors, **Comments and Slack reminders** stops new practice-feedback comments on authored pull/merge requests and issues, as well as related Slack reminders, but does not stop review processing or transmission to the LLM provider. To exercise your Art. 21 right to object to processing, use the contact path in section 7.
+Providing personal data is neither legally nor contractually required, but the platform cannot be used without authenticating through one of the federated identity providers, and that requires the identity attributes listed in section 3. If your workspace has AI-assisted feedback active, the corresponding processing of repository activity is part of how the workspace operates. For signed-in contributors, **Comments and Slack reminders** stops new practice-feedback comments on authored pull/merge requests and issues, as well as related Slack reminders, but does not stop review processing. **No AI** stops new AI requests under the choice described below; it does not stop source sync, stored data or requests already sent. To exercise your Art. 21 right to object to processing, use the contact path in section 7.
 
 TUM may update this statement to reflect changes in processing or in the law. The current version is available at [https://hephaestus.build/privacy](https://hephaestus.build/privacy). Hephaestus uses TLS for all connections; standard email transmission may have security limitations and complete protection during email transit cannot be guaranteed.
+
+## 12. Your AI choice and feedback controls
+
+Choose **No AI**, **In-house** or **Cloud** in **Your AI choice** in a workspace sidebar or in
+**User settings**. The choice applies across your workspaces on this instance to practice reviews
+and Heph, including Slack. In-house allows models declared to be operated by your organisation;
+Cloud also allows approved provider-operated models. The workspace's stricter policy still applies.
+An operator declaration does not prove a location, retention period or no-training agreement.
+No AI stops new AI requests for your work; it does not stop synchronisation, ordinary access to
+stored records or requests already sent. Linking an account, accepting terms, research participation
+and the AI choice are separate. The choice does not establish the lawful basis for processing.
+Slack App Home shows when Heph is off or unavailable for your choice and keeps privacy controls
+available; a failed refresh can leave an older Home view visible.
+
+In Slack App Home, **Stop using my messages** stops channel collection and erases your collected
+channel messages and related conversation observations and feedback. **Allow future messages**
+permits later collection without restoring erased data. This does not erase mentor DMs, unrelated
+repository feedback, Slack's original copy or buffered events. Monitoring starts only after separate
+channel activation and its visible announcement; old pre-activation history is not imported.
+
+Follow **Answer or dispute it in Hephaestus** on a provider comment to respond to your own reviews.
+Workspace admins read dispute explanations; the form states this before submission. A standing
+dispute holds back the same point in later reviews of that work, with a committed-secret exception.
+Withdrawing the dispute allows it again. Admins can mark observations incorrect or withdraw and
+restore practice-page feedback with reasons. Withdrawal retains the original and its history and
+excludes it from later review and Heph context. An unseen card does not appear; a seen card becomes
+a withdrawal notice. Already-sent replies and inline provider comments are not recalled. Reactions
+or replies on the provider are not the Hephaestus dispute process. These controls do not erase data.
+
+## 13. Review context, working copies and upgrade clearing
+
+Practice reviews can use all permitted workspace areas and repositories available in their job
+folder, including Slack threads and person-scoped observation and feedback history, without
+record-count or history-window caps. Permissions, privacy choices, withdrawal, tenancy, processor
+and erasure checks still apply. Engineering approval of this scope does not replace the controller's
+legal basis or DPIA. The legal owner must review this wider scope before release; this notice update
+does not record approval.
+
+Web and Slack Heph run on connected workers; review and mentor sandboxes run on the worker role only.
+The server handles admission, context and persistence. Heph has a separate internet-access setting; the operator must assess and disclose any broader
+network use. Worker memory, repository mirrors and mounted
+attempt folders are processing locations, in addition to PostgreSQL and the integration broker.
+Generated-path settings mark retained evidence rather than remove it. Refusing bot authors or bot
+reviewers is a review decision, not erasure of mirrored work.
+
+A repository that becomes unavailable or loses access retains its monitor and stored content.
+The product retries availability daily after two unavailable responses; **Sync now** checks sooner.
+Stopping the last monitor or a verified erasure request provides the removal path. GitLab note
+reconciliation removes confirmed missing notes from live context after a complete listing and direct
+absence check; it does not rewrite historical captured review input. Failed or incomplete checks
+retain the copy until a later successful check or an erasure path.
+
+The person-data upgrade clears legacy attribution that has no exact stable identity and resets
+hidden Heph runtime memory once. Visible chats, titles and times remain, but you may need to repeat
+context. Settings and lifecycle times remain when old operator attribution is cleared. This upgrade
+clearing is separate from your account deletion or person request.
+
+## 14. Optional monitoring and deployment retention
+
+The shipped production stack has no general HTTP access log. Authentication events still record
+IP address and browser information. Metrics use a private management listener; private scrape access
+and monitoring retention are operator responsibilities. Optional tracing is disabled by default;
+enabling it adds operational workspace and run identifiers to the approved monitoring scope.
+
+Optional browser Sentry error monitoring requires a configured endpoint and your opt-in through **Cookie
+preferences** in the footer or **User settings → Privacy → Change cookie choices**. Withdrawal stops
+new reports, not previously stored reports. The client strips request, user and breadcrumb fields
+and disables content collection, but error text and stack traces can contain incidental personal
+data. Before enabling it, the operator must publish `[Sentry operator, hosting region, lawful basis,
+retention, rights contact and transfer safeguard]`. Server Sentry is a separate DSN-controlled setting and does not consult browser consent. It disables
+default PII, strips request/user/breadcrumb fields and can retain trace correlation. The operator must
+complete `[server diagnostic lawful basis, recipient, region, retention and rights procedure]`;
+browser consent withdrawal does not disable it. The actual deployment must confirm whether each
+reporting path is enabled; the bundled code alone cannot establish that fact.
+
+For records without automatic expiry, including contributor profiles, conversations, observations,
+feedback and several administrative records, the controller must set `[necessity-review interval
+and deletion trigger]`. It must also confirm `[actual backup and support-bundle retention]` and the
+configured model providers' retention and transfer terms. These unresolved deployment details must
+be completed and reviewed by the legal owner before this revised notice is released.

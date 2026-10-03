@@ -49,18 +49,20 @@ defines the governance decision that permits collection, retention, processing, 
 
 A material change reopens the affected reviews. There is no deployment-level allowlist: the shipped, versioned
 source-use decisions are the only gate, and no runtime configuration waives them. A source whose decision is
-missing or expired is never read, whatever the deployment sets. Disabling a use therefore means shipping a
-contract version in which that decision no longer permits it.
+missing or expired is never read, whatever the deployment sets. Revoking its per-source engineering permission requires a
+contract version in which that decision no longer permits it. For an immediate legal or security
+stop, pause the affected feature or disconnect its source; existing registry permission is not an
+operator instruction to keep processing.
 
 The runtime registry is
 [`source-use-decisions.json`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/source-use/1.3.0/source-use-decisions.json).
 It is an engineering gate and contains only releasable decision summaries. Each record governs exactly one source-use purpose; a source references separate records for automated review, feedback delivery, Mentor context, and operator evidence review:
 
-- `ENGINEERING_BASELINE` with `ENGINEERING_APPROVED` records maintainer approval of the shipped, minimized
+- `ENGINEERING_BASELINE` with `ENGINEERING_APPROVED` records maintainer approval of the shipped, permitted
   product scope, including a scope expansion explicitly approved by the maintainer in a new version. It is not
   controller or DPO approval. It is the only basis
   the contract can express: a use no maintainer has approved carries no record at all, rather than a record
-  saying it was refused, so nothing here can ever be mistaken for a controller sign-off.
+  saying it was refused. The controller decision must be recorded separately.
 
 ### Full job-folder scope
 
@@ -68,7 +70,7 @@ On 2026-10-01, the maintainer explicitly approved the engineering scope in
 [#1732](https://github.com/hephaestus-build/Hephaestus/issues/1732): every permitted workspace area and repository,
 including Slack threads and person-scoped observation and feedback history, without record-count or history-window
 caps. Version 1.3.0 records this approval for automated practice review. It does **not** record controller or DPO
-approval. The existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks still apply.
+approval. The existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks still apply. The engineering implementation ships in [#2335](https://github.com/hephaestus-build/Hephaestus/pull/2335). The full DPIA is indicated for this combined scope; a versioned engineering decision is not authority to activate it for TUM.
 The folder is not permission to disclose a refused record or to retain a source after its deletion boundary.
 
 The wider Slack-thread and person-scoped history scope must be part of the pending TUM privacy-notice review in
@@ -90,7 +92,7 @@ not authorize retaining complete inputs or replaying a review.
 
 `WORKSPACE_AND_PERSON_ERASURE` is a governance obligation, not proof that every copy supports immediate selective
 deletion. Controller approval must cover active attempts, disposable repository mirrors, backups, and retained
-results. Person and channel requests use the source-specific paths in the processor checklist; any uncovered
+results. Person and channel requests use the source-specific paths in the personal-data map; any uncovered
 derived copy blocks approval. The runtime and schemas use closed policy identifiers so a source cannot omit this decision.
 
 ## Decision record
@@ -100,14 +102,13 @@ summary and stable reference, but never participant data, private review notes, 
 
 The statuses in this template belong to the controller's governance system and are not the runtime registry's
 vocabulary. The shipped registry expresses exactly one basis and one outcome — `ENGINEERING_BASELINE` with
-`ENGINEERING_APPROVED` — so a controller's refusal is recorded there, in the controller's system, and reaches
-the runtime as the absence of a permitting record rather than as a refusal the runtime can hold.
+`ENGINEERING_APPROVED` — so a controller's refusal is recorded in the controller's system. Operators must stop the affected use or integration while a release removes its engineering permission; the existing registry does not automatically ingest a legal refusal.
 
 ```yaml
 decisionId: SRC-YYYY-NNN
 status: PROPOSED # APPROVED, REJECTED, WITHDRAWN, SUPERSEDED
 sourceKind: example.logical-source
-sourceContractVersion: 1.2.0
+sourceContractVersion: 1.3.0
 deploymentScope: tumaet-production
 
 sourceUse:
@@ -183,7 +184,9 @@ Before enabling a source or increasing retention, tests must prove:
 - disposable attempt folders and repository mirrors follow the worker cleanup and erasure contract;
 - broker and backup expiry are documented when selective deletion is impossible;
 - externally delivered content has a documented deletion or manual-remediation path; and
-- tombstones contain no source content, identifiers, URLs, or reversible hashes.
+- completed request receipts contain no erased content or subject keys. Minimal exact native identity
+  keys remain separately as permanent processing-suppression controls; they are personal data with a
+  distinct prevention purpose, not anonymous tombstones.
 
 Do not enable extended evaluation retention until its purpose, authorization, tenant isolation, retention, and
 source/workspace/person erasure paths are implemented and tested.
@@ -228,10 +231,10 @@ The TUM deployment's current Art. 35 status and expansion restrictions are recor
 
 ## References
 
-- [GDPR Article 5](https://eur-lex.europa.eu/eli/reg/2016/679/art_5/oj)
-- [GDPR Article 25](https://eur-lex.europa.eu/eli/reg/2016/679/art_25/oj)
-- [GDPR Article 30](https://eur-lex.europa.eu/eli/reg/2016/679/art_30/oj)
-- [GDPR Article 35](https://eur-lex.europa.eu/eli/reg/2016/679/art_35/oj)
+- [GDPR Article 5](https://eur-lex.europa.eu/eli/reg/2016/679/oj)
+- [GDPR Article 25](https://eur-lex.europa.eu/eli/reg/2016/679/oj)
+- [GDPR Article 30](https://eur-lex.europa.eu/eli/reg/2016/679/oj)
+- [GDPR Article 35](https://eur-lex.europa.eu/eli/reg/2016/679/oj)
 - [WP29 Guidelines on DPIA, WP248 rev.01](https://ec.europa.eu/newsroom/article29/items/611236/en)
 - [NIST Privacy Framework](https://www.nist.gov/privacy-framework)
 - [NIST Generative AI Profile](https://doi.org/10.6028/NIST.AI.600-1)

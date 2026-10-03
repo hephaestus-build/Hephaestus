@@ -39,7 +39,11 @@ Boltzmannstraße 3
 For questions regarding Hephaestus, please contact:
 
 Email: [ls1.admin@in.tum.de](mailto:ls1.admin@in.tum.de)  
-Issues: [github.com/hephaestus-build/Hephaestus/issues](https://github.com/hephaestus-build/Hephaestus/issues)
+Public bug reports: [github.com/hephaestus-build/Hephaestus/issues](https://github.com/hephaestus-build/Hephaestus/issues)
+
+For personal-data requests, use the private contact in [Privacy](/privacy). Do not post personal
+data, credentials or rights requests in public issues. This imprint identifies the TUM deployment;
+other operators must publish their own details.
 
 ## Terms of Use
 

@@ -7,16 +7,50 @@ description: Art. 30 / Art. 35 / Art. 28 records and source-governance controls 
 
 # Hephaestus — Data-Protection Documentation
 
-This folder is the data-protection package for the TUM-operated Hephaestus deployment at https://hephaestus.build. Files are named after the GDPR articles they answer to, not after the TUM DSMS portal field labels. The portal supplies its own field prompts; submit by pasting from the fenced code blocks in `record-of-processing.md` into the corresponding form fields.
+This package describes the shipped processing and the TUM deployment record. Self-hosters must
+complete their own record before collecting data. The TUM identity, public-task basis and institutional
+agreements do not apply to another operator. A setting, a source-use decision or a passing test cannot
+establish a legal basis or prove that a deployment follows this record.
 
-A different operator forking Hephaestus must amend, before opening their deployment to users: the controller block in `record-of-processing.md`, the operational-contact email, the Art. 28 row for any processor they engage that is not on the AET pool, the consent / public-task framing in `record-of-processing.md` "Legal basis", and the live privacy notice and imprint under `webapp/public/legal/profiles/`.
+The TUM privacy notice still needs the legal owner's approval before release. This update does not
+change that approval state; the release action remains in
+[#1377](https://github.com/hephaestus-build/Hephaestus/issues/1377).
+
+## Before collecting data
+
+Complete these deployment decisions in the controller's governance system. Replace each placeholder;
+do not publish unresolved placeholders as a valid privacy notice.
+
+| Decision | Operator must record |
+|---|---|
+| Responsibility | `[controller name, address, representative, privacy contact, DPO where applicable]`; identify any joint controllers and their actual arrangement. An admin role alone does not establish Art. 26 status. |
+| Purpose and lawful basis | `[basis and necessity per purpose and data-subject group]`, including people who never sign in, employees, students, incidental third parties, and research participants. Terms acceptance and the AI choice do not supply this basis. |
+| Information duties | `[how and when people receive the Art. 13/14 notice]`, including source-only contributors and Slack participants; record any claimed Art. 14 exception and its safeguards. A footer link alone does not prove fulfilment. |
+| Risk | `[full DPIA reference, owner, measures, residual risk and controller decision]`. The [screen](./dpia-prescreen.md) indicates a full DPIA for the current combined scope. |
+| Recipients and transfers | `[exact providers, roles, regions, contracts, subprocessors, transfer safeguards, renewal dates]`, using the [processor checklist](./processor-checklist.md). |
+| Retention | `[duration or review/deletion trigger for every category]`, including stores with no automatic expiry, active Slack threads, unavailable repositories, exports, suppression keys, logs and backups. |
+| Security and recovery | `[access owners, key management, backup destination and expiry, restore test, incident response and breach procedure]`. Verify the configured stack; source code does not prove operational controls. |
+| Rights | `[verified request intake, secure delivery, response owner, exceptions and completion evidence]`; use the shipped Person data procedure, not ad hoc SQL. |
+
+Help a requester identify their records under Art. 12(2). Resolve stable provider IDs from verified
+source-profile/work links if the person does not know them; never substitute a display-name match.
+Ask for additional identity evidence only where reasonable doubts require it, and use a secure
+transfer channel. Do not demand a Hephaestus account from someone whose work was collected without one.
+Under Art. 12(3), respond within one month. A justified extension of up to two further months requires
+notice within the first month. Record any refusal and explain the complaint and judicial-remedy rights.
+Assess special-category and criminal-offence content under Arts. 9 and 10 separately; an Art. 6 basis
+alone does not authorise it. Employee or student consent must be freely given, with a real refusal
+path and no disadvantage; a workplace or course power imbalance needs explicit assessment.
+Assess portability under Art. 20 separately: it applies to qualifying consent- or contract-based,
+automated processing, and must respect other people's rights. A JSON download does not make all
+public-task processing subject to Art. 20.
 
 ## Files
 
 | File | Purpose |
 |---|---|
 | [`record-of-processing.md`](./record-of-processing.md) | Art. 30 record. TOMs (Art. 32) folded in under Art. 30(1)(g). Fenced blocks paste-ready into the TUM DSMS form. |
-| [`dpia-prescreen.md`](./dpia-prescreen.md) | Art. 35 pre-screen. Records the pending controller/DPO determination, safeguards, and change freeze. |
+| [`dpia-prescreen.md`](./dpia-prescreen.md) | Art. 35 pre-screen. Indicates a full DPIA; records the pending controller/DPO determination, safeguards, and change freeze. |
 | [`processor-checklist.md`](./processor-checklist.md) | Art. 28 checklist. Per-processor AVV status; LRZ-as-separate-controller analysis. |
 | [`artifact-source-governance.md`](./artifact-source-governance.md) | Approval, minimization, processor-egress, retention, and erasure gate for every AI-readable source. |
 | [`personal-data-map.md`](./personal-data-map.md) | Personal-data stores, export coverage, erasure paths, residual retention, and their verification. |
