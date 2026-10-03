@@ -33,9 +33,9 @@ The package method requires Chrome developer mode.
 1. If you cannot see the Hephaestus icon, pin it from Chrome's puzzle-piece menu.
 2. Select the Hephaestus toolbar icon to open extension settings.
 3. For the hosted service at `hephaestus.build`, select **Continue with Hephaestus**.
-4. Allow Chrome's request for extension access to that address.
+4. For the hosted service, allow Chrome's request for extension access to that address.
 5. For your organization's own Hephaestus instead, open **Use a self-hosted instance**.
-6. Enter its HTTPS address.
+6. For a self-hosted instance, enter its HTTPS address.
 7. Choose your usual sign-in provider.
 
 If the settings page reports an incomplete account step:
@@ -183,14 +183,14 @@ Sign-out or a Hephaestus address change clears displayed extension content in ea
 - On an allowed site, the extension immediately sends opened work addresses to Hephaestus for lookup. This includes pull requests, merge requests, and issues. It sends the address again while the page stays open and the review may change. On lists, it sends a row's address only after you select its Hephaestus button. It sends no other addresses, including from other sites.
 - It does not read or send page content or read cookies. Requests to Hephaestus use its own sign-in, not browser cookies.
 - Report content stays inside the extension's page area. The page sees only the report's presence and height.
-- Sign-in stays in Chrome memory for the extension only. Chrome closure removes it.
+- Sign-in stays in Chrome memory for the extension only. When Chrome closes, it removes the sign-in.
 - Hephaestus matches the address against repositories the workspace already monitors. It does not fetch the page itself.
 
 [Your data in Hephaestus](./privacy) and [the extension's data handling](./browser-extension-privacy) explain recorded data and access.
 
 ## When something is not right
 
-| The report says | What it means |
+| The report starts with | What it means |
 | --- | --- |
 | Could not load here | The report did not start. |
 | Could not load | Your Hephaestus did not answer. |

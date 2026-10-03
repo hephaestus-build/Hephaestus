@@ -57,7 +57,7 @@ Privacy choices, access boundaries, and erasure checks still apply.
 
 Generated-path settings mark retained evidence but do not remove it.
 Refusal to review a bot's work does not erase its source records.
-A connection does not authorize each use of its content.
+A connection alone does not authorize all uses of its content.
 These sources supply context for practice reviews and the mentor.
 
 Hephaestus records **observations and practice feedback**, including observations that never become comments.
@@ -217,9 +217,9 @@ A dispute or withdrawal is not erasure.
 ## Get a copy of your data
 
 1. Open **User settings → Danger Zone → Export my data → Request export**.
-2. When the export is ready, select **Download**.
-3. If generation fails, select **Retry export**.
-4. For repeated failures or stalled exports, contact the operator.
+2. If generation fails, select **Retry export**.
+3. For repeated failures or stalled exports, contact the operator.
+4. When the export is ready, select **Download**.
 5. Keep the downloaded file private.
 
 Downloads expire **48 hours** after preparation.
@@ -313,8 +313,8 @@ The sections above describe account and export timing.
 
 - **Authentication history:** records expire in monthly batches. Account erasure redacts identifying authentication details.
 - **Settings-change history:** records expire after their own retention period. Account erasure detaches actor references, not the change record.
-- **Review diagnostics:** records become eligible for removal when enough time has passed since job completion. Job history becomes eligible later, only without observation or feedback references. Pending delivery delays both. The job-retention service must also be enabled. Disabling reviews does not automatically delete old records.
-- **Review working copies:** worker attempt folders are removed after evidence admission. Ended attempts have a one-hour cleanup grace period. Restart cleanup removes abandoned folders. Failed cleanup needs a later successful run. Raw Git mirrors follow repository monitoring. The repository owner must handle Git authorship at source.
+- **Review diagnostics:** records become eligible for removal when enough time has passed since job completion. Job history becomes eligible later, only without observation or feedback references. Pending delivery delays both. The job-retention service must also be on. Disabling reviews does not automatically delete old records.
+- **Review working copies:** cleanup removes worker attempt folders after evidence admission. Ended attempts have a one-hour cleanup grace period. Restart cleanup removes abandoned folders. Failed cleanup needs a later successful run. Raw Git mirrors follow repository monitoring. The repository owner must handle Git authorship at source.
 - **AI usage accounting:** records contain token counts, costs, and run identifiers, not message content. They stay long enough for annual accounting. An operator can extend retention for a legal obligation.
 - **Other operational and administration history:** some records of who configured or requested an operation have no automatic expiry. They survive account or workspace removal. A verified erasure request must include them.
 

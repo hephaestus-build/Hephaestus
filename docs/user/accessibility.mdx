@@ -39,7 +39,7 @@ The [audit record](/contributor/accessibility-audit-record-2026-10-03) lists eac
 
 - Screen readers are untested. Nobody ran NVDA with Firefox or VoiceOver with Safari on any page or process. Screen-reader-only barriers may stay. The application now announces new page titles after link navigation. We have not confirmed how screen readers voice them.
 - Safari on macOS is untested with any assistive technology. WebKit passes the same checks on Linux, which is not the same as Safari.
-- Pages with real data are only partly evaluated. The evaluated installation had no synced work, review runs, or language-model provider. Component tests used sample data for feedback, review results, activity, usage charts, and audit entries. These pages were not checked in a live installation. Heph conversations are also untested against a running instance.
+- Pages with real data are only partly evaluated. The evaluated installation had no synced work, review runs, or language-model provider. Component tests used sample data for feedback, review results, activity, usage charts, and audit entries. We did not check these pages in a live installation. Heph conversations are also untested against a running instance.
 - We performed the Tab walk only as an administrator. Workspace member pages pass automated checks, but we have not checked them by keyboard.
 - We did not test recovery from failed requests in any process. Nobody forced a request failure to check the information shown to the person.
 - Some processes are untested with a keyboard or screen reader. These include workspace creation from a provider, feedback responses on work, Heph conversations, and account deletion. GitHub or GitLab sign-in leaves the application. That handoff is also untested.

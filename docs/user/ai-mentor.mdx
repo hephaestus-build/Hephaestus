@@ -82,9 +82,9 @@ Heph sees only feedback records that it may use in conversation.
 It does not see:
 
 - Feedback proposed for a reviewer to approve, or the reviewer's decision.
-- Feedback that was withheld or replaced.
+- Withheld or replaced feedback.
 - Feedback whose evidence is no longer available for conversations.
-- Feedback about a Slack conversation whose consent is paused or revoked, even if that feedback reached you.
+- Feedback about a Slack conversation with paused or revoked consent, even if that feedback reached you.
 
 If Heph sees no feedback for some work, it cannot tell whether feedback reached you, was drafted, or was rejected.
 It states this limit instead of saying there was no feedback.
@@ -116,7 +116,7 @@ Heph can also use:
 - Selected team documents from a connected Outline workspace.
 
 Heph uses this context to answer your question.
-It does not have an unrestricted checkout of each connected repository.
+It does not have an unrestricted checkout of all connected repositories.
 It may ask for a specific snippet if the available context is not enough.
 
 Heph does not use work deleted on GitHub or GitLab.
