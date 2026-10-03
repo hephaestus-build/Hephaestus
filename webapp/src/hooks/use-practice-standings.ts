@@ -38,8 +38,8 @@ function groupPracticeStandings(
 }
 
 /**
- * The developer's practice standings in one workspace — the groups, the standing in each and the
- * standing on every practice — as the practice profile and the drawer over it read them. With
+ * The developer's practice standings in one workspace, the groups, the standing in each and the
+ * standing on every practice, as the practice profile and the drawer over it read them. With
  * `enabled` off nothing is read, for a page that shows them only while a level is open.
  */
 export function usePracticeStandings(

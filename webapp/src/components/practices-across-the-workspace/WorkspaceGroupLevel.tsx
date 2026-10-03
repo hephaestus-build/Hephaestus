@@ -80,7 +80,8 @@ export function WorkspaceGroupLevel({
 						</>
 					)
 				}
-				// The way on is a link in the header's one line, not a column beside the title.
+				// The way on is a link in the header's one line, not a column beside the title. As the
+				// header's description it is also the dialog's, so a screen reader reads it on opening.
 				description={
 					group && (
 						<InlineLink

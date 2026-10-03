@@ -49,7 +49,8 @@ interface Part {
 /**
  * None yet holds both standings that say why there is none, so it takes a neutral empty circle
  * rather than either one's icon, and a fill in the one grey family that stays a part of the bar
- * against the card in both themes.
+ * against the card in both themes. The fill stays under 3:1 against the card, since the count and
+ * icon under every part carry what it shows.
  */
 const NONE_YET_ICON = CircleIcon;
 const NONE_YET_FILL = "bg-muted-foreground/40";
