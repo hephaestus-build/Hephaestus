@@ -18,7 +18,7 @@ For a release deployment, the host verifies two signatures:
 
 The host rejects a new channel commit that does not descend from its last accepted channel commit.
 It also rejects lower release versions and older commits unless `allowRollback` is set. These checks
-do not order manual transitions between releases and commits; choose those targets deliberately.
+do not order manual transitions between releases and commits. Choose those targets deliberately.
 
 ## The channel
 
@@ -46,19 +46,25 @@ enabling continuous staging.
 
 ## Requirements
 
-Install Docker Engine with Compose v2, `git`, `cosign`, and the Node.js version pinned in
-`package.json#devEngines.runtime`. Verify downloaded tools against their published checksums.
+1. Install Docker Engine with Compose v2.
+2. Install `git` and `cosign`.
+3. Install the Node.js version pinned in `package.json#devEngines.runtime`.
+4. Verify downloaded tools against their published checksums.
+5. Allow outbound HTTPS to GitHub and its release-asset download hosts.
+6. Allow outbound HTTPS to Sigstore trust services.
+7. Allow outbound HTTPS to the lock's image registries, including GHCR and Docker Hub.
 
-Allow outbound HTTPS to GitHub and its release-asset download hosts, Sigstore trust services, and
-the image registries in the lock, including GHCR and Docker Hub. Registry authentication and download
-redirects may use additional hosts; an allowlist limited to `github.com` and `ghcr.io` is insufficient.
+Registry authentication and download redirects may use additional hosts.
+An allowlist with only `github.com` and `ghcr.io` is insufficient.
 
 ## Install
 
-1. Install the trusted reconciler checkout. This clone is the first tooling the host runs: from the
-   first release it applies onward, the host runs the reconciler and verifier of the release it
-   applied, reached through the `/var/lib/hephaestus/tooling` link that the reconciler moves only
-   after it has verified and applied a release. A release never replaces the tooling that verifies it.
+The initial clone is the first tooling that the host runs.
+After its first applied release, the host uses that release's reconciler and verifier through `/var/lib/hephaestus/tooling`.
+The reconciler moves the link only after it verifies and applies a release.
+A release never replaces the tooling that verifies it.
+
+1. Install the trusted reconciler checkout:
 
    ```bash
    sudo install -d -m 0750 /var/lib/hephaestus
@@ -67,115 +73,146 @@ redirects may use additional hosts; an allowlist limited to `github.com` and `gh
    sudo ln -sfn /var/lib/hephaestus/checkout /var/lib/hephaestus/tooling
    ```
 
-2. Copy `docker/self-host/systemd/reconcile.env.example` to `/etc/hephaestus/reconcile.env`
-   (`root:root`, `0600`) and set the channel, the stacks this host owns, and the promotion identity.
-3. Put one `<stack>.env` per stack in `/etc/hephaestus`, `0600`. These hold the deployment secrets
-   and never leave the host.
-4. Install the units:
+2. Copy `docker/self-host/systemd/reconcile.env.example` to `/etc/hephaestus/reconcile.env`.
+3. Set its ownership to `root:root` and mode to `0600`.
+4. Set the channel, the stacks this host owns, and the promotion identity.
+5. Put one `<stack>.env` per stack in `/etc/hephaestus`, with mode `0600`.
+   These files hold deployment secrets and never leave the host.
+
+6. Install the units:
+
+      ```bash
+      sudo install -m 644 \
+        /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.service \
+        /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.timer \
+        /etc/systemd/system/
+      sudo systemctl daemon-reload
+      sudo systemctl enable --now hephaestus-reconcile.timer
+      ```
+
+   The units are copies because systemd needs them on the root filesystem at boot.
+   The reconciler keeps both at the host's release.
+   It reloads systemd when it rewrites a unit.
+   This is therefore the last manual installation of the units.
+
+7. Watch the first run with:
 
    ```bash
-   sudo install -m 644 \
+   journalctl -fu hephaestus-reconcile.service
+   ```
+
+### Moving an existing host
+
+A host with an existing Hephaestus database keeps the secrets used to write that database.
+Pull-based deployment does not change them.
+Operators write the per-stack files in `/etc/hephaestus` (`app.env`, `core.env`) manually here.
+`docker/self-host/setup.sh` and its guard belong to the Compose installer.
+
+1. Before the first reconcile, copy these settings from the previous deployment:
+
+   | Setting                                                                                                                                                                                                                          | What it must be                                                                                                                                                                                                             |
+   | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`                                                                                                                                                                                             | The previous deployment's value. It encrypted the server's stored values other than integration credentials.                                                                                                    |
+   | `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`                                                                                                                                                                                  | The previous deployment's value, or the master key if the installation never set it separately. It encrypted integration credentials. A different key makes them unreadable without a warning.       |
+   | `HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED`, `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION`, `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY`, `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY_VERSION` | The previous deployment's values, if it rotated credential keys. Each stored credential names the key version that wrote it. A credential under the prior key remains readable only while that key is configured. |
+   | `WEBHOOK_SECRET`                                                                                                                                                                                                                 | what the providers were registered to sign with                                                                                                                                                                             |
+   | `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`                                                                                                                                                                                               | optional. A new one only invalidates sign-ins that are in flight at the moment of the switch                                                                                                                                |
+
+   A host with its own edge keeps certificates in the `proxy_letsencrypt` volume.
+   In a release worktree, the old bind-mounted `acme.json` is under `docker/letsencrypt/`.
+   The reconciler never prunes a worktree that still holds that file.
+
+   :::caution CAUTION: Preserve the active ACME store
+   An existing `acme.json` in the volume is Traefik's active store.
+   An older backup would discard certificates currently in service.
+   The command below refuses that replacement.
+   Inspect an existing store deliberately before replacing it.
+   :::
+
+   Before reconciling a host that used the old bind mount:
+
+2. Pause the timer.
+3. Stop its existing Traefik container so the ACME store cannot change during the copy.
+4. Back up `acme.json` first.
+5. Before the new proxy starts, copy it into the volume.
+   Otherwise, Traefik issues the certificates again.
+6. On the Docker Engine host, use the volume's actual mountpoint, not an assumed Docker data root:
+
+   ```bash
+   sudo docker volume create proxy_letsencrypt
+   volume_path=$(sudo docker volume inspect --format '{{ .Mountpoint }}' proxy_letsencrypt)
+   if sudo test -s "$volume_path/acme.json"; then
+     echo "acme.json is already in proxy_letsencrypt — inspect it before replacing it" >&2
+   else
+     sudo install -m 600 /path/to/previous/acme.json "$volume_path/acme.json"
+   fi
+   ```
+
+7. Keep the backup until the new proxy successfully serves the existing certificates.
+8. Then re-enable reconciliation.
+
+For rollback to a release whose proxy still uses the bind mount:
+
+1. Stop Traefik.
+2. Copy the current ACME store back.
+
+The old release tree alone does not keep that copy current.
+The pull-based stacks use the bundled database with fixed credentials.
+No database password therefore needs transfer.
+On the Compose installer, `docker/self-host/setup.sh` refuses to generate an encryption key while `hephaestus_postgresql-data` exists.
+It stops rather than guesses if Docker cannot list volumes.
+
+### Upgrading a host installed before the tooling link
+
+A host installed before `/var/lib/hephaestus/tooling` existed runs the reconciler directly from its checkout.
+That checkout did not update.
+The commands below advance it manually once.
+Afterward, the reconciler maintains the link and units.
+
+:::caution CAUTION: Do not change a checkout during reconciliation
+A oneshot service remains `activating` while it runs.
+Stopping the timer does not stop an active tick.
+The commands first stop the timer and wait for an active tick to finish.
+Do not change the checkout underneath a tick.
+:::
+
+1. Run this block:
+
+   ```bash
+   sudo systemctl stop hephaestus-reconcile.timer
+   while [ "$(systemctl show --property=ActiveState --value hephaestus-reconcile.service)" = activating ]; do sleep 5; done
+   sudo git -C /var/lib/hephaestus/checkout fetch --quiet origin main
+   sudo git -C /var/lib/hephaestus/checkout reset --quiet --hard origin/main
+   sudo ln -sfn /var/lib/hephaestus/checkout /var/lib/hephaestus/tooling
+   sudo install -m 0644 \
      /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.service \
      /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.timer \
      /etc/systemd/system/
    sudo systemctl daemon-reload
-   sudo systemctl enable --now hephaestus-reconcile.timer
+   sudo systemctl start hephaestus-reconcile.service
+   sudo systemctl start hephaestus-reconcile.timer
+   sudo readlink /var/lib/hephaestus/tooling
    ```
 
-   The units are copies, because systemd needs them on the root filesystem at boot. The reconciler
-   keeps both at the release the host runs and reloads systemd when it rewrites one, so this is the
-   last time they are installed by hand.
+2. Run the **Promote** workflow for the release that the host already runs.
 
-5. Watch the first run: `journalctl -fu hephaestus-reconcile.service`.
+   The host cannot complete an old record that lacks the release commit from files on disk.
+   Those files cannot distinguish the accepted tree from one left by a failed promotion.
+   The host therefore keeps the checkout's tooling and reports `hephaestus_deploy_tooling_pending 1`.
+   The next apply records the commit and adopts that release's tooling.
 
-### Moving an existing host
+   After a tick adopts the tooling, the block's last line names the running release's worktree.
+   The service starts only through the link.
 
-A host that already has a Hephaestus database keeps the secrets that database was written with;
-nothing about pull-based deployment changes them. The per-stack files in `/etc/hephaestus`
-(`app.env`, `core.env`) are written by hand here — `docker/self-host/setup.sh` and its guard belong
-to the Compose installer — so carry these over from the previous deployment before the first
-reconcile:
+3. If the link is missing or points to a removed directory, recreate it with the `ln` line above.
 
-| Setting                                                                                                                                                                                                                          | What it must be                                                                                                                                                                                                             |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`                                                                                                                                                                                             | the previous deployment's value: what the server encrypts at rest other than integration credentials was written with it                                                                                                    |
-| `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`                                                                                                                                                                                  | the previous deployment's value, or the master key on an installation that never set it separately: integration credentials were written with it, and a different key makes them unreadable without a word of warning       |
-| `HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED`, `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION`, `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY`, `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY_VERSION` | whatever the previous deployment set, if it rotated credential keys: each stored credential names the key version that wrote it, and a credential written under the prior key is readable only while that key is configured |
-| `WEBHOOK_SECRET`                                                                                                                                                                                                                 | what the providers were registered to sign with                                                                                                                                                                             |
-| `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`                                                                                                                                                                                               | optional; a new one only invalidates sign-ins that are in flight at the moment of the switch                                                                                                                                |
+   If a recorded release's worktree under `releases/` was deleted, the reconciler rebuilds it before any other action.
+   It uses the accepted commit, not the tag's current target.
+   If it cannot rebuild the worktree, such as when the checkout lost that commit, the tick stops with the reason.
 
-A host that also brings its own edge keeps its certificates in the `proxy_letsencrypt` volume. Before
-reconciling a host that used the old bind mount, pause the timer and stop its existing Traefik container
-so the ACME store cannot change during the copy. Back up that `acme.json` first; in a release worktree
-it is under `docker/letsencrypt/`, and the reconciler never prunes a worktree that still holds it.
-Copy it into the volume before starting the new proxy, or Traefik issues the certificates again.
+   `HEPHAESTUS_STACKS` selects the host's managed Compose projects.
 
-A volume that already holds an `acme.json` holds the store Traefik is using: copying an older backup
-over it discards the certificates currently being served. The command below refuses in that case
-rather than leaving the operator to notice, so a store that is already there has to be looked at
-deliberately before anything replaces it.
-
-On the Docker Engine host, use the volume's actual mountpoint rather than assuming Docker's data root:
-
-```bash
-sudo docker volume create proxy_letsencrypt
-volume_path=$(sudo docker volume inspect --format '{{ .Mountpoint }}' proxy_letsencrypt)
-if sudo test -s "$volume_path/acme.json"; then
-  echo "acme.json is already in proxy_letsencrypt — inspect it before replacing it" >&2
-else
-  sudo install -m 600 /path/to/previous/acme.json "$volume_path/acme.json"
-fi
-```
-
-Keep the backup until the new proxy serves the existing certificates successfully, then re-enable
-reconciliation. A rollback to a release whose proxy still uses the bind mount needs the current ACME
-store copied back while Traefik is stopped; retaining the old release tree alone does not keep that
-copy current.
-
-The pull-based stacks use the bundled database with its fixed credentials, so there is no
-database password to carry. On the Compose installer, `docker/self-host/setup.sh` refuses to
-generate an encryption key while the volume `hephaestus_postgresql-data` exists, and stops rather
-than guess when Docker cannot list volumes.
-
-### Upgrading a host installed before the tooling link
-
-A host set up before `/var/lib/hephaestus/tooling` existed runs the reconciler straight from its
-checkout, and that checkout is exactly what stood still. Bring it forward once by hand; from then
-on the reconciler maintains the link and the units.
-
-```bash
-sudo systemctl stop hephaestus-reconcile.timer
-while [ "$(systemctl show --property=ActiveState --value hephaestus-reconcile.service)" = activating ]; do sleep 5; done
-sudo git -C /var/lib/hephaestus/checkout fetch --quiet origin main
-sudo git -C /var/lib/hephaestus/checkout reset --quiet --hard origin/main
-sudo ln -sfn /var/lib/hephaestus/checkout /var/lib/hephaestus/tooling
-sudo install -m 0644 \
-  /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.service \
-  /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.timer \
-  /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl start hephaestus-reconcile.service
-sudo systemctl start hephaestus-reconcile.timer
-sudo readlink /var/lib/hephaestus/tooling
-```
-
-Then run the **Promote** workflow for the release the host already runs. A record written before
-the release commit was kept is never completed from what is on disk — nothing there tells the tree
-the host accepted from one a failed promotion left behind — so the host keeps the tooling from the
-checkout, reports `hephaestus_deploy_tooling_pending 1`, and only the next apply records the commit
-and adopts that release's tooling.
-
-The timer is stopped first and a tick already running is waited out — a oneshot service is
-`activating` while it runs, and stopping its timer does not stop it — because nothing may change the
-checkout underneath a tick. The last line names the worktree of the release the host runs once a
-tick has adopted it. The service starts only through that link: if it is ever missing or points at
-a directory that is gone, recreate it with the `ln` line above. A recorded release whose worktree
-under `releases/` has been deleted is rebuilt before anything else, at the commit the host accepted
-for it rather than wherever its tag points now; if that cannot be done, because the checkout
-has lost that commit, say, the tick stops with the reason.
-
-`HEPHAESTUS_STACKS` selects the Compose projects this host manages. If another proxy provides its
-ingress, omit `proxy` and use `core app`.
+4. If another proxy supplies ingress, omit `proxy` and use `core app`.
 
 ## Operating it
 
@@ -187,91 +224,124 @@ ingress, omit `proxy` and use `core app`.
 | Resume a held environment                              | Manually promote the desired release or commit with **freeze** cleared   |
 | Reapply Compose configuration                          | Promote the release or commit the host already runs                      |
 | Move a following host onto the commit's database image | Promote the commit with **refresh-database-image**                       |
-| Prevent new reconciliation runs                        | `sudo systemctl disable --now hephaestus-reconcile.timer`                |
-| See what a host runs                                   | `cat /var/lib/hephaestus/applied.json`                                   |
-| Keep a release worktree while you work in it           | Lock it; see [What it keeps on disk](#what-it-keeps-on-disk)             |
+| Prevent new reconciliation runs                        | Use the timer-disable command below                                      |
+| See what a host runs                                   | Use the applied-record command below                                     |
+| Keep a release worktree while you work in it           | Lock it. See [What it keeps on disk](#what-it-keeps-on-disk)             |
 
-:::warning Pause reconciliation before manual changes
-Disable the timer and confirm the service is no longer running with
-`systemctl status hephaestus-reconcile.service` before editing.
-Disabling the timer does not stop an active reconciliation. Re-enable the timer after recovery.
+Timer-disable command:
 
-Re-promoting reapplies Compose configuration; it does not restore arbitrary container-file changes.
-The reconciler refuses a release checkout with modified tracked files.
+```bash
+sudo systemctl disable --now hephaestus-reconcile.timer
+```
+
+Applied-record command:
+
+```bash
+cat /var/lib/hephaestus/applied.json
+```
+
+:::caution CAUTION: Pause reconciliation before manual changes
+An active reconciliation can conflict with manual changes.
+Disable the timer before editing.
+Confirm that the service no longer runs with:
+
+```bash
+systemctl status hephaestus-reconcile.service
+```
+
+A disabled timer does not stop an active reconciliation.
+Re-enable the timer after recovery.
 :::
+
+A new promotion reapplies Compose configuration, not arbitrary container-file changes.
+The reconciler refuses a release checkout with modified tracked files.
 
 ### What restarts the database
 
-An apply recreates a container whose image or Compose definition changed, and recreating PostgreSQL
-drops every connection to it for as long as the application services take to stop and come back.
-Every commit of the default branch rebuilds the PostgreSQL image — the rebuild is what carries
-Debian's security updates into it — so a host following commits is offered a new digest on every
-apply. Taking each one would restart the database several times a day, so the reconciler keeps the
-image it already runs and applies the rest of the channel.
+An apply recreates a container whose image or Compose definition changed.
+PostgreSQL recreation drops all database connections until the application services stop and return.
+Each default-branch commit rebuilds the PostgreSQL image to include Debian security updates.
+A host that follows commits therefore receives a new digest on each apply.
+Applying each digest would restart the database several times a day.
+The reconciler instead keeps the current image and applies the rest of the channel.
 
-On such a host the database restarts when:
+On such a host, the database restarts in these cases:
 
-- the commit changes what the image is built from — `docker/postgres/`, or the workflows that build
-  it;
-- the first commit of a later day is applied, so the security updates in that day's rebuild land
-  within a day of the push that built them;
-- the `postgres` service in `docker/compose.app.yaml` changes;
-- the host has no usable record of the image it runs — no applied commit, no lock for it, or a
-  checkout that cannot resolve the two commits;
-- you promote with **refresh-database-image**, which takes that commit's image once. The next
-  automatic promotion goes back to carrying it.
+- The commit changes `docker/postgres/` or the workflows that build the image.
+- The host applies the first commit of a later day.
+  That day's security updates arrive within a day of the push that built them.
+- The `postgres` service in `docker/compose.app.yaml` changes.
+- The host has no usable image record.
+  This includes a missing applied commit, missing lock, or checkout unable to resolve the two commits.
+- You promote with **refresh-database-image**.
+  That takes the commit's image once.
+  The next automatic promotion carries it forward again.
 
 A release is applied exactly as its signed lock names it, so a release that rebuilt the image
 restarts the database.
 
 ### What it keeps on disk
 
-Every release or commit the host applies gets a Git worktree under `/var/lib/hephaestus/releases/`
-and a lock under `/var/lib/hephaestus/release-locks/`. After each successful apply, the reconciler
-removes the worktrees nothing needs any more with `git worktree remove`, and then the lock of every
-release left without a worktree. It keeps:
+Each applied release or commit gets a Git worktree under `/var/lib/hephaestus/releases/` and a lock under `/var/lib/hephaestus/release-locks/`.
+After a successful apply, the reconciler removes unnecessary worktrees with `git worktree remove`.
+It then removes the locks of releases with no worktree.
+It keeps these worktrees:
 
-- the release it has just applied;
-- the release it ran before that, so a rollback starts from a worktree that is already there;
-  promoting the running release again keeps this one as well;
-- the worktree the `/var/lib/hephaestus/tooling` link names;
-- a worktree locked with `git worktree lock`, which is how you keep one you are working in;
-- a worktree that holds anything its release does not, such as a modified file or an untracked or
-  ignored one. An `acme.json` that an older release's proxy wrote to `docker/letsencrypt/` is one of
-  these.
+- The release just applied.
+- The previous running release, so rollback starts from an existing worktree.
+  Promoting the running release again also keeps this previous release.
+- The worktree named by `/var/lib/hephaestus/tooling`.
+- A worktree locked with `git worktree lock` for manual work.
+- A worktree with files absent from its release, including modified, untracked, or ignored files.
+  This includes `acme.json` written to `docker/letsencrypt/` by an older proxy.
 
 The journal names each worktree the reconciler removes, and says why it keeps a locked worktree or
 one that holds files. Pruning deletes worktrees and lock files only. It never touches a Docker
 volume, so the certificates in `proxy_letsencrypt` and the database stay as they are.
 
-To keep a worktree while you use it, lock it, and unlock it when you are done:
+1. To keep a worktree during use, lock it.
+2. When you finish, unlock it:
 
-```bash
-sudo git -C /var/lib/hephaestus/checkout worktree lock --reason "incident review" \
-  /var/lib/hephaestus/releases/<release>
-sudo git -C /var/lib/hephaestus/checkout worktree unlock /var/lib/hephaestus/releases/<release>
-```
+   ```bash
+   sudo git -C /var/lib/hephaestus/checkout worktree lock --reason "incident review" \
+     /var/lib/hephaestus/releases/<release>
+   sudo git -C /var/lib/hephaestus/checkout worktree unlock /var/lib/hephaestus/releases/<release>
+   ```
 
-A worktree kept because of its files stays until you remove it. Save what it holds first, then
-use `sudo git -C /var/lib/hephaestus/checkout worktree remove --force <worktree>`.
+   A worktree kept because of its files remains until you remove it.
+
+3. Save its files first.
+4. Use:
+
+   ```bash
+   sudo git -C /var/lib/hephaestus/checkout worktree remove --force <worktree>
+   ```
 
 A rollback to a pruned release creates its worktree again at the commit the host accepts for it.
 The proxy then finds its certificates in the volume, so nothing is issued again. This is not true
-for a release whose proxy still used the bind mount; see
+for a release whose proxy still used the bind mount. See
 [Moving an existing host](#moving-an-existing-host).
 
 If pruning fails, the pass fails after the new release is running, recorded and its tooling
 adopted. The journal gives the reason. The next apply prunes everything that is still obsolete.
 
-To run a pass by hand, use `sudo systemctl start hephaestus-reconcile.service`. Do not start the
-reconciler directly: systemd runs one pass at a time, so no other pass can use a worktree that
-pruning removes.
+Systemd runs one pass at a time.
+This prevents another pass from using a worktree that pruning removes.
+
+1. To run a pass manually, use:
+
+   ```bash
+   sudo systemctl start hephaestus-reconcile.service
+   ```
+
+2. Do not start the reconciler directly.
 
 ## Watching it
 
-Set `HEPHAESTUS_METRICS_FILE` to a `.prom` file in an existing node_exporter textfile collector
-directory. After a deployment has succeeded, every run writes these, except one that only adopted
-the tooling of the applied release, which leaves them as they were:
+1. Set `HEPHAESTUS_METRICS_FILE` to a `.prom` file in an existing node_exporter textfile collector directory.
+
+After deployment succeeds, each run writes the metrics below.
+A run that only adopts the applied release's tooling leaves them unchanged:
 
 ```text
 hephaestus_deploy_info{channel="staging",release="v1.2.3",channel_commit="…"} 1
@@ -283,28 +353,31 @@ hephaestus_deploy_last_success_timestamp_seconds …
 
 Alert when `time() - hephaestus_deploy_reconcile_timestamp_seconds` exceeds ten minutes, when
 `hephaestus_deploy_reconcile_success` is `0`, or when the host's reconciliation metrics are absent.
-`hephaestus_deploy_last_success_timestamp_seconds` records the last successful **apply**; unchanged
+`hephaestus_deploy_last_success_timestamp_seconds` records the last successful **apply**. Unchanged
 and frozen channels do not advance it, so its age is not a reconciliation-liveness check.
 Alert as well when `hephaestus_deploy_tooling_pending` stays `1`: the host runs tooling no apply has
 recorded yet, and a promotion of the release it runs ends that.
 
 A promotion without **freeze** waits for the public webapp to report the requested version. This
-checks the webapp version, not the readiness of every service; use host metrics and logs for the
+checks the webapp version, not the readiness of every service. Use host metrics and logs for the
 Compose result. A promotion with **freeze** records the hold without waiting for a version change.
 Skipped automatic promotions do not start an environment deployment.
 
-The promotion job summary names this boundary explicitly, including when a version check fails or
-is skipped for a hold. It does not fetch host metrics: their textfile collector and authenticated
-monitoring access belong to the host, not to the public application. Confirm a fresh successful
-reconciliation and the expected release/channel commit on **each** participating host, then inspect
-its Compose health and service logs. A matching frontend version alone says nothing about server,
-worker, webhook, database, NATS, or integration readiness. Do not expose management endpoints to
-make the public version check stand in for that operator verification.
+The promotion job summary explicitly names this boundary, including when a version check fails or a hold skips it.
+It does not fetch host metrics.
+The textfile collector and authenticated monitoring access belong to the host, not the public application.
+A matching frontend version does not establish server, worker, webhook, database, NATS, or integration readiness.
+
+1. On **each** participating host, confirm a fresh successful reconciliation.
+2. Confirm the expected release/channel commit.
+3. Inspect Compose health.
+4. Inspect service logs.
+5. Do not expose management endpoints to replace operator verification with the public version check.
 
 ## What it will not do
 
 **It does not roll back a failed deploy.** A failed apply may leave some services updated. Schema
-migrations are forward-only; older images may be incompatible with the migrated database. Promote a
+migrations are forward-only. Older images may be incompatible with the migrated database. Promote a
 fix, or follow [Backup & Restore](./backup-restore.mdx) if database recovery is needed.
 
 **It does not manage anything it does not own.** The reconciler touches only the Compose projects

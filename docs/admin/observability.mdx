@@ -13,21 +13,26 @@ Each runtime role serves `GET /actuator/prometheus` without a user token on a se
 listener, port **9090** by default (`MANAGEMENT_PORT` outside the supported Compose stacks). The
 application listener refuses this metrics path, including requests with a user token. Port 8081 is
 the sandbox gateway, not a metrics endpoint. Liveness and readiness also remain available on the
-application listener at `/livez` and `/readyz`; container probes use these application-listener paths.
+application listener at `/livez` and `/readyz`. Container probes use these application-listener paths.
 
-The reference and single-host Compose stacks bind management to the container's own
-`shared-network` address through its network-qualified hostname, and expose 9090 **only on that
-network**. This excludes sandbox interfaces, including after a restart with other networks attached.
-Docker's [network-scoped DNS resolution](https://github.com/moby/moby/blob/v28.2.2/libnetwork/sandbox.go#L401-L425)
-selects the management network without a fixed container IP. The stacks do not publish the
-management port to the host or configure a proxy route. Attach your own Prometheus to that network;
-do not add a `ports` mapping, a Traefik router, or internet ingress for management. Docker `expose`
-is not a firewall: any container on that network can read metrics. Restrict network membership to
-trusted services. For a non-Compose deployment, restrict the management listener with private
-networking and firewall policy before starting it. Its default address is loopback (`127.0.0.1`). For a remote scraper, set
-`MANAGEMENT_SERVER_ADDRESS` to a specific trusted private interface. Do not set its port equal to
-the application or sandbox gateway port. See [Spring Boot management listeners](https://docs.spring.io/spring-boot/reference/actuator/monitoring.html)
-and [Prometheus security](https://prometheus.io/docs/operating/security/).
+The reference and single-host Compose stacks bind management to the container's own `shared-network` address through its network-qualified hostname.
+They expose 9090 **only on that network**.
+This excludes sandbox interfaces, including after a restart with other networks attached.
+Docker's [network-scoped DNS resolution](https://github.com/moby/moby/blob/v28.2.2/libnetwork/sandbox.go#L401-L425) selects the management network without a fixed container IP.
+The stacks do not publish the management port to the host or configure a proxy route.
+
+Docker `expose` is not a firewall.
+Any container on that network can read metrics.
+The management listener's default address is loopback (`127.0.0.1`).
+
+1. Attach your own Prometheus to that network.
+2. Do not add a `ports` mapping, Traefik router, or internet ingress for management.
+3. Restrict network membership to trusted services.
+4. For non-Compose deployments, restrict the management listener with private networks and firewall policy before startup.
+5. For a remote scraper, set `MANAGEMENT_SERVER_ADDRESS` to a specific trusted private interface.
+6. Do not use the application or sandbox gateway port for management.
+
+See [Spring Boot management listeners](https://docs.spring.io/spring-boot/reference/actuator/monitoring.html) and [Prometheus security](https://prometheus.io/docs/operating/security/).
 
 No monitoring service or outbound metric exporter is enabled by this configuration. Operators who
 do not run Prometheus need no monitoring setup. Traces remain opt-in and separate from scraping.
@@ -54,22 +59,30 @@ rule_files:
   - hephaestus-alerts.yml
 ```
 
-For multiple replicas, discover and scrape **every container**, not a
-load-balanced service address that can switch replicas between scrapes. Keep each target's `instance`
-label distinct. Apply `increase` or `rate` to each counter before summing so resets are handled per
-process. `runtime_role` above is an operator-supplied target label, not an application meter label.
-`workspace.id` and `job.id` stay log fields; never add them as metric labels.
+For multiple replicas:
+
+1. Discover and scrape **all containers**, not a load-balanced service address that can switch replicas between scrapes.
+2. Keep each target's `instance` label distinct.
+3. Apply `increase` or `rate` to each counter before you sum them.
+4. Never add `workspace.id` or `job.id` as metric labels.
+
+This handles resets per process.
+`runtime_role` above is an operator-supplied target label, not an application meter label.
+`workspace.id` and `job.id` remain log fields.
 
 ### Example alert rules
 
 These rules use the **exported Prometheus names**, not the dotted Micrometer names. The receiver
-exports stream poll age; server consumers export poison counts. Budget admission and committed
+exports stream poll age. Server consumers export poison counts. Budget admission and committed
 agent-job outcomes can occur in different roles, so their rules aggregate all scraped roles.
 
-Use this as `hephaestus-alerts.yml`. Tune windows, thresholds and routing to your traffic and recovery
-objectives. The poll-age threshold is three times the default 60-second monitor interval; increase
-it if you change that interval. A failed scrape and a missing poll-age series are separate alerts:
+The poll-age threshold is three times the default 60-second monitor interval.
+A failed scrape and a missing poll-age series are separate alerts.
 `NaN` means a stream has never been polled successfully, not that its age is zero.
+
+1. Use the rules below as `hephaestus-alerts.yml`.
+2. Adjust windows, thresholds, and routing to your traffic and recovery objectives.
+3. If you change the monitor interval, increase the poll-age threshold.
 
 ```yaml
 groups:
@@ -128,21 +141,38 @@ groups:
           summary: At least three agent jobs failed or timed out in fifteen minutes
 ```
 
-Only enable the stream rules where the webhook stream monitor is expected. To detect an individually
-missing stream, add an `absent_over_time` rule for each expected `stream` and receiver target; the
-example missing-series rule detects loss of the whole monitor. Counters created on their first event
-can be absent before that event. An `increase` rule needs at least two samples and cannot recover
-an event that occurred before its first sample. Scraping does not replace the warning logs or Sentry.
-Poison counts mean the application stopped retrying a delivery; they are not a durable dead-letter
-queue. Failed outcomes exclude deliberate cancellation. See
-[Webhook ingestion operations](./webhook-ingestion-operations.mdx#what-to-alert-on) and
-[Alert response](./production-operations-runbook.mdx#alert-response) for response steps.
+1. Enable stream rules only where you expect the webhook stream monitor.
+2. To detect an individually missing stream, add an `absent_over_time` rule for each expected `stream` and receiver target.
 
-Validate both files with `promtool check config prometheus.yml` and
-`promtool check rules hephaestus-alerts.yml`. Test rule evaluation and the notification route in your
-monitoring stack before relying on it. Prometheus evaluates rules; your Alertmanager or equivalent
-owns notification delivery, grouping and silences. See the
-[Prometheus alerting guidance](https://prometheus.io/docs/practices/alerting/).
+   The example missing-series rule detects loss of the whole monitor.
+   Counters created on their first event can be absent before that event.
+   An `increase` rule needs at least two samples.
+   It cannot recover an event that occurred before its first sample.
+   Scraping does not replace warning logs or Sentry.
+
+   Poison counts mean the application stopped retrying a delivery.
+   They are not a durable dead-letter queue.
+   Failed outcomes exclude deliberate cancellation.
+   See [Webhook ingestion operations](./webhook-ingestion-operations.mdx#what-to-alert-on) and [Alert response](./production-operations-runbook.mdx#alert-response) for response steps.
+
+3. Validate the config with:
+
+   ```bash
+   promtool check config prometheus.yml
+   ```
+
+4. Validate the rules with:
+
+   ```bash
+   promtool check rules hephaestus-alerts.yml
+   ```
+
+5. Before relying on them, test rule evaluation in your monitoring stack.
+6. Before relying on the rules, test the notification route.
+
+Prometheus evaluates rules.
+Your Alertmanager or equivalent controls notification delivery, grouping, and silences.
+See the [Prometheus alerting guidance](https://prometheus.io/docs/practices/alerting/).
 
 ## Reading log records
 
@@ -150,28 +180,28 @@ owns notification delivery, grouping and silences. See the
 | ---------------------------- | -------------------------------------------------------------------------------------------------- |
 | `timestamp`                  | UTC event time, in ISO-8601 format                                                                 |
 | `level`, `logger`, `message` | Severity, originating logger, and human-readable event description                                 |
-| `event.name`                 | Stable name on structured application events; do not parse the message to identify these events    |
+| `event.name`                 | Stable name on structured application events. Do not parse the message to identify these events    |
 | `mdc`                        | Thread-scoped context, including `traceId`, `spanId`, and workspace/job identifiers when available |
-| `stacktrace`                 | Exception details when deliberately included; not present on every failure                         |
+| `stacktrace`                 | Exception details when deliberately included. Not present on every failure                         |
 
 Event-specific numbers and booleans remain JSON numbers and booleans. Context stays under `mdc` so
-it cannot overwrite the record's severity or message. A JSON string can contain escaped newlines;
-read logs as JSON rather than treating their rendered text as additional records.
+it cannot overwrite the record's severity or message. A JSON string can contain escaped newlines.
+Read logs as JSON, not as extra records from their rendered text.
 
 The startup event `runtime.roles.configured` records `runtime.server.enabled`,
 `runtime.worker.enabled`, and `runtime.webhook.enabled` as booleans. It is informational when any
-role is enabled and warns when all are disabled; a role configuration log is not a readiness probe.
+role is enabled and warns when all are disabled. A role configuration log is not a readiness probe.
 
 At the shared HTTP boundary, `integration.request.failed` identifies the request method, upstream
 host, and exception class without recording the full URL, headers, or exception message.
 `database.constraint.conflict` identifies the exception class and a valid five-character SQLSTATE
-(`db.response.status_code`) without recording SQL or rejected row values. Both remain warnings;
-the response still reports service unavailability or a conflict.
+(`db.response.status_code`) without recording SQL or rejected row values. Both remain warnings.
+The response still reports service unavailability or a conflict.
 
 GitLab webhook registration failures expose the workspace and HTTP status in
 `integration.webhook.registration.failed`, never the provider's response body. Outline request
 diagnostics use `integration.request.failed` with the API operation, host, exception type, and HTTP
-status when available; they stay at debug level and do not include raw transport/decoding messages.
+status when available. They stay at debug level and do not include raw transport/decoding messages.
 
 Credential-field masking and known-token masking are defense in depth, not a guarantee that arbitrary
 private text is safe to log. Keep raw requests, provider responses, signed URLs, and private runtime text out of logs. Restrict log access and retention as part of the instance's data-protection
@@ -210,20 +240,23 @@ existing execution metric.
 | `mentor_turn_first_token_seconds` | Histogram | `sandbox` | From a message being accepted to the first text of Heph's reply |
 | `mentor_turn_duration_seconds`    | Histogram | none      | A whole turn, from starting to run to its last chunk            |
 
-`sandbox` is `warm` when the turn found the developer's sandbox running, and `cold` when it had to
-wait for one to start — its own, or one that opening Heph had started moments before. Web and Slack
-turns both count; a turn that ends before any text records no first-token time. The share of cold
-turns is the ratio of the two `_count` series:
+`sandbox` is `warm` when the turn finds the developer's sandbox running.
+It is `cold` when the turn must wait for a sandbox to start.
+That can be its own startup, or one that Heph started moments before when it opened.
+Web and Slack turns both count.
+A turn that ends before any text records no first-token time.
+The share of cold turns is the ratio of the two `_count` series:
 
 ```promql
 sum(rate(mentor_turn_first_token_seconds_count{sandbox="cold"}[1h]))
   / sum(rate(mentor_turn_first_token_seconds_count[1h]))
 ```
 
-`mentor_attach_duration_seconds` times the start of one sandbox alone, up to the runner's first
-frame. A high cold share means sandboxes are gone before developers write: the idle TTL, a restart or
-deploy (which removes every Heph sandbox), or the session caps. See
-[Runtime Roles](./runtime-roles.mdx#interactive-mentor-turns) for how a sandbox is prepared and how long it stays warm.
+`mentor_attach_duration_seconds` measures only one sandbox's startup, through the runner's first frame.
+A high cold share means sandboxes are gone before developers write.
+Possible causes are the idle TTL, a restart or deploy, or session caps.
+A restart or deploy removes all Heph sandboxes.
+See [Runtime Roles](./runtime-roles.mdx#interactive-mentor-turns) for sandbox preparation and the warm period.
 
 ## Privacy-job metrics
 
@@ -235,18 +268,21 @@ outcome per run, published by the server role.
 | `privacy_job_completed_total` | Counter | `job`, `outcome` | Terminal privacy-job executions              |
 | `privacy_job_affected_total`  | Counter | `job`            | Rows or subjects the run removed or produced |
 
-`job` is one of `account_erasure`, `export_generation`, `export_retention`, or
-`llm_usage_retention`. `outcome` is `success`, `incomplete` or `failure`. An empty backlog is a
-`success`, so silence on the success counter is itself alertable. `incomplete` means the run finished
-without error but ran out of its time budget with work still eligible — the LLM usage retention sweep
-deletes in batches for at most five minutes and reports `incomplete` when expired rows remain, so a
-deployment that reports it every day never finishes deleting. Account, workspace, export and source
-identifiers are not labels. The erasure and retention paths these cover are listed in the
-[personal-data map](./dsms/personal-data-map.md).
+`job` is one of `account_erasure`, `export_generation`, `export_retention`, or `llm_usage_retention`.
+`outcome` is `success`, `incomplete`, or `failure`.
+An empty backlog is a `success`.
+No increase in the success counter therefore also warrants an alert.
+`incomplete` means the run ended without error but exhausted its time budget while eligible work remained.
+
+The LLM usage retention sweep deletes in batches for at most five minutes.
+It reports `incomplete` when expired rows remain.
+A deployment that reports this each day never finishes deletion.
+Account, workspace, export, and source identifiers are not labels.
+The [personal-data map](./dsms/personal-data-map.md) lists the erasure and retention paths these metrics cover.
 
 For export generation, `success` and the affected count are published only after the export commits.
 A failed attempt reports `failure` even if the database is unavailable and cannot save the failed
-status; consult the server log when an export remains queued or processing after a reported failure.
+status. Consult the server log when an export remains queued or processing after a reported failure.
 
 ## Correlating a request
 
@@ -257,21 +293,28 @@ from user attributes. While a trace scope is active, JSON logs carry its IDs und
 Access logs stay off at every layer.
 
 A queued review records its submission correlation, but an execution attempt starts its own trace.
-Join the request and subsequent lifecycle by `job.id`; do not assume every log for a job shares the
+Join the request and subsequent lifecycle by `job.id`. Do not assume every log for a job shares the
 request's trace ID. Sandbox proxy calls propagate the execution trace. The
 [trace export contract](#exporting-opentelemetry-traces) describes the separate submission attribute.
 
-No collector or log aggregator is required. From a reference deployment, take the ID a user reports
-(or the `X-Request-Id` of a failing response) and search the container logs:
+No collector or log aggregator is necessary.
+From a reference deployment:
 
-```bash
-docker compose logs --no-color | grep '"traceId":"<the-id>"'
-```
+1. Take the ID a user reports, or the `X-Request-Id` from a failed response.
+2. Search the container logs:
 
-That finds records written in the matching trace scope. To follow a queued job into later execution
-attempts, take its `job.id` from the queued event and search that identifier as well. Scheduler work
-can have execution traces without any originating HTTP response. A trace ID in a log proves
-correlation context was present, not that a collector received the trace.
+   ```bash
+   docker compose logs --no-color | grep '"traceId":"<the-id>"'
+   ```
+
+   That command finds records in the matching trace scope.
+   To follow a queued job into later execution attempts:
+
+3. Take its `job.id` from the queued event.
+4. Search that identifier too.
+
+Scheduler work can have execution traces without an original HTTP response.
+A trace ID proves that correlation context was present, not that a collector received the trace.
 
 ## HTTP route metrics
 
@@ -281,8 +324,11 @@ bounded unmatched-request and management tags. A new URI beyond the budget is re
 creating unbounded time series. A limit warning therefore means metrics are incomplete and needs
 investigation, not a logging-level change.
 
-When the limit is reached, inspect the actual `uri` tag values first. Concrete IDs or URLs indicate
-a tagging defect; fix that before considering a larger budget. Do not turn off the bound.
+Concrete IDs or URLs in `uri` tags indicate a tagging defect.
+
+1. When the limit is reached, first inspect the actual `uri` tag values.
+2. Fix a tagging defect before considering a larger budget.
+3. Do not turn off the bound.
 
 ## Exporting OpenTelemetry traces
 
@@ -294,7 +340,7 @@ roles whose spans you want to collect:
 | ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
 | `TRACING_OTLP_ENABLED`         | `false`                           | Enable the OTLP trace exporter.                                                |
 | `TRACING_OTLP_ENDPOINT`        | `http://localhost:4318/v1/traces` | Full OTLP HTTP receiver URL, reachable from the application container.         |
-| `TRACING_SAMPLING_PROBABILITY` | `0.0`                             | Fraction of new traces sampled; use `1.0` for a dedicated evaluation instance. |
+| `TRACING_SAMPLING_PROBABILITY` | `0.0`                             | Fraction of new traces sampled. Use `1.0` for a dedicated evaluation instance. |
 
 The supported Compose stack forwards these settings to server, worker and webhook containers.
 For authenticated collectors, configure Spring Boot's
@@ -318,6 +364,6 @@ after the stream has been committed.
 
 A trace ID is not proof of export. Sampling, exporter errors, collector retention and abrupt
 process termination can all leave partial coverage. A trace describes when calls happened and how
-they ended; it is not a record of what a review read or said. Beyond the diagnostic job output that
+they ended. It is not a record of what a review read or said. Beyond the diagnostic job output that
 `AGENT_PAYLOAD_RETENTION` strips, a review retains its admitted observations and their citation
 verdicts, not its inputs, model requests or session transcript.
