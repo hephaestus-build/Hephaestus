@@ -24,7 +24,7 @@ type Story = StoryObj<typeof meta>;
 export const TypeToConfirm: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("alertdialog"));
-		await expect(dialog.getByText(/14 rows in 5 stores/u)).toBeVisible();
+		await waitFor(async () => expect(dialog.getByText(/14 rows in 5 stores/u)).toBeVisible());
 		const phrase = dialog.getByLabelText(/to confirm/iu);
 		const submit = dialog.getByRole("button", { name: "Erase data" });
 
