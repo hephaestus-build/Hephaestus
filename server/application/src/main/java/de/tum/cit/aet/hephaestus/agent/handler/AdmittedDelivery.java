@@ -40,6 +40,18 @@ sealed interface AdmittedDelivery {
     }
 
     /**
+     * Decides what the review places on the reviewed work, checking in this order:
+     *
+     * <ol>
+     *   <li>{@link Withheld} when the review did not reach every practice and no admitted observation is a
+     *       problem: the all-clear would speak for practices nobody evaluated, so nothing is placed on the
+     *       work and only the composer's withheld decisions are kept.
+     *   <li>{@link Proposed} when an observation awaits approval and the note, written with the lead, was
+     *       written from at least one such observation.
+     *   <li>{@link Automatic} otherwise: the note without the lead, posted without approval, with the
+     *       practices it was written from; its content is null when no observation was admitted.
+     * </ol>
+     *
      * @param observations every observation the review recorded, in delivery order
      * @param proposals    the observations awaiting approval
      * @param automatic    the observations admitted without approval

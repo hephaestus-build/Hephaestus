@@ -239,7 +239,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     @Test
     void stagesTheRecordedTextAsItWasWritten() {
         String rationale = "The practice requires a test; the assessment is BAD -> MAJOR severity band.";
-        String body = "Per the fixed bucketing this is a MINOR severity tier finding.";
+        String body = "Per the fixed bucketing this is a MINOR severity tier observation.";
         when(observationRepository.findForPersonHistory(any(), any()))
                 .thenReturn(List.of(observationWithRationale(rationale)));
         when(feedbackRepository.findDeliveredForPersonHistory(any(), any()))

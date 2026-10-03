@@ -769,10 +769,8 @@ hephaestus:
                 client-id: ${GH_APP_CLIENT_ID:}
                 client-secret: ${GH_APP_CLIENT_SECRET:}
             meta:
-                # DEPRECATED: token used to live here; the Hephaestus-contributor
-                # endpoint now reads hephaestus.contributors.github.auth-token instead.
-                # Binding kept for backwards compatibility — remove once all environments
-                # have been migrated.
+                # Deprecated: bound by GitHubProperties.meta and read by nothing. The contributor endpoint
+                # reads hephaestus.contributors.github.auth-token.
                 auth-token: ${GH_AUTH_TOKEN:}
             # GitHub-specific sync tuning (GitHubSyncProperties). Provider-agnostic scheduler
             # knobs (run-on-startup, cron, cooldown, backfill, filters, …) stay under

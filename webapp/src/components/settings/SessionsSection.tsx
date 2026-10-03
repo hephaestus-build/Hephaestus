@@ -1,15 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MonitorIcon, PuzzleIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { toast } from "sonner";
 
-import {
-	listSessionsOptions,
-	listSessionsQueryKey,
-	revokeOtherSessionsMutation,
-	revokeSessionMutation,
-} from "@/api/@tanstack/react-query.gen";
 import type { SessionView } from "@/api/types.gen";
+import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { useNow } from "@/components/common/use-now";
 import {
 	AlertDialog,
@@ -83,42 +76,30 @@ function describeSession(session: SessionView): string {
 	return session.client === "BROWSER_EXTENSION" ? `Browser extension in ${device}` : device;
 }
 
-export function SessionsSection() {
-	const queryClient = useQueryClient();
+export type SessionsState =
+	| { status: "loading" }
+	| { status: "error"; error: unknown; onRetry: () => void }
+	| {
+			status: "ready";
+			sessions: SessionView[];
+			/** The session being revoked, which shows a spinner and blocks a repeat click. */
+			revokingJti: string | null;
+			revokingOthers: boolean;
+			onRevoke: (jti: string) => void;
+			onRevokeOthers: () => void;
+	  };
+
+export interface SessionsSectionProps {
+	state: SessionsState;
+}
+
+export function SessionsSection({ state }: SessionsSectionProps) {
 	const today = new Date(useNow());
-
-	const sessionsQuery = useQuery({ ...listSessionsOptions({}) });
-
-	const invalidateSessions = async () =>
-		queryClient.invalidateQueries({ queryKey: listSessionsQueryKey() });
-
-	const revokeOne = useMutation({
-		...revokeSessionMutation(),
-		onSuccess: () => {
-			void invalidateSessions();
-			toast.success("Session revoked");
-		},
-		onError: () => {
-			toast.error("Failed to revoke session. Please try again later.");
-		},
-	});
-
-	const revokeOthers = useMutation({
-		...revokeOtherSessionsMutation(),
-		onSuccess: () => {
-			void invalidateSessions();
-			toast.success("Signed out of all other sessions");
-		},
-		onError: () => {
-			toast.error("Failed to sign out other sessions. Please try again later.");
-		},
-	});
-
-	const sessions: SessionView[] = sessionsQuery.data ?? [];
+	const sessions = state.status === "ready" ? state.sessions : [];
 	const otherSessionCount = sessions.filter((s) => s.current !== true).length;
 
 	let body: ReactNode;
-	if (sessionsQuery.isLoading) {
+	if (state.status === "loading") {
 		body = (
 			<div className="space-y-3" role="list" aria-busy="true" aria-label="Loading sessions">
 				{Array.from({ length: 2 }, (_, index) => (
@@ -139,11 +120,13 @@ export function SessionsSection() {
 				))}
 			</div>
 		);
-	} else if (sessionsQuery.isError) {
+	} else if (state.status === "error") {
 		body = (
-			<p className="text-sm text-destructive" role="alert">
-				Failed to load sessions. Please try refreshing the page.
-			</p>
+			<QueryErrorAlert
+				error={state.error}
+				title="Could not load sessions"
+				onRetry={state.onRetry}
+			/>
 		);
 	} else if (sessions.length === 0) {
 		body = <p className="text-sm text-muted-foreground">No active sessions found.</p>;
@@ -155,8 +138,7 @@ export function SessionsSection() {
 					const expiresAt = asDate(session.expiresAt);
 					const deviceLabel = describeSession(session);
 					const SessionIcon = session.client === "BROWSER_EXTENSION" ? PuzzleIcon : MonitorIcon;
-					const isRevokingThis =
-						revokeOne.isPending && revokeOne.variables.path.jti === session.jti;
+					const isRevokingThis = state.revokingJti === session.jti;
 					return (
 						<div
 							key={session.jti ?? `${session.userAgent}:${session.ip}`}
@@ -199,7 +181,7 @@ export function SessionsSection() {
 									disabled={isRevokingThis || !hasText(session.jti)}
 									onClick={() => {
 										if (hasText(session.jti)) {
-											revokeOne.mutate({ path: { jti: session.jti } });
+											state.onRevoke(session.jti);
 										}
 									}}
 									aria-label="Revoke this session"
@@ -226,17 +208,17 @@ export function SessionsSection() {
 						Devices and browsers currently signed in to your account.
 					</p>
 				</div>
-				{otherSessionCount > 0 && (
+				{state.status === "ready" && otherSessionCount > 0 && (
 					<AlertDialog>
 						<AlertDialogTrigger
 							render={
 								<Button
 									variant="outline"
 									size="sm"
-									disabled={revokeOthers.isPending}
+									disabled={state.revokingOthers}
 									className="mt-1 shrink-0"
 								>
-									{revokeOthers.isPending ? <Spinner className="mr-1.5" /> : null}
+									{state.revokingOthers ? <Spinner className="mr-1.5" /> : null}
 									Sign out {otherSessionCount} other{" "}
 									{otherSessionCount === 1 ? "session" : "sessions"}
 								</Button>
@@ -256,10 +238,7 @@ export function SessionsSection() {
 							</AlertDialogHeader>
 							<AlertDialogFooter>
 								<AlertDialogCancel>Cancel</AlertDialogCancel>
-								<AlertDialogAction
-									onClick={() => revokeOthers.mutate({})}
-									disabled={revokeOthers.isPending}
-								>
+								<AlertDialogAction onClick={state.onRevokeOthers} disabled={state.revokingOthers}>
 									Sign out others
 								</AlertDialogAction>
 							</AlertDialogFooter>

@@ -451,7 +451,7 @@ class DeliveryComposerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldOrderCriticalFindingBeforeMinorFindingWhenBothAreInSummary() {
+    void shouldOrderCriticalObservationBeforeMinorObservationWhenBothAreInSummary() {
         var critical = negativeObservation(
                 "avoids-insecure-defaults-and-over-broad-permissions",
                 "Token committed to the repo",

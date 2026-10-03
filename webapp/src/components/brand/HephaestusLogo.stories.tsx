@@ -25,7 +25,9 @@ export const LightAndDark: Story = {
 		</div>
 	),
 	play: async ({ canvasElement }) => {
-		for (const mark of canvasElement.querySelectorAll("img")) {
+		const marks = canvasElement.querySelectorAll("img");
+		await expect(marks).toHaveLength(2);
+		for (const mark of marks) {
 			await waitFor(async () => expect(mark.naturalWidth).toBeGreaterThan(0));
 		}
 	},

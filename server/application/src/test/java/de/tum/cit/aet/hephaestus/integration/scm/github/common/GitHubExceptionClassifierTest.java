@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationSuspendedException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.Category;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -17,6 +18,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -226,6 +228,17 @@ class GitHubExceptionClassifierTest {
             var exception = new RuntimeException("Wrapped", cause);
 
             assertThat(classifier.classify(exception)).isEqualTo(Category.RETRYABLE);
+        }
+
+        @Test
+        void shouldClassifyAsAuthErrorWhenSuspendedInstallationIsWrappedTwice() {
+            var suspended = new InstallationSuspendedException(42L);
+            var exception = new CompletionException(new RuntimeException("Wrapped", suspended));
+
+            ClassificationResult result = classifier.classifyWithDetails(exception);
+
+            assertThat(result.category()).isEqualTo(Category.AUTH_ERROR);
+            assertThat(result.message()).contains("42");
         }
 
         @Test

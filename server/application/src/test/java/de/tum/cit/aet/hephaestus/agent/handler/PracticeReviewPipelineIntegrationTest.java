@@ -1498,7 +1498,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
-        void allPositiveFindingsStayQuietWhenTheReviewDidNotReachEveryPractice() {
+        void allPositiveObservationsStayQuietWhenTheReviewDidNotReachEveryPractice() {
             String output = """
                 {
                   "observations": [
@@ -1633,7 +1633,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
     }
 
     @Nested
-    class FindingIdempotency {
+    class ObservationIdempotency {
 
         @Test
         @DisplayName("re-delivering same job creates no duplicate observations")

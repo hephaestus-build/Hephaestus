@@ -372,7 +372,7 @@ class DeliveryComposer {
     private static final int RECURRING_BUDGET = 200;
 
     /**
-     * The opening sits where a reader trusts the message most, so it is held to a narrower contract than an
+     * The opening sits where a reader trusts the comment most, so it is held to a narrower contract than an
      * observation's body: nothing that can restructure the comment around itself, no link, and no verdict on
      * merging — which the composer is never told and could only invent. A lead reaching for any of them is
      * dropped whole, and the note opens on its first observation instead.

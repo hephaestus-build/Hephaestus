@@ -590,7 +590,7 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
 
         @Test
         @DisplayName("persisted observation pins the practice's current definition revision")
-        void findingPinsCurrentRevision() {
+        void observationPinsCurrentRevision() {
             Practice practice = practiceRepository
                     .findByWorkspaceIdAndSlug(workspace.getId(), "pr-description-quality")
                     .orElseThrow();

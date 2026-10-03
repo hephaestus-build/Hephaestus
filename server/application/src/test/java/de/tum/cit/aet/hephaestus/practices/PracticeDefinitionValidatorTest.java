@@ -182,7 +182,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"PRESENT", "NOT_MET", "BAD", "ASSESSED", "NOT_APPLICABLE", "UNDETERMINED"})
-    void rejectsDetectorVocabularyInDeveloperFacingGuidance(String label) {
+    void rejectsReviewResultLabelsInDeveloperFacingGuidance(String label) {
         PracticeDefinition definition = new PracticeDefinition(
                 "Focused review",
                 List.of(ScmSignals.PULL_REQUEST_OPENED),

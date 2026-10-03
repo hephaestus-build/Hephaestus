@@ -455,7 +455,7 @@ public class GitHubInlineFeedbackChannel implements InlineFeedbackChannel {
         }
         String key = parseDeliveryKey(body);
         if (key == null) {
-            return; // human thread or a legacy bot note posted before keys existed — not ours to reconcile
+            return; // human thread or a bot note that carries no delivery key — not ours to reconcile
         }
         boolean outdated =
                 Boolean.TRUE.equals(thread.get("isOutdated")) || Boolean.TRUE.equals(thread.get("isResolved"));

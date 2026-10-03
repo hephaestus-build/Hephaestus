@@ -323,7 +323,7 @@ describe("useMentorChat", () => {
 				chat.lastOptions.onData?.({ type: "data-mentor-status", data: { state: "busy" } });
 			});
 			act(() => {
-				chat.raiseError(new Error("Heph is busy. Please try again."));
+				chat.raiseError(new Error("Streaming error"));
 			});
 			expect(result.current.turn).toStrictEqual({ kind: "error", failure: "busy" });
 
@@ -331,6 +331,18 @@ describe("useMentorChat", () => {
 				result.current.sendMessage("Try again");
 			});
 			expect(result.current.turn).toStrictEqual({ kind: "submitted", warmingUp: false });
+		});
+
+		it("does not read busy from the error text when no status part said so", () => {
+			const { result } = renderHook(() => useMentorChat({}), {
+				wrapper: createWrapper(queryClient),
+			});
+
+			act(() => {
+				chat.raiseError(new Error("Heph is busy. Please try again."));
+			});
+
+			expect(result.current.turn).toStrictEqual({ kind: "error", failure: "failed" });
 		});
 	});
 

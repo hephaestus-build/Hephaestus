@@ -54,9 +54,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * {@code GET /practice-profile/review-runs} and its detail against a seeded history: three runs on the
@@ -262,17 +265,23 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo(oldestRun.getId().toString());
     }
 
-    @Test
+    @ParameterizedTest(name = "{0}")
+    @CsvSource({
+        "GITHUB, https://github.com/acme/api/pull/32, https://github.com/acme/api/pull/32#issuecomment-4711",
+        "GITLAB, https://gitlab.com/acme/api/-/merge_requests/32,"
+                + " https://gitlab.com/acme/api/-/merge_requests/32#note_4711"
+    })
     @WithUser
     @DisplayName("a run links to its summary comment at the address the provider returned for it")
-    void shouldLinkTheFeedbackToTheRecordedAddressWhenTheRunPostedASummary() {
-        recordSummary(latestRun, "https://github.com/acme/api/pull/32#issuecomment-4711");
+    void shouldLinkTheFeedbackToTheRecordedAddressWhenTheRunPostedASummary(
+            IntegrationKind provider, String workUrl, String summaryUrl) {
+        recordSummary(latestRun, provider, workUrl, summaryUrl);
 
         readRuns()
                 .jsonPath("$.content[0].reviewId")
                 .isEqualTo(latestRun.getId().toString())
                 .jsonPath("$.content[0].feedbackUrl")
-                .isEqualTo("https://github.com/acme/api/pull/32#issuecomment-4711")
+                .isEqualTo(summaryUrl)
                 .jsonPath("$.content[1].feedbackUrl")
                 .doesNotExist();
     }
@@ -281,15 +290,24 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
     @WithUser
     @DisplayName("a recorded address that is not a comment on the reviewed work is not linked")
     void shouldCarryNoFeedbackAddressWhenTheRecordedAddressIsNotOnTheWork() {
-        recordSummary(latestRun, "https://github.com/acme/api/pull/33#issuecomment-4711");
+        recordSummary(
+                latestRun,
+                IntegrationKind.GITHUB,
+                "https://github.com/acme/api/pull/32",
+                "https://github.com/acme/api/pull/33#issuecomment-4711");
 
         readRuns().jsonPath("$.content[0].feedbackUrl").doesNotExist();
     }
 
-    /** The run's delivered summary, as the dispatch records the comment the provider created. */
-    private void recordSummary(AgentJob run, String url) {
+    /**
+     * The run's delivered summary on {@code workUrl}, as the dispatch records the comment the provider created.
+     */
+    private void recordSummary(AgentJob run, IntegrationKind provider, String workUrl, String url) {
         String commentId = "IC_" + run.getId();
-        run.setIntegrationKind(IntegrationKind.GITHUB);
+        ObjectNode metadata = ((ObjectNode) Objects.requireNonNull(run.getMetadata())).deepCopy();
+        metadata.put("pr_url", workUrl);
+        run.setMetadata(metadata);
+        run.setIntegrationKind(provider);
         run.setDeliveryCommentId(commentId);
         agentJobRepository.save(run);
         jdbcTemplate.update(

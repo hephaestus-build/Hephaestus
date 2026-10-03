@@ -351,18 +351,18 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepDetectorVocabularyOutOfDeveloperCopy() {
-        Pattern detectorVocabulary = Pattern.compile("\\b(?:PRESENT|ABSENT|GOOD|BAD|NOT_APPLICABLE)\\b");
+    void shouldKeepReviewResultLabelsOutOfDeveloperCopy() {
+        Pattern reviewResultLabels = Pattern.compile("\\b(?:PRESENT|ABSENT|GOOD|BAD|NOT_APPLICABLE)\\b");
 
         assertThat(loader.catalog().practices()).allSatisfy(practice -> {
             assertThat(practice.definition().whyItMatters())
                     .as("whyItMatters for '%s'", practice.slug())
                     .isNotNull()
-                    .doesNotContainPattern(detectorVocabulary);
+                    .doesNotContainPattern(reviewResultLabels);
             assertThat(practice.definition().whatGoodLooksLike())
                     .as("whatGoodLooksLike for '%s'", practice.slug())
                     .isNotNull()
-                    .doesNotContainPattern(detectorVocabulary);
+                    .doesNotContainPattern(reviewResultLabels);
         });
     }
 

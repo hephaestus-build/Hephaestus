@@ -76,7 +76,7 @@ class CatalogEntryTest extends BaseUnitTest {
     }
 
     @Test
-    void anUpdateThatChangesWhatGetsDetectedIsMarkedAsSuch() {
+    void anUpdateThatChangesWhatGetsReviewedIsMarkedAsSuch() {
         PracticeDefinition mine = practice("Small PRs", "Our criteria", "Shipped reason");
         PracticeDefinition newer = practice("Small PRs", "Newer criteria", "Shipped reason");
 

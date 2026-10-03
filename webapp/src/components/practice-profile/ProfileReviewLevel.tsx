@@ -259,7 +259,7 @@ function ReviewHead({
 		<div className="flex min-w-0 flex-1 flex-col gap-2">
 			<DetailPath {...path} current="Review" />
 			<p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-				<WorkIcon className="size-3.5 shrink-0" aria-hidden />
+				<WorkIcon className="size-3.5 shrink-0" />
 				<span className="truncate">
 					{work ? reviewedWorkName(work) : artifactKindLabel(undefined)}
 					{hasText(work?.container) && `, ${work.container}`}

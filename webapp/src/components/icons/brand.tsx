@@ -1,10 +1,10 @@
 import type { ReactElement, SVGProps } from "react";
 
-import { hasText } from "@/lib/text";
-
 // lucide-react ships no brand glyphs, for licensing reasons. These take the Lucide icon API
-// (size, className, currentColor) so a slot can render either, and its accessibility default: hidden
-// from assistive technology unless an `aria-label` names the mark.
+// (size, className, currentColor, children) so a slot can render either, and Lucide's accessibility
+// default: hidden from assistive technology unless the icon has children or any `aria-*`, `role` or
+// `title` prop. One step past Lucide, an exposed mark is an `img`, because an `<svg>`'s implicit
+// role is not mapped consistently across browsers and screen readers.
 
 type BrandIconProps = SVGProps<SVGSVGElement> & { size?: number | string };
 
@@ -17,9 +17,15 @@ export interface BrandIcon {
 	displayName?: string;
 }
 
+/** lucide-react's `hasA11yProp`, which the package does not export. */
+const hasA11yProp = (props: object): boolean =>
+	Object.keys(props).some(
+		(prop) => prop.startsWith("aria-") || prop === "role" || prop === "title",
+	);
+
 const make = (displayName: string, viewBox: string, path: string): BrandIcon => {
-	function Icon({ size, width, height, ...props }: BrandIconProps): ReactElement {
-		const named = hasText(props["aria-label"]);
+	function Icon({ size, width, height, children, ...props }: BrandIconProps): ReactElement {
+		const exposed = Boolean(children) || hasA11yProp(props);
 		return (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -27,11 +33,12 @@ const make = (displayName: string, viewBox: string, path: string): BrandIcon => 
 				width={width ?? size ?? "1em"}
 				height={height ?? size ?? "1em"}
 				fill="currentColor"
-				role={named ? "img" : undefined}
-				aria-hidden={named ? undefined : true}
+				role={exposed ? "img" : undefined}
+				aria-hidden={exposed ? undefined : true}
 				{...props}
 			>
 				<path d={path} />
+				{children}
 			</svg>
 		);
 	}

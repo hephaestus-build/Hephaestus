@@ -743,7 +743,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .uri(FEEDBACK_URI, workspace.getWorkspaceSlug(), feedbackUnit.getId())
                     .headers(TestAuthUtils.withCurrentUser())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(new FeedbackResponseRequestDTO(null, FeedbackResolution.DISPUTED, "Wrong detection"))
+                    .bodyValue(new FeedbackResponseRequestDTO(null, FeedbackResolution.DISPUTED, "Wrong observation"))
                     .exchange()
                     .expectStatus()
                     .isOk()

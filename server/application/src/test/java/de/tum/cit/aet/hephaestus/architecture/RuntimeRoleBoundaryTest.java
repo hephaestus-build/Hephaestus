@@ -7,6 +7,9 @@ import com.tngtech.archunit.core.domain.JavaAnnotation;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.properties.HasAnnotations;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import java.time.Clock;
 import java.util.List;
@@ -238,18 +241,21 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
      * A role gate is written once, as {@code @ConditionalOn{Server,Worker,Webhook}Role}, so its
      * {@code matchIfMissing} default cannot be dropped on one bean. A further condition sits beside the
      * composed annotation, since Boot requires every property condition on an element to match. The
-     * exceptions are the gates no composed annotation expresses: the sandbox gateway's rate-limit
-     * buckets exist only where the server role is off, and worker tokens wherever the server or the
-     * worker role is on.
+     * exceptions are the composed annotations themselves and the gates no composed annotation expresses:
+     * the sandbox gateway's rate-limit buckets exist only where the server role is off, and worker tokens
+     * wherever the server or the worker role is on. Each exception must still carry an inline gate, so
+     * one that no longer needs exempting fails here.
      */
     @Test
     void runtimeRoleGatesUseTheComposedAnnotations() {
         Set<String> exceptions = Set.of(
+                ConditionalOnServerRole.class.getName(),
+                ConditionalOnWorkerRole.class.getName(),
+                ConditionalOnWebhookRole.class.getName(),
                 "de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration.sandboxGatewayBucketResolver()",
                 "de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtConfiguration");
-        List<String> inline = classes.stream()
+        List<String> gated = classes.stream()
                 .filter(c -> c.getFullName().startsWith("de.tum.cit.aet.hephaestus."))
-                .filter(c -> !c.isAnnotation())
                 .flatMap(c -> Stream.concat(
                         Stream.of(c)
                                 .filter(RuntimeRoleBoundaryTest::hasInlineRoleGate)
@@ -257,10 +263,12 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                         c.getMethods().stream()
                                 .filter(RuntimeRoleBoundaryTest::hasInlineRoleGate)
                                 .map(JavaMethod::getFullName)))
-                .filter(gated -> !exceptions.contains(gated))
                 .toList();
 
-        assertThat(inline)
+        assertThat(gated)
+                .as("Every exemption still carries an inline role gate; remove one that no longer does")
+                .containsAll(exceptions);
+        assertThat(gated.stream().filter(element -> !exceptions.contains(element)))
                 .as("Gate on @ConditionalOnServerRole, @ConditionalOnWorkerRole or @ConditionalOnWebhookRole, not on "
                         + "a property condition or expression naming a RuntimeRole property")
                 .isEmpty();

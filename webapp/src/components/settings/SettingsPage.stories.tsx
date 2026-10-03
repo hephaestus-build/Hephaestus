@@ -4,6 +4,7 @@ import { expect, fn } from "storybook/test";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
 import { withStandardPage } from "@/stories/decorators";
 import { expectNoPageOverflow } from "@/stories/reflow";
+import { storySessions } from "@/stories/sessions-story-mock-data";
 
 import type { AiChoiceSectionProps } from "./AiChoiceSection";
 import { SettingsPage } from "./SettingsPage";
@@ -27,6 +28,16 @@ const meta = {
 				},
 				isPending: false,
 				onChange: fn(),
+			},
+		},
+		sessionsProps: {
+			state: {
+				status: "ready",
+				sessions: storySessions,
+				revokingJti: null,
+				revokingOthers: false,
+				onRevoke: fn(),
+				onRevokeOthers: fn(),
 			},
 		},
 	},

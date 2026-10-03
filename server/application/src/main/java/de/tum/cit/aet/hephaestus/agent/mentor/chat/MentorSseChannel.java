@@ -243,7 +243,8 @@ final class MentorSseChannel implements MentorChannel {
     public void completeWithConflict() {
         cancelHeartbeat();
         try {
-            send(UIMessageChunk.DataMentorStatus.of("conflict", "another turn is in flight for this thread"));
+            send(UIMessageChunk.DataMentorStatus.of(
+                    UIMessageChunk.DataMentorStatus.State.CONFLICT, "another turn is in flight for this thread"));
             send(new UIMessageChunk.Error("Another mentor turn is already in flight for this thread."));
         } catch (RuntimeException ignored) {
         }

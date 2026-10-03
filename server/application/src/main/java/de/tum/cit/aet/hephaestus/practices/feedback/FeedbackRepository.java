@@ -751,8 +751,8 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
      * The operator's page of feedback.
      *
      * <p><b>IN_APP bodies are never returned here.</b> {@code IN_CONTEXT} bodies are already public on
-     * the pull request and {@code IN_CHAT} bodies are NULL by construction, so until now "operators
-     * can read feedback bodies" exposed nothing private. A {@code IN_APP} body is the first
+     * the pull request and {@code IN_CHAT} bodies are NULL by construction, so for those channels "operators
+     * can read feedback bodies" exposes nothing private. A {@code IN_APP} body is the first
      * system-authored text about a named person that lives nowhere else — and in the course deployment
      * the workspace admin is the instructor. {@link FeedbackChannel}'s own contract says every channel is
      * developer-facing, "never to a mentor, instructor, or grader"; handing this one to an admin would

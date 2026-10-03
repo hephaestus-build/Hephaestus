@@ -1278,7 +1278,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
             var keys = result.recorded().get(0).keys();
             assertThat(keys).isNotNull();
             assertThat(fingerprintCaptor.getValue())
-                    .as("persisted recurrence_key matches the returned findingFingerprint")
+                    .as("persisted recurrence_key matches the returned recurrence key")
                     .matches("[0-9a-f]{64}")
                     .isEqualTo(keys.recurrenceKey());
         }

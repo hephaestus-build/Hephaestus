@@ -19,7 +19,7 @@ import org.springframework.data.repository.Repository;
  *
  * <h2>Architecture: Modular Monolith with Multi-Provider Support</h2>
  * <ul>
- *   <li><b>integration.scm</b> - Shared kernel for git provider data sync (GitHub now, GitLab coming)</li>
+ *   <li><b>integration.scm</b> - Shared kernel for git provider data sync (GitHub and GitLab)</li>
  *   <li><b>workspace</b> - Cross-cutting context (multi-tenancy)</li>
  *   <li><b>Feature modules</b> - activity, mentor, practices depend on both</li>
  *   <li><b>Provider subpackages</b> - github/ and (future) gitlab/ isolate provider-specific logic</li>

@@ -125,8 +125,9 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
 
     @BeforeEach
     void setUpWorkspaces() {
-        User owner = persistUser("detection-owner");
-        workspace = createWorkspace("detection-ws", "Detection WS", "detection-org", AccountType.ORG, owner);
+        User owner = persistUser("review-output-owner");
+        workspace =
+                createWorkspace("review-output-ws", "Review Output WS", "review-output-org", AccountType.ORG, owner);
         ensureAdminMembership(workspace);
         alice = persistUser("alice");
         bob = persistUser("bob");
@@ -296,9 +297,9 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                 .jsonPath(path + ".title")
                 .isEqualTo("Make review output visible")
                 .jsonPath(path + ".container")
-                .isEqualTo("detection-org/review-ui")
+                .isEqualTo("review-output-org/review-ui")
                 .jsonPath(path + ".url")
-                .isEqualTo("https://github.com/detection-org/review-ui/pull/42");
+                .isEqualTo("https://github.com/review-output-org/review-ui/pull/42");
     }
 
     private void bind(Feedback unit, UUID observationId) {
@@ -888,9 +889,9 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     "title",
                     "Make review output visible",
                     "repository_full_name",
-                    "detection-org/review-ui",
+                    "review-output-org/review-ui",
                     "pr_url",
-                    "https://github.com/detection-org/review-ui/pull/42")));
+                    "https://github.com/review-output-org/review-ui/pull/42")));
             agentJobRepository.save(job);
             UUID observationId = insertObservation(
                     practiceA, job, alice, "Resolved artifact", "NOT_MET", "MAJOR", artifactId, Instant.now());

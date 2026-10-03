@@ -443,7 +443,7 @@ public class GitLabDataSyncScheduler {
                             .orElse(null);
                 }
                 if (repo == null) {
-                    // Legacy row with no captured id yet — resolve by (still-current) name to capture it.
+                    // A row with no captured id yet — resolve by (still-current) name to capture it.
                     repo = repositoryRepository
                             .findByNameWithOwnerAndProviderId(target.repositoryNameWithOwner(), providerId)
                             .orElse(null);

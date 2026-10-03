@@ -295,7 +295,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
         InlineResult result = channel.postInlineFeedback(
                 gitlabTarget(),
                 List.of(new InlineFeedback(
-                        new DiffAnchor("src/Foo.java", 10, null), "re-detected", MARKER, "ck-human")));
+                        new DiffAnchor("src/Foo.java", 10, null), "re-observed", MARKER, "ck-human")));
 
         verify(updateSpec, never()).execute();
         verify(destroySpec, never()).execute();

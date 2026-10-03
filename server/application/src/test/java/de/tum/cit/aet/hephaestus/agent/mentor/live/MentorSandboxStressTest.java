@@ -102,8 +102,8 @@ class MentorSandboxStressTest {
      * {@code AgentSessionRuntime} via {@code switchSession}, not separate containers.
      *
      * <p>The interesting number is the <b>per-session marginal RSS</b>: how much extra memory each
-     * extra thread costs once the Pi SDK is loaded. The single-session test gives the floor
-     * (~150 MB); this test gives the slope.
+     * extra thread costs once the Pi SDK is loaded. The single-session test gives the floor; this
+     * test gives the slope.
      *
      * <p>Run: {@code N=3 K=5 ./gradlew :application:liveTest --tests MentorSandboxStressTest.multiSessionPerRunner}.
      */
@@ -143,7 +143,7 @@ class MentorSandboxStressTest {
             }
             // Hard regression budgets for multi-session: peak RSS per runner + marginal RSS per
             // extra session. The marginal slope is the headline architectural invariant — if it
-            // ever exceeds ~2 MB the per-thread state has bloated and the per-user-container
+            // ever exceeds its budget the per-thread state has bloated and the per-user-container
             // model stops scaling. Both override via env.
             long peakRssBudgetKb = Long.parseLong(System.getenv().getOrDefault("PEAK_RSS_BUDGET_KB", "240000"));
             long marginalBudgetKb = Long.parseLong(System.getenv().getOrDefault("MARGINAL_RSS_BUDGET_KB", "2048"));
@@ -214,8 +214,8 @@ class MentorSandboxStressTest {
                 throw new AssertionError("stress test failed: " + failed + "/" + n + " sessions errored");
             }
             // Hard regression budgets. Without these the test is a printf with a liveness check —
-            // a 10× RSS bloat or 5× cold-start regression would still pass green. Budgets are
-            // generous (≥40% headroom over measured steady-state) so they don't flake on
+            // an RSS bloat or a cold-start regression would still pass green. Budgets leave
+            // headroom over steady state so they don't flake on
             // shared CI hardware. Override via env for soak runs.
             long peakRssBudgetKb = Long.parseLong(System.getenv().getOrDefault("PEAK_RSS_BUDGET_KB", "240000"));
             long coldStartBudgetMs = Long.parseLong(System.getenv().getOrDefault("COLD_START_BUDGET_MS", "5000"));

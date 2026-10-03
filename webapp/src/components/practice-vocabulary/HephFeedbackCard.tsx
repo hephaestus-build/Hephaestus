@@ -343,7 +343,7 @@ function ReviewedWorkCell({ group }: ReviewedWorkCellProps) {
 	const noun = artifactKindNoun(group.kind, n, group.provider);
 	return (
 		<li className="flex flex-wrap items-center gap-x-1.5 text-sm">
-			<WorkIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+			<WorkIcon className="size-3.5 shrink-0 text-muted-foreground" />
 			<span className="whitespace-nowrap">
 				<span className="font-semibold">{n}</span> <span className="font-medium">{noun}</span>
 			</span>

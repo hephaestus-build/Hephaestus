@@ -281,9 +281,13 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
         @ParameterizedTest
         @ValueSource(strings = {"note.system", "note.confidential.issue.create", "note.commit.create"})
         void shouldSkipTheNoteWhenItIsASystemConfidentialOrCommitNote(String payload) throws Exception {
-            handler.handleEvent(loadPayload(payload));
+            GitLabNoteEventDTO note = loadPayload(payload);
+            handler.handleEvent(note);
 
-            assertThat(commentRepository.count()).isZero();
+            long nativeId = Objects.requireNonNull(note.objectAttributes()).id();
+            assertThat(commentRepository.findByNativeIdAndProviderId(
+                            nativeId, Objects.requireNonNull(savedProvider.getId())))
+                    .isEmpty();
             assertThat(eventListener.ofType(ScmDomainEvent.CommentCreated.class))
                     .isEmpty();
         }

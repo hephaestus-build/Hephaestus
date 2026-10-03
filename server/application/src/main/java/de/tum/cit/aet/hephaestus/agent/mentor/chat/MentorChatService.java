@@ -347,7 +347,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 // sandbox waits for a cold start too.
                 turn.coldSandbox = !sandboxService.isWarm(spec);
                 if (turn.coldSandbox) {
-                    channel.send(UIMessageChunk.DataMentorStatus.of("warming-up", "container-cold"));
+                    channel.send(UIMessageChunk.DataMentorStatus.of(
+                            UIMessageChunk.DataMentorStatus.State.WARMING_UP, "container-cold"));
                 }
             } catch (RuntimeException beforeAttach) {
                 // Only attach uses, and so revokes, the credential the spec minted.
@@ -852,7 +853,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
      */
     private static void completeWithError(MentorChannel channel, Throwable cause, String userError) {
         if (isBusy(cause)) {
-            sendTerminal(channel, UIMessageChunk.DataMentorStatus.of("busy", null));
+            sendTerminal(channel, UIMessageChunk.DataMentorStatus.of(UIMessageChunk.DataMentorStatus.State.BUSY, null));
         }
         channel.completeWithError(userError);
     }

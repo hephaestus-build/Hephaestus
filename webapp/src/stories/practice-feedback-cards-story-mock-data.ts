@@ -34,7 +34,7 @@ const SCOPE_ONE_CONCERN = {
 		"Next time a fix and a refactor meet in the same branch, open the fix first as its own pull request, let it be reviewed on its own, and put the refactor on top of it once the fix is in. The reviewer then reads one intention at a time.",
 	condition: CLEAN_CONDITION,
 	cleanNeeded: 3,
-	timestamp: inStoryYear("09-09T14:10:00"),
+	timestamp: inStoryYear("09-09T14:10"),
 } satisfies Partial<PracticeFeedbackCardEntry>;
 
 /** The page's first card: new, three problems in the strip, nothing clean yet. */
@@ -93,7 +93,7 @@ const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		condition: CLEAN_CONDITION,
 		cleanNeeded: 3,
 		state: "open",
-		timestamp: inStoryYear("09-09T14:10:00"),
+		timestamp: inStoryYear("09-09T14:10"),
 	},
 	{
 		feedbackId: "reviewable-diff-size",
@@ -119,7 +119,7 @@ const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		condition: CLEAN_CONDITION,
 		cleanNeeded: 3,
 		state: "open",
-		timestamp: inStoryYear("09-09T14:10:00"),
+		timestamp: inStoryYear("09-09T14:10"),
 	},
 	{
 		// The third of the three examples the cards are read against: the review dialogue, as the
@@ -145,7 +145,7 @@ const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		condition: CLEAN_CONDITION,
 		cleanNeeded: 3,
 		state: "open",
-		timestamp: inStoryYear("09-04T09:32:00"),
+		timestamp: inStoryYear("09-04T09:32"),
 	},
 	{
 		feedbackId: "acceptance-criteria",
@@ -167,7 +167,7 @@ const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		condition: CLEAN_CONDITION,
 		cleanNeeded: 3,
 		state: "open",
-		timestamp: inStoryYear("09-02T16:45:00"),
+		timestamp: inStoryYear("09-02T16:45"),
 	},
 ];
 
@@ -202,7 +202,7 @@ const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		cleanNeeded: 3,
 		state: "resolved",
 		resolvedBy: "WORK",
-		timestamp: inStoryYear("09-09T14:10:00"),
+		timestamp: inStoryYear("09-09T14:10"),
 	},
 	{
 		feedbackId: "review-comments-specific-resolved",
@@ -236,7 +236,7 @@ const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		cleanNeeded: 3,
 		state: "resolved",
 		resolvedBy: "WORK",
-		timestamp: inStoryYear("09-02T11:40:00"),
+		timestamp: inStoryYear("09-02T11:40"),
 	},
 	{
 		feedbackId: "status-updates-resolved",
@@ -269,7 +269,7 @@ const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		cleanNeeded: 3,
 		state: "resolved",
 		resolvedBy: "DEVELOPER",
-		timestamp: inStoryYear("08-27T16:05:00"),
+		timestamp: inStoryYear("08-27T16:05"),
 	},
 ];
 

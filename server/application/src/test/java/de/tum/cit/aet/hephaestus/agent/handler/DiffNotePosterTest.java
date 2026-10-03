@@ -208,7 +208,7 @@ class DiffNotePosterTest extends BaseUnitTest {
     }
 
     @Test
-    void postedFindings_reportCounts() {
+    void postedObservations_reportCounts() {
         RecordingChannel channel = new RecordingChannel();
         DiffNotePoster poster = poster(channel);
         var captor = ArgumentCaptor.forClass(IntegrationKind.class);

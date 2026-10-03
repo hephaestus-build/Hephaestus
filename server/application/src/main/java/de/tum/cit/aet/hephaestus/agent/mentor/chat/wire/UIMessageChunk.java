@@ -202,10 +202,28 @@ public sealed interface UIMessageChunk {
         /** Stable id so subsequent status emits dedupe client-side instead of accumulating. */
         public static final String STATUS_PART_ID = "mentor-status";
 
-        public record DataMentorStatusPayload(
-                String state, @Nullable String reason) {}
+        /** What the mentor is doing instead of answering; the webapp matches these wire strings. */
+        public enum State {
+            WARMING_UP("warming-up"),
+            BUSY("busy"),
+            CONFLICT("conflict");
 
-        public static DataMentorStatus of(String state, @Nullable String reason) {
+            private final String wire;
+
+            State(String wire) {
+                this.wire = wire;
+            }
+
+            @JsonValue
+            public String wire() {
+                return wire;
+            }
+        }
+
+        public record DataMentorStatusPayload(
+                State state, @Nullable String reason) {}
+
+        public static DataMentorStatus of(State state, @Nullable String reason) {
             return new DataMentorStatus(STATUS_PART_ID, new DataMentorStatusPayload(state, reason), Boolean.TRUE);
         }
     }

@@ -146,7 +146,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
             float confidence,
             String artifactKind,
             Long artifactId,
-            Instant detectedAt) {
+            Instant observedAt) {
         UUID id = UUID.randomUUID();
         observationRepository.insertIfAbsent(
                 id,
@@ -164,7 +164,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 DIFF_EVIDENCE_JSON,
                 "Test reasoning for " + title,
                 null,
-                detectedAt,
+                observedAt,
                 "LIVE");
         return id;
     }
@@ -805,8 +805,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
 
         @Test
         @WithUser
-        @DisplayName("orders observations by detected_at descending")
-        void shouldOrderByDetectedAtDesc() {
+        @DisplayName("orders observations by observed_at descending")
+        void shouldOrderByObservedAtDesc() {
             Instant now = Instant.now();
             insertObservation(
                     practiceA,

@@ -122,7 +122,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
      */
     @Test
     void theGateIsAskedAboutTheRequest_notAboutALifecycleEventThatDidNotHappen() {
-        givenGateDetects();
+        givenGateReturnsRun();
         givenSubmissionSucceeds();
 
         requests.requestPullRequestReview(workspace, pullRequest(), requesters());
@@ -139,7 +139,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
      */
     @Test
     void theRunCarriesNoOccasionInItsMetadataAndIsFiledAsASelfSelectedSample() {
-        givenGateDetects();
+        givenGateReturnsRun();
         givenSubmissionSucceeds();
 
         requests.requestPullRequestReview(workspace, pullRequest(), requesters());
@@ -158,7 +158,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
 
     @Test
     void theAskIsRecordedInTheLedgerUnderItsOwnRunId() {
-        givenGateDetects();
+        givenGateReturnsRun();
         givenSubmissionSucceeds();
 
         requests.requestPullRequestReview(workspace, pullRequest(), requesters());
@@ -178,7 +178,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
      */
     @Test
     void twoAsksAboutTheSameUnchangedWorkAreTwoOccasions() {
-        givenGateDetects();
+        givenGateReturnsRun();
         givenSubmissionSucceeds();
 
         requests.requestPullRequestReview(workspace, pullRequest(), requesters());
@@ -240,7 +240,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
     /** A submission refusal — an exhausted budget, a cooldown — travels out with its own reason too. */
     @Test
     void aSubmissionRefusalKeepsTheReasonTheSubmissionStoppedOn() {
-        givenGateDetects();
+        givenGateReturnsRun();
         when(agentJobService.submitWithOutcome(anyLong(), any(), any(), any(), any(GateDecision.Run.class)))
                 .thenReturn(SubmissionOutcome.refused(SignalStateReason.BUDGET_EXHAUSTED));
 
@@ -296,7 +296,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
     /** The limit is asked about every identity of the asker, not just the one that granted standing. */
     @Test
     void theLimitCountsEveryIdentityOfTheSamePerson() {
-        givenGateDetects();
+        givenGateReturnsRun();
         givenSubmissionSucceeds();
         User second = new User();
         second.setId(7777L);
@@ -323,7 +323,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
         verifyNoInteractions(signalRecorder, agentJobService);
     }
 
-    private void givenGateDetects() {
+    private void givenGateReturnsRun() {
         when(gate.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(new GateDecision.Run(
                         workspace,

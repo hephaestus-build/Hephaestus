@@ -82,7 +82,7 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void capturesTheDefinitionAsItWasSoAFindingCanCiteIt() {
+    void capturesTheDefinitionAsItWasSoAnObservationCanCiteIt() {
         when(revisionRepository.findFirstByPracticeIdOrderByRevisionNumberDesc(42L))
                 .thenReturn(Optional.empty());
 

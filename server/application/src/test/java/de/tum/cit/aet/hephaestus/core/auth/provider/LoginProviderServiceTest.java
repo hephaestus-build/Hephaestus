@@ -429,7 +429,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
 
     /**
      * The mirror image: a link-only provider must not PROP UP the count either. With GitHub + Outline enabled,
-     * deleting GitHub leaves nobody able to sign in — the old count saw a non-empty list and waved it through.
+     * deleting GitHub leaves nobody able to sign in, even though the list of providers is not empty.
      */
     @Test
     void deleteRefusesTheLastSignInProviderEvenWhenALinkOnlyProviderRemains() {

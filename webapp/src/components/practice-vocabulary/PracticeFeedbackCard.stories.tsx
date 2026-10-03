@@ -248,7 +248,7 @@ export const MarkedAsAddressed: Story = {
 			resolvedBy: "DEVELOPER",
 			cleanWork: twoClean,
 			condition: [text("Marked as addressed on 9 September")],
-			timestamp: inStoryYear("09-09T16:05:00"),
+			timestamp: inStoryYear("09-09T16:05"),
 		},
 		resolution: "ADDRESSED",
 	},

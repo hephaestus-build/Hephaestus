@@ -307,7 +307,7 @@ function WorkLink({ reviewedWork }: { reviewedWork: ReviewedWorkRef }) {
 	const Icon = reviewedWorkIcon(reviewedWork.kind, reviewedWork.provider);
 	const name = (
 		<>
-			<Icon className="size-3.5 shrink-0" aria-hidden />
+			<Icon className="size-3.5 shrink-0" />
 			<span className="min-w-0 break-words">
 				{[reviewedWorkName(reviewedWork), reviewedWork.container].filter(hasText).join(" · ")}
 			</span>

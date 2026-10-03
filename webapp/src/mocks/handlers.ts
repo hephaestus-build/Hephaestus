@@ -4,7 +4,7 @@
 // client is unconfigured and issues same-origin relative requests (`/user`).
 // The leading `*` matches the optional `<scheme>://<host>` prefix.
 
-import { HttpResponse, delay, http, type PathParams } from "msw";
+import { HttpResponse, http, type PathParams } from "msw";
 
 import type { AccountAiChoice, AccountAiChoiceRequest } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
@@ -126,18 +126,3 @@ export const unauthenticatedUser = http.get(
 	"*/user",
 	() => new HttpResponse(null, { status: 401 }),
 );
-
-/** `GET /user/sessions` -> 500, for the sessions error state. */
-export const sessionsError = http.get(
-	"*/user/sessions",
-	() => new HttpResponse(null, { status: 500 }),
-);
-
-/** `GET /user/sessions` -> empty list. */
-export const noSessions = http.get("*/user/sessions", () => HttpResponse.json([]));
-
-/** `GET /user/sessions` that never answers, for the sessions loading state. */
-export const sessionsPending = http.get("*/user/sessions", async () => {
-	await delay("infinite");
-	return HttpResponse.json([]);
-});

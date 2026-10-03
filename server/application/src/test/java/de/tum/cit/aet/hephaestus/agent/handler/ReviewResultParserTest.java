@@ -43,7 +43,7 @@ class ReviewResultParserTest extends BaseUnitTest {
     }
 
     /** Creates a minimal valid observation JSON object. */
-    private ObjectNode validFindingNode() {
+    private ObjectNode validObservationNode() {
         ObjectNode observation = objectMapper.createObjectNode();
         observation.put("practiceSlug", "pr-description-quality");
         observation.put("summary", "Good PR description");
@@ -70,7 +70,7 @@ class ReviewResultParserTest extends BaseUnitTest {
         @Test
         void shouldValidateASubmittedArrayWithoutRereadingItAsText() {
             ArrayNode submitted = objectMapper.createArrayNode();
-            submitted.add(validFindingNode());
+            submitted.add(validObservationNode());
             submitted.add("not an observation");
 
             var result = parser.parseObservations(submitted);
@@ -174,7 +174,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode root = objectMapper.createObjectNode();
             ArrayNode arr = root.putArray("observations");
             for (int i = 0; i < 5; i++) {
-                ObjectNode f = validFindingNode();
+                ObjectNode f = validObservationNode();
                 f.put("practiceSlug", "practice-" + i);
                 arr.add(f);
             }
@@ -192,7 +192,7 @@ class ReviewResultParserTest extends BaseUnitTest {
             ObjectNode root = objectMapper.createObjectNode();
             ArrayNode arr = root.putArray("observations");
             arr.add("not an object");
-            arr.add(validFindingNode());
+            arr.add(validObservationNode());
 
             ParseResult result = parser.parse(wrapRawOutput(root.toString()));
 
@@ -207,7 +207,7 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void validObservation() {
-            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(validFindingNode())));
+            ParseResult result = parser.parse(wrapRawOutput(wrapObservations(validObservationNode())));
 
             assertThat(result.validObservations()).hasSize(1);
             assertThat(result.discarded()).isEmpty();
@@ -221,7 +221,7 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void missingPracticeSlug() {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.remove("practiceSlug");
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
@@ -233,7 +233,7 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void blankTitle() {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.put("summary", "  ");
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
@@ -246,7 +246,7 @@ class ReviewResultParserTest extends BaseUnitTest {
         @ParameterizedTest
         @EnumSource(Outcome.class)
         void shouldPreserveEveryOutcome(Outcome outcome) {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.put("outcome", outcome.name());
             if (outcome == Outcome.NOT_MET) observation.put("severity", "MINOR");
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
@@ -258,14 +258,14 @@ class ReviewResultParserTest extends BaseUnitTest {
         @Test
         void shouldRejectMissingOrUnknownOutcomes() {
             for (String value : new String[] {"ASSESSED", "POSITIVE", "UNKNOWN"}) {
-                ObjectNode observation = validFindingNode();
+                ObjectNode observation = validObservationNode();
                 observation.put("outcome", value);
                 assertThat(parser.parseObservations(
                                         objectMapper.createArrayNode().add(observation))
                                 .validObservations())
                         .isEmpty();
             }
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.remove("outcome");
             assertThat(parser.parseObservations(objectMapper.createArrayNode().add(observation))
                             .validObservations())
@@ -275,7 +275,7 @@ class ReviewResultParserTest extends BaseUnitTest {
         @ParameterizedTest
         @ValueSource(strings = {"absenceBoundary", "presence", "assessment", "unknown"})
         void shouldRejectUnknownEvidenceFields(String field) {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             ((ObjectNode) observation.path("evidence")).putNull(field);
 
             var result = parser.parseObservations(objectMapper.createArrayNode().add(observation));
@@ -289,7 +289,7 @@ class ReviewResultParserTest extends BaseUnitTest {
         @Test
         void shouldRejectRemovedAxesInsteadOfInferringAnOutcome() {
             for (String field : new String[] {"assessmentStatus", "presence", "assessment"}) {
-                ObjectNode observation = validFindingNode();
+                ObjectNode observation = validObservationNode();
                 observation.put(field, "legacy value");
                 assertThat(parser.parseObservations(
                                         objectMapper.createArrayNode().add(observation))
@@ -302,7 +302,7 @@ class ReviewResultParserTest extends BaseUnitTest {
         @ParameterizedTest
         @ValueSource(strings = {"met", "Met", "not_met", "NOT MET", " MET", "MET "})
         void shouldRejectNoncanonicalOutcomeValues(String outcome) {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.put("outcome", outcome);
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
@@ -314,7 +314,7 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void shouldRejectLowercaseSeverity() {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.put("outcome", "NOT_MET");
             observation.put("severity", "major");
 
@@ -328,7 +328,7 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void invalidSeverity() {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.put("severity", "EXTREME");
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
@@ -338,7 +338,7 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void missingSeverityIsRejected() {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.remove("severity");
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
             assertThat(result.validObservations()).isEmpty();
@@ -347,7 +347,7 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void shouldPreserveNullSeverityForMet() {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.putNull("severity");
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
@@ -358,7 +358,7 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void removedConfidenceFieldRejectsTheObservation() {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.put("confidence", 0.9);
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
@@ -373,9 +373,9 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void shouldDiscardOnlyTheObservationWhenItsSummaryExceedsTheRunnerBound() {
-            ObjectNode atBound = validFindingNode();
+            ObjectNode atBound = validObservationNode();
             atBound.put("summary", "x".repeat(160));
-            ObjectNode overBound = validFindingNode();
+            ObjectNode overBound = validObservationNode();
             overBound.put("summary", "x".repeat(161));
 
             ParseResult result = parser.parseObservations(
@@ -393,7 +393,7 @@ class ReviewResultParserTest extends BaseUnitTest {
         @Test
         @DisplayName("normalizes practice slug with underscores")
         void slugNormalization() {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.put("practiceSlug", "PR_Description_Quality");
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
@@ -404,7 +404,7 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void preservesSubmittedEvidenceAndRationale() {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.put("evidenceRationale", "Some evidenceRationale");
             ObjectNode evidence = objectMapper.createObjectNode();
             evidence.putArray("citations").addObject().put("quote", "Quoted source text");
@@ -422,7 +422,7 @@ class ReviewResultParserTest extends BaseUnitTest {
         @Test
         @DisplayName("a removed measurement field rejects the observation")
         void removedFieldsAreContractErrors() {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.put("evidenceRationale", "Some evidenceRationale");
             observation.put("guidance", "Rotate the credential and re-run the pipeline.");
 
@@ -438,7 +438,7 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void oversizedEvidenceIsRejected() {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             ObjectNode evidence = objectMapper.createObjectNode();
             evidence.putArray("citations").addObject().put("quote", "x".repeat(70_000));
             observation.set("evidence", evidence);
@@ -456,7 +456,7 @@ class ReviewResultParserTest extends BaseUnitTest {
         @Test
         @DisplayName("rejects evidenceRationale exceeding 10000 chars")
         void oversizedEvidenceRationaleIsRejected() {
-            ObjectNode observation = validFindingNode();
+            ObjectNode observation = validObservationNode();
             observation.put("evidenceRationale", "r".repeat(15_000));
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
@@ -475,8 +475,8 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void mixedValidAndInvalid() {
-            ObjectNode valid = validFindingNode();
-            ObjectNode invalid = validFindingNode();
+            ObjectNode valid = validObservationNode();
+            ObjectNode invalid = validObservationNode();
             invalid.put("outcome", "BOGUS");
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(valid, invalid)));
@@ -488,9 +488,9 @@ class ReviewResultParserTest extends BaseUnitTest {
 
         @Test
         void allInvalid() {
-            ObjectNode bad1 = validFindingNode();
+            ObjectNode bad1 = validObservationNode();
             bad1.remove("practiceSlug");
-            ObjectNode bad2 = validFindingNode();
+            ObjectNode bad2 = validObservationNode();
             bad2.remove("summary");
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(bad1, bad2)));
@@ -504,16 +504,16 @@ class ReviewResultParserTest extends BaseUnitTest {
     class Deduplication {
 
         @Test
-        void keepsAllFindingsPerPractice() {
-            ObjectNode f1 = validFindingNode();
+        void keepsAllObservationsPerPractice() {
+            ObjectNode f1 = validObservationNode();
             f1.put("practiceSlug", "error-handling");
             f1.put("summary", "First violation");
 
-            ObjectNode f2 = validFindingNode();
+            ObjectNode f2 = validObservationNode();
             f2.put("practiceSlug", "error-handling");
             f2.put("summary", "Second violation");
 
-            ObjectNode f3 = validFindingNode();
+            ObjectNode f3 = validObservationNode();
             f3.put("practiceSlug", "code-hygiene");
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(f1, f2, f3)));
@@ -540,7 +540,7 @@ class ReviewResultParserTest extends BaseUnitTest {
                 [PHASE1] RELEVANT: avoids-insecure-defaults-and-over-broad-permissions
                 [PHASE4] Output ready
                 {"observations": [%s]}
-                """.formatted(validFindingNode().toString());
+                """.formatted(validObservationNode().toString());
 
             ParseResult result = parser.parse(wrapRawOutput(mixed));
 

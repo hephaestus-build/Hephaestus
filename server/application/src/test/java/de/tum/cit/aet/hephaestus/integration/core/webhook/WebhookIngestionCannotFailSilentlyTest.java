@@ -48,7 +48,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
     private static final Path NATS_COMPOSE = Path.of("..", "..", "docker", "compose.core.yaml");
     private static final Path SHIPPED_ENV = Path.of("..", "..", "docker", ".env.example");
 
-    /** A busy instance's daily GitHub delivery volume: about 46,500 deliveries. */
+    /** GitHub deliveries a busy instance receives in a day. */
     private static final long BUSY_GITHUB_BYTES_PER_DAY = 750_000_000L;
 
     /**

@@ -248,7 +248,7 @@ class MentorLiveLlmTest {
         //
         // The chain: build a list one item per turn. Turn 5 asks for the full list. This
         // requires the LLM to have seen every prior assistant message AND its own prior
-        // answers — exactly the failure mode the screenshot showed.
+        // answers.
         LiveLlmCredentials creds = LiveLlmCredentials.fromEnv();
         UUID threadId = UUID.randomUUID();
         workspaceDir = stageWorkspace(creds);
@@ -361,7 +361,7 @@ class MentorLiveLlmTest {
                 .map(UIMessageChunk.ToolInputStart.class::cast)
                 .toList();
         assertThat(toolStarts)
-                .as("agent must invoke fetch_context to answer the question")
+                .as("Heph must invoke fetch_context to answer the question")
                 .isNotEmpty();
 
         List<String> toolNames =
@@ -378,7 +378,7 @@ class MentorLiveLlmTest {
                 .as("at least one tool call completed with output")
                 .isNotEmpty();
 
-        // Agent's text response should reference the planted content.
+        // Heph's reply should reference the planted content.
         String text = chunks.stream()
                 .filter(UIMessageChunk.TextDelta.class::isInstance)
                 .map(UIMessageChunk.TextDelta.class::cast)
@@ -386,7 +386,7 @@ class MentorLiveLlmTest {
                 .reduce("", String::concat);
         System.out.printf("[tool-use] LLM response (%d chars): %s%n", text.length(), trim(text, 300));
         assertThat(text)
-                .as("agent must answer from recent_authored_work.json")
+                .as("Heph must answer from recent_authored_work.json")
                 .contains("12")
                 .containsIgnoringCase("Slack mentor onboarding");
     }

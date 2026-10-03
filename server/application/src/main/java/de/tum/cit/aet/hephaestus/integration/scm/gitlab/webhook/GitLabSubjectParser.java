@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  * becomes the {@link EventTypeKey#eventType()} verbatim.
  *
  * <p>Unlike GitHub, GitLab has no domain-tier prefix on the eventType — its event-type
- * space is flat. This matches plan v4 D7.
+ * space is flat.
  */
 @Component
 public class GitLabSubjectParser implements SubjectParser {

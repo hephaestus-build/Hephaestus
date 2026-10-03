@@ -454,6 +454,12 @@ class MentorChatServiceTest extends BaseUnitTest {
                 .contains("data-mentor-status", "error")
                 .doesNotContain("finish");
         assertThat(emitter.rawData).anySatisfy(raw -> assertThat(raw).contains("\"state\":\"busy\""));
+        assertThat(emitter.rawData.stream()
+                        .filter(raw -> raw.startsWith("{"))
+                        .map(mapper::readTree)
+                        .filter(frame -> frame.path("type").asString().equals("error"))
+                        .map(frame -> frame.path("errorText").asString()))
+                .containsExactly(MentorBusyException.USER_MESSAGE);
         verify(interactiveSandboxService, times(1)).attach(any());
     }
 

@@ -252,7 +252,7 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
     /**
      * Locates the mirrored row for a repository whose name has just moved. Prefers the stable
      * {@code (nativeId, providerId)} key — the only identity a transfer preserves — and falls back to
-     * the previous {@code owner/name} for legacy rows whose {@code native_id} was never captured.
+     * the previous {@code owner/name} for a row whose {@code native_id} was never captured.
      */
     private Optional<Repository> resolveMovedRepository(
             @Nullable Long nativeId, @Nullable String previousNameWithOwner) {

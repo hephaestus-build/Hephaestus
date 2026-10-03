@@ -181,10 +181,6 @@ class CrossCuttingModuleBoundaryTest extends HephaestusArchitectureTest {
         }
     }
 
-    // NOTE: Feature module cycle tests removed - they used allowEmptyShould(true)
-    // which means they pass even when there's nothing to check.
-    // The top-level cycle test in ArchitectureTest.noCyclesBetweenModules() is sufficient.
-
     @Nested
     class WorkspaceCrossCuttingTests {
 

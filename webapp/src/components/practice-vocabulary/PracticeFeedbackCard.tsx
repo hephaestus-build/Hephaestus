@@ -346,7 +346,7 @@ export function PracticeFeedbackCard({
 
 				<div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
 					<span className="inline-flex items-center gap-2 whitespace-nowrap text-muted-foreground">
-						<WorkIcon className="size-3.5 shrink-0" aria-hidden />
+						<WorkIcon className="size-3.5 shrink-0" />
 						{stripLabel.text}
 					</span>
 					{shownWork.map((piece, index) => (

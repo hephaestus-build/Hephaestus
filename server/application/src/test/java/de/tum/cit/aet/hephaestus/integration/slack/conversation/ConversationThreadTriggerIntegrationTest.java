@@ -102,7 +102,7 @@ class ConversationThreadTriggerIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName(
             "a settled, deep, grown thread enqueues one CONVERSATION_REVIEW per participant and advances the watermark")
-    void detectsSettledThreadAndEnqueuesPerParticipant() {
+    void shouldEnqueueAReviewPerParticipantWhenADeepThreadSettles() {
         long ws = newWorkspace();
         long baseSecond = Instant.now().getEpochSecond() - 1200; // 20 minutes ago → past the 10-minute quiescence
         String rootTs = baseSecond + ".000000";

@@ -2816,7 +2816,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .uri(BASE_URI, workspace.getWorkspaceSlug())
                     .headers(TestAuthUtils.withCurrentUser())
                     .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(createWithExemplar("guard-assessment", "Flagged GOOD, BAD, or ABSENT by the detector."))
+                    .bodyValue(createWithExemplar("guard-assessment", "Flagged GOOD, BAD, or ABSENT by the review."))
                     .exchange()
                     .expectStatus()
                     .isBadRequest()

@@ -141,7 +141,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     }
 
     @Test
-    void composerWithheld_bindsEachFindingExactlyOnce_keptToDeliveredDroppedToSuppressed() {
+    void composerWithheld_bindsEachObservationExactlyOnce_keptToDeliveredDroppedToSuppressed() {
         List<Observation> observations = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             observations.add(problem());
@@ -160,10 +160,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder().record(job(), delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-ref", null);
 
         // Every observation bound exactly once across ALL units (3 to DELIVERED + 1 each to the 2 SUPPRESSED units).
-        var boundFindingIds = ArgumentCaptor.forClass(UUID.class);
+        var boundObservationIds = ArgumentCaptor.forClass(UUID.class);
         verify(feedbackObservationRepository, times(5))
-                .insertIfAbsent(any(), boundFindingIds.capture(), any(), anyInt());
-        assertThat(boundFindingIds.getAllValues()).doesNotHaveDuplicates().hasSize(5);
+                .insertIfAbsent(any(), boundObservationIds.capture(), any(), anyInt());
+        assertThat(boundObservationIds.getAllValues()).doesNotHaveDuplicates().hasSize(5);
 
         var saved = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository, atLeast(3)).save(saved.capture());
@@ -200,7 +200,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     @Test
     void inlinePlacement_persistsExternalRefFromMatchingSignal() {
         // A3: the INLINE placement must carry the durable vendor handle the channel reported, not a hardcoded
-        // null. The note and its DeliveredSignal share a findingFingerprint, so the signal's externalRef lands
+        // null. The note and its DeliveredSignal share a recurrence key, so the signal's externalRef lands
         // on the saved FeedbackPlacement.
         var observation = problem();
         when(observationRepository.findByAgentJobId(any(), anyLong())).thenReturn(List.of(observation));
@@ -257,7 +257,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     }
 
     @Test
-    void b2AndComposerWithheldOverlap_aSuppressedFindingIsNeverBoundTwice() {
+    void b2AndComposerWithheldOverlap_aSuppressedObservationIsNeverBoundTwice() {
         // An observation reaction suppression already withheld must NOT also be written as a composer-withheld
         // unit even when the composer reports its key — it is bound exactly once across all units.
         List<Observation> observations = new ArrayList<>();
@@ -284,7 +284,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     }
 
     @Test
-    void alreadySuppressedFinding_isExcludedFromDeliveredUnit() {
+    void alreadySuppressedObservation_isExcludedFromDeliveredUnit() {
         // An observation withheld earlier in the flow (reaction suppression wrote a SUPPRESSED unit for it) must
         // NOT also be bound to the DELIVERED unit — else it is double-counted as delivered.
         var kept = problem();
@@ -502,7 +502,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     }
 
     @Test
-    void recordUndelivered_persistsFailedBody_bindsFindings_andSignalsConversation() {
+    void recordUndelivered_persistsFailedBody_bindsObservations_andSignalsConversation() {
         // A direct-delivery failure: the composed body must be persisted as a FAILED IN_CONTEXT unit (auditable +
         // dashboard-visible) AND the conversational channel must be signalled so it can pick up the loci the
         // developer never saw in-context.
@@ -678,7 +678,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     }
 
     @Test
-    void recordSuppressedUnit_persistsGateReasonAndBody_bindsFindings_noConversationSignal() {
+    void recordSuppressedUnit_persistsGateReasonAndBody_bindsObservations_noConversationSignal() {
         // A closed PR withholds more than the note on the work, so the whole review collapses to ONE suppressed
         // unit and no lane is woken to re-raise its loci.
         Observation bad = problem();
@@ -737,7 +737,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRecordOnlyLandedPlacementAndFindingWhenInlineDeliveryIsPartiallySuppressed() {
+    void shouldRecordOnlyLandedPlacementAndObservationWhenInlineDeliveryIsPartiallySuppressed() {
         Observation landed = problem();
         Observation suppressed = problem();
         when(landed.getOccurrenceKey()).thenReturn("key-1");

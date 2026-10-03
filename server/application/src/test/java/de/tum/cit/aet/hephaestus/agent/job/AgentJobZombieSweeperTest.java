@@ -200,7 +200,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
     }
 
     @Nested
-    @DisplayName("recoverOrphanedJobs (#1138)")
+    @DisplayName("recoverOrphanedJobs")
     class RecoverOrphaned {
 
         @Test
@@ -228,8 +228,8 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("legacy jobs without an admission snapshot are recovered as explicitly unpriced")
-        void recoversLegacyJobWithoutPriceSnapshot() {
+        @DisplayName("jobs without an admission snapshot are recovered as explicitly unpriced")
+        void recoversJobWithoutPriceSnapshot() {
             UUID jobId = UUID.randomUUID();
             when(jobRepository.findOrphanedRunningJobs(any(), anyLong())).thenReturn(List.of(orphan(jobId, 7L, 0)));
             when(jobRepository.requeueOrphan(eq(jobId), eq(DEAD_WORKER_ID), anyInt(), any(), any(), any()))

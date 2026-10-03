@@ -92,7 +92,7 @@ class IntegrationCutoverPinsTest extends HephaestusArchitectureTest {
     }
 
     /**
-     * Forbid legacy denormalised connection columns from re-appearing on JPA entities
+     * Forbid denormalised connection columns from appearing on JPA entities
      * in {@code ..workspace..}. The Connection registry owns this data; re-declaring
      * them on the entity recreates a dual-source-of-truth bug. DTOs keep these field
      * names on the wire and are out of scope (entity-only filter below).

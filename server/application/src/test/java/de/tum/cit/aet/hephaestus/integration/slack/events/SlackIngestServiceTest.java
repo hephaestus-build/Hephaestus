@@ -25,7 +25,7 @@ import org.mockito.Mock;
 /**
  * Ingest write-path unit tests. Deterministic: the repositories and the identity resolver are mocked, so
  * these lock the consent gate (only ACTIVE channels flow content), the author→member firewall stamp, and the
- * thread upsert bookkeeping — the behavioral break from the old "auto-PENDING then persist unconditionally" path.
+ * thread upsert bookkeeping. Content from a channel that is not ACTIVE is never persisted.
  */
 class SlackIngestServiceTest extends BaseUnitTest {
 

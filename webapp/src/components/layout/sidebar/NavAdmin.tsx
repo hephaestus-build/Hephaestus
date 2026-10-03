@@ -274,7 +274,7 @@ export function NavAdmin({
 									<Link to="/w/$workspaceSlug/admin/integrations/scm" params={{ workspaceSlug }} />
 								}
 							>
-								<ScmIcon aria-hidden />
+								<ScmIcon />
 								<span>{scmLabel}</span>
 							</SidebarMenuSubButton>
 						</SidebarMenuSubItem>

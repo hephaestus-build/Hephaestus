@@ -195,7 +195,7 @@ export function LinkedAccountsSection({
 								role="listitem"
 							>
 								<ItemMedia variant="icon">
-									<Icon aria-hidden="true" />
+									<Icon />
 								</ItemMedia>
 								<ItemContent>
 									<ItemTitle>
@@ -239,7 +239,7 @@ export function LinkedAccountsSection({
 						return (
 							<Item key={registrationId} variant="outline" role="listitem">
 								<ItemMedia variant="icon">
-									<Icon aria-hidden="true" />
+									<Icon />
 								</ItemMedia>
 								<ItemContent>
 									<ItemTitle>{label} is not connected</ItemTitle>
@@ -252,7 +252,7 @@ export function LinkedAccountsSection({
 										onClick={() => onLink(registrationId)}
 										aria-label={`Connect ${label}`}
 									>
-										<Icon className="mr-1.5 size-3.5" aria-hidden="true" />
+										<Icon className="mr-1.5 size-3.5" />
 										Connect
 									</Button>
 								</ItemActions>
@@ -287,7 +287,7 @@ export function LinkedAccountsSection({
 									disabled={!hasText(provider.registrationId)}
 									aria-label={`Connect ${label}`}
 								>
-									<Icon className="mr-1.5 size-3.5" aria-hidden="true" />
+									<Icon className="mr-1.5 size-3.5" />
 									Connect {label}
 								</Button>
 							);

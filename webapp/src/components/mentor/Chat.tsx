@@ -1,4 +1,5 @@
 import { AlertCircleIcon, RotateCcwIcon } from "lucide-react";
+import type { ComponentProps } from "react";
 
 import type { ChatMessageVote } from "@/api/types.gen";
 import { HephIcon } from "@/components/brand/HephIcon";
@@ -19,6 +20,24 @@ import { ChatComposer } from "./ChatComposer";
 import { Greeting } from "./Greeting";
 import { MentorMessage } from "./MentorMessage";
 import { visibleTexts } from "./message-text";
+
+type ChatFailure = Extract<ChatTurn, { kind: "error" }>["failure"];
+
+const RETRY_NOTICES = {
+	busy: {
+		variant: "warning",
+		title: "Heph is busy",
+		description: "Please try again in a moment.",
+	},
+	failed: {
+		variant: "destructive",
+		title: "Something went wrong",
+		description: "An error occurred while generating the response. Please try again.",
+	},
+} as const satisfies Record<
+	ChatFailure,
+	{ variant: ComponentProps<typeof Alert>["variant"]; title: string; description: string }
+>;
 
 export interface ChatProps {
 	messages: ChatMessage[];
@@ -55,7 +74,7 @@ export function Chat({
 }: ChatProps) {
 	const busy = turn.kind === "submitted" || turn.kind === "streaming";
 	const streaming = turn.kind === "streaming";
-	const failure = turn.kind === "error" ? turn.failure : undefined;
+	const retryNotice = RETRY_NOTICES[turn.kind === "error" ? turn.failure : "failed"];
 	const lastMessage = messages.at(-1);
 	// Until a reply shows words, it is a status line rather than an empty message.
 	const replyPending =
@@ -133,17 +152,11 @@ export function Chat({
 
 				<div className="mx-auto flex w-full max-w-3xl flex-col gap-2 px-4 pb-2">
 					{canRetry && (
-						<Alert variant={failure === "busy" ? "warning" : "destructive"}>
+						<Alert variant={retryNotice.variant}>
 							<AlertCircleIcon />
-							<AlertTitle>
-								{failure === "busy" ? "Heph is busy" : "Something went wrong"}
-							</AlertTitle>
+							<AlertTitle>{retryNotice.title}</AlertTitle>
 							<AlertDescription className="flex items-center justify-between gap-4">
-								<span>
-									{failure === "busy"
-										? "Please try again in a moment."
-										: "An error occurred while generating the response. Please try again."}
-								</span>
+								<span>{retryNotice.description}</span>
 								{onReload && (
 									<Button variant="outline" size="sm" onClick={onReload} className="shrink-0">
 										<RotateCcwIcon />

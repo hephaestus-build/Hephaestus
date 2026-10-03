@@ -72,7 +72,7 @@ class AutonomyRollupIntegrationTest extends AbstractWorkspaceIntegrationTest {
         practice.setSlug(slug);
         practice.setName("Practice " + slug);
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
-        practice.setCriteria("Detect prompt for " + slug);
+        practice.setCriteria("Review prompt for " + slug);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         practice.setGroup(group);
         practice.setAutonomy(autonomy);
@@ -334,7 +334,7 @@ class AutonomyRollupIntegrationTest extends AbstractWorkspaceIntegrationTest {
         theirs.setSlug("theirs");
         theirs.setName("Theirs");
         PracticeTestEvidence.configure(theirs, ScmSignals.PULL_REQUEST_OPENED);
-        theirs.setCriteria("Detect prompt for theirs");
+        theirs.setCriteria("Review prompt for theirs");
         theirs.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         theirs.setAutonomy(PracticeAutonomy.OFF);
         practiceRepository.save(theirs);

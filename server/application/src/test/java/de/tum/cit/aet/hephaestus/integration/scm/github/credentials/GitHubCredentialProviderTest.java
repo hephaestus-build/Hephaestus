@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-/** The PAT decryption path; the GitHub App branch carries no per-row credential and is covered by integration tests. */
 class GitHubCredentialProviderTest extends BaseUnitTest {
 
     @Mock

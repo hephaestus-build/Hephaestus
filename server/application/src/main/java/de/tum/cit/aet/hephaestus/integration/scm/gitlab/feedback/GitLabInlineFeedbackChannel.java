@@ -491,7 +491,7 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
             }
         }
         if (botKey == null || botNoteId == null) {
-            return; // not one of ours, or a legacy bot note posted before keys existed — leave the clear path to it
+            return; // not one of ours, or a bot note that carries no delivery key — leave the clear path to it
         }
         byKey.put(botKey, new PriorThread(botKey, botNoteId, discussionId, humanReplied, botUrl));
     }

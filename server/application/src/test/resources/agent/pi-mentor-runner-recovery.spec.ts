@@ -979,6 +979,23 @@ void test("a small restored session is not compacted", async (t) => {
 	assert.ok(!typesOf(runner).includes("compaction_start"));
 });
 
+void test("Heph offers the model only its context and link tools", async (t) => {
+	const model = await fakeModel(t, () => ({ text: "answer", promptTokens: 3000 }));
+	const runner = spawnRealRunner(t, runnerRoot(), model);
+	await openAndPrompt(runner, "what happened in the review?");
+	await runner.next(isEvent("agent_end"));
+
+	const first: unknown = JSON.parse(model.bodies[0] ?? "{}");
+	assert.ok(isRecord(first) && Array.isArray(first.tools));
+	const names = first.tools.map((tool: unknown) =>
+		isRecord(tool) && isRecord(tool.function) ? String(tool.function.name) : "",
+	);
+	assert.deepEqual(
+		names.toSorted((a, b) => a.localeCompare(b)),
+		["fetch_context", "link_observation"],
+	);
+});
+
 void test("aborting during the pre-prompt compaction ends the turn once, without sending the prompt", async (t) => {
 	const root = runnerRoot();
 	const model = await fakeModel(t, (kind) =>

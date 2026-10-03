@@ -11,8 +11,11 @@ import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
@@ -260,6 +263,13 @@ public class GitHubExceptionClassifier {
             return ClassificationResult.of(Category.UNKNOWN, "Null exception");
         }
 
+        // Suspended installation - this is an auth error, not retryable, however deeply it is wrapped
+        InstallationSuspendedException suspended = suspendedInstallation(e);
+        if (suspended != null) {
+            return ClassificationResult.of(
+                    Category.AUTH_ERROR, "Installation " + suspended.getInstallationId() + " is suspended");
+        }
+
         // Unwrap common wrapper exceptions
         Throwable cause = e;
         if (e.getCause() != null
@@ -267,12 +277,6 @@ public class GitHubExceptionClassifier {
                         || e.getClass().getName().contains("CompletionException")
                         || e.getClass().getName().contains("ExecutionException"))) {
             cause = e.getCause();
-        }
-
-        // Suspended installation - this is an auth error, not retryable
-        if (cause instanceof InstallationSuspendedException suspended) {
-            return ClassificationResult.of(
-                    Category.AUTH_ERROR, "Installation " + suspended.getInstallationId() + " is suspended");
         }
 
         // Database deadlocks are transient and should be retried with backoff
@@ -389,6 +393,17 @@ public class GitHubExceptionClassifier {
     private ClassificationResult classifyNetworkException(Throwable e) {
         String message = "Network error: " + e.getClass().getSimpleName() + " - " + e.getMessage();
         return ClassificationResult.of(Category.RETRYABLE, message);
+    }
+
+    private static @Nullable InstallationSuspendedException suspendedInstallation(Throwable e) {
+        // Each throwable is visited once, so a cyclic cause chain still ends.
+        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Throwable current = e; current != null && seen.add(current); current = current.getCause()) {
+            if (current instanceof InstallationSuspendedException suspended) {
+                return suspended;
+            }
+        }
+        return null;
     }
 
     /**

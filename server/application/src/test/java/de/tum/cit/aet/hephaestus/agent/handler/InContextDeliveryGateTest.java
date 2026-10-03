@@ -150,7 +150,7 @@ class InContextDeliveryGateTest extends BaseUnitTest {
 
     /** A ledger failure is telemetry loss, never delivery loss: the surviving observations still go out. */
     @Test
-    void aLedgerFailureDoesNotStopTheFindingsThatSurvived() {
+    void aLedgerFailureDoesNotStopTheObservationsThatSurvived() {
         when(practiceRepository.findByWorkspaceId(WORKSPACE_ID))
                 .thenReturn(List.of(
                         practice("measured", PracticeAutonomy.OFF), practice("loud", PracticeAutonomy.AUTOMATIC)));

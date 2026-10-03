@@ -82,10 +82,9 @@ public class GitLabGroupSyncService {
     /**
      * Resolves the GitLab provider entity from the database for {@code serverUrl}.
      * Falls back to the configured default ({@code hephaestus.integration.gitlab.default-server-url})
-     * only when the caller has no per-workspace URL to pass — that fallback path stamps
-     * gitlab.com on rows that may actually live elsewhere (silent cross-instance data
-     * corruption observed live on 2026-05-25 against gitlab.lrz.de), so always prefer
-     * the workspace-bound overload.
+     * only when the caller has no per-workspace URL to pass. That fallback stamps the default
+     * instance on rows that may live on another one, so a caller that knows the workspace's URL
+     * passes it.
      *
      * @param serverUrl  the per-workspace GitLab base URL (e.g. {@code https://gitlab.lrz.de}),
      *                   or {@code null} to fall back to the global default
@@ -105,7 +104,8 @@ public class GitLabGroupSyncService {
      * @param scopeId       the workspace/scope ID for authentication
      * @param groupFullPath the full path of the group (e.g., {@code org/team})
      * @param serverUrl     workspace's GitLab base URL, so a self-hosted instance is not stamped
-     *                      as gitlab.com; null resolves the gitlab.com provider
+     *                      as the default one; null or blank falls back to the configured default
+     *                      server URL
      * @return the synced Organization entity, or empty if not found or on error
      */
     @Transactional
@@ -179,7 +179,8 @@ public class GitLabGroupSyncService {
      *
      * @param scopeId       the workspace/scope ID for authentication
      * @param groupFullPath the full path of the group
-     * @param serverUrl     workspace's GitLab base URL; null resolves the gitlab.com provider
+     * @param serverUrl     workspace's GitLab base URL; null or blank falls back to the configured
+     *                      default server URL
      * @return structured result with synced repositories, page counts, and error counts
      */
     // Note: intentionally NOT @Transactional — this is an orchestrator that makes multiple

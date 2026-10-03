@@ -203,8 +203,8 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
                 .contains(new EventTypeKey(IntegrationKind.SLACK, "message"))
                 .contains(new EventTypeKey(IntegrationKind.SLACK, "message_im"));
 
-        // No Slack webhook fixtures are committed today, so this block is vacuous now but becomes active
-        // the instant a Slack fixture lands: a fixture for a bolt event with no handler will fail the
+        // Vacuous while no Slack webhook fixture is committed, and active the instant one lands: a fixture for a bolt
+        // event with no handler will fail the
         // build unless it is handled or explicitly allowlisted, mirroring the SCM/Outline invariant.
         assertFixturesResolveOrAllowlisted(
                 "Slack",

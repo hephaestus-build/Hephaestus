@@ -289,7 +289,7 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldSubmitWhenGateReturnsDetect() {
+        void shouldSubmitWhenGateReturnsRun() {
             var issueData = createIssueData(Issue.State.OPEN);
             var event = new ScmDomainEvent.IssueCreated(issueData, webhookContext(99L));
 

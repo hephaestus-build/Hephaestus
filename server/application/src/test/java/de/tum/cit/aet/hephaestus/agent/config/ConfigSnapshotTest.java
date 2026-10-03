@@ -231,11 +231,11 @@ class ConfigSnapshotTest extends BaseUnitTest {
 
         @Test
         void shouldDeserializeV4SnapshotStillCarryingTheDroppedConfigFields() {
-            // Regression guard for agent_job.config_snapshot rows already in production: v4 froze
-            // configId/configName, v5 dropped both. Such a row must read through the CURRENT shape with
-            // the two dead keys ignored — not the pre-v4 legacy translation, which would null the
+            // A stored v4 agent_job.config_snapshot froze configId/configName, which v5 dropped. Such a row
+            // must read through the CURRENT shape with the two dead keys ignored — not the pre-v4 translation, which
+            // would null the
             // connection identity and leave an in-flight job unroutable at the proxy.
-            String v4 = "{\"schemaVersion\":4,\"configId\":42,\"configName\":\"detection\","
+            String v4 = "{\"schemaVersion\":4,\"configId\":42,\"configName\":\"practice-review\","
                     + "\"apiProtocol\":\"openai-completions\",\"baseUrl\":\"https://gpu.example.com/v1\","
                     + "\"upstreamModelId\":\"gpt-oss-120b\",\"modelVersion\":\"2025-05-01\","
                     + "\"contextWindow\":128000,\"maxOutputTokens\":4096,\"supportsReasoning\":true,"
@@ -301,7 +301,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
         @Test
         void shouldDeserializeV1WithoutSchemaVersion() {
             // Earliest snapshot shape predates the schemaVersion guard. fromJson reads
-            // missing schemaVersion as 0 (< v4), so v1 rows are translated via the legacy path.
+            // missing schemaVersion as 0 (< v4), so v1 rows are translated via the pre-v4 path.
             String v1 = "{\"configId\":7,\"configName\":\"v1\",\"agentType\":\"OPENCODE\","
                     + "\"llmProvider\":\"OPENAI\",\"credentialMode\":\"PROXY\","
                     + "\"modelName\":\"gpt-4o-mini\",\"timeoutSeconds\":300,\"allowInternet\":false}";

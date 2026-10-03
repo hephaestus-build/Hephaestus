@@ -31,6 +31,8 @@ are not here: write code that reads like the file you are editing.
   generated clients stay in their separate module. Missing dependency annotation metadata belongs
   on the needed compile-only classpath, not in lint suppressions or annotation processors.
 - **Error Prone fails compilation** on an unnecessary fully qualified name or a wildcard import.
+  Lombok expands `@Builder.Default` to its fully qualified name before Error Prone runs, so import
+  `lombok.Builder.Default` and write `@Default`.
 - **One build invocation per checkout at a time.** Gradle owns the module `build/` directories.
 - **Tests always execute when requested.** Test result caching and up-to-date skipping are disabled;
   PostgreSQL, containers and provider state are not content-addressed inputs. Compilation remains

@@ -141,16 +141,17 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
                 .hasMessageContaining(version);
     }
 
-    @Test
-    void shouldAuthorizeCaptureForAutomatedPracticeReview() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldAuthorizeCaptureWhenTheCatalogPermitsAutomatedPracticeReview(boolean permitted) {
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
         JobFolderIndexBuilder target = new JobFolderIndexBuilder(
                 mapper, catalogs, new PracticePreconditionEvaluator(mapper), NO_FENCE, Clock.systemUTC());
         SourceContractVersion version = new SourceContractVersion("1.3.0");
         when(catalogs.isSourceUsePermitted(version, DIFF, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
-                .thenReturn(true);
+                .thenReturn(permitted);
 
-        assertThat(target.isSourceUsePermitted(version, DIFF)).isTrue();
+        assertThat(target.isSourceUsePermitted(version, DIFF)).isEqualTo(permitted);
     }
 
     @Test

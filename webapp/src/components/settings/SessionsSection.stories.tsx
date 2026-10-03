@@ -1,16 +1,22 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, fn, within } from "storybook/test";
 
-import { noSessions, sessionsError, sessionsPending } from "@/mocks/handlers";
+import { storySessions } from "@/stories/sessions-story-mock-data";
 
 import { SessionsSection } from "./SessionsSection";
 
 const meta = {
 	component: SessionsSection,
-	parameters: {
-		layout: "centered",
-		// One MSW worker answers a whole Docs page, so each story gets its own frame.
-		docs: { story: { inline: false, height: "600px" } },
+	parameters: { layout: "centered" },
+	args: {
+		state: {
+			status: "ready",
+			sessions: storySessions,
+			revokingJti: null,
+			revokingOthers: false,
+			onRevoke: fn(),
+			onRevokeOthers: fn(),
+		},
 	},
 	tags: ["autodocs"],
 } satisfies Meta<typeof SessionsSection>;
@@ -22,13 +28,30 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(
-			await canvas.findByRole("listitem", { name: "Browser extension in Chrome on macOS" }),
+			canvas.getByRole("listitem", { name: "Browser extension in Chrome on macOS" }),
 		).toBeVisible();
+		const current = canvas.getByRole("listitem", { name: "Chrome on macOS" });
+		await expect(within(current).getByText("This device")).toBeVisible();
+		await expect(within(current).getByRole("button", { name: "Current session" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Sign out 3 other sessions" })).toBeEnabled();
+	},
+};
+
+/** Only the session being revoked waits; every other row stays actionable. */
+export const Revoking: Story = {
+	args: { state: { ...meta.args.state, revokingJti: "sess-other-002" } },
+	play: async ({ canvas }) => {
+		const revoking = canvas.getByRole("listitem", { name: "Firefox on Linux" });
+		await expect(
+			within(revoking).getByRole("button", { name: "Revoke this session" }),
+		).toBeDisabled();
+		const other = canvas.getByRole("listitem", { name: "Safari on iOS" });
+		await expect(within(other).getByRole("button", { name: "Revoke this session" })).toBeEnabled();
 	},
 };
 
 export const Loading: Story = {
-	parameters: { msw: { handlers: [sessionsPending] } },
+	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("list", { name: "Loading sessions" })).toHaveAttribute(
 			"aria-busy",
@@ -39,16 +62,25 @@ export const Loading: Story = {
 	},
 };
 
+/** No other device to sign out, so there is no button for it. */
 export const Empty: Story = {
-	parameters: { msw: { handlers: [noSessions] } },
+	args: { state: { ...meta.args.state, sessions: [] } },
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText("No active sessions found.")).toBeVisible();
+		await expect(canvas.getByText("No active sessions found.")).toBeVisible();
+		await expect(canvas.queryByRole("button")).toBeNull();
 	},
 };
 
 export const ErrorState: Story = {
-	parameters: { msw: { handlers: [sessionsError] } },
+	args: {
+		state: {
+			status: "error",
+			error: { detail: "The session store is unavailable." },
+			onRetry: fn(),
+		},
+	},
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText(/Failed to load sessions/iu)).toBeVisible();
+		await expect(canvas.getByRole("alert")).toHaveTextContent("Could not load sessions");
+		await expect(canvas.getByRole("button", { name: "Retry" })).toBeVisible();
 	},
 };

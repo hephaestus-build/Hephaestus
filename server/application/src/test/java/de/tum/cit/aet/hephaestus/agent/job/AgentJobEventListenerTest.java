@@ -384,7 +384,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldSubmitWhenGateReturnsDetect() {
+        void shouldSubmitWhenGateReturnsRun() {
             var prData = createPrData(Issue.State.OPEN, false, false);
             var event = new ScmDomainEvent.PullRequestCreated(prData, webhookContext(99L));
 
@@ -878,7 +878,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
         }
 
         @Test
-        void listenerWithRealGateSubmitsOnDetectCarryingTheGatesTrigger() {
+        void listenerWithRealGateSubmitsOnRunCarryingTheGatesTrigger() {
             var fixture = CollaborationFixture.create(agentJobService, pullRequestRepository, signalRecorder);
 
             Workspace workspace = new Workspace();

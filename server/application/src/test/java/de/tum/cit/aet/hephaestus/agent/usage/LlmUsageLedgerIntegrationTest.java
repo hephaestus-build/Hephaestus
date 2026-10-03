@@ -196,7 +196,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
      * Give the workspace a PRACTICE_REVIEW binding funded by {@code fundingSource} — submission
      * resolves it first, because the cap that applies is the one belonging to whoever pays for it.
      */
-    private WorkspaceAgentBinding bindDetectionTo(Workspace workspace, FundingSource fundingSource) {
+    private WorkspaceAgentBinding bindPracticeReviewTo(Workspace workspace, FundingSource fundingSource) {
         workspace.getFeatures().setPracticesEnabled(true);
         workspaceRepository.save(workspace);
         var practice = new Practice();
@@ -412,7 +412,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         Workspace workspace = setupWorkspace("ledger-block");
         workspace.setMonthlyLlmBudgetUsd(new BigDecimal("0.50"));
         workspaceRepository.save(workspace);
-        bindDetectionTo(workspace, FundingSource.INSTANCE);
+        bindPracticeReviewTo(workspace, FundingSource.INSTANCE);
         LlmPriceSnapshot price = pricedInstance("500.00", "0.00"); // $0.50 per 1000 input tokens
         record(workspace.getId(), agentSample(UUID.randomUUID(), 0, 1000, price));
         double blockedBefore = blockedCount("instance");
@@ -425,11 +425,11 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** Work funded by the workspace can still be queued when the instance-funded allowance is exhausted. */
     @Test
-    void submitIsNotBlockedByTheInstanceCapWhenDetectionRunsOnTheWorkspacesOwnProvider() {
+    void submitIsNotBlockedByTheInstanceCapWhenPracticeReviewRunsOnTheWorkspacesOwnProvider() {
         Workspace workspace = setupWorkspace("ledger-block-byo-open");
         workspace.setMonthlyLlmBudgetUsd(new BigDecimal("0.50")); // host cap already reached
         workspaceRepository.save(workspace);
-        bindDetectionTo(workspace, FundingSource.WORKSPACE);
+        bindPracticeReviewTo(workspace, FundingSource.WORKSPACE);
         record(workspace.getId(), agentSample(UUID.randomUUID(), 0, 1000, pricedInstance("500.00", "0.00")));
         double instanceBlockedBefore = blockedCount("instance");
         double byoBlockedBefore = blockedCount("byo");
@@ -442,11 +442,11 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void submitIsBlockedByTheWorkspacesOwnCapForOwnProviderDetection() {
+    void submitIsBlockedByTheWorkspacesOwnCapForOwnProviderPracticeReview() {
         Workspace workspace = setupWorkspace("ledger-block-byo");
         workspace.setMonthlyByoLlmBudgetUsd(BigDecimal.ZERO); // an immediate pause switch
         workspaceRepository.save(workspace);
-        bindDetectionTo(workspace, FundingSource.WORKSPACE);
+        bindPracticeReviewTo(workspace, FundingSource.WORKSPACE);
         double blockedBefore = blockedCount("byo");
 
         var job = agentJobService.submit(workspace.getId(), AgentJobType.PULL_REQUEST_REVIEW, reviewRequest(), null);
@@ -456,11 +456,11 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void theWorkspacesOwnCapNeverPausesSharedModelDetection() {
+    void theWorkspacesOwnCapNeverPausesSharedModelPracticeReview() {
         Workspace workspace = setupWorkspace("ledger-byo-cap-instance-work");
         workspace.setMonthlyByoLlmBudgetUsd(BigDecimal.ZERO);
         workspaceRepository.save(workspace);
-        bindDetectionTo(workspace, FundingSource.INSTANCE);
+        bindPracticeReviewTo(workspace, FundingSource.INSTANCE);
         double instanceBlockedBefore = blockedCount("instance");
         double byoBlockedBefore = blockedCount("byo");
 

@@ -192,7 +192,7 @@ public class AgentJobEventListener {
      *
      * <p>The ledger settles the first question for everyone: whichever observer of an occurrence gets
      * there first is told to act, and the rest stop here. That is what makes deduplication outlast the
-     * job, so a webhook redelivered after the review completed no longer re-runs it.
+     * job, so a webhook redelivered after the review completed does not re-run it.
      */
     private void dispatch(
             ScmEventPayload.PullRequestData prData,

@@ -95,7 +95,7 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
 
     @Test
     void prod_existingUnsealedRow_failsClosed() {
-        // A legacy v0-unsealed row must fail closed at both the startup assertion and the signing path.
+        // An unsealed v0 row must fail closed at both the startup assertion and the signing path.
         // ensureActiveKey() is intentionally NOT the guard here: it runs inside AuthJwtConfig's
         // swallowing @PostConstruct, so making it the guard would be inert — the exact bug this pins.
         JwtSigningKeySealer sealer = new JwtSigningKeySealer(systemKey(KEY, "prod"));
