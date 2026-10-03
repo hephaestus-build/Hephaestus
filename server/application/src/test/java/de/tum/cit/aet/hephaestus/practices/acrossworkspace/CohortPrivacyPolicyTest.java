@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.M
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Row;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Shape;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Split;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Totals;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import java.util.ArrayList;
@@ -116,14 +115,11 @@ class CohortPrivacyPolicyTest {
     }
 
     @Test
-    @DisplayName("the observed total shows from three others, the eligible one while the difference is none or three")
-    void shouldShowEachTotalOnlyWhileItHoldsThreeOthers() {
-        assertThat(CohortPrivacyPolicy.totals(20, 17, true, true)).isEqualTo(new Totals(21, 18));
-        assertThat(CohortPrivacyPolicy.totals(20, 20, true, false)).isEqualTo(new Totals(21, 20));
-        // Two others without a standing would be named by the difference, so the eligible total is held back.
-        assertThat(CohortPrivacyPolicy.totals(20, 18, true, true)).isEqualTo(new Totals(null, 19));
-        // Two others observed: the observed total is held back, and with it nothing to subtract from.
-        assertThat(CohortPrivacyPolicy.totals(6, 2, true, true)).isEqualTo(new Totals(7, null));
+    @DisplayName("the observed total shows from three others, the reader counted in it")
+    void shouldShowTheObservedTotalOnlyWhileItHoldsThreeOthers() {
+        assertThat(CohortPrivacyPolicy.observedTotal(17, true)).isEqualTo(18);
+        assertThat(CohortPrivacyPolicy.observedTotal(3, false)).isEqualTo(3);
+        assertThat(CohortPrivacyPolicy.observedTotal(2, true)).isNull();
     }
 
     @Test

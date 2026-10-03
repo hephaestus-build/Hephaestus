@@ -26,8 +26,6 @@ const LAST_OPPORTUNITY = "2026-09-20T09:00:00Z";
 const wire = (window: PracticesAcrossWorkspace["window"]): Wire<PracticesAcrossWorkspace> => ({
 	...ACROSS_WORKSPACE,
 	window,
-	since: undefined,
-	until: ACROSS_WORKSPACE.until.toISOString(),
 	// The trend's support carries its dates as the server sends them, so the transformer is proven.
 	groups: ACROSS_WORKSPACE.groups.map(({ yourTrendSupport, ...group }) => ({
 		...group,

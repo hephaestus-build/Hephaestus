@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto;
 
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.PracticesAcrossWorkspaceWindow;
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -14,21 +13,8 @@ public record PracticesAcrossWorkspaceDTO(
         @NonNull @Schema(description = "The window the evidence was read over")
         PracticesAcrossWorkspaceWindow window,
 
-        @Nullable @Schema(description = "Start of the window; absent for ALL_TIME, which has none")
-        Instant since,
-
-        @NonNull @Schema(description = "End of the window, the moment the page was read")
-        Instant until,
-
         @NonNull @Schema(description = "The fewest developers other than the reader a shown count stands for")
         Integer minimumOthers,
-
-        @Nullable
-        @Schema(
-                description = "Members practice review is eligible for, hidden members left out; absent while the"
-                        + " eligible developers without a standing other than the reader would be 1 to"
-                        + " minimumOthers - 1")
-        Integer eligibleDevelopers,
 
         @Nullable
         @Schema(

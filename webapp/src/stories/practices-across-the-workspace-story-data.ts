@@ -5,8 +5,6 @@ import type {
 	WorkspaceSplit,
 } from "@/api/types.gen";
 
-import { daysBefore, STORY_NOW } from "./story-clock";
-
 type Group = Pick<WorkspaceGroupSplit, "groupSlug" | "groupName" | "groupIcon" | "groupColor">;
 
 const ACTING: Group = {
@@ -138,15 +136,12 @@ export const PACKAGING_GROUP: WorkspaceGroupSplit = {
 };
 
 /**
- * Eight practice groups over 28 of 33 developers. Every part shown, none yet included, holds at
+ * Eight practice groups over 28 observed developers. Every part shown, none yet included, holds at
  * least six developers, as the privacy rule requires, so it stands for five besides any reader.
  */
 export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	window: "DAYS_30",
-	since: daysBefore(30),
-	until: new Date(STORY_NOW),
 	minimumOthers: 3,
-	eligibleDevelopers: 33,
 	observedDevelopers: 28,
 	readerCounted: true,
 	yourPractices: 18,
@@ -169,7 +164,6 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 /** Four other developers observed: too few for any figure about the workspace, even a total. */
 export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
 	...ACROSS_WORKSPACE,
-	eligibleDevelopers: 33,
 	observedDevelopers: undefined,
 	reviewedWork: { yours: 17 },
 	practicesGoingWell: { yours: 6 },

@@ -15,9 +15,8 @@ import org.jspecify.annotations.Nullable;
  * more than {@link #MINIMUM_OTHERS} developers, counted over every observed developer: whoever reads it, that part
  * holds at least {@link #MINIMUM_OTHERS} others, and every reader sees the same shape.
  *
- * <p>The observed total shows only while it holds {@link #MINIMUM_OTHERS} others, and the eligible total beside it
- * only while the others without a standing are none or {@link #MINIMUM_OTHERS}. A practice group and a practice are
- * split by the same rule, over the same observed developers: each developer falls in one {@link Bucket}, read off
+ * <p>The observed total shows only while it holds {@link #MINIMUM_OTHERS} others. A practice group and a practice
+ * are split by the same rule, over the same observed developers: each developer falls in one {@link Bucket}, read off
  * their group standing or their practice standing. A split shows Needs attention, Mixed feedback, Going well and
  * none yet only when every one of the four holds enough; otherwise the whole split is withheld, never a part of it,
  * since the page states how many developers were observed and a missing part would be that total less the rest.
@@ -26,8 +25,9 @@ import org.jspecify.annotations.Nullable;
  * <p>A group's standing is read off its practices, so its has a standing is everyone with a standing in any of
  * them, and its split and its practices' splits can be subtracted from each other: two practices of sixteen and a
  * group of thirty one name the one developer with a standing in both. A practice therefore shows only while the
- * developers its group has and it lacks are none or {@link #MINIMUM_OTHERS}, and a group's practices show only
- * while the overlap they add up to beyond the group is none or {@link #MINIMUM_OTHERS} ({@link #group}).
+ * developers its group has and it lacks are none or at least {@link #MINIMUM_OTHERS}, and a group's practices show
+ * only while the overlap they add up to beyond the group is none or at least {@link #MINIMUM_OTHERS}
+ * ({@link #group}).
  *
  * <p>Each window is checked on its own and the figures are live, so two windows, or two reads at different times,
  * can still be subtracted from each other; ADR 0051 records that limit.
@@ -87,24 +87,14 @@ public final class CohortPrivacyPolicy {
         static final Split WITHHELD = new Split(Shape.WITHHELD, null, null, null, null);
     }
 
-    /** The page's two totals, the reader included where the reader belongs; each null while held back. */
-    public record Totals(
-            @Nullable Integer eligible, @Nullable Integer observed) {}
-
     /**
-     * The eligible and observed totals as they may be shown: the observed total only while it holds K others, and
-     * the eligible total only while the others it adds to the observed total are none or K.
+     * The observed total as it may be shown, the reader included when the reader is counted: only while it holds K
+     * others, otherwise null.
      *
-     * @param eligibleOthers eligible developers other than the reader
      * @param observedOthers observed developers other than the reader
      */
-    public static Totals totals(int eligibleOthers, int observedOthers, boolean readerEligible, boolean readerCounted) {
-        int unobservedOthers = eligibleOthers - observedOthers;
-        boolean observedShows = observedOthers >= MINIMUM_OTHERS;
-        boolean eligibleShows = !observedShows || unobservedOthers == 0 || unobservedOthers >= MINIMUM_OTHERS;
-        return new Totals(
-                eligibleShows ? eligibleOthers + (readerEligible ? 1 : 0) : null,
-                observedShows ? observedOthers + (readerCounted ? 1 : 0) : null);
+    public static @Nullable Integer observedTotal(int observedOthers, boolean readerCounted) {
+        return observedOthers >= MINIMUM_OTHERS ? observedOthers + (readerCounted ? 1 : 0) : null;
     }
 
     /**
@@ -120,9 +110,9 @@ public final class CohortPrivacyPolicy {
      * The splits of one practice group and its practices.
      *
      * <p>Each split is first decided on its own. Then the cells a reader can work out by inclusion and exclusion
-     * must each hold none or K developers: a practice is withheld where its has a standing falls short of its
-     * group's by 1 to K - 1, and every practice of the group is withheld where the practices shown add up to 1 to
-     * K - 1 more developers with a standing than the group has, which is how many hold a standing in more than
+     * must each hold none or at least K developers: a practice is withheld where its has a standing falls short of
+     * its group's by 1 to K - 1, and every practice of the group is withheld where the practices shown add up to 1
+     * to K - 1 more developers with a standing than the group has, which is how many hold a standing in more than
      * one of them. The group's own split stands, since on its own every part it shows already holds enough.
      *
      * @param observed every observed developer's buckets, the reader's included when the reader is observed
@@ -156,7 +146,7 @@ public final class CohortPrivacyPolicy {
         return new GroupRelease(group, practices);
     }
 
-    /** Whether a cell two shown splits let a reader work out is none or K, or not worked out at all. */
+    /** Whether a cell two shown splits let a reader work out is none or at least K, or not worked out at all. */
     private static boolean safeCell(int developers, Split one, Split other) {
         if (one.shape() == Shape.WITHHELD || other.shape() == Shape.WITHHELD) {
             return true;

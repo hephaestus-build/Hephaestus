@@ -106,8 +106,6 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .jsonPath("$.minimumOthers")
                 .isEqualTo(3)
                 // The owner, the reader and twenty six developers are eligible, and every one of them was reviewed.
-                .jsonPath("$.eligibleDevelopers")
-                .isEqualTo(28)
                 .jsonPath("$.observedDevelopers")
                 .isEqualTo(28)
                 .jsonPath("$.readerCounted")
@@ -269,11 +267,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         read("DAYS_30")
                 .jsonPath("$.window")
                 .isEqualTo("DAYS_30")
-                // The owner's only standing moved out of the window: one other unobserved holds the eligible total.
+                // The owner's only standing moved out of the window.
                 .jsonPath("$.observedDevelopers")
                 .isEqualTo(27)
-                .jsonPath("$.eligibleDevelopers")
-                .doesNotExist()
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.shape")
                 .isEqualTo("WITHHELD")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
@@ -294,8 +290,6 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
         read("DAYS_90").jsonPath("$.observedDevelopers").doesNotExist();
         read("ALL_TIME")
-                .jsonPath("$.since")
-                .doesNotExist()
                 .jsonPath("$.observedDevelopers")
                 .isEqualTo(28)
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.shape")
@@ -345,8 +339,6 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         }
 
         read("ALL_TIME")
-                .jsonPath("$.eligibleDevelopers")
-                .isEqualTo(26)
                 .jsonPath("$.observedDevelopers")
                 .isEqualTo(26)
                 // Two of the six at Needs attention are hidden, which leaves four there: still a part of its own.

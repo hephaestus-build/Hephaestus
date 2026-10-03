@@ -4205,10 +4205,6 @@ export type PracticeWorkTypeDefinitionOptions = {
  */
 export type PracticesAcrossWorkspace = {
   /**
-   * Members practice review is eligible for, hidden members left out; absent while the eligible developers without a standing other than the reader would be 1 to minimumOthers - 1
-   */
-  eligibleDevelopers?: number;
-  /**
    * One row per practice group shown on the practice pages, in catalog order
    */
   groups: Array<WorkspaceGroupSplit>;
@@ -4240,14 +4236,6 @@ export type PracticesAcrossWorkspace = {
    * Pieces of the reader's work reviewed in the window
    */
   reviewedWork: WorkspaceTile;
-  /**
-   * Start of the window; absent for ALL_TIME, which has none
-   */
-  since?: string;
-  /**
-   * End of the window, the moment the page was read
-   */
-  until: string;
   /**
    * The window the evidence was read over
    */

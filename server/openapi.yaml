@@ -16009,12 +16009,6 @@ components:
         \ observed in the workspace split across the same groups, counted in developers\
         \ and never naming one"
       properties:
-        eligibleDevelopers:
-          type: integer
-          format: int32
-          description: "Members practice review is eligible for, hidden members left\
-            \ out; absent while the eligible developers without a standing other than\
-            \ the reader would be 1 to minimumOthers - 1"
         groups:
           type: array
           description: "One row per practice group shown on the practice pages, in\
@@ -16050,14 +16044,6 @@ components:
         reviewedWork:
           $ref: "#/components/schemas/WorkspaceTile"
           description: Pieces of the reader's work reviewed in the window
-        since:
-          type: string
-          format: date-time
-          description: "Start of the window; absent for ALL_TIME, which has none"
-        until:
-          type: string
-          format: date-time
-          description: "End of the window, the moment the page was read"
         window:
           type: string
           description: The window the evidence was read over
@@ -16078,7 +16064,6 @@ components:
       - practicesNeedingAttention
       - readerCounted
       - reviewedWork
-      - until
       - window
       - yourPractices
     PreviewRequest:

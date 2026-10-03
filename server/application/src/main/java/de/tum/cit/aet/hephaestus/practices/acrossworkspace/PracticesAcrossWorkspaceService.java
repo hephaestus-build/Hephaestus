@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.B
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.GroupRelease;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Row;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Totals;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspacePracticeSplitDTO;
@@ -61,8 +60,8 @@ public class PracticesAcrossWorkspaceService {
     @Transactional(readOnly = true)
     public PracticesAcrossWorkspaceDTO read(WorkspaceContext context, PracticesAcrossWorkspaceWindow window) {
         Long workspaceId = context.id();
-        Instant until = clock.instant();
-        @Nullable Instant since = window.since(until);
+        Instant now = clock.instant();
+        @Nullable Instant since = window.since(now);
 
         // Hidden members are left out of every workspace total, so they are left out of these counts too.
         Set<Long> eligible = new LinkedHashSet<>(membershipService.practiceReviewEligibleUserIds(workspaceId));
@@ -73,7 +72,7 @@ public class PracticesAcrossWorkspaceService {
             read.add(reader);
         }
         Map<Long, StandingSnapshot> snapshots = practiceStandingService.getWorkspaceStandingSnapshots(
-                workspaceId, read, since == null ? Instant.EPOCH : since, until);
+                workspaceId, read, since == null ? Instant.EPOCH : since, now);
         StandingSnapshot yours = reader == null ? NOTHING_READ : snapshots.getOrDefault(reader, NOTHING_READ);
 
         List<PracticeGroup> groups = practiceGroupService.listGroups(context, true);
@@ -89,8 +88,6 @@ public class PracticesAcrossWorkspaceService {
         boolean readerEligible = reader != null && eligible.contains(reader);
         boolean readerCounted = reader != null && observed.contains(reader);
         int others = observed.size() - (readerCounted ? 1 : 0);
-        Totals totals = CohortPrivacyPolicy.totals(
-                eligible.size() - (readerEligible ? 1 : 0), others, readerEligible, readerCounted);
 
         Map<String, PracticeGroupStandingDTO> yourGroups =
                 practiceGroupStandingService.summarize(groups, yours).stream()
@@ -142,7 +139,7 @@ public class PracticesAcrossWorkspaceService {
         if (reader != null) {
             recipients.add(reader);
         }
-        Map<Long, Integer> openFeedback = inAppFeedbackService.countOpen(workspaceId, recipients, until);
+        Map<Long, Integer> openFeedback = inAppFeedbackService.countOpen(workspaceId, recipients, now);
         MiddleHalf openMiddle = CohortPrivacyPolicy.middleHalf(
                 eligible.stream()
                         .map(developer -> openFeedback.getOrDefault(developer, 0))
@@ -150,11 +147,8 @@ public class PracticesAcrossWorkspaceService {
                 eligible.size() - (readerEligible ? 1 : 0));
         return new PracticesAcrossWorkspaceDTO(
                 window,
-                since,
-                until,
                 CohortPrivacyPolicy.MINIMUM_OTHERS,
-                totals.eligible(),
-                totals.observed(),
+                CohortPrivacyPolicy.observedTotal(others, readerCounted),
                 readerCounted,
                 yours.practices().size(),
                 tile(yours, observedSnapshots, others, PracticesAcrossWorkspaceService::reviewedWork),

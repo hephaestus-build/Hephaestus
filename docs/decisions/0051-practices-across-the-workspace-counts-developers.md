@@ -51,8 +51,7 @@ attention, Mixed feedback and Going well, counted in developers.
   that total less the rest. Omit rather than show a small number. Each window (the last 30 days, the
   last 90 days, all time) is checked on its own. *All time* reads every observation, with no lower
   bound. The page opens on the last 30 days.
-- The observed total shows only while it holds three others, and the eligible total beside it only
-  while the others it adds are none or three, since their difference is a count of its own.
+- The observed total shows only while it holds three others.
 - A group's practices are split by the same rule over the same observed developers. Because a
   group's developers with a standing are everyone with a standing in any of its practices, the cells
   a reader can work out by subtraction must each hold none or at least three: a practice whose
