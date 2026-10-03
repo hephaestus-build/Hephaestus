@@ -50,7 +50,7 @@ section before any rule file.
 
 `async-defer-await`, `async-parallel`, `async-dependencies`, `bundle-barrel-imports`,
 `bundle-defer-third-party`, `bundle-conditional`, `bundle-preload`, `client-event-listeners`.
-every `rerender-*` except `rerender-memo`. Every `rendering-*` except `rendering-hydration-no-flicker`
+Every `rerender-*` except `rerender-memo`. Every `rendering-*` except `rendering-hydration-no-flicker`
 (this includes `rendering-activity` — React is 19.2+, so `<Activity>` exists). Every `js-*`. Every
 `advanced-*`.
 
