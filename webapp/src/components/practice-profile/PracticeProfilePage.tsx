@@ -215,7 +215,7 @@ export function PracticeProfilePage({
 						<span className="pb-2 text-sm text-muted-foreground">Newest first</span>
 					</PracticeTabsRail>
 					<TabsContent value={feedbackTab}>
-						<div className="flex flex-col gap-3">
+						<div className="flex flex-col gap-3" aria-busy={isLoading}>
 							{isLoading &&
 								// Two cards' worth, the "Newest" tab's count, so the list does not jump.
 								Array.from({ length: NEWEST_CARD_COUNT }, (_, index) => (
