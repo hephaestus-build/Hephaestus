@@ -357,7 +357,7 @@ void test("a change with no reference anywhere says what it scanned and what the
 	}
 });
 
-void test("a print beside an existing logger is a lead, a print under a scripts path is marked as tool output", async () => {
+void test("native platform logging is a logger and standard output a print, a print under a scripts path is marked as tool output", async () => {
 	const { root, script } = await stage("logs-through-the-platform-logger");
 	try {
 		writeFileSync(
@@ -369,25 +369,45 @@ void test("a print beside an existing logger is a lead, a print under a scripts 
 			new Map([
 				whole(
 					"App/Store.swift",
-					'final class Store {\n    func load() {\n        print("loading")\n        logger.info("loaded")\n    }\n}\n',
+					'final class Store {\n    func load() {\n        print("loading")\n        logger.info("loaded")\n        NSLog("loaded %d", count)\n    }\n}\n',
+				),
+				whole(
+					"App/Sync.m",
+					'- (void)sync {\n    NSLog(@"synced %@", name);\n    os_log_error(OS_LOG_DEFAULT, "sync failed");\n    printf("synced");\n}\n',
+				),
+				whole(
+					"app/src/main/java/com/example/Feed.kt",
+					'class Feed {\n    fun load() {\n        Log.d("Feed", "loaded")\n        println("loaded")\n    }\n}\n',
+				),
+				whole(
+					"app/src/main/java/com/example/Cache.java",
+					'class Cache {\n    void evict() {\n        Log.w(TAG, "evicted");\n        System.out.println("evicted");\n    }\n}\n',
 				),
 				whole("scripts/report.py", 'print("done")\n'),
 			]),
 			metadata,
 		);
 		assert.deepEqual(result.metrics, {
-			printsAdded: 2,
-			loggerCallsAdded: 1,
+			printsAdded: 5,
+			loggerCallsAdded: 6,
 			printsInToolPaths: 1,
 			checkoutHasLogger: 1,
-			filesScanned: 2,
-			linesAdded: 9,
+			filesScanned: 5,
+			linesAdded: 30,
 		});
 		assert.deepEqual(
 			result.hints.map((h) => [h.pattern, h.flags.kind, h.flags.toolPath]),
 			[
 				["swift:print(", "print", false],
 				["swift:Logger", "logger", false],
+				["swift:NSLog", "logger", false],
+				["objective-c:NSLog", "logger", false],
+				["objective-c:os_log", "logger", false],
+				["objective-c:printf(", "print", false],
+				["kotlin:android.util.Log", "logger", false],
+				["kotlin:println(", "print", false],
+				["java:android.util.Log", "logger", false],
+				["java:System.out/err", "print", false],
 				["python:print(", "print", true],
 			],
 		);

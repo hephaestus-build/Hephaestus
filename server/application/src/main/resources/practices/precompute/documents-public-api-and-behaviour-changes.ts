@@ -1,13 +1,12 @@
 // Precompute HINTS for documents-public-api-and-behaviour-changes. Surfaces FACTS ONLY — the LLM judges.
 //
-// The observation hinges on a STRUCTURAL fact a diff hunk alone cannot reveal: does the repo even SHIP a public
-// product (library/framework), and are the symbols touched in the diff actually EXPORTED (part of that public
-// surface) or merely internal/private? An app-only repo with no library product has no public API to document,
-// and a modifier-less Swift declaration is INTERNAL — not public. We surface {hasPublicProduct,
-// changedPublicSymbols, changedInternalSymbols} and let the model decide whether documentation was owed.
-// Treating modifier-less Swift as public on an app-only repo yields false negative observations, so the
-// export-status table classifies it as internal. The table is keyed off file extension: adding a language =
-// one row, no engine change.
+// Two STRUCTURAL leads a diff hunk alone cannot reveal: whether a manifest declares a library/framework
+// product, and whether the declarations the diff adds are EXPORTED or internal/private. Neither settles the
+// public surface: an app without a library product can still expose an HTTP, configuration or wire contract
+// to separate consumers, which the review investigates. A modifier-less Swift declaration is INTERNAL — not
+// public — so the export-status table classifies it as internal. We surface {hasPublicProduct,
+// changedPublicSymbols, changedInternalSymbols} and let the model decide whether documentation was owed. The
+// table is keyed off file extension: adding a language = one row, no engine change.
 import { isCommentLine } from "../lib/declarations.ts";
 import { findFiles, readFileLines } from "../lib/grep.ts";
 import { languageOf } from "../lib/languages.ts";
@@ -17,7 +16,7 @@ import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 // Each manifest filename maps to a predicate over its raw text that answers "does this declare a consumable
 // library/framework product?". One row per ecosystem; the predicate stays neutral (a structural test, no observation).
 const PRODUCT_MANIFESTS: [RegExp, (text: string) => boolean][] = [
-	// Swift Package Manager: a `.library(...)` product (executables/apps don't expose a public API surface).
+	// Swift Package Manager: a `.library(...)` product.
 	[/(?:^|\/)Package\.swift$/u, (t) => /\.library\s*\(/u.test(t)],
 	// npm: a non-private package that declares an entry/types surface for consumers.
 	[
