@@ -1652,6 +1652,47 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldRefuseAClosureWhenItsSnapshotChangesAfterPreparation() {
+            when(reviewTargets.findIssue(999L))
+                    .thenReturn(Optional.of(new ReviewTargetQuery.Target(123L, "owner/repo", 12, 789L, false)));
+            ObjectNode metadata = objectMapper.createObjectNode();
+            metadata.put("artifact_kind", ArtifactKinds.ISSUE.value());
+            metadata.put("issue_id", 999L);
+            metadata.put("repository_id", 123L);
+            metadata.put("repository_full_name", "owner/repo");
+            metadata.put("issue_number", 12);
+            metadata.put("signal", "scm.issue.closed");
+            metadata.put("review_snapshot_id", UUID.randomUUID().toString());
+            testJob.setMetadata(metadata);
+            var prepared = service.prepare(testJob, List.of(validObservation("pr-description-quality", Outcome.MET)));
+            when(observationRepository.lockIssueSnapshotForReview(1L, testJob.getId(), 999L))
+                    .thenReturn(Optional.of(UUID.randomUUID()));
+
+            assertThatThrownBy(() -> service.publish(testJob, prepared))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("Issue changed after this review was submitted");
+            verify(observationRepository, never())
+                    .insertIfAbsent(
+                            any(),
+                            anyString(),
+                            any(),
+                            anyLong(),
+                            anyLong(),
+                            anyLong(),
+                            anyString(),
+                            anyLong(),
+                            anyLong(),
+                            anyString(),
+                            anyString(),
+                            anyString(),
+                            any(),
+                            any(),
+                            anyString(),
+                            any(),
+                            anyString());
+        }
+
+        @Test
         void refusesAKindWithNoDeliveryRoute() {
             ObjectNode meta = new ObjectMapper().createObjectNode();
             meta.put("artifact_kind", "wiki.page");

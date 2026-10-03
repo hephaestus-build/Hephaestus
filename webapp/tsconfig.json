@@ -12,6 +12,7 @@
 		"types": ["vite/client"],
 		/* Bundler mode */
 		"moduleResolution": "bundler",
+		"resolveJsonModule": true,
 		"allowImportingTsExtensions": true,
 		"verbatimModuleSyntax": true,
 		"noEmit": true,
@@ -29,7 +30,10 @@
 		"allowUnusedLabels": false,
 		"paths": {
 			"@/brand/*": ["./brand/*"],
-			"@/*": ["./src/*"]
+			"@/*": ["./src/*"],
+			"@bundled-practices": [
+				"../server/application/src/main/resources/practices/default-catalog.json"
+			]
 		}
 	}
 }

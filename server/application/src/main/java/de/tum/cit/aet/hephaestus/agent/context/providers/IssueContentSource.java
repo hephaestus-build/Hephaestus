@@ -16,22 +16,21 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewContextBuilder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.StoredComment;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -79,12 +78,17 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
 
     private final IssueRepository issueRepository;
     private final IssueCommentRepository issueCommentRepository;
+    private final IssueEvidenceRevision revisions;
 
     public IssueContentSource(
-            ObjectMapper objectMapper, IssueRepository issueRepository, IssueCommentRepository issueCommentRepository) {
+            ObjectMapper objectMapper,
+            IssueRepository issueRepository,
+            IssueCommentRepository issueCommentRepository,
+            IssueEvidenceRevision revisions) {
         this.objectMapper = objectMapper;
         this.issueRepository = issueRepository;
         this.issueCommentRepository = issueCommentRepository;
+        this.revisions = revisions;
     }
 
     @Override
@@ -123,17 +127,33 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
         if (issue == null || issue.getDeletedAt() != null) {
             return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
         }
-        if (ScmSignals.ISSUE_UPDATED.value().equals(metadata.path("signal").asString())) {
+        // Source absence codes belong to a versioned contract. A stale admission uses NOT_FOUND.
+        String signal = metadata.path("signal").asString();
+        if (ScmSignals.ISSUE_UPDATED.value().equals(signal)) {
             String admittedRevision =
                     metadata.path(AgentJob.SIGNAL_REVISION_METADATA_KEY).asString("");
-            String currentRevision = ScmSignals.issueUpdatedRevision(ScmEventPayload.IssueData.from(issue))
-                    .value();
-            // A keyed job with no admission revision predates this fence and cannot be checked against
-            // it; refuse the same way a mismatch does rather than guess which snapshot it meant.
-            // NOT_FOUND rather than a dedicated code: reasonCode is a published artifact-source
-            // contract vocabulary, frozen per version once shipped (immutability check on the 1.0.0
-            // directory), so a new value needs its own contract version, not a quiet addition.
+            String currentRevision =
+                    revisions.of(ScmEventPayload.IssueData.from(issue)).value();
+            // An update without an admission revision cannot identify its evidence.
             if (admittedRevision.isBlank() || !currentRevision.equals(admittedRevision)) {
+                log.info(
+                        "Issue evidence changed since the review was admitted: issueId={}, jobId={}",
+                        issueId,
+                        job.getId());
+                return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
+            }
+        }
+        // The snapshot token distinguishes this close from later edits and reopen/close cycles.
+        if (ScmSignals.ISSUE_CLOSED.value().equals(signal)) {
+            String admittedSnapshot = metadata.path("review_snapshot_id").asString("");
+            UUID currentSnapshot = issue.getReviewSnapshotId();
+            if (admittedSnapshot.isBlank()
+                    || currentSnapshot == null
+                    || !admittedSnapshot.equals(currentSnapshot.toString())) {
+                log.info(
+                        "Issue snapshot changed since the close review was admitted: issueId={}, jobId={}",
+                        issueId,
+                        job.getId());
                 return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
             }
         }
@@ -190,14 +210,15 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
 
         int commentCount = 0;
         if (selectedKinds.contains(COMMENTS)) {
-            CommentCapture commentCapture = recentComments(issueId);
-            List<IssueComment> ordered = commentCapture.comments();
+            CommentCapture commentCapture = reviewedComments(issueId, issue);
+            List<StoredComment> ordered = commentCapture.comments();
             ArrayNode commentsArr = objectMapper.createArrayNode();
-            for (IssueComment c : ordered) {
+            for (StoredComment c : ordered) {
                 ObjectNode cn = objectMapper.createObjectNode();
-                cn.put("author", c.getAuthor() != null ? c.getAuthor().getLogin() : null);
+                cn.put("author", c.getAuthorLogin());
                 cn.put("created_at", c.getCreatedAt() != null ? c.getCreatedAt().toString() : null);
-                cn.put("body", c.getBody() != null ? c.getBody() : "");
+                cn.put("updated_at", c.getUpdatedAt() != null ? c.getUpdatedAt().toString() : null);
+                cn.put("body", c.getBody());
                 commentsArr.add(cn);
             }
             commentCount = ordered.size();
@@ -216,16 +237,17 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
         return new EvidenceContribution(files, completeness, Map.of(), observedAt, Map.of(), contentStates);
     }
 
-    private CommentCapture recentComments(long issueId) {
-        List<IssueComment> comments =
-                new ArrayList<>(issueCommentRepository.findRecentByIssueIdWithAuthor(issueId, Pageable.unpaged()));
-        boolean complete = true;
-        comments.sort(
-                Comparator.comparing(IssueComment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
-        return new CommentCapture(List.copyOf(comments), complete);
+    /**
+     * The discussion the review reads: the mirrored comments, the same ones its update revision digests. A provider
+     * count above what the mirror holds marks it partial, since comments known to exist are missing; a count at or
+     * below it shows only that none known are missing, not that the mirror is current with the provider.
+     */
+    private CommentCapture reviewedComments(long issueId, Issue issue) {
+        long mirrored = issueCommentRepository.countByIssueId(issueId);
+        return new CommentCapture(revisions.reviewedComments(issueId), issue.getCommentsCount() <= mirrored);
     }
 
-    private record CommentCapture(List<IssueComment> comments, boolean complete) {}
+    private record CommentCapture(List<StoredComment> comments, boolean complete) {}
 
     private void writeJson(Map<String, byte[]> files, String name, Object node) {
         try {
