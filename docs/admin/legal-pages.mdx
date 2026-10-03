@@ -8,7 +8,7 @@ Hephaestus ships with two legal pages: `/imprint` and `/privacy`.
 The webapp renders them from Markdown files that nginx serves directly.
 This page explains the webapp's three-layer resolution and each self-hosted operator's responsibilities.
 
-:::danger Configure legal notices before admitting users
+:::caution CAUTION: Configure legal notices before admitting users
 The built-in “not configured” pages are placeholders, not legal notices. Use `LEGAL_PROFILE=tumaet`
 only for the TUM/AET deployment it describes. Other operators must supply their own notices.
 :::
@@ -64,7 +64,7 @@ Every research decision records the organization that the question named in `con
 Consent to a study is consent to the organization that runs it.
 After a rename, no other record identifies the organization that the account saw in the question.
 
-If the setting names a different organization, no account's grant to the previous one authorizes anything.
+If the setting has a different name, no account's grant to the previous one authorizes anything.
 `participatesInResearch` reports false.
 Setup asks the question again.
 Earlier decisions stay in the ledger as a record of the questions and answers at that time.

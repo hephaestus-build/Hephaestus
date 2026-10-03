@@ -46,11 +46,13 @@ Two consecutive stalls end the review with its recorded results.
 If unset, the provider default applies.
 A low temperature does not guarantee repeatable judgments.
 
-1. Use a value that the selected model supports.
-2. Confirm that the deployment forwards the setting.
-3. Evaluate changes against representative cases.
-4. Before an environment-variable change, read the [server configuration](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/application.yml).
-5. Read the [reference Compose files](https://github.com/hephaestus-build/Hephaestus/tree/main/docker).
+Before you change an environment variable:
+
+1. Read the [server configuration](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/application.yml).
+2. Read the [reference Compose files](https://github.com/hephaestus-build/Hephaestus/tree/main/docker).
+3. Use a value that the selected model supports.
+4. Confirm that the deployment forwards the setting.
+5. Evaluate changes against representative cases.
 
 Unknown variables or variables that the deployment does not forward cannot configure the application.
 Repository mirrors and attempt folders are disposable container-local storage, not a shared evidence store.

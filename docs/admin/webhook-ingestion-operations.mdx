@@ -6,33 +6,35 @@ description: Metrics, storage bounds, and recovery for the webhook receiver and 
 
 # Webhook ingestion operations
 
-Hephaestus receives webhooks in a container of its own and buffers every delivery on NATS JetStream
-before anything else reads it. Providers never retry on their own: GitHub keeps a
-[**Redeliver** button](https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/redelivering-webhooks)
-on deliveries from the past three days and retries nothing automatically. Push events on GitHub and
-GitLab are **not** redeliverable at all — that button does not apply to them — so a delivery that is
-dropped between the receiver and the consumer is gone.
+Hephaestus receives webhooks in a separate container.
+It buffers all deliveries on NATS JetStream before anything else reads them.
+Providers never retry on their own.
+GitHub keeps a [**Redeliver** button](https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/redelivering-webhooks) on deliveries from the past three days.
+It retries nothing automatically.
+Push events on GitHub and GitLab are **not** redeliverable at all.
 
-This page is what to watch, what to set, and what to do when it goes wrong. Why it is built this way
-is [ADR 0008](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md).
+That button does not apply to push events.
+A delivery dropped between the receiver and consumer is therefore gone.
+This page explains what to monitor, configure, and do after a failure.
+[ADR 0008](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md) explains the design.
 
 ## Durability and availability
 
 The supported Compose topology runs one NATS server and every webhook stream has one replica (R1).
 The bundled broker sets `sync_interval: always`, so it calls `fsync` for each message before
 acknowledging it. An acknowledged webhook or integration-sync event therefore survives host power
-loss or an unclean shutdown, provided the storage stack honours `fsync`. The
+loss or an unclean shutdown, provided the storage stack honors `fsync`. The
 [NATS durability documentation](https://docs.nats.io/nats-concepts/jetstream#syncing-data-to-disk)
-defines this guarantee; [Jepsen's NATS 2.12.1 analysis](https://jepsen.io/analyses/nats-2.12.1)
-demonstrates the acknowledged-write loss possible with periodic syncing.
+defines this guarantee.  [Jepsen's NATS 2.12.1 analysis](https://jepsen.io/analyses/nats-2.12.1)
+shows the acknowledged-write loss possible with periodic syncing.
 
 Waiting for durable storage costs write throughput and latency. R1 remains unavailable while its
 only server is down, and cannot survive loss or corruption of its only JetStream volume.
 
 A clustered profile with three servers and R3 streams can remain available after one server fails,
 as described by [NATS replicated storage](https://docs.nats.io/nats-concepts/jetstream/replication).
-That profile may use a longer sync interval after evaluating its failure model and latency budget;
-keep `always` to protect acknowledgements from a correlated, unclean shutdown of the whole cluster.
+That profile may use a longer sync interval after an assessment of its failure model and latency budget.
+Keep `always` to protect acknowledgments from a correlated, unclean shutdown of the whole cluster.
 
 ## What to alert on
 
@@ -54,26 +56,30 @@ and poll-age alert rules. The meters below are tagged `stream` with one of
 | `webhook.stream.messages` | gauge | Messages stored. |
 | `webhook.stream.consumers` | gauge | Durable consumers on the stream. |
 
-**No metric counts lost deliveries.** A delivery is lost when the stream sheds it before the consumer
-that needed it has acknowledged it. The gauges above describe what the stream holds now, so zero
-pending means nothing is waiting, not that nothing was lost. Stream positions cannot tell either: each
-consumer reads only its own subjects on a shared stream, so a caught-up consumer's position trails the
-stream's oldest message whenever other subjects are busier. The broker can announce a delivered but
-unacknowledged message it deleted as a consumer advisory; Hephaestus does not subscribe to it.
+**No metric counts lost deliveries.**
+A delivery is lost when the stream removes it before its required consumer acknowledges it.
+The gauges describe what the stream holds now.
+Zero pending means nothing waits, not that nothing was lost.
 
-- **Alert on `webhook.stream.consumer.pending` or `webhook.stream.consumer.ack.pending` staying above
-  zero or growing** for several monitor intervals. Beside `webhook.stream.bytes.utilization` near 1 it
-  is a risk to investigate: at its bound the stream sheds its oldest message on the next publish,
-  whoever still needs it. `webhook.stream.oldest.message.age` is how much history the stream holds, not
-  how long a pending message has left.
-- `webhook.stream.consumers.without.pull.requests` above zero beside a growing backlog points at a
-  consumer nothing is fetching from. On its own it is not an alert.
-- **Alert on `webhook.stream.poll.age`** at a few times your
-  `hephaestus.webhook.stream.monitor-interval` (default 60s). A receiver that cannot reach the broker
-  holds every gauge at its last value, which reads exactly like a current one.
+Stream positions cannot establish loss either.
+Each consumer reads only its own subjects on a shared stream.
+A caught-up consumer therefore trails the stream's oldest message whenever other subjects are busier.
+The broker can announce a delivered but unacknowledged message that it deleted as a consumer advisory.
+Hephaestus does not subscribe to that advisory.
+
+1. Alert if `webhook.stream.consumer.pending` or `webhook.stream.consumer.ack.pending` stays above zero or grows for several monitor intervals.
+2. If `webhook.stream.bytes.utilization` is also near 1, investigate the risk.
+3. Alert on `webhook.stream.poll.age` at a few times `hephaestus.webhook.stream.monitor-interval` (default 60s).
+
+At its bound, the stream removes its oldest message on the next publish, regardless of which consumer still needs it.
+`webhook.stream.oldest.message.age` shows how much history remains, not how long a pending message has left.
+`webhook.stream.consumers.without.pull.requests` above zero with a growing backlog indicates a consumer from which nothing fetches.
+Alone, that value is not an alert.
+A receiver that cannot reach the broker holds all gauges at their last values.
+Those stale values look like current values.
 
 Provider reconciliation restores current source state within each integration's own limits, not every
-event; see
+event. See
 [choosing the broker recovery strategy](./production-operations-runbook.mdx#choose-the-broker-recovery-strategy-before-starting-consumers).
 
 Do not page on `webhook.stream.bytes.utilization`. A healthy stream at its bound sits near 1.0
@@ -97,24 +103,27 @@ Each stream carries two bounds, and **which one binds depends on your traffic**:
   `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` at `10GB`) is the **floor** under it. At the bound the
   broker deletes the oldest messages to admit new ones.
 
-At low volume nothing approaches the byte bound and you get the full 180 days. At high volume the
-byte bound recycles the stream long before that. Neither number tells you which you have — read
-`webhook.stream.oldest.message.age` for your own deployment and treat that as the answer.
+At low volume, nothing approaches the byte bound and retention is the full 180 days.
+At high volume, the byte bound recycles the stream much earlier.
+Neither limit shows your actual retention.
+Read `webhook.stream.oldest.message.age` for your deployment to get that value.
 
-Size the byte bound against **what a shed message costs you**, not against the age ceiling. Nightly
-reconciliation re-fetches the last `MONITORING_TIMEFRAME` days from the provider API, so a delivery
-shed inside that window is recoverable by other means and one shed outside it is recoverable by
-nothing. **If you raise `MONITORING_TIMEFRAME`, raise the byte bounds with it.**
+Nightly reconciliation fetches the last `MONITORING_TIMEFRAME` days from the provider API again.
+Other means can recover a delivery removed inside that window.
+Nothing can recover one removed outside it.
+
+1. Size the byte bound against **the cost of a removed message**, not the age ceiling.
+2. **If you raise `MONITORING_TIMEFRAME`, raise the byte bounds with it.**
 
 Streams carrying personal message content — `slack` and `outline` — are capped at 72 hours regardless
-of volume. PostgreSQL is the system of record; an erasure request cannot reach inside a broker
+of volume. PostgreSQL is the system of record. An erasure request cannot reach inside a broker
 stream, so those are transport buffers and nothing more.
 
 ## The storage budget, and why it is not just a number
 
-`NATS_JS_MAX_FILE_BYTES` (10 GiB in the self-host `.env.example`; 16 GiB without an override) sets two things from one value: the broker's own JetStream
-budget, and the total the receiver checks its per-stream bounds against. **The receiver refuses to
-start if the four bounds sum above it:**
+`NATS_JS_MAX_FILE_BYTES` is 10 GiB in the self-host `.env.example` and 16 GiB without an override.
+It sets the broker's JetStream budget and the total against which the receiver checks per-stream bounds.
+**The receiver refuses to start if the four bounds sum above that budget:**
 
 ```text
 Webhook stream bounds total 21474836480 bytes, over the 17179869184-byte broker storage budget
@@ -144,7 +153,7 @@ subjects, retention mode, storage type or discard policy.
 | The change would delete stored messages | **withholds it**, logs at ERROR with exactly what it would cost |
 | …and `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true` | applies it, logs what was deleted |
 | The change would leave the stream with no bound at all | **withholds it**, logs at ERROR — no flag overrides this |
-| Stream state cannot be read | withholds everything; nothing can be proven safe |
+| Stream state cannot be read | withholds everything. Nothing can be proven safe |
 | The live stream's shape has drifted | withholds everything, logs at ERROR |
 
 A withheld change looks like this:
@@ -155,29 +164,51 @@ Stream github limit change withheld because it would delete stored messages:
 set hephaestus.webhook.stream.allow-destructive-limit-updates=true to apply it
 ```
 
-To apply it deliberately:
+:::caution CAUTION: Destructive limit changes
+A destructive change deletes stored messages.
+A flag left on gives all future deploys permission to delete messages.
+Enable it only for one deliberate change.
+Unset it after you confirm the deletion.
+:::
 
-1. Run `nats stream report` and decide whether the size is legitimate for your traffic.
-2. If it is, raise `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` (or `..._MAX_BYTES`) instead, keeping
-   the four bounds under `NATS_JS_MAX_FILE_BYTES`.
-3. If it is not, set `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true`, restart the
-   receiver **once**, confirm the `DELETED stored messages` log line, and unset it again.
+To apply a withheld change deliberately:
 
-Leaving that flag set turns a one-time decision into standing permission for any future deploy to
-delete stored messages.
+1. Run:
 
-Shedding the excess happens **before** the broker replies, so on a large stream the call takes as
-long as the deletion does. `HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT` (default `5m`) is how
-long startup waits; raise it if your stream is too large to shed inside that. If it still runs out,
-startup reports the limits the stream actually has rather than assuming its own update failed —
-which matters, because a timed-out update is one the broker may well have applied:
+   ```bash
+   nats stream report
+   ```
+
+2. Decide whether the size is legitimate for your traffic.
+3. If it is, raise `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` (or `..._MAX_BYTES`) instead.
+4. Keep the four bounds under `NATS_JS_MAX_FILE_BYTES`.
+5. If the size is not legitimate, set `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true`.
+6. If the size is not legitimate, restart the receiver **once**.
+7. After that destructive restart, confirm the `DELETED stored messages` log line.
+8. After that confirmation, unset the flag again.
+
+The broker deletes excess messages **before** it replies.
+On a large stream, the call therefore takes as long as the deletion.
+`HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT` (default `5m`) specifies startup's wait time.
+
+1. If deletion takes longer, raise the timeout.
+
+If the call still times out, startup reports the stream's actual limits.
+It does not assume the update failed.
+The broker may have applied a timed-out update:
 
 ```text
 Failed to reconcile JetStream stream limits: name=github changed=[maxBytes -1 -> 10737418240]
 — live configuration is now maxAge=PT4320H maxBytes=10737418240 maxMessages=-1
 ```
 
-That line says the change **did** land. Confirm with `nats stream info github` before retrying.
+That line says the change **did** occur.
+
+1. Before retrying, confirm with:
+
+   ```bash
+   nats stream info github
+   ```
 
 If instead you see a shape-drift error, the stream is not what this deployment expects and no bound
 is written onto it at all:
@@ -187,15 +218,26 @@ Stream github has drifted from the shape this deployment expects: [discardPolicy
 — limits left unreconciled
 ```
 
-Repair it with `nats stream edit github` before the bound can be applied. `discardPolicy=New` in
-particular makes the broker reject incoming publishes at the bound instead of shedding old messages,
-which turns a full stream into a total ingestion outage.
+1. Before applying the bound, repair the shape with:
+
+   ```bash
+   nats stream edit github
+   ```
+
+`discardPolicy=New` makes the broker reject incoming publishes at the bound instead of removing old messages.
+A full stream therefore causes a total ingestion outage.
 
 ## Recovering a wedged broker
 
-Symptoms: the receiver's readiness probe is DOWN, `webhook.stream.poll.age` is climbing or `NaN`, and
-the NATS container logs write errors. `docker compose ps` shows `nats-server` unhealthy but running —
-Docker does not act on a failing healthcheck, so it will sit there indefinitely.
+A wedged broker has these symptoms:
+
+- The receiver's readiness probe is DOWN.
+- `webhook.stream.poll.age` grows or shows `NaN`.
+- The NATS container logs write errors.
+- `docker compose ps` shows `nats-server` unhealthy but running.
+
+Docker does not act on a failed healthcheck.
+The container therefore remains in that state indefinitely.
 
 1. **Confirm it is the disk.** On the broker host:
 
@@ -204,11 +246,18 @@ Docker does not act on a failing healthcheck, so it will sit there indefinitely.
    docker compose logs --tail=100 nats-server
    ```
 
-   `no space left on device` on a JetStream write is the wedge. If there is free space, this is a
-   different fault — check the network path and `nats server check connection` instead.
+   `no space left on device` on a JetStream write identifies this failure.
+   If space is free, the fault is different.
+   Check the network path instead.
+   Check with:
 
-2. **Free space.** Remove whatever else is on that volume. JetStream will *not* recover on its own
-   once it has failed to write its own metadata, so expect the errors to continue.
+   ```bash
+   nats server check connection
+   ```
+
+2. **Free space.** Remove other content from that volume.
+   JetStream will *not* recover alone after it fails to write its metadata.
+   The errors therefore continue.
 
 3. **Restart the broker**, which is the step that clears the wedge:
 
@@ -222,21 +271,24 @@ Docker does not act on a failing healthcheck, so it will sit there indefinitely.
    docker compose restart webhook-server
    ```
 
-5. **Fix the cause before the next incident**: set `NATS_JS_MAX_FILE_BYTES` below the volume's real
-   free space, and bring the per-stream bounds under it. Startup will refuse to run if they do not
-   fit, which is the point.
+5. Before another incident, set `NATS_JS_MAX_FILE_BYTES` below the volume's actual free space.
+6. Bring the per-stream bounds under it.
+   Startup deliberately refuses to run if they do not fit.
 
-6. **Account for what was lost.** Deliveries that arrived while the broker could not write were
-   dropped at the edge; the provider saw a 503. Anything GitHub or GitLab retries comes back on its
-   own schedule — push events do not. Select **Sync now** on the workspace connection under **Administration → Integrations → GitHub/GitLab** to
-   re-fetch what falls inside `MONITORING_TIMEFRAME`; anything older than that window is gone.
+7. **Account for what was lost.** Deliveries that arrived while the broker could not write were
+   dropped at the edge. The provider saw a 503. Anything GitHub or GitLab retries comes back on its
+   own schedule — push events do not.
+8. Under **Administration → Integrations → GitHub/GitLab**, select **Sync now** on the workspace connection.
+   It fetches what falls inside `MONITORING_TIMEFRAME` again. Anything older than that window is gone.
 
 ## Payload size
 
-The receiver accepts webhook deliveries up to 25 MiB, matching GitHub's own delivery cap. The broker
-must be configured to carry at least that much: `NATS_MAX_PAYLOAD_BYTES` (default `26214400`) sets
-NATS' `max_payload`, whose own default of 1 MB is far below it. Every delivery in the gap would be
-verified, accepted, and then lost at publish.
+The receiver accepts webhook deliveries up to 25 MiB, matching GitHub's delivery cap.
+`NATS_MAX_PAYLOAD_BYTES` (default `26214400`) sets NATS' `max_payload`.
+NATS' own default is only 1 MB.
+Without sufficient capacity, each delivery in the gap would pass verification and acceptance but fail at publish.
+
+1. Configure the broker to carry at least 25 MiB.
 
 The receiver reads the broker's live limit at startup and logs at ERROR if the two disagree:
 
@@ -246,52 +298,57 @@ The receiver accepts webhooks up to 26214400 bytes but this NATS server caps a m
 
 ## Consumers that outlive their deployment
 
-Nothing but JetStream removes a durable consumer, and a stack that is *deleted* rather than shut down
-never removes the ones it created. On a shared broker that leaves one generation of durables — each
-with a backlog that will never drain — per stack that ever existed.
+Only JetStream removes a durable consumer.
+A stack that is *deleted*, rather than shut down, never removes its consumers.
+On a shared broker, each former stack therefore leaves a generation of durables whose backlogs never drain.
 
-`HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD` (default `30d`) lets JetStream reap them. It
-measures time with **nothing connected**, not time without traffic: a running deployment holds
-standing requests against its consumers and resets the clock continuously even while its queues are
-silent. Only a deployment that no longer exists ages out.
+`HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD` (default `30d`) lets JetStream remove them.
+It measures time with **nothing connected**, not time without traffic.
+A running deployment holds continuous requests against its consumers.
+Those requests continuously reset the clock, even with silent queues.
+Only a deployment that no longer exists ages out.
 
-- Set a much shorter value (`72h`) on disposable stacks that share a broker — preview environments,
-  throwaway test stacks.
-- Set `0s` to switch reaping off, if your deployment may be offline for more than the threshold and
-  must resume exactly where it left off. A reaped consumer is recreated pointing at new messages
-  only, so it skips whatever arrived while the deployment was gone.
-- Values between `0s` and `1h` are rejected at startup — a threshold that short expires a consumer
-  across an ordinary restart, which is the loss the setting exists to prevent.
+Values between `0s` and `1h` fail at startup.
+A threshold that short expires a consumer during an ordinary restart, which the setting must prevent.
+A removed consumer is recreated at new messages only.
+It skips messages that arrived while the deployment was gone.
 
-`0s` preserves the consumer's *position*, not the *messages*. Those still expire on the stream's own
-retention, so a deployment offline past the stream's byte or age bound comes back to a cursor pointing
-at messages the stream no longer holds, and those are not delivered.
+1. On disposable stacks that share a broker, set a much shorter value (`72h`).
+   This includes preview environments and temporary test stacks.
+2. If an offline deployment must resume after the threshold exactly where it stopped, set `0s` to disable removal.
+
+`0s` preserves the consumer's *position*, not its *messages*.
+Messages still expire under the stream's retention.
+A deployment offline past the stream's byte or age bound returns to a cursor that points at messages no longer present.
+Those messages are not delivered.
 
 ## Making a change actually reach the broker
 
-**Compose does not recreate NATS when only its config changes.** The broker's configuration is a
-Compose `configs:` block whose content renders to a bind-mounted file. Changing the content does not
-change the container's spec, so after a configuration change recreate the broker yourself, from the
-directory the reference stack is deployed from:
+**Compose does not recreate NATS when only its config changes.**
+The broker configuration is a Compose `configs:` block that renders to a bind-mounted file.
+A content change does not change the container spec.
 
-For the self-host stack, run from `docker/self-host`:
+:::caution CAUTION: Restart loses active deliveries
+Recreation preserves stored messages because JetStream data lives in the volume.
+But deliveries in progress during the restart are lost, and webhooks are not redeliverable.
+Reconciliation covers `MONITORING_TIMEFRAME` days afterward.
+:::
 
-```bash
-docker compose up -d --force-recreate nats-server
-docker compose exec nats-server cat /etc/nats/nats-server.conf
-```
+1. After a configuration change, recreate the broker from the directory where the stack is deployed.
+2. For the self-host stack, run from `docker/self-host`:
 
-For the reference stack:
+   ```bash
+   docker compose up -d --force-recreate nats-server
+   docker compose exec nats-server cat /etc/nats/nats-server.conf
+   ```
+
+3. For the reference stack:
 
 ```bash
 dc() { docker compose --env-file .env --env-file release-lock.env -p hephaestus-core -f compose.core.yaml "$@"; }
 dc up -d --force-recreate nats-server
 dc exec nats-server cat /etc/nats/nats-server.conf   # confirm the value you set
 ```
-
-Recreating the broker is safe for stored messages — JetStream data lives in the volume — but
-in-flight deliveries during the restart are lost, and webhooks are not redeliverable. Reconciliation
-covers `MONITORING_TIMEFRAME` days afterwards.
 
 ## Where these settings live
 

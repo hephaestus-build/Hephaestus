@@ -108,7 +108,9 @@ This setting never demotes an existing admin.
 The recovery endpoint promotes an account only while no admin exists.
 Do not publish the token or keep it in shell history.
 
-1. If no admin exists, temporarily set `HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN`.
+If no admin exists, use this recovery procedure:
+
+1. Temporarily set `HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN`.
 2. Restart the application server.
 3. From a signed-in account, submit the token to `POST /api/auth/bootstrap-admin` with normal CSRF protection.
    The JSON body must have a `token` field.
