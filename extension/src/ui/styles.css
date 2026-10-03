@@ -3,6 +3,14 @@
 /* The palette and theme scale the web app uses; this tree keeps only its own base rules below. */
 @import "../../../webapp/src/styles/theme-tokens.css";
 
+/* The Heph panel renders messages with the web app's own leaves and Streamdown, which live outside
+   this tree, so their classes are named here for Tailwind to generate. */
+@source "../../node_modules/streamdown/dist";
+@source "../../../webapp/src/components/mentor/MessageText.tsx";
+@source "../../../webapp/src/components/mentor/InterruptedReplyNote.tsx";
+@source "../../../webapp/src/components/common/MarkdownCode.tsx";
+@source "../../../webapp/src/components/ui/marker.tsx";
+
 /* The focus ring takes the mentor blue rather than the web app's neutral ring, so a focused control
    inside a provider's page keeps at least 3:1 against its surface. The frame's
    `color-scheme` must stay the one its iframe element declares for the same palette

@@ -51,6 +51,7 @@ const meta = {
 		onOpenSettings: fn(),
 		onChooseWorkspace: fn(),
 		onAction: fn(),
+		onAskHeph: fn(),
 	},
 } satisfies Meta<typeof PageReport>;
 
@@ -173,6 +174,26 @@ export const Opened: Story = {
 		);
 		await expect(canvas.queryByRole("link", { name: /Review details/u })).toBeNull();
 		await expect(canvas.getAllByRole("button", { name: "Request review…" })).toHaveLength(1);
+	},
+};
+
+/**
+ * Heph is one press away in the opened report, and opens beside the page in Chrome's side panel: the
+ * conversation never enters the report or the page.
+ */
+export const AskHeph: Story = {
+	args: { expanded: true },
+	play: async ({ canvas, args }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Ask Heph" }));
+		await expect(args.onAskHeph).toHaveBeenCalledOnce();
+	},
+};
+
+/** The side panel did not open: the report says why, under its footer. */
+export const AskHephFailed: Story = {
+	args: { expanded: true, askHephError: "Chrome did not open the Heph panel. Try again." },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("alert")).toHaveTextContent("Chrome did not open the Heph panel");
 	},
 };
 

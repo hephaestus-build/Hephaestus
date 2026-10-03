@@ -14,6 +14,7 @@ import type { ChatMessageVote } from "@/api/types.gen";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { isWarmingUp } from "@/lib/chat-validation";
+import { mentorTurnBody, retryPlan } from "@/lib/mentor-turn";
 import { hasText } from "@/lib/text";
 import type { ChatMessage } from "@/lib/types";
 import { csrfHeaders } from "@/runtime/auth/auth-client";
@@ -106,25 +107,13 @@ export function useMentorChat({
 	// when its id changes.
 	const transport = new DefaultChatTransport<ChatMessage>({
 		api: `${environment.serverUrl}/workspaces/${slug}/mentor/chat`,
-		prepareSendMessagesRequest: ({ id, messages, trigger, messageId, requestMetadata }) => {
-			const effectiveId = id || stableThreadId;
-			// Only the latest message travels: the server rebuilds context and parent linkage from the
-			// thread id, so anything else in `messages` is bytes it ignores. A custom body replaces the
-			// SDK's default one, so the trigger and the replaced reply have to be carried over by hand.
-			const lastMessage = messages.at(-1);
-			return {
-				body: {
-					id: effectiveId,
-					message: lastMessage,
-					trigger,
-					messageId: messageId ?? retriedReplyOf(requestMetadata),
-				},
-				// Cookie-session auth (ADR 0017): session cookie rides credentials:include;
-				// CSRF double-submit header for this state-changing POST.
-				credentials: "include",
-				headers: { ...csrfHeaders(), ...userViewHeaders() },
-			};
-		},
+		prepareSendMessagesRequest: (options) => ({
+			body: mentorTurnBody(options, stableThreadId),
+			// Cookie-session auth (ADR 0017): session cookie rides credentials:include;
+			// CSRF double-submit header for this state-changing POST.
+			credentials: "include",
+			headers: { ...csrfHeaders(), ...userViewHeaders() },
+		}),
 	});
 
 	// The server says so on a transient `data-mentor-status` part, which `useChat` hands to `onData` and
@@ -186,8 +175,7 @@ export function useMentorChat({
 		},
 	});
 
-	// `regenerate` drops the failed reply before it posts, and only accepts a reply still in the list, so
-	// after a retry refused before a new reply started, the target travels as request metadata.
+	// The reply the last retry replaced, for a retry of a retry that never started (`retryPlan`).
 	const retryTarget = useRef<string | undefined>(undefined);
 
 	const startNewChat = async () => {
@@ -209,14 +197,9 @@ export function useMentorChat({
 
 	const retry = () => {
 		setWarmingUp(false);
-		const last = messages.at(-1);
-		if (last?.role === "assistant") {
-			retryTarget.current = last.id;
-			void regenerate({ messageId: last.id });
-			return;
-		}
-		const dropped = retryTarget.current;
-		void regenerate(dropped === undefined ? undefined : { metadata: { retryOf: dropped } });
+		const plan = retryPlan(messages, retryTarget.current);
+		retryTarget.current = plan.replaces;
+		void regenerate(plan.options);
 	};
 
 	// No greeting request: the server has no greeting flag, so a POST asking for one comes back
@@ -286,13 +269,4 @@ export function useMentorChat({
 	};
 
 	return result;
-}
-
-function retriedReplyOf(requestMetadata: unknown): string | undefined {
-	return typeof requestMetadata === "object" &&
-		requestMetadata !== null &&
-		"retryOf" in requestMetadata &&
-		typeof requestMetadata.retryOf === "string"
-		? requestMetadata.retryOf
-		: undefined;
 }

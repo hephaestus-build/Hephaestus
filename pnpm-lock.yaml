@@ -349,12 +349,18 @@ importers:
 
   extension:
     dependencies:
+      '@ai-sdk/react':
+        specifier: 4.0.96
+        version: 4.0.96(react@19.2.8)(zod@4.5.4)
       '@tanstack/react-query':
         specifier: 5.102.8
         version: 5.102.8(react@19.2.8)
       '@wxt-dev/browser':
         specifier: 0.3.0
         version: 0.3.0
+      ai:
+        specifier: 7.0.93
+        version: 7.0.93(zod@4.5.4)
       cn:
         specifier: 0.2.6
         version: 0.2.6
@@ -367,6 +373,12 @@ importers:
       react-dom:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
+      streamdown:
+        specifier: 2.6.0
+        version: 2.6.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)
+      use-stick-to-bottom:
+        specifier: 1.1.6
+        version: 1.1.6(react@19.2.8)
       zod:
         specifier: 4.5.4
         version: 4.5.4
@@ -11978,6 +11990,11 @@ packages:
 
   url-parse-as-address@1.0.0:
     resolution: {integrity: sha512-1WJ8YX1Kcec9wgxy8d/ATzGP1ayO6BRnd3iB6NlM+7cOnn6U8p5PKppRTCPLobh3CSdJ4d0TdPjopzyU2KcVFw==}
+
+  use-stick-to-bottom@1.1.6:
+    resolution: {integrity: sha512-z3Up8jYQGTkUCsGBnwg6/wj70KgXoW5Kz1AAc1j8MtQuYMBo6ZsdhrIXoegxa7gaMMilgQYyTohTrt3p94jHog==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
   use-sync-external-store@1.6.0:
     resolution: {integrity: sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==}
@@ -25417,6 +25434,10 @@ snapshots:
       file-loader: 6.2.0(webpack@5.109.2(@swc/core@1.16.1)(@swc/html@1.16.1)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.26))(csso@5.0.5)(esbuild@0.27.7)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.26))
 
   url-parse-as-address@1.0.0: {}
+
+  use-stick-to-bottom@1.1.6(react@19.2.8):
+    dependencies:
+      react: 19.2.8
 
   use-sync-external-store@1.6.0(react@19.2.8):
     dependencies:

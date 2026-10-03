@@ -276,6 +276,17 @@ function PageContent() {
 	} else if (action.isError) {
 		actionState = { status: "error", message: action.error.message };
 	}
+	const [askHephError, setAskHephError] = useState<string>();
+	// Sent from inside the click itself, not from a mutation that would send it a task later: Chrome
+	// opens a side panel only while it is handling the reader's press.
+	const askHeph = async () => {
+		setAskHephError(undefined);
+		try {
+			await ask({ type: "open-mentor" });
+		} catch (error) {
+			setAskHephError(error instanceof Error ? error.message : "The Heph panel did not open.");
+		}
+	};
 	return (
 		<PageReport
 			state={review.state}
@@ -293,6 +304,10 @@ function PageContent() {
 			onChooseWorkspace={(chosen) => remember({ expanded, workspaceSlug: chosen })}
 			onAction={(request) => action.mutate(request)}
 			action={actionState}
+			onAskHeph={() => {
+				void askHeph();
+			}}
+			askHephError={askHephError}
 			stale={review.stale}
 		/>
 	);

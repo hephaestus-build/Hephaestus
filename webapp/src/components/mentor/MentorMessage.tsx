@@ -1,18 +1,16 @@
-import { AlertCircleIcon } from "lucide-react";
-import { type InputHTMLAttributes, useState } from "react";
-import { Streamdown } from "streamdown";
+import { useState } from "react";
 
 import type { ChatMessageVote } from "@/api/types.gen";
 import { HephIcon } from "@/components/brand/HephIcon";
-import { MarkdownCode } from "@/components/common/MarkdownCode";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
-import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { Message, MessageContent, MessageFooter, MessageHeader } from "@/components/ui/message";
 import type { ChatMessage } from "@/lib/types";
 
+import { InterruptedReplyNote } from "./InterruptedReplyNote";
 import { visibleTexts } from "./message-text";
 import { MessageActions } from "./MessageActions";
 import { MessageEditor } from "./MessageEditor";
+import { MessageText } from "./MessageText";
 
 export interface MentorMessageProps {
 	message: ChatMessage;
@@ -26,17 +24,6 @@ export interface MentorMessageProps {
 	onCopy: (content: string) => void;
 	onVote?: (messageId: string, isUpvote: boolean) => void;
 }
-
-function MarkdownTaskCheckbox(props: InputHTMLAttributes<HTMLInputElement>) {
-	return (
-		<input {...props} aria-label={props.checked === true ? "Completed task" : "Incomplete task"} />
-	);
-}
-
-const MESSAGE_MARKDOWN_COMPONENTS = {
-	code: MarkdownCode,
-	input: MarkdownTaskCheckbox,
-};
 
 /** Heph's name and mark over a reply, alive while the reply is still arriving. */
 function HephMessageHeader({ streaming = false }: { streaming?: boolean }) {
@@ -83,26 +70,14 @@ export function MentorMessage({
 					/>
 				) : (
 					texts.map((text, index) => (
-						<Bubble key={`${message.id}-${index}`} variant={isUser ? "default" : "ghost"}>
+						<Bubble key={`${message.id}-${index}`} variant={isUser ? "muted" : "ghost"}>
 							<BubbleContent>
-								<Streamdown components={MESSAGE_MARKDOWN_COMPONENTS} isAnimating={streaming}>
-									{text}
-								</Streamdown>
+								<MessageText text={text} streaming={streaming} />
 							</BubbleContent>
 						</Bubble>
 					))
 				)}
-				{interrupted && (
-					<Marker>
-						<MarkerIcon>
-							<AlertCircleIcon />
-						</MarkerIcon>
-						<MarkerContent>
-							This reply was interrupted before it finished, so it is incomplete. Ask again for a
-							full answer.
-						</MarkerContent>
-					</Marker>
-				)}
+				{interrupted && <InterruptedReplyNote />}
 				{hasActions && (
 					<MessageFooter>
 						<MessageActions

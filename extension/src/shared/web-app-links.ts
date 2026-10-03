@@ -9,6 +9,20 @@ export function workspaceBase(webAppOrigin: string, workspaceSlug: string): stri
 	return `${webAppOrigin}/w/${encodeURIComponent(workspaceSlug)}`;
 }
 
+/** A conversation with Heph, where the web app continues it. */
+export function mentorThreadLink(
+	webAppOrigin: string,
+	workspaceSlug: string,
+	threadId: string,
+): string {
+	return `${workspaceBase(webAppOrigin, workspaceSlug)}/mentor/${encodeURIComponent(threadId)}`;
+}
+
+/** Where the reader makes or changes their AI choice for the workspace. */
+export function onboardingLink(webAppOrigin: string, workspaceSlug: string): string {
+	return `${workspaceBase(webAppOrigin, workspaceSlug)}/onboarding`;
+}
+
 /** The reader's feedback page, and the admin's existing work drawer when this kind has a route. */
 export function workLinks(
 	webAppOrigin: string,

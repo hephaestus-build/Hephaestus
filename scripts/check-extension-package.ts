@@ -21,7 +21,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const OUTPUT = path.join(REPO_ROOT, "extension/.output");
 
 /** What the privacy practices form justifies; a new permission is a new store review. */
-export const PERMISSIONS = ["identity", "scripting", "storage"];
+export const PERMISSIONS = ["identity", "scripting", "sidePanel", "storage"];
 export const OPTIONAL_HOSTS = ["https://*/*"];
 const ICON_SIZES = [16, 32, 48, 128];
 
@@ -97,7 +97,9 @@ function surfaceProblems(manifest: Manifest): string[] {
 		problems.push("options_ui.page must be options.html");
 	}
 	if ("side_panel" in manifest) {
-		problems.push("side_panel must be absent: review context belongs on the provider page");
+		problems.push(
+			"side_panel must be absent: Heph is configured per tab, never as a default panel",
+		);
 	}
 	const minimum = manifest.minimum_chrome_version;
 	if (
@@ -158,6 +160,7 @@ export function missingPackageAssets(archive: Buffer): string[] {
 		"options.html",
 		"inline.html",
 		"action.html",
+		"mentor.html",
 		...ICON_SIZES.map((size) => `icon/${size}.png`),
 	].filter((entry) => (readZipEntry(archive, entry)?.length ?? 0) === 0);
 }

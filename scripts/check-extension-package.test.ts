@@ -115,6 +115,7 @@ void test("rejects missing packaged icons and empty extension pages", () => {
 		"options.html": Buffer.from("options"),
 		"inline.html": Buffer.from("inline"),
 		"action.html": Buffer.from("confirmation"),
+		"mentor.html": Buffer.from("mentor"),
 		"icon/16.png": Buffer.from("icon"),
 		"icon/32.png": Buffer.from("icon"),
 		"icon/48.png": Buffer.from("icon"),
@@ -137,6 +138,8 @@ void test("rejects missing packaged icons and empty extension pages", () => {
 	assert.deepEqual(missingPackageAssets(Buffer.from(zipSync(withoutConfirmation))), [
 		"action.html",
 	]);
+	const { "mentor.html": _mentor, ...withoutMentor } = assets;
+	assert.deepEqual(missingPackageAssets(Buffer.from(zipSync(withoutMentor))), ["mentor.html"]);
 	assert.deepEqual(
 		missingPackageAssets(
 			Buffer.from(zipSync({ ...withoutStoreIcon, "inline.html": Buffer.alloc(0) })),
@@ -158,6 +161,7 @@ void test("rejects public resources that expose privileged pages or broaden acce
 		[{ ...inline, resources: ["*"] }],
 		[{ ...inline, resources: ["inline.html", "options.html"] }],
 		[{ ...inline, resources: ["inline.html", "action.html"] }],
+		[{ ...inline, resources: ["inline.html", "mentor.html"] }],
 		[{ ...inline, resources: ["sidepanel.html"] }],
 		[{ ...inline, resources: undefined }],
 		[{ ...inline, extension_ids: ["*"] }],

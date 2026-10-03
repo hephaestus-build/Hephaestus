@@ -4,9 +4,12 @@ import { defineBackground } from "wxt/utils/define-background";
 import { restrictSessionStorage } from "~/background/storage";
 import {
 	handleMessage,
+	onActionClicked,
 	onSiteAccessAdded,
+	onMentorPort,
 	onSiteAccessRemoved,
 	onTabRemoved,
+	onTabUpdated,
 	reconcile,
 } from "~/background/worker";
 
@@ -27,6 +30,8 @@ export default defineBackground(() => {
 		// oxlint-disable-next-line typescript/strict-void-return -- Chrome keeps the reply channel open only when the listener returns `true`; its type says `void`.
 		return true;
 	});
+	// Stream activity, including server keep-alive comments, keeps the MV3 worker alive.
+	browser.runtime.onConnect.addListener(onMentorPort);
 	browser.permissions.onAdded.addListener(() => {
 		void onSiteAccessAdded();
 	});
@@ -36,8 +41,11 @@ export default defineBackground(() => {
 	browser.tabs.onRemoved.addListener((tabId) => {
 		void onTabRemoved(tabId);
 	});
-	browser.action.onClicked.addListener(() => {
-		void browser.runtime.openOptionsPage();
+	browser.tabs.onUpdated.addListener((tabId, change) => {
+		void onTabUpdated(tabId, change);
+	});
+	browser.action.onClicked.addListener((tab) => {
+		void onActionClicked(tab);
 	});
 	browser.runtime.onInstalled.addListener(({ reason }) => {
 		if (reason === "install") {

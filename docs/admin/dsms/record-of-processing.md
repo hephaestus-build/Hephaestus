@@ -57,7 +57,12 @@ choices, and returned review records, only the reader's own, administrators incl
 comments recorded as posted for the reader on that work (practice names, comment locations, links and
 recorded delivery times), and the reader's own observations on it (practice, outcome, severity and a
 one-sentence summary) when the report is opened. It reads and shows no feedback text and no other
-developer's records; those remain in the web app under its own access rules. The default destination is `hephaestus.build`;
+developer's records; those remain in the web app under its own access rules. It is also a client of the
+mentor purpose: in its side panel, after the reader presses Send, it sends their message to the same
+mentor endpoint as the web app, where it is stored, processed and retained as any conversation with
+Heph; a conversation's first message opens with a visible line naming the work by its canonical
+address. It keeps only a per-tab session-memory record of which conversation the panel holds, by
+identifier. The default destination is `hephaestus.build`;
 custom instances have their own operator. The published notice's **Chrome extension** section and
 [extension privacy guide](/user/browser-extension-privacy) own the disclosure and controls.
 The [personal-data map](./personal-data-map.md) owns installed-client session cleanup. Canonical

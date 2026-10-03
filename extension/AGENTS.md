@@ -2,15 +2,16 @@
 
 A Chrome MV3 extension (WXT, React 19, Tailwind 4) that puts a practice review report into the page
 of the pull request, merge request or issue open in the current tab, and previews one row of a
-repository's list on request. Desktop Chrome only. The architecture record is ADR 0049; operator and
-user docs are `docs/admin/browser-extension.mdx` and `docs/user/browser-extension.mdx`.
+repository's list on request, and holds a conversation with Heph about the tab's work in Chrome's side
+panel. Desktop Chrome only. The architecture records are ADR 0049 and ADR 0051; operator and user
+docs are `docs/admin/browser-extension.mdx` and `docs/user/browser-extension.mdx`.
 
 ## Where things live
 
 | Path | What |
 |---|---|
-| `src/entrypoints/` | WXT entrypoints: `background.ts` (service worker), `provider.content.ts` (runtime-registered content script), `inline/` (the report frame), `action/` (the confirmation window) and `options/` pages |
-| `src/background/` | Everything with a credential or a network call: session store, generated-client calls, sign-in, context resolution, pending review actions, site access |
+| `src/entrypoints/` | WXT entrypoints: `background.ts` (service worker), `provider.content.ts` (runtime-registered content script), `inline/` (the report frame), `action/` (the confirmation window), `mentor/` (the Heph side panel) and `options/` pages |
+| `src/background/` | Everything with a credential or a network call: session store, generated-client calls, sign-in, context resolution, pending review actions, site access, the Heph panel's turns (`mentor.ts`) |
 | `src/content/` | Provider report slots and list-row hooks (`anchors.ts`), the report's generic host around its frame, and the list rows' inspect control; no data, no RPC |
 | `src/shared/` | Pure contracts: the RPC union and sender policy, the provider URL grammar, instance URL rules, polling |
 | `src/components/` | Presentational components with stories; data arrives as props |
@@ -42,9 +43,17 @@ the type check on its own. Lint holds tests to the web app's Vitest policy: narr
   call is `credentials: "omit"` with a bearer. No view or content script may `fetch`.
 - **Messages are a closed union** (`src/shared/rpc.ts`), checked for shape and then for sender
   (`sender-policy.ts`): only options may change extension state; the report frame may only read about
-  its own tab and ask for the confirmation window; a content script may send nothing. No method or
-  header field; the worker derives the work from the sender's tab at request time, and checks every
-  record it returns is about that exact work.
+  its own tab and ask for the confirmation window or the Heph panel; a content script may send nothing.
+  No method or header field; the worker derives the work from the sender's tab at request time, and
+  checks every record it returns is about that exact work.
+- **Heph talks only in its own side panel.** `mentor.html` is Chrome's side panel for one tab, never
+  a frame in the page; there is no manifest default panel. The worker opens it with `setOptions` and
+  `open` before its first await, attests every request by Chrome's sender facts and by
+  `sidePanel.getOptions` holding `mentor.html?tab=<id>` for that tab, and streams a turn over the
+  `mentor-turn` port to the hidden mentor endpoint only, one per tab. A new conversation must open with
+  the visible reference to the tab's work (`workReference`, from the parsed address, never a title or
+  page content); a continued one stops when the tab leaves its work. Only ids are stored. Nothing is
+  sent to Heph until the reader presses Send; the server's gates are never re-implemented.
 - **A list row is a selector, never an authority.** A preview frame names its row's work in its URL
   (`WORK_PARAMETER`), which the page can forge. The worker accepts it only on `get-context` and
   `get-work-feedback`, only as a canonical work address of the repository and kind of the list the

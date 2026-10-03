@@ -17,7 +17,8 @@ export function UsageGuide() {
 					<p className="text-xs text-muted-foreground">
 						Open a pull request, merge request or issue to see its review status and your feedback.
 						Expand it to jump to comments or explore supporting observations. On a list, press the
-						Hephaestus mark beside a title to preview that work.
+						Hephaestus mark beside a title to preview that work. Choose Ask Heph on a work’s page,
+						or click the toolbar icon, to talk privately with your mentor.
 					</p>
 				</div>
 			</li>

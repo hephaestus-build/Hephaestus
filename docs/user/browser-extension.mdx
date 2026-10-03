@@ -1,7 +1,7 @@
 ---
 id: browser-extension
 title: Chrome extension
-description: See the practice review of the pull request, merge request or issue you are viewing, in the page, on GitHub or GitLab.
+description: See the practice review of the pull request, merge request or issue you are viewing, in the page, on GitHub or GitLab, and talk with Heph about it.
 ---
 
 The Hephaestus Chrome extension puts a **practice review** into the page of the pull request, merge
@@ -12,7 +12,9 @@ the app. It reads the same records as **Review activity** in the app.
 
 It is a place to read context, not another place feedback is sent. Feedback still appears on the
 work, on your [Practice profile](./practice-profile) and in Heph, as
-[Practice feedback](./ai-code-review#where-feedback-appears) describes.
+[Practice feedback](./ai-code-review#where-feedback-appears) describes. From the report you can
+also [talk with Heph about the work](#talking-with-heph-about-this-work) in Chrome's side panel,
+beside the page.
 
 ## Before you start
 
@@ -27,7 +29,7 @@ they provide, which needs Chrome's developer mode.
 
 ## Connect it to your Hephaestus
 
-1. Open the extension's settings: click the Hephaestus icon in Chrome's toolbar. Pin it from the
+1. Open the extension's settings: click the Hephaestus icon in Chrome's toolbar on a page other than a pull request, merge request or issue, or use **Settings** in the Heph panel. Pin it from the
    puzzle-piece menu first if you do not see it.
 2. Choose **Continue with Hephaestus** to use the hosted service at `hephaestus.build`. Chrome asks
    you to let the extension reach that one address; allow it. If your organisation runs its own
@@ -127,6 +129,32 @@ always confirmed in a small Hephaestus window of its own, which the page cannot 
 - Cancelling a review run, retrying its results, and approving or rejecting feedback happen in
   Hephaestus, from **Review details**.
 
+## Talking with Heph about this work
+
+On a pull request, merge request or issue, choose **Ask Heph** in the report or click the Hephaestus toolbar icon. Heph opens in
+Chrome's side panel, beside the page, for that tab only: switch tabs and it hides, come back and it
+returns. The panel holds the conversation and nothing else; the practice review stays in the page.
+Opening it sends nothing to Heph.
+
+- **Your first message names the work.** Before you write, the panel shows the line your first
+  message starts with — for example *About pull request #12 in octo/app:* followed by its address.
+  It is part of your message, visible to you, to Heph and wherever the conversation is shown later;
+  nothing else is added to what you write. Heph answers from what Hephaestus recorded in the
+  workspace — your own work, its practice reviews and your feedback. It does not read the page, and
+  it may know little about work other people did.
+- **Nothing is sent until you press Send** (or Enter; Shift+Enter starts a new line). While Heph
+  answers, Send becomes **Stop**, which stops the reply; a stopped reply is kept, marked as
+  incomplete. If a reply fails, the panel says why and offers **Try again**.
+- **One conversation per tab and work.** Close the panel and open it again from the same work, and
+  the conversation is still there. **New conversation** starts an empty one. If the tab moves on to
+  other work, the panel does not carry the conversation over: go back to continue it, or start one
+  about the work the tab shows now.
+- **Conversations are kept in Hephaestus.** **Continue in Hephaestus** opens the same conversation in
+  [Heph](./ai-mentor), where all your conversations are.
+- **When Heph does not answer you.** If you chose *No AI*, if your workspace has no Heph model ready,
+  or if you have not made your AI choice yet, the panel says so in the same words as Hephaestus, and
+  links to where you can change your choice when you can.
+
 ## How long you stay signed in
 
 You stay signed in until Chrome closes, or at most seven days (your instance may set a shorter
@@ -149,6 +177,9 @@ address clears everything the extension was showing, in every tab.
   your Hephaestus carry its own sign-in, not your browser's cookies.
 - What the report shows stays inside the extension's part of the page; the page itself sees only that
   a report is there, and how tall it is.
+- What you write to Heph in the side panel goes to your Hephaestus, which keeps the conversation like
+  any other conversation with Heph. The page never sees it. The extension remembers only which
+  conversation each tab holds, by its identifier, until the tab or Chrome closes.
 - Your sign-in is kept in Chrome's memory for the extension only and is gone when Chrome closes.
 - Your Hephaestus matches the address against the repositories your workspace already monitors. It
   does not fetch the page itself.
@@ -170,3 +201,5 @@ cover what is recorded and who can see it.
 | Followed in 2 workspaces; choose one | More than one of your workspaces follows this work. Open the report and choose one; the extension never picks for you.                      |
 | No recorded comments for you         | Hephaestus recorded no comment for you here. See [what that does not mean](#what-the-report-shows).                                         |
 | Not refreshed                        | Hephaestus did not answer the latest refresh. The report still shows its last answer and the time it is from. Choose **Try again**.         |
+| Chrome did not open the Heph panel   | Choose **Ask Heph** again. If it keeps happening, reload the page.                                                                          |
+| This tab moved on                    | The panel holds a conversation about other work. Go back to that work to continue, or start a conversation about this one.                  |

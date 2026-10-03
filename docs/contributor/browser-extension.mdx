@@ -24,6 +24,7 @@ effect. [The user guide](/user/browser-extension) is the product description and
 | Content script                      | isolated world on a granted provider origin     | nothing                                                 | recognise a supported route, insert one generic report host with the report frame   |
 | Report frame (`inline.html`)        | extension origin, framed by the provider page   | the current view                                        | read about its own tab's work; ask for the confirmation window; link to the web app |
 | Confirmation window (`action.html`) | extension origin, top-level, not web-accessible | one pending action's preview                            | confirm or discard the one intent bound to its tab                                  |
+| Heph panel (`mentor.html`)          | extension origin, Chrome side panel for one tab | one conversation                                        | read its tab's work and conversation; stream one mentor turn at a time              |
 | Options page                        | extension origin, unframeable                   | settings view                                           | instance URL, sign-in, per-origin grants, sign-out                                  |
 | Hephaestus web app                  | configured web origin, new top-level tab        | its own web session                                     | approve or reject feedback; everything else about a review                          |
 
@@ -76,6 +77,48 @@ So the boundary is drawn around data and actions, not around the extension's pre
 - **The page can still observe the extension.** It can see that the report exists and its frame's
   size; the page and the frame exchange only readiness, height and theme messages. Nothing here hides
   that the user runs the extension or when they open the report.
+
+### Heph in the side panel
+
+A conversation is a mutation and its transcript is confidential, so it lives neither in the report
+frame, which the page can overlay, nor in the provider DOM, which the page reads. It lives in
+`mentor.html`, Chrome's side panel for one tab: browser chrome the page can neither see nor cover. It
+is the conversation only; the report stays in the page.
+
+- **Opening.** The toolbar icon also opens Heph on a supported work page (settings on other pages). The report's **Ask Heph** sends `open-mentor` from inside the click. The worker calls
+  `sidePanel.setOptions({ tabId, path: "mentor.html?tab=<id>", enabled: true })` and
+  `sidePanel.open({ tabId })` before it awaits anything (`handleMessage`), because Chrome opens a side
+  panel only while it handles the press. Only a work page's own report may ask, and the tab's address
+  Chrome reports must be such a page. A ready report also configures its tab's panel in advance.
+  There is no manifest `side_panel`, so no tab has a panel the worker did not configure.
+- **Attestation.** The panel counts only outside any tab, at exactly `mentor.html?tab=<id>`
+  (`sender-policy.ts`); the tab comes from that Chrome-reported address, never a message. Every request
+  then checks with `sidePanel.getOptions({ tabId })` that the worker still holds that address as the
+  tab's panel (`attestPanel`).
+- **Context.** The panel's work is the tab's, resolved as the report resolves it, in the workspace the
+  reader chose in the report. A conversation's first message starts with a visible line built from the
+  parsed address alone — noun, number, repository, canonical URL (`workReference`); never the title,
+  which another person may have written, and nothing from the page. It is ordinary history, so the web
+  app shows it too, and there is no hidden prompt and no schema for it. The worker refuses a new
+  conversation whose first message does not open with the reference to the work the tab shows now, and
+  a continued one once the tab has left its work.
+- **Transport.** The panel runs the AI SDK's `useChat` and `DefaultChatTransport` with the request body
+  the web app sends (`webapp/src/lib/mentor-turn.ts`), but with `workerFetch` in place of the network:
+  the body goes over a `mentor-turn` port, the worker validates it (`turnRequestSchema`), sends it to
+  the hidden `POST /workspaces/{slug}/mentor/chat` through the generated client with `parseAs:
+  "stream"`, and relays status, the raw bytes and the end. The SDK parses the stream; the server's
+  `: ping` comments reach the panel as bytes, so a long quiet turn keeps the worker running without a
+  keep-alive of its own. Closing the port is Stop: the worker aborts the request and the server ends
+  the turn. One turn per tab at a time; a generation change or closing the tab aborts it.
+- **Continuity.** `storage.session` keeps `mentorPanel:<tab>` — generation, workspace, work address and
+  thread id, never text. Reopening the panel reads the thread back with `getThread`; **New
+  conversation** drops the binding; **Continue in Hephaestus** opens `/w/<slug>/mentor/<thread>`.
+- **Gates stay the server's.** The panel reads the member's AI choice (`getMemberOnboarding`) only to
+  disable sending with the web app's own notice (`mentorPreferenceReason`, `MENTOR_PREFERENCE_COPY`);
+  the server refuses a turn regardless. No sandbox warm-up, greeting or suggested prompt is sent:
+  nothing reaches Heph until the reader presses Send.
+- **Rendering.** Messages render through the web app's own leaves (`MessageText`, which sanitises and
+  renders markdown with Streamdown, and `InterruptedReplyNote`), so a reply reads the same in both.
 
 ### Where the report goes
 
@@ -433,15 +476,16 @@ Publishing needs, once:
 1. A Chrome Web Store developer account for the publishing organisation, with its contact verified
    and [2-Step Verification](https://developer.chrome.com/docs/webstore/program-policies/two-step-verification)
    enabled on the publishing account; Chrome requires it for publication and updates.
-2. A listing: name, description, icons, screenshots of the in-page report, the confirmation window
-   and settings, and the support address.
+2. A listing: name, description, icons, screenshots of the in-page report, the Heph side panel, the
+   confirmation window and settings, and the support address.
 3. A privacy policy URL, and the privacy practices form: the single purpose (show, in the page, the
-   practice review a self-chosen Hephaestus instance recorded about the work in the current tab), a justification for each
-   permission (`storage`, `identity`, `scripting` and the optional host permissions),
-   no remote code, and the limited-use disclosure — once a site is allowed, supported work addresses
-   are sent automatically to the user's own instance, and a list row's work address only when the
-   user presses its Hephaestus button; no page content is collected, nothing is sold or used for
-   anything else.
+   practice review a self-chosen Hephaestus instance recorded about the work in the current tab, and
+   let the reader talk with Heph about that work beside it), a justification for each permission
+   (`storage`, `identity`, `scripting`, `sidePanel` and the optional host permissions), no remote
+   code, and the limited-use disclosure — once a site is allowed, supported work addresses are sent
+   automatically to the user's own instance, a list row's work address only when the user presses its
+   Hephaestus button, and a message to Heph only when the user sends it; no page content is collected,
+   nothing is sold or used for anything else.
 
 **Release is blocked** until the public help and privacy pages the extension links to
 (`docs.hephaestus.build` user guide and extension privacy page) are deployed and answer, installed-
@@ -479,7 +523,7 @@ self-hosting needs its own signing and distribution process as described in the 
 
 Keep the submitted text, in-product disclosure and published notice consistent with the same
 release. The extension's single purpose is **See Hephaestus practice reviews for the
-GitHub and GitLab work you are viewing.** The default service is `https://hephaestus.build`; custom
+GitHub and GitLab work you are viewing, and talk with Heph about it.** The default service is `https://hephaestus.build`; custom
 instances are a secondary choice. A connected account, workspace access and an instance that
 supports the store extension ID are required. Do not advertise GitHub Enterprise, Slack, Outline or
 mobile support for this client.
@@ -494,6 +538,10 @@ Suggested listing description:
 >
 > Ask for a review from the page: a small Hephaestus window shows exactly what will happen, and
 > nothing changes until you confirm there.
+>
+> Talk with Heph, Hephaestus's mentor, about the work beside the page, in Chrome's side panel. Heph
+> answers from what Hephaestus recorded about your work, and the conversation continues in
+> Hephaestus. Nothing is sent until you send a message.
 >
 > Connect to hephaestus.build or your organisation's Hephaestus instance, sign in, and allow each site
 > where Hephaestus may run. On an allowed site, the extension sends the address of each pull request,
@@ -510,8 +558,9 @@ a source file or a private preview is not a publicly accessible policy. Link the
 the listing and the extension. A self-hosted operator must publish its own instance notice.
 
 The dashboard's data-use declarations include authentication information, personally identifiable
-account information, the supported work URLs under web history, and website content represented by
-the review records received from the instance. Locally handled data also counts. Do not tick
+account information, the supported work URLs under web history, website content represented by the
+review records received from the instance, and personal communications for the messages a user
+writes to Heph and the replies shown. Locally handled data also counts. Do not tick
 unrelated categories or claim **no user data collected** merely because credentials stay in memory.
 Review these fields against the actual release and
 [Chrome's data-disclosure definitions](https://developer.chrome.com/docs/webstore/program-policies/user-data-faq).
@@ -522,11 +571,13 @@ Certify Limited Use only when the deployed data handling matches the published c
 | `identity`             | Complete sign-in through the selected instance and its identity providers.                                                |
 | `storage`              | Keep the chosen instance locally and credentials in session memory.                                                       |
 | `scripting`            | Add the practice review report to supported pages on individually allowed sites.                                          |
+| `sidePanel`            | Hold the user's conversation with Heph beside the work's tab, where the provider page can neither read nor cover it.      |
 | Optional `https://*/*` | Reach user-selected self-hosted Hephaestus and GitLab instances; actual requests grant exact origins, never the wildcard. |
 
 No remote executable code is used. JavaScript and images ship in the package, fonts use the system stack, and server APIs
-return data. A requested practice review can invoke the server's configured AI provider, which is
-covered in the instance notice. Do not describe self-hosting as a guarantee of local AI processing.
+return data; Heph's replies are text the panel renders, never code it runs. A requested practice
+review or a message to Heph can invoke the server's configured AI provider, which is covered in the
+instance notice. Do not describe self-hosting as a guarantee of local AI processing.
 
 ### Store artwork and reviewer walkthrough
 

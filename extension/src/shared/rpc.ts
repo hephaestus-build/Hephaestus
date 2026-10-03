@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import type { MentorPanel } from "~/shared/mentor";
 import {
 	type ActionOutcome,
 	type ActionPreview,
@@ -77,18 +78,24 @@ export const requestSchema = z.discriminatedUnion("type", [
 	z.strictObject({ type: z.literal("get-action"), intent: actionIntentSchema }),
 	z.strictObject({ type: z.literal("confirm-action"), intent: actionIntentSchema }),
 	z.strictObject({ type: z.literal("discard-action"), intent: actionIntentSchema }),
+	// The report frame may only ask for the Heph panel of its own tab; opening it sends nothing.
+	z.strictObject({ type: z.literal("open-mentor") }),
+	z.strictObject({ type: z.literal("get-mentor-panel") }),
+	z.strictObject({ type: z.literal("get-mentor-thread"), threadId: z.uuid() }),
+	z.strictObject({ type: z.literal("new-mentor-conversation") }),
 ]);
 
 export type RpcRequest = z.infer<typeof requestSchema>;
 export type RpcCommand = RpcRequest["type"];
 
 /** Who is asking, decided by the worker from `MessageSender` alone (`sender-policy.ts`). */
-export type Surface = "options" | "inline" | "action";
+export type Surface = "options" | "inline" | "action" | "mentor";
 
 /**
  * Which surface may send which command. The inline frame sits inside a page the provider controls,
  * which can overlay it to redirect a real click, so it may only read about its own tab, and ask for
- * the confirmation window. Only that window, a top-level extension page no site can frame, confirms.
+ * the confirmation window or the Heph panel. Only that window, a top-level extension page no site can
+ * frame, confirms; only the Heph panel, Chrome's side panel for one tab, talks with Heph.
  */
 export const COMMAND_SURFACES: Record<RpcCommand, readonly Surface[]> = {
 	"get-state": ["options", "inline", "action"],
@@ -108,6 +115,10 @@ export const COMMAND_SURFACES: Record<RpcCommand, readonly Surface[]> = {
 	"get-action": ["action"],
 	"confirm-action": ["action"],
 	"discard-action": ["action"],
+	"open-mentor": ["inline"],
+	"get-mentor-panel": ["mentor"],
+	"get-mentor-thread": ["mentor"],
+	"new-mentor-conversation": ["mentor"],
 };
 
 export type RpcErrorCode =
@@ -211,6 +222,11 @@ export interface RpcResponses {
 	"get-action": ActionPreview;
 	"confirm-action": ActionOutcome;
 	"discard-action": null;
+	"open-mentor": null;
+	"get-mentor-panel": MentorPanel;
+	/** The stored transcript as the server returned it; the panel validates it before showing it. */
+	"get-mentor-thread": { messages: unknown[] };
+	"new-mentor-conversation": null;
 }
 
 /** Worker → views. Carries no data: a view that hears one asks again. */

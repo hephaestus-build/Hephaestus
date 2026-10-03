@@ -92,6 +92,42 @@ export async function readReportView(tabId: number): Promise<StoredReportView | 
 	return parsed.success ? parsed.data : undefined;
 }
 
+/**
+ * Which conversation one tab's Heph panel holds, as ids and addresses only — never a word of it. It
+ * counts only under the generation and in the workspace it was started in; the transcript stays on
+ * the server, where the web app continues it.
+ */
+const mentorBindingSchema = z.object({
+	generation: z.number().int().nonnegative(),
+	workspaceSlug: z.string(),
+	/** The canonical address of the work the conversation is about. */
+	workUrl: z.string(),
+	threadId: z.uuid(),
+});
+
+export type MentorBinding = z.infer<typeof mentorBindingSchema>;
+
+function mentorBindingKey(tabId: number): string {
+	return `mentorPanel:${tabId}`;
+}
+
+export async function readMentorBinding(tabId: number): Promise<MentorBinding | undefined> {
+	const key = mentorBindingKey(tabId);
+	const stored = await browser.storage.session.get(key);
+	const parsed = mentorBindingSchema.safeParse(stored[key]);
+	return parsed.success ? parsed.data : undefined;
+}
+
+export async function writeMentorBinding(
+	tabId: number,
+	binding: MentorBinding | undefined,
+): Promise<void> {
+	const key = mentorBindingKey(tabId);
+	await (binding === undefined
+		? browser.storage.session.remove(key)
+		: browser.storage.session.set({ [key]: binding }));
+}
+
 export async function writeReportView(
 	tabId: number,
 	view: StoredReportView | undefined,

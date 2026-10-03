@@ -220,6 +220,32 @@ describe("the report's calls", () => {
 		return { built, requests };
 	}
 
+	it("streams a mentor turn with JSON, bearer auth and no cookies to the one workspace endpoint", async () => {
+		const { built, requests } = await api(
+			async () =>
+				new Response("data: [DONE]\n\n", { headers: { "content-type": "text/event-stream" } }),
+		);
+		const controller = new AbortController();
+		const body = {
+			id: "thread",
+			message: { role: "user", parts: [{ type: "text", text: "Question" }] },
+		};
+		const turn = await built.mentorTurn("team", body, controller.signal);
+		const request = required(requests[0], "the mentor request");
+		expect(request.url).toBe("https://a.example.test/api/workspaces/team/mentor/chat");
+		expect(request.method).toBe("POST");
+		expect(request.headers.get("Content-Type")).toBe("application/json");
+		expect(request.headers.get("Accept")).toBe("text/event-stream");
+		expect(request.headers.get("Authorization")).toBe("Bearer access-a");
+		expect(request.credentials).toBe("omit");
+		expect(request.redirect).toBe("error");
+		await expect(request.json()).resolves.toStrictEqual(body);
+		expect(turn.status).toBe(200);
+		await expect(new Response(turn.stream).text()).resolves.toBe("data: [DONE]\n\n");
+		controller.abort();
+		expect(request.signal.aborted).toBe(true);
+	});
+
 	it("asks for the reader's own observations on one exact piece of work", async () => {
 		const { built, requests } = await api(async () => json({ content: [], totalElements: 0 }));
 		await built.ownObservations("team", "scm.pull_request", 16, 25);
