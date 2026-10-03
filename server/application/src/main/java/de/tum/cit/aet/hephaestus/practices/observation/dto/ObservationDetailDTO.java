@@ -51,8 +51,9 @@ public record ObservationDetailDTO(
 
         @Nullable
         @Schema(
-                description = "What to do — the text of the newest feedback that said something about this "
-                        + "observation to this developer (null if nothing was said)")
+                description =
+                        "The summary body of the newest eligible feedback about this observation to this developer "
+                                + "(null when no summary body was recorded, including delivery through inline notes only)")
         String deliveredFeedback,
 
         @Nullable
@@ -63,9 +64,10 @@ public record ObservationDetailDTO(
 
         @Nullable
         @Schema(
-                description = "The developer's standing answer to the very feedback whose text deliveredFeedback "
-                        + "shows, with that feedback's id as the handle for responding (null when nothing was said, "
-                        + "or when the feedback that said it failed to deliver and so cannot be answered)")
+                description =
+                        "The developer's standing answer and response handle for the newest eligible feedback about "
+                                + "this observation, including inline-only delivery with no summary body (null when no "
+                                + "eligible feedback exists or the newest eligible feedback has failed delivery)")
         FeedbackResponseDTO feedbackResponse,
 
         @Nullable @Schema(description = "Cross-run locus key; null when continuity is unavailable")
@@ -94,7 +96,7 @@ public record ObservationDetailDTO(
 
     /**
      * One piece of feedback answers both {@code deliveredFeedback} and {@code feedbackResponse}, so the
-     * developer always rates the words they just read. FAILED feedback's text is still shown — it was composed
+     * developer answers the feedback they received, even when it landed only as inline notes. FAILED feedback's text is still shown — it was composed
      * and may have reached them on the artifact — but it carries no response handle, because only DELIVERED
      * feedback can be answered.
      */

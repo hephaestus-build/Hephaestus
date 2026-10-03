@@ -2739,7 +2739,7 @@ export type ObservationDetail = {
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
-   * What to do — the text of the newest feedback that said something about this observation to this developer (null if nothing was said)
+   * The summary body of the newest eligible feedback about this observation to this developer (null when no summary body was recorded, including delivery through inline notes only)
    */
   deliveredFeedback?: string;
   evidence?: ObservationEvidence;
@@ -2748,7 +2748,7 @@ export type ObservationDetail = {
    */
   evidenceRationale?: string;
   /**
-   * The developer's standing answer to the very feedback whose text deliveredFeedback shows, with that feedback's id as the handle for responding (null when nothing was said, or when the feedback that said it failed to deliver and so cannot be answered)
+   * The developer's standing answer and response handle for the newest eligible feedback about this observation, including inline-only delivery with no summary body (null when no eligible feedback exists or the newest eligible feedback has failed delivery)
    */
   feedbackResponse?: FeedbackResponse;
   /**
