@@ -111,7 +111,7 @@ function PracticesAcrossTheWorkspace() {
 	const ownOpen =
 		(openPracticeSlug !== undefined || ownGroupSlug !== undefined) &&
 		featureState.practicesEnabled === true;
-	const standings = usePracticeStandings(workspaceSlug);
+	const standings = usePracticeStandings(workspaceSlug, { enabled: ownOpen });
 	const { overview: profileOverview, ...profileOverviewQuery } = usePracticeProfileOverview(
 		workspaceSlug,
 		ownGroupSlug !== undefined && featureState.practicesEnabled === true,

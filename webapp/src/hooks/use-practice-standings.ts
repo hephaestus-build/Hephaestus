@@ -39,19 +39,28 @@ function groupPracticeStandings(
 
 /**
  * The developer's practice standings in one workspace — the groups, the standing in each and the
- * standing on every practice — as the practice profile and the drawer over it read them.
+ * standing on every practice — as the practice profile and the drawer over it read them. With
+ * `enabled` off nothing is read, for a page that shows them only while a level is open.
  */
-export function usePracticeStandings(workspaceSlug: string): PracticeStandings {
-	const groupsQuery = useQuery(
-		listGroupsOptions({
+export function usePracticeStandings(
+	workspaceSlug: string,
+	{ enabled = true }: { enabled?: boolean } = {},
+): PracticeStandings {
+	const groupsQuery = useQuery({
+		...listGroupsOptions({
 			path: { workspaceSlug },
 			query: { visibleInPracticeDashboardsOnly: true },
 		}),
-	);
-	const groupStandingsQuery = useQuery(
-		listPracticeGroupStandingsOptions({ path: { workspaceSlug } }),
-	);
-	const standingsQuery = useQuery(listPracticeStandingsOptions({ path: { workspaceSlug } }));
+		enabled,
+	});
+	const groupStandingsQuery = useQuery({
+		...listPracticeGroupStandingsOptions({ path: { workspaceSlug } }),
+		enabled,
+	});
+	const standingsQuery = useQuery({
+		...listPracticeStandingsOptions({ path: { workspaceSlug } }),
+		enabled,
+	});
 	const practiceStandings = standingsQuery.data ?? [];
 	return {
 		groups: groupsQuery.data ?? [],

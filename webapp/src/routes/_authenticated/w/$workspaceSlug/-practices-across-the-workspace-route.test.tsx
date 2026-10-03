@@ -96,6 +96,14 @@ afterEach(() => {
 const overviewReads = () =>
 	requests.filter((request) => request.url.pathname.endsWith("/practices/workspace-overview"));
 
+/** The reader's own profile reads, which only the reader's own levels need. */
+const profileReads = () =>
+	requests.filter(({ url }) =>
+		["/practice-groups", "/practice-groups/standings", "/practices/standings"].some((path) =>
+			url.pathname.endsWith(path),
+		),
+	);
+
 async function renderPage(path = PAGE) {
 	const { router } = renderRouteAtWithRouter(path);
 	await screen.findByRole(
@@ -149,8 +157,10 @@ describe("Practices across the workspace", () => {
 		);
 		// The reader's trend in the group, read off the support the wire sent with its dates.
 		screen.getByRole("button", { name: "More positive recently" });
-		// The level asks for nothing of its own: the page's one read carries every practice's split.
+		// The level asks for nothing of its own: the page's one read carries every practice's split,
+		// and the reader's own profile is read only once one of its levels opens.
 		expect(overviewReads()).toHaveLength(1);
+		expect(profileReads()).toStrictEqual([]);
 		await userEvent.click(
 			within(level).getByRole("button", { name: "View practice Scope the change to one concern" }),
 		);
