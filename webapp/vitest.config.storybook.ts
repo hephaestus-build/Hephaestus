@@ -18,13 +18,12 @@ export default defineConfig({
 		}),
 	],
 	resolve: {
+		tsconfigPaths: true,
 		alias: [
 			{
 				find: "@monaco-editor/react",
 				replacement: path.resolve(import.meta.dirname, "./src/test/monaco-editor-react.mock.tsx"),
 			},
-			{ find: "@/brand", replacement: path.resolve(import.meta.dirname, "brand") },
-			{ find: "@", replacement: path.resolve(import.meta.dirname, "./src") },
 		],
 	},
 	optimizeDeps: {

@@ -28,7 +28,9 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -287,6 +289,49 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .orElseThrow();
         assertThat(practice.getAutonomy()).isEqualTo(PracticeAutonomy.OFF);
         assertThat(practice.getPrecomputeScript()).isNull();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldAdoptTheClosedIssueRecordPracticeAsReviewableBesideTheWithdrawnAtCloseCopy() {
+        ensureAdminMembership(workspace);
+        String historical = "issue-closed-with-unmet-outcome";
+        String current = "closed-issue-outcome-recorded";
+        for (String slug : List.of(historical, current)) {
+            String etag = required(webTestClient
+                    .get()
+                    .uri(BASE + "/" + slug, workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .returnResult(Void.class)
+                    .getResponseHeaders()
+                    .getETag());
+            webTestClient
+                    .post()
+                    .uri(BASE + "/" + slug, workspace.getWorkspaceSlug())
+                    .headers(headers -> {
+                        TestAuthUtils.withCurrentUser().accept(headers);
+                        headers.set(HttpHeaders.IF_MATCH, etag);
+                    })
+                    .exchange()
+                    .expectStatus()
+                    .isCreated()
+                    .expectBody(Void.class);
+        }
+
+        var withdrawn = practiceRepository
+                .findByWorkspaceIdAndSlug(workspace.getId(), historical)
+                .orElseThrow();
+        var adopted = practiceRepository
+                .findByWorkspaceIdAndSlug(workspace.getId(), current)
+                .orElseThrow();
+        assertThat(withdrawn.getAutonomy()).isEqualTo(PracticeAutonomy.OFF);
+        assertThat(adopted.getAutonomy()).isEqualTo(PracticeAutonomy.HUMAN_APPROVAL);
+        assertThat(adopted.getAutomatedReviewPolicy().automatedReview().canAttemptAutomatedReview())
+                .isTrue();
+        assertThat(adopted.getReviewWhen()).isEqualTo(Map.of("state", Set.of("CLOSED")));
     }
 
     @ParameterizedTest

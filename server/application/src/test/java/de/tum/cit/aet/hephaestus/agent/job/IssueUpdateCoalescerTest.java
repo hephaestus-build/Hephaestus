@@ -14,7 +14,10 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentProvenance;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -40,6 +43,8 @@ class IssueUpdateCoalescerTest extends BaseUnitTest {
             submitter,
             workspaceResolver,
             new PracticeReviewProperties(false, 15, 5, null, 12, 16000),
+            new IssueEvidenceRevision(
+                    mock(IssueCommentRepository.class), new IssueCommentProvenance(issueId -> List.of())),
             mock(TransactionTemplate.class));
 
     @Test

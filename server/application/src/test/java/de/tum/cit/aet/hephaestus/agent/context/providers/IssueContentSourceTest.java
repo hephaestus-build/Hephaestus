@@ -2,8 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -19,19 +17,20 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentProvenance;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.StoredComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuetype.IssueType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -71,10 +70,64 @@ class IssueContentSourceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        provider = new IssueContentSource(objectMapper, issueRepository, issueCommentRepository);
-        lenient()
-                .when(issueCommentRepository.findRecentByIssueIdWithAuthor(eq(ISSUE_ID), any()))
-                .thenReturn(List.of());
+        provider = new IssueContentSource(
+                objectMapper,
+                issueRepository,
+                issueCommentRepository,
+                new IssueEvidenceRevision(issueCommentRepository, new IssueCommentProvenance(issueId -> List.of())));
+        lenient().when(issueCommentRepository.countByIssueId(ISSUE_ID)).thenReturn(0L);
+        lenient().when(issueCommentRepository.findStoredByIssueId(ISSUE_ID)).thenReturn(List.of());
+    }
+
+    @Test
+    void shouldReadNothingForACloseReviewWhoseSnapshotMovedOnSinceItWasAdmitted() {
+        Issue issue = richIssue();
+        issue.setReviewSnapshotId(UUID.fromString("00000000-0000-0000-0000-0000000000b2"));
+        when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
+        ObjectNode stale = sampleMetadata();
+        stale.put("signal", "scm.issue.closed");
+        stale.put("review_snapshot_id", "00000000-0000-0000-0000-0000000000b1");
+        ObjectNode unidentified = sampleMetadata();
+        unidentified.put("signal", "scm.issue.closed");
+
+        for (ObjectNode metadata : List.of(stale, unidentified)) {
+            var captured = provider.capture(request(metadata), Set.of(CORE, COMMENTS));
+            assertThat(captured.files()).isEmpty();
+            assertThat(captured.stateOverrides())
+                    .containsEntry(CORE, new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND))
+                    .containsEntry(COMMENTS, new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND));
+        }
+        verifyNoInteractions(issueCommentRepository);
+    }
+
+    @Test
+    void shouldCaptureACloseReviewWhoseSnapshotIsStillCurrent() {
+        Issue issue = richIssue();
+        UUID snapshot = UUID.fromString("00000000-0000-0000-0000-0000000000b3");
+        issue.setReviewSnapshotId(snapshot);
+        stubComments(List.of(
+                comment("bob", "first", Instant.parse("2025-06-01T10:00:00Z")),
+                comment("alice", "Export moved to #12.", Instant.parse("2025-06-02T10:00:00Z"))));
+        when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
+        ObjectNode metadata = sampleMetadata();
+        metadata.put("signal", "scm.issue.closed");
+        metadata.put("review_snapshot_id", snapshot.toString());
+
+        var captured = provider.capture(request(metadata), Set.of(CORE, COMMENTS));
+
+        assertThat(captured.files()).containsKeys(METADATA_KEY, COMMENTS_KEY);
+        assertThat(captured.completeness()).containsEntry(COMMENTS, SourceCompleteness.COMPLETE);
+    }
+
+    @Test
+    void shouldReportTheDiscussionPartialWhenTheProviderCountsMoreCommentsThanTheMirrorHolds() {
+        Issue issue = richIssue();
+        stubComments(List.of(comment("bob", "first", Instant.parse("2025-06-01T10:00:00Z"))));
+        when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
+
+        var captured = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
+
+        assertThat(captured.completeness()).containsEntry(COMMENTS, SourceCompleteness.PARTIAL);
     }
 
     @Test
@@ -150,22 +203,44 @@ class IssueContentSourceTest extends BaseUnitTest {
         return l;
     }
 
-    private IssueComment comment(@Nullable String authorLogin, String body, Instant createdAt) {
-        IssueComment c = new IssueComment();
-        c.setBody(body);
-        if (authorLogin != null) {
-            c.setAuthor(user(authorLogin));
-        }
-        c.setCreatedAt(createdAt);
-        return c;
+    private StoredComment comment(@Nullable String authorLogin, String body, Instant createdAt) {
+        return new StoredComment() {
+            @Override
+            public Long getId() {
+                return createdAt.toEpochMilli();
+            }
+
+            @Override
+            public Long getNativeId() {
+                return createdAt.toEpochMilli();
+            }
+
+            @Override
+            public @Nullable String getAuthorLogin() {
+                return authorLogin;
+            }
+
+            @Override
+            public Instant getCreatedAt() {
+                return createdAt;
+            }
+
+            @Override
+            public Instant getUpdatedAt() {
+                return createdAt;
+            }
+
+            @Override
+            public String getBody() {
+                return body;
+            }
+        };
     }
 
-    private void stubComments(List<IssueComment> chronological) {
-        int from = 0;
-        List<IssueComment> recent = new ArrayList<>(chronological.subList(from, chronological.size()));
-        Collections.reverse(recent);
-        when(issueCommentRepository.findRecentByIssueIdWithAuthor(eq(ISSUE_ID), any()))
-                .thenReturn(recent);
+    /** The stored comments as the projection returns them, oldest first, and that many mirrored in all. */
+    private void stubComments(List<StoredComment> chronological) {
+        when(issueCommentRepository.countByIssueId(ISSUE_ID)).thenReturn((long) chronological.size());
+        when(issueCommentRepository.findStoredByIssueId(ISSUE_ID)).thenReturn(chronological);
     }
 
     private Issue richIssue() {
@@ -294,8 +369,8 @@ class IssueContentSourceTest extends BaseUnitTest {
         @Test
         void ordersThreadByCreatedAtAscending() throws Exception {
             Issue issue = richIssue();
-            IssueComment newer = comment("alice", "second", Instant.parse("2025-06-02T10:00:00Z"));
-            IssueComment older = comment("bob", "first", Instant.parse("2025-06-01T10:00:00Z"));
+            StoredComment newer = comment("alice", "second", Instant.parse("2025-06-02T10:00:00Z"));
+            StoredComment older = comment("bob", "first", Instant.parse("2025-06-01T10:00:00Z"));
             stubComments(List.of(older, newer));
             when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
 
@@ -327,7 +402,7 @@ class IssueContentSourceTest extends BaseUnitTest {
         @Test
         void shouldKeepAllCommentsAboveTheFormerCaptureLimit() throws Exception {
             Issue issue = richIssue();
-            var thread = new ArrayList<IssueComment>();
+            var thread = new ArrayList<StoredComment>();
             int overflow = 10_000 + 50;
             Instant base = Instant.parse("2025-01-01T00:00:00Z");
             for (int i = 0; i < overflow; i++) {
@@ -350,7 +425,7 @@ class IssueContentSourceTest extends BaseUnitTest {
             Issue issue = richIssue();
             when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
             Instant base = Instant.parse("2025-01-01T00:00:00Z");
-            List<IssueComment> comments = new ArrayList<>();
+            List<StoredComment> comments = new ArrayList<>();
             for (int i = 0; i < 10_000; i++) {
                 comments.add(comment("u" + i, "Comment " + i, base.plusSeconds(i)));
             }
@@ -375,7 +450,8 @@ class IssueContentSourceTest extends BaseUnitTest {
             provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
 
             verify(issueRepository).findByIdWithRepository(ISSUE_ID);
-            verify(issueCommentRepository).findRecentByIssueIdWithAuthor(eq(ISSUE_ID), any());
+            verify(issueCommentRepository).countByIssueId(ISSUE_ID);
+            verify(issueCommentRepository).findStoredByIssueId(ISSUE_ID);
         }
     }
 

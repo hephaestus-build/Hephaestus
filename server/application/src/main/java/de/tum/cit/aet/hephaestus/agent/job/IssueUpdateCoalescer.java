@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -48,6 +49,7 @@ public class IssueUpdateCoalescer {
     private final IssueSignalResubmitter submitter;
     private final WorkspaceResolver workspaceResolver;
     private final PracticeReviewProperties reviewProperties;
+    private final IssueEvidenceRevision revisions;
     private final TransactionTemplate transactions;
 
     public IssueUpdateCoalescer(
@@ -57,6 +59,7 @@ public class IssueUpdateCoalescer {
             IssueSignalResubmitter submitter,
             WorkspaceResolver workspaceResolver,
             PracticeReviewProperties reviewProperties,
+            IssueEvidenceRevision revisions,
             TransactionTemplate transactions) {
         this.signals = signals;
         this.issues = issues;
@@ -64,6 +67,7 @@ public class IssueUpdateCoalescer {
         this.submitter = submitter;
         this.workspaceResolver = workspaceResolver;
         this.reviewProperties = reviewProperties;
+        this.revisions = revisions;
         this.transactions = transactions;
     }
 
@@ -126,9 +130,7 @@ public class IssueUpdateCoalescer {
         if (coolingDown(signals, owner, reviewProperties, ScmSignals.ISSUE, issueId, ScmSignals.ISSUE_UPDATED, now)) {
             return;
         }
-        SignalKey current = ScmSignals.issueKey(
-                        workspaceId, ScmSignals.ISSUE_UPDATED, ScmEventPayload.IssueData.from(issue))
-                .orElseThrow();
+        SignalKey current = revisions.updatedKey(workspaceId, ScmEventPayload.IssueData.from(issue));
         if (pending.stream().noneMatch(signal -> signal.key().equals(current)) && signals.isDeferred(current)) {
             // Preserve the deadline if the current snapshot committed after the group was locked.
             return;

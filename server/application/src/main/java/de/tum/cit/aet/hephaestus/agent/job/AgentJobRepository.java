@@ -28,6 +28,32 @@ import tools.jackson.databind.JsonNode;
 @Repository
 public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
+    /** Provenance survives replacement or withdrawal: those comments remain Hephaestus-authored. */
+    @Query(value = """
+        SELECT p.posted_comment_ref AS "externalRef", p.posted_comment_url AS "url"
+          FROM feedback_placement p JOIN feedback f ON f.id = p.feedback_id
+         WHERE f.artifact_kind = 'scm.issue' AND f.artifact_id = :issueId
+           AND p.placement_type = 'SUMMARY' AND p.posted_comment_ref IS NOT NULL
+        UNION
+        SELECT d.delivered_external_ref AS "externalRef", d.delivered_external_url AS "url"
+          FROM feedback_dispatch d JOIN agent_job j ON j.id = d.agent_job_id AND j.workspace_id = d.workspace_id
+         WHERE j.artifact_kind = 'scm.issue' AND j.metadata ->> 'issue_id' = CAST(:issueId AS text)
+           AND d.delivered_external_ref IS NOT NULL
+        UNION
+        SELECT j.delivery_comment_id AS "externalRef", NULL AS "url"
+          FROM agent_job j
+         WHERE j.artifact_kind = 'scm.issue' AND j.metadata ->> 'issue_id' = CAST(:issueId AS text)
+           AND j.delivery_comment_id IS NOT NULL
+        """, nativeQuery = true)
+    List<DeliveredIssueCommentRow> findDeliveredIssueComments(@Param("issueId") long issueId);
+
+    interface DeliveredIssueCommentRow {
+        String getExternalRef();
+
+        @Nullable
+        String getUrl();
+    }
+
     @Modifying(flushAutomatically = true)
     @Query("DELETE FROM AgentJob j WHERE j.workspace.id = :workspaceId")
     int deleteAllByWorkspaceId(@Param("workspaceId") Long workspaceId);
