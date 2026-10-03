@@ -505,6 +505,7 @@ export const Withdrawn: Story = {
 /**
  * A press on "Helpful" whose write takes a while: every response control waits at once, and the
  * pressed one says it is saving only after a second, so a quick write never flashes the word.
+ * Send waits too but does not claim to be sending, since the reader sent nothing.
  */
 export const RatingPending: Story = {
 	args: {
@@ -521,7 +522,7 @@ export const RatingPending: Story = {
 		).toBeDisabled();
 		await expect(canvas.queryByRole("button", { name: "Helpful" })).toBeNull();
 		await expect(canvas.getByRole("button", { name: "Not helpful" })).toBeDisabled();
-		await expect(canvas.getByRole("button", { name: "Sending…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
 	},
 };
 

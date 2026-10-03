@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-Your Practice profile keeps its layout while your feedback loads, and a response on a feedback card no longer flashes "Saving…" unless it takes more than a second. A link to a practice group that no longer exists now says so the same way in every panel.
+Your Practice profile keeps its layout while your feedback loads. A response on a feedback card shows "Saving…" only if it takes more than a second. While a rating saves, the comment's **Send** button no longer shows "Sending…". A link to a practice group that no longer exists now shows the same message in every panel.

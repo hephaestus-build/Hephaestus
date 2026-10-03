@@ -237,14 +237,20 @@ export function PracticeFeedbackCard({
 }: PracticeFeedbackCardProps) {
 	const headingId = useId();
 	const responseId = useId();
-	// Which row of buttons the reader pressed last, so a write in flight says "Saving…" on the button
-	// that asked for it and not on a pressed button in the other row.
-	const [lastPressed, setLastPressed] = useState<"rating" | "answer">("rating");
+	// Which control the reader pressed last, so a write in flight says so on the control that asked
+	// for it: not on a pressed button in the other row, and not on Send when a rating is saving.
+	const [lastPressed, setLastPressed] = useState<"rating" | "answer" | "comment">("rating");
 	const shownTimestamp = formatTimestamp(timestamp, state, new Date(useNow()));
 	// The write is optimistic, so a quick one says nothing: the controls wait at once, and the
 	// pressed button says "Saving…" only once the write outlasts a second. `ssr` off, since its
 	// default shows the word at once on a card that mounts with a write in flight.
 	const showSaving = useSpinDelay(isPending, { delay: 1000, minDuration: 500, ssr: false });
+	const sendComment =
+		onSendComment &&
+		((comment: FeedbackComment) => {
+			setLastPressed("comment");
+			onSendComment(comment);
+		});
 	const resolved = state === "resolved";
 	// No work can tick a closed card, so it draws no count towards the threshold.
 	const closed = state === "closed";
@@ -489,7 +495,8 @@ export function PracticeFeedbackCard({
 					label="What worked about this feedback?"
 					placeholder="Optional: what helped, or what you did"
 					isPending={isPending}
-					onSend={onSendComment}
+					sending={showSaving && lastPressed === "comment"}
+					onSend={sendComment}
 					onSkip={onSkipComment}
 				/>
 			)}
@@ -509,7 +516,8 @@ export function PracticeFeedbackCard({
 								: undefined
 						}
 						isPending={isPending}
-						onSend={onSendComment}
+						sending={showSaving && lastPressed === "comment"}
+						onSend={sendComment}
 						onSkip={onSkipComment}
 					/>
 				)}
