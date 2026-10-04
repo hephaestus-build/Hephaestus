@@ -200,9 +200,12 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 											<span className="min-w-0">Allow research use of your data?</span>
 										</span>
 									}
-									description="Studying this needs real project work, so the research asks developers to take part. It is optional, and Hephaestus works the same either way."
+									description="This research needs real project work, so it asks developers to take part. It is optional, and Hephaestus works the same either way."
 								>
-									<ResearchSummary organization={researchOrganization} />
+									<ResearchSummary
+										organization={researchOrganization}
+										id={`${id}-research-summary`}
+									/>
 									<ResearchDetails organization={researchOrganization} />
 
 									<RadioGroup
@@ -210,7 +213,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 										onValueChange={(value) => setAnswer(value ?? undefined)}
 										disabled={submitting}
 										aria-labelledby={`${id}-research-title`}
-										aria-describedby={`${id}-research-description`}
+										aria-describedby={`${id}-research-description ${id}-research-summary`}
 										className="grid gap-3 sm:grid-cols-2"
 									>
 										{researchAnswers(researchOrganization).map(({ value, title, detail }) => (

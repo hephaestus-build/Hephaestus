@@ -78,8 +78,8 @@ responses to that feedback. It also covers how you use Hephaestus, including you
 Heph and your answers to research surveys.
 
 **Excluded data.** Sign-in credentials and access tokens are never used. Your
-Slack message choices still apply. The research does not use data about health, beliefs or other
-special categories of personal data.
+Slack message choices still apply. The research team does not look for data about health, beliefs or other
+special categories of personal data and removes any that it finds.
 
 **Who works with it.** The research organization and the researchers who work for it use the data,
 only for research in this area. Only the research team and its AI model providers (see section 5) work with data in pseudonymized form.

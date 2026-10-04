@@ -81,7 +81,7 @@ They remain mandatory while the determination is pending.
 | Pseudonymized data goes to AI model providers during benchmark runs | Pseudonymized data is still personal data (EDPB Guidelines 01/2025). Send only pseudonymized data, under the Art. 28 agreement, region and no-training terms in the [processor checklist](./processor-checklist.md). Apply the participant's AI choice (No AI, In-house or Cloud) to the runs. |
 | A participant withdraws, but the data is already in a dataset | Remove the account's data from datasets that are not yet anonymized within `[removal time limit, proposed: 30 days]`. Anonymized data in a published result or dataset cannot be removed, so release only anonymized data. Test the withdrawal path before the first release. |
 | Third-party code in a dataset carries a licence that does not allow the release | This is not a GDPR matter, but it is a release gate. Check the licence of each source before release. |
-| Special-category content in free text reaches a research dataset | The research does not use special-category data (Art. 9). Researchers screen for names and remove what they find. Assess this incidental content in the full DPIA. |
+| Special-category content in free text reaches a research dataset | The research team does not look for special-category data (Art. 9) and removes any that it finds. Researchers screen for names and remove what they find. Assess this incidental content in the full DPIA. |
 | The broad research purpose is wider than a participant can foresee | Keep a research information page that lists current research projects and released datasets. Hold a positive vote of an ethics board. Restrict access to the research team. See section 7. |
 | Consent is not freely given because of a power imbalance | Keep a real refusal path with no disadvantage and equal-weight answers (EDPB Guidelines 3/2022). Keep the research team separate from grading and line management. If doubt remains, do not rely on consent. |
 
@@ -200,7 +200,7 @@ The research applies these safeguards under Art. 89(1) GDPR:
 - Before analysis, name, username and contact details are replaced by a code.
 - The key is stored apart from the data. Only the research team can reach it.
 - Researchers screen free text for names and remove what they find.
-- The research uses no special-category data (Art. 9).
+- The team does not look for special-category data (Art. 9) and removes any that it finds.
 
 Withdrawal (Art. 7(3) GDPR) is one switch in User settings. It stops use for new research and research survey invitations.
 The research team removes the account's data from datasets that are not yet anonymized within `[removal time limit, proposed: 30 days]`.

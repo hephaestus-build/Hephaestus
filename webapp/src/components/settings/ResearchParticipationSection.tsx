@@ -4,7 +4,7 @@ import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/
 import { Switch } from "@/components/ui/switch";
 
 export interface ResearchParticipationSectionProps {
-	/** The organization running the study, named beside the control so the reader knows whom the answer is for. */
+	/** The organization running the research, named beside the control so the reader knows whom the answer is for. */
 	organization: string;
 	participateInResearch: boolean;
 	onToggleResearch: (checked: boolean) => void;
@@ -42,7 +42,7 @@ export function ResearchParticipationSection({
 				/>
 			) : (
 				<>
-					<ResearchSummary organization={organization} />
+					<ResearchSummary organization={organization} id="research-summary" />
 					<ResearchDetails organization={organization} />
 					<Field orientation="horizontal">
 						<FieldContent>
@@ -60,6 +60,7 @@ export function ResearchParticipationSection({
 							onCheckedChange={onToggleResearch}
 							disabled={isLoading}
 							aria-busy={isLoading}
+							aria-describedby="research-summary"
 						/>
 					</Field>
 				</>

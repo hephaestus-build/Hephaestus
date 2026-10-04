@@ -537,7 +537,7 @@ Research safeguards (Art. 89(1) GDPR)
 - Before analysis, name, username and contact details are replaced by a code (pseudonymization).
 - The key is stored apart from the data. Only the research team can reach it.
 - Free text can still name people. Researchers screen for names and remove what they find.
-- The research does not use special-category data (Art. 9). Data minimization applies.
+- The research team does not look for special-category data (Art. 9) and removes any that it finds. Data minimization applies.
 - Access to research data is limited to the research team.
 - A dataset or benchmark leaves the research team only if it is anonymized.
 - A re-identification test must pass before a dataset is called anonymous. See the DPIA pre-screen.
@@ -598,9 +598,9 @@ Product feedback and product-purpose surveys improve the TUM-operated instance u
 
 Research-purpose surveys: Art. 6(1)(a) GDPR under the research participation above. Such a survey reaches only accounts whose latest research decision is a grant for the current notice version and for the organization it names. The screen labels it as research.
 
-Its answers are that study's data, rather than product feedback. They stay in the same database. Instance administrators who read them act on behalf of the study.
+Its answers are research data, rather than product feedback. They stay in the same database. Instance administrators who read them act on behalf of the research.
 
-Withdrawal does not automatically delete stored survey answers. The study must apply withdrawal to further consent-based processing. It must review retention and erasure under its documented lawful basis. Continued storage is not permission to continue research use.
+Withdrawal does not automatically delete stored survey answers in the instance database. The research team removes them from datasets that are not yet anonymized and applies withdrawal to further consent-based processing. It must review retention and erasure under its documented lawful basis. Continued storage is not permission to continue research use.
 
 The Hephaestus session cookie (`__Host-HEPHAESTUS_AT`), the CSRF + OAuth-state cookies, and theme-preference localStorage use this basis:
 § 25 Abs. 2 Nr. 2 TDDDG (technisch unbedingt erforderlich) i.V.m. Art. 6(1)(e) GDPR.

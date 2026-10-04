@@ -136,7 +136,7 @@ export const NoticeChangedUnderneath: Story = {
 	},
 };
 
-/** No study on this deployment, so the question is not asked and the terms alone complete setup. */
+/** No research on this deployment, so the question is not asked and the terms alone complete setup. */
 export const NoResearchProgramme: Story = {
 	args: {
 		state: { ...ready, notice: { ...notice, researchOrganization: undefined } },

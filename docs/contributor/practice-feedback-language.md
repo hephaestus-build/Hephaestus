@@ -259,7 +259,7 @@ Data is **pseudonymized** when a code replaces the identifiers that name a perso
 Pseudonymized data is still personal data.
 Data is **anonymized** when nobody can identify the person from it.
 Say *anonymized* only for data that passed a re-identification test.
-Do not use *academic*, *study*, or *participation* for research use in UI text.
+Do not use *academic* or *study* for research use in UI text.
 
 ## Software technical names
 

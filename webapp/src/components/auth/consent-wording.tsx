@@ -65,21 +65,21 @@ export const TERMS_OBLIGATIONS =
 	"Use only work you are entitled to see. Treat feedback as guidance for the person it is for, not as an assessment to share.";
 
 /**
- * Both answers are equal in weight, carry no icon and name what they do. A reason to say yes sits
- * in the summary, not inside one answer: an answer with more reasons than its opposite is the
- * asymmetry EDPB 03/2022 calls deceptive.
+ * Both answers are equal in weight, carry no icon and name what they do. The reason for asking
+ * sits in the section description, not inside one answer: an answer with more reasons than its
+ * opposite is the asymmetry EDPB 03/2022 calls deceptive.
  */
 export function researchAnswers(organization: string) {
 	return [
 		{
 			value: "yes",
 			title: "Yes, allow research use",
-			detail: `Let ${organization} use my data for this research.`,
+			detail: `${organization} may use my data for this research.`,
 		},
 		{
 			value: "no",
 			title: "No, keep my data out of research",
-			detail: "Keep my data out of this research.",
+			detail: `${organization} may not use my data for this research.`,
 		},
 	] as const;
 }
@@ -89,9 +89,10 @@ export function researchAnswers(organization: string) {
  * research, the data, who sees it, and what withdrawal does and cannot do. The safeguards are the
  * research organization's commitments, so each is worded with the team as its subject.
  */
-export function ResearchSummary({ organization }: { organization: string }) {
+/** `id` lets the control that records the answer name this text as its description. */
+export function ResearchSummary({ organization, id }: { organization: string; id: string }) {
 	return (
-		<div className="space-y-2 text-sm break-words">
+		<div id={id} className="space-y-2 text-sm break-words">
 			<p>
 				The research organization, {organization}, may use your data for research if you allow it.
 				The research looks at how AI mentoring and practice feedback affect software engineering
@@ -108,7 +109,7 @@ export function ResearchSummary({ organization }: { organization: string }) {
 			</ul>
 			<p>
 				The research team replaces your name with a code before analysis. Only the team and its AI
-				model providers work with data that could identify you. A dataset leaves the team only if it
+				model providers work with data that could identify you. Nobody else gets a dataset unless it
 				is anonymized.
 			</p>
 			<p>
@@ -137,13 +138,13 @@ function researchDetails(organization: string): readonly Fact[] {
 			icon: ShieldCheckIcon,
 			term: "How it is protected",
 			detail:
-				"The research team replaces your name, username and contact details with a code. This is called pseudonymization. The team stores the key apart from the data, and only the team can reach it. Text can still name people, so the team screens for names and removes what it finds. The research does not use data about your health, beliefs or other special categories of personal data. These safeguards follow Article 89 of the GDPR.",
+				"The research team replaces your name, username and contact details with a code. This is called pseudonymization. The team stores the key apart from the data, and only the team can reach it. Text can still name people, so the team screens for names and removes what it finds. The team does not look for data about your health, beliefs or other special categories of personal data, and it removes any that it finds. These safeguards follow Article 89 of the GDPR.",
 		},
 		{
 			icon: ShareIcon,
 			term: "Datasets and benchmarks",
 			detail:
-				"A dataset or benchmark leaves the research team only if it is anonymized, so that nobody can identify you from it. If the team cannot anonymize a dataset, it keeps the dataset inside the team. Running a benchmark can mean running AI models on the data. Your AI choice applies to these runs too.",
+				"A dataset or benchmark leaves the research team only if it is anonymized, so that nobody can identify you from it. If the team cannot anonymize a dataset, it keeps the dataset inside the team. Running a benchmark can mean running AI models on the data. Your AI choice in User settings applies to these runs too.",
 		},
 		{
 			icon: UndoIcon,
