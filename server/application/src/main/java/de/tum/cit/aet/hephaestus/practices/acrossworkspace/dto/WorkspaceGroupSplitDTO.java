@@ -8,7 +8,9 @@ import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-@Schema(description = "One practice group: the reader's own standing and how the observed developers split across it")
+@Schema(
+        description =
+                "One practice group: the reader's own standing and how the developers with a standing split across it")
 public record WorkspaceGroupSplitDTO(
         @NonNull @Schema(description = "Group slug") String groupSlug,
         @NonNull @Schema(description = "Group name") String groupName,
@@ -24,7 +26,7 @@ public record WorkspaceGroupSplitDTO(
         @Nullable @Schema(description = "Evidence support and provenance for the reader's direction")
         TrendSupportDTO yourTrendSupport,
 
-        @NonNull @Schema(description = "How the observed developers split across the group")
+        @NonNull @Schema(description = "How the developers with a standing split across the group")
         WorkspaceSplitDTO split,
 
         @NonNull

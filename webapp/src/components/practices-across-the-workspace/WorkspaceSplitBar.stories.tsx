@@ -26,7 +26,7 @@ const meta = {
 		yourStanding: "MIXED",
 		window: "DAYS_30",
 		readerCounted: true,
-		observedDevelopers: 28,
+		developersWithAStanding: 28,
 		minimumOthers: 3,
 	},
 } satisfies Meta<typeof WorkspaceSplitBar>;

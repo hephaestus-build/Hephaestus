@@ -83,14 +83,14 @@ public class PracticesAcrossWorkspaceService {
         for (Long developer : read) {
             groupStandings.put(developer, groupStandings(groups, snapshots.getOrDefault(developer, NOTHING_READ)));
         }
-        // Observed: a verdict in a group the page shows, the same verdicts the group standings are read off.
-        List<Long> observed = eligible.stream()
+        // With a standing: a verdict in a group the page shows, the same verdicts the group standings are read off.
+        List<Long> withAStanding = eligible.stream()
                 .filter(developer -> Objects.requireNonNull(groupStandings.get(developer)).values().stream()
                         .anyMatch(group -> PracticeGroupStandingDTO.isVerdict(group.standing())))
                 .toList();
         boolean readerEligible = reader != null && eligible.contains(reader);
-        boolean readerCounted = reader != null && observed.contains(reader);
-        int others = observed.size() - (readerCounted ? 1 : 0);
+        boolean readerCounted = reader != null && withAStanding.contains(reader);
+        int others = withAStanding.size() - (readerCounted ? 1 : 0);
 
         Map<String, PracticeGroupStandingDTO> yourGroups = reader == null
                 ? groupStandings(groups, NOTHING_READ)
@@ -108,7 +108,7 @@ public class PracticesAcrossWorkspaceService {
                                     practiceBucket(snapshots.getOrDefault(developer, NOTHING_READ), practice.getSlug()))
                             .toList());
             GroupRelease release =
-                    CohortPrivacyPolicy.group(observed.stream().map(rowOf).toList(), practices.size());
+                    CohortPrivacyPolicy.group(withAStanding.stream().map(rowOf).toList(), practices.size());
             List<WorkspacePracticeSplitDTO> practiceSplits = new ArrayList<>();
             for (int index = 0; index < practices.size(); index++) {
                 Practice practice = practices.get(index);
@@ -130,7 +130,7 @@ public class PracticesAcrossWorkspaceService {
                     practiceSplits));
         }
 
-        List<StandingSnapshot> observedSnapshots = observed.stream()
+        List<StandingSnapshot> snapshotsWithAStanding = withAStanding.stream()
                 .map(developer -> snapshots.getOrDefault(developer, NOTHING_READ))
                 .toList();
         // Open now, for the reader and the workspace alike, so the tile sets one moment beside one moment: every
@@ -148,18 +148,18 @@ public class PracticesAcrossWorkspaceService {
         return new PracticesAcrossWorkspaceDTO(
                 window,
                 CohortPrivacyPolicy.MINIMUM_OTHERS,
-                CohortPrivacyPolicy.observedTotal(others, readerCounted),
+                CohortPrivacyPolicy.totalWithAStanding(others, readerCounted),
                 readerCounted,
                 yours.practices().size(),
-                tile(yours, observedSnapshots, others, PracticesAcrossWorkspaceService::reviewedWork),
+                tile(yours, snapshotsWithAStanding, others, PracticesAcrossWorkspaceService::reviewedWork),
                 tile(
                         yours,
-                        observedSnapshots,
+                        snapshotsWithAStanding,
                         others,
                         snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.STRENGTH)),
                 tile(
                         yours,
-                        observedSnapshots,
+                        snapshotsWithAStanding,
                         others,
                         snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.DEVELOPING)),
                 new WorkspaceTileDTO(
@@ -191,11 +191,11 @@ public class PracticesAcrossWorkspaceService {
 
     private static WorkspaceTileDTO tile(
             StandingSnapshot yours,
-            List<StandingSnapshot> observed,
+            List<StandingSnapshot> withAStanding,
             int others,
             ToIntFunction<StandingSnapshot> figure) {
         MiddleHalf middle = CohortPrivacyPolicy.middleHalf(
-                observed.stream().map(figure::applyAsInt).toList(), others);
+                withAStanding.stream().map(figure::applyAsInt).toList(), others);
         return new WorkspaceTileDTO(
                 figure.applyAsInt(yours), middle == null ? null : middle.low(), middle == null ? null : middle.high());
     }

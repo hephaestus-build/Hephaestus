@@ -16005,10 +16005,16 @@ components:
       - supportedAutomatedReviewModes
     PracticesAcrossWorkspace:
       type: object
-      description: "The reader's own practice group standings beside how the developers\
-        \ observed in the workspace split across the same groups, counted in developers\
+      description: "The reader's own practice group standings beside how the workspace's\
+        \ developers with a standing split across the same groups, counted in developers\
         \ and never naming one"
       properties:
+        developersWithAStanding:
+          type: integer
+          format: int32
+          description: Eligible developers with a standing in a practice group shown
+            in the window; absent while fewer than minimumOthers of them are other
+            than the reader
         groups:
           type: array
           description: "One row per practice group shown on the practice pages, in\
@@ -16020,12 +16026,6 @@ components:
           format: int32
           description: The fewest developers other than the reader a shown count stands
             for
-        observedDevelopers:
-          type: integer
-          format: int32
-          description: Eligible developers with a standing in a practice group shown
-            in the window; absent while fewer than minimumOthers of them are other
-            than the reader
         openFeedback:
           $ref: "#/components/schemas/WorkspaceTile"
           description: "The reader's open feedback, counted by the rule the practice\
@@ -16039,8 +16039,8 @@ components:
           description: The reader's practices needing attention
         readerCounted:
           type: boolean
-          description: Whether the reader is one of the observed developers and so
-            inside the counts
+          description: Whether the reader is one of the developers with a standing
+            and so inside the counts
         reviewedWork:
           $ref: "#/components/schemas/WorkspaceTile"
           description: Pieces of the reader's work reviewed in the window
@@ -19974,8 +19974,8 @@ components:
       - practiceReviewsReady
     WorkspaceGroupSplit:
       type: object
-      description: "One practice group: the reader's own standing and how the observed\
-        \ developers split across it"
+      description: "One practice group: the reader's own standing and how the developers\
+        \ with a standing split across it"
       properties:
         groupColor:
           type: string
@@ -19997,7 +19997,7 @@ components:
             $ref: "#/components/schemas/WorkspacePracticeSplit"
         split:
           $ref: "#/components/schemas/WorkspaceSplit"
-          description: How the observed developers split across the group
+          description: How the developers with a standing split across the group
         yourDirection:
           type: string
           description: "The direction of the reader's own standing in the group, read\
@@ -20523,7 +20523,7 @@ components:
     WorkspacePracticeSplit:
       type: object
       description: "One practice of a group: the reader's own standing and how the\
-        \ observed developers split"
+        \ developers with a standing split"
       properties:
         practiceName:
           type: string
@@ -20533,7 +20533,7 @@ components:
           description: Practice slug
         split:
           $ref: "#/components/schemas/WorkspaceSplit"
-          description: How the observed developers split across the practice
+          description: How the developers with a standing split across the practice
         yourStanding:
           type: string
           description: The reader's own standing in the practice
@@ -20597,9 +20597,9 @@ components:
       - repositoryMode
     WorkspaceSplit:
       type: object
-      description: "How the observed developers split across one practice group or\
-        \ one practice, counted in developers; every count is absent outside the shape\
-        \ that shows it"
+      description: "How the developers with a standing split across one practice group\
+        \ or one practice, counted in developers; every count is absent outside the\
+        \ shape that shows it"
       properties:
         goingWell:
           type: integer
@@ -20616,7 +20616,8 @@ components:
         noneYet:
           type: integer
           format: int32
-          description: Observed developers without a standing here; set only for SPLIT
+          description: Developers with a standing in a group shown but none here;
+            set only for SPLIT
         shape:
           type: string
           description: How the split may be shown
@@ -20673,18 +20674,18 @@ components:
     WorkspaceTile:
       type: object
       description: "One figure: the reader's own value, then the middle half of the\
-        \ observed developers"
+        \ developers counted"
       properties:
         middleHigh:
           type: integer
           format: int32
           description: Upper bound of the workspace's middle half; null when too few
-            are observed
+            are counted
         middleLow:
           type: integer
           format: int32
           description: Lower bound of the workspace's middle half; null when too few
-            are observed
+            are counted
         yours:
           type: integer
           format: int32

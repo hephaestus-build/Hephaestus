@@ -12,15 +12,15 @@ import org.jspecify.annotations.Nullable;
  * What the page may say about the developers other than its reader, and the only place that decides it.
  *
  * <p>Every figure about other developers is a count of developers. A part of a split is shown only when it holds
- * more than {@link #MINIMUM_OTHERS} developers, counted over every observed developer: whoever reads it, that part
- * holds at least {@link #MINIMUM_OTHERS} others, and every reader sees the same shape.
+ * more than {@link #MINIMUM_OTHERS} developers, counted over every developer with a standing: whoever reads it, that
+ * part holds at least {@link #MINIMUM_OTHERS} others, and every reader sees the same shape.
  *
- * <p>The observed total shows only while it holds {@link #MINIMUM_OTHERS} others. A practice group and a practice
- * are split by the same rule, over the same observed developers: each developer falls in one {@link Bucket}, read off
- * their group standing or their practice standing. A split shows Needs attention, Mixed feedback, Going well and
- * none yet only when every one of the four holds enough; otherwise the whole split is withheld, never a part of it,
- * since the page states how many developers were observed and a missing part would be that total less the rest.
- * Omit rather than show a zero. The reader's own standing is shown in every case, since it is theirs.
+ * <p>The total with a standing shows only while it holds {@link #MINIMUM_OTHERS} others. A practice group and a
+ * practice are split by the same rule, over the same developers with a standing: each developer falls in one
+ * {@link Bucket}, read off their group standing or their practice standing. A split shows Needs attention, Mixed
+ * feedback, Going well and none yet only when every one of the four holds enough; otherwise the whole split is
+ * withheld, never a part of it, since the page states how many developers have a standing and a missing part would
+ * be that total less the rest. Omit rather than show a zero. The reader's own standing is shown in every case, since it is theirs.
  *
  * <p>A group's standing is read off its practices, so its developers with a standing are everyone with a standing
  * in any of them, and its split and its practices' splits can be subtracted from each other: two practices of
@@ -83,13 +83,13 @@ public final class CohortPrivacyPolicy {
     }
 
     /**
-     * The observed total as it may be shown, the reader included when the reader is counted: only while it holds K
-     * others, otherwise null.
+     * The total of developers with a standing as it may be shown, the reader included when the reader is counted:
+     * only while it holds K others, otherwise null.
      *
-     * @param observedOthers observed developers other than the reader
+     * @param othersWithAStanding developers with a standing other than the reader
      */
-    public static @Nullable Integer observedTotal(int observedOthers, boolean readerCounted) {
-        return observedOthers >= MINIMUM_OTHERS ? observedOthers + (readerCounted ? 1 : 0) : null;
+    public static @Nullable Integer totalWithAStanding(int othersWithAStanding, boolean readerCounted) {
+        return othersWithAStanding >= MINIMUM_OTHERS ? othersWithAStanding + (readerCounted ? 1 : 0) : null;
     }
 
     /**
@@ -111,15 +111,16 @@ public final class CohortPrivacyPolicy {
      * standing in more than one of them. The group's own split stands, since on its own every part it shows
      * already holds enough.
      *
-     * @param observed every observed developer's buckets, the reader's included when the reader is observed
-     * @param practiceCount how many practices each row carries, which no row says when nobody is observed
+     * @param withAStanding the buckets of every developer with a standing, the reader's included when the reader
+     *     has one
+     * @param practiceCount how many practices each row carries, which no row says when nobody has a standing
      */
-    public static GroupRelease group(List<Row> observed, int practiceCount) {
-        List<Bucket> groupBuckets = observed.stream().map(Row::group).toList();
+    public static GroupRelease group(List<Row> withAStanding, int practiceCount) {
+        List<Bucket> groupBuckets = withAStanding.stream().map(Row::group).toList();
         Split group = split(groupBuckets);
         List<Split> practices = IntStream.range(0, practiceCount)
                 .mapToObj(index -> {
-                    Split practice = split(observed.stream()
+                    Split practice = split(withAStanding.stream()
                             .map(row -> row.practices().get(index))
                             .toList());
                     return safeCell(hasStanding(group) - hasStanding(practice), group, practice)
@@ -163,14 +164,14 @@ public final class CohortPrivacyPolicy {
     }
 
     /**
-     * One split counted over every observed developer, the reader included when observed: all four parts, each
-     * holding more than K of them, or nothing.
+     * One split counted over every developer with a standing, the reader included when they have one: all four
+     * parts, each holding more than K of them, or nothing.
      */
-    static Split split(Collection<Bucket> observed) {
-        int needs = count(observed, Bucket.NEEDS_ATTENTION);
-        int mixed = count(observed, Bucket.MIXED_FEEDBACK);
-        int well = count(observed, Bucket.GOING_WELL);
-        int none = observed.size() - needs - mixed - well;
+    static Split split(Collection<Bucket> withAStanding) {
+        int needs = count(withAStanding, Bucket.NEEDS_ATTENTION);
+        int mixed = count(withAStanding, Bucket.MIXED_FEEDBACK);
+        int well = count(withAStanding, Bucket.GOING_WELL);
+        int none = withAStanding.size() - needs - mixed - well;
         if (shows(needs) && shows(mixed) && shows(well) && shows(none)) {
             return new Split(Shape.SPLIT, needs, mixed, well, none);
         }
@@ -181,12 +182,12 @@ public final class CohortPrivacyPolicy {
     public record MiddleHalf(int low, int high) {}
 
     /**
-     * The middle half of one figure across the observed developers, the reader's own value among them, or null when
-     * fewer than twice {@link #MINIMUM_OTHERS} others are observed. Only the quartiles leave, each interpolated
+     * The middle half of one figure across the developers counted, the reader's own value among them, or null when
+     * fewer than twice {@link #MINIMUM_OTHERS} others are counted. Only the quartiles leave, each interpolated
      * between the two values around it and rounded, so a quartile falls on one developer's value only where the
      * values around it agree: a minimum, a maximum or a count of developers at one value would single someone out.
      *
-     * @param values the figure for every observed developer, the reader's included when the reader is observed
+     * @param values the figure for every developer counted, the reader's included when the reader is counted
      * @param others how many of {@code values} are other developers'
      */
     public static @Nullable MiddleHalf middleHalf(List<Integer> values, int others) {
@@ -206,7 +207,7 @@ public final class CohortPrivacyPolicy {
         return (int) Math.round(value);
     }
 
-    /** Whether a part counted over every observed developer holds K others whoever reads it. */
+    /** Whether a part counted over every developer with a standing holds K others whoever reads it. */
     private static boolean shows(int developers) {
         return developers > MINIMUM_OTHERS;
     }

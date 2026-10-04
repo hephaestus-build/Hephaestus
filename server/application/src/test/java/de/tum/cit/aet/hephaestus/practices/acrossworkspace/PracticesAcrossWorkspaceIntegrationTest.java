@@ -86,7 +86,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
         reader = member("testuser"); // matches @WithUser
         strength(packaging, reader, NEWEST);
-        // The owner has a standing too, so every eligible developer is observed.
+        // The owner has a standing too, so every eligible developer has one.
         strength(issues, owner, MIDDLE);
         for (int index = 0; index < DEVELOPERS; index++) {
             User developer = member("across-dev-" + index);
@@ -112,14 +112,14 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @Test
     @WithUser
     @DisplayName("an even group splits with the reader counted; a bare or nearly full one is withheld")
-    void shouldSplitAndWithholdByTheCountsOfObservedDevelopers() {
+    void shouldSplitAndWithholdByTheCountsOfDevelopersWithAStanding() {
         read("ALL_TIME")
                 .jsonPath("$.window")
                 .isEqualTo("ALL_TIME")
                 .jsonPath("$.minimumOthers")
                 .isEqualTo(3)
                 // The owner, the reader and twenty six developers are eligible, and every one of them was reviewed.
-                .jsonPath("$.observedDevelopers")
+                .jsonPath("$.developersWithAStanding")
                 .isEqualTo(28)
                 .jsonPath("$.readerCounted")
                 .isEqualTo(true)
@@ -310,7 +310,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .jsonPath("$.window")
                 .isEqualTo("DAYS_30")
                 // The owner's only standing moved out of the window.
-                .jsonPath("$.observedDevelopers")
+                .jsonPath("$.developersWithAStanding")
                 .isEqualTo(27)
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.shape")
                 .isEqualTo("WITHHELD")
@@ -330,9 +330,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 "UPDATE observation SET observed_at = observed_at - interval '100 days' WHERE workspace_id = ?",
                 workspace.getId());
 
-        read("DAYS_90").jsonPath("$.observedDevelopers").doesNotExist();
+        read("DAYS_90").jsonPath("$.developersWithAStanding").doesNotExist();
         read("ALL_TIME")
-                .jsonPath("$.observedDevelopers")
+                .jsonPath("$.developersWithAStanding")
                 .isEqualTo(28)
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.shape")
                 .isEqualTo("WITHHELD");
@@ -341,7 +341,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @Test
     @WithUser
     @DisplayName("the reader is not one of the three: two others and the reader leave every figure withheld")
-    void shouldWithholdEverythingWhenOnlyTwoOthersAreObserved() {
+    void shouldWithholdEverythingWhenOnlyTwoOthersHaveAStanding() {
         jdbc.update("""
                 DELETE FROM observation WHERE workspace_id = ? AND about_user_id IN (
                     SELECT id FROM "user" WHERE login LIKE 'across-%' AND login NOT IN
@@ -349,7 +349,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 """, workspace.getId());
 
         read("ALL_TIME")
-                .jsonPath("$.observedDevelopers")
+                .jsonPath("$.developersWithAStanding")
                 .doesNotExist()
                 .jsonPath("$.reviewedWork.yours")
                 .isEqualTo(1)
@@ -381,7 +381,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         }
 
         read("ALL_TIME")
-                .jsonPath("$.observedDevelopers")
+                .jsonPath("$.developersWithAStanding")
                 .isEqualTo(26)
                 // Two of the six at Needs attention are hidden, which leaves four there: still a part of its own.
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")

@@ -59,13 +59,13 @@ export const PAGE_PURPOSE =
 export function tilesHint(
 	minimumOthers: number,
 	window: AcrossWorkspaceWindow,
-	observedDevelopers?: number,
+	developersWithAStanding?: number,
 ): string {
 	// No count where the server held the total back: a small total is a count of its own.
 	const of =
-		observedDevelopers === undefined
+		developersWithAStanding === undefined
 			? "the developers here"
-			: `${developerCount(observedDevelopers)} observed ${windowPhrase(window)}`;
+			: `${developerCount(developersWithAStanding)} observed ${windowPhrase(window)}`;
 	return `The typical range is the middle half of ${of}; your marker shows you. A tile compares you once at least ${2 * minimumOthers} other developers have reviewed work in this window; until then it shows only your own value.`;
 }
 
@@ -122,10 +122,10 @@ export interface SplitContext {
 	/** Whether the reader is inside the counts; without it no part carries the You marker. */
 	readerCounted: boolean;
 	/**
-	 * The workspace's observed total, the reference group every split is a part of; absent while the
-	 * server holds it back.
+	 * The workspace's total of developers with a standing, the reference group every split is a part
+	 * of; absent while the server holds it back.
 	 */
-	observedDevelopers?: number;
+	developersWithAStanding?: number;
 	/** K: the fewest developers other than the reader a shown count stands for. */
 	minimumOthers: number;
 }
@@ -145,9 +145,9 @@ export const HELD_BACK = "Held back so no one can be singled out";
 /** The reference group a split is a part of: "24 developers observed in this workspace so far". */
 function referenceGroup(context: SplitContext): string {
 	const observed =
-		context.observedDevelopers === undefined
+		context.developersWithAStanding === undefined
 			? "Developers"
-			: developerCount(context.observedDevelopers);
+			: developerCount(context.developersWithAStanding);
 	return `${observed} observed in this workspace ${windowPhrase(context.window)}`;
 }
 

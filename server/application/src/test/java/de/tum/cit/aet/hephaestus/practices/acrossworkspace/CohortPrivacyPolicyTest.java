@@ -37,8 +37,8 @@ class CohortPrivacyPolicyTest {
         return buckets;
     }
 
-    private static Split split(List<Bucket> observed) {
-        return CohortPrivacyPolicy.split(observed);
+    private static Split split(List<Bucket> withAStanding) {
+        return CohortPrivacyPolicy.split(withAStanding);
     }
 
     @Test
@@ -53,7 +53,7 @@ class CohortPrivacyPolicyTest {
     }
 
     @Test
-    @DisplayName("every part holding four observed developers shows the split")
+    @DisplayName("every part holding four developers with a standing shows the split")
     void shouldShowTheSplitWhenEveryPartHoldsFourDevelopers() {
         Split split = split(developers(4, 5, 6, 4));
 
@@ -90,7 +90,7 @@ class CohortPrivacyPolicyTest {
     }
 
     @Test
-    @DisplayName("the middle half is the quartiles of every observed value")
+    @DisplayName("the middle half is the quartiles of every value counted")
     void shouldBoundTheMiddleHalfByTheQuartiles() {
         List<Integer> values = IntStream.rangeClosed(1, 13).boxed().toList();
 
@@ -106,8 +106,8 @@ class CohortPrivacyPolicyTest {
     }
 
     @Test
-    @DisplayName("fewer than six others observed leaves no middle half")
-    void shouldLeaveNoMiddleHalfWhenFewerThanSixOthersAreObserved() {
+    @DisplayName("fewer than six others counted leaves no middle half")
+    void shouldLeaveNoMiddleHalfWhenFewerThanSixOthersAreCounted() {
         List<Integer> values = IntStream.rangeClosed(1, 7).boxed().toList();
 
         assertThat(CohortPrivacyPolicy.middleHalf(values, 5)).isNull();
@@ -115,11 +115,11 @@ class CohortPrivacyPolicyTest {
     }
 
     @Test
-    @DisplayName("the observed total shows from three others, the reader counted in it")
-    void shouldShowTheObservedTotalOnlyWhileItHoldsThreeOthers() {
-        assertThat(CohortPrivacyPolicy.observedTotal(17, true)).isEqualTo(18);
-        assertThat(CohortPrivacyPolicy.observedTotal(3, false)).isEqualTo(3);
-        assertThat(CohortPrivacyPolicy.observedTotal(2, true)).isNull();
+    @DisplayName("the total with a standing shows from three others, the reader counted in it")
+    void shouldShowTheTotalWithAStandingOnlyWhileItHoldsThreeOthers() {
+        assertThat(CohortPrivacyPolicy.totalWithAStanding(17, true)).isEqualTo(18);
+        assertThat(CohortPrivacyPolicy.totalWithAStanding(3, false)).isEqualTo(3);
+        assertThat(CohortPrivacyPolicy.totalWithAStanding(2, true)).isNull();
     }
 
     @Test
@@ -213,24 +213,24 @@ class CohortPrivacyPolicyTest {
     @Test
     @DisplayName("a practice whose split falls short of its group's by fewer than three is withheld")
     void shouldWithholdAPracticeThatFallsShortOfItsGroupByFewerThanThree() {
-        List<Row> observed = new ArrayList<>();
+        List<Row> withAStanding = new ArrayList<>();
         for (Bucket bucket : developers(4, 4, 4, 6)) {
-            observed.add(new Row(bucket, List.of(bucket)));
+            withAStanding.add(new Row(bucket, List.of(bucket)));
         }
         // Two with a group standing from another practice, none yet in this one.
-        observed.add(new Row(GOING_WELL, List.of(NONE_YET)));
-        observed.add(new Row(GOING_WELL, List.of(NONE_YET)));
+        withAStanding.add(new Row(GOING_WELL, List.of(NONE_YET)));
+        withAStanding.add(new Row(GOING_WELL, List.of(NONE_YET)));
 
         GroupRelease release = CohortPrivacyPolicy.group(
-                observed, observed.getFirst().practices().size());
+                withAStanding, withAStanding.getFirst().practices().size());
 
         assertThat(release.group().shape()).isEqualTo(Shape.SPLIT);
         assertThat(release.practices()).extracting(Split::shape).containsExactly(Shape.WITHHELD);
     }
 
     @Test
-    @DisplayName("a window nobody was observed in withholds every practice it names")
-    void shouldWithholdEveryPracticeWhenNobodyIsObserved() {
+    @DisplayName("a window nobody has a standing in withholds every practice it names")
+    void shouldWithholdEveryPracticeWhenNobodyHasAStanding() {
         GroupRelease release = CohortPrivacyPolicy.group(List.of(), 2);
 
         assertThat(release.group()).isEqualTo(Split.WITHHELD);

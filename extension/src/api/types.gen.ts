@@ -4201,9 +4201,13 @@ export type PracticeWorkTypeDefinitionOptions = {
 };
 
 /**
- * The reader's own practice group standings beside how the developers observed in the workspace split across the same groups, counted in developers and never naming one
+ * The reader's own practice group standings beside how the workspace's developers with a standing split across the same groups, counted in developers and never naming one
  */
 export type PracticesAcrossWorkspace = {
+  /**
+   * Eligible developers with a standing in a practice group shown in the window; absent while fewer than minimumOthers of them are other than the reader
+   */
+  developersWithAStanding?: number;
   /**
    * One row per practice group shown on the practice pages, in catalog order
    */
@@ -4212,10 +4216,6 @@ export type PracticesAcrossWorkspace = {
    * The fewest developers other than the reader a shown count stands for
    */
   minimumOthers: number;
-  /**
-   * Eligible developers with a standing in a practice group shown in the window; absent while fewer than minimumOthers of them are other than the reader
-   */
-  observedDevelopers?: number;
   /**
    * The reader's open feedback, counted by the rule the practice profile shows it open by, beside the middle half of every eligible developer's: both open now, whatever the window
    */
@@ -4229,7 +4229,7 @@ export type PracticesAcrossWorkspace = {
    */
   practicesNeedingAttention: WorkspaceTile;
   /**
-   * Whether the reader is one of the observed developers and so inside the counts
+   * Whether the reader is one of the developers with a standing and so inside the counts
    */
   readerCounted: boolean;
   /**
@@ -6767,7 +6767,7 @@ export type WorkspaceAiOption = {
 };
 
 /**
- * One practice group: the reader's own standing and how the observed developers split across it
+ * One practice group: the reader's own standing and how the developers with a standing split across it
  */
 export type WorkspaceGroupSplit = {
   /**
@@ -6791,7 +6791,7 @@ export type WorkspaceGroupSplit = {
    */
   practices: Array<WorkspacePracticeSplit>;
   /**
-   * How the observed developers split across the group
+   * How the developers with a standing split across the group
    */
   split: WorkspaceSplit;
   /**
@@ -7150,7 +7150,7 @@ export type WorkspaceOnboardingSettings = {
 };
 
 /**
- * One practice of a group: the reader's own standing and how the observed developers split
+ * One practice of a group: the reader's own standing and how the developers with a standing split
  */
 export type WorkspacePracticeSplit = {
   /**
@@ -7162,7 +7162,7 @@ export type WorkspacePracticeSplit = {
    */
   practiceSlug: string;
   /**
-   * How the observed developers split across the practice
+   * How the developers with a standing split across the practice
    */
   split: WorkspaceSplit;
   /**
@@ -7200,7 +7200,7 @@ export type WorkspaceReviewScope = {
 };
 
 /**
- * How the observed developers split across one practice group or one practice, counted in developers; every count is absent outside the shape that shows it
+ * How the developers with a standing split across one practice group or one practice, counted in developers; every count is absent outside the shape that shows it
  */
 export type WorkspaceSplit = {
   /**
@@ -7216,7 +7216,7 @@ export type WorkspaceSplit = {
    */
   needsAttention?: number;
   /**
-   * Observed developers without a standing here; set only for SPLIT
+   * Developers with a standing in a group shown but none here; set only for SPLIT
    */
   noneYet?: number;
   /**
@@ -7266,15 +7266,15 @@ export type WorkspaceTeamSettings = {
 };
 
 /**
- * One figure: the reader's own value, then the middle half of the observed developers
+ * One figure: the reader's own value, then the middle half of the developers counted
  */
 export type WorkspaceTile = {
   /**
-   * Upper bound of the workspace's middle half; null when too few are observed
+   * Upper bound of the workspace's middle half; null when too few are counted
    */
   middleHigh?: number;
   /**
-   * Lower bound of the workspace's middle half; null when too few are observed
+   * Lower bound of the workspace's middle half; null when too few are counted
    */
   middleLow?: number;
   /**

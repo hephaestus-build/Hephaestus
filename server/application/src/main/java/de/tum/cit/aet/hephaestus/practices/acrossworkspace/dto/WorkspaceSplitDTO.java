@@ -7,7 +7,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 @Schema(
-        description = "How the observed developers split across one practice group or one practice, counted in"
+        description = "How the developers with a standing split across one practice group or one practice, counted in"
                 + " developers; every count is absent outside the shape that shows it")
 public record WorkspaceSplitDTO(
         @NonNull @Schema(description = "How the split may be shown")
@@ -22,7 +22,7 @@ public record WorkspaceSplitDTO(
         @Nullable @Schema(description = "Developers at Going well; set only for SPLIT")
         Integer goingWell,
 
-        @Nullable @Schema(description = "Observed developers without a standing here; set only for SPLIT")
+        @Nullable @Schema(description = "Developers with a standing in a group shown but none here; set only for SPLIT")
         Integer noneYet) {
 
     public static WorkspaceSplitDTO from(Split split) {

@@ -7,8 +7,8 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 @Schema(
-        description = "The reader's own practice group standings beside how the developers observed in the"
-                + " workspace split across the same groups, counted in developers and never naming one")
+        description = "The reader's own practice group standings beside how the workspace's developers with a"
+                + " standing split across the same groups, counted in developers and never naming one")
 public record PracticesAcrossWorkspaceDTO(
         @NonNull @Schema(description = "The window the evidence was read over")
         PracticesAcrossWorkspaceWindow window,
@@ -20,9 +20,10 @@ public record PracticesAcrossWorkspaceDTO(
         @Schema(
                 description = "Eligible developers with a standing in a practice group shown in the window; absent"
                         + " while fewer than minimumOthers of them are other than the reader")
-        Integer observedDevelopers,
+        Integer developersWithAStanding,
 
-        @NonNull @Schema(description = "Whether the reader is one of the observed developers and so inside the counts")
+        @NonNull
+        @Schema(description = "Whether the reader is one of the developers with a standing and so inside the counts")
         Boolean readerCounted,
 
         @NonNull

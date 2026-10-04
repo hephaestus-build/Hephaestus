@@ -47,7 +47,7 @@ export function splitContextOf(overview: PracticesAcrossWorkspace): SplitContext
 	return {
 		window: overview.window,
 		readerCounted: overview.readerCounted,
-		observedDevelopers: overview.observedDevelopers,
+		developersWithAStanding: overview.developersWithAStanding,
 		minimumOthers: overview.minimumOthers,
 	};
 }
@@ -95,7 +95,11 @@ export function PracticesAcrossTheWorkspacePage({
 						<WorkspaceTiles overview={overview} />
 						{overview !== undefined && (
 							<p className="text-xs text-muted-foreground">
-								{tilesHint(overview.minimumOthers, overview.window, overview.observedDevelopers)}
+								{tilesHint(
+									overview.minimumOthers,
+									overview.window,
+									overview.developersWithAStanding,
+								)}
 							</p>
 						)}
 					</>

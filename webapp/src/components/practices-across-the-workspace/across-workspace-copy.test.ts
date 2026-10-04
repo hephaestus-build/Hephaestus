@@ -11,7 +11,7 @@ import {
 const context: SplitContext = {
 	window: "ALL_TIME",
 	readerCounted: true,
-	observedDevelopers: 28,
+	developersWithAStanding: 28,
 	minimumOthers: 3,
 };
 
@@ -55,7 +55,7 @@ describe("a split held back", () => {
 				"MIXED",
 				{
 					...context,
-					observedDevelopers: undefined,
+					developersWithAStanding: undefined,
 				},
 			),
 		).toMatch(/^Developers observed in this workspace so far: /u);

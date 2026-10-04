@@ -142,7 +142,7 @@ export const PACKAGING_GROUP: WorkspaceGroupSplit = {
 export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	window: "DAYS_30",
 	minimumOthers: 3,
-	observedDevelopers: 28,
+	developersWithAStanding: 28,
 	readerCounted: true,
 	yourPractices: 18,
 	reviewedWork: { yours: 17, middleLow: 11, middleHigh: 21 },
@@ -164,7 +164,7 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 /** Four other developers observed: too few for any figure about the workspace, even a total. */
 export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
 	...ACROSS_WORKSPACE,
-	observedDevelopers: undefined,
+	developersWithAStanding: undefined,
 	reviewedWork: { yours: 17 },
 	practicesGoingWell: { yours: 6 },
 	practicesNeedingAttention: { yours: 4 },

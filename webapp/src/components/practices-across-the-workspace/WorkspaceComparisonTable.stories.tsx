@@ -30,7 +30,7 @@ const ROWS: ComparisonRow[] = [
 const CONTEXT = {
 	window: "DAYS_30",
 	readerCounted: true,
-	observedDevelopers: 28,
+	developersWithAStanding: 28,
 	minimumOthers: 3,
 } as const;
 
@@ -85,7 +85,7 @@ export const Withheld: Story = {
 		state: {
 			status: "ready",
 			rows: ROWS.map((each) => ({ ...each, split: WITHHELD })),
-			context: { ...CONTEXT, observedDevelopers: undefined },
+			context: { ...CONTEXT, developersWithAStanding: undefined },
 		},
 	},
 	play: async ({ canvas }) => {

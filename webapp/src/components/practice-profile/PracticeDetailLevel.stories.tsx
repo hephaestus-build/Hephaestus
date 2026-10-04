@@ -338,7 +338,7 @@ export const BesideTheWorkspace: Story = {
 					yourStanding="STRENGTH"
 					window="DAYS_30"
 					readerCounted
-					observedDevelopers={28}
+					developersWithAStanding={28}
 					minimumOthers={3}
 				/>
 			</div>

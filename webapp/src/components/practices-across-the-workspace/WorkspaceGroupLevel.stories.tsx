@@ -13,7 +13,7 @@ import { WorkspaceGroupLevel } from "./WorkspaceGroupLevel";
 const CONTEXT = {
 	window: "DAYS_30",
 	readerCounted: true,
-	observedDevelopers: 28,
+	developersWithAStanding: 28,
 	minimumOthers: 3,
 } as const;
 
