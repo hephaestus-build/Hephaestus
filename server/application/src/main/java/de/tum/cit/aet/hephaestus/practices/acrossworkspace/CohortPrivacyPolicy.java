@@ -1,10 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
-import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
-import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
+import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO.Standing;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 
@@ -16,9 +14,9 @@ import org.jspecify.annotations.Nullable;
  * part holds at least {@link #MINIMUM_OTHERS} others, and every reader sees the same shape.
  *
  * <p>The total with a standing shows only while it holds {@link #MINIMUM_OTHERS} others. A practice group and a
- * practice are split by the same rule, over the same developers with a standing: each developer falls in one
- * {@link Bucket}, read off their group standing or their practice standing. A split shows Needs attention, Mixed
- * feedback, Going well and none yet only when every one of the four holds enough; otherwise the whole split is
+ * practice are split by the same rule, over the same developers with a standing: each developer falls in the part of
+ * their group standing or their practice standing, and both standings that are no verdict fall in none yet. A split
+ * shows Needs attention, Mixed feedback, Going well and none yet only when every one of the four holds enough; otherwise the whole split is
  * withheld, never a part of it, since the page states how many developers have a standing and a missing part would
  * be that total less the rest. Omit rather than show a zero. The reader's own standing shows only as the marker on
  * their part of a split, and a split withheld marks no one.
@@ -47,26 +45,8 @@ public final class CohortPrivacyPolicy {
 
     private CohortPrivacyPolicy() {}
 
-    /** Where one developer falls in a split: one of the three standings, or none yet. */
-    public enum Bucket {
-        NEEDS_ATTENTION,
-        MIXED_FEEDBACK,
-        GOING_WELL,
-        NONE_YET;
-
-        public static Bucket of(PracticeGroupStandingDTO.Standing standing) {
-            return of(standing.asPracticeStanding());
-        }
-
-        public static Bucket of(PracticeStandingDTO.Standing standing) {
-            return switch (standing) {
-                case DEVELOPING -> NEEDS_ATTENTION;
-                case MIXED -> MIXED_FEEDBACK;
-                case STRENGTH -> GOING_WELL;
-                case NOT_OBSERVED, NO_OPPORTUNITY -> NONE_YET;
-            };
-        }
-    }
+    /** The verdicts a split counts a part for, in the order the practice profile lists them. */
+    static final List<Standing> VERDICTS = List.of(Standing.DEVELOPING, Standing.MIXED, Standing.STRENGTH);
 
     /** How one split is shown. */
     public enum Shape {
@@ -76,18 +56,18 @@ public final class CohortPrivacyPolicy {
         WITHHELD,
     }
 
+    /** The developers at one verdict in a split. */
+    public record Part(Standing standing, int developers) {}
+
     /**
-     * One split as it may be shown. Counts include the reader when the reader is counted, so the bar and
-     * the reader's place on it agree; every count is null outside the shape that shows it.
+     * One split as it may be shown: a part per verdict, in {@link #VERDICTS} order, and none yet. Counts include
+     * the reader when the reader is counted, so the bar and the reader's place on it agree; a withheld split has
+     * no parts and no none yet.
      */
     public record Split(
-            Shape shape,
-            @Nullable Integer needsAttention,
-            @Nullable Integer mixedFeedback,
-            @Nullable Integer goingWell,
-            @Nullable Integer noneYet) {
+            Shape shape, List<Part> parts, @Nullable Integer noneYet) {
 
-        static final Split WITHHELD = new Split(Shape.WITHHELD, null, null, null, null);
+        static final Split WITHHELD = new Split(Shape.WITHHELD, List.of(), null);
     }
 
     /**
@@ -101,10 +81,10 @@ public final class CohortPrivacyPolicy {
     }
 
     /**
-     * One developer's buckets in a practice group and in each of its practices, the practices in the order the
+     * One developer's standing in a practice group and in each of its practices, the practices in the order the
      * page lists them.
      */
-    public record Row(Bucket group, List<Bucket> practices) {}
+    public record Row(Standing group, List<Standing> practices) {}
 
     /** A practice group's split and its practices' splits, in the order of the rows' practices. */
     public record GroupRelease(Split group, List<Split> practices) {}
@@ -119,13 +99,12 @@ public final class CohortPrivacyPolicy {
      * standing in more than one of them. The group's own split stands, since on its own every part it shows
      * already holds enough.
      *
-     * @param withAStanding the buckets of every developer with a standing, the reader's included when the reader
-     *     has one
+     * @param withAStanding the standings of every developer with a standing, the reader's included when the
+     *     reader has one
      * @param practiceCount how many practices each row carries, which no row says when nobody has a standing
      */
     public static GroupRelease group(List<Row> withAStanding, int practiceCount) {
-        List<Bucket> groupBuckets = withAStanding.stream().map(Row::group).toList();
-        Split group = split(groupBuckets);
+        Split group = split(withAStanding.stream().map(Row::group).toList());
         List<Split> practices = IntStream.range(0, practiceCount)
                 .mapToObj(index -> {
                     Split practice = split(withAStanding.stream()
@@ -160,28 +139,25 @@ public final class CohortPrivacyPolicy {
         return size == 0 || size >= MINIMUM_OTHERS;
     }
 
-    /** How many a shown split counts with a standing. */
+    /** How many a split counts with a standing; none for a withheld split, which has no parts. */
     private static int hasStanding(Split split) {
-        return switch (split.shape()) {
-            case SPLIT ->
-                Objects.requireNonNull(split.needsAttention())
-                        + Objects.requireNonNull(split.mixedFeedback())
-                        + Objects.requireNonNull(split.goingWell());
-            case WITHHELD -> 0;
-        };
+        return split.parts().stream().mapToInt(Part::developers).sum();
     }
 
     /**
      * One split counted over every developer with a standing, the reader included when they have one: all four
      * parts, each holding more than K of them, or nothing.
      */
-    static Split split(Collection<Bucket> withAStanding) {
-        int needs = count(withAStanding, Bucket.NEEDS_ATTENTION);
-        int mixed = count(withAStanding, Bucket.MIXED_FEEDBACK);
-        int well = count(withAStanding, Bucket.GOING_WELL);
-        int none = withAStanding.size() - needs - mixed - well;
-        if (shows(needs) && shows(mixed) && shows(well) && shows(none)) {
-            return new Split(Shape.SPLIT, needs, mixed, well, none);
+    static Split split(Collection<Standing> withAStanding) {
+        List<Part> parts = VERDICTS.stream()
+                .map(verdict -> new Part(verdict, (int) withAStanding.stream()
+                        .filter(standing -> standing == verdict)
+                        .count()))
+                .toList();
+        int none =
+                withAStanding.size() - parts.stream().mapToInt(Part::developers).sum();
+        if (parts.stream().allMatch(part -> shows(part.developers())) && shows(none)) {
+            return new Split(Shape.SPLIT, parts, none);
         }
         return Split.WITHHELD;
     }
@@ -218,9 +194,5 @@ public final class CohortPrivacyPolicy {
     /** Whether a part counted over every developer with a standing holds K others whoever reads it. */
     private static boolean shows(int developers) {
         return developers > MINIMUM_OTHERS;
-    }
-
-    private static int count(Collection<Bucket> buckets, Bucket bucket) {
-        return (int) buckets.stream().filter(each -> each == bucket).count();
     }
 }

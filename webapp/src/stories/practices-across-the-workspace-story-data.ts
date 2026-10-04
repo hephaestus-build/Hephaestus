@@ -67,13 +67,15 @@ export const threeWay = ([needsAttention, mixedFeedback, goingWell]: [
 	number,
 ]): WorkspaceSplit => ({
 	shape: "SPLIT",
-	needsAttention,
-	mixedFeedback,
-	goingWell,
+	parts: [
+		{ standing: "DEVELOPING", developers: needsAttention },
+		{ standing: "MIXED", developers: mixedFeedback },
+		{ standing: "STRENGTH", developers: goingWell },
+	],
 	noneYet: STORY_WITH_A_STANDING - needsAttention - mixedFeedback - goingWell,
 });
 
-export const WITHHELD: WorkspaceSplit = { shape: "WITHHELD" };
+export const WITHHELD: WorkspaceSplit = { shape: "WITHHELD", parts: [] };
 
 const practice = (
 	practiceSlug: string,

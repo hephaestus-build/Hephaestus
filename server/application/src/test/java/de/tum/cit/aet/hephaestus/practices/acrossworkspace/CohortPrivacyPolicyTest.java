@@ -1,23 +1,23 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
-import static de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Bucket.GOING_WELL;
-import static de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Bucket.MIXED_FEEDBACK;
-import static de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Bucket.NEEDS_ATTENTION;
-import static de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Bucket.NONE_YET;
+import static de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO.Standing.DEVELOPING;
+import static de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO.Standing.MIXED;
+import static de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO.Standing.NOT_OBSERVED;
+import static de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO.Standing.NO_OPPORTUNITY;
+import static de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO.Standing.STRENGTH;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Bucket;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.GroupRelease;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Part;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Row;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Shape;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Split;
-import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
+import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO.Standing;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.Random;
 import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
@@ -28,40 +28,36 @@ import org.junit.jupiter.api.Test;
 @Tag("unit")
 class CohortPrivacyPolicyTest {
 
-    private static List<Bucket> developers(int needs, int mixed, int well, int none) {
-        List<Bucket> buckets = new ArrayList<>();
-        buckets.addAll(Collections.nCopies(needs, NEEDS_ATTENTION));
-        buckets.addAll(Collections.nCopies(mixed, MIXED_FEEDBACK));
-        buckets.addAll(Collections.nCopies(well, GOING_WELL));
-        buckets.addAll(Collections.nCopies(none, NONE_YET));
-        return buckets;
+    private static List<Standing> developers(int needs, int mixed, int well, int none) {
+        List<Standing> standings = new ArrayList<>();
+        standings.addAll(Collections.nCopies(needs, DEVELOPING));
+        standings.addAll(Collections.nCopies(mixed, MIXED));
+        standings.addAll(Collections.nCopies(well, STRENGTH));
+        standings.addAll(Collections.nCopies(none, NOT_OBSERVED));
+        return standings;
     }
 
-    private static Split split(List<Bucket> withAStanding) {
+    private static Split split(List<Standing> withAStanding) {
         return CohortPrivacyPolicy.split(withAStanding);
     }
 
     @Test
-    @DisplayName("a group standing and a practice standing fall in the same bucket, both silences in none yet")
-    void shouldPutAGroupAndAPracticeStandingInTheSameBucket() {
-        for (PracticeStandingDTO.Standing standing : PracticeStandingDTO.Standing.values()) {
-            assertThat(Bucket.of(standing))
-                    .isEqualTo(Bucket.of(PracticeGroupStandingDTO.Standing.valueOf(standing.name())));
-        }
-        assertThat(Bucket.of(PracticeStandingDTO.Standing.NO_OPPORTUNITY)).isEqualTo(NONE_YET);
-        assertThat(Bucket.of(PracticeGroupStandingDTO.Standing.NOT_OBSERVED)).isEqualTo(NONE_YET);
-    }
-
-    @Test
-    @DisplayName("every part holding four developers with a standing shows the split")
+    @DisplayName("every part holding four developers with a standing shows the split, the verdicts in profile order")
     void shouldShowTheSplitWhenEveryPartHoldsFourDevelopers() {
         Split split = split(developers(4, 5, 6, 4));
 
         assertThat(split.shape()).isEqualTo(Shape.SPLIT);
-        assertThat(split.needsAttention()).isEqualTo(4);
-        assertThat(split.mixedFeedback()).isEqualTo(5);
-        assertThat(split.goingWell()).isEqualTo(6);
+        assertThat(split.parts()).containsExactly(new Part(DEVELOPING, 4), new Part(MIXED, 5), new Part(STRENGTH, 6));
         assertThat(split.noneYet()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("both standings that are no verdict count as none yet")
+    void shouldCountBothSilencesAsNoneYet() {
+        List<Standing> withAStanding = new ArrayList<>(developers(4, 4, 4, 2));
+        withAStanding.addAll(Collections.nCopies(2, NO_OPPORTUNITY));
+
+        assertThat(split(withAStanding).noneYet()).isEqualTo(4);
     }
 
     /** Three in a part are three others to a reader outside it and two to a reader inside: every reader is held back. */
@@ -126,8 +122,8 @@ class CohortPrivacyPolicyTest {
     @DisplayName("practices that move with their group show beside it")
     void shouldShowPracticesThatMoveWithTheirGroup() {
         List<Row> others = new ArrayList<>();
-        for (Bucket bucket : developers(4, 4, 5, 4)) {
-            others.add(new Row(bucket, List.of(bucket, bucket)));
+        for (Standing standing : developers(4, 4, 5, 4)) {
+            others.add(new Row(standing, List.of(standing, standing)));
         }
 
         GroupRelease release =
@@ -135,7 +131,7 @@ class CohortPrivacyPolicyTest {
 
         assertThat(release.group().shape()).isEqualTo(Shape.SPLIT);
         assertThat(release.practices()).extracting(Split::shape).containsExactly(Shape.SPLIT, Shape.SPLIT);
-        assertThat(release.practices().getFirst().goingWell()).isEqualTo(5);
+        assertThat(at(release.practices().getFirst(), STRENGTH)).isEqualTo(5);
     }
 
     /**
@@ -148,14 +144,14 @@ class CohortPrivacyPolicyTest {
     @DisplayName("a developer whom the group and two practices single out together holds the practices back")
     void shouldHoldThePracticesBackWhenTheyAndTheGroupWouldSingleOutOneDeveloper() {
         List<Row> others = new ArrayList<>();
-        for (Bucket bucket : developers(4, 4, 4, 0)) {
-            others.add(new Row(bucket, List.of(bucket, NONE_YET)));
-            others.add(new Row(bucket, List.of(NONE_YET, bucket)));
+        for (Standing standing : developers(4, 4, 4, 0)) {
+            others.add(new Row(standing, List.of(standing, NOT_OBSERVED)));
+            others.add(new Row(standing, List.of(NOT_OBSERVED, standing)));
         }
         for (int index = 0; index < 4; index++) {
-            others.add(new Row(NONE_YET, List.of(NONE_YET, NONE_YET)));
+            others.add(new Row(NOT_OBSERVED, List.of(NOT_OBSERVED, NOT_OBSERVED)));
         }
-        others.add(new Row(MIXED_FEEDBACK, List.of(NEEDS_ATTENTION, GOING_WELL)));
+        others.add(new Row(MIXED, List.of(DEVELOPING, STRENGTH)));
         // On their own, each of the three splits holds three others in every part.
         assertThat(split(others.stream().map(row -> row.practices().get(0)).toList())
                         .shape())
@@ -168,7 +164,7 @@ class CohortPrivacyPolicyTest {
                 CohortPrivacyPolicy.group(others, others.getFirst().practices().size());
 
         assertThat(release.group().shape()).isEqualTo(Shape.SPLIT);
-        assertThat(release.group().mixedFeedback()).isEqualTo(9);
+        assertThat(at(release.group(), MIXED)).isEqualTo(9);
         assertThat(release.practices()).extracting(Split::shape).containsExactly(Shape.WITHHELD, Shape.WITHHELD);
     }
 
@@ -181,14 +177,14 @@ class CohortPrivacyPolicyTest {
     @DisplayName("no cohort lets the group and its practices name 1 to K - 1 developers with a standing in both")
     void shouldNeverLetTheGroupAndItsPracticesNameFewerThanKOthersInBoth() {
         Random random = new Random(51);
-        Bucket[] buckets = Bucket.values();
+        Standing[] standings = Standing.values();
         for (int cohort = 0; cohort < 2000; cohort++) {
             List<Row> others = new ArrayList<>();
             int size = 8 + random.nextInt(30);
             for (int index = 0; index < size; index++) {
-                Bucket a = buckets[random.nextInt(buckets.length)];
-                Bucket b = buckets[random.nextInt(buckets.length)];
-                others.add(new Row(a != NONE_YET ? a : b, List.of(a, b)));
+                Standing a = standings[random.nextInt(standings.length)];
+                Standing b = standings[random.nextInt(standings.length)];
+                others.add(new Row(PracticeStandingDTO.isVerdict(a) ? a : b, List.of(a, b)));
             }
 
             GroupRelease release = CohortPrivacyPolicy.group(
@@ -214,12 +210,12 @@ class CohortPrivacyPolicyTest {
     @DisplayName("a practice whose split falls short of its group's by fewer than three is withheld")
     void shouldWithholdAPracticeThatFallsShortOfItsGroupByFewerThanThree() {
         List<Row> withAStanding = new ArrayList<>();
-        for (Bucket bucket : developers(4, 4, 4, 6)) {
-            withAStanding.add(new Row(bucket, List.of(bucket)));
+        for (Standing standing : developers(4, 4, 4, 6)) {
+            withAStanding.add(new Row(standing, List.of(standing)));
         }
         // Two with a group standing from another practice, none yet in this one.
-        withAStanding.add(new Row(GOING_WELL, List.of(NONE_YET)));
-        withAStanding.add(new Row(GOING_WELL, List.of(NONE_YET)));
+        withAStanding.add(new Row(STRENGTH, List.of(NOT_OBSERVED)));
+        withAStanding.add(new Row(STRENGTH, List.of(NOT_OBSERVED)));
 
         GroupRelease release = CohortPrivacyPolicy.group(
                 withAStanding, withAStanding.getFirst().practices().size());
@@ -240,11 +236,16 @@ class CohortPrivacyPolicyTest {
     /** How many a split shows with a standing, or null when it shows no such count. */
     private static @Nullable Integer hasStanding(Split split) {
         return switch (split.shape()) {
-            case SPLIT ->
-                Objects.requireNonNull(split.needsAttention())
-                        + Objects.requireNonNull(split.mixedFeedback())
-                        + Objects.requireNonNull(split.goingWell());
+            case SPLIT -> split.parts().stream().mapToInt(Part::developers).sum();
             case WITHHELD -> null;
         };
+    }
+
+    /** The developers a split shows at one verdict. */
+    private static int at(Split split, Standing verdict) {
+        return split.parts().stream()
+                .filter(part -> part.standing() == verdict)
+                .mapToInt(Part::developers)
+                .sum();
     }
 }

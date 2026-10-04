@@ -20630,26 +20630,20 @@ components:
     WorkspaceSplit:
       type: object
       description: "How the developers with a standing split across one practice group\
-        \ or one practice, counted in developers; every count is absent outside the\
-        \ shape that shows it"
+        \ or one practice, counted in developers: a part per verdict and none yet,\
+        \ all set only for SPLIT"
       properties:
-        goingWell:
-          type: integer
-          format: int32
-          description: Developers at Going well; set only for SPLIT
-        mixedFeedback:
-          type: integer
-          format: int32
-          description: Developers at Mixed feedback; set only for SPLIT
-        needsAttention:
-          type: integer
-          format: int32
-          description: Developers at Needs attention; set only for SPLIT
         noneYet:
           type: integer
           format: int32
           description: Developers with a standing in a group shown but none here;
             set only for SPLIT
+        parts:
+          type: array
+          description: "Developers at each verdict, Needs attention, Mixed feedback\
+            \ and Going well in that order; empty unless SPLIT"
+          items:
+            $ref: "#/components/schemas/WorkspaceSplitPart"
         shape:
           type: string
           description: How the split may be shown
@@ -20657,7 +20651,28 @@ components:
           - SPLIT
           - WITHHELD
       required:
+      - parts
       - shape
+    WorkspaceSplitPart:
+      type: object
+      description: The developers at one verdict in a split
+      properties:
+        developers:
+          type: integer
+          format: int32
+          description: "Developers at the verdict, the reader included when counted"
+        standing:
+          type: string
+          description: The verdict the part counts
+          enum:
+          - DEVELOPING
+          - STRENGTH
+          - MIXED
+          - NOT_OBSERVED
+          - NO_OPPORTUNITY
+      required:
+      - developers
+      - standing
     WorkspaceTeamRepositorySettings:
       type: object
       description: Repository contribution visibility settings for a specific team

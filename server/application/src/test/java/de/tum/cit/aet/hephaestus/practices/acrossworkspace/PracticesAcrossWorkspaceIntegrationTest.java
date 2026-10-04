@@ -140,11 +140,11 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourStanding")
                 .isEqualTo("STRENGTH")
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.needsAttention")
+                .jsonPath(groupPart("review-ready-work", "DEVELOPING"))
                 .isEqualTo(6)
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.mixedFeedback")
+                .jsonPath(groupPart("review-ready-work", "MIXED"))
                 .isEqualTo(6)
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.goingWell")
+                .jsonPath(groupPart("review-ready-work", "STRENGTH"))
                 .isEqualTo(7)
                 // The eight developers and the owner without a standing are a fourth part of their own.
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.noneYet")
@@ -153,18 +153,18 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].yourStanding")
                 .isEqualTo("NOT_OBSERVED")
-                .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.goingWell")
+                .jsonPath(groupPart("testing-discipline", "STRENGTH"))
                 .isEqualTo(4)
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.noneYet")
                 .isEqualTo(16)
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.shape")
                 .isEqualTo("WITHHELD")
-                .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.goingWell")
+                .jsonPath(groupPart("actionable-issues", "STRENGTH"))
                 .doesNotExist()
                 // Every standing holds eight or more, but only three are left at none yet, the reader among them.
                 .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.shape")
                 .isEqualTo("WITHHELD")
-                .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.goingWell")
+                .jsonPath(groupPart("code-craftsmanship", "STRENGTH"))
                 .doesNotExist()
                 .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.noneYet")
                 .doesNotExist();
@@ -205,14 +205,12 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'explain')]"
                         + ".split.shape")
                 .isEqualTo("SPLIT")
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'explain')]"
-                        + ".split.goingWell")
+                .jsonPath(practicePart("review-ready-work", "explain", "STRENGTH"))
                 .isEqualTo(7)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
                         + ".split.shape")
                 .isEqualTo("SPLIT")
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
-                        + ".split.needsAttention")
+                .jsonPath(practicePart("review-ready-work", "small", "DEVELOPING"))
                 .isEqualTo(6)
                 // A group with one practice names it, split as the group is.
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].practices[0].split.shape")
@@ -445,7 +443,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 // Two of the six at Needs attention are hidden, which leaves four there: still a part of its own.
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
                 .isEqualTo("SPLIT")
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.needsAttention")
+                .jsonPath(groupPart("review-ready-work", "DEVELOPING"))
                 .isEqualTo(4)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.noneYet")
                 .isEqualTo(9);
@@ -510,6 +508,19 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         } finally {
             CurrentScmIdentityHolder.clear();
         }
+    }
+
+    /** The path to the developers at one verdict in a group's split. */
+    private static String groupPart(String groupSlug, String standing) {
+        return "$.groups[?(@.groupSlug == '%s')].split.parts[?(@.standing == '%s')].developers"
+                .formatted(groupSlug, standing);
+    }
+
+    /** The path to the developers at one verdict in a practice's split. */
+    private static String practicePart(String groupSlug, String practiceSlug, String standing) {
+        return ("$.groups[?(@.groupSlug == '%s')].practices[?(@.practiceSlug == '%s')]"
+                        + ".split.parts[?(@.standing == '%s')].developers")
+                .formatted(groupSlug, practiceSlug, standing);
     }
 
     /** Every group's split and its practices' names and splits: what reads the same whoever reads it. */

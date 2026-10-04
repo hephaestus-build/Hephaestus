@@ -12,8 +12,7 @@ public record WorkspacePracticeSplitDTO(
         @NonNull
         @Schema(
                 description = "The reader's current standing in the practice, the one their practice profile shows:"
-                        + " the part of the split the reader is marked in",
-                allowableValues = {"DEVELOPING", "STRENGTH", "MIXED", "NOT_OBSERVED", "NO_OPPORTUNITY"})
+                        + " the part of the split the reader is marked in")
         Standing yourStanding,
 
         @NonNull @Schema(description = "How the developers with a standing split across the practice")

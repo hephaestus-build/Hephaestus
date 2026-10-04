@@ -2,9 +2,11 @@ import type { PracticesAcrossWorkspaceTiles, WorkspaceSplit } from "@/api/types.
 import type { FilterOption } from "@/components/common/FilterToggle";
 import { statusValues } from "@/components/common/status-def";
 import {
+	isSettledStanding,
 	PRACTICE_GROUP_STANDING_DEFS,
 	type PracticeGroupStandingValue,
 } from "@/components/practice-vocabulary/practice-group-standing-defs";
+import { NONE_YET_SEGMENT } from "@/components/practice-vocabulary/standing-counts";
 
 export type AcrossWorkspaceWindow = PracticesAcrossWorkspaceTiles["window"];
 
@@ -100,27 +102,6 @@ export function practicesHint(minimumOthers: number): string {
 	return `Each bar counts developers by their current standing in the practice, as their Practice profile shows it. You marks your part. A bar shows only if each of its parts holds at least ${minimumOthers} other developers. The bar must also single no one out beside the group's bar. If not, it is held back.`;
 }
 
-export const standingLabel = (standing: PracticeGroupStandingValue): string =>
-	PRACTICE_GROUP_STANDING_DEFS[standing].label;
-
-/** The three standings a split counts, in the order the profile lists them. */
-export const SPLIT_STANDINGS = ["DEVELOPING", "MIXED", "STRENGTH"] as const;
-export type SplitStanding = (typeof SPLIT_STANDINGS)[number];
-
-/** The field of a split that counts each standing. */
-export const SPLIT_FIELDS = {
-	DEVELOPING: "needsAttention",
-	MIXED: "mixedFeedback",
-	STRENGTH: "goingWell",
-} as const satisfies Record<SplitStanding, keyof WorkspaceSplit>;
-
-export function isSplitStanding(standing: PracticeGroupStandingValue): standing is SplitStanding {
-	return (SPLIT_STANDINGS as readonly string[]).includes(standing);
-}
-
-/** The part of a split that counts the developers with no standing yet, whatever the reason. */
-export const NONE_YET = "None yet";
-
 /** What the bar and its text alternative need besides the split itself. */
 export interface SplitContext {
 	/** Whether the reader is inside the counts; without it no part carries the You marker. */
@@ -167,12 +148,15 @@ export function splitDescription(
 	if (split.shape === "WITHHELD") {
 		return `${HELD_BACK}.`;
 	}
-	// Each standing in the registry's own words, so the bar's text says what its legend says.
-	const standings = SPLIT_STANDINGS.map(
-		(standing) => `${split[SPLIT_FIELDS[standing]] ?? 0} ${standingLabel(standing)}`,
+	// Each part in the registry's own words and the server's order, so the bar's text says what its
+	// legend says.
+	const parts = split.parts.map(
+		(part) => `${part.developers} ${PRACTICE_GROUP_STANDING_DEFS[part.standing].label}`,
 	);
-	const noneYet = split.noneYet ?? 0;
-	const yourPart = isSplitStanding(yourStanding) ? standingLabel(yourStanding) : "none yet";
+	const noneYet = `${split.noneYet ?? 0} ${NONE_YET_SEGMENT.inSentence}`;
+	const yourPart = isSettledStanding(yourStanding)
+		? PRACTICE_GROUP_STANDING_DEFS[yourStanding].label
+		: NONE_YET_SEGMENT.inSentence;
 	const marker = context.readerCounted ? ` The You marker is on ${yourPart}.` : "";
-	return `${referenceGroup(context)}: ${standings.join(", ")}, ${noneYet} none yet.${marker}`;
+	return `${referenceGroup(context)}: ${[...parts, noneYet].join(", ")}.${marker}`;
 }

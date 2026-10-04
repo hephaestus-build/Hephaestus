@@ -1,23 +1,24 @@
-import { CircleIcon, TriangleIcon } from "lucide-react";
+import { TriangleIcon } from "lucide-react";
 import type { ComponentType } from "react";
 
 import { cn } from "cn";
 import type { WorkspaceSplit } from "@/api/types.gen";
-import { statusToneClass } from "@/components/common/status-def";
+import { statusValues } from "@/components/common/status-def";
 import {
+	isSettledStanding,
 	PRACTICE_GROUP_STANDING_DEFS,
 	type PracticeGroupStandingValue,
 } from "@/components/practice-vocabulary/practice-group-standing-defs";
+import {
+	NEUTRAL_GREY,
+	NONE_YET_SEGMENT,
+	standingColorClass,
+} from "@/components/practice-vocabulary/standing-counts";
 
 import {
 	developerCount,
 	HELD_BACK,
-	isSplitStanding,
-	NONE_YET,
-	SPLIT_FIELDS,
-	SPLIT_STANDINGS,
 	type SplitContext,
-	type SplitStanding,
 	splitDescription,
 } from "./across-workspace-copy";
 
@@ -30,65 +31,51 @@ export interface WorkspaceSplitBarProps extends SplitContext {
 	yourStanding: PracticeGroupStandingValue;
 }
 
-interface Part {
+/** One part a split can show: its words, its icon and the colour its icon and its piece of bar wear. */
+interface PartDef {
 	key: string;
-	count: number;
 	label: string;
 	icon: ComponentType<{ className?: string }>;
-	/** The icon's colour under the bar: the standing's tone, or the grey of a part with none. */
-	tone: string;
-	/** The ground of the part's piece of the bar. */
-	className: string;
-	/** Whether the reader is one of the developers this part counts. */
-	isYours: boolean;
+	/** A text colour; the bar paints with `currentColor`, so the part and its icon share it. */
+	colorClass: string;
 }
+
+/** A verdict's part, in the registry's words, icon and tone, never written here. */
+function standingPart(standing: PracticeGroupStandingValue): PartDef {
+	const def = PRACTICE_GROUP_STANDING_DEFS[standing];
+	return {
+		key: standing,
+		label: def.label,
+		icon: def.icon,
+		colorClass: standingColorClass(standing),
+	};
+}
+
+const NONE_YET_PART: PartDef = { key: "none", ...NONE_YET_SEGMENT };
 
 /**
- * None yet holds both standings that say why there is none, so it takes a neutral empty circle
- * rather than either one's icon, and a fill in the one grey family that stays a part of the bar
- * against the card in both themes. The fill stays under 3:1 against the card, since the count and
- * icon under every part carry what it shows.
+ * Every part a split can show, in the order the server sends them: the verdicts in registry order,
+ * then none yet. The legend lists these; a bar draws the wire's parts with the same definitions.
  */
-const NONE_YET_ICON = CircleIcon;
-const NONE_YET_FILL = "bg-muted-foreground/40";
-const GREY = "text-muted-foreground";
+const SPLIT_PARTS: readonly PartDef[] = [
+	...statusValues(PRACTICE_GROUP_STANDING_DEFS).filter(isSettledStanding).map(standingPart),
+	NONE_YET_PART,
+];
+
 /** The empty track of a split held back, dashed so it is never read as a part of none yet. */
-const HELD_BACK_TRACK = "h-2 rounded-sm border border-dashed border-muted-foreground/60";
+const HELD_BACK_TRACK = cn("h-2 rounded-sm border border-dashed border-current", NEUTRAL_GREY);
 
-/** A standing's part, in the registry's tone, every part at one strength. */
-function standingFill(standing: SplitStanding): string {
-	return cn("bg-current", statusToneClass(PRACTICE_GROUP_STANDING_DEFS[standing].badgeVariant));
-}
-
-function partsOf(
-	split: WorkspaceSplit,
-	yourStanding: PracticeGroupStandingValue,
-	readerCounted: boolean,
-): Part[] {
-	const noneYet: Part = {
-		key: "none",
-		count: split.noneYet ?? 0,
-		label: NONE_YET,
-		icon: NONE_YET_ICON,
-		tone: GREY,
-		className: NONE_YET_FILL,
-		isYours: readerCounted && !isSplitStanding(yourStanding),
-	};
-	const standings = SPLIT_STANDINGS.map((standing): Part => {
-		const def = PRACTICE_GROUP_STANDING_DEFS[standing];
-		const isYours = readerCounted && standing === yourStanding;
-		return {
-			key: standing,
-			count: split[SPLIT_FIELDS[standing]] ?? 0,
-			label: def.label,
-			icon: def.icon,
-			// The status colour reaches the bar and the icon through the registry, never written here.
-			tone: statusToneClass(def.badgeVariant),
-			className: standingFill(standing),
-			isYours,
-		};
-	});
-	return [...standings, noneYet];
+/**
+ * The reader's place on a bar: the word over a downward pointer. The page's one accent, as the
+ * palette in `webapp/AGENTS.md` allows it.
+ */
+function YouMarker() {
+	return (
+		<>
+			<span className="text-xs leading-3 font-semibold">You</span>
+			<TriangleIcon aria-hidden className="size-2.5 rotate-180 fill-current" />
+		</>
+	);
 }
 
 /**
@@ -110,35 +97,41 @@ export function WorkspaceSplitBar({ split, yourStanding, ...context }: Workspace
 		);
 	}
 	const description = splitDescription(split, yourStanding, context);
-	const parts = partsOf(split, yourStanding, context.readerCounted);
+	const parts = [
+		...split.parts.map((part) => ({
+			def: standingPart(part.standing),
+			count: part.developers,
+			isYours: context.readerCounted && part.standing === yourStanding,
+		})),
+		{
+			def: NONE_YET_PART,
+			count: split.noneYet ?? 0,
+			isYours: context.readerCounted && !isSettledStanding(yourStanding),
+		},
+	];
 	const total = parts.reduce((sum, part) => sum + part.count, 0);
 	return (
 		<div className="flex w-full min-w-0 flex-col gap-1">
 			<div role="img" aria-label={description} className="flex w-full min-w-0 gap-0.5">
-				{parts.map((part) => {
-					const Icon = part.icon;
+				{parts.map(({ def, count, isYours }) => {
+					const Icon = def.icon;
 					return (
 						<div
-							key={part.key}
+							key={def.key}
 							aria-hidden
-							title={`${part.label}: ${part.count}`}
+							title={`${def.label}: ${count}`}
 							// Each count sits in its own part's column, centred under the part's piece of the bar,
 							// and every column keeps room for its label, so no count shifts or meets another.
 							className="flex min-w-10 grow-(--count) basis-0 flex-col items-center gap-0.5"
-							style={{ "--count": part.count }}
+							style={{ "--count": count }}
 						>
 							<span className="flex h-5 flex-col items-center justify-end text-mentor">
-								{part.isYours && (
-									<>
-										<span className="text-xs leading-3 font-semibold">You</span>
-										<TriangleIcon className="size-2.5 rotate-180 fill-current" />
-									</>
-								)}
+								{isYours && <YouMarker />}
 							</span>
-							<span className={cn("h-2 w-full rounded-sm", part.className)} />
+							<span className={cn("h-2 w-full rounded-sm bg-current", def.colorClass)} />
 							<span className="flex w-full items-center justify-center gap-1 text-xs text-muted-foreground tabular-nums">
-								<Icon className={cn("size-3 shrink-0", part.tone)} />
-								{part.count}
+								<Icon className={cn("size-3 shrink-0", def.colorClass)} />
+								{count}
 							</span>
 						</div>
 					);
@@ -175,38 +168,23 @@ export function LevelSplit({
  * reader's marker, and the dashed track of a split held back.
  */
 export function SplitLegend() {
-	const items = [
-		...SPLIT_STANDINGS.map((standing) => {
-			const def = PRACTICE_GROUP_STANDING_DEFS[standing];
-			return {
-				key: standing,
-				label: def.label,
-				icon: def.icon,
-				// The icon in its standing's colour, as the badge colours it.
-				tone: statusToneClass(def.badgeVariant),
-				swatch: standingFill(standing),
-			};
-		}),
-		{ key: "none", label: NONE_YET, icon: NONE_YET_ICON, tone: GREY, swatch: NONE_YET_FILL },
-	];
 	return (
 		<ul
 			aria-label="What the bars show"
 			className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground"
 		>
-			{items.map((item) => {
-				const Icon = item.icon;
+			{SPLIT_PARTS.map((part) => {
+				const Icon = part.icon;
 				return (
-					<li key={item.key} className="inline-flex items-center gap-1.5">
-						<span aria-hidden className={cn("h-2 w-4 rounded-sm", item.swatch)} />
-						<Icon aria-hidden className={cn("size-3 shrink-0", item.tone)} />
-						{item.label}
+					<li key={part.key} className="inline-flex items-center gap-1.5">
+						<span aria-hidden className={cn("h-2 w-4 rounded-sm bg-current", part.colorClass)} />
+						<Icon aria-hidden className={cn("size-3 shrink-0", part.colorClass)} />
+						{part.label}
 					</li>
 				);
 			})}
 			<li className="inline-flex items-center gap-1 text-mentor">
-				<TriangleIcon aria-hidden className="size-2.5 rotate-180 fill-current" />
-				<span className="font-semibold">You</span>
+				<YouMarker />
 				<span className="text-muted-foreground">marks your part</span>
 			</li>
 			<li className="inline-flex items-center gap-1.5">

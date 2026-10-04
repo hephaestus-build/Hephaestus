@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 
+import { cn } from "cn";
 import type { WorkspaceTile as WorkspaceTileFigure } from "@/api/types.gen";
 import { StatTile } from "@/components/common/StatTile";
+import { NEUTRAL_GREY } from "@/components/practice-vocabulary/standing-counts";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -93,7 +95,10 @@ function RangeBar({ yours, middle }: { yours: number; middle?: MiddleHalf }) {
 			{middle !== undefined && (
 				<span
 					aria-hidden
-					className="absolute top-1 left-(--low) h-2 w-(--width) min-w-1 rounded-full bg-muted-foreground/70"
+					className={cn(
+						"absolute top-1 left-(--low) h-2 w-(--width) min-w-1 rounded-full bg-current",
+						NEUTRAL_GREY,
+					)}
 					style={{ "--low": at(middle.low), "--width": at(middle.high - middle.low) }}
 				/>
 			)}

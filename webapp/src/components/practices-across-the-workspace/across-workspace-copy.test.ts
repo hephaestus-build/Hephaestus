@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import type { WorkspaceSplit } from "@/api/types.gen";
+
 import {
 	groupsHint,
 	PAGE_PURPOSE,
@@ -9,6 +11,23 @@ import {
 	tilesHint,
 } from "./across-workspace-copy";
 
+const split = (
+	needsAttention: number,
+	mixedFeedback: number,
+	goingWell: number,
+	noneYet: number,
+): WorkspaceSplit => ({
+	shape: "SPLIT",
+	parts: [
+		{ standing: "DEVELOPING", developers: needsAttention },
+		{ standing: "MIXED", developers: mixedFeedback },
+		{ standing: "STRENGTH", developers: goingWell },
+	],
+	noneYet,
+});
+
+const WITHHELD: WorkspaceSplit = { shape: "WITHHELD", parts: [] };
+
 const context: SplitContext = {
 	readerCounted: true,
 	developersWithAStanding: 28,
@@ -17,65 +36,43 @@ const context: SplitContext = {
 
 describe("splitDescription", () => {
 	it("names the reference group, every count the bar shows, and the part the marker is on", () => {
-		expect(
-			splitDescription(
-				{ shape: "SPLIT", needsAttention: 6, mixedFeedback: 7, goingWell: 7, noneYet: 8 },
-				"MIXED",
-				context,
-			),
-		).toBe(
+		expect(splitDescription(split(6, 7, 7, 8), "MIXED", context)).toBe(
 			"28 developers with a current standing in this workspace: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet. The You marker is on Mixed feedback.",
 		);
 	});
 
 	it("names no window: a bar counts the current standing whatever the tiles read", () => {
-		expect(
-			splitDescription(
-				{ shape: "SPLIT", needsAttention: 6, mixedFeedback: 7, goingWell: 7, noneYet: 8 },
-				"MIXED",
-				context,
-			),
-		).not.toMatch(/days|so far|All time/u);
+		expect(splitDescription(split(6, 7, 7, 8), "MIXED", context)).not.toMatch(
+			/days|so far|All time/u,
+		);
 	});
 
 	it("marks none yet for a reader counted with no standing in the subject", () => {
-		expect(
-			splitDescription(
-				{ shape: "SPLIT", needsAttention: 6, mixedFeedback: 7, goingWell: 7, noneYet: 8 },
-				"NOT_OBSERVED",
-				context,
-			),
-		).toMatch(/, 8 none yet\. The You marker is on none yet\.$/u);
+		expect(splitDescription(split(6, 7, 7, 8), "NOT_OBSERVED", context)).toMatch(
+			/, 8 none yet\. The You marker is on none yet\.$/u,
+		);
 	});
 
 	it("says nothing of a reader who is not among the developers with a standing", () => {
 		expect(
-			splitDescription(
-				{ shape: "SPLIT", needsAttention: 6, mixedFeedback: 7, goingWell: 7, noneYet: 8 },
-				"NOT_OBSERVED",
-				{ ...context, readerCounted: false },
-			),
+			splitDescription(split(6, 7, 7, 8), "NOT_OBSERVED", { ...context, readerCounted: false }),
 		).toMatch(/, 8 none yet\.$/u);
 	});
 });
 
 describe("a split held back", () => {
 	it("gives one short reason and nothing of the reader, never the total", () => {
-		expect(splitDescription({ shape: "WITHHELD" }, "MIXED", context)).toBe(
+		expect(splitDescription(WITHHELD, "MIXED", context)).toBe(
 			"Held back so no one can be singled out.",
 		);
 	});
 
 	it("names no total the server held back", () => {
 		expect(
-			splitDescription(
-				{ shape: "SPLIT", needsAttention: 4, mixedFeedback: 5, goingWell: 6, noneYet: 4 },
-				"MIXED",
-				{
-					...context,
-					developersWithAStanding: undefined,
-				},
-			),
+			splitDescription(split(4, 5, 6, 4), "MIXED", {
+				...context,
+				developersWithAStanding: undefined,
+			}),
 		).toMatch(/^Developers with a current standing in this workspace: /u);
 	});
 });
@@ -121,6 +118,6 @@ describe("the hints", () => {
 		expect(practicesHint(3)).toContain(
 			"The bar must also single no one out beside the group's bar.",
 		);
-		expect(splitDescription({ shape: "WITHHELD" }, "MIXED", context)).not.toMatch(/yet/u);
+		expect(splitDescription(WITHHELD, "MIXED", context)).not.toMatch(/yet/u);
 	});
 });

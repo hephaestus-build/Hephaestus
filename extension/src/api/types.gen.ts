@@ -7206,29 +7206,35 @@ export type WorkspaceReviewScope = {
 };
 
 /**
- * How the developers with a standing split across one practice group or one practice, counted in developers; every count is absent outside the shape that shows it
+ * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict and none yet, all set only for SPLIT
  */
 export type WorkspaceSplit = {
-  /**
-   * Developers at Going well; set only for SPLIT
-   */
-  goingWell?: number;
-  /**
-   * Developers at Mixed feedback; set only for SPLIT
-   */
-  mixedFeedback?: number;
-  /**
-   * Developers at Needs attention; set only for SPLIT
-   */
-  needsAttention?: number;
   /**
    * Developers with a standing in a group shown but none here; set only for SPLIT
    */
   noneYet?: number;
   /**
+   * Developers at each verdict, Needs attention, Mixed feedback and Going well in that order; empty unless SPLIT
+   */
+  parts: Array<WorkspaceSplitPart>;
+  /**
    * How the split may be shown
    */
   shape: 'SPLIT' | 'WITHHELD';
+};
+
+/**
+ * The developers at one verdict in a split
+ */
+export type WorkspaceSplitPart = {
+  /**
+   * Developers at the verdict, the reader included when counted
+   */
+  developers: number;
+  /**
+   * The verdict the part counts
+   */
+  standing: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
 };
 
 /**

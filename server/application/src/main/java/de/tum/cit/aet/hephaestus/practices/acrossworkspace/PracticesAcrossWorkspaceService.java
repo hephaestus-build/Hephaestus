@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Bucket;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.GroupRelease;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Row;
@@ -76,11 +75,11 @@ public class PracticesAcrossWorkspaceService {
             // The practices every reader sees, whatever their own evidence says.
             List<Practice> practices = standings.eligiblePracticesByGroup().getOrDefault(group.getSlug(), List.of());
             Function<Long, Row> rowOf = developer -> new Row(
-                    Bucket.of(Objects.requireNonNull(
-                                    current.groupStandingsOf(developer).get(group.getSlug()))
-                            .standing()),
+                    Objects.requireNonNull(current.groupStandingsOf(developer).get(group.getSlug()))
+                            .standing()
+                            .asPracticeStanding(),
                     practices.stream()
-                            .map(practice -> practiceBucket(current.snapshotOf(developer), practice.getSlug()))
+                            .map(practice -> standingIn(current.snapshotOf(developer), practice.getSlug()))
                             .toList());
             GroupRelease release = CohortPrivacyPolicy.group(
                     current.withAStanding().stream().map(rowOf).toList(), practices.size());
@@ -90,7 +89,7 @@ public class PracticesAcrossWorkspaceService {
                 practiceSplits.add(new WorkspacePracticeSplitDTO(
                         practice.getSlug(),
                         practice.getName(),
-                        yourStanding(yours, practice.getSlug()),
+                        standingIn(yours, practice.getSlug()),
                         WorkspaceSplitDTO.from(release.practices().get(index))));
             }
             rows.add(new WorkspaceGroupSplitDTO(
@@ -226,18 +225,12 @@ public class PracticesAcrossWorkspaceService {
                 members.reader() != null && withAStanding.contains(members.reader()));
     }
 
-    /** The reader's own standing in a practice, or not observed when nothing of theirs was read. */
-    private static PracticeStandingDTO.Standing yourStanding(StandingSnapshot yours, String practiceSlug) {
-        StandingSnapshot.PracticeStanding practice = yours.practices().get(practiceSlug);
+    /** A developer's standing in a practice; one their snapshot does not list is one nothing reached: not observed. */
+    private static PracticeStandingDTO.Standing standingIn(StandingSnapshot snapshot, String practiceSlug) {
+        StandingSnapshot.PracticeStanding practice = snapshot.practices().get(practiceSlug);
         return practice == null
                 ? PracticeStandingDTO.Standing.NOT_OBSERVED
                 : practice.dto().standing();
-    }
-
-    /** A practice the developer's snapshot does not list is one nothing reached for them: none yet. */
-    private static Bucket practiceBucket(StandingSnapshot snapshot, String practiceSlug) {
-        StandingSnapshot.PracticeStanding practice = snapshot.practices().get(practiceSlug);
-        return practice == null ? Bucket.NONE_YET : Bucket.of(practice.dto().standing());
     }
 
     private Map<String, PracticeGroupStandingDTO> groupStandings(
