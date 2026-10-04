@@ -433,12 +433,12 @@ function buildStageCopySources(dockerfile: string): string[] {
 }
 
 void describe("CI contract", () => {
-	void test("every Dockerfile build refreshes its isolated OS-package stage", async () => {
+	void test("every Dockerfile build refreshes OS packages through its exported runtime", async () => {
 		const reusable = parseDocument(
 			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 		);
 		const build = namedStep(reusable, ["jobs", "build"], "Build and push (Dockerfile)");
-		assert.equal(build.getIn(["with", "no-cache-filters"]), "os-packages");
+		assert.equal(build.getIn(["with", "no-cache-filters"]), "os-packages,runtime");
 		assert.match(String(build.getIn(["with", "cache-from"])), /cache-main-/u);
 		assert.match(String(build.getIn(["with", "cache-to"])), /mode=max/u);
 
@@ -458,6 +458,7 @@ void describe("CI contract", () => {
 			const stages = dockerfile.split(/^FROM /mu);
 			const packages = stages.find((stage) => /^.* AS os-packages$/mu.test(stage));
 			assert.ok(packages !== undefined, `${file} must have the stage named by no-cache-filters`);
+			assert.match(stages.at(-1) ?? "", /^os-packages AS runtime$/mu);
 			assert.match(packages, /^RUN .*?(?:apt-get|apk)/msu);
 			assert.doesNotMatch(packages, /^COPY |^ARG SOURCE_COMMIT/mu);
 			if (packages.includes("apt-get")) {
