@@ -25,7 +25,9 @@ final class StandingScale {
      *
      * <p>Placed between ONE setback and a PATTERN of them. Under the standing's recency weights a single
      * problem on the newest piece of reviewed work scores {@code 0.384} and two in a row score {@code 0.138}; a boundary at
-     * one half put both on the same side, so one slip after a clean run read as "needs attention".
+     * one half put both on the same side, so one slip after a clean run read as "needs attention". Both scores
+     * hold for one to four decided pieces of work, since a practice's share is measured against the weight of a
+     * full window ({@code PracticeTrend#recentMetShare}), so the boundary needs no second value for a short history.
      */
     static final double MIXED_SHARE = 0.37;
 

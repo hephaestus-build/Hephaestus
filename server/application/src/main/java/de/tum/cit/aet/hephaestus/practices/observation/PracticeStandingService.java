@@ -313,6 +313,11 @@ public class PracticeStandingService {
      * requested work the trend reads; a practice only a backfill campaign judged reads the campaign's work by the
      * same rule, so the two populations are never mixed.
      *
+     * <p>The share is measured against the weight of all {@link #STANDING_WINDOW} opportunities, read or not, so
+     * fewer decided pieces of work than the window do not move a label: one problem on the newest piece reads
+     * Mixed feedback with one, two, three or four pieces decided ({@code PracticeTrend#recentMetShare}). How little
+     * work a standing rests on is said beside it instead: the response carries the decided work count.
+     *
      * <p>Every opportunity is read from {@code since}, where the caller's evidence starts, so the binary fallback
      * is reached only when every verdict lies before it. The profile reads from the trend horizon, which is its
      * own look-back of {@link #LOOKBACK_DAYS} days, so it never reaches it. Across the workspace the window is the

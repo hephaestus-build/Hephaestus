@@ -315,7 +315,11 @@ export function PracticeGroupDetailLevel({
 				chips={
 					group && (
 						<>
-							<StandingBadge standing={standing?.standing ?? "NOT_OBSERVED"} scope="group" />
+							<StandingBadge
+								standing={standing?.standing ?? "NOT_OBSERVED"}
+								scope="group"
+								support={standing?.trendSupport}
+							/>
 							<TrendNote
 								direction={standing?.direction}
 								support={standing?.trendSupport}

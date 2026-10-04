@@ -2,7 +2,13 @@ import type { TrendSupport } from "@/api/types.gen";
 import { andList, capitalise } from "@/lib/text";
 
 import { count as counted, spell } from "./feedback-text";
-import { PRACTICE_GROUP_STANDING_DEFS, type StandingScope } from "./practice-group-standing-defs";
+import {
+	isSettledStanding,
+	PRACTICE_GROUP_STANDING_DEFS,
+	type PracticeGroupStandingValue,
+	standingDefs,
+	type StandingScope,
+} from "./practice-group-standing-defs";
 import type { TrendDirection } from "./practice-trend-defs";
 import { type StandingCounts, summarizeStandingCounts } from "./standing-counts";
 
@@ -23,18 +29,59 @@ export function shownTrendDirection(
 }
 
 /**
- * What a settled practice standing rests on: the newest stretch of reviewed work the trend
- * compares, which is the window the standing is read from. With none of that work, only a review
- * of past work judged the practice, and the standing was read from it.
+ * Below this many decided pieces of work a settled standing is an early read: its label can change
+ * with the next piece, so its sentence says how little it rests on rather than describing a
+ * pattern of reviews.
  */
-export function formatStandingBasis(support: TrendSupport): string {
+export const EARLY_READ_BELOW = 3;
+
+/**
+ * The decided pieces of work a settled standing is read from: the newest stretch the trend
+ * compares, the server's own count. None where only a review of past work judged it, or where no
+ * count came with it.
+ */
+export function standingWork(support: TrendSupport | undefined): number | undefined {
+	const current = support?.currentOpportunities;
+	return current !== undefined && current > 0 ? current : undefined;
+}
+
+/** "from 3 pieces of work": how much a settled standing rests on, beside its badge. */
+export function formatStandingWork(work: number): string {
+	return `from ${counted(work, "piece", "pieces", true)} of work`;
+}
+
+/**
+ * What a standing says about itself: the registry's sentence, or, while fewer than
+ * {@link EARLY_READ_BELOW} pieces of work back a settled standing, that it is an early read from
+ * them. From that many on, the sentence names the count after the registry's.
+ */
+export function explainStanding(
+	standing: PracticeGroupStandingValue,
+	scope: StandingScope,
+	support: TrendSupport | undefined,
+): string {
+	const { description } = standingDefs(scope)[standing];
+	const work = isSettledStanding(standing) ? standingWork(support) : undefined;
+	if (work === undefined) {
+		return description;
+	}
+	const pieces = `${counted(work, "piece", "pieces")} of work`;
+	return work < EARLY_READ_BELOW
+		? `An early read from ${pieces}.`
+		: `${description} Read from ${pieces}.`;
+}
+
+/**
+ * How a settled practice standing weighs its work: the newest counts most, the older ones less.
+ * With only a review of past work, it says the standing was read from that. One piece weighs
+ * nothing against another, so it says nothing.
+ */
+export function formatStandingBasis(support: TrendSupport): string | undefined {
 	const current = support.currentOpportunities;
 	if (current === 0) {
 		return "Read from a review of your past work, which never moves a trend.";
 	}
-	return current === 1
-		? "Based on your latest piece of reviewed work."
-		: `Based on your latest ${reviewedWork(current)}.`;
+	return current === 1 ? undefined : "Your latest work counts most, and older work counts less.";
 }
 
 /**

@@ -41,6 +41,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -250,6 +252,84 @@ class PracticeStandingServiceTest extends BaseUnitTest {
 
         assertThat(standings).hasSize(1);
         assertThat(standings.get(0).standing()).isEqualTo(PracticeStandingDTO.Standing.MIXED);
+    }
+
+    /**
+     * One problem on the newest piece of work reads the same whatever the count of decided work: the share is
+     * measured against a full window's weight, so a short history does not move the label.
+     */
+    @ParameterizedTest(name = "with {0} piece(s) of work decided")
+    @ValueSource(ints = {1, 2, 3, 4})
+    @DisplayName("one problem on the newest piece of work reads MIXED with one to four pieces decided")
+    void shouldReadOneFreshProblemAsMixedWhateverTheCountOfDecidedWork(int decided) {
+        theCurrentDeveloper();
+        Practice practice = practice("robust-error-handling");
+        List<Observation> evidence = new ArrayList<>();
+        for (int index = 1; index < decided; index++) {
+            evidence.add(good(practice, 40L + index));
+        }
+        evidence.add(bad(practice, Severity.MAJOR, 50L));
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
+                .thenReturn(evidence);
+        when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
+                .thenReturn(List.of());
+
+        List<PracticeStandingDTO> standings = practiceStandingService.getStandings(WORKSPACE_ID);
+
+        assertThat(standings)
+                .singleElement()
+                .satisfies(standing -> assertThat(standing.standing()).isEqualTo(PracticeStandingDTO.Standing.MIXED));
+    }
+
+    @ParameterizedTest(name = "with {0} pieces of work decided")
+    @ValueSource(ints = {2, 3, 4})
+    @DisplayName("two problems on the newest two pieces of work read DEVELOPING with two to four pieces decided")
+    void shouldReadTwoFreshProblemsAsDevelopingWhateverTheCountOfDecidedWork(int decided) {
+        theCurrentDeveloper();
+        Practice practice = practice("robust-error-handling");
+        List<Observation> evidence = new ArrayList<>();
+        for (int index = 2; index < decided; index++) {
+            evidence.add(good(practice, 40L + index));
+        }
+        evidence.add(bad(practice, Severity.MAJOR, 50L));
+        evidence.add(bad(practice, Severity.MAJOR, 51L));
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
+                .thenReturn(evidence);
+        when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
+                .thenReturn(List.of());
+
+        List<PracticeStandingDTO> standings = practiceStandingService.getStandings(WORKSPACE_ID);
+
+        assertThat(standings)
+                .singleElement()
+                .satisfies(
+                        standing -> assertThat(standing.standing()).isEqualTo(PracticeStandingDTO.Standing.DEVELOPING));
+    }
+
+    @ParameterizedTest(name = "with {0} piece(s) of work decided")
+    @ValueSource(ints = {1, 2, 3, 4})
+    @DisplayName("clean work alone reads STRENGTH with one to four pieces decided")
+    void shouldReadCleanWorkAsStrengthWhateverTheCountOfDecidedWork(int decided) {
+        theCurrentDeveloper();
+        Practice practice = practice("robust-error-handling");
+        List<Observation> evidence = new ArrayList<>();
+        for (int index = 0; index < decided; index++) {
+            evidence.add(good(practice, 40L + index));
+        }
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
+                .thenReturn(evidence);
+        when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
+                .thenReturn(List.of());
+
+        List<PracticeStandingDTO> standings = practiceStandingService.getStandings(WORKSPACE_ID);
+
+        assertThat(standings)
+                .singleElement()
+                .satisfies(
+                        standing -> assertThat(standing.standing()).isEqualTo(PracticeStandingDTO.Standing.STRENGTH));
     }
 
     @Test

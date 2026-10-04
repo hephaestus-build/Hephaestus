@@ -4,10 +4,13 @@ import type { TrendSupport } from "@/api/types.gen";
 import { wellSupported } from "@/stories/practice-profile-story-mock-data";
 
 import {
+	explainStanding,
 	formatGroupStandingBasis,
 	formatStandingBasis,
+	formatStandingWork,
 	formatTrendProvenance,
 	shownTrendDirection,
+	standingWork,
 } from "./practice-trend-presentation";
 
 const support = (overrides: Partial<TrendSupport> = {}): TrendSupport => ({
@@ -52,16 +55,56 @@ describe("practice trend copy", () => {
 		);
 	});
 
-	it("names the newest stretch a standing is read from, or the review of past work it rests on", () => {
+	it("says the latest work counts most, or names the review of past work a standing rests on", () => {
 		expect(formatStandingBasis(support())).toBe(
-			"Based on your latest four pieces of reviewed work.",
+			"Your latest work counts most, and older work counts less.",
 		);
-		expect(formatStandingBasis(support({ currentOpportunities: 1 }))).toBe(
-			"Based on your latest piece of reviewed work.",
+		expect(formatStandingBasis(support({ currentOpportunities: 2 }))).toBe(
+			"Your latest work counts most, and older work counts less.",
 		);
+		// One piece weighs nothing against another: the early read already names it.
+		expect(formatStandingBasis(support({ currentOpportunities: 1 }))).toBeUndefined();
 		expect(formatStandingBasis(support({ currentOpportunities: 0 }))).toBe(
 			"Read from a review of your past work, which never moves a trend.",
 		);
+	});
+
+	it("calls a settled standing from fewer than three pieces of work an early read", () => {
+		expect(explainStanding("STRENGTH", "practice", support({ currentOpportunities: 1 }))).toBe(
+			"An early read from one piece of work.",
+		);
+		expect(explainStanding("DEVELOPING", "group", support({ currentOpportunities: 2 }))).toBe(
+			"An early read from two pieces of work.",
+		);
+	});
+
+	it("names the work a settled standing is read from after the registry's sentence", () => {
+		expect(explainStanding("STRENGTH", "practice", support({ currentOpportunities: 3 }))).toBe(
+			"Recent reviews here were almost entirely positive. Read from three pieces of work.",
+		);
+		expect(explainStanding("MIXED", "practice", support())).toBe(
+			"Recent reviews found both strengths and problems here. Read from four pieces of work.",
+		);
+	});
+
+	it("keeps the registry's sentence where no count of work backs the standing", () => {
+		expect(explainStanding("STRENGTH", "practice", undefined)).toBe(
+			"Recent reviews here were almost entirely positive.",
+		);
+		expect(explainStanding("STRENGTH", "practice", support({ currentOpportunities: 0 }))).toBe(
+			"Recent reviews here were almost entirely positive.",
+		);
+		expect(explainStanding("NOT_OBSERVED", "practice", support({ currentOpportunities: 1 }))).toBe(
+			"No review has observed this practice in your work yet.",
+		);
+	});
+
+	it("names how much work a standing rests on beside its badge, in digits", () => {
+		expect(formatStandingWork(1)).toBe("from 1 piece of work");
+		expect(formatStandingWork(4)).toBe("from 4 pieces of work");
+		expect(standingWork(support({ currentOpportunities: 0 }))).toBeUndefined();
+		expect(standingWork(undefined)).toBeUndefined();
+		expect(standingWork(support())).toBe(4);
 	});
 
 	it("counts a group's practices by standing as one sentence, in the registry's order", () => {

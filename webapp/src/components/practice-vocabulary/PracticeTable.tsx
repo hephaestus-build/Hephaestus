@@ -296,7 +296,7 @@ export function StandingCell({ standing, direction, support, scope }: StandingCe
 	return (
 		<TableCell className={cn(OPEN_ROW_BAR, "whitespace-normal")}>
 			<div className="flex min-w-0 flex-col items-start gap-1.5">
-				<StandingBadge standing={standing} scope={scope} />
+				<StandingBadge standing={standing} scope={scope} support={support} />
 				<TrendNote direction={direction} support={support} scope={scope} />
 			</div>
 		</TableCell>

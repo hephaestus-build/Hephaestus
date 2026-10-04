@@ -51,6 +51,29 @@ class DeterministicGroupGuidanceComposerTest {
     }
 
     @Test
+    void shouldNotNameAMixedPracticeWithNoStrengthOnItsCardAsAStrength() {
+        // One problem on a short history reads MIXED; nothing on its card is a strength to acknowledge.
+        PracticeStandingDTO oneSetback = new PracticeStandingDTO(
+                "tests",
+                "Test Coverage",
+                "code-quality",
+                "Code Quality",
+                null,
+                null,
+                PracticeStandingDTO.Standing.MIXED,
+                List.of(item()),
+                List.of(),
+                null,
+                null);
+
+        String guidance = DeterministicGroupGuidanceComposer.compose(
+                PracticeGroupStandingDTO.Standing.MIXED, List.of(oneSetback));
+
+        assertThat(guidance)
+                .isEqualTo("Your recent feedback suggests that “Test Coverage” is the next practice to work on.");
+    }
+
+    @Test
     void shouldNotNameAPracticeItsOwnStandingCallsFixedAsTheNextFocus() {
         // A run of clean work has already moved this practice to STRENGTH. The older problems still on its card
         // must not name it as the group's next focus — the sentence would contradict the card beside it.

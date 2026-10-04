@@ -79,8 +79,9 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractPracticeReviewInteg
         read(token, "/workspaces/actor-github/practices/standings")
                 .jsonPath("$[0].slug")
                 .isEqualTo("github-practice")
+                // One problem on one piece of work: a verdict read for this actor, one setback.
                 .jsonPath("$[0].standing")
-                .isEqualTo("DEVELOPING");
+                .isEqualTo("MIXED");
         read(token, "/workspaces/actor-github/practice-profile/overview")
                 .jsonPath("$.latestRun.reviewId")
                 .isEqualTo(run.getId().toString());
@@ -185,8 +186,9 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractPracticeReviewInteg
         read(token, "/workspaces/actor-lrz/practices/standings")
                 .jsonPath("$[0].slug")
                 .isEqualTo("lrz-practice")
+                // One problem on one piece of work: a verdict read for this actor, one setback.
                 .jsonPath("$[0].standing")
-                .isEqualTo("DEVELOPING");
+                .isEqualTo("MIXED");
         read(token, "/workspaces/actor-lrz/practices/feedback/in-app")
                 .jsonPath("$[0].id")
                 .isEqualTo(feedback.getId().toString());

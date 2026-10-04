@@ -83,6 +83,14 @@ public final class PracticeTrend {
      * A {@code decay} strictly below 0.5 is what makes the two newest opportunities outweigh everything older
      * — see the caller that chooses it.
      *
+     * <p>The share is what is left after the problems, measured against the weight of a full window: {@code 1 −
+     * Σ weight·(1 − metShare) / Σ decay^age} over every age the window has, read or not. With fewer decided
+     * opportunities than the window, the ages not reached yet count as neither a problem nor a success, so the
+     * same problems weigh the same whatever the count. One problem on the newest piece of work therefore scores
+     * the same with one, two, three or four pieces decided, and keeps the same label. Measured against the
+     * weight of the opportunities read instead, one problem among three or fewer scored lower than among four,
+     * and its label changed with the count alone. With a full window the two are the same.
+     *
      * @param window how many of the newest decided opportunities to consider, at least one
      * @param decay per-opportunity weight factor in {@code (0,1]}; 1.0 is an unweighted mean
      */
@@ -98,14 +106,15 @@ public final class PracticeTrend {
             return OptionalDouble.empty();
         }
         List<EvidenceOpportunity> recent = decided.subList(Math.max(0, decided.size() - window), decided.size());
-        double weighted = 0.0;
-        double totalWeight = 0.0;
+        double missed = 0.0;
         for (int index = recent.size() - 1, age = 0; index >= 0; index--, age++) {
-            double weight = Math.pow(decay, age);
-            weighted += weight * recent.get(index).outcomes().metShare();
-            totalWeight += weight;
+            missed += Math.pow(decay, age) * (1.0 - recent.get(index).outcomes().metShare());
         }
-        return OptionalDouble.of(weighted / totalWeight);
+        double fullWeight = 0.0;
+        for (int age = 0; age < window; age++) {
+            fullWeight += Math.pow(decay, age);
+        }
+        return OptionalDouble.of(1.0 - missed / fullWeight);
     }
 
     /**

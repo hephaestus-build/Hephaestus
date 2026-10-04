@@ -369,8 +369,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @Test
     @DisplayName("the reader's marker is the standing their practice profile shows")
     void shouldMarkTheReaderByTheirProfileStandingWhenTheWindowIsShorterThanTheProfile() {
-        // A slip sixty days back: inside the profile's ninety days, outside the last 30 days.
+        // Two slips sixty and fifty days back: inside the profile's ninety days, outside the last 30 days.
         problem(craft, reader, NOW.minus(Duration.ofDays(60)));
+        problem(craft, reader, NOW.minus(Duration.ofDays(50)));
 
         PracticesAcrossWorkspaceDTO page = readAs(reader);
         CurrentScmIdentityHolder.set(reader.getId(), reader.getLogin(), Set.of(reader.getId()));
@@ -575,10 +576,16 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     /** Needs attention, Mixed feedback or Going well by {@code index}, a third of the developers each. */
     private void standing(Practice practice, User developer, int index) {
         switch (index % 3) {
-            case 0 -> problem(practice, developer, NEWEST);
+            case 0 -> needsAttention(practice, developer);
             case 1 -> mixed(practice, developer);
             default -> strength(practice, developer, NEWEST);
         }
+    }
+
+    /** A slip on each of the two newest pieces of work: a pattern, not one setback. */
+    private void needsAttention(Practice practice, User developer) {
+        problem(practice, developer, MIDDLE);
+        problem(practice, developer, NEWEST);
     }
 
     /** Clean, then a slip, then clean again on the newest: a share between the two bars. */

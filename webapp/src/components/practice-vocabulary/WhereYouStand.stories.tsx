@@ -27,7 +27,7 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		standing: "STRENGTH",
-		basis: "Based on your latest four pieces of reviewed work.",
+		basis: "Your latest work counts most, and older work counts less.",
 		direction: "IMPROVING",
 		support,
 		scope: "practice",
@@ -40,8 +40,28 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		const region = canvas.getByRole("region", { name: "Where you stand" });
+		await expect(region).toHaveTextContent(
+			"Recent reviews here were almost entirely positive. Read from four pieces of work. Your latest work counts most, and older work counts less.",
+		);
 		await expect(region).toHaveTextContent(PRACTICE_TREND_DEFS.IMPROVING.label);
 		await expect(region).toHaveTextContent(PRACTICE_TREND_DEFS.IMPROVING.description);
+	},
+};
+
+/**
+ * Fewer than three pieces of work back the standing: its sentence says it is an early read from
+ * them, not a pattern of reviews.
+ */
+export const EarlyRead: Story = {
+	args: {
+		basis: undefined,
+		direction: "INSUFFICIENT_EVIDENCE",
+		support: { ...support, currentOpportunities: 1, previousOpportunities: 0, opportunities: 1 },
+	},
+	play: async ({ canvas }) => {
+		const region = canvas.getByRole("region", { name: "Where you stand" });
+		await expect(region).toHaveTextContent("An early read from one piece of work.");
+		await expect(region).not.toHaveTextContent("almost entirely positive");
 	},
 };
 

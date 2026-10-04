@@ -36,8 +36,12 @@ final class DeterministicGroupGuidanceComposer {
         List<PracticeStandingDTO> verdicts = cards.stream()
                 .filter(card -> PracticeStandingDTO.isVerdict(card.standing()))
                 .toList();
+        // A MIXED practice counts as a strength only with a strength on its card: one problem on a short history
+        // reads MIXED (StandingScale), and naming it a strength would claim what no review found.
         List<PracticeStandingDTO> strengths = verdicts.stream()
-                .filter(card -> card.standing() != PracticeStandingDTO.Standing.DEVELOPING)
+                .filter(card -> card.standing() == PracticeStandingDTO.Standing.STRENGTH
+                        || (card.standing() == PracticeStandingDTO.Standing.MIXED
+                                && !card.strengths().isEmpty()))
                 .toList();
         List<PracticeStandingDTO> gaps = verdicts.stream()
                 .filter(card -> card.standing() != PracticeStandingDTO.Standing.STRENGTH)
@@ -52,15 +56,11 @@ final class DeterministicGroupGuidanceComposer {
                                         : "Your recent feedback shows strengths in ")
                         .append(nameList(strengths))
                         .append(strengths.size() == 1 ? ". Keep building on it." : ". Keep building on them.");
-            case DEVELOPING ->
-                summary.append("Your recent feedback suggests that ")
-                        .append(nameList(gaps))
-                        .append(
-                                gaps.size() == 1
-                                        ? " is the next practice to work on."
-                                        : " are the next practices to work on.");
+            case DEVELOPING -> appendNextPractices(summary, gaps);
             case MIXED -> {
-                if (samePractices(strengths, gaps)) {
+                if (strengths.isEmpty()) {
+                    appendNextPractices(summary, gaps);
+                } else if (samePractices(strengths, gaps)) {
                     summary.append("Your recent feedback is mixed in ")
                             .append(nameList(gaps))
                             .append(", with both strengths and room to grow.");
@@ -82,6 +82,12 @@ final class DeterministicGroupGuidanceComposer {
             appendCatalogReminder(summary, strengths.get(0));
         }
         return summary.toString();
+    }
+
+    private static void appendNextPractices(StringBuilder summary, List<PracticeStandingDTO> gaps) {
+        summary.append("Your recent feedback suggests that ")
+                .append(nameList(gaps))
+                .append(gaps.size() == 1 ? " is the next practice to work on." : " are the next practices to work on.");
     }
 
     private static void appendCatalogReminder(StringBuilder summary, PracticeStandingDTO practice) {
