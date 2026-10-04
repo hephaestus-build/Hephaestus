@@ -34,7 +34,7 @@ export function ContributorCard({ contributor, size = "md", className }: Contrib
 			<Avatar className={isSmall ? "size-12" : "size-16"}>
 				<AvatarImage
 					src={contributor.avatarUrl || undefined}
-					alt={`${contributor.login}'s avatar`}
+					alt={`${contributor.login}’s avatar`}
 				/>
 				<AvatarFallback>{getInitials(contributor.name, contributor.login)}</AvatarFallback>
 			</Avatar>

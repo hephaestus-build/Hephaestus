@@ -117,7 +117,7 @@ function FeedbackSection(props: SectionProps<ReviewFeedback>) {
 			{...props}
 			title="Feedback"
 			icon={<MessageSquareTextIcon />}
-			empty="No feedback"
+			empty="No feedback was composed"
 		>
 			{(items) => items.map((item) => <FeedbackRow key={item.id} feedback={item} />)}
 		</PreviewSection>
@@ -164,7 +164,7 @@ function PreviewSection<T>({
 			{state.status === "error" && (
 				<QueryErrorAlert
 					error={state.error}
-					title={`Could not load ${noun}`}
+					title={`We could not load ${noun}`}
 					onRetry={state.onRetry}
 				/>
 			)}

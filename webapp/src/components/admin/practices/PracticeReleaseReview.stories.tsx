@@ -57,7 +57,7 @@ export const ConflictingUpdate: Story = {
 		await userEvent.click(
 			within(
 				screen.getByRole("radiogroup", { name: "Use a version for Review criteria" }),
-			).getByRole("radio", { name: "Offered" }),
+			).getByRole("radio", { name: "Proposed" }),
 		);
 		await expect(accept).toBeEnabled();
 		await userEvent.click(accept);
@@ -87,12 +87,12 @@ export const RecoveredBase: Story = {
 		const delivery = within(
 			screen.getByRole("radiogroup", { name: "Use a version for Feedback delivery" }),
 		);
-		await expect(delivery.getByRole("radio", { name: "Offered" })).not.toBeChecked();
+		await expect(delivery.getByRole("radio", { name: "Proposed" })).not.toBeChecked();
 		await expect(delivery.getByRole("radio", { name: "Current" })).not.toBeChecked();
 		await userEvent.click(
 			within(
 				screen.getByRole("radiogroup", { name: "Use a version for Review criteria" }),
-			).getByRole("radio", { name: "Offered" }),
+			).getByRole("radio", { name: "Proposed" }),
 		);
 		await expect(accept).toBeDisabled();
 		await userEvent.click(delivery.getByRole("radio", { name: "Current" }));

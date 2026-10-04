@@ -122,7 +122,7 @@ final class PracticeTraceDeriver {
                 return entry(
                         practice,
                         PracticeTraceOutcome.REVIEWED,
-                        "The review checked this practice on this work. It has nothing to report.",
+                        "The review checked this practice on this work and found nothing to report.",
                         occurrence,
                         review.decidedAt(),
                         occurrence.reviewId(),
@@ -230,7 +230,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.PENDING,
-                        reasonCopy(occurrence.stateReason(), "The work is recorded. The review tries again."),
+                        reasonCopy(occurrence.stateReason(), "Hephaestus recorded this work and will try again."),
                         occurrence,
                         null,
                         null,
@@ -239,8 +239,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.SKIPPED,
-                        reasonCopy(
-                                occurrence.stateReason(), "The work is recorded, and no review covers it on purpose."),
+                        reasonCopy(occurrence.stateReason(), "Hephaestus recorded this work, and no review covers it."),
                         occurrence,
                         null,
                         null,
@@ -251,7 +250,7 @@ final class PracticeTraceDeriver {
                         PracticeTraceOutcome.LAPSED,
                         reasonCopy(
                                 occurrence.stateReason(),
-                                "This waited too long for a review. It expired without a review."),
+                                "This work waited too long for a review and expired unreviewed."),
                         occurrence,
                         null,
                         null,
@@ -261,7 +260,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.PENDING,
-                        "The work is recorded. No decision about it exists yet.",
+                        "Hephaestus recorded this work and has not decided on it yet.",
                         occurrence,
                         null,
                         null,

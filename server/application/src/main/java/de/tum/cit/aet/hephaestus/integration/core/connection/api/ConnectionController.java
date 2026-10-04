@@ -114,12 +114,12 @@ public class ConnectionController {
             @Nullable Authentication authentication) {
         Long workspaceId = workspace.id();
         if (body == null || body.kind() == null) {
-            throw new IllegalArgumentException("kind is required");
+            throw new IllegalArgumentException("Choose an integration to connect.");
         }
 
         ConnectionStrategy strategy = strategies.get(body.kind());
         if (strategy == null) {
-            throw new IllegalArgumentException("No ConnectionStrategy registered for kind=" + body.kind());
+            throw new IllegalArgumentException("This instance cannot connect that integration.");
         }
 
         // Strategy-level validation failures (e.g. missing 'pat' for GitLab) surface as
@@ -183,8 +183,9 @@ public class ConnectionController {
     private ConnectionStrategy strategyForDisconnect(Connection connection) {
         ConnectionStrategy strategy = strategies.get(connection.getKind());
         if (strategy == null) {
-            throw new IllegalStateException("Cannot disconnect " + connection.getKind()
-                    + ". The integration is disabled on this instance, so Hephaestus cannot erase its data.");
+            throw new IllegalStateException(
+                    "We could not disconnect this integration because it is turned off on this instance. "
+                            + "Ask your instance operator to turn it on, then disconnect again.");
         }
         return strategy;
     }

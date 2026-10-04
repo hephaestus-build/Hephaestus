@@ -1,7 +1,9 @@
 # Server
 
 All prose follows the [writing standard](../docs/contributor/simplified-technical-english.md).
-Apply it to docs, UI text, user-facing responses, comments, and repository instructions.
+It has two profiles.
+UI text, user-facing responses, and user docs use the product voice.
+Admin docs, contributor docs, and repository instructions use STE.
 
 Spring Boot 4 / Java 21 / Spring Modulith 2. Liquibase owns the schema. The OpenAPI spec and the
 GraphQL clients are generated. Package layout under

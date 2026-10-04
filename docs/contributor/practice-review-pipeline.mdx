@@ -39,7 +39,7 @@ Start elsewhere when your change belongs to one contract:
 | A practice's criteria, occasion, or evidence requirements         | [Practice catalogue](./practice-catalogue.md)                 |
 | Observation or feedback persistence, identity, or API projections | [Practice review data model](./practice-feedback-schema.md)   |
 | Product and model-facing terminology                              | [Practice feedback language](./practice-feedback-language.md) |
-| Run provenance and evaluation joins                              | [Evaluation provenance](./evaluation-provenance.md)           |
+| Run provenance and evaluation joins                               | [Evaluation provenance](./evaluation-provenance.md)           |
 | An exact enum meaning after you know the stage                    | [Practice review glossary](./practice-review-glossary.mdx)    |
 
 Use this page for changes across stages.
@@ -53,7 +53,7 @@ Capture failures must not become observations, and delivery choices must not era
 | ----------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------- |
 | Occasion    | `SignalStateReason`                                                          | `artifact_signal.state_reason`                                             | We chose not to look, or not yet |
 | Capture     | `SourceAbsenceReason` per source, `SourceReadinessReason` per practice check | `agent_job.evidence_snapshot` (the manifest), `agent_job.review_readiness` | We could not look                |
-| Observation | `Outcome.UNDETERMINED`                                                      | `observation.outcome`                                                     | We looked and could not tell     |
+| Observation | `Outcome.UNDETERMINED`                                                       | `observation.outcome`                                                      | We looked and could not tell     |
 | Delivery    | `FeedbackSuppressionReason`                                                  | `feedback.suppression_reason`                                              | We know, and chose to stay quiet |
 
 A missing source is not a claim about behavior and must not become an `Outcome` value.
@@ -158,11 +158,11 @@ Retry and lapse thresholds are `hephaestus.signal-ledger.pending-retry-after` an
 
 Issue practices bind to three lifecycle occasions:
 
-| Occasion | Transition | Revision identity |
-| --- | --- | --- |
-| `scm.issue.opened` | The issue is created | Title and body |
-| `scm.issue.updated` | The review-relevant snapshot changes, including reopening | The whole snapshot |
-| `scm.issue.closed` | The issue enters a closed state | The close timestamp |
+| Occasion            | Transition                                                | Revision identity   |
+| ------------------- | --------------------------------------------------------- | ------------------- |
+| `scm.issue.opened`  | The issue is created                                      | Title and body      |
+| `scm.issue.updated` | The review-relevant snapshot changes, including reopening | The whole snapshot  |
+| `scm.issue.closed`  | The issue enters a closed state                           | The close timestamp |
 
 The snapshot contains the title, body, native type, labels, assignees, milestone, state, and state reason.
 These fields build the issue evidence that a bundled practice reads.
@@ -233,16 +233,16 @@ Two consequences are worth stating because neither is obvious:
   snapshot still current when the burst settles is submitted — see
   [Durable update coalescing](#durable-update-coalescing).
 
-| Transition | GitHub webhook action | GitLab webhook action | Review decision |
-| --- | --- | --- | --- |
-| Title or body changed | `edited` | `update` | Updated |
-| Native type set or removed | `typed`, `untyped` | Not exposed by the validated webhook contract | GitHub: updated. GitLab: synchronization only |
-| Label added or removed | `labeled`, `unlabeled` | `update` | Updated |
-| Assignee added or removed | `assigned`, `unassigned` | `update` | Updated |
-| Milestone set or removed | `milestoned`, `demilestoned` | `update` | Updated |
-| Reopened | `reopened` | `reopen` | Updated |
-| Closed | `closed` | `close` | Closed |
-| Locked, pinned, due date, weight, time tracking | `locked`, `pinned` | `update` | Nothing |
+| Transition                                      | GitHub webhook action        | GitLab webhook action                         | Review decision                               |
+| ----------------------------------------------- | ---------------------------- | --------------------------------------------- | --------------------------------------------- |
+| Title or body changed                           | `edited`                     | `update`                                      | Updated                                       |
+| Native type set or removed                      | `typed`, `untyped`           | Not exposed by the validated webhook contract | GitHub: updated. GitLab: synchronization only |
+| Label added or removed                          | `labeled`, `unlabeled`       | `update`                                      | Updated                                       |
+| Assignee added or removed                       | `assigned`, `unassigned`     | `update`                                      | Updated                                       |
+| Milestone set or removed                        | `milestoned`, `demilestoned` | `update`                                      | Updated                                       |
+| Reopened                                        | `reopened`                   | `reopen`                                      | Updated                                       |
+| Closed                                          | `closed`                     | `close`                                       | Closed                                        |
+| Locked, pinned, due date, weight, time tracking | `locked`, `pinned`           | `update`                                      | Nothing                                       |
 
 Both adapters report what a delivery moved as a field set.
 An update that moves none of the snapshot's fields occasions nothing.
@@ -552,7 +552,7 @@ An invalid feedback unit is dropped and logged without invalidating admitted obs
   `threadKey` that was staged in `prepared.json`.
 - **No second unit on the same lane about the same practice.** One unit per `(channel,
 practiceSlug)`.
-The rest are dropped.
+  The rest are dropped.
 
 Staying quiet is the fourth action, not a gap: `action: "WITHHOLD"` with `NO_MATERIAL_CHANGE`, `ALREADY_SAID` or `BELOW_BAR`.
 Those three are the composer's own vocabulary and are deliberately not `FeedbackSuppressionReason` values — the glossary says [why the two must never be merged](./practice-review-glossary.mdx#measurement-and-intervention).

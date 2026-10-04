@@ -47,13 +47,13 @@ export async function discoverInstance(
 		if (webApp?.ok !== true) {
 			throw new WorkerError(
 				"invalid",
-				"This is a local API server. Enter the address the web app runs at as well.",
+				"This is a local API server. Also enter the address of the web app.",
 			);
 		}
 		return { origin, apiBase: origin, webAppOrigin: webApp.origin };
 	}
 	throw new WorkerError(
 		"invalid",
-		"No Hephaestus instance answered at that address. Check it and that access was granted.",
+		"No Hephaestus instance answered at that address. Check the address and that you allowed access in Chrome.",
 	);
 }

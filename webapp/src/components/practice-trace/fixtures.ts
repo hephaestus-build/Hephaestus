@@ -135,8 +135,7 @@ export const tracedSignals = [
 		discoveredVia: "EVENT",
 		state: "SUPPRESSED",
 		stateReason: "GATE_SKIPPED",
-		stateReasonDescription:
-			"The review settings of this workspace did not allow a review of this work.",
+		stateReasonDescription: "This workspace’s review settings did not allow a review of this work.",
 	},
 	{
 		id: "sig-ready",
@@ -158,7 +157,7 @@ export const tracedSignals = [
 		state: "SUPPRESSED",
 		stateReason: "COOLDOWN_ACTIVE",
 		stateReasonDescription:
-			"This work already had a review within the cooldown period of this workspace.",
+			"This work already had a review within this workspace’s cooldown period.",
 	},
 	{
 		id: "sig-review-requested",
@@ -278,7 +277,7 @@ const practiceTraceEntries = [
 		groupName: "Acting on review feedback",
 		autonomy: "AUTOMATIC",
 		outcome: "NOT_REACHED",
-		explanation: "The review ended before reaching this practice.",
+		explanation: "The review ended before it reached this practice.",
 		watches: [READY],
 		occasionedBy: READY,
 		occasionedById: "sig-ready",

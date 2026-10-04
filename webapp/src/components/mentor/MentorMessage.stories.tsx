@@ -45,6 +45,7 @@ export const FormattedReply: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { name: "Decision" })).toBeVisible();
 		await expect(canvas.getByRole("checkbox", { name: "Completed task" })).toBeChecked();
+		await expect(canvas.getByRole("button", { name: "Copy code" })).toBeVisible();
 	},
 };
 
@@ -95,7 +96,7 @@ export const Interrupted: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/This reply was interrupted before it finished/u)).toBeVisible();
+		await expect(canvas.getByText(/This reply stopped before it finished/u)).toBeVisible();
 	},
 };
 

@@ -3,7 +3,7 @@ import { CircleCheck, MessageSquare, Square } from "lucide-react";
 import { motion, stagger } from "motion/react";
 import { useMediaQuery } from "usehooks-ts";
 import { LandingSignInCta } from "@/components/auth/LandingSignInCta";
-import { GitHubIcon, GitLabIcon } from "@/components/icons/brand";
+import { GitHubIcon, GitLabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -231,7 +231,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						id="landing-hero-heading"
 						className="relative z-10 mt-5 max-w-3xl text-4xl font-bold tracking-display text-balance sm:text-5xl md:text-6xl"
 					>
-						Learn from the work you are{" "}
+						Learn from the work you’re{" "}
 						<span className="relative inline-block whitespace-nowrap">
 							already doing
 							<span
@@ -249,7 +249,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 							The mentoring feedback a senior would give.
 						</span>{" "}
 						<span className="text-muted-foreground">
-							For everyone, not only the people they have time for.
+							For every developer, not only the ones a senior has time for.
 						</span>
 					</motion.p>
 
@@ -291,16 +291,24 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 							<GitLabIcon />
 							GitLab
 						</Badge>
+						<Badge variant="secondary" size="lg">
+							<SlackIcon />
+							Slack
+						</Badge>
+						<Badge variant="secondary" size="lg">
+							<OutlineIcon />
+							Outline
+						</Badge>
 					</motion.p>
 				</motion.div>
 
 				<figure className={cn(styles.heroFigure, "relative w-full")}>
 					<HeroScene />
 					<figcaption className="sr-only">
-						One change through a project. The issue #412 has no acceptance criteria, so the pull
-						request grew to 34 files and picked up an unrelated rename. A reviewer asks a good
-						question that never gets answered before the merge. Hephaestus points back to the issue
-						as the place to start.
+						One change through a project. Issue #412 has no acceptance criteria, so the pull request
+						grew to 34 files and picked up an unrelated rename. A reviewer asks a good question that
+						never gets answered before the merge. Hephaestus points back to the issue as the place
+						to start.
 					</figcaption>
 				</figure>
 			</motion.div>

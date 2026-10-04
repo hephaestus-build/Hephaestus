@@ -97,11 +97,11 @@ export const Invalid: Story = {
 			insufficiencyReason: { code: "LIMITATION_00000000", description: "" },
 			knownLimitations: [],
 		},
-		error: "Explain at least one limitation that requires additional context.",
+		error: "Add at least one limitation that needs context from a person.",
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText("Explain at least one limitation that requires additional context."),
+			canvas.getByText("Add at least one limitation that needs context from a person."),
 		).toBeVisible();
 		await expect(
 			canvas.getByText("Say what a person can see here that the connected work cannot show."),

@@ -34,7 +34,7 @@ const STATUS_OPTIONS: { value: FeedbackStatusFilter; label: string }[] = [
 ];
 
 export const Route = createFileRoute("/_authenticated/admin/feedback")({
-	head: instanceAdminHead("Feedback inbox"),
+	head: instanceAdminHead("Product feedback"),
 	validateSearch: z.object({
 		status: z.enum(["OPEN", "RESOLVED", "ALL"]).optional().catch(undefined),
 		page: z.coerce.number().int().min(0).optional().catch(undefined),
@@ -57,7 +57,7 @@ function AdminFeedbackInboxPage() {
 			void queryClient.invalidateQueries({ queryKey: adminListProductFeedbackQueryKey() });
 		},
 		onError: (error) =>
-			toast.error("Could not update the feedback", { description: problemDetailOf(error) }),
+			toast.error("We could not update the feedback", { description: problemDetailOf(error) }),
 	});
 	const pendingIds = usePendingMutationIds(TRIAGE_KEY, (variables) =>
 		pathString(variables, "feedbackId"),
@@ -93,8 +93,8 @@ function AdminFeedbackInboxPage() {
 		<PageLayout>
 			<PageHeader
 				icon={<Inbox />}
-				title="Feedback inbox"
-				description="Private inbox for ideas, bug reports and feedback. Marking an item resolved does not notify its sender."
+				title="Product feedback"
+				description="Ideas, bug reports and comments from users. Marking one resolved does not notify the sender."
 			/>
 
 			<div className="flex flex-wrap items-center justify-between gap-3">

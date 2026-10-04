@@ -41,7 +41,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
-		await expect(canvas.getByText("No linked account")).toBeVisible();
+		await expect(canvas.getByText("No account yet")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "View as user: sam" }));
 		await expect(args.onView).toHaveBeenCalledWith(accountless);
 	},
@@ -50,7 +50,7 @@ export const Default: Story = {
 export const AccountUnavailable: Story = {
 	args: { state: { status: "ready", users: [suspended], totalPages: 1 } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Account unavailable")).toBeVisible();
+		await expect(canvas.getByText("Account not active")).toBeVisible();
 	},
 };
 

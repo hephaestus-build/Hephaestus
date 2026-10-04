@@ -80,7 +80,7 @@ class SandboxGatewayRateLimitFilterTest extends BaseUnitTest {
         assertThat(refused.getContentType()).isEqualTo("application/problem+json");
         assertThat(Long.parseLong(Objects.requireNonNull(refused.getHeader(HttpHeaders.RETRY_AFTER))))
                 .isGreaterThanOrEqualTo(1);
-        assertThat(refused.getContentAsString()).contains("Too Many Requests").contains("retryAfterSeconds");
+        assertThat(refused.getContentAsString()).contains("Too many requests").contains("retryAfterSeconds");
     }
 
     /**

@@ -231,7 +231,7 @@ export const ManyObservations: Story = {
 		const held = "The new branch has no test exercising it";
 		await expect(canvas.queryByText(held)).toBeNull();
 
-		await userEvent.click(canvas.getByRole("button", { name: "Show more (1)" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Show 1 more observation" }));
 		await expect(canvas.getByText(held)).toBeVisible();
 
 		await userEvent.click(canvas.getByRole("button", { name: "Show less" }));

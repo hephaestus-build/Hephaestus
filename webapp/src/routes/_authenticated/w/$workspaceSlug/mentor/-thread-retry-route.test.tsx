@@ -88,9 +88,7 @@ it("tries a reply saved as interrupted again after the conversation is reopened"
 	);
 
 	renderRouteAt(`/w/acme/mentor/${threadId}`);
-	await userEvent.click(
-		await screen.findByRole("button", { name: "Try again" }, ROUTE_RENDER_WAIT),
-	);
+	await userEvent.click(await screen.findByRole("button", { name: "Retry" }, ROUTE_RENDER_WAIT));
 
 	await screen.findByText("Here is a plan.");
 	expect(posted).toHaveLength(1);
@@ -100,7 +98,7 @@ it("tries a reply saved as interrupted again after the conversation is reopened"
 		trigger: "regenerate-message",
 		messageId: interruptedId,
 	});
-	await waitFor(() => expect(screen.queryByRole("button", { name: "Try again" })).toBeNull());
+	await waitFor(() => expect(screen.queryByRole("button", { name: "Retry" })).toBeNull());
 });
 
 it("shows a streamed capacity refusal as Heph is busy and lets the developer retry", async () => {
@@ -165,12 +163,10 @@ it("shows a streamed capacity refusal as Heph is busy and lets the developer ret
 		}),
 	);
 	renderRouteAt(`/w/acme/mentor/${threadId}`);
-	await userEvent.click(
-		await screen.findByRole("button", { name: "Try again" }, ROUTE_RENDER_WAIT),
-	);
+	await userEvent.click(await screen.findByRole("button", { name: "Retry" }, ROUTE_RENDER_WAIT));
 	await screen.findByText("Heph is busy", { exact: true });
-	screen.getByText("Please try again in a moment.");
-	await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+	screen.getByText("Try again in a moment.");
+	await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 	await screen.findByText("The worker is available again.");
 	expect(attempts).toBe(2);
 });

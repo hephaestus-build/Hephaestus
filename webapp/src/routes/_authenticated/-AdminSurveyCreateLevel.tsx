@@ -40,11 +40,11 @@ export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreat
 			);
 			void queryClient.invalidateQueries({ queryKey: adminListProductSurveysQueryKey() });
 			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
-			toast.success("Survey published.");
+			toast.success("Survey published");
 			onPublished(survey.id);
 		},
 		onError: (error) =>
-			toast.error("Could not publish the survey. Your draft is still here.", {
+			toast.error("We could not publish the survey. Your draft is still here.", {
 				description: problemDetailOf(error),
 			}),
 	});
@@ -70,7 +70,7 @@ export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreat
 				<DrawerBody>
 					<QueryErrorAlert
 						error={workspacesQuery.error ?? consentQuery.error}
-						title="The survey composer could not be loaded"
+						title="We could not load the survey composer"
 						onRetry={() => {
 							void workspacesQuery.refetch();
 							void consentQuery.refetch();

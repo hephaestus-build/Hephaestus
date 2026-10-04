@@ -131,7 +131,7 @@ export const Revoked: Story = {
 		await expect(screen.queryByRole("menuitem", { name: /^pause$/iu })).not.toBeInTheDocument();
 		await expect(screen.queryByRole("menuitem", { name: /^resume$/iu })).not.toBeInTheDocument();
 		await expect(
-			screen.queryByRole("menuitem", { name: /remove & erase/iu }),
+			screen.queryByRole("menuitem", { name: /remove and erase/iu }),
 		).not.toBeInTheDocument();
 	},
 };

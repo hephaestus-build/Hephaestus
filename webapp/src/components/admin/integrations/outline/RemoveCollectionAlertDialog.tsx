@@ -72,8 +72,8 @@ export function RemoveCollectionAlertDialog({
 								: `all ${documentCount} mirrored documents`}{" "}
 							from Hephaestus
 						</strong>
-						. The documents in Outline itself are not affected, and you can mirror the collection
-						again later.
+						. The documents in Outline itself are not affected. You can mirror the collection again
+						later.
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>
@@ -85,7 +85,7 @@ export function RemoveCollectionAlertDialog({
 							void confirm();
 						}}
 					>
-						{submitting ? "Removing…" : "Remove & erase"}
+						{submitting ? "Removing…" : "Remove and erase"}
 					</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>

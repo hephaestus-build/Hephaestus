@@ -23,7 +23,7 @@ public class PiEventToUiChunkTranslator {
     private static final Logger log = LoggerFactory.getLogger(PiEventToUiChunkTranslator.class);
 
     public static final String REPLY_LOST_IN_TRANSIT =
-            "Part of Heph's reply was lost before it reached you. Try again.";
+            "Part of Heph’s reply was lost before it reached you. Try again.";
 
     public List<UIMessageChunk> translate(JsonNode piEvent, TranslatorState state) {
         if (piEvent == null || !piEvent.path("type").isString()) {
@@ -112,7 +112,7 @@ public class PiEventToUiChunkTranslator {
         // text block first so the AI SDK reducer doesn't crash on an `error` chunk
         // following an unmatched `*-start` (vercel/ai#11700).
         List<UIMessageChunk> out = new ArrayList<>(closeOpenStreamingBlocks(state));
-        out.add(new UIMessageChunk.TurnError("The mentor turn took too long and stopped."));
+        out.add(new UIMessageChunk.TurnError("Heph took too long to reply and stopped. Try again."));
         return out;
     }
 

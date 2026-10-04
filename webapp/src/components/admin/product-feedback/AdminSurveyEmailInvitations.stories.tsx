@@ -42,7 +42,7 @@ export const Empty: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Queue email invitations…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Send email invitations…" })).toBeDisabled();
 	},
 };
 export const Queuing: Story = { args: { state: { ...ready, isPending: true } } };
@@ -59,12 +59,12 @@ export const EmailNotConfigured: Story = {
 	args: { state: { ...ready, summary: { ...ready.summary, deliveryConfigured: false } } },
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.queryByRole("button", { name: "Queue email invitations…" }),
+			canvas.queryByRole("button", { name: "Send email invitations…" }),
 		).not.toBeInTheDocument();
 		await expect(canvas.getByRole("link", { name: "Set up email" })).toHaveAttribute(
 			"href",
 			"/admin/settings",
 		);
-		await expect(canvas.getByText("Accepted by relay")).toBeVisible();
+		await expect(canvas.getByText("Handed to mail server")).toBeVisible();
 	},
 };

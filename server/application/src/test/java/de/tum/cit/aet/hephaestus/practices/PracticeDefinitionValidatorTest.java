@@ -46,7 +46,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         SignalName.of("scm.pull_request.rebased"), null, List.of(need(DIFF)), languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("This kind of work does not offer one of the chosen moments. "
-                        + "Choose from the moments that this kind of work offers.")
+                        + "Choose from the moments it offers.")
                 .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
@@ -58,8 +58,9 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         List.of(need(new SourceKind("scm.pull-request.unknown"))),
                         languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("scm.pull-request.unknown is not an evidence source that Hephaestus knows. Choose a source "
-                        + "from the list “Reads” in “When this practice is reviewed”.");
+                .hasMessage(
+                        "scm.pull-request.unknown is not an evidence source Hephaestus knows. Choose from the sources "
+                                + "listed under “Reads” in “When this practice is reviewed”.");
     }
 
     @Test
@@ -78,8 +79,8 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         null,
                         null)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("This kind of work does not record “Whoever merged it”. A review of it cannot be about "
-                        + "that person. Choose from the people in the list “Person this practice judges”.")
+                .hasMessage("This kind of work does not record “Whoever merged it”, so a review of it cannot be about "
+                        + "them. Choose from the people listed under “Person this practice judges”.")
                 .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
@@ -123,7 +124,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         definition(ScmSignals.PULL_REQUEST_MANUAL_REVIEW, null, List.of(need(DIFF)), languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageStartingWith("Remove “Review requested by hand”.")
-                .hasMessageContaining("Do not choose it as a moment.")
+                .hasMessageContaining("It is not a moment to choose.")
                 .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
@@ -177,7 +178,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
         assertThatThrownBy(() -> validator.validate(definition(
                         ScmSignals.PULL_REQUEST_OPENED, "export default {}", List.of(), withoutAutomatedReview())))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("A practice that Hephaestus cannot review cannot have a precompute script.");
+                .hasMessage("A precompute script needs a practice that Hephaestus can review.");
     }
 
     @ParameterizedTest

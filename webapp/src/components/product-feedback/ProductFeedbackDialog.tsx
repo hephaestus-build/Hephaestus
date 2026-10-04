@@ -104,7 +104,8 @@ export function ProductFeedbackDialog({
 					<DialogHeader>
 						<DialogTitle>{copy.heading}</DialogTitle>
 						<DialogDescription>
-							Goes straight to {READERS}, with your name and contact address so they can follow up.
+							This goes straight to {READERS}. Your name and contact address go with it, so they can
+							follow up.
 						</DialogDescription>
 					</DialogHeader>
 					<DialogBody className="flex flex-col gap-5 py-1">
@@ -167,7 +168,7 @@ export function ProductFeedbackDialog({
 									/>
 									<FieldContent>
 										<FieldLabel htmlFor={`${id}-context`}>
-											Attach the page and browser you are on
+											Attach the page and browser you’re on
 										</FieldLabel>
 										<FieldDescription className="break-all">
 											<code className="text-xs">{context.pagePath}</code>

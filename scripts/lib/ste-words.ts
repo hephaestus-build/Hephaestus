@@ -16,6 +16,8 @@ export const contractions = Object.entries(asRecord(list.contractions, "contract
 export const substitutions = Object.entries(asRecord(list.substitutions, "substitutions")).map(
 	([from, to]) => ({ from, to: asString(to, from) }),
 );
+/** The one family that the user-facing voice spells out: "can't" is misread as "can". */
+export const negativeContractions = contractions.filter(({ from }) => /n['’]t$/iu.test(from));
 
 /** The first column owns each term. The other columns describe it, not new names. */
 export function technicalNames(markdown: string): string[] {
@@ -45,15 +47,25 @@ export function withoutTechnicalNames(text: string): string {
 	return text.replaceAll(terms, (term) => " ".repeat(term.length));
 }
 
-const replacements = [...substitutions, ...contractions].map(({ from, to }) => ({
-	pattern: new RegExp(`\\b${escape(from).replaceAll(" ", String.raw`\s+`)}\\b`, "giu"),
-	from,
-	to,
-}));
+function patterns(entries: { from: string; to: string }[]) {
+	return entries.map(({ from, to }) => ({
+		pattern: new RegExp(`\\b${escape(from).replaceAll(" ", String.raw`\s+`)}\\b`, "giu"),
+		from,
+		to,
+	}));
+}
+const replacements = {
+	strict: patterns([...substitutions, ...contractions]),
+	voice: patterns([...substitutions, ...negativeContractions]),
+};
 
-export function wordAlerts(text: string): { from: string; to: string; index: number }[] {
+/** `strict` spells out every contraction. `voice` allows the positive ones ("you're", "we'll"). */
+export function wordAlerts(
+	text: string,
+	profile: keyof typeof replacements = "strict",
+): { from: string; to: string; index: number }[] {
 	const prose = withoutTechnicalNames(text);
-	return replacements
+	return replacements[profile]
 		.flatMap(({ pattern, from, to }) =>
 			[...prose.matchAll(pattern)].map((match) => ({ from, to, index: match.index })),
 		)

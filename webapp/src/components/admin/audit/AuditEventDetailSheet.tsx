@@ -43,7 +43,7 @@ export function AuditEventDetailSheet({
 				<SheetHeader>
 					<SheetTitle>{event ? eventLabel(event.eventType) : "Audit event"}</SheetTitle>
 					<SheetDescription>
-						{event ? `Event #${event.id} — ${event.eventType}` : ""}
+						{event ? `Event #${event.id} · ${event.eventType}` : ""}
 					</SheetDescription>
 				</SheetHeader>
 

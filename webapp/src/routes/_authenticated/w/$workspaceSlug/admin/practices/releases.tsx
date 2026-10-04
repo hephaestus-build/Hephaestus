@@ -55,20 +55,20 @@ function PracticeReleaseInbox() {
 			if (problemStatusOf(error) === 412) {
 				refresh();
 			}
-			toast.error("Could not accept the update", { description: problemDetailOf(error) });
+			toast.error("We could not accept the update", { description: problemDetailOf(error) });
 		},
 	});
 	const decline = useMutation({
 		...declinePracticeReleaseMutation(),
 		onSuccess: () => {
 			refresh();
-			toast.success("This update was declined");
+			toast.success("Practice update declined");
 		},
 		onError: (error) => {
 			if (problemStatusOf(error) === 412) {
 				refresh();
 			}
-			toast.error("Could not decline the update", { description: problemDetailOf(error) });
+			toast.error("We could not decline the update", { description: problemDetailOf(error) });
 		},
 	});
 	const proposals = query.data ?? [];
@@ -85,7 +85,7 @@ function PracticeReleaseInbox() {
 		content = (
 			<QueryErrorAlert
 				error={query.error}
-				title="Could not load practice updates"
+				title="We could not load practice updates"
 				onRetry={() => {
 					void query.refetch();
 				}}
@@ -100,7 +100,8 @@ function PracticeReleaseInbox() {
 					</EmptyMedia>
 					<EmptyTitle>No updates to review</EmptyTitle>
 					<EmptyDescription>
-						Accepted and declined versions do not appear here again unless the catalog changes.
+						Catalog changes to your practices appear here. Accepted and declined versions do not
+						return unless the catalog changes again.
 					</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
@@ -118,7 +119,9 @@ function PracticeReleaseInbox() {
 							onClick={() => setSelectedSlug(proposal.slug)}
 						>
 							<span className="block font-medium">{proposal.offered.name}</span>
-							<span className="text-muted-foreground">{proposal.fields.length} changed fields</span>
+							<span className="text-muted-foreground">
+								{proposal.fields.length} changed {proposal.fields.length === 1 ? "field" : "fields"}
+							</span>
 						</button>
 					))}
 				</nav>

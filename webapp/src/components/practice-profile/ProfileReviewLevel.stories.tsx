@@ -87,7 +87,7 @@ export const Default: Story = {
 	play: async ({ args }) => {
 		const panel = await settledDrawerPanel();
 		await expect(screen.getByRole("link", { name: /^Open the original/u })).toBeVisible();
-		await userEvent.click(screen.getByRole("button", { name: "Review this now" }));
+		await userEvent.click(screen.getByRole("button", { name: "Request review" }));
 		await expect(args.onReviewNow).toHaveBeenCalledWith(openProfileReviewRun.reviewedWork);
 		await expect(screen.getByText("Requested")).toBeVisible();
 		await expect(screen.getByText("2nd review")).toBeVisible();
@@ -103,7 +103,7 @@ export const Default: Story = {
 			within(table).getByText("A dependency bump rode along with the behaviour change"),
 		).toBeVisible();
 		await expect(
-			within(table).getByText("The review ended before reaching this practice."),
+			within(table).getByText("The review ended before it reached this practice."),
 		).toBeVisible();
 		// The unfiltered table states no count: the tab already carries it.
 		await expect(screen.queryByText(/^\d+ practices?\.$/u)).toBeNull();
@@ -203,7 +203,7 @@ export const WhatWeNoticed: Story = {
 		await settledDrawerPanel();
 		await expect(screen.getByRole("heading", { name: "What we noticed" })).toBeVisible();
 		await expect(
-			screen.getByText(/already had a review within the cooldown period of this workspace/u),
+			screen.getByText(/already had a review within this workspace’s cooldown period/u),
 		).toBeVisible();
 	},
 };
@@ -222,7 +222,7 @@ export const AskingForAReview: Story = {
 	args: { requesting: openProfileReviewRun.reviewedWork },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByRole("button", { name: "Asking…" })).toBeDisabled();
+		await expect(screen.getByRole("button", { name: "Requesting review…" })).toBeDisabled();
 	},
 };
 
@@ -303,7 +303,7 @@ export const ActivityFailed: Story = {
 	},
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("Could not load this work's review activity")).toBeVisible();
+		await expect(screen.getByText("We could not load this work’s review activity")).toBeVisible();
 	},
 };
 
@@ -320,7 +320,7 @@ export const NotFound: Story = {
 	args: { state: { status: "error", error: { status: 404 }, onRetry: fn() } },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("Could not load this review")).toBeVisible();
+		await expect(screen.getByText("We could not find this review")).toBeVisible();
 		await expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
 	},
 };

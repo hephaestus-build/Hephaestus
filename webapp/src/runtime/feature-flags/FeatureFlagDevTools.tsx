@@ -11,7 +11,7 @@ interface FeatureFlagDevToolsPanelProps {
 
 function FlagList({ flags, isLoading }: FeatureFlagDevToolsPanelProps) {
 	if (isLoading) {
-		return <div className="px-2 py-3 text-center text-xs text-muted-foreground">Loading...</div>;
+		return <div className="px-2 py-3 text-center text-xs text-muted-foreground">Loading…</div>;
 	}
 	if (flags === undefined) {
 		return (
@@ -33,7 +33,7 @@ function FlagList({ flags, isLoading }: FeatureFlagDevToolsPanelProps) {
 								enabled ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
 							}`}
 						>
-							{enabled ? "ON" : "OFF"}
+							{enabled ? "On" : "Off"}
 						</span>
 					</div>
 				))}
@@ -53,7 +53,7 @@ export function FeatureFlagDevToolsPanel({ flags, isLoading }: FeatureFlagDevToo
 			{isOpen && (
 				<div className="mb-2 w-72 rounded-lg border border-border bg-background shadow-lg">
 					<div className="flex items-center justify-between border-b border-border px-3 py-2">
-						<span className="text-xs font-semibold text-foreground">Feature Flags</span>
+						<span className="text-xs font-semibold text-foreground">Feature flags</span>
 						<button
 							type="button"
 							onClick={() => setIsOpen(false)}
@@ -71,11 +71,10 @@ export function FeatureFlagDevToolsPanel({ flags, isLoading }: FeatureFlagDevToo
 				type="button"
 				onClick={() => setIsOpen(!isOpen)}
 				className="flex h-8 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs font-medium text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
-				title="Feature Flag DevTools"
+				title="Feature flag devtools"
 			>
 				<svg
-					role="img"
-					aria-label="Feature flags"
+					aria-hidden="true"
 					xmlns="http://www.w3.org/2000/svg"
 					width="14"
 					height="14"

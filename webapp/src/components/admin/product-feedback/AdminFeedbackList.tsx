@@ -43,7 +43,7 @@ export interface AdminFeedbackListProps {
 }
 
 const EMPTY_COPY: Record<FeedbackStatusFilter, { title: string; description: string }> = {
-	OPEN: { title: "Inbox zero", description: "Nothing is waiting." },
+	OPEN: { title: "No open feedback", description: "New feedback from members appears here." },
 	RESOLVED: { title: "No resolved feedback yet", description: "Resolved feedback moves here." },
 	ALL: {
 		title: "No feedback yet",
@@ -62,7 +62,7 @@ export function AdminFeedbackList({ state, pendingIds, onTriage }: AdminFeedback
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Feedback could not be loaded"
+				title="We could not load feedback"
 				onRetry={state.onRetry}
 			/>
 		);

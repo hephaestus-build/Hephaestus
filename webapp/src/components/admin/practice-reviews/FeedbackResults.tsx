@@ -54,7 +54,7 @@ export function FeedbackResults({ state }: FeedbackResultsProps) {
 					</EmptyTitle>
 					<EmptyDescription>
 						{state.filtered
-							? "Every filter still applies. Clear them to see the whole list, or narrow one at a time."
+							? "Change or clear the filters to see more."
 							: "Delivered and withheld feedback appears here after reviews run."}
 					</EmptyDescription>
 				</EmptyHeader>

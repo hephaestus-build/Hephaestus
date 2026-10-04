@@ -140,8 +140,8 @@ export function PracticeForm(props: PracticeFormProps) {
 						<p className="text-sm text-muted-foreground">
 							The requirements above are the author’s own claim about this practice. Nobody has
 							checked them independently, and nothing here says the observations recorded under it
-							are correct. The digests record the exact rules that were declared, so a later change
-							to them is visible rather than silent.
+							are correct. The codes below identify the exact rules and policy that were declared,
+							so a later change to them is visible rather than silent.
 						</p>
 					</div>
 					<PracticeAutomatedReviewValidationSummary

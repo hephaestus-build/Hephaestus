@@ -6,11 +6,11 @@ description: OAuth App for login, PAT or GitHub App for data access, and manual 
 
 Hephaestus uses three GitHub mechanisms:
 
-| Mechanism | Purpose | Required? |
-| --- | --- | --- |
-| **OAuth App** | "Sign in with GitHub" | Yes, unless you use only GitLab login |
-| **PAT** *or* **GitHub App** | Repository data access and feedback delivery per workspace | One of the two |
-| **Webhook** | Live events: PRs, reviews, pushes, and others | Strongly recommended. Without it, updates wait for scheduled sync, hourly by default in production. |
+| Mechanism                   | Purpose                                                    | Required?                                                                                           |
+| --------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **OAuth App**               | "Continue with GitHub"                                     | Yes, unless you use only GitLab login                                                               |
+| **PAT** *or* **GitHub App** | Repository data access and feedback delivery per workspace | One of the two                                                                                      |
+| **Webhook**                 | Live events: PRs, reviews, pushes, and others              | Strongly recommended. Without it, updates wait for scheduled sync, hourly by default in production. |
 
 Configure login with the [OAuth App setup](./install#3-configure-a-login-provider).
 
@@ -19,13 +19,13 @@ Configure login with the [OAuth App setup](./install#3-configure-a-login-provide
 **PAT mode fully supports synchronization** and is the simplest way to evaluate a single-org installation.
 Before you enable feedback delivery, use a GitHub App so comments have a distinct app identity.
 
-| | PAT | GitHub App |
-| --- | --- | --- |
-| Setup effort | Paste a token in the workspace UI | Create an App. Install it. Manage a private key. |
-| Environment variables | None | `GH_APP_ID`, `GH_APP_PRIVATE_KEY`, `GH_APP_INSTALLATION_URL`, `GH_APP_CLIENT_ID`, `GH_APP_CLIENT_SECRET` |
-| API rate-limit budget | Shared with the user's other API use | Per installation. See [GitHub's limits](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/rate-limits-for-github-apps). |
-| Practice feedback posted back to GitHub (PR comments, inline notes, approvals) | Uses the token's user identity. Do not use for active delivery. | Uses the App identity |
-| Webhooks | Create manually, as described below | Configure once on the App |
+|                                                                                | PAT                                                             | GitHub App                                                                                                                                          |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Setup effort                                                                   | Paste a token in the workspace UI                               | Create an App. Install it. Manage a private key.                                                                                                    |
+| Environment variables                                                          | None                                                            | `GH_APP_ID`, `GH_APP_PRIVATE_KEY`, `GH_APP_INSTALLATION_URL`, `GH_APP_CLIENT_ID`, `GH_APP_CLIENT_SECRET`                                            |
+| API rate-limit budget                                                          | Shared with the user's other API use                            | Per installation. See [GitHub's limits](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/rate-limits-for-github-apps). |
+| Practice feedback posted back to GitHub (PR comments, inline notes, approvals) | Uses the token's user identity. Do not use for active delivery. | Uses the App identity                                                                                                                               |
+| Webhooks                                                                       | Create manually, as described below                             | Configure once on the App                                                                                                                           |
 
 The database stores tokens encrypted with AES-256-GCM per workspace.
 
@@ -47,17 +47,17 @@ Authentication uses each workspace connection's mode.
 These are the [core permissions](#core-contract--required) without Checks, which GitHub does not
 offer to fine-grained tokens.
 
-| Permission (manifest key) | Scope | Level | Without it |
-| --- | --- | --- | --- |
-| Contents (`contents`) | Repository | Read | Commit sync stays empty. Practice reviews cannot check out the repository. |
-| Pull requests (`pull_requests`) | Repository | Read & write | Pull request and review sync stays empty. Feedback delivery on pull requests fails. |
-| Issues (`issues`) | Repository | Read & write | Issue sync stays empty. Feedback delivery as comments fails. |
-| Discussions (`discussions`) | Repository | Read | Discussion sync stays empty |
-| Commit statuses (`statuses`) | Repository | Read | Commit statuses do not count toward a pull request's check state |
-| Members (`members`) | Organization | Read | Organization membership and team sync stay empty |
-| Projects (`organization_projects`) | Organization | Read | Projects v2 sync stays empty |
-| Issue types (`issue_types`) | Organization | Read | Issue-type sync stays empty |
-| Metadata (`metadata`) | Repository | Read | Always included |
+| Permission (manifest key)          | Scope        | Level        | Without it                                                                          |
+| ---------------------------------- | ------------ | ------------ | ----------------------------------------------------------------------------------- |
+| Contents (`contents`)              | Repository   | Read         | Commit sync stays empty. Practice reviews cannot check out the repository.          |
+| Pull requests (`pull_requests`)    | Repository   | Read & write | Pull request and review sync stays empty. Feedback delivery on pull requests fails. |
+| Issues (`issues`)                  | Repository   | Read & write | Issue sync stays empty. Feedback delivery as comments fails.                        |
+| Discussions (`discussions`)        | Repository   | Read         | Discussion sync stays empty                                                         |
+| Commit statuses (`statuses`)       | Repository   | Read         | Commit statuses do not count toward a pull request's check state                    |
+| Members (`members`)                | Organization | Read         | Organization membership and team sync stay empty                                    |
+| Projects (`organization_projects`) | Organization | Read         | Projects v2 sync stays empty                                                        |
+| Issue types (`issue_types`)        | Organization | Read         | Issue-type sync stays empty                                                         |
+| Metadata (`metadata`)              | Repository   | Read         | Always included                                                                     |
 
 :::caution CAUTION: A missing permission does not fail the connection
 
@@ -91,7 +91,7 @@ Classic tokens and the GitHub App also read it with each sync.
 ### Connecting an installation to a workspace
 
 The App requests user authorization during installation.
-When a workspace administrator connects GitHub, Hephaestus exchanges GitHub's authorization for a short-lived token of the person who installed the App.
+When a workspace admin connects GitHub, Hephaestus exchanges GitHub's authorization for a short-lived token of the person who installed the App.
 It connects the installation only if that person can [access it](https://docs.github.com/en/rest/apps/installations#list-app-installations-accessible-to-the-user-access-token) and owns its account.
 This means an organization owner or the user themselves.
 Hephaestus uses the token once and never stores it.
@@ -102,7 +102,7 @@ These conditions also apply:
 
 - **One workspace per installation.** A connected installation cannot connect to another workspace until the first workspace disconnects it.
   This applies even while the connection is suspended.
-  A refusal names the other workspace only to its administrators.
+  A refusal names the other workspace only to its workspace admins.
 - **Disconnect uninstalls only what the workspace holds.** A disconnect removes the installation from GitHub only when the connection recorded it.
 - **Installed from GitHub or the workspace wizard.** The return has no workspace to connect.
   Hephaestus sends the person to its home page.
@@ -160,29 +160,29 @@ The tables explain each grant.
 
 “Write” in GitHub's manifest includes read access. All unlisted permissions remain **No access**.
 
-| Permission (manifest key) | Scope | Level | Why |
-| --- | --- | --- | --- |
-| Metadata (`metadata`) | Repository | Read | Mandatory repository identity and metadata |
-| Contents (`contents`) | Repository | Read | Push and commit sync. Repository checkout for practice reviews. No code writes. |
-| Pull requests (`pull_requests`) | Repository | Read & write | PR and review sync. Delivery of review feedback, inline notes, and approvals. |
-| Issues (`issues`) | Repository | Read & write | Issue sync. Delivery of feedback as issue or PR comments. |
-| Discussions (`discussions`) | Repository | Read | Discussion sync, not discussion delivery |
-| Members (`members`) | Organization | Read | Organization membership, teams, and member events |
-| Projects (`organization_projects`) | Organization | Read | Projects v2 sync and project event access, not classic repository projects. |
-| Issue types (`issue_types`) | Organization | Read | Native issue-type sync, and the issue-type change that opens a practice review |
-| Checks (`checks`) | Repository | Read | Check state of a pull request's head. Read with the pull request. `check_suite` events keep it current. |
-| Commit statuses (`statuses`) | Repository | Read | The same state from commit statuses, including non-Actions CI. `status` events keep it current. |
+| Permission (manifest key)          | Scope        | Level        | Why                                                                                                     |
+| ---------------------------------- | ------------ | ------------ | ------------------------------------------------------------------------------------------------------- |
+| Metadata (`metadata`)              | Repository   | Read         | Mandatory repository identity and metadata                                                              |
+| Contents (`contents`)              | Repository   | Read         | Push and commit sync. Repository checkout for practice reviews. No code writes.                         |
+| Pull requests (`pull_requests`)    | Repository   | Read & write | PR and review sync. Delivery of review feedback, inline notes, and approvals.                           |
+| Issues (`issues`)                  | Repository   | Read & write | Issue sync. Delivery of feedback as issue or PR comments.                                               |
+| Discussions (`discussions`)        | Repository   | Read         | Discussion sync, not discussion delivery                                                                |
+| Members (`members`)                | Organization | Read         | Organization membership, teams, and member events                                                       |
+| Projects (`organization_projects`) | Organization | Read         | Projects v2 sync and project event access, not classic repository projects.                             |
+| Issue types (`issue_types`)        | Organization | Read         | Native issue-type sync, and the issue-type change that opens a practice review                          |
+| Checks (`checks`)                  | Repository   | Read         | Check state of a pull request's head. Read with the pull request. `check_suite` events keep it current. |
+| Commit statuses (`statuses`)       | Repository   | Read         | The same state from commit statuses, including non-Actions CI. `status` events keep it current.         |
 
 #### Provisioned — read access ahead of features
 
-| Permission (manifest key) | Scope | Level | Why / roadmap |
-| --- | --- | --- | --- |
-| Actions (`actions`) | Repository | Read | Workflow, run, and job signals. No workflow dispatch or cancellation: [#1403](https://github.com/hephaestus-build/Hephaestus/issues/1403), [#1338](https://github.com/hephaestus-build/Hephaestus/issues/1338) |
-| Deployments (`deployments`) | Repository | Read | Delivery cadence, outcomes, and approval history: [#1676](https://github.com/hephaestus-build/Hephaestus/issues/1676) |
-| Merge queues (`merge_queues`) | Repository | Read | Queue usage and ejection signals, never queue control: [#1677](https://github.com/hephaestus-build/Hephaestus/issues/1677) |
-| Dependabot alerts (`vulnerability_alerts`) | Repository | Read | Vulnerability-response times and dismissal practices: [#1675](https://github.com/hephaestus-build/Hephaestus/issues/1675) |
-| Secret scanning alerts (`secret_scanning_alerts`) | Repository | Read | Leaked-credential response timing: [#1675](https://github.com/hephaestus-build/Hephaestus/issues/1675) |
-| Code scanning alerts (`security_events`) | Repository | Read | Static-analysis triage practices: [#1675](https://github.com/hephaestus-build/Hephaestus/issues/1675) |
+| Permission (manifest key)                         | Scope      | Level | Why / roadmap                                                                                                                                                                                                  |
+| ------------------------------------------------- | ---------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Actions (`actions`)                               | Repository | Read  | Workflow, run, and job signals. No workflow dispatch or cancellation: [#1403](https://github.com/hephaestus-build/Hephaestus/issues/1403), [#1338](https://github.com/hephaestus-build/Hephaestus/issues/1338) |
+| Deployments (`deployments`)                       | Repository | Read  | Delivery cadence, outcomes, and approval history: [#1676](https://github.com/hephaestus-build/Hephaestus/issues/1676)                                                                                          |
+| Merge queues (`merge_queues`)                     | Repository | Read  | Queue usage and ejection signals, never queue control: [#1677](https://github.com/hephaestus-build/Hephaestus/issues/1677)                                                                                     |
+| Dependabot alerts (`vulnerability_alerts`)        | Repository | Read  | Vulnerability-response times and dismissal practices: [#1675](https://github.com/hephaestus-build/Hephaestus/issues/1675)                                                                                      |
+| Secret scanning alerts (`secret_scanning_alerts`) | Repository | Read  | Leaked-credential response timing: [#1675](https://github.com/hephaestus-build/Hephaestus/issues/1675)                                                                                                         |
+| Code scanning alerts (`security_events`)          | Repository | Read  | Static-analysis triage practices: [#1675](https://github.com/hephaestus-build/Hephaestus/issues/1675)                                                                                                          |
 
 A provisioned permission grants *access*, not a subscription.
 Its events stay [unsubscribed](#deliberately-not-subscribed) until a feature reads them.
@@ -196,12 +196,12 @@ If you subscribe regardless:
 
 The manifest grants none of these at the level shown or above.
 
-| Permission (manifest key) | Scope | Level | Release trigger / why it is held |
-| --- | --- | --- | --- |
-| Checks (`checks`) | Repository | Read & write | Only with non-blocking annotation delivery ([#1678](https://github.com/hephaestus-build/Hephaestus/issues/1678)). Requires an installation approval round. Read is core. |
-| Administration (`administration`) | Repository | Read | Held until GitHub offers a narrower branch-protection grant. Broad administration access is not justified for that signal. |
-| Issue fields (`issue_fields`) | Organization | Read | Custom issue fields have no reader. Issue-type sync uses Issue types above. Revoke it where an existing registration grants it. |
-| Copilot metrics (`organization_copilot_metrics`) | Organization | Read | Privacy assessment first ([#1679](https://github.com/hephaestus-build/Hephaestus/issues/1679)). Provision only if approved. |
+| Permission (manifest key)                        | Scope        | Level        | Release trigger / why it is held                                                                                                                                         |
+| ------------------------------------------------ | ------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Checks (`checks`)                                | Repository   | Read & write | Only with non-blocking annotation delivery ([#1678](https://github.com/hephaestus-build/Hephaestus/issues/1678)). Requires an installation approval round. Read is core. |
+| Administration (`administration`)                | Repository   | Read         | Held until GitHub offers a narrower branch-protection grant. Broad administration access is not justified for that signal.                                               |
+| Issue fields (`issue_fields`)                    | Organization | Read         | Custom issue fields have no reader. Issue-type sync uses Issue types above. Revoke it where an existing registration grants it.                                          |
+| Copilot metrics (`organization_copilot_metrics`) | Organization | Read         | Privacy assessment first ([#1679](https://github.com/hephaestus-build/Hephaestus/issues/1679)). Provision only if approved.                                              |
 
 ### Event subscriptions
 
@@ -220,31 +220,31 @@ See [webhook ingestion operations](./webhook-ingestion-operations).
 Provision the *permission* now, because permission increases need an approval round.
 Add the subscription in the release with the feature that reads it.
 
-| Event | Rationale |
-| --- | --- |
-| `push` | Refresh commits and repository activity. |
-| `pull_request` | Synchronize PR lifecycle and changes. |
-| `pull_request_review` | Synchronize submitted and updated reviews. |
-| `pull_request_review_comment` | Synchronize inline review comments. |
-| `pull_request_review_thread` | Track review-thread resolution, and when it happened. |
-| `check_suite` | Keep the head's check state current between syncs. |
-| `status` | Keep the head's check state current from commit statuses. |
-| `issues` | Synchronize issue lifecycle and content. |
-| `issue_comment` | Synchronize issue and PR conversation comments. |
-| `label` | Keep label metadata current. |
-| `milestone` | Keep milestone metadata current. |
-| `member` | Track repository collaborator changes. |
-| `repository` | Track repository metadata and lifecycle. |
-| `discussion` | Synchronize discussions. |
-| `discussion_comment` | Synchronize discussion comments. |
-| `sub_issues` | Update parent/child issue relationships. |
-| `issue_dependencies` | Update blocking/blocked-by relationships. |
-| `organization` | Track organization changes. |
-| `team` | Synchronize teams. |
-| `membership` | Synchronize team membership. |
-| `projects_v2` | Synchronize organization project metadata where delivered. |
-| `projects_v2_item` | Synchronize project items and field values where delivered. |
-| `projects_v2_status_update` | Synchronize project status updates where delivered. |
+| Event                         | Rationale                                                   |
+| ----------------------------- | ----------------------------------------------------------- |
+| `push`                        | Refresh commits and repository activity.                    |
+| `pull_request`                | Synchronize PR lifecycle and changes.                       |
+| `pull_request_review`         | Synchronize submitted and updated reviews.                  |
+| `pull_request_review_comment` | Synchronize inline review comments.                         |
+| `pull_request_review_thread`  | Track review-thread resolution, and when it happened.       |
+| `check_suite`                 | Keep the head's check state current between syncs.          |
+| `status`                      | Keep the head's check state current from commit statuses.   |
+| `issues`                      | Synchronize issue lifecycle and content.                    |
+| `issue_comment`               | Synchronize issue and PR conversation comments.             |
+| `label`                       | Keep label metadata current.                                |
+| `milestone`                   | Keep milestone metadata current.                            |
+| `member`                      | Track repository collaborator changes.                      |
+| `repository`                  | Track repository metadata and lifecycle.                    |
+| `discussion`                  | Synchronize discussions.                                    |
+| `discussion_comment`          | Synchronize discussion comments.                            |
+| `sub_issues`                  | Update parent/child issue relationships.                    |
+| `issue_dependencies`          | Update blocking/blocked-by relationships.                   |
+| `organization`                | Track organization changes.                                 |
+| `team`                        | Synchronize teams.                                          |
+| `membership`                  | Synchronize team membership.                                |
+| `projects_v2`                 | Synchronize organization project metadata where delivered.  |
+| `projects_v2_item`            | Synchronize project items and field values where delivered. |
+| `projects_v2_status_update`   | Synchronize project status updates where delivered.         |
 
 GitHub delivers `installation` and `installation_repositories` automatically.
 Do not add them to the manifest's `default_events`.
@@ -264,11 +264,11 @@ Projects read remains required for API synchronization.
 Hephaestus subscribes to no GitHub event absent from the table above.
 These include three groups:
 
-| Not subscribed | Why |
-| --- | --- |
-| The provisioned families — `check_run`, `workflow_run`, `workflow_job`, `deployment`, `deployment_status`, `deployment_review`, `merge_group`, `merge_queue_entry`, `release`, `commit_comment`, `create`, `delete`, `dependabot_alert`, `secret_scanning_alert`, `code_scanning_alert` | Their permissions are provisioned. Their consumers do not yet exist. Subscribe with the feature, not before it. `check_run` is not needed: the suite event reports its runs' conclusion. |
-| `deployment_protection_rule`, `exemption_request_push_ruleset` | Each requests an approval decision from Hephaestus. Hephaestus observes work and never gates it. `exemption_request_push_ruleset` also needs Administration read, which is [held](#held--do-not-grant), so it stays unsubscribed. |
-| `deploy_key`, `team_add` | Access management, not practice context. Team and membership sync use the events above. |
+| Not subscribed                                                                                                                                                                                                                                                                          | Why                                                                                                                                                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The provisioned families — `check_run`, `workflow_run`, `workflow_job`, `deployment`, `deployment_status`, `deployment_review`, `merge_group`, `merge_queue_entry`, `release`, `commit_comment`, `create`, `delete`, `dependabot_alert`, `secret_scanning_alert`, `code_scanning_alert` | Their permissions are provisioned. Their consumers do not yet exist. Subscribe with the feature, not before it. `check_run` is not needed: the suite event reports its runs' conclusion.                                          |
+| `deployment_protection_rule`, `exemption_request_push_ruleset`                                                                                                                                                                                                                          | Each requests an approval decision from Hephaestus. Hephaestus observes work and never gates it. `exemption_request_push_ruleset` also needs Administration read, which is [held](#held--do-not-grant), so it stays unsubscribed. |
+| `deploy_key`, `team_add`                                                                                                                                                                                                                                                                | Access management, not practice context. Team and membership sync use the events above.                                                                                                                                           |
 
 ### GitHub App manifest template
 
@@ -281,41 +281,59 @@ Hephaestus does not implement GitHub's manifest registration flow.
 
 ```json
 {
-  "name": "your-hephaestus",
-  "url": "https://<APP_HOSTNAME>",
-  "description": "Reads repository and organization data, including CI, deployment, merge-queue and security-alert signals. Can write pull-request reviews and issue/PR comments for practice feedback. Never modifies your code.",
-  "public": true,
-  "hook_attributes": {
-    "url": "https://<APP_HOSTNAME>/webhooks/github",
-    "active": true
-  },
-  "callback_urls": ["https://<APP_HOSTNAME>/oauth/callback/github"],
-  "request_oauth_on_install": true,
-  "default_permissions": {
-    "metadata": "read",
-    "contents": "read",
-    "pull_requests": "write",
-    "issues": "write",
-    "discussions": "read",
-    "members": "read",
-    "organization_projects": "read",
-    "issue_types": "read",
-    "checks": "read",
-    "statuses": "read",
-    "actions": "read",
-    "deployments": "read",
-    "merge_queues": "read",
-    "vulnerability_alerts": "read",
-    "secret_scanning_alerts": "read",
-    "security_events": "read"
-  },
-  "default_events": [
-    "push", "pull_request", "pull_request_review", "pull_request_review_comment",
-    "pull_request_review_thread", "check_suite", "status", "issues", "issue_comment", "label",
-    "milestone", "member", "repository", "discussion", "discussion_comment", "sub_issues",
-    "issue_dependencies", "organization", "team", "membership", "projects_v2",
-    "projects_v2_item", "projects_v2_status_update"
-  ]
+ "name": "your-hephaestus",
+ "url": "https://<APP_HOSTNAME>",
+ "description": "Reads repository and organization data, including CI, deployment, merge-queue and security-alert signals. Can write pull-request reviews and issue/PR comments for practice feedback. Never modifies your code.",
+ "public": true,
+ "hook_attributes": {
+  "url": "https://<APP_HOSTNAME>/webhooks/github",
+  "active": true
+ },
+ "callback_urls": ["https://<APP_HOSTNAME>/oauth/callback/github"],
+ "request_oauth_on_install": true,
+ "default_permissions": {
+  "metadata": "read",
+  "contents": "read",
+  "pull_requests": "write",
+  "issues": "write",
+  "discussions": "read",
+  "members": "read",
+  "organization_projects": "read",
+  "issue_types": "read",
+  "checks": "read",
+  "statuses": "read",
+  "actions": "read",
+  "deployments": "read",
+  "merge_queues": "read",
+  "vulnerability_alerts": "read",
+  "secret_scanning_alerts": "read",
+  "security_events": "read"
+ },
+ "default_events": [
+  "push",
+  "pull_request",
+  "pull_request_review",
+  "pull_request_review_comment",
+  "pull_request_review_thread",
+  "check_suite",
+  "status",
+  "issues",
+  "issue_comment",
+  "label",
+  "milestone",
+  "member",
+  "repository",
+  "discussion",
+  "discussion_comment",
+  "sub_issues",
+  "issue_dependencies",
+  "organization",
+  "team",
+  "membership",
+  "projects_v2",
+  "projects_v2_item",
+  "projects_v2_status_update"
+ ]
 }
 ```
 
@@ -454,13 +472,13 @@ For a manual webhook, use **Settings → Webhooks → webhook → Recent Deliver
 [Webhook ingestion operations](./webhook-ingestion-operations) describes redelivery limits, including the time window and events GitHub will never redeliver.
 Do not rely on scheduled polling to recover event-only history, such as CI state at merge or security-response timestamps.
 
-| Symptom | Check / action |
-| --- | --- |
-| No delivery entry | Confirm installation, repository selection, subscription, and accepted permissions. Confirm event availability for this webhook type. Check [GitHub Status](https://www.githubstatus.com/). |
-| `3xx` | Replace the webhook URL that redirects with the direct instance URL. |
-| `401` on a real event | Check that the app or manual webhook secret matches `WEBHOOK_SECRET`. Proxies must preserve the body and signature header. |
-| Timeout, TLS error, or `404` | Check public DNS, certificate chain, reverse-proxy routing, and webhook-role health. |
-| `5xx` | Inspect webhook-role and NATS health ([webhook ingestion operations](./webhook-ingestion-operations)). Repair the failure before redelivery. |
+| Symptom                          | Check / action                                                                                                                                                                                                                                           |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No delivery entry                | Confirm installation, repository selection, subscription, and accepted permissions. Confirm event availability for this webhook type. Check [GitHub Status](https://www.githubstatus.com/).                                                              |
+| `3xx`                            | Replace the webhook URL that redirects with the direct instance URL.                                                                                                                                                                                     |
+| `401` on a real event            | Check that the app or manual webhook secret matches `WEBHOOK_SECRET`. Proxies must preserve the body and signature header.                                                                                                                               |
+| Timeout, TLS error, or `404`     | Check public DNS, certificate chain, reverse-proxy routing, and webhook-role health.                                                                                                                                                                     |
+| `5xx`                            | Inspect webhook-role and NATS health ([webhook ingestion operations](./webhook-ingestion-operations)). Repair the failure before redelivery.                                                                                                             |
 | `2xx`, but no application update | Check server consumption and workspace repository selection. Check the repository's sync error under **Administration → Integrations → GitHub → Manage repositories**. Events without a feature consumer are acknowledged and discarded without updates. |
 
 Follow GitHub's [delivery troubleshooting guide](https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/troubleshooting-webhooks).

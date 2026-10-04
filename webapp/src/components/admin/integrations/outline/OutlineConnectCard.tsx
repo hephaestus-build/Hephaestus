@@ -112,7 +112,7 @@ export function OutlineConnectCard({
 				<CardContent className="space-y-4">
 					{connected ? (
 						<>
-							{/* Which Outline instance is linked — the one fact the connection plane above does not
+							{/* Which Outline instance is linked — the one fact the connection plane above doesn't
 							    carry. The green check is a claim that syncing works, so it is spent only on ACTIVE;
 							    any other state is explained by the shared notice above this card. */}
 							<div className="flex items-center gap-2 text-sm">
@@ -123,7 +123,7 @@ export function OutlineConnectCard({
 								)}
 								<span>
 									Outline {connectionState ? CONNECTION_STATE_LABEL[connectionState] : "connected"}
-									{hasText(connectionLabel) ? ` — ${connectionLabel}` : ""}
+									{hasText(connectionLabel) ? ` · ${connectionLabel}` : ""}
 								</span>
 							</div>
 
@@ -145,8 +145,8 @@ export function OutlineConnectCard({
 									aria-invalid={serverUrlInvalid}
 								/>
 								<FieldDescription>
-									Your Outline host — <code>{CLOUD_SERVER_URL}</code> for Outline Cloud, otherwise
-									your self-hosted URL.
+									Your Outline host. Use <code>{CLOUD_SERVER_URL}</code> for Outline Cloud, or your
+									self-hosted URL.
 								</FieldDescription>
 								{serverUrlInvalid && <FieldError>Enter an https:// URL.</FieldError>}
 							</Field>
@@ -163,8 +163,7 @@ export function OutlineConnectCard({
 									autoComplete="off"
 								/>
 								<FieldDescription>
-									Create it in Outline under <em>Settings → API Keys</em>. A dedicated bot-user
-									token is recommended.
+									Create it in Outline under <em>Settings → API Keys</em>.
 								</FieldDescription>
 							</Field>
 
@@ -176,7 +175,7 @@ export function OutlineConnectCard({
 									<AlertTitle>Outline may not be enabled on this instance</AlertTitle>
 									<AlertDescription>
 										The server has no Outline integration configured, so connecting cannot succeed
-										here. If your URL and token are correct, ask your server administrator to enable
+										here. If your URL and token are correct, ask your instance operator to enable
 										the Outline integration for this deployment.
 									</AlertDescription>
 								</Alert>
@@ -215,9 +214,9 @@ export function OutlineConnectCard({
 					<AlertDialogHeader>
 						<AlertDialogTitle>Disconnect Outline?</AlertDialogTitle>
 						<AlertDialogDescription>
-							The document mirror stops syncing and every mirrored document for this workspace is
-							erased. Documents in Outline itself are not affected. You can reconnect later with a
-							token.
+							Hephaestus stops syncing Outline and erases every mirrored document for this
+							workspace. Documents in Outline itself are not affected. You cannot undo this. You can
+							reconnect later with a token.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -230,7 +229,7 @@ export function OutlineConnectCard({
 								onDisconnect();
 							}}
 						>
-							{isDisconnecting ? "Disconnecting…" : "Disconnect"}
+							{isDisconnecting ? "Disconnecting…" : "Disconnect Outline"}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -261,9 +260,9 @@ function OutlineTokenPanel({ tokenStatus, isLoading }: OutlineTokenPanelProps) {
 		return (
 			<Alert variant="destructive">
 				<TriangleAlertIcon />
-				<AlertTitle>Outline no longer accepts this token — reconnect with a new one</AlertTitle>
+				<AlertTitle>Outline no longer accepts this token. Reconnect with a new one</AlertTitle>
 				<AlertDescription>
-					Syncing is stopped until a working API key is stored. Create a key in Outline under{" "}
+					Syncing is stopped until you store a working API key. Create a new key in Outline under{" "}
 					<strong>Settings → API Keys</strong>, then disconnect and reconnect here with it.
 				</AlertDescription>
 			</Alert>
@@ -319,9 +318,9 @@ function OutlineTokenPanel({ tokenStatus, isLoading }: OutlineTokenPanelProps) {
 							: `This API key expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"} (on ${format(expiresAt, "d MMM yyyy")})`}
 					</AlertTitle>
 					<AlertDescription>
-						Outline API keys cannot be rotated through the API, so create a fresh key in Outline
-						under <strong>Settings → API Keys</strong> and re-enter it here before this one lapses —
-						the mirror stops the moment it does.
+						Outline API keys cannot be rotated through the API. Create a new key in Outline under{" "}
+						<strong>Settings → API Keys</strong> and enter it here before this one expires. The
+						mirror stops the moment it expires.
 					</AlertDescription>
 				</Alert>
 			)}

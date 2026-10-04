@@ -43,17 +43,19 @@ export const Revoking: Story = {
 	play: async ({ canvas }) => {
 		const revoking = canvas.getByRole("listitem", { name: "Firefox on Linux" });
 		await expect(
-			within(revoking).getByRole("button", { name: "Revoke this session" }),
+			within(revoking).getByRole("button", { name: "Sign out Firefox on Linux" }),
 		).toBeDisabled();
 		const other = canvas.getByRole("listitem", { name: "Safari on iOS" });
-		await expect(within(other).getByRole("button", { name: "Revoke this session" })).toBeEnabled();
+		await expect(
+			within(other).getByRole("button", { name: "Sign out Safari on iOS" }),
+		).toBeEnabled();
 	},
 };
 
 export const Loading: Story = {
 	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("list", { name: "Loading sessions" })).toHaveAttribute(
+		await expect(canvas.getByRole("list", { name: "Loading sessions…" })).toHaveAttribute(
 			"aria-busy",
 			"true",
 		);
@@ -80,7 +82,7 @@ export const ErrorState: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("alert")).toHaveTextContent("Could not load sessions");
+		await expect(canvas.getByRole("alert")).toHaveTextContent("We could not load your sessions");
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeVisible();
 	},
 };

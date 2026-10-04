@@ -135,7 +135,7 @@ final class CuratedCatalogModel {
             throw new CuratedPreconditionRequiredException();
         }
         if (!precondition.matches(found.etag())) {
-            throw new StaleCuratedEntryException(type + " '" + slug + "'");
+            throw new StaleCuratedEntryException(type + " “" + slug + "”");
         }
         return found;
     }

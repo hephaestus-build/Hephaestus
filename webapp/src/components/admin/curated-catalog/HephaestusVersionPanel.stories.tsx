@@ -126,7 +126,7 @@ export const GroupAppearanceUpdate: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText(/would change the group's name, description, icon, or color/u),
+			canvas.getByText(/would change the group’s name, description, icon, or color/u),
 		).toBeVisible();
 		await expect(canvas.queryByText(/detect/u)).not.toBeInTheDocument();
 	},

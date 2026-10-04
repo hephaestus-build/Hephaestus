@@ -70,7 +70,7 @@ function AdminLoginProvidersPage() {
 			setDialogOpen(false);
 			toast.success("Login provider added");
 		},
-		onError: (error) => reportError(error, "Could not add the login provider"),
+		onError: (error) => reportError(error, "We could not add the login provider. Try again."),
 	});
 
 	const updateMutation = useMutation({
@@ -80,7 +80,7 @@ function AdminLoginProvidersPage() {
 			setDialogOpen(false);
 			toast.success("Login provider updated");
 		},
-		onError: (error) => reportError(error, "Could not update the login provider"),
+		onError: (error) => reportError(error, "We could not update the login provider. Try again."),
 	});
 
 	const deleteMutation = useMutation({
@@ -89,7 +89,7 @@ function AdminLoginProvidersPage() {
 			void invalidate();
 			toast.success("Login provider deleted");
 		},
-		onError: (error) => reportError(error, "Could not delete the login provider"),
+		onError: (error) => reportError(error, "We could not delete the login provider. Try again."),
 	});
 
 	const mutatingIds = usePendingMutationIds(PROVIDER_WRITE_MUTATION_KEY, (variables) =>
@@ -121,7 +121,7 @@ function AdminLoginProvidersPage() {
 			<PageHeader
 				icon={<KeyRound />}
 				title="Login providers"
-				description="Configure OAuth providers for sign-in and account linking."
+				description="Configure OAuth providers for sign-in and for connecting accounts."
 				actions={
 					<Button onClick={openCreate}>
 						<Plus className="size-4" aria-hidden />

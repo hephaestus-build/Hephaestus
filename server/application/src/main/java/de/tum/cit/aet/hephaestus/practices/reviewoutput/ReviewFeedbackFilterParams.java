@@ -60,12 +60,13 @@ public record ReviewFeedbackFilterParams(
         Instant to) {
     public FeedbackQueryFilter toFilter() {
         if (artifactId != null && artifactKind == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "artifactId requires artifactKind");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Choose a kind of work before you filter by one item.");
         }
         ArtifactKind kind = QueryFilterSupport.artifactKind(artifactKind);
         if (from != null && to != null && from.isAfter(to)) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "The from parameter must not be after the to parameter.");
+                    HttpStatus.BAD_REQUEST, "The start of the range must not be after its end.");
         }
         return new FeedbackQueryFilter(
                 deliveryState,

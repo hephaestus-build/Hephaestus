@@ -38,7 +38,7 @@ describe("DangerZoneSection — data export", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: /Request export/u }));
 
-		// First status poll returns PENDING; the in-progress copy proves we are polling.
+		// First status poll returns PENDING; the in-progress copy proves we're polling.
 		await waitFor(() => screen.getByText(/Preparing your export/iu));
 
 		// Drive the 2s poll interval forward; the next poll lands READY.
@@ -49,9 +49,9 @@ describe("DangerZoneSection — data export", () => {
 	});
 });
 
-/** The trigger button (collapsed) is labelled "Delete"; opening reveals the confirm input. */
+/** The trigger button (collapsed) is labelled "Delete account"; opening reveals the confirm input. */
 function openDeleteDialog() {
-	fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+	fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
 }
 
 describe("DangerZoneSection — account deletion", () => {

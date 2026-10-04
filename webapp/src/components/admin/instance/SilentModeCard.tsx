@@ -39,7 +39,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { hasText } from "@/lib/text";
 
-const RELEASE_CONFIRM_WORD = "release";
+const RELEASE_CONFIRM_WORD = "turn off";
 
 export interface SilentModeCardProps {
 	settings: InstanceSettings;
@@ -97,21 +97,17 @@ export function SilentModeCard({
 					Silent mode
 				</CardTitle>
 				<CardDescription>
-					The instance-wide emergency brake. While engaged, Hephaestus posts no practice feedback on
-					pull requests, merge requests or issues, and sends no Slack messages — for any workspace.
-					Workspace settings are untouched and apply again the moment silent mode is released.
+					The instance-wide emergency brake. While it is on, Hephaestus posts no practice feedback
+					on pull requests, merge requests or issues, and sends no Slack messages in any workspace.
+					Workspace settings stay as they are and apply again the moment you turn silent mode off.
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-2">
 				<div className="flex flex-wrap items-center gap-2">
-					{engaged ? (
-						<Badge variant="destructive">Engaged</Badge>
-					) : (
-						<Badge variant="success">Released</Badge>
-					)}
+					{engaged ? <Badge variant="destructive">On</Badge> : <Badge variant="success">Off</Badge>}
 					{settings.silentModeChangedByAccountId != null || settings.silentModeChangedAt ? (
 						<span className="text-sm text-muted-foreground">
-							{engaged ? "engaged" : "last changed"}
+							{engaged ? "turned on" : "last changed"}
 							{settings.silentModeChangedByAccountId == null
 								? ""
 								: ` by account #${settings.silentModeChangedByAccountId}`}
@@ -132,12 +128,12 @@ export function SilentModeCard({
 				{engaged ? (
 					<Button variant="outline" onClick={openRelease} disabled={isPending || releaseDisabled}>
 						{isPending ? <Spinner aria-hidden /> : <Volume2 aria-hidden />}
-						Release silent mode…
+						Turn off silent mode…
 					</Button>
 				) : (
 					<Button variant="destructive-outline" onClick={openEngage} disabled={isPending}>
 						{isPending ? <Spinner aria-hidden /> : <VolumeX aria-hidden />}
-						Engage silent mode…
+						Turn on silent mode…
 					</Button>
 				)}
 			</CardFooter>
@@ -145,13 +141,13 @@ export function SilentModeCard({
 			<Dialog open={engageOpen} onOpenChange={setEngageOpen}>
 				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>Engage silent mode</DialogTitle>
+						<DialogTitle>Turn on silent mode</DialogTitle>
 						<DialogDescription>
 							Nothing will be posted to GitHub, GitLab or Slack from any workspace. This includes
 							feedback on pull requests, merge requests and issues, Slack messages, and the
 							acknowledgement reaction. Reviews keep running and keep costing AI budget. Their
 							observations are saved and marked withheld. Anything withheld while silent mode is on
-							is never posted, not even after you release it.
+							is never posted, not even after you turn silent mode off.
 						</DialogDescription>
 					</DialogHeader>
 					<Field>
@@ -162,7 +158,7 @@ export function SilentModeCard({
 							id="silent-mode-reason"
 							value={reason}
 							onChange={(event) => setReason(event.target.value)}
-							placeholder="e.g. Investigating incident #42 — bad feedback going out"
+							placeholder="e.g. Investigating incident #42, bad feedback going out"
 							maxLength={500}
 							rows={3}
 						/>
@@ -180,7 +176,7 @@ export function SilentModeCard({
 							onClick={() => onEngage(reason.trim() === "" ? undefined : reason.trim())}
 						>
 							{isPending ? <Spinner aria-hidden /> : <VolumeX aria-hidden />}
-							Engage silent mode
+							Turn on silent mode
 						</Button>
 					</DialogFooter>
 				</DialogContent>
@@ -189,20 +185,20 @@ export function SilentModeCard({
 			<AlertDialog open={releaseOpen} onOpenChange={setReleaseOpen}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Release silent mode?</AlertDialogTitle>
+						<AlertDialogTitle>Turn off silent mode?</AlertDialogTitle>
 						<AlertDialogDescription>
 							Hephaestus posts feedback on pull requests and merge requests again, and Slack
 							messages go out. This applies to every workspace, immediately. Anything withheld while
-							silent mode was on stays withheld. Releasing does not post it. If a bad review is what
-							prompted this, check that it is fixed first: the next completed review posts its
+							silent mode was on stays withheld. Turning it off does not post it. If a bad review is
+							what prompted this, check that it is fixed first: the next completed review posts its
 							feedback.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					{releaseDisabled ? (
 						<Alert variant="destructive">
 							<AlertDescription>
-								The current settings could not be verified. Keep silent mode on and retry after
-								reloading.
+								The current settings could not be verified. Keep silent mode on, reload the page,
+								and try again.
 							</AlertDescription>
 						</Alert>
 					) : null}
@@ -240,7 +236,7 @@ export function SilentModeCard({
 								disabled={isPending || releaseDisabled}
 							>
 								{isPending && <Spinner aria-hidden />}
-								Release silent mode
+								Turn off silent mode
 							</AlertDialogAction>
 						</AlertDialogFooter>
 					</form>

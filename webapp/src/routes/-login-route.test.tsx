@@ -94,9 +94,9 @@ describe("contextual sign-in", () => {
 
 	it("uses the generic error for inherited object-property names", async () => {
 		renderRouteAtWithRouter("/login?error=__proto__");
-		await screen.findByText("Something went wrong", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("We could not sign you in", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.getByRole("alert").textContent).toContain(
-			"We could not sign you in. Please try again.",
+			"Try again. If it keeps failing, contact your instance operator.",
 		);
 	});
 
@@ -111,7 +111,7 @@ describe("contextual sign-in", () => {
 				]),
 			),
 		);
-		await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+		await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 		await screen.findByRole("button", { name: "Continue with GitLab" });
 	});
 });

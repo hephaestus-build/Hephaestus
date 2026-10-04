@@ -165,7 +165,7 @@ describe("the workspace summary", () => {
 
 	it("reads as a sentence for the live region, not as middot-separated fragments", () => {
 		expect(autonomyDistributionSentence(fixture.rollup.counts)).toBe(
-			"4 practices: 1 off, 2 review before sending and 1 send automatically.",
+			"4 practices: 1 set to off, 2 set to review before sending and 1 set to send automatically.",
 		);
 	});
 
@@ -180,7 +180,7 @@ describe("the workspace summary", () => {
 		expect(autonomyTotal(scale.rollup.counts)).toBe(100);
 		expect(scale.rollup.groups).toHaveLength(25);
 		expect(autonomyDistributionSentence(scale.rollup.counts)).toBe(
-			"100 practices: 6 off, 89 review before sending and 5 send automatically.",
+			"100 practices: 6 set to off, 89 set to review before sending and 5 set to send automatically.",
 		);
 	});
 });

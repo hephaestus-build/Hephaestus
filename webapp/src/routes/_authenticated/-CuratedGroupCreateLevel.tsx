@@ -28,7 +28,7 @@ export function CuratedGroupCreateLevel({ nested, path, onDone }: CuratedGroupCr
 			onDone();
 		},
 		onError: (error) =>
-			toast.error("Could not create the group", { description: problemDetailOf(error) }),
+			toast.error("We could not create the group", { description: problemDetailOf(error) }),
 	});
 
 	return (

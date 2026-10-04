@@ -7,7 +7,7 @@ description: The normative product vocabulary for observations, feedback, practi
 
 Use these product terms in user-facing interfaces, documentation, and release notes.
 
-This page is the project's list of technical names and technical verbs for [Simplified Technical English](./simplified-technical-english.md).
+This page is the project's list of technical names and technical verbs for the [writing standard](./simplified-technical-english.md).
 The tables define names.
 The verb table defines actions.
 The prose checks read the first column, so keep each term in bold.
@@ -105,7 +105,7 @@ Do not use the level as the name.
 
 `IN_APP` is the code noun — the enum constant and the `chk_feedback_channel` value.
 Do not call it a *profile* or *reflection* channel: those words name a different surface or an outcome the system cannot observe. [ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md) records the naming decision.
-On an operator surface, the place reads **On their practice pages**.
+On an operator surface, the channel reads **On their practice pages**.
 
 **Feedback waiting for a mentor conversation is *prepared*, never *queued*.** A queue implies somebody has to work it.
 Nothing works this queue.
@@ -259,6 +259,9 @@ Its link above remains their source.
 | **Instance** | One deployment that hosts workspaces. |
 | **Integration** | A connection to GitHub, GitLab, Slack, or Outline. |
 | **Runtime role** | The server, worker, or webhook part of one application. |
+| **Instance admin** | A person with the admin role for the whole deployment. |
+| **Workspace admin** | A person with the admin role in one workspace. |
+| **Instance operator** | The person or team who runs the deployment. Readers contact them for faults that no admin can fix. |
 | **Server** | The service that handles application requests. |
 | **Worker** | The runtime role that executes background work. |
 | **Webhook** | A provider's HTTP event request. |

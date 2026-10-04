@@ -340,14 +340,14 @@ export function SortableCatalogTree<
 				const target = resolveEntryDropTarget({ active, over });
 				return target
 					? `Moved ${data.label} to ${describeTarget(target, data.entrySlug)}.`
-					: "Move cancelled.";
+					: "Move canceled.";
 			}
 			const overData = catalogDndData(over?.data.current);
 			return data && overData?.type === "group"
 				? `Moved ${data.label} to position ${sortedGroups.findIndex(({ slug }) => slug === overData.groupSlug) + 1} of ${sortedGroups.length}.`
-				: "Move cancelled.";
+				: "Move canceled.";
 		},
-		onDragCancel: () => "Move cancelled.",
+		onDragCancel: () => "Move canceled.",
 	};
 
 	const registerActionTrigger = (key: string) => (node: HTMLButtonElement | null) => {
@@ -451,7 +451,7 @@ export function SortableCatalogTree<
 				announcements,
 				screenReaderInstructions: {
 					draggable:
-						"Press space to pick up an item. Use the arrow keys to move it, then press space to drop or escape to cancel. You can also use the item's actions menu to move it without dragging.",
+						"Press space to pick up an item. Use the arrow keys to move it, then press space to drop or escape to cancel. You can also use the item’s actions menu to move it without dragging.",
 				},
 			}}
 			onDragStart={handleDragStart}

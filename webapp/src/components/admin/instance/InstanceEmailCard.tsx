@@ -58,10 +58,10 @@ export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEma
 					Email
 				</CardTitle>
 				<CardDescription>
-					Hephaestus sends account emails through the relay configured with{" "}
+					Hephaestus sends account emails through the mail server configured with{" "}
 					<code>SPRING_MAIL_HOST</code>. A test email uses the same transport as account
-					notifications, including silent mode. A successful test confirms relay acceptance, not
-					inbox delivery.
+					notifications, including silent mode. A successful test confirms the mail server accepted
+					the email, not inbox delivery.
 				</CardDescription>
 			</CardHeader>
 			<form onSubmit={submit} className="flex flex-col gap-4">
@@ -97,7 +97,7 @@ export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEma
 										{hasText(result.messageId) ? (
 											<>
 												{" "}
-												— message id <code className="text-xs">{result.messageId}</code>
+												· message ID <code className="text-xs">{result.messageId}</code>
 											</>
 										) : null}
 									</>

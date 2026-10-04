@@ -142,7 +142,7 @@ describe("AdminLlmModelAccessDialog", () => {
 			/>,
 		);
 
-		screen.getByText("Could not load workspaces");
+		screen.getByText("We could not load workspaces");
 		expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save access" }).disabled).toBe(
 			true,
 		);

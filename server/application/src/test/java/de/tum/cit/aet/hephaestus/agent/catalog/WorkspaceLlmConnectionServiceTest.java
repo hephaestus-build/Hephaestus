@@ -317,13 +317,13 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
             when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
                     .thenReturn(Optional.of(new LlmProbeTarget("https://api.openai.com", LlmAuthMode.BEARER, null)));
             when(probeService.probeCredential(any(), any(), any()))
-                    .thenReturn(LlmProbeResultDTO.unreachable(503, "Provider returned HTTP 503"));
+                    .thenReturn(LlmProbeResultDTO.unreachable(503, "The provider answered with HTTP 503."));
 
             WorkspaceLlmProbeResultDTO result = connectionService.probe(workspaceContext, 5L);
 
             assertThat(result.reachable()).isFalse();
             assertThat(result.modelCount()).isEqualTo(0);
-            assertThat(result.message()).isEqualTo("Provider returned HTTP 503");
+            assertThat(result.message()).isEqualTo("The provider answered with HTTP 503.");
         }
 
         /**

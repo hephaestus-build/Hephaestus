@@ -1,6 +1,6 @@
 [(${subject})]
 
-[(#{${'email.product-feedback.' + feedbackKind}})] Sign in as an instance administrator to read it.
+[(#{${'email.product-feedback.' + feedbackKind}})] Sign in as an instance admin to read it.
 
 Open product feedback: [(${webappUrl})]/admin/feedback
 

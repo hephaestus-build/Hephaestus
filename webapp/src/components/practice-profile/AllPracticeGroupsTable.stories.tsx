@@ -179,10 +179,10 @@ export const ReadOnly: Story = {
 export const Empty: Story = {
 	args: { groups: [], standings: {}, practicesByGroup: {} },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No practices set up yet.")).toBeVisible();
+		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Practice groups appear here once an admin sets up the practices this workspace reviews.",
+				"Practice groups appear here once a workspace admin sets up the practices this workspace reviews.",
 			),
 		).toBeVisible();
 	},
@@ -209,7 +209,7 @@ export const LoadFailed: Story = {
 		},
 	},
 	play: async ({ args: { state }, canvas }) => {
-		await expect(canvas.getByText("Could not load your practice groups")).toBeVisible();
+		await expect(canvas.getByText("We could not load your practice groups")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(state.status === "error" && state.onRetry).toHaveBeenCalledOnce();
 	},

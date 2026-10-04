@@ -21,7 +21,7 @@ export interface SweepScheduleMutations {
 }
 
 const failed = (verb: string) => (error: unknown) =>
-	toast.error(`Could not ${verb} this recurring check`, { description: problemDetailOf(error) });
+	toast.error(`We could not ${verb} this recurring check`, { description: problemDetailOf(error) });
 
 /**
  * The three writes to a workspace's recurring checks, shaped as the props the schedule editor takes.
@@ -58,9 +58,9 @@ export function useSweepScheduleMutations(workspaceSlug: string): SweepScheduleM
 		...deleteSweepScheduleMutation(),
 		onSuccess: () => {
 			void invalidate();
-			toast.success("Recurring check removed");
+			toast.success("Recurring check deleted");
 		},
-		onError: failed("remove"),
+		onError: failed("delete"),
 	});
 
 	return {

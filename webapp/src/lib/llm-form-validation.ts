@@ -32,14 +32,14 @@ function firstIssuePerField<TField extends string>(
 const displayNameSchema = z
 	.string()
 	.trim()
-	.min(1, "A display name is required.")
+	.min(1, "Enter a display name.")
 	.max(128, "Use 128 characters or fewer.");
 
 /** Credentials, query and fragment are rejected: that is how a gateway URL smuggles a key into logs. */
 const baseUrlSchema = z
 	.string()
 	.trim()
-	.min(1, "A base URL is required.")
+	.min(1, "Enter a base URL.")
 	.max(2048, "Use 2048 characters or fewer.")
 	.superRefine((value, ctx) => {
 		let url: URL;
@@ -85,7 +85,7 @@ const tokenCountSchema = z
 const rateSchema = z
 	.number()
 	.refine(Number.isFinite, "Enter an amount in USD.")
-	.min(0, "Rates cannot be negative.");
+	.min(0, "Enter a rate of 0 or more.");
 
 const LLM_CONNECTION_FORM_FIELDS = ["displayName", "baseUrl"] as const;
 
@@ -147,7 +147,7 @@ const llmModelFormSchema = z
 		upstreamModelId: z
 			.string()
 			.trim()
-			.min(1, "The upstream model id is required.")
+			.min(1, "Enter the upstream model ID.")
 			.max(256, "Use 256 characters or fewer.")
 			.optional(),
 		contextWindow: tokenCountSchema,

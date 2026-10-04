@@ -490,7 +490,8 @@ public class OutlineApiClient implements OutlineTokenClient, OutlineContentClien
         String trimmed = serverUrl.trim();
         String normalized = trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
         if (!originPolicy.allows(normalized)) {
-            throw new OutlineApiException("The instance operator did not approve this Outline origin.");
+            throw new OutlineApiException(
+                    "This Outline address is not approved on this instance. Ask your instance operator to approve it.");
         }
         return normalized;
     }

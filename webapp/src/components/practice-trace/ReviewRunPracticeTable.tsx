@@ -183,7 +183,7 @@ export function ReviewRunPracticeTable({
 					<TableRow variant="static">
 						<TableCell colSpan={3} className="p-4 whitespace-normal">
 							<p className="text-sm text-muted-foreground">
-								{entries.length > 0 ? "No practice here matches your filters." : emptyMessage}
+								{entries.length > 0 ? "No practices match your filters." : emptyMessage}
 							</p>
 						</TableCell>
 					</TableRow>

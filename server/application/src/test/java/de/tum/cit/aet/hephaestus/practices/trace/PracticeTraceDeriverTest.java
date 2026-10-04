@@ -81,7 +81,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.REVIEWED);
-            assertThat(entry.explanation()).contains("It has nothing to report");
+            assertThat(entry.explanation()).contains("found nothing to report");
             assertThat(entry.observationCount()).isZero();
         }
 

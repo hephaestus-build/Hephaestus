@@ -47,7 +47,9 @@ export function OverviewStatCard({
 							</p>
 						)}
 						{!isLoading && (
-							<p className="text-xs text-muted-foreground">{isError ? "Could not load" : hint}</p>
+							<p className="text-xs text-muted-foreground">
+								{isError ? "We could not load" : hint}
+							</p>
 						)}
 					</div>
 					<div className="rounded-full bg-muted p-2">

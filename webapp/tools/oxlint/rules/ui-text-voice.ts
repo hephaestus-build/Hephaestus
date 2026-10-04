@@ -1,15 +1,11 @@
 import { defineRule, type ESTree } from "@oxlint/plugins";
 import { decodeHTMLStrict } from "entities";
 
-import { isRecord } from "../../../../scripts/lib/json.ts";
-import {
-	approvedWords,
-	withoutTechnicalNames,
-	wordAlerts,
-} from "../../../../scripts/lib/ste-words.ts";
+import { wordAlerts } from "../../../../scripts/lib/ste-words.ts";
 
 // Names of the JSX props and object keys whose string values are UI text. Object keys cover the
-// vocabulary registries, option lists and form schemas.
+// vocabulary registries, option lists and form schemas. A suffix match catches the compound names
+// that components use for the same fields (`confirmLabel`, `emptyTitle`, `emptyDescription`).
 const textNames = new Set([
 	"alt",
 	"aria-label",
@@ -21,15 +17,8 @@ const textNames = new Set([
 	"summary",
 	"message",
 	"error",
-	"helperText",
-	"emptyText",
-	"loadingText",
 	"tooltip",
 	"children",
-	"confirmText",
-	"cancelText",
-	"submitText",
-	"buttonText",
 	"note",
 	"content",
 	"detail",
@@ -40,8 +29,9 @@ const textNames = new Set([
 	"success",
 	"loading",
 ]);
+const textSuffix = /(?:Label|Title|Text|Message|Description|Placeholder|Hint|Caption|Heading)$/u;
+const codeElements = new Set(["code", "pre", "kbd", "samp", "style", "script"]);
 const toastCalls = new Set(["error", "success", "info", "warning", "message", "loading"]);
-const dictionary = new Set(approvedWords);
 const sentences = new Intl.Segmenter("en", { granularity: "sentence" });
 
 /** Static text only. Unknown expressions are boundaries, not words that we invent. */
@@ -84,12 +74,31 @@ function isToastCall(callee: ESTree.Node): boolean {
 	);
 }
 
-function isCodeElement(node: ESTree.Node): boolean {
+/** Code, not prose: its text keeps semicolons and apostrophes. */
+function insideCode(node: ESTree.Node): boolean {
+	for (let current = node.parent; current; current = current.parent) {
+		if (
+			current.type === "JSXElement" &&
+			current.openingElement.name.type === "JSXIdentifier" &&
+			codeElements.has(current.openingElement.name.name)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/** A `meta` tag's `content` holds a machine value, such as a viewport rule. */
+function isMetaElement(node: ESTree.Node): boolean {
 	return (
-		node.type === "JSXElement" &&
-		node.openingElement.name.type === "JSXIdentifier" &&
-		(node.openingElement.name.name === "style" || node.openingElement.name.name === "script")
+		node.type === "JSXOpeningElement" &&
+		node.name.type === "JSXIdentifier" &&
+		node.name.name === "meta"
 	);
+}
+
+function isTextName(name: string): boolean {
+	return textNames.has(name) || textSuffix.test(name);
 }
 
 function propertyName(key: ESTree.Node): string | undefined {
@@ -99,44 +108,32 @@ function propertyName(key: ESTree.Node): string | undefined {
 	return key.type === "Literal" && typeof key.value === "string" ? key.value : undefined;
 }
 
-export const steUiText = defineRule({
+export const uiTextVoice = defineRule({
 	meta: {
-		type: "problem",
+		type: "suggestion",
 		docs: {
-			description: "Use the STE writing standard for literal UI text.",
+			description: "Write literal UI text in the user-facing voice.",
 		},
-		schema: [
-			{
-				type: "object",
-				properties: { vocabulary: { type: "boolean" } },
-				additionalProperties: false,
-			},
-		],
+		schema: [],
 		messages: {
 			word: 'Write "{{to}}" instead of "{{from}}". Keep the same meaning.',
 			sentence: "Split this sentence. Write no more than 25 words per sentence.",
 			semicolon: "Write two sentences instead of a semicolon.",
-			vocabulary:
-				'Write an approved word instead of "{{word}}", or use a technical name or verb from the product vocabulary.',
+			// One glyph for every apostrophe, so a contraction or possessive never mixes forms.
+			apostrophe: 'Write the apostrophe in "{{found}}" as ’.',
 		},
 	},
 	create(context) {
-		const options = context.options[0];
-		const vocabulary = isRecord(options) && options.vocabulary === true;
 		function check(node: ESTree.Node, text: string): void {
-			if (vocabulary) {
-				for (const match of withoutTechnicalNames(text).matchAll(/\b[a-z]+\b/giu)) {
-					if (!dictionary.has(match[0].toLowerCase())) {
-						context.report({ node, messageId: "vocabulary", data: { word: match[0] } });
-					}
-				}
-				return;
-			}
-			for (const alert of wordAlerts(text)) {
+			for (const alert of wordAlerts(text, "voice")) {
 				context.report({ node, messageId: "word", data: alert });
 			}
 			if (text.includes(";")) {
 				context.report({ node, messageId: "semicolon" });
+			}
+			const apostrophe = /[\p{L}\p{N}]*'[\p{L}\p{N}]*/u.exec(text);
+			if (apostrophe !== null) {
+				context.report({ node, messageId: "apostrophe", data: { found: apostrophe[0] } });
 			}
 			// A line break in JSX source ends a sentence for the segmenter, so join the lines first.
 			for (const { segment } of sentences.segment(text.replaceAll(/\s+/gu, " "))) {
@@ -147,13 +144,16 @@ export const steUiText = defineRule({
 		}
 		return {
 			JSXText(node) {
-				check(node, decodeHTMLStrict(node.value));
+				if (!insideCode(node)) {
+					check(node, decodeHTMLStrict(node.value));
+				}
 			},
 			JSXAttribute(node) {
 				if (
 					node.name.type !== "JSXIdentifier" ||
-					!textNames.has(node.name.name) ||
-					node.value === null
+					!isTextName(node.name.name) ||
+					node.value === null ||
+					isMetaElement(node.parent)
 				) {
 					return;
 				}
@@ -173,7 +173,7 @@ export const steUiText = defineRule({
 			},
 			Property(node) {
 				const name = node.computed ? undefined : propertyName(node.key);
-				if (name !== undefined && textNames.has(name) && node.parent.type === "ObjectExpression") {
+				if (name !== undefined && isTextName(name) && node.parent.type === "ObjectExpression") {
 					for (const text of literalText(node.value)) {
 						check(node.value, text);
 					}
@@ -182,7 +182,7 @@ export const steUiText = defineRule({
 			JSXExpressionContainer(node) {
 				// Attributes have their own visitor; identifiers and calls need human review. A style
 				// or script element holds code, not prose.
-				if (node.parent.type === "JSXAttribute" || isCodeElement(node.parent)) {
+				if (node.parent.type === "JSXAttribute" || insideCode(node)) {
 					return;
 				}
 				for (const text of literalText(node.expression)) {

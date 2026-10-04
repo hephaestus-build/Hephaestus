@@ -154,7 +154,7 @@ export default function Header({
 									<Avatar className="hover:brightness-90">
 										<AvatarImage
 											src={firstNonBlank(avatarUrl)}
-											alt={hasText(username) ? `${username}'s avatar` : ""}
+											alt={hasText(username) ? `${username}’s avatar` : ""}
 										/>
 										<AvatarFallback>{getInitials(name, username)}</AvatarFallback>
 									</Avatar>
@@ -202,7 +202,7 @@ export default function Header({
 									)}
 									<DropdownMenuItem onClick={onLogout}>
 										<LogOut />
-										<span>Sign Out</span>
+										<span>Sign out</span>
 									</DropdownMenuItem>
 								</DropdownMenuContent>
 							</DropdownMenu>

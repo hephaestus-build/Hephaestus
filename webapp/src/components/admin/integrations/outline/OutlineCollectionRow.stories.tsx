@@ -151,8 +151,8 @@ export const BudgetSkipped: Story = {
 		await expect(canvas.queryByText(/\/ 512/u)).not.toBeInTheDocument();
 
 		await userEvent.click(
-			canvas.getByRole("button", { name: /32 exports skipped for budget for research notes/iu }),
+			canvas.getByRole("button", { name: /32 documents skipped in research notes/iu }),
 		);
-		await expectSettledVisible(await screen.findByText(/catch up on the next reconcile/iu));
+		await expectSettledVisible(await screen.findByText(/next sync picks up anything skipped/iu));
 	},
 };

@@ -49,11 +49,11 @@ export const ConfirmTurningOff: Story = {
 		canConnectSlack: true,
 	},
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("switch", { name: /use my new channel messages/iu }));
+		await userEvent.click(canvas.getByRole("switch", { name: /use your new channel messages/iu }));
 		// Flipping the switch alone must not delete anything.
 		await expect(args.onToggleChannelMessages).not.toHaveBeenCalled();
 
-		const confirm = await screen.findByRole("button", { name: /turn off & delete/iu });
+		const confirm = await screen.findByRole("button", { name: "Stop using and delete" });
 		await userEvent.click(confirm);
 		await expect(args.onToggleChannelMessages).toHaveBeenCalledWith("hephaestustest", false);
 	},
@@ -67,7 +67,7 @@ export const MessageUseOff: Story = {
 		canConnectSlack: true,
 	},
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("switch", { name: /use my new channel messages/iu }));
+		await userEvent.click(canvas.getByRole("switch", { name: /use your new channel messages/iu }));
 		await expect(args.onToggleChannelMessages).toHaveBeenCalledWith("hephaestustest", true);
 	},
 };

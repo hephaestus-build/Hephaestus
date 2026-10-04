@@ -473,7 +473,7 @@ test.describe("what the page can see and do", () => {
 		await page.addInitScript(replaceFrameDocumentOnInsert);
 		await page.goto(GITLAB_MR);
 		await expect(reportHost(page)).toHaveCount(1);
-		await expect(page.getByText(/Could not load here/u)).toBeVisible({ timeout: 20_000 });
+		await expect(page.getByText(/We could not load here/u)).toBeVisible({ timeout: 20_000 });
 		await expect.poll(async () => reportHeight(page)).toBe(COLLAPSED);
 	});
 });

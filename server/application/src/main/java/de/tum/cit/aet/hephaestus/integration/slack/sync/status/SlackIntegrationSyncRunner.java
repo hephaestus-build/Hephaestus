@@ -52,28 +52,22 @@ public class SlackIntegrationSyncRunner implements IntegrationSyncRunner {
      */
     public static SyncProgress progressDetail(WorkspaceSyncSummary summary) {
         StringBuilder step = new StringBuilder();
-        step.append("Hephaestus synced ")
+        step.append("Synced ")
                 .append(summary.synced())
                 .append(" of ")
                 .append(summary.channels())
-                .append(summary.channels() == 1 ? " channel." : " channels.");
+                .append(summary.channels() == 1 ? " channel" : " channels");
         if (summary.ingested() > 0) {
-            step.append(" Hephaestus ingested ")
-                    .append(summary.ingested())
-                    .append(summary.ingested() == 1 ? " message." : " messages.");
+            step.append(" · ").append(summary.ingested()).append(summary.ingested() == 1 ? " message" : " messages");
         }
         if (summary.skipped() > 0) {
-            step.append(" The sync skipped ")
-                    .append(summary.skipped())
-                    .append(summary.skipped() == 1 ? " channel." : " channels.");
+            step.append(" · ").append(summary.skipped()).append(" skipped");
         }
         if (summary.failed() > 0) {
-            step.append(" The sync failed for ")
-                    .append(summary.failed())
-                    .append(summary.failed() == 1 ? " channel." : " channels.");
+            step.append(" · ").append(summary.failed()).append(" failed");
         }
         if (summary.budgetExhausted()) {
-            step.append(" The request budget ran out.");
+            step.append(" · request budget used up");
         }
         return SyncProgress.ofResource(
                 SyncPhase.CHANNELS, step.toString(), null, summary.synced() + summary.skipped(), summary.channels());

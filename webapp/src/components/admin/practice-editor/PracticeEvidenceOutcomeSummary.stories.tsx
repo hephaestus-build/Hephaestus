@@ -35,7 +35,26 @@ export const RequirementsThatKeepSkipping: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("4 of 12 reviews ran")).toBeVisible();
 		await expect(canvas.getByText(/Skipped in 8 reviews/u)).toBeVisible();
-		await expect(canvas.getByText(/Code changes — was empty \(6 reviews\)/u)).toBeVisible();
+		await expect(canvas.getByText(/Code changes: empty \(6 reviews\)/u)).toBeVisible();
+	},
+};
+
+/** With no reason to list, the line itself says why the reviews were skipped. */
+export const SkippedWithoutListedReasons: Story = {
+	args: {
+		outcome: outcome({
+			practiceSlug: "handles-errors-instead-of-swallowing-them",
+			considered: 3,
+			skipped: 2,
+		}),
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText(
+				"Skipped in 2 reviews, because the evidence was not there to review against.",
+			),
+		).toBeVisible();
+		await expect(canvas.queryByRole("listitem")).not.toBeInTheDocument();
 	},
 };
 
@@ -61,10 +80,10 @@ export const ReasonsCanOutnumberTheSkips: Story = {
 		}),
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/Skipped in 1 review,/u)).toBeVisible();
+		await expect(canvas.getByText(/Skipped in 1 review\./u)).toBeVisible();
 		await expect(canvas.getAllByRole("listitem").map((row) => row.textContent)).toEqual([
-			"Code changes — was not fully captured (1 review)",
-			"Pull request details — was not available (1 review)",
+			"Code changes: not fully captured (1 review)",
+			"Pull request details: not available (1 review)",
 		]);
 	},
 };
@@ -80,7 +99,7 @@ export const SkippedByItsOwnSetting: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText(/this practice is not set up for automated review \(9 reviews\)/u),
+			canvas.getByText(/This practice is not set up for automated review \(9 reviews\)/u),
 		).toBeVisible();
 	},
 };
@@ -108,7 +127,7 @@ export const OnADocumentPractice: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText(/Document under review — was not fully captured \(2 reviews\)/u),
+			canvas.getByText(/Document under review: not fully captured \(2 reviews\)/u),
 		).toBeVisible();
 	},
 };

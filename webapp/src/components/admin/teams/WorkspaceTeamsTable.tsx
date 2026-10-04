@@ -142,7 +142,7 @@ export function WorkspaceTeamsTable({
 		return (
 			<PageLayout>
 				{header}
-				<QueryErrorAlert error={error} title="Could not load teams" onRetry={onRetry} />
+				<QueryErrorAlert error={error} title="We could not load teams" onRetry={onRetry} />
 			</PageLayout>
 		);
 	}
@@ -174,7 +174,7 @@ export function WorkspaceTeamsTable({
 					</InputGroupAddon>
 					<InputGroupInput
 						aria-label="Search teams"
-						placeholder="Search teams..."
+						placeholder="Search teams…"
 						value={search}
 						onChange={(e) => onSearchChange(e.target.value)}
 					/>
@@ -186,7 +186,9 @@ export function WorkspaceTeamsTable({
 					<Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
 					<h2 className="mb-2 text-lg font-medium">No teams found</h2>
 					<p className="text-muted-foreground">
-						{search ? "Try different search terms." : "No teams available."}
+						{search
+							? "No team matches your search. Try a different search."
+							: "This workspace has no teams."}
 					</p>
 				</div>
 			) : (

@@ -55,7 +55,8 @@ class GlobalControllerAdviceLoggingTest {
         var response = advice.handleWebClientRequestException(exception);
 
         assertThat(response.getStatus()).isEqualTo(503);
-        assertThat(response.getDetail()).isEqualTo("An upstream service is not available now. Try again later.");
+        assertThat(response.getDetail())
+                .isEqualTo("We could not reach a service that Hephaestus depends on. Try again in a moment.");
         assertThat(appender.list).hasSize(1);
         ILoggingEvent event = appender.list.getFirst();
         assertThat(event.getLevel()).isEqualTo(Level.WARN);
@@ -80,7 +81,8 @@ class GlobalControllerAdviceLoggingTest {
                 "private-statement", new SQLException("private-email@example.test private-row-value", "23505")));
 
         assertThat(response.getStatus()).isEqualTo(409);
-        assertThat(response.getDetail()).isEqualTo("The request conflicts with the current resource state.");
+        assertThat(response.getDetail())
+                .isEqualTo("This request conflicts with the current data. Reload and try again.");
         assertThat(appender.list).hasSize(1);
         ILoggingEvent event = appender.list.getFirst();
         assertThat(event.getLevel()).isEqualTo(Level.WARN);

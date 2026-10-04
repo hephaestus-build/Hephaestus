@@ -38,7 +38,7 @@ describe("product feedback dialog", () => {
 			"  An idea  ",
 		);
 		await user.click(
-			screen.getByRole("checkbox", { name: "Attach the page and browser you are on" }),
+			screen.getByRole("checkbox", { name: "Attach the page and browser you’re on" }),
 		);
 		await user.click(screen.getByRole("button", { name: "Send" }));
 		expect(props.onSubmit).toHaveBeenLastCalledWith({
@@ -64,7 +64,7 @@ describe("product feedback dialog", () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog();
 		const checkbox = screen.getByRole("checkbox", {
-			name: "Attach the page and browser you are on",
+			name: "Attach the page and browser you’re on",
 		});
 		await user.click(checkbox);
 		rerender(<ProductFeedbackDialog {...props} isSubmitting />);

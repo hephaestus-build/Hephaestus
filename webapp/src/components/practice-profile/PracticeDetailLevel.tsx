@@ -162,8 +162,8 @@ export function PracticeDetailLevel({
 				error={error}
 				title={
 					practice
-						? `Could not load your standing for ${practice.name}`
-						: "Could not load this practice"
+						? `We could not load your standing for ${practice.name}`
+						: "We could not load this practice"
 				}
 				onRetry={onRetry}
 			/>
@@ -205,8 +205,8 @@ export function PracticeDetailLevel({
 							// Every row here reviews the same practice, so the newest is the one the reader
 							// came for; the rest are its history and wait for a press.
 							initiallyOpen="newest"
-							emptyTitle="No observations yet."
-							emptyDescription="No review has reached this practice yet."
+							emptyTitle="No observations yet"
+							emptyDescription="An observation appears here after a review checks this practice against your work."
 						/>
 					</Section>
 				</TabsContent>
@@ -274,7 +274,8 @@ export function PracticeDetailLevel({
 	} else {
 		body = (
 			<p className="text-sm text-muted-foreground">
-				This practice does not exist or is not reviewed in this workspace.
+				We could not find this practice. Check the link, or ask a workspace admin whether this
+				workspace reviews it.
 			</p>
 		);
 	}

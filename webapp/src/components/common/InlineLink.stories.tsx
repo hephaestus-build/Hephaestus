@@ -89,13 +89,13 @@ export const Count: Story = {
 		<p className="max-w-md text-sm text-muted-foreground">
 			<InlineLink {...args} /> ·{" "}
 			<InlineLink tone="count" href="">
-				1 cancelled
+				1 canceled
 			</InlineLink>
 		</p>
 	),
 	play: async ({ canvas }) => {
 		const link = canvas.getByRole("link", { name: "2 failed" });
 		await expect(getComputedStyle(link).textDecorationLine).toBe("underline");
-		await expect(getComputedStyle(canvas.getByText("1 cancelled")).textDecorationLine).toBe("none");
+		await expect(getComputedStyle(canvas.getByText("1 canceled")).textDecorationLine).toBe("none");
 	},
 };

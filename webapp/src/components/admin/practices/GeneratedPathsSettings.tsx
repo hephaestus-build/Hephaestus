@@ -34,7 +34,7 @@ export function GeneratedPathsSettings(props: GeneratedPathsSettingsProps) {
 				<QueryErrorAlert
 					error={repositories.error}
 					onRetry={repositories.onRetry}
-					title="Could not load generated-path settings"
+					title="We could not load generated-path settings"
 				/>
 			)}
 			{repositories.status === "ready" && repositories.options.length === 0 && (
@@ -79,8 +79,8 @@ function RepositoryGeneratedPaths({
 		description: "Your generated-path changes will be lost if you leave.",
 	});
 	const errorMessage = conflicted
-		? "Saved patterns changed while you were editing. Your draft has not been saved."
-		: "Could not save generated paths. Check the patterns and try again.";
+		? "Saved patterns changed while you were editing. Your draft is not saved. Use the saved patterns, then make your changes again."
+		: "We could not save generated paths. Check the patterns and try again.";
 	const save = async () => {
 		setState("saving");
 		try {

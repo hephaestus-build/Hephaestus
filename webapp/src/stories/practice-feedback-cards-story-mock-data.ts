@@ -22,7 +22,9 @@ const PACKAGING_GROUP = {
 	icon: PackageIcon,
 } as const;
 
-const CLEAN_CONDITION = [text("Ticks itself once three pieces of work in a row come back clean")];
+const CLEAN_CONDITION = [
+	text("Resolves on its own once three pieces of work in a row come back clean"),
+];
 
 const SCOPE_ONE_CONCERN = {
 	group: PACKAGING_GROUP,

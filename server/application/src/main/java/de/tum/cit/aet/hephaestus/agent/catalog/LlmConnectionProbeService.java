@@ -103,11 +103,12 @@ public class LlmConnectionProbeService {
                     .exchange((clientRequest, clientResponse) -> {
                         int status = clientResponse.getStatusCode().value();
                         if (!clientResponse.getStatusCode().is2xxSuccessful()) {
-                            return LlmProbeResultDTO.unreachable(status, "Provider returned HTTP " + status);
+                            return LlmProbeResultDTO.unreachable(
+                                    status, "The provider answered with HTTP " + status + ".");
                         }
                         byte[] response = clientResponse.getBody().readNBytes(MAX_RESPONSE_BYTES + 1);
                         if (response.length > MAX_RESPONSE_BYTES) {
-                            return LlmProbeResultDTO.unreachable(status, "Provider response was too large");
+                            return LlmProbeResultDTO.unreachable(status, "The provider’s response was too large.");
                         }
                         JsonNode body = objectMapper.readTree(response);
                         return LlmProbeResultDTO.reachable(extractModelIds(body), status);
@@ -116,7 +117,8 @@ public class LlmConnectionProbeService {
             // The exception message may carry host detail, so keep it out of the response.
             log.info("LLM connection probe failed: reason={}", e.getClass().getSimpleName());
             return LlmProbeResultDTO.unreachable(
-                    null, "Could not reach the provider: " + e.getClass().getSimpleName());
+                    null,
+                    "Hephaestus could not reach the provider (" + e.getClass().getSimpleName() + ").");
         }
     }
 

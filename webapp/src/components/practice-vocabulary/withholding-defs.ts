@@ -29,17 +29,18 @@ export const WITHHOLDING_FAMILY_DEFS: StatusDefs<WithholdingFamily> = {
 		description: "The pull request, issue or document had moved past the point of being told.",
 	},
 	POLICY: {
-		label: "Policy kept it quiet",
+		label: "A setting held it back",
 		icon: VolumeOffIcon,
 		badgeVariant: "outline",
 		description:
-			"A setting somebody chose — a volume limit, a practice's autonomy, or silent mode.",
+			"A setting somebody chose, such as a limit on how much feedback is sent, a practice’s autonomy or silent mode.",
 	},
 	DEVELOPER_CHOICE: {
-		label: "The developer's choice",
+		label: "The developer’s choice",
 		icon: UserRoundXIcon,
 		badgeVariant: "outline",
-		description: "The developer opted out, or already told us this kind of feedback was wrong.",
+		description:
+			"The developer opted out, or already disputed this kind of feedback or marked it not applicable.",
 	},
 	ADMIN_CORRECTION: {
 		label: "An admin corrected it",
@@ -95,7 +96,7 @@ export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 	VOLUME_CAPPED: "Over the limit on how much feedback one person gets from a single review.",
 	PRACTICE_REQUIRES_APPROVAL: "This feedback is waiting for a person to approve it.",
 	BACKFILL_QUIET: "Found while reviewing past work, which is measured but never sent.",
-	INSTANCE_SILENCED: "Silent mode was switched on for the whole instance.",
+	INSTANCE_SILENCED: "Silent mode was on for the whole instance.",
 	WORKSPACE_DISABLED: "Practice feedback is not enabled for this workspace.",
 	WORKSPACE_DELIVERY_PAUSED: "External practice feedback is paused for this workspace.",
 	STALE_ROLLOUT_REVISION:

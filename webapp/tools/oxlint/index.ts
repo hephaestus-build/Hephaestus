@@ -11,12 +11,12 @@ import { preferAutoStoryTitle } from "./rules/prefer-auto-story-title.ts";
 import { svgNeedsAccessibleName } from "./rules/svg-needs-accessible-name.ts";
 import { typedStoryMeta } from "./rules/typed-story-meta.ts";
 
-import { steUiText } from "./rules/ste-ui-text.ts";
+import { uiTextVoice } from "./rules/ui-text-voice.ts";
 
 export default definePlugin({
 	meta: { name: "hephaestus" },
 	rules: {
-		"ste-ui-text": steUiText,
+		"ui-text-voice": uiTextVoice,
 		"no-manual-query-key": noManualQueryKey,
 		"no-non-ascii-filename": noNonAsciiFilename,
 		"no-nondeterministic-render": noNondeterministicRender,

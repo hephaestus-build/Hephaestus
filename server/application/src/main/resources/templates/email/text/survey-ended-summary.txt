@@ -1,6 +1,6 @@
 [(#{email.survey-ended-summary.subject})]
 
-A survey ended. These are its participation totals. Only a signed-in administrator can read individual answers, in the administrator console.
+A survey ended. These are its participation totals. Only a signed-in instance admin can read individual answers, on the Surveys page.
 
 People shown an in-app invitation: [(${invited})]
 Responded: [(${responded})]

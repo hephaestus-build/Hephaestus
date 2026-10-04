@@ -266,7 +266,7 @@ describe("feedback approval level", () => {
 
 			await queueSteps("1 of 3");
 			const { length: entries } = router.history;
-			await userEvent.click(screen.getByRole("button", { name: "Approve and next" }));
+			await userEvent.click(screen.getByRole("button", { name: "Approve and open next" }));
 
 			await waitFor(
 				() => expect(router.state.location.search.detail).toStrictEqual([`feedback:${second.id}`]),
@@ -294,7 +294,7 @@ describe("feedback approval level", () => {
 			const atSecond = await queueSteps("2 of 3");
 			await userEvent.click(atSecond.getByRole("link", { name: "Next" }));
 			await queueSteps("3 of 3");
-			await userEvent.click(screen.getByRole("button", { name: "Approve and next" }));
+			await userEvent.click(screen.getByRole("button", { name: "Approve and open next" }));
 
 			await waitFor(
 				() => expect(router.state.location.search.detail).toStrictEqual([`feedback:${oldest.id}`]),
@@ -340,7 +340,7 @@ describe("feedback approval level", () => {
 			);
 
 			await queueSteps("1 of 3");
-			await userEvent.click(screen.getByRole("button", { name: "Approve and next" }));
+			await userEvent.click(screen.getByRole("button", { name: "Approve and open next" }));
 
 			await screen.findByText("This proposal has already been decided");
 			await waitFor(
@@ -360,13 +360,13 @@ describe("feedback approval level", () => {
 			);
 
 			await queueSteps("1 of 3");
-			await userEvent.click(screen.getByRole("button", { name: "Approve and next" }));
+			await userEvent.click(screen.getByRole("button", { name: "Approve and open next" }));
 
 			await screen.findByText(/Sending is paused/u);
 			// Enabled again once the decision settles, which is when a move on would have run.
 			await waitFor(() =>
 				expect(
-					screen.getByRole("button", { name: "Approve and next" }).hasAttribute("disabled"),
+					screen.getByRole("button", { name: "Approve and open next" }).hasAttribute("disabled"),
 				).toBe(false),
 			);
 			expect(router.state.location.search.detail).toStrictEqual([`feedback:${oldest.id}`]);
@@ -392,7 +392,7 @@ describe("feedback approval level", () => {
 			);
 
 			await queueSteps("1 of 3");
-			await userEvent.click(screen.getByRole("button", { name: "Approve and next" }));
+			await userEvent.click(screen.getByRole("button", { name: "Approve and open next" }));
 			fireEvent.keyDown(document.body, { key: "Escape" });
 			await waitFor(
 				() => expect(router.state.location.search).not.toHaveProperty("detail"),
@@ -434,7 +434,7 @@ describe("feedback approval level", () => {
 			);
 
 			await queueSteps("1 of 3");
-			await userEvent.click(screen.getByRole("button", { name: "Approve and next" }));
+			await userEvent.click(screen.getByRole("button", { name: "Approve and open next" }));
 			const feedbackLevel = screen.getByRole("dialog", { name: /^Feedback for/u });
 			await userEvent.click(within(feedbackLevel).getByRole("link", { name: source.summary }));
 			const opened = [`feedback:${oldest.id}`, `observation:${source.observationId}`];
@@ -448,7 +448,9 @@ describe("feedback approval level", () => {
 			// Once decided, the level reads it back as prepared and drops its footer; the move on would
 			// run right after.
 			await waitFor(() =>
-				expect(screen.queryByRole("button", { name: "Approve and next", hidden: true })).toBeNull(),
+				expect(
+					screen.queryByRole("button", { name: "Approve and open next", hidden: true }),
+				).toBeNull(),
 			);
 			await sleep(100);
 			expect(router.state.location.search.detail).toStrictEqual(opened);
@@ -506,7 +508,7 @@ describe("feedback approval level", () => {
 			);
 
 			await queueSteps("3 of 4");
-			await userEvent.click(screen.getByRole("button", { name: "Approve and next" }));
+			await userEvent.click(screen.getByRole("button", { name: "Approve and open next" }));
 
 			await waitFor(
 				() => expect(router.state.location.search.detail).toStrictEqual([`feedback:${oldest.id}`]),
@@ -527,7 +529,7 @@ describe("feedback approval level", () => {
 			// Within the level: the overview under it has figures of its own that read "1 of 3".
 			const level = await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
 			await within(level).findByText("1 of 3", undefined, ROUTE_RENDER_WAIT);
-			within(level).getByRole("button", { name: "Approve and next" });
+			within(level).getByRole("button", { name: "Approve and open next" });
 			expect(router.state.location.search).toMatchObject({
 				detail: [`feedback:${oldest.id}`],
 				queue: "approvals",
@@ -552,7 +554,7 @@ describe("feedback approval level", () => {
 			await within(level).findByRole("button", { name: "Approve for delivery" }, ROUTE_RENDER_WAIT);
 			expect(router.state.location.search).not.toHaveProperty("queue");
 			expect(within(level).queryByText(/ of 3$/u)).toBeNull();
-			expect(within(level).queryByRole("button", { name: "Approve and next" })).toBeNull();
+			expect(within(level).queryByRole("button", { name: "Approve and open next" })).toBeNull();
 		});
 	});
 });

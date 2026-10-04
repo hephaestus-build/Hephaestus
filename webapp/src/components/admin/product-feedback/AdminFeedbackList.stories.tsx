@@ -67,7 +67,7 @@ export const Saving: Story = {
 export const Empty: Story = {
 	args: { state: ready([], "OPEN") },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Inbox zero")).toBeVisible();
+		await expect(canvas.getByText("No open feedback")).toBeVisible();
 	},
 };
 

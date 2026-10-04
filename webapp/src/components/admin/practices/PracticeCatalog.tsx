@@ -156,7 +156,7 @@ export function PracticeCatalog({
 		catalogContent = (
 			<QueryErrorAlert
 				error={library.state.error}
-				title="Could not load the catalog"
+				title="We could not load the catalog"
 				onRetry={library.state.onRetry}
 			/>
 		);
@@ -185,7 +185,7 @@ export function PracticeCatalog({
 				<Section
 					size="sm"
 					title="Instance catalog"
-					description="Practices this instance includes. Adding one gives you a copy you own. Later catalog changes never reach it."
+					description="Practices this instance includes. Adding one gives you a copy you own. Later catalog changes do not change your copy unless you accept them."
 					// Arrives rather than appears: the toggle is above it, so a section that simply exists
 					// on the next frame gives no clue where it came from. Short, and off under
 					// `prefers-reduced-motion`, where the arrival is the information and the travel is not.
@@ -275,9 +275,9 @@ export function PracticeCatalog({
 				)}
 				getEmptyLabel={(groupSlug, total) => {
 					if (total > 0) {
-						return "No matching practices.";
+						return "No matching practices";
 					}
-					return groupSlug === null ? "Nothing unassigned." : "No practices here.";
+					return groupSlug === null ? "Nothing unassigned" : "No practices in this group";
 				}}
 			/>
 
@@ -302,7 +302,7 @@ export function PracticeCatalog({
 			) : (
 				focusFilter !== "ALL" &&
 				visiblePracticeSlugs.size === 0 && (
-					// Without a way out, the reader is left with per-group "No matching practices." strings
+					// Without a way out, the reader is left with per-group "No matching practices" strings
 					// and a banner telling them to clear a filter, and no control that clears it.
 					<Empty variant="outlined" className="min-h-56">
 						<EmptyHeader>
@@ -421,7 +421,7 @@ function GroupActions({
 					onSetDashboardVisibility(group.slug, visibleInPracticeDashboards)
 				}
 				disabled={pending}
-				aria-label={`Show ${group.name} on practice dashboards`}
+				aria-label={`Show ${group.name} on practice profiles`}
 			/>
 			<DropdownMenu>
 				<DropdownMenuTrigger
@@ -446,8 +446,8 @@ function GroupActions({
 						onClick={() => onSetDashboardVisibility(group.slug, !group.visibleInPracticeDashboards)}
 					>
 						{group.visibleInPracticeDashboards
-							? "Hide from practice dashboards"
-							: "Show on practice dashboards"}
+							? "Hide from practice profiles"
+							: "Show on practice profiles"}
 					</DropdownMenuItem>
 					<DropdownMenuSeparator />
 					<DropdownMenuGroup>
@@ -518,7 +518,7 @@ function PracticeActions({
 						/>
 					}
 				>
-					Change on Review
+					Change in review settings
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuGroup>

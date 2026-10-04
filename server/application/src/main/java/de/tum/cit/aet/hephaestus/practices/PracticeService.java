@@ -92,7 +92,7 @@ public class PracticeService {
     @Transactional
     public void reorderPractices(WorkspaceContext ctx, String groupSlug, List<String> orderedSlugs) {
         if (new HashSet<>(orderedSlugs).size() != orderedSlugs.size()) {
-            throw new IllegalArgumentException("orderedSlugs must not contain duplicate slugs");
+            throw new IllegalArgumentException("The order lists a practice twice. Reload the page and try again.");
         }
         lockWorkspace(ctx);
         List<Practice> bucket = practiceRepository.findAllForCatalog(ctx.id()).stream()
@@ -109,7 +109,8 @@ public class PracticeService {
             if (unknown != null) {
                 throw new EntityNotFoundException("Practice", unknown);
             }
-            throw new IllegalArgumentException("orderedSlugs must contain every practice in the group.");
+            throw new IllegalArgumentException(
+                    "The practices in this group changed. Reload the page to see the current order.");
         }
         Map<String, Practice> bySlug = bucket.stream().collect(Collectors.toMap(Practice::getSlug, p -> p));
         int order = 0;
@@ -144,8 +145,7 @@ public class PracticeService {
                 : practicesInGroup(allPractices, destinationGroupId, practice);
 
         if (position > target.size()) {
-            throw new IllegalArgumentException(
-                    "position must be from 0 up to the number of practices in the destination.");
+            throw new IllegalArgumentException("The position is outside the group. Reload the page and try again.");
         }
         target.add(position, practice);
         practice.setGroup(destination);
@@ -211,7 +211,7 @@ public class PracticeService {
             @Nullable PracticeAutonomy initialAutonomy) {
         if (practiceRepository.existsByWorkspaceIdAndSlug(ctx.id(), slug)) {
             throw new PracticeSlugConflictException(
-                    "A practice with slug '" + slug + "' already exists in this workspace.");
+                    "A practice with slug “" + slug + "” already exists in this workspace.");
         }
 
         Workspace workspace = lockWorkspace(ctx);
@@ -252,7 +252,7 @@ public class PracticeService {
                 throw ex;
             }
             throw new PracticeSlugConflictException(
-                    "A practice with slug '" + slug + "' already exists in this workspace.", ex);
+                    "A practice with slug “" + slug + "” already exists in this workspace.", ex);
         }
         int revisionNumber = practiceRevisionService.append(practice).getRevisionNumber();
         workspace.getReviewSettings().incrementRolloutRevision();

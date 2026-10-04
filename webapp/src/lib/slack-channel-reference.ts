@@ -2,7 +2,7 @@ import { hasText } from "@/lib/text";
 
 const SLACK_CHANNEL_ID = /^[CG][A-Z0-9]{8,}$/u;
 // Anchored to a Slack archive URL path segment so an unrelated all-caps word pasted in prose
-// (e.g. shouting "PLEASE HELP ASAP") cannot be mistaken for a channel id.
+// (e.g. shouting "PLEASE HELP ASAP") can't be mistaken for a channel id.
 const SLACK_CHANNEL_ID_IN_TEXT = /\/archives\/(?<id>[CG][A-Z0-9]{8,})(?:[/?#]|$)/u;
 const SLACK_MENTION = /^<#(?<id>[CG][A-Z0-9]{8,})(?:\|(?<name>[^>]+))?>$/u;
 

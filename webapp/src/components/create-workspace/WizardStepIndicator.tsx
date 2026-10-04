@@ -6,13 +6,13 @@ import type { WizardStep } from "./wizard-context";
 
 const STEPS = [
 	{ number: 1, label: "Connect" },
-	{ number: 2, label: "Select Group" },
+	{ number: 2, label: "Select group" },
 	{ number: 3, label: "Configure" },
 ] as const satisfies readonly { number: WizardStep; label: string }[];
 
 export function WizardStepIndicator({ currentStep }: { currentStep: WizardStep }) {
 	return (
-		<ol aria-label="Wizard progress" className="flex items-center gap-2">
+		<ol aria-label="Setup progress" className="flex items-center gap-2">
 			{STEPS.map(({ number: stepNumber, label }, index) => {
 				const isCompleted = stepNumber < currentStep;
 				const isCurrent = stepNumber === currentStep;

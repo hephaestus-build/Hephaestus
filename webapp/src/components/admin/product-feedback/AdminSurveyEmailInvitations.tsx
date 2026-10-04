@@ -57,7 +57,7 @@ export function AdminSurveyEmailInvitations({ state }: { state: SurveyEmailInvit
 				{state.status === "loading" && <Skeleton className="h-24 w-full" />}
 				{state.status === "error" && (
 					<QueryErrorAlert
-						title="Could not load email invitations"
+						title="We could not load email invitations"
 						error={state.error}
 						onRetry={state.onRetry}
 					/>
@@ -68,7 +68,7 @@ export function AdminSurveyEmailInvitations({ state }: { state: SurveyEmailInvit
 							{[
 								{ label: "Eligible now", value: state.summary.eligible },
 								{ label: "Already requested", value: state.summary.alreadyRequested },
-								{ label: "Accepted by relay", value: state.summary.accepted },
+								{ label: "Handed to mail server", value: state.summary.accepted },
 								{ label: "Remaining", value: state.summary.remaining },
 							].map(({ label, value }) => (
 								<div key={label}>
@@ -78,9 +78,9 @@ export function AdminSurveyEmailInvitations({ state }: { state: SurveyEmailInvit
 							))}
 						</dl>
 						<p className="text-sm text-muted-foreground">
-							Relay acceptance does not confirm inbox delivery. Already requested includes cancelled
-							requests. It is not a pending-delivery count. Hephaestus checks eligibility again
-							before it sends.
+							Handed to mail server does not mean delivered to an inbox. Already requested includes
+							canceled requests, so it is not a count of pending emails. Hephaestus checks
+							eligibility again before it sends.
 						</p>
 						<div className="flex flex-wrap gap-2">
 							{state.summary.deliveryConfigured ? (
@@ -92,7 +92,7 @@ export function AdminSurveyEmailInvitations({ state }: { state: SurveyEmailInvit
 									}}
 								>
 									{showSpinner && <Spinner />}
-									{showSpinner ? "Queuing…" : "Queue email invitations…"}
+									{showSpinner ? "Sending…" : "Send email invitations…"}
 								</Button>
 							) : (
 								<Link to="/admin/settings" className={cn(buttonVariants({ variant: "outline" }))}>
@@ -120,12 +120,12 @@ export function AdminSurveyEmailInvitations({ state }: { state: SurveyEmailInvit
 						>
 							<AlertDialogContent>
 								<AlertDialogHeader>
-									<AlertDialogTitle>Queue survey invitation emails?</AlertDialogTitle>
+									<AlertDialogTitle>Send survey invitation emails?</AlertDialogTitle>
 									<AlertDialogDescription>
 										This requests email for up to 1,000 eligible recipients. Repeat this action if
-										recipients remain. It also retries invitations that were cancelled or expired
-										before the relay accepted them. Invitations already accepted by the relay are
-										not sent again. Cancelled reminders stay cancelled.
+										recipients remain. It also retries invitations that were canceled or expired
+										before the mail server accepted them. Invitations already handed to the mail
+										server are not sent again. Canceled reminders stay canceled.
 									</AlertDialogDescription>
 								</AlertDialogHeader>
 								<Field orientation="horizontal">
@@ -140,8 +140,8 @@ export function AdminSurveyEmailInvitations({ state }: { state: SurveyEmailInvit
 											Send one reminder after 72 hours if unanswered
 										</FieldLabel>
 										<FieldDescription id={`${id}-reminder-help`}>
-											Only after relay acceptance and while still eligible. Pausing the survey
-											cancels pending reminders.
+											Only after the mail server accepts the invitation and while still eligible.
+											Pausing the survey cancels pending reminders.
 										</FieldDescription>
 									</FieldContent>
 								</Field>
@@ -157,7 +157,7 @@ export function AdminSurveyEmailInvitations({ state }: { state: SurveyEmailInvit
 											state.onQueue(sendReminder);
 										}}
 									>
-										Queue invitations
+										Send invitations
 									</AlertDialogAction>
 								</AlertDialogFooter>
 							</AlertDialogContent>

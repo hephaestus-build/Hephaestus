@@ -43,7 +43,7 @@ const meta = {
 		subject: row,
 		title: (subject: Row) => `Delete “${subject.displayName}”?`,
 		description:
-			"A model still bound to a workspace's agent cannot be deleted. This cannot be undone.",
+			"This deletes the model. If a workspace still uses it, the delete fails. You cannot undo this.",
 		confirmLabel: "Delete",
 		onConfirm: fn(),
 		onClose: fn(),

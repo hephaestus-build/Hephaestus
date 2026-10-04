@@ -201,6 +201,6 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> misconfigured.initiate(new InitiateRequest(42L, IntegrationKind.SLACK, Map.of(), 42L)))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("redirect URI");
+                .hasMessageContaining("Slack is not set up on this instance");
     }
 }

@@ -200,7 +200,7 @@ the address itself as a bare API server.
 
 That case needs the web app's address separately.
 Every extension link goes to the web app, never the API server, where it would return a Spring `404`.
-These links include **Open in app**, the consent step, review pages, and practice pages. So a
+These links include **Open in Hephaestus**, the consent step, review pages, and practice pages. So a
 development build's setup form shows a second field, **Web app address (local server only)**.
 
 For a local stack, enter:
@@ -561,11 +561,11 @@ return data. A requested practice review can invoke the server's configured AI p
 - A 128px PNG icon.
 - A **440×280** small promotional tile.
 - One to five screenshots at **1280×800** or **640×400**. A 1400×560 marquee is optional. The
-[brand exporter](./brand-assets.mdx) owns the icon and promotional tile. Screenshots must show the
-final working extension at a legible scale. Use non-sensitive test data and actual provider pages.
-Capture the in-page report (collapsed and opened), the confirmation window and the connection/site
-controls. Do not show unreleased features
-or use private review content as marketing material.
+  [brand exporter](./brand-assets.mdx) owns the icon and promotional tile. Screenshots must show the
+  final working extension at a legible scale. Use non-sensitive test data and actual provider pages.
+  Capture the in-page report (collapsed and opened), the confirmation window and the connection/site
+  controls. Do not show unreleased features
+  or use private review content as marketing material.
 
 Supply the reviewer with a reachable test instance that allows the store ID.
 Supply an account with a connected demonstration workspace.
@@ -576,7 +576,7 @@ the dashboard's private test-instructions field, keeping credentials out of the 
 2. Open the supplied issue and pull/merge-request links, and their changes. The practice review sits
    after the description and above the changed files. Open it and compare its comments and
    observations with the app. On a list, press a row's Hephaestus button and check the one line.
-3. Choose **Request review…** on a disposable work item: the confirmation window names the work and
+3. Choose **Request review** on a disposable work item: the confirmation window names the work and
    workspace. Cancel once, then confirm once and check the outcome shown. Nothing in the page itself
    sends a change.
 4. Remove and restore site access while the page is open, then sign out in settings with the report

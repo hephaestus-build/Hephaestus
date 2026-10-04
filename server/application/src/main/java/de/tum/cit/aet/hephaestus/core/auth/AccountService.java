@@ -121,16 +121,20 @@ public class AccountService {
                 .filter(il -> il.getId().equals(identityLinkId))
                 .findFirst()
                 .orElseThrow(
-                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The identity link was not found."));
+                        () -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "We could not find that connected account. It may have been deleted. Reload the page to see what is current."));
         if (active.size() <= 1) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "You cannot unlink your only sign-in method. Link another provider first or delete your account.");
+                    "You cannot disconnect your only sign-in method. Connect another provider first, or delete your account.");
         }
         Long gitProviderId = target.getProviderId();
         if (identityLinkRepository.deleteByIdAndAccountId(identityLinkId, accountId) == 0) {
             // Lost a race (concurrently removed) — nothing to do; surface as not-found.
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "The identity link was not found.");
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "We could not find that connected account. It may have been deleted. Reload the page to see what is current.");
         }
         // The link row is now gone, so don't reference its id in the audit (its auth_event FK is
         // ON DELETE SET NULL anyway); account + provider record who unlinked which provider.
@@ -180,7 +184,7 @@ public class AccountService {
                 if (activeAdmins <= 1) {
                     throw new ResponseStatusException(
                             HttpStatus.CONFLICT,
-                            "You cannot revoke the last admin. First, grant admin to another account.");
+                            "You cannot revoke the last admin. Grant admin to another account first.");
                 }
             }
             Account.AppRole previousRole = account.getAppRole();

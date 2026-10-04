@@ -25,7 +25,7 @@ The bundled broker sets `sync_interval: always`, so it calls `fsync` for each me
 acknowledging it. An acknowledged webhook or integration-sync event therefore survives host power
 loss or an unclean shutdown, provided the storage stack honors `fsync`. The
 [NATS durability documentation](https://docs.nats.io/nats-concepts/jetstream#syncing-data-to-disk)
-defines this guarantee.  [Jepsen's NATS 2.12.1 analysis](https://jepsen.io/analyses/nats-2.12.1)
+defines this guarantee. [Jepsen's NATS 2.12.1 analysis](https://jepsen.io/analyses/nats-2.12.1)
 shows the acknowledged-write loss possible with periodic syncing.
 
 Waiting for durable storage costs write throughput and latency. R1 remains unavailable while its
@@ -43,18 +43,18 @@ The receiver exports these Micrometer meters on its private management listener.
 and poll-age alert rules. The meters below are tagged `stream` with one of
 `github`, `gitlab`, `slack`, `outline`.
 
-| Metric | Type | What it means |
-| --- | --- | --- |
-| `webhook.stream.consumer.pending` | gauge | Messages not yet delivered, summed over your deployment's consumers. A message two consumers match counts twice. |
-| `webhook.stream.consumer.ack.pending` | gauge | Messages delivered and not yet acknowledged, including ones waiting for redelivery, summed the same way. |
-| `webhook.stream.consumers.without.pull.requests` | gauge | Your deployment's consumers with no pull request waiting when polled. A healthy consumer can read zero between fetches. |
-| `webhook.stream.poll.age` | gauge (s) | Seconds since the gauges on this page were last refreshed. `NaN` means never. |
-| `webhook.stream.oldest.message.age` | gauge (s) | **Your effective retention.** The age of the oldest message the stream still holds. |
-| `webhook.stream.bytes` | gauge | Bytes stored. |
-| `webhook.stream.bytes.limit` | gauge | The bound in force on the live stream. |
-| `webhook.stream.bytes.utilization` | gauge (0-1) | `bytes` over `bytes.limit`. |
-| `webhook.stream.messages` | gauge | Messages stored. |
-| `webhook.stream.consumers` | gauge | Durable consumers on the stream. |
+| Metric                                           | Type        | What it means                                                                                                           |
+| ------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `webhook.stream.consumer.pending`                | gauge       | Messages not yet delivered, summed over your deployment's consumers. A message two consumers match counts twice.        |
+| `webhook.stream.consumer.ack.pending`            | gauge       | Messages delivered and not yet acknowledged, including ones waiting for redelivery, summed the same way.                |
+| `webhook.stream.consumers.without.pull.requests` | gauge       | Your deployment's consumers with no pull request waiting when polled. A healthy consumer can read zero between fetches. |
+| `webhook.stream.poll.age`                        | gauge (s)   | Seconds since the gauges on this page were last refreshed. `NaN` means never.                                           |
+| `webhook.stream.oldest.message.age`              | gauge (s)   | **Your effective retention.** The age of the oldest message the stream still holds.                                     |
+| `webhook.stream.bytes`                           | gauge       | Bytes stored.                                                                                                           |
+| `webhook.stream.bytes.limit`                     | gauge       | The bound in force on the live stream.                                                                                  |
+| `webhook.stream.bytes.utilization`               | gauge (0-1) | `bytes` over `bytes.limit`.                                                                                             |
+| `webhook.stream.messages`                        | gauge       | Messages stored.                                                                                                        |
+| `webhook.stream.consumers`                       | gauge       | Durable consumers on the stream.                                                                                        |
 
 **No metric counts lost deliveries.**
 A delivery is lost when the stream removes it before its required consumer acknowledges it.
@@ -133,10 +133,10 @@ or raise the budget and the JetStream volume with it.
 
 Keep the budget **below the free space on the broker's volume**. The two failure modes are not alike:
 
-| The broker fills… | What happens |
-| --- | --- |
+| The broker fills…        | What happens                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------- |
 | its own JetStream budget | refuses new messages, keeps running, recovers by itself when messages expire |
-| the **filesystem** | cannot write its own metadata, and stays wedged even after space is freed |
+| the **filesystem**       | cannot write its own metadata, and stays wedged even after space is freed    |
 
 The second one needs a human. That is what the arithmetic above exists to make unreachable — for
 webhook stream growth. `max_file` governs the whole JetStream store, so anything else sharing that
@@ -147,14 +147,14 @@ volume can still fill it.
 Startup reconciles an existing stream's **limits** with your configuration. It never rewrites
 subjects, retention mode, storage type or discard policy.
 
-| Situation | Startup does |
-| --- | --- |
-| The change cannot delete anything | applies it, logs at INFO |
-| The change would delete stored messages | **withholds it**, logs at ERROR with exactly what it would cost |
-| …and `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true` | applies it, logs what was deleted |
-| The change would leave the stream with no bound at all | **withholds it**, logs at ERROR — no flag overrides this |
-| Stream state cannot be read | withholds everything. Nothing can be proven safe |
-| The live stream's shape has drifted | withholds everything, logs at ERROR |
+| Situation                                                             | Startup does                                                    |
+| --------------------------------------------------------------------- | --------------------------------------------------------------- |
+| The change cannot delete anything                                     | applies it, logs at INFO                                        |
+| The change would delete stored messages                               | **withholds it**, logs at ERROR with exactly what it would cost |
+| …and `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true` | applies it, logs what was deleted                               |
+| The change would leave the stream with no bound at all                | **withholds it**, logs at ERROR — no flag overrides this        |
+| Stream state cannot be read                                           | withholds everything. Nothing can be proven safe                |
+| The live stream's shape has drifted                                   | withholds everything, logs at ERROR                             |
 
 A withheld change looks like this:
 

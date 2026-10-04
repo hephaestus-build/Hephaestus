@@ -47,7 +47,7 @@ export function useSurveyLifecycle() {
 			invalidateSurveys();
 		},
 		onError: (error) =>
-			toast.error("Could not change the survey", { description: problemDetailOf(error) }),
+			toast.error("We could not change the survey", { description: problemDetailOf(error) }),
 	});
 	const remove = useMutation({
 		...filedUnder(SURVEY_WRITE_KEY, adminDeleteProductSurveyMutation()),
@@ -57,10 +57,10 @@ export function useSurveyLifecycle() {
 			queryClient.removeQueries({ queryKey: adminGetProductSurveySummaryQueryKey(path) });
 			queryClient.removeQueries({ queryKey: adminListProductSurveyResponsesQueryKey(path) });
 			invalidateSurveys();
-			toast.success("Survey deleted.");
+			toast.success("Survey deleted");
 		},
 		onError: (error) =>
-			toast.error("Could not delete the survey", { description: problemDetailOf(error) }),
+			toast.error("We could not delete the survey", { description: problemDetailOf(error) }),
 	});
 	const pendingIds = usePendingMutationIds(SURVEY_WRITE_KEY, (variables) =>
 		pathString(variables, "surveyId"),
@@ -82,7 +82,7 @@ export function useSurveyLifecycle() {
 				{ path: { surveyId: survey.id }, body: { ...editOf(survey), endsAt: new Date() } },
 				{
 					onSuccess: () => {
-						toast.success("Survey ended.");
+						toast.success("Survey ended");
 					},
 				},
 			),

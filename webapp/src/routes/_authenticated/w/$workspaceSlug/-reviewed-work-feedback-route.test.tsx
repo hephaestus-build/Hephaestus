@@ -35,7 +35,7 @@ describe("the page a comment on the work links to", () => {
 		renderRouteAt("/w/acme/feedback/scm.pull_request/1423");
 
 		await screen.findByRole("heading", { name: "Your feedback on this work" }, ROUTE_RENDER_WAIT);
-		await screen.findByRole("list", { name: "Review runs" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
 		expect(reads[0]).toStrictEqual({ artifactKind: "scm.pull_request", artifactId: "1423" });
 	});
 
@@ -54,7 +54,7 @@ describe("the page a comment on the work links to", () => {
 			await screen.findByRole("button", { name: "Disputed" }, ROUTE_RENDER_WAIT),
 		);
 		await userEvent.type(
-			screen.getByRole("textbox", { name: "What was missed?" }),
+			screen.getByRole("textbox", { name: "Why do you dispute this?" }),
 			"The loader never ran on this path.",
 		);
 		await userEvent.click(screen.getByRole("button", { name: "Send" }));

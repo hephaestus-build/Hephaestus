@@ -226,7 +226,7 @@ describe("practice profile route", () => {
 		await screen.findByRole("tab", { name: /^Every practice/u }, ROUTE_RENDER_WAIT);
 		// A quiet practice's reason comes only from the activity, asked for this review.
 		await screen.findByText(
-			"The review ended before reaching this practice.",
+			"The review ended before it reached this practice.",
 			undefined,
 			ROUTE_RENDER_WAIT,
 		);
@@ -292,7 +292,7 @@ describe("practice profile route", () => {
 		fireEvent.click(await openReviewsChip());
 
 		fireEvent.click(
-			await screen.findByRole("button", { name: "Review this now: #890" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Request review: #890" }, ROUTE_RENDER_WAIT),
 		);
 
 		await screen.findByText("No review was started", undefined, ROUTE_RENDER_WAIT);
@@ -323,7 +323,7 @@ describe("practice profile route", () => {
 		);
 
 		fireEvent.click(
-			await screen.findByRole("button", { name: "Review this now" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Request review" }, ROUTE_RENDER_WAIT),
 		);
 		await screen.findByText("A review of this was already asked for a moment ago.");
 
@@ -403,7 +403,7 @@ describe("practice profile route", () => {
 			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS / 2);
 			firstActivity.resolve();
 			await vi.waitFor(
-				() => screen.getByText("The review ended before reaching this practice."),
+				() => screen.getByText("The review ended before it reached this practice."),
 				ROUTE_RENDER_WAIT,
 			);
 
@@ -436,7 +436,7 @@ describe("practice profile route", () => {
 			`${PAGE}?detail=${encodeURIComponent(JSON.stringify(["review:gone"]))}`,
 		);
 
-		await screen.findByText("Could not load this review", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("We could not find this review", undefined, ROUTE_RENDER_WAIT);
 		await screen.findByText(/may have been deleted or moved/u);
 		expect(reads).toBe(1);
 	});

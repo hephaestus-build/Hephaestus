@@ -96,7 +96,7 @@ public class WorkspaceLifecycleService {
 
         if (workspace.getStatus() == WorkspaceStatus.PURGED) {
             throw new WorkspaceLifecycleViolationException(
-                    "Workspace '" + workspaceSlug + "' is purged. You cannot suspend it.");
+                    "The workspace “" + workspaceSlug + "” is purged. You cannot suspend it.");
         }
 
         if (workspace.getStatus() != WorkspaceStatus.SUSPENDED) {
@@ -137,7 +137,7 @@ public class WorkspaceLifecycleService {
 
         if (workspace.getStatus() == WorkspaceStatus.PURGED) {
             throw new WorkspaceLifecycleViolationException(
-                    "Workspace '" + workspaceSlug + "' is purged. You cannot resume it.");
+                    "The workspace “" + workspaceSlug + "” is purged. You cannot resume it.");
         }
 
         if (workspace.getStatus() != WorkspaceStatus.ACTIVE) {

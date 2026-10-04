@@ -8,6 +8,6 @@ public class RepositoryAlreadyMonitoredException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     public RepositoryAlreadyMonitoredException(String nameWithOwner) {
-        super("Repository with name '" + nameWithOwner + "' is already monitored");
+        super("The repository “" + nameWithOwner + "” is already monitored.");
     }
 }

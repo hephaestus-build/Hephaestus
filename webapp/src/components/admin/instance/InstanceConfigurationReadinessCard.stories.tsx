@@ -55,7 +55,7 @@ const emailNotConfigured = fact("notification.email", "spring.mail.host", "email
 	requirement: "OPTIONAL",
 	status: "NOT_CONFIGURED",
 	explanation:
-		"Email is optional. If you set a relay host, hephaestus.email.from must name the sender address.",
+		"Email is optional. If you set a mail server host, hephaestus.email.from must name the sender address.",
 });
 
 const workerRuntime = fact(
@@ -136,7 +136,7 @@ export const AllSatisfied: Story = {
 		await expect(canvas.queryByText("Action required")).toBeNull();
 		// Folded, but one press away.
 		await expect(canvas.queryByText("spring.datasource.url")).toBeNull();
-		await userEvent.click(canvas.getByRole("button", { name: /Satisfied/u }));
+		await userEvent.click(canvas.getByRole("button", { name: /Passed/u }));
 		await expect(canvas.getByText("spring.datasource.url")).toBeVisible();
 	},
 };
@@ -169,7 +169,7 @@ export const RefreshFailed: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText("Could not refresh. This card shows the last successful check."),
+			canvas.getByText("We could not refresh. This card shows the last successful check."),
 		).toBeVisible();
 		await expect(
 			canvas.getByText("Every check that applies to this instance passes."),

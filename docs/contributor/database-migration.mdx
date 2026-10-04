@@ -117,12 +117,12 @@ the listed changelog. Each is excluded from the
 drift gate in `--exclude-objects` (`server/application/build.gradle.kts`, `liquibaseDiff`). The
 changeset that drops the object also removes its exclusion.
 
-| Object | Changelog that stopped writing it | Exclusion to remove |
-|---|---|---|
-| `consent_notice` table | `1789067582535_changelog.xml` | `table:consent_notice` |
-| `consent_decision.notice_sha256` column | `1789067582535_changelog.xml` | `column:notice_sha256` |
-| `product_survey_submission` table | `1789117764980_changelog.xml` | `table:product_survey_submission` |
-| `llm_model.supports_reasoning`, `workspace_llm_model.supports_reasoning` columns | `1789135709162_changelog.xml` | `column:supports_reasoning` |
+| Object                                                                           | Changelog that stopped writing it | Exclusion to remove               |
+| -------------------------------------------------------------------------------- | --------------------------------- | --------------------------------- |
+| `consent_notice` table                                                           | `1789067582535_changelog.xml`     | `table:consent_notice`            |
+| `consent_decision.notice_sha256` column                                          | `1789067582535_changelog.xml`     | `column:notice_sha256`            |
+| `product_survey_submission` table                                                | `1789117764980_changelog.xml`     | `table:product_survey_submission` |
+| `llm_model.supports_reasoning`, `workspace_llm_model.supports_reasoning` columns | `1789135709162_changelog.xml`     | `column:supports_reasoning`       |
 
 ## CI validation
 

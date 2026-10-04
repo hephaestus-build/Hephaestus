@@ -140,7 +140,7 @@ export function ProposalDecision({
 	if (queue) {
 		// By the total, not by position or `next`: the last one reached may have others skipped on the
 		// way, and a queue longer than the page it was read in goes on past it.
-		approveLabel = queue.total === 1 ? "Approve and close" : "Approve and next";
+		approveLabel = queue.total === 1 ? "Approve and close" : "Approve and open next";
 	}
 	return (
 		<>
@@ -218,13 +218,13 @@ function RejectFeedbackPopover({
 				<PopoverHeader>
 					<PopoverTitle>Reject this feedback</PopoverTitle>
 					<PopoverDescription>
-						Choose the reason. Add a note when the category is not enough.
+						Choose a reason. Add a note if the reason needs more detail.
 					</PopoverDescription>
 				</PopoverHeader>
 				<RadioGroup
 					value={reason}
 					onValueChange={(value) => setReason(value)}
-					aria-label="Rejection category"
+					aria-label="Rejection reason"
 					className="gap-1"
 				>
 					{PROPOSAL_REJECTION_REASONS.map((option) => (

@@ -152,9 +152,9 @@ public class SlackAppHomeService {
                                         ? "Allowed, " + activeChannelText
                                         : "Not allowed"))))),
                 section(s -> s.text(markdownText(
-                        "*Context and privacy.* Hephaestus can use your linked project work and the new messages "
-                                + "that you send in monitored channels. It does not read the history of a channel from "
-                                + "before Hephaestus became active there. It does not mentor in channels."))));
+                        "*Context and privacy.* Hephaestus can use your linked project work and new messages "
+                                + "you send in monitored channels. It does not read channel history from before the "
+                                + "channel was activated. It does not mentor in channels."))));
     }
 
     record HomeOverviewState(
@@ -173,7 +173,7 @@ public class SlackAppHomeService {
                         s -> s.text(
                                 markdownText(
                                         "*Account settings.* Use this Home tab to control how Hephaestus uses your Slack messages. "
-                                                + "Open Hephaestus to manage your sign-in, your linked accounts, and your research participation."))),
+                                                + "Open Hephaestus to manage your sign-in, your connected accounts, and your research participation."))),
                 actions(a -> a.elements(asElements(button(b -> b.text(plainText("Open account settings"))
                         .url(url)
                         .actionId(ACTION_OPEN_HEPHAESTUS)
@@ -182,11 +182,11 @@ public class SlackAppHomeService {
 
     private static String leadText(HomeOverviewState state) {
         if (!state.mentorReady()) {
-            return ("*Mentor unavailable.* The mentor is turned off or not set up for this workspace. "
+            return ("*Mentor unavailable.* Heph is turned off or not set up for this workspace. "
                     + "You can still manage your privacy here.");
         }
         if (state.login().isEmpty()) {
-            return ("*Check your account access to use the mentor.* You need an active Hephaestus account "
+            return ("*Check your account access to use Heph.* You need an active Hephaestus account "
                     + "that you linked to Slack. You also need a project identity in this workspace. "
                     + "You can still manage channel-message privacy here.");
         }

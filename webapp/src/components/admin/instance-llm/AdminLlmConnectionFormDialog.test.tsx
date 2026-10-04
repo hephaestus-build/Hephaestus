@@ -107,7 +107,7 @@ describe("AdminLlmConnectionFormDialog", () => {
 			target: { value: "https://gw.example.com/v1?api-key=SECRET" },
 		});
 
-		fireEvent.click(screen.getByRole("button", { name: "Save inactive connection" }));
+		fireEvent.click(screen.getByRole("button", { name: "Add connection" }));
 
 		const rejection = validateLlmConnectionForm({
 			displayName: "Gateway",
@@ -122,7 +122,7 @@ describe("AdminLlmConnectionFormDialog", () => {
 		const onProbe = vi.fn<AdminLlmConnectionFormDialogProps["onProbe"]>();
 		const onProbed = vi.fn<NonNullable<AdminLlmConnectionFormDialogProps["onProbed"]>>();
 		renderDialog({ onProbe, onProbed });
-		fireEvent.click(screen.getByRole("button", { name: "Test & fetch models" }));
+		fireEvent.click(screen.getByRole("button", { name: "Test and fetch models" }));
 		// The probe answers synchronously here, so `act` flushes the state it sets before the assertion.
 		act(() => {
 			onProbe.mock.calls[0]?.[1].onSuccess({ reachable: true, models: ["gpt-5"] });
@@ -139,7 +139,7 @@ describe("AdminLlmConnectionFormDialog", () => {
 		const onProbe = vi.fn<AdminLlmConnectionFormDialogProps["onProbe"]>();
 		const onProbed = vi.fn<NonNullable<AdminLlmConnectionFormDialogProps["onProbed"]>>();
 		renderDialog({ onProbe, onProbed });
-		fireEvent.click(screen.getByRole("button", { name: "Test & fetch models" }));
+		fireEvent.click(screen.getByRole("button", { name: "Test and fetch models" }));
 		const callbacks = onProbe.mock.calls[0]?.[1];
 		assert(callbacks);
 

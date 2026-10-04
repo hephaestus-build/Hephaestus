@@ -12,7 +12,7 @@ import { isRecord } from "@/lib/is-record";
  */
 export function problemDetailOf(
 	err: unknown,
-	fallback = "An unexpected error occurred. Try again.",
+	fallback = "We could not finish that. Try again. If it keeps failing, contact your instance operator.",
 ): string {
 	if (typeof err === "string") {
 		return err;

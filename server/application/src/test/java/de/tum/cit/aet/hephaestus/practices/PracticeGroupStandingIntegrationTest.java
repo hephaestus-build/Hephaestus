@@ -351,7 +351,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("STRENGTH")
                     .jsonPath("$[0].guidance")
                     .isEqualTo(
-                            "Your recent feedback shows a strength in “PR Description Quality”. Continue to build on it.")
+                            "Your recent feedback shows a strength in “PR Description Quality”. Keep building on it.")
                     .jsonPath("$[0].direction")
                     .isEqualTo("INSUFFICIENT_EVIDENCE")
                     .jsonPath("$[0].observations.length()")
@@ -575,7 +575,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .value(
                             String.class,
                             value -> MatcherAssert.assertThat(
-                                    value, Matchers.containsString("It shows both strengths and areas to improve.")));
+                                    value, Matchers.containsString("with both strengths and room to grow.")));
         }
 
         @Test

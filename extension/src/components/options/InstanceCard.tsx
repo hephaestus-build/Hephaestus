@@ -45,8 +45,8 @@ export function InstanceCard({ host, hosted, disconnecting, onDisconnect }: Inst
 			{confirming ? (
 				<div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 p-3.5">
 					<p className="text-sm">
-						Disconnect from <span className="font-medium">{host}</span>? You are signed out, and the
-						extension gives up its access to that address. You can then connect to{" "}
+						Disconnect from <span className="font-medium">{host}</span>? This signs you out and
+						removes the extension’s access to that address. You can then connect to{" "}
 						{hosted ? "a self-hosted instance" : "hosted Hephaestus or another instance"}.
 					</p>
 					<div className="flex flex-wrap gap-2">
@@ -55,7 +55,7 @@ export function InstanceCard({ host, hosted, disconnecting, onDisconnect }: Inst
 							{disconnecting ? "Disconnecting…" : "Disconnect"}
 						</Button>
 						<Button variant="ghost" disabled={disconnecting} onClick={() => setConfirming(false)}>
-							Keep it
+							Stay connected
 						</Button>
 					</div>
 				</div>

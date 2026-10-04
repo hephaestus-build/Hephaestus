@@ -29,7 +29,7 @@ export const PROVIDER_COPY_IN_FORCE: Record<ProviderCopy, string> = {
 	INLINE_REMAINS:
 		"Inline comments Hephaestus posted about it are still on the work unchanged, because they cannot be edited from here. Any summary comment now carries a correction notice. Remove or answer the inline comments on the pull request or merge request.",
 	UNRESOLVED:
-		"Hephaestus cannot correct every comment about it. One cause is a summary that it could not edit. Another is a comment that the provider accepted without saying which one it is. A third is a comment that it tried to post and has not confirmed. Check the pull request or merge request and correct it there. Hephaestus keeps checking and updates this if it finds the comment.",
+		"Hephaestus cannot correct every comment about it. A summary comment could not be edited, the provider did not say which comment it accepted, or a posted comment is unconfirmed. Check the pull request or merge request and correct it there. Hephaestus keeps checking and updates this if it finds the comment.",
 };
 
 /** The same after a restore, where only a notice Hephaestus added has anything to undo. */

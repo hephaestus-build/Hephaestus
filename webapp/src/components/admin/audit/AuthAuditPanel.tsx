@@ -93,7 +93,7 @@ export function AuthAuditPanel({
 			const day = new Date().toISOString().slice(0, 10);
 			saveTextFile(data, `audit-log-${day}.csv`, "text/csv;charset=utf-8;");
 		},
-		onError: () => toast.error("Could not export the audit log. Please try again."),
+		onError: () => toast.error("We could not export the audit log. Try again."),
 	});
 
 	return (

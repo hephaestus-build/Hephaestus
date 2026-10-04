@@ -19,7 +19,7 @@ import java.lang.annotation.Target;
 @Retention(RUNTIME)
 public @interface WorkspaceSlug {
     String message() default
-            "Slug must be 3-51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens";
+            "Slug must be 3 to 51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens";
 
     Class<?>[] groups() default {};
 

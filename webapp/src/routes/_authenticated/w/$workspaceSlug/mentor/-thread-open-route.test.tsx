@@ -75,7 +75,7 @@ it.each([
 	// The only thing on the page, so it is the page's heading.
 	await screen.findByRole(
 		"heading",
-		{ level: 1, name: "This conversation could not be opened" },
+		{ level: 1, name: "We could not open this conversation" },
 		ROUTE_RENDER_WAIT,
 	);
 	expect(screen.queryByRole("textbox", { name: "Message" })).toBeNull();
@@ -107,9 +107,7 @@ it("opens the conversation when trying again succeeds", async () => {
 	);
 
 	renderRouteAt(`/w/acme/mentor/${threadId}`);
-	await userEvent.click(
-		await screen.findByRole("button", { name: "Try again" }, ROUTE_RENDER_WAIT),
-	);
+	await userEvent.click(await screen.findByRole("button", { name: "Retry" }, ROUTE_RENDER_WAIT));
 
 	await screen.findByText("Here is a plan.");
 });
@@ -142,5 +140,5 @@ it.each([
 		).toBe("idle"),
 	);
 	screen.getByText("Here is a plan.");
-	expect(screen.queryByText("This conversation could not be opened")).toBeNull();
+	expect(screen.queryByText("We could not open this conversation")).toBeNull();
 });

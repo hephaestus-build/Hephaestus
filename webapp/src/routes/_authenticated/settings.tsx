@@ -95,7 +95,7 @@ function RouteComponent() {
 			toast.error(
 				problemStatusOf(error) === 412
 					? "Email choices changed elsewhere. Review the updated choices and try again."
-					: problemDetailOf(error, "Could not update your email choices. Please try again."),
+					: problemDetailOf(error, "We could not update your email choices. Try again."),
 			);
 		},
 	});
@@ -158,7 +158,7 @@ function RouteComponent() {
 			if (context?.previousSettings) {
 				queryClient.setQueryData(userSettingsQueryKey, context.previousSettings);
 			}
-			toast.error("Failed to update settings. Please try again later.");
+			toast.error("We could not update your settings. Try again.");
 		},
 		onSuccess: (data) => {
 			queryClient.setQueryData(userSettingsQueryKey, data);
@@ -195,7 +195,7 @@ function RouteComponent() {
 			// The refusal may be the notice moving on — a renamed research organisation, or setup owed
 			// again. Re-read it so the control reflects what this instance is now asking.
 			void queryClient.invalidateQueries({ queryKey: getConsentStatusQueryKey({}) });
-			toast.error("Failed to update research participation. Please try again.");
+			toast.error("We could not update your research participation. Try again.");
 		},
 	});
 
@@ -219,7 +219,7 @@ function RouteComponent() {
 			void queryClient.invalidateQueries({ queryKey: memberOnboardingQueryScope() });
 		},
 		onError: () => {
-			toast.error("Could not save your AI choice. Please try again.");
+			toast.error("We could not save your AI choice. Try again.");
 		},
 	});
 
@@ -237,10 +237,10 @@ function RouteComponent() {
 			void queryClient.invalidateQueries({ queryKey: listLinkedIdentitiesQueryKey({}) });
 			// The primary identity (avatar, username) the app shows may have been the one removed.
 			void queryClient.invalidateQueries({ queryKey: getCurrentUserQueryKey() });
-			toast.success("Account disconnected.");
+			toast.success("Account disconnected");
 		},
 		onError: (error: DefaultError) => {
-			toast.error(problemDetailOf(error, "Could not disconnect that account. Please try again."));
+			toast.error(problemDetailOf(error, "We could not disconnect that account. Try again."));
 		},
 	});
 
@@ -271,7 +271,7 @@ function RouteComponent() {
 			);
 		},
 		onError: (error: DefaultError) => {
-			toast.error(problemDetailOf(error, "Could not update Slack preferences. Please try again."));
+			toast.error(problemDetailOf(error, "We could not update your Slack preferences. Try again."));
 		},
 	});
 
@@ -347,10 +347,10 @@ function RouteComponent() {
 		...revokeSessionMutation(),
 		onSuccess: () => {
 			void invalidateSessions();
-			toast.success("Session revoked");
+			toast.success("Signed out of that session");
 		},
 		onError: () => {
-			toast.error("Failed to revoke session. Please try again later.");
+			toast.error("We could not sign out that session. Try again.");
 		},
 	});
 	const revokeOtherSessions = useMutation({
@@ -360,7 +360,7 @@ function RouteComponent() {
 			toast.success("Signed out of all other sessions");
 		},
 		onError: () => {
-			toast.error("Failed to sign out other sessions. Please try again later.");
+			toast.error("We could not sign out your other sessions. Try again.");
 		},
 	});
 	let sessionsState: SessionsSectionProps["state"] = { status: "loading" };

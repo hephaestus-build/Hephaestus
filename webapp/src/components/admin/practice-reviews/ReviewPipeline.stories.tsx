@@ -86,7 +86,7 @@ export const Default: Story = {
 			within(canvas.getByRole("list", { name: "Reviews by outcome" }))
 				.getAllByRole("listitem")
 				.map((item) => item.textContent),
-		).toEqual(["31 completed", "2 failed", "1 timed out", "1 cancelled"]);
+		).toEqual(["31 completed", "2 failed", "1 timed out", "1 canceled"]);
 		await expect(
 			within(canvas.getByRole("list", { name: "Feedback by delivery" }))
 				.getAllByRole("listitem")

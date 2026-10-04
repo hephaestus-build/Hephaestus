@@ -39,7 +39,7 @@ export const CATALOG_AVAILABILITY_DEFS: StatusDefs<CatalogAvailability> &
 		badged: true,
 	},
 	SLUG_CONFLICT: {
-		label: "Name unavailable",
+		label: "Name in use",
 		icon: CircleAlert,
 		badgeVariant: "outline",
 		description: "Another workspace practice already uses this identifier.",

@@ -212,7 +212,11 @@ export function TeamsPage({ teams, isLoading }: TeamsPageProps) {
 	} else if (roots.length > 0) {
 		body = <div className="space-y-4">{roots.map((team) => renderTeamNode(team))}</div>;
 	} else {
-		body = <p className="py-8 text-center text-muted-foreground">No teams found</p>;
+		body = (
+			<p className="py-8 text-center text-muted-foreground">
+				No teams yet. Teams appear here after they sync from your connected provider.
+			</p>
+		);
 	}
 
 	return (

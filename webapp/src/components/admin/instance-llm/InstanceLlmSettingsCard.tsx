@@ -74,7 +74,8 @@ function InstanceLlmSettingsForm({ settings, isSubmitting, onSave }: InstanceLlm
 						rows={4}
 					/>
 					<FieldDescription>
-						One host per line (or comma-separated). Blank allows any public host.
+						Enter one host per line, or separate hosts with commas. Leave blank to allow any public
+						host.
 					</FieldDescription>
 				</Field>
 
@@ -84,8 +85,8 @@ function InstanceLlmSettingsForm({ settings, isSubmitting, onSave }: InstanceLlm
 							Let workspaces add providers and models
 						</FieldLabel>
 						<FieldDescription>
-							Controls new provider connections and new models. Existing providers and models remain
-							manageable and are billed to the account that owns their credential.
+							Applies to new provider connections and new models. Existing providers and models
+							remain manageable and are billed to the account that owns their credential.
 						</FieldDescription>
 					</FieldContent>
 					<Switch

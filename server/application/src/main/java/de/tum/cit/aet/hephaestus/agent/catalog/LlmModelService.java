@@ -88,7 +88,7 @@ public class LlmModelService {
     @Transactional
     public LlmModel create(Long connectionId, CreateLlmModelRequestDTO request) {
         if (Boolean.TRUE.equals(request.enabled())) {
-            throw new IllegalArgumentException("Create the model as disabled. Set its price. Then activate the model.");
+            throw new IllegalArgumentException("Create the model disabled, set its price, then activate it.");
         }
         LlmConnection connection = connectionRepository
                 .findById(connectionId)
@@ -146,7 +146,7 @@ public class LlmModelService {
                 priceRepository.findByModelIdAndEffectiveToIsNull(model.getId()).orElse(null);
         if (!model.getConnection().isEnabled() || price == null || price.getPricingMode() == PricingMode.UNPRICED) {
             throw new IllegalArgumentException(
-                    "Before you activate the model, activate the connection. Also set a price for the model.");
+                    "Activate the connection and set a price before you activate the model.");
         }
     }
 
@@ -205,8 +205,7 @@ public class LlmModelService {
                 .orElseThrow(() -> new EntityNotFoundException("LlmModel", modelId));
         validatePriceRequest(request);
         if (model.isEnabled() && request.pricingMode() == PricingMode.UNPRICED) {
-            throw new IllegalArgumentException(
-                    "To change the price of the model to UNPRICED, first disable the model.");
+            throw new IllegalArgumentException("Disable the model before you change its price to UNPRICED.");
         }
 
         Instant now = Instant.now();

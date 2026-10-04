@@ -85,7 +85,7 @@ public class InstanceSettingsService implements SilentModeQuery {
 
     private InstanceSettings engage(@Nullable String reason, @Nullable Long actor, Instant changedAt) {
         if (repository.engageSilentMode(reason, changedAt, actor) != 1) {
-            throw new IllegalStateException("Failed to engage instance Silent Mode");
+            throw new IllegalStateException("We could not turn on silent mode. Try again.");
         }
         return currentSettings();
     }

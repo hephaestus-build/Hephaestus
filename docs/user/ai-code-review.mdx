@@ -7,57 +7,61 @@ description: How Hephaestus reviews pull requests, merge requests, and issues fo
 Use this guide to read practice feedback, respond to it, or request another review.
 Feedback can concern the scope of a change, its explanation, or your response to reviewers.
 
-When practice reviews are on, Hephaestus uses AI to review eligible work against your workspace practices.
-This work includes pull requests, merge requests, and issues. It records observations first, then
-decides whether any feedback would be useful and where it belongs.
+When practice reviews are on, Hephaestus uses AI to check eligible work against your workspace’s practices.
+Eligible work includes pull requests, merge requests, and issues.
+Hephaestus first records observations.
+Then it decides whether feedback would help and where it belongs.
 
 The feedback is guidance. It does not approve a change for merge, grade the developer, or replace human review.
 
 ## Where feedback appears
 
-- **On the work:** a public, task-level comment about this change. A point about a line can appear on the diff. A point about the whole work stays in the summary.
+- **On the work:** a public comment about this change. A point about a line can appear on the diff. A point about the whole work stays in the summary.
 - **On your [Practice profile](./practice-profile):** private feedback about a pattern across your work. Each practice has at most one open card.
 - **In Heph:** private feedback prepared for a later conversation. Heph decides when it is relevant
   and shows it as a separate part of its reply. It counts as delivered only when Heph shows it.
 
-Not each observation becomes feedback. Hephaestus can withhold a repeated, unchanged, ungrounded, or
-already-addressed point instead of sending more feedback.
+Not every observation becomes feedback.
+Hephaestus can withhold a point that is repeated, unchanged, ungrounded, or already addressed.
 
-If an issue changes after a review, its earlier observations stay in the review history with a historical mark. They no longer count as current practice feedback or Heph context. A later
-review that cannot finish does not turn the earlier result into a new claim. A comment already posted
-on the issue is not silently removed.
+If an issue changes after a review, its earlier observations stay in the review history with a historical mark. They no longer count as current practice feedback or Heph context. A later review that cannot finish does not turn the earlier result into a new claim.
+Hephaestus does not silently remove a comment it already posted on the issue.
 
-A workspace admin can mark an observation as incorrect when it was wrong when made. It stays in your review history with the admin's reason.
+A workspace admin can mark an observation as incorrect if it was wrong when Hephaestus made it.
+The observation stays in your review history with the admin’s reason.
 It no longer counts toward your standing, your Practice profile, or what Heph knows about your work.
-Hephaestus does not send feedback about it that has not reached you. Hephaestus tries to add a correction notice to its existing summary comment on your pull request or merge request.
-An inline comment stays unchanged.
+Hephaestus does not send feedback about it that has not reached you yet.
+It tries to add a correction notice to its existing summary comment on your pull request or merge request.
+An inline comment stays as it is.
 
 If the admin restores the observation, it counts again and Hephaestus removes any notice.
 
 ## Answer or dispute feedback
 
-Reactions and replies on GitHub or GitLab do not record your feedback response in Hephaestus. Every comment ends with **Answer or dispute it in Hephaestus**.
-This link opens your own reviews of that pull request, merge request, or issue. You can mark each observation behind the comment as **Addressed**, **Not applicable**, or **Disputed** there. Other people who follow the link see only their own reviews, with no information about you.
+Reactions and replies on GitHub or GitLab do not record your response in Hephaestus. Every comment ends with **Answer or dispute it in Hephaestus**.
+The link opens your own reviews of that pull request, merge request, or issue.
+There you can mark each observation behind the comment as **Addressed**, **Not applicable**, or **Disputed**.
+Other people who follow the link see only their own reviews, and nothing about you.
 
-1. Follow **Answer or dispute it in Hephaestus** on the comment.
+1. Select **Answer or dispute it in Hephaestus** on the comment.
 2. Open the observation you want to answer.
 3. Select **Addressed**, **Not applicable**, or **Disputed**.
-4. If you dispute it, explain why.
+4. If you dispute it, explain what is wrong under **Why do you dispute this?**.
 
-For example, name the description section that contains information the review said was missing.
-Workspace admins can read your dispute explanation.
+For example, name the description section that contains the information the review said was missing.
+Workspace admins read your explanation on the observation.
 
 While the dispute stands, later reviews withhold feedback about the same claim on the same work.
 **Not applicable** also withholds feedback about that claim.
-If you withdraw the dispute, a review can raise that point again. A dispute
-does not change the observation or your standing by itself.
+If you withdraw the dispute, a review can raise that point again.
+A dispute does not change the observation or your standing by itself.
 
-The admins can then act on it:
+Admins can then act on it:
 
 - **Mark the observation incorrect** when it was wrong. It stops counting, as described above.
 - **Withdraw the feedback** on your Practice profile when correct observations led to incorrect feedback. See [Practice profile](./practice-profile.mdx).
 
-Neither action undoes earlier words.
+Neither action takes back words already sent.
 A summary comment gets a correction notice where the provider permits edits.
 Inline comments and earlier words from Heph stay unchanged.
 
@@ -69,7 +73,7 @@ For brevity, **change request** means either kind of work here.
 ### What happens
 
 An eligible event, such as new work or a manual request, can start a review.
-Each practice determines which events it reviews.
+Each practice decides which events it reviews.
 Hephaestus reads the change, its description, commits, and relevant discussion.
 It checks the work against workspace practices and records observations when the evidence supports an assessment.
 It then decides whether feedback would help.
@@ -77,8 +81,9 @@ It then decides whether feedback would help.
 Useful feedback can become a summary or inline comment.
 A review can also stay private or deliberately send no feedback.
 
-Review time depends on the size of the work, available evidence, and instance limits.
-Your Practice profile lets you follow the review without a provider comment. Once the review records a result about your work, it appears under [Reviews of your work](./practice-profile#reviews-of-your-work).
+How long a review takes depends on the size of the work, the evidence available, and your instance’s limits.
+On your Practice profile, you can follow the review even when no comment is posted on GitHub or GitLab.
+Once the review records a result about your work, it appears under [Reviews of your work](./practice-profile#reviews-of-your-work).
 The chip beside the title opens that section.
 A review that records nothing about your work is not listed there.
 
@@ -92,11 +97,12 @@ When the review produces a public summary, it can include:
 - an explanation of why the practice matters and what to try next
 
 The summary names a clear positive practice only when the review prepared feedback about it for this change.
-Otherwise, Hephaestus does not post it, but it still counts on your practice page. This is feedback on the practice, not an approval of the change.
+Otherwise Hephaestus does not post it, but the practice still counts on your practice page.
+This is feedback on the practice, not an approval of the change.
 
 If new commits trigger another review, Hephaestus posts a new summary.
-It can describe what was resolved, what remains, and what is new. The earlier review stays unchanged.
-The conversation keeps an accurate history of feedback that people may have read or answered.
+It can describe what was resolved, what remains, and what is new.
+The earlier summary stays unchanged, so the conversation keeps an accurate history of feedback that people may have read or answered.
 
 ### Read inline comments
 
@@ -113,20 +119,19 @@ Some comments include a suggested code change.
 ### Ask for a review
 
 There are two ways to ask.
-Only the work's author, assignees, and workspace admins may use them.
+Only the work’s author, assignees, and workspace admins may use them.
 Each person has an hourly allowance.
 Hephaestus refuses requests above this limit instead of adding them to a queue.
 
-**From the app.** In a workspace that reviews practices, [Activity](./activity#review-this-now) shows **Review this now** for your open pull requests and assigned issues.
+**From the app.** In a workspace that reviews practices, [Activity](./activity#request-a-review) shows **Request review** for your open pull requests and assigned issues.
 For your own work with recorded review results, it also appears beside each row of [Reviews of your work](./practice-profile#reviews-of-your-work).
 It appears on the review you open there, too.
 Workspace admins find it on any pull request or issue under **Administration → Practices → Practice reviews → Work**.
 
-1. Select **Review this now** for the work.
+1. Select **Request review** for the work.
 
-If Hephaestus refuses the request, you stay on the same page.
-It explains why in a sentence.
-Reasons include work reviewed within the workspace's cooldown period and no model within the author's [AI choice](./user-settings#your-ai-choice).
+If Hephaestus refuses the request, you stay on the same page and it explains why in one sentence.
+Reasons include a review of the same work during the workspace’s cooldown period and no model within the author’s [AI choice](./user-settings#your-ai-choice).
 The practices that watch the work might also be off.
 
 **From a GitLab merge request.**
@@ -137,18 +142,18 @@ The practices that watch the work might also be off.
 /hephaestus review
 ```
 
-The command is case-insensitive. Text before the command prevents detection.
+The command is case-insensitive.
+Text before the command stops Hephaestus from seeing it.
 Hephaestus ignores it after the merge request closes or merges.
 Workspace settings determine whether Hephaestus accepts it.
 
-There is no equivalent command on GitHub pull requests.
-
-1. For a GitHub pull request, select **Review this now**.
+GitHub pull requests have no such command.
+On a GitHub pull request, select **Request review** instead.
 
 ### See what was reviewed, and what was not
 
 [Reviews of your work](./practice-profile#reviews-of-your-work) lists each review with recorded results about your work, not only reviews with comments.
-**Every practice** shows each practice's result, including practices that sent no feedback, with reasons.
+**Every practice** shows each practice’s result, with reasons, including practices that sent no feedback.
 This explains why expected feedback did not arrive.
 
 1. Open a review on your Practice profile.
@@ -157,46 +162,47 @@ This explains why expected feedback did not arrive.
 Work without recorded review results does not appear there.
 Workspace admins can see each piece of work Hephaestus recorded, reviewed or not.
 
-Feedback on the work waits for a workspace admin's approval by default. The setting is
-**Review before sending**. Feedback on your Practice profile and in Heph has separate delivery
-checks and does not need this comment approval.
+By default, feedback on the work waits for a workspace admin’s approval.
+The setting is **Review before sending**.
+Feedback on your Practice profile and in Heph has separate delivery checks and does not need this approval.
 
-A practice's review state and its feedback delivery are separate:
+A practice’s review state and its feedback delivery are separate:
 
-| State or condition | Meaning |
-| --- | --- |
-| **Reviewed** | The review measured the practice. It can still have no delivered feedback. |
-| **Running** | A review is reading the work. |
-| **Waiting** | The review has not started yet. |
-| **Skipped** | Review settings stopped this occurrence before a review began. |
-| **Not reached** | The practice was eligible, but the review ended before it evaluated it. |
-| The review could not assess the practice | The review could not settle the practice from the evidence it could reach. |
-| **Turned off** | The practice is off in this workspace. |
-| **Not triggered** | Nothing happened that this practice watches for. |
-| **Waiting on a connection** | The practice needs an integration the workspace has not connected. |
-| **Expired** | The occasion became too old before a review reached it. |
-| **Failed** | A review started but could not finish. |
+| State or condition          | Meaning                                                                    |
+| --------------------------- | -------------------------------------------------------------------------- |
+| **Reviewed**                | The review measured the practice. It can still have no delivered feedback. |
+| **Running**                 | A review is reading the work.                                              |
+| **Waiting**                 | The review has not started yet.                                            |
+| **Skipped**                 | Review settings stopped this occurrence before a review began.             |
+| **Not reached**             | The practice was eligible, but the review ended before it evaluated it.    |
+| **We could not assess**     | The review could not settle the practice from the evidence it could reach. |
+| **Turned off**              | The practice is off in this workspace.                                     |
+| **Not triggered**           | Nothing happened that this practice watches for.                           |
+| **Waiting on a connection** | The practice needs an integration the workspace has not connected.         |
+| **Expired**                 | The occasion became too old before a review reached it.                    |
+| **Failed**                  | A review started but could not finish.                                     |
 
-An observation can be **Met**, **Not met**, **Not applicable**, or **Undetermined**. Met and Not met
-say whether the captured evidence establishes conformance or a material shortfall. Not applicable requires evidence that the practice does not
-apply. Undetermined means the review read enough evidence but could not settle a question.
-Missing or failed required evidence stops assessment before the review creates an observation.
+An observation can be **Met**, **Not met**, **Not applicable**, or **Undetermined**.
+**Met** and **Not met** say whether the captured evidence shows that the work meets the practice or falls materially short of it.
+**Not applicable** needs evidence that the practice does not apply.
+**Undetermined** means the review read enough evidence but could not settle a question.
+Missing or failed required evidence stops the assessment before the review creates an observation.
 This failure is never a claim about your work.
 
 Catch-up reviews of past work never produce comments.
 
 ### What code is reviewed
 
-Hephaestus evaluates lines added by the change request.
+Hephaestus evaluates the lines that a change request adds.
 It can use existing code as context but does not report it as a new concern.
 
-Some practices use change-request metadata instead of code, including the description, commit history, and review discussion.
+Some practices look at the details of the change request instead of its code: the description, the commit history, and the review discussion.
 
 ## Issues
 
 Hephaestus can also give practice feedback on issues.
 Depending on the workspace practices, a new issue, an update, or a closure can start a review.
-Changes to a closed issue's description or discussion can start another review of its current record.
+Changes to a closed issue’s description or discussion can start another review of its current record.
 
 Issue feedback appears as a single comment. It can cover practices such as:
 
@@ -205,17 +211,17 @@ Issue feedback appears as a single comment. It can cover practices such as:
 - one concern per issue
 
 Closed issues do not receive a new feedback comment.
-A review when an issue closes still stores results for you and workspace admins, but cannot post them.
+A review that runs when an issue closes still stores its results for you and workspace admins, but cannot post a comment.
 For example, it might check that the issue records why it closed.
 
-Hephaestus reads an issue's current state when the review runs.
+Hephaestus reads an issue’s current state when the review runs.
 By then, people may have selected, cleared, or added checklist boxes.
 They may have completed or attached sub-issues, or reopened and closed the issue again.
 The catalog practice that checks completion of checklists and sub-issues at closure therefore requires human review.
 Hephaestus does not review a workspace copy recorded as adopted from the catalog.
 
 If that practice still reviews your issues, ask a workspace admin to switch it off.
-A separately created workspace practice may not carry the catalog restriction.
+A practice that someone created separately in the workspace may not carry the catalog restriction.
 Earlier results stay unchanged.
 
 ## Practices and urgency
@@ -229,15 +235,17 @@ The exact practices depend on your workspace. Common areas include:
 - maintainable code
 - security and reliability practices
 
-The app shows urgency as **Critical**, **Major**, **Minor**, or **Informational**. Only comments on
-the work use urgency emoji. Urgency orders the feedback. It is not a grade or a merge decision.
+The app shows urgency as **Critical**, **Major**, **Minor**, or **Informational**.
+Only comments on the work use urgency emoji.
+Urgency orders the feedback.
+It is not a grade or a merge decision.
 
 ## Linked documentation
 
 If your workspace connects an [Outline](https://www.getoutline.com/) team wiki, Hephaestus can read selected documents linked from a change request or issue.
-It can use an architecture decision or design document instead of assumptions about missing context.
+It can then use an architecture decision or design document instead of guessing at missing context.
 
-Hephaestus only reads collections a workspace admin chose to mirror. It does not write to Outline. Your Outline account link under **User settings → Connected Accounts** lets Hephaestus identify you as the author of your documents.
+Hephaestus reads only the collections that a workspace admin chose to mirror. It does not write to Outline. Your Outline account link under **User settings → Connected accounts** lets Hephaestus identify you as the author of your documents.
 
 ## Stop comments and reminders
 
@@ -248,7 +256,8 @@ This stops new practice-feedback comments on issues, pull requests, or merge req
 It also stops Slack reminders sent to you.
 
 A reminder is a Slack direct message about feedback prepared for a conversation with Heph. It arrives at most once in 24 hours per workspace.
-The workspace needs a Slack connection, your linked account, and Heph available within your AI choice. It contains a count, not the feedback text.
+The workspace needs a Slack connection, you must have connected your Slack account, and Heph must be available within your AI choice.
+The message contains a count, not the feedback text.
 
 This setting controls delivery only. Reviews can still run.
 Their observations stay stored and may be visible to workspace admins.
@@ -256,7 +265,7 @@ This setting does not delete earlier comments or observations.
 
 1. To allow new comments and reminders again, turn on **Comments and Slack reminders**.
 
-Each practice determines whether it reviews drafts.
-There is no single workspace switch.
-Most practices wait until the work is handed over.
-A few deliberately run on drafts. A change from draft to ready does not always start a review by itself.
+Each practice decides whether it reviews drafts, and no single workspace switch controls it.
+Most practices wait until the work is ready for review.
+A few run on drafts on purpose.
+Marking a draft ready does not always start a review by itself.

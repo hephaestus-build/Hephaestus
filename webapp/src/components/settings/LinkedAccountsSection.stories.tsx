@@ -180,7 +180,7 @@ export const Empty: Story = {
 export const Loading: Story = {
 	args: { isLoading: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("list", { name: "Loading connected accounts" })).toBeVisible();
+		await expect(canvas.getByRole("list", { name: "Loading connected accounts…" })).toBeVisible();
 		await expect(canvas.queryByText(/no connected accounts yet/iu)).toBeNull();
 		await expect(canvas.queryByRole("button")).toBeNull();
 	},
@@ -195,7 +195,7 @@ export const ErrorState: Story = {
 		providers: [],
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/could not load connected accounts/iu);
+		canvas.getByText(/we could not load your connected accounts/iu);
 		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalled();
 	},

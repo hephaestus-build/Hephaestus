@@ -212,7 +212,7 @@ describe("the live hint under a cap field", () => {
 	it("rounds to whole units, like every other cap figure", () => {
 		expect(fxCapHint(50, eur, true)).toStrictEqual({
 			conversion: { text: "≈ €44", label: "about 44 euros" },
-			tail: " at today's rate.",
+			tail: " at today’s rate.",
 		});
 	});
 

@@ -71,7 +71,7 @@ class DeterministicGroupGuidanceComposerTest {
                 DeterministicGroupGuidanceComposer.compose(PracticeGroupStandingDTO.Standing.STRENGTH, List.of(fixed));
 
         assertThat(guidance)
-                .isEqualTo("Your recent feedback shows a strength in “Test Coverage”. Continue to build on it.");
+                .isEqualTo("Your recent feedback shows a strength in “Test Coverage”. Keep building on it.");
     }
 
     @ParameterizedTest

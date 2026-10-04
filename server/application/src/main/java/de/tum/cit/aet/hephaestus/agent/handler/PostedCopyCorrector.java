@@ -177,6 +177,6 @@ class PostedCopyCorrector {
                 ? names.getFirst()
                 : String.join(", ", names.subList(0, names.size() - 1)) + " and " + names.getLast();
         return "> **Correction:** a workspace admin marked what this review says about " + joined
-                + " as incorrect. Ignore that part.\n\n" + original;
+                + " as incorrect. Do not rely on that part.\n\n" + original;
     }
 }

@@ -68,7 +68,7 @@ export const Unavailable: Story = {
 		});
 		await expect(title).toBeVisible();
 		await expect(title.parentElement).toHaveTextContent(
-			"No Heph model is within Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
+			"No Heph model is set up for Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
 		);
 		await expect(canvas.getByRole("link", { name: "Change your AI choice" })).toHaveAttribute(
 			"href",

@@ -145,7 +145,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         } catch (RejectedExecutionException rejected) {
             log.warn("Mentor turn rejected by executor (probably shutting down): {}", rejected.getMessage());
             metrics.recordCompleted(MentorChatMetrics.Outcome.REJECTED);
-            channel.completeWithError("The mentor service is stopping. Try again in a moment.");
+            channel.completeWithError("Heph is not available because the server is stopping. Try again in a moment.");
         }
     }
 
@@ -179,7 +179,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         } catch (RejectedExecutionException rejected) {
             log.warn("Slack mentor turn rejected by executor: {}", rejected.getMessage());
             metrics.recordCompleted(MentorChatMetrics.Outcome.REJECTED);
-            channel.completeWithError("The mentor service is stopping. Try again in a moment.");
+            channel.completeWithError("Heph is not available because the server is stopping. Try again in a moment.");
         }
     }
 
@@ -235,7 +235,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     t);
             metrics.recordCompleted(MentorChatMetrics.Outcome.ERROR);
             try {
-                channel.completeWithError("The mentor turn failed unexpectedly.");
+                channel.completeWithError("Heph could not finish this reply. Try again.");
             } catch (RuntimeException ignored) {
                 // Best-effort: the channel may already be closed.
             }
@@ -455,7 +455,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     "Mentor turn timed out waiting for agent_end (threadId={}): {}",
                     request.threadId(),
                     timeout.toString());
-            failTurn(turn, state, channel, cookie, timeout, "The mentor turn took too long and stopped.");
+            failTurn(turn, state, channel, cookie, timeout, "Heph took too long to reply and stopped. Try again.");
             outcome = MentorChatMetrics.Outcome.TIMEOUT;
         } catch (ClientDisconnectedException disconnect) {
             if (clientHolder.get() == null) {
@@ -883,7 +883,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             return PiEventToUiChunkTranslator.REPLY_LOST_IN_TRANSIT;
         }
         if (e instanceof LlmBudgetExhaustedException budget) {
-            return Objects.requireNonNullElse(budget.getMessage(), "The mentor budget is used up.");
+            return Objects.requireNonNullElse(budget.getMessage(), "The budget for Heph is used up.");
         }
         if (e instanceof LlmUnpricedUsageBlockedException unpriced) {
             return Objects.requireNonNullElse(
@@ -894,7 +894,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             return "Heph had an unexpected error. Try again.";
         }
         if (e instanceof TimeoutException) {
-            return "The mentor turn took too long and stopped.";
+            return "Heph took too long to reply and stopped. Try again.";
         }
         if (e instanceof ClientDisconnectedException) {
             // Should never surface to a still-connected client, but guard anyway.
@@ -907,9 +907,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             return Objects.requireNonNullElse(rejected.getMessage(), MentorRetryRejectedException.NOT_RETRYABLE);
         }
         if (e instanceof InteractiveSandboxException) {
-            return "I could not start the mentor runtime. Try again in a moment.";
+            return "Heph could not start. Try again in a moment.";
         }
-        return "The mentor turn failed unexpectedly.";
+        return "Heph could not finish this reply. Try again.";
     }
 
     private Map<String, byte[]> buildMentorContext(MentorTurnRequest request, User user, UUID currentUserMessageId) {

@@ -56,7 +56,7 @@ export function ChannelHistorySheet({
 				<SheetHeader>
 					<SheetTitle>Consent history</SheetTitle>
 					<SheetDescription>
-						Every recorded consent transition for #{label}, newest first.
+						Every recorded consent change for #{label}, newest first.
 					</SheetDescription>
 				</SheetHeader>
 
@@ -72,7 +72,7 @@ export function ChannelHistorySheet({
 					{!isLoading && error && (
 						<QueryErrorAlert
 							error={error}
-							title="Could not load the consent history"
+							title="We could not load the consent history"
 							onRetry={() => {
 								void refetch();
 							}}
@@ -87,8 +87,8 @@ export function ChannelHistorySheet({
 								</EmptyMedia>
 								<EmptyTitle>No consent changes recorded yet</EmptyTitle>
 								<EmptyDescription>
-									Every activation, pause, resume and removal lands here as an immutable audit
-									entry.
+									Each activation, pause, resume, and removal is recorded here. Entries cannot be
+									edited.
 								</EmptyDescription>
 							</EmptyHeader>
 						</Empty>

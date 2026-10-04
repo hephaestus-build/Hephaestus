@@ -48,21 +48,21 @@ export const DELIVERY_STATE_DEFS: StatusDefs<DeliveryState> = {
 		icon: ClockIcon,
 		badgeVariant: "secondary",
 		description:
-			"Composed, and waiting for the moment that delivers it — which differs by channel.",
+			"Composed, and waiting for the moment that delivers it. That moment differs by channel.",
 	},
 	PARTIALLY_DELIVERED: {
 		label: "Partially delivered",
 		icon: CircleAlertIcon,
 		badgeVariant: "warning",
 		description:
-			"Some approved comments reached the provider. The remaining comments are retrying or were withheld for the reason shown.",
+			"Some approved comments reached the provider. The remaining comments are being tried again or were withheld for the reason shown.",
 	},
 	PARTIALLY_FAILED: {
 		label: "Partially delivered · retries exhausted",
 		icon: CircleAlertIcon,
 		badgeVariant: "destructive",
 		description:
-			"Some approved comments reached the provider, but the remaining comments could not be delivered after bounded retries.",
+			"Some approved comments reached the provider, but the rest could not be delivered after several attempts.",
 	},
 	SUPERSEDED: {
 		label: "Replaced by newer",
@@ -109,19 +109,19 @@ const IN_CHAT_OVERRIDES = {
 		label: "Prepared for conversation",
 		icon: MessageSquareDashedIcon,
 		badgeVariant: "secondary",
-		description: "Waiting for the developer's next chat with the mentor, which is what sends it.",
+		description: "Waiting for the developer’s next chat with Heph, which is what sends it.",
 	},
 	RAISED: {
 		label: "Delivered in conversation",
 		icon: BotMessageSquareIcon,
 		badgeVariant: "success",
-		description: "The mentor showed it to the developer in a reply to their next chat.",
+		description: "Heph showed it to the developer in a reply to their next chat.",
 	},
 	EXPIRED: {
 		label: "Withheld, never raised",
 		icon: HourglassIcon,
 		badgeVariant: "warning",
-		description: "It sat in the conversation queue until it aged out, and was never said.",
+		description: "It stayed prepared for conversation until it expired. Heph never raised it.",
 	},
 } as const satisfies Record<string, StatusDef>;
 
@@ -136,7 +136,7 @@ const IN_APP_OVERRIDES = {
 		icon: UserRoundIcon,
 		badgeVariant: "secondary",
 		description:
-			"Waiting on the developer's own practice pages. The feedback is delivered when the developer opens it.",
+			"Waiting on the developer’s own practice pages. The feedback is delivered when the developer opens it.",
 	},
 } as const satisfies Record<string, StatusDef>;
 

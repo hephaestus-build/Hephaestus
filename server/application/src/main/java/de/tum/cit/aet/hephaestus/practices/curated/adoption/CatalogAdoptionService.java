@@ -55,7 +55,7 @@ public class CatalogAdoptionService {
         requireCurrentPlan(ifMatch, plan.etag());
         if (plan.availability() != CatalogAdoptionAvailability.AVAILABLE) {
             throw new PracticeSlugConflictException(
-                    "A practice with slug '" + slug + "' already exists in this workspace.");
+                    "A practice with slug “" + slug + "” already exists in this workspace.");
         }
         if (plan.groupDisposition() == CatalogGroupDisposition.CREATE_CATALOG_GROUP) {
             groupService.adoptGroupFromCatalog(

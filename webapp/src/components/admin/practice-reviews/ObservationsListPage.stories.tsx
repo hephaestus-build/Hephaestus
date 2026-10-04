@@ -183,7 +183,7 @@ export const FilterToOneSeverity: Story = {
 		await canvas.findByText("12 observations.");
 		await pickFacet(canvas, userEvent, "Severity", /Major/u);
 		await canvas.findByText("2 observations match your filters.");
-		await expect(canvas.queryByText(/leaks the ledger's table name/u)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/leaks the ledger’s table name/u)).not.toBeInTheDocument();
 	},
 };
 
@@ -326,10 +326,10 @@ export const LoadFailed: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	args: {
 		observations: undefined,
-		error: { status: 500, detail: "Something went wrong." },
+		error: { status: 500 },
 	},
 	play: async ({ canvas }) => {
-		await canvas.findByText("Could not load observations");
+		await canvas.findByText("We could not load observations");
 	},
 };
 

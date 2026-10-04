@@ -5,7 +5,13 @@ import { TableRowsSkeleton } from "@/components/admin/integrations/TableRowsSkel
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import {
+	Empty,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "@/components/ui/empty";
 import {
 	Table,
 	TableBody,
@@ -107,7 +113,7 @@ export function AdminInstanceLlmUsageTable({
 	onEditSharedModelBudget,
 }: AdminInstanceLlmUsageTableProps) {
 	if (error != null) {
-		return <QueryErrorAlert error={error} title="Could not load AI usage" onRetry={onRetry} />;
+		return <QueryErrorAlert error={error} title="We could not load AI usage" onRetry={onRetry} />;
 	}
 	if (rows.length === 0 && !isLoading) {
 		return (
@@ -117,6 +123,7 @@ export function AdminInstanceLlmUsageTable({
 						<CircleDollarSign />
 					</EmptyMedia>
 					<EmptyTitle>No workspaces on this instance yet</EmptyTitle>
+					<EmptyDescription>Usage appears here after you create a workspace.</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
 		);
@@ -153,7 +160,7 @@ export function AdminInstanceLlmUsageTable({
 							Provider spend
 						</TableHead>
 						<TableHead scope="col" className="text-right">
-							<HelpHeader help="The workspace's own money. Only its admins can change this.">
+							<HelpHeader help="The workspace’s own money. Only its admins can change this.">
 								Provider cap
 							</HelpHeader>
 						</TableHead>
@@ -222,7 +229,7 @@ export function AdminInstanceLlmUsageTable({
 												aria-expanded={isExpanded}
 												// The panel is unmounted while collapsed; a constant IDREF would dangle.
 												aria-controls={isExpanded ? detailPanelId(row.workspaceSlug) : undefined}
-												aria-label={`${isExpanded ? "Hide" : "View"} usage details for ${row.displayName}`}
+												aria-label={`Details for ${row.displayName}`}
 												onClick={() => onToggleDetails(row)}
 											>
 												{isExpanded ? <ChevronDown aria-hidden /> : <ChevronRight aria-hidden />}
@@ -380,7 +387,7 @@ function WorkspaceUsageDetails({
 			) : (
 				<QueryErrorAlert
 					error={error}
-					title={`Could not load usage details for ${workspace.displayName}`}
+					title={`We could not load usage details for ${workspace.displayName}`}
 					onRetry={onRetry}
 				/>
 			)}

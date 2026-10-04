@@ -4,7 +4,7 @@ import { WizardStepIndicator } from "./WizardStepIndicator";
 
 /**
  * Visual progress indicator for the workspace creation wizard.
- * Shows three steps (Connect, Select Group, Configure) with
+ * Shows three steps (Connect, Select group, Configure) with
  * completed, current, and future states.
  */
 const meta = {

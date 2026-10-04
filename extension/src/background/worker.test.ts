@@ -302,16 +302,16 @@ describe("worker instance transitions", () => {
 	});
 
 	it.each([
-		["The user did not approve access.", "cancelled", "Sign-in was cancelled before it finished."],
+		["The user did not approve access.", "cancelled", "Sign-in was canceled before it finished."],
 		[
 			"Authorization page could not be loaded.",
 			"network",
-			"Sign-in could not complete. Try again.",
+			"We could not finish signing you in. Try again.",
 		],
 		[
 			"Failed https://issuer.test/callback?code=private",
 			"network",
-			"Sign-in could not complete. Try again.",
+			"We could not finish signing you in. Try again.",
 		],
 	])("reports the browser sign-in failure accurately: %s", async (message, code, expected) => {
 		const h = await harness();

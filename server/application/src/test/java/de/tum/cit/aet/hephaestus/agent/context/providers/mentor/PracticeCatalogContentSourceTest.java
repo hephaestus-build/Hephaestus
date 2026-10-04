@@ -130,7 +130,7 @@ class PracticeCatalogContentSourceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> provider.buildPayload(99L))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("99");
+                .hasMessageContaining("We could not find that workspace.");
     }
 
     @Test

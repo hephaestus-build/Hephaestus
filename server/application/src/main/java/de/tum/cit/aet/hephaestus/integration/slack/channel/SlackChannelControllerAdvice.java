@@ -48,12 +48,12 @@ public class SlackChannelControllerAdvice {
 
     private static String slackErrorDetail(String slackError) {
         return switch (slackError == null ? "" : slackError) {
-            case "not_in_channel" -> "Invite Hephaestus to the Slack channel. Then try again.";
-            case "channel_not_found" -> "Check the Slack channel link or ID. Then try again.";
+            case "not_in_channel" -> "Invite Hephaestus to the Slack channel, then try again.";
+            case "channel_not_found" -> "Check the Slack channel link or ID, then try again.";
             case "is_archived" -> "Unarchive the Slack channel or choose another channel.";
-            case "missing_scope" -> "Reinstall the Slack app with the required scopes. Then try again.";
-            case "no_active_slack_connection" -> "Reconnect Slack for this workspace. Then try again.";
-            default -> "Slack rejected the channel operation. Check the channel and the app access. Then try again.";
+            case "missing_scope" -> "Reinstall the Slack app with the required scopes, then try again.";
+            case "no_active_slack_connection" -> "Reconnect Slack for this workspace, then try again.";
+            default -> "Slack rejected the channel operation. Check the channel and the app access, then try again.";
         };
     }
 }

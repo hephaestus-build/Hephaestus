@@ -80,11 +80,12 @@ public class GitLabPreflightService {
                 log.debug("GitLab /api/v4/user returned {}: trying group fallback", status);
             } else {
                 log.warn("GitLab /api/v4/user failed: status={}, serverUrl={}", status, resolvedUrl);
-                return GitLabPreflightResponseDTO.failure("GitLab API returned status " + status);
+                return GitLabPreflightResponseDTO.failure("GitLab returned status " + status + ".");
             }
         } catch (Exception e) {
             log.warn("GitLab /api/v4/user failed: serverUrl={}, error={}", resolvedUrl, e.getMessage());
-            return GitLabPreflightResponseDTO.failure("Hephaestus could not connect to the GitLab server");
+            return GitLabPreflightResponseDTO.failure(
+                    "We could not connect to the GitLab server. Try again in a moment.");
         }
 
         // Fallback: validate the token against the group it is meant for
@@ -114,22 +115,23 @@ public class GitLabPreflightService {
         } catch (WebClientResponseException e) {
             int status = e.getStatusCode().value();
             if (status == 401 || status == 403) {
-                return GitLabPreflightResponseDTO.failure("Token does not have access to group: " + groupFullPath);
+                return GitLabPreflightResponseDTO.failure(
+                        "The token does not have access to group " + groupFullPath + ".");
             }
             if (status == 404) {
-                return GitLabPreflightResponseDTO.failure("Group not found: " + groupFullPath);
+                return GitLabPreflightResponseDTO.failure("Group " + groupFullPath + " was not found.");
             }
-            return GitLabPreflightResponseDTO.failure("GitLab API returned status " + status);
+            return GitLabPreflightResponseDTO.failure("GitLab returned status " + status + ".");
         } catch (Exception e) {
             log.warn(
                     "GitLab group token validation failed: serverUrl={}, group={}, error={}",
                     serverUrl,
                     groupFullPath,
                     e.getMessage());
-            return GitLabPreflightResponseDTO.failure("Hephaestus could not validate the group token");
+            return GitLabPreflightResponseDTO.failure("We could not validate the group token. Try again in a moment.");
         }
 
-        return GitLabPreflightResponseDTO.failure("Hephaestus could not validate the group token");
+        return GitLabPreflightResponseDTO.failure("We could not validate the group token. Try again in a moment.");
     }
 
     /**
@@ -169,7 +171,9 @@ public class GitLabPreflightService {
             log.warn("Failed to list accessible GitLab groups: serverUrl={}, error={}", resolvedUrl, e.getMessage());
             // An empty list would read as "this token sees no groups"; the caller must learn it failed.
             throw new ResponseStatusException(
-                    HttpStatus.BAD_GATEWAY, "GitLab did not return the groups for this token", e);
+                    HttpStatus.BAD_GATEWAY,
+                    "GitLab did not return the groups for this token. Try again in a moment.",
+                    e);
         }
     }
 

@@ -141,7 +141,7 @@ export function SurveyActions({
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>{deleteTitle}</AlertDialogTitle>
-						<AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+						<AlertDialogDescription>You cannot undo this.</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>Cancel</AlertDialogCancel>

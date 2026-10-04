@@ -380,7 +380,7 @@ public class WorkspaceRepositoryMonitorService {
         IdentityProvider provider = gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseThrow(() -> new IllegalStateException(
-                        "IdentityProvider not found for type=GITHUB, serverUrl=https://github.com"));
+                        "GitHub is not set up on this instance. Ask your instance operator to set it up."));
 
         ensureRepositoryFromSnapshot(
                 workspace, provider, snapshot.id(), snapshot.nameWithOwner(), snapshot.name(), snapshot.isPrivate());
@@ -464,7 +464,7 @@ public class WorkspaceRepositoryMonitorService {
         IdentityProvider provider = gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseThrow(() -> new IllegalStateException(
-                        "IdentityProvider not found for type=GITHUB, serverUrl=https://github.com"));
+                        "GitHub is not set up on this instance. Ask your instance operator to set it up."));
 
         allowedSnapshots.forEach(snapshot -> {
             ensureRepositoryFromSnapshot(

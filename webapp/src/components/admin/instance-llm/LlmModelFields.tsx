@@ -155,7 +155,7 @@ const COPY = {
 	instance: {
 		displayNamePlaceholder: "e.g. GPT-5",
 		upstreamIdPlaceholder: "e.g. openai/gpt-5",
-		upstreamIdHint: "The exact id the provider expects. Slashes are part of the id.",
+		upstreamIdHint: "The exact ID the provider expects. Slashes are part of the ID.",
 		activeHintEdit: "Only active models can be selected for new workspace requests.",
 		activeHintCreate:
 			"New models are saved inactive. Review the saved price and sharing before activating.",
@@ -166,7 +166,7 @@ const COPY = {
 	workspace: {
 		displayNamePlaceholder: "e.g. GPT-5 mini",
 		upstreamIdPlaceholder: "e.g. openai/gpt-5-mini",
-		upstreamIdHint: "The exact id your provider expects. Slashes are part of the id.",
+		upstreamIdHint: "The exact ID your provider expects. Slashes are part of the ID.",
 		activeHintEdit: "Only active models with a declared price can be selected.",
 		activeHintCreate: "Starts inactive. Add a price, then activate.",
 		deactivationTitle: "Work on this model stops immediately",
@@ -302,7 +302,7 @@ export function LlmModelFields({
 			</Field>
 
 			<Field data-invalid={Boolean(errors.upstreamModelId)}>
-				<FieldLabel htmlFor={`${idPrefix}-upstream-id`}>Upstream model id</FieldLabel>
+				<FieldLabel htmlFor={`${idPrefix}-upstream-id`}>Upstream model ID</FieldLabel>
 				<Input
 					id={`${idPrefix}-upstream-id`}
 					value={value.upstreamModelId}
@@ -323,7 +323,7 @@ export function LlmModelFields({
 					</datalist>
 				)}
 				<FieldDescription>
-					{isEdit ? "Create a new model to use a different upstream id." : copy.upstreamIdHint}
+					{isEdit ? "Create a new model to use a different upstream ID." : copy.upstreamIdHint}
 				</FieldDescription>
 				{hasText(errors.upstreamModelId) && (
 					<FieldError id={upstreamModelIdErrorId}>{errors.upstreamModelId}</FieldError>
@@ -437,7 +437,7 @@ export function LlmModelFields({
 					<Alert variant="warning">
 						<AlertTriangle aria-hidden />
 						<AlertTitle>
-							Rows holding this model as {DATA_HANDLING_DEFS[leftTier].label} stop serving
+							Assignments holding this model as {DATA_HANDLING_DEFS[leftTier].label} stop serving
 						</AlertTitle>
 						<AlertDescription>
 							A row holds only models declared as its own tier. Nothing runs on this model there

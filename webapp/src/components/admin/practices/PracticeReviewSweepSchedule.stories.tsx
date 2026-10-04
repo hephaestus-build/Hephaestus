@@ -73,7 +73,7 @@ export const Running: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText(/every day, covering the last 2 days/iu);
 		canvas.getByRole("button", { name: "Pause checking pull or merge requests" });
-		canvas.getByRole("button", { name: "Remove the recurring check on pull or merge requests" });
+		canvas.getByRole("button", { name: "Delete the recurring check on pull or merge requests" });
 		await expectNoPageOverflow();
 	},
 };
@@ -130,10 +130,10 @@ export const EveryKindScheduled: Story = {
 export const CouldNotLoad: Story = {
 	args: { isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/recurring checks could not be loaded/iu);
+		canvas.getByText(/could not load recurring checks/iu);
 		// The failure is about this screen, not the workspace: read as "stopped", it costs a second
 		// check scheduled over the same work.
-		canvas.getByText(/still running/iu);
-		canvas.getByRole("button", { name: "Try again" });
+		canvas.getByText(/keep running/iu);
+		canvas.getByRole("button", { name: "Retry" });
 	},
 };

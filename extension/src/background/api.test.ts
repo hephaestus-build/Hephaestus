@@ -389,7 +389,11 @@ describe("the report's calls", () => {
 			const { built } = await api(async () => json({ title: "Refused" }, status));
 			await expect(
 				built.workFeedback("team", "https://github.com/octo/app/pull/16"),
-			).rejects.toMatchObject({ code: "server", message: "Hephaestus refused the request." });
+			).rejects.toMatchObject({
+				code: "server",
+				message:
+					"Hephaestus did not accept the request. Try again. If it keeps failing, contact your instance operator.",
+			});
 		}
 	});
 

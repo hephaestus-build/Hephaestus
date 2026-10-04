@@ -17,7 +17,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
 		await expect(
-			canvas.getByRole("region", { name: "Viewing Sam in Engineering — read-only" }),
+			canvas.getByRole("region", { name: "Viewing Sam in Engineering (read-only)" }),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Exit user view" }));
 		await expect(args.onExit).toHaveBeenCalledOnce();
@@ -27,7 +27,7 @@ export const Default: Story = {
 export const WithoutAccount: Story = {
 	args: { hasAccount: false },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/No linked Hephaestus account/u)).toBeVisible();
+		await expect(canvas.getByText(/no Hephaestus account yet/u)).toBeVisible();
 	},
 };
 

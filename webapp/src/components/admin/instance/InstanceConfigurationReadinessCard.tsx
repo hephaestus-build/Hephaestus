@@ -127,8 +127,7 @@ function ReadinessBody({ state }: InstanceConfigurationReadinessCardProps) {
 						</EmptyMedia>
 						<EmptyTitle>No configuration checks reported</EmptyTitle>
 						<EmptyDescription>
-							This server returned no checks, which it should never do. Reload the page to ask
-							again.
+							The server returned no checks, which is unexpected. Reload the page to ask again.
 						</EmptyDescription>
 					</EmptyHeader>
 				</Empty>
@@ -166,7 +165,7 @@ function ReadyBody({
 		<>
 			{refreshFailure ? (
 				<QueryErrorAlert
-					title="Could not refresh. This card shows the last successful check."
+					title="We could not refresh. This card shows the last successful check."
 					error={refreshFailure.error}
 					onRetry={refreshFailure.onRetry}
 				/>

@@ -16,6 +16,6 @@ public class LlmModelSlugConflictException extends RuntimeException {
     }
 
     public LlmModelSlugConflictException(Long connectionId, String slug, @Nullable Throwable cause) {
-        super("A model with slug '" + slug + "' already exists on connection " + connectionId + ".", cause);
+        super("A model with slug “" + slug + "” already exists on connection " + connectionId + ".", cause);
     }
 }

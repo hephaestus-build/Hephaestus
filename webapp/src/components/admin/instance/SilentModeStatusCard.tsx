@@ -36,19 +36,19 @@ export function SilentModeStatusCard({
 			<div className="space-y-1">
 				<Badge variant="outline">Unknown</Badge>
 				<p className="text-sm text-muted-foreground">
-					Could not read the delivery state. Open instance settings to check.
+					We could not read the delivery state. Open instance settings to check.
 				</p>
 			</div>
 		);
 	} else if (engaged) {
 		body = (
 			<div className="space-y-1">
-				<Badge variant="destructive">Silent mode engaged</Badge>
+				<Badge variant="destructive">Silent mode is on</Badge>
 				<p className="text-sm text-muted-foreground">
 					Workspace delivery is blocked
 					{settings.silentModeChangedByAccountId == null
 						? ""
-						: ` — engaged by account #${settings.silentModeChangedByAccountId}`}
+						: `, turned on by account #${settings.silentModeChangedByAccountId}`}
 					{settings.silentModeChangedAt ? (
 						<>
 							{" "}

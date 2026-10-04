@@ -78,7 +78,7 @@ You do not register a new OAuth application or add a callback URL at a provider.
   Its label is **Browser extension in Chrome on …**.
 - **Every way of ending a session ends it.** All these actions end extension sessions with web sessions:
   - The user ends that session or signs out everywhere.
-  - An administrator forces a sign-out.
+  - An instance admin forces a sign-out.
   - An account is deleted.
   - An instance admin is demoted.
 - **They cannot outlive the sign-in.** An extension session ends at the web session's absolute limit, however often it renews.
@@ -153,6 +153,7 @@ GitHub Enterprise Server has no end-to-end verification and is not currently sup
 
    `{"registered":true}` means the id is in the list.
    `{"registered":false}` means it is not.
+
 2. If the id is absent, check that the variable reached the application server.
 3. Check that the server restarted.
 4. Sign in from the extension's options page.

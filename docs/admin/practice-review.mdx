@@ -60,7 +60,7 @@ The review follows this sequence:
    It can propose a public summary, private process feedback, mentor context, or no feedback.
 7. Server-side policy admits or refuses each proposal.
    Feedback awaiting a decision appears first under **Needs you** on **Practices → Practice reviews**.
-8. A workspace owner or administrator reads the exact in-context feedback and its observations.
+8. A workspace admin reads the exact in-context feedback and its observations.
 9. That person approves and sends the feedback, or rejects it.
 
 A provider comment exists only after approval and a successful release-time policy check.
@@ -165,13 +165,13 @@ Comments already on the pull request or merge request do not change immediately.
 The page shows their resulting state, and each state has a record.
 The table contains the exact UI text:
 
-| State | Sentence shown while the correction is in force |
-| --- | --- |
-| Pending | `Hephaestus is still correcting the comments it posted about this observation, or it is still checking whether a comment it tried to post arrived.` |
-| Nothing posted | `No comment about it was found on the work.` |
-| Updated | `Every summary comment Hephaestus posted about it now opens with a correction notice, or has since been deleted.` |
-| Inline comments remain | `Inline comments Hephaestus posted about it are still on the work unchanged, because they cannot be edited from here. Any summary comment now carries a correction notice. Remove or answer the inline comments on the pull request or merge request.` |
-| Unresolved | `Hephaestus cannot correct every comment about it. One cause is a summary that it could not edit. Another is a comment that the provider accepted without saying which one it is. A third is a comment that it tried to post and has not confirmed. Check the pull request or merge request and correct it there. Hephaestus keeps checking and updates this if it finds the comment.` |
+| State                  | Sentence shown while the correction is in force                                                                                                                                                                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pending                | `Hephaestus is still correcting the comments it posted about this observation, or it is still checking whether a comment it tried to post arrived.`                                                                                                                                                                  |
+| Nothing posted         | `No comment about it was found on the work.`                                                                                                                                                                                                                                                                         |
+| Updated                | `Every summary comment Hephaestus posted about it now opens with a correction notice, or has since been deleted.`                                                                                                                                                                                                    |
+| Inline comments remain | `Inline comments Hephaestus posted about it are still on the work unchanged, because they cannot be edited from here. Any summary comment now carries a correction notice. Remove or answer the inline comments on the pull request or merge request.`                                                               |
+| Unresolved             | `Hephaestus cannot correct every comment about it. A summary comment could not be edited, the provider did not say which comment it accepted, or a posted comment is unconfirmed. Check the pull request or merge request and correct it there. Hephaestus keeps checking and updates this if it finds the comment.` |
 
 **Restore observation** reverses the correction with a second reason.
 It removes any notice the correction added and resends nothing.
@@ -243,7 +243,7 @@ It does not approve a pull request for merge.
 - **Missing important context**.
 - **Not useful to the recipient**.
 - **Already covered elsewhere**.
-- **Wrong delivery place**.
+- **Wrong place for this feedback**.
 - **Something else**.
 
 1. Add the requested explanation.
@@ -263,7 +263,7 @@ flowchart LR
     accDescr: Live events, manual requests, campaigns, and recurring checks start reviews. Provider reconciliation records an occurrence. It does not start a pull request or issue review.
     Event[A live event from GitHub or GitLab] --> Live[Live event]
     Command[The /hephaestus review comment command] --> Hand[Requested by hand]
-    Button[The Review this now button] --> Hand
+    Button[The Request review button] --> Hand
     Campaign[A confirmed Past work campaign] --> Back[Backfill of past work]
     Sweep[A recurring Keep checking new work schedule] --> Rec[Found by a recurring check]
     Reconcile[Reconciling with the provider] --> Sync[Noticed during a sync]
@@ -288,13 +288,13 @@ Two distinctions matter:
 
 All five entry paths spend from the workspace's AI budget.
 
-| Entry path | Who may use it | Rate limit |
-| --- | --- | --- |
-| Live event | Nobody. It is automatic, per the practices' occasions | Per-workspace cooldown between reviews of the same work |
-| `/hephaestus review` in a **GitLab merge request** comment | The work's author or assignees, or a workspace admin | Per-person hourly allowance and the same per-work cooldown |
-| **Review this now** in the app | The same people. Only authorized readers see it, and the server refuses others | Per-person hourly allowance and the same per-work cooldown |
-| **Past work** campaign | A workspace admin, only after confirmation of a priced estimate | The campaign's own scope |
-| **Keep checking new work** schedule | A workspace admin | One campaign at a time per workspace |
+| Entry path                                                 | Who may use it                                                                 | Rate limit                                                 |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| Live event                                                 | Nobody. It is automatic, per the practices' occasions                          | Per-workspace cooldown between reviews of the same work    |
+| `/hephaestus review` in a **GitLab merge request** comment | The work's author or assignees, or a workspace admin                           | Per-person hourly allowance and the same per-work cooldown |
+| **Request review** in the app                              | The same people. Only authorized readers see it, and the server refuses others | Per-person hourly allowance and the same per-work cooldown |
+| **Past work** campaign                                     | A workspace admin, only after confirmation of a priced estimate                | The campaign's own scope                                   |
+| **Keep checking new work** schedule                        | A workspace admin                                                              | One campaign at a time per workspace                       |
 
 Two switches control the whole table.
 **Start from work activity** controls the first row.
@@ -321,7 +321,7 @@ It must enable repository checkout wherever evidence capture runs.
 Until then, every workspace on the instance stays quiet, regardless of configuration.
 
 No instance population flag configures workspace coverage.
-Instance Silent Mode is the separate emergency brake for external delivery.
+Instance silent mode is the separate emergency brake for external delivery.
 [Practice review operations](./practice-review-operations.mdx) covers variables, Compose forwarding, storage, queue metrics, retention, and fixed limits.
 
 Review conditions belong to each practice, not workspace coverage.
@@ -338,7 +338,7 @@ Confusion between them is the most common misconfiguration.
 - **Who authorizes release** uses **Off**, **Review before sending**, or **Send automatically**.
   **Off** stops the review.
   **Review before sending** continues measurement.
-  It queues each new in-context piece of feedback for a workspace owner or administrator to approve or reject.
+  It queues each new in-context piece of feedback for a workspace admin to approve or reject.
   The developer's practice pages and mentor still receive feedback on request.
   Only the developer reads those channels.
   **Send automatically** permits new feedback on the work without that decision, subject to the same delivery policy.
@@ -358,7 +358,7 @@ Confusion between them is the most common misconfiguration.
   Feedback approved but unsent at pause is permanently withheld, as automatic feedback is.
   Resume cannot release that old work.
   Undecided proposals stay in the approval queue.
-  After resume, an owner or administrator can still inspect and decide each proposal under current policy.
+  After resume, a workspace admin can still inspect and decide each proposal under current policy.
 
 1. To stop all new practice reviews, turn **Start practice reviews** off.
 
@@ -393,7 +393,7 @@ GitLab workspace members include everyone with group access shown in GitLab's gr
 - Project members with Developer or Reporter roles in the group or its subgroups, including a student on one project only.
 
 If GitLab lists someone repeatedly, their highest role applies.
-Maintainer and Owner roles make workspace administrators.
+Maintainer and Owner roles make workspace admins.
 Someone listed only by a subgroup or project is a member.
 An email invitation counts after acceptance.
 The workspace owner retains the workspace regardless of the roster.
@@ -585,13 +585,13 @@ They run automatically after its return, or are dropped if it stays absent for a
    Both counts must be nonzero, and the author must be a covered person.
    **What we noticed** distinguishes an unknown author from excluded work:
 
-   - *"The author is unknown or not a workspace member yet"*.
+   - *“The author is unknown or not yet a member of this workspace”*.
      The repository and base branch are covered.
      The author is not a member on the connected instance, or has no known account.
      Check **Members**, and for GitLab the group's list with inherited members shown.
      Work waits for membership sync to admit the author.
      It then runs without another request if admission occurs within `SIGNAL_LEDGER_PENDING_LAPSE_AFTER` (default seven days).
-   - *"The author, repository, or base branch is outside the workspace's review coverage"*.
+   - *“The author, repository, or base branch is outside this workspace’s review scope”*.
      The repository or base branch is unselected, or the people selection excludes the member.
      This decision is final for the work.
      Broader coverage affects later work.
@@ -618,7 +618,7 @@ They run automatically after its return, or are dropped if it stays absent for a
    A continual increase means the server submits jobs but no worker claims them.
 10. **Check instance-wide silent mode.**
     Open Instance admin → **Instance settings**.
-    While engaged, it blocks external comments, conversation feedback, and email for every workspace.
+    While it is on, it blocks external comments, conversation feedback, and email for every workspace.
     Reviews continue, and in-app feedback still reaches developers' Practice profiles.
     Every instance-admin page shows a banner.
 

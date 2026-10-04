@@ -23,7 +23,7 @@ export function SelectGroupStep() {
 	if (state.groups.length === 0) {
 		return (
 			<p role="status" className="py-4 text-center text-sm text-muted-foreground">
-				No groups found. Your token may lack the required scopes, or you are not a member of any
+				No groups found. The token may be missing a required scope, or you are not a member of any
 				group.
 			</p>
 		);
@@ -36,7 +36,7 @@ export function SelectGroupStep() {
 					<SearchIcon />
 				</InputGroupAddon>
 				<InputGroupInput
-					placeholder="Search groups..."
+					placeholder="Search groups…"
 					value={search}
 					onChange={(e) => setSearch(e.target.value)}
 					aria-label="Search groups"

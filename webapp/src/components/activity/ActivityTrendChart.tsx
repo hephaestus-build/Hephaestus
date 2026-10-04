@@ -74,7 +74,7 @@ export function ActivityTrendChart({
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Could not load the chart"
+				title="We could not load the chart"
 				onRetry={state.onRetry}
 			/>
 		);
@@ -82,7 +82,7 @@ export function ActivityTrendChart({
 	if (state.status === "loading") {
 		return (
 			<div aria-busy="true" className="space-y-4">
-				<span className="sr-only">Loading the chart</span>
+				<span className="sr-only">Loading the chart…</span>
 				<Skeleton aria-hidden className="h-12 w-full" />
 				<Skeleton aria-hidden className="h-48 w-full" />
 			</div>

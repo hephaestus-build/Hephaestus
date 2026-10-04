@@ -40,12 +40,12 @@ export function AiChoiceSection({
 					Your AI choice
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					One answer for every workspace you are in on this Hephaestus instance.
+					One answer for every workspace you’re in on this Hephaestus instance.
 				</p>
 			</div>
 
 			{isError ? (
-				<QueryErrorAlert title="Could not load your AI choice" error={error} onRetry={onRetry} />
+				<QueryErrorAlert title="We could not load your AI choice" error={error} onRetry={onRetry} />
 			) : (
 				// Keyed on the saved answer: a refetch that changes it remounts the form with a clean draft.
 				<AiChoiceForm
@@ -107,10 +107,10 @@ function AiChoiceForm({
 			<footer className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
 				<Button type="submit" disabled={!changed || busy} aria-describedby={hintId}>
 					{isSaving && <Spinner />}
-					{isSaving ? "Saving…" : "Save"}
+					{isSaving ? "Saving…" : "Save AI choice"}
 				</Button>
 				<p id={hintId} className="text-sm text-muted-foreground">
-					Applies in all your workspaces. Change it any time.
+					Applies in all your workspaces. You can change your answer at any time.
 				</p>
 			</footer>
 		</Questionnaire>

@@ -39,7 +39,7 @@ describe("validateLlmConnectionForm", () => {
 			displayName: "   ",
 			baseUrl: "https://api.openai.com/v1",
 		});
-		expect(errors.displayName).toMatch(/display name is required/u);
+		expect(errors.displayName).toMatch(/Enter a display name/u);
 	});
 });
 
@@ -84,7 +84,7 @@ describe("validateLlmModelForm", () => {
 			per1mInputUsd: -1,
 			per1mOutputUsd: 2,
 		});
-		expect(errors.per1mInputUsd).toMatch(/negative/u);
+		expect(errors.per1mInputUsd).toMatch(/rate of 0 or more/u);
 	});
 
 	it("rejects an all-zero price, which would record verified $0 spend forever", () => {

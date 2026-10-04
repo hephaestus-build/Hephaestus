@@ -80,7 +80,7 @@ export function ObservationList({ observations, onRetry }: ObservationListProps)
 				<Truncated items={rows} render={(row) => <Observation key={row.id} row={row} />} />
 				{total > rows.length ? (
 					<p className={cn(INDENT, "pb-1 text-xs text-muted-foreground")}>
-						The first {rows.length} of {total}, most severe first.
+						Showing the {rows.length} most severe of {total}.
 					</p>
 				) : null}
 			</>

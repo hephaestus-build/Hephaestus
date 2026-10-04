@@ -57,7 +57,7 @@ function SiteRow({
 				<span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
 					<ProviderIcon className="size-4" />
 				</span>
-				<div className="flex min-w-0 flex-1 flex-col">
+				<div className="flex min-w-0 flex-1 basis-40 flex-col">
 					<p className="text-sm font-medium break-all">{host(entry.origin)}</p>
 					<p className="text-xs text-muted-foreground">
 						{provider} · used by {entry.workspaces.join(", ")}
@@ -103,7 +103,7 @@ function SiteRow({
 			{activity?.status === "denied" ? (
 				<p className="flex items-start gap-1.5 text-xs text-muted-foreground" role="status">
 					<CircleSlashIcon aria-hidden className="mt-px size-3.5 shrink-0" />
-					Chrome did not allow access, so nothing changed. Choose Allow again to see the prompt.
+					Chrome did not allow access, so nothing changed. Select Allow again to see the prompt.
 				</p>
 			) : null}
 			{activity?.status === "error" ? (
@@ -140,10 +140,10 @@ export function SiteAccessList({
 			<Notice
 				icon={CircleAlertIcon}
 				tone="destructive"
-				title="Sites could not be loaded"
+				title="We could not load sites"
 				action={
 					<Button variant="outline" size="sm" onClick={state.onRetry}>
-						Try again
+						Retry
 					</Button>
 				}
 			>

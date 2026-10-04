@@ -16,7 +16,7 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
-		title: "This feedback has not loaded",
+		title: "We could not load this feedback",
 		onRetry: fn(),
 	},
 } satisfies Meta<typeof MissingRecordEmpty>;
@@ -30,7 +30,7 @@ export const Default: Story = {
 		// Not "error", not "destructive": nothing failed, so the surface must not claim one did.
 		await expect(canvas.queryByRole("alert")).toBeNull();
 
-		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledTimes(1);
 	},
 };
@@ -40,12 +40,12 @@ export const NothingToRetry: Story = {
 	args: { onRetry: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("button")).toBeNull();
-		await expect(canvas.getByText("This feedback has not loaded")).toBeVisible();
+		await expect(canvas.getByText("We could not load this feedback")).toBeVisible();
 	},
 };
 
 /** The longest title a detail page passes, at the width where it has the least room. */
 export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
-	args: { title: "This work's review activity has not loaded" },
+	args: { title: "We could not load this review activity" },
 };

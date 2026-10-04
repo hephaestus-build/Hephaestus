@@ -102,11 +102,14 @@ export function ProductSurveyDialog({
 										onClick={() => onOpenChange(false)}
 									>
 										User settings
-									</Link>{" "}
-									— answers already sent stay with the study.
+									</Link>
+									. Answers already sent stay with the study.
 								</>
 							) : (
-								<>Read by {READERS}, with your name attached. Not research.</>
+								<>
+									Your answers go to {READERS}, with your name attached. This survey is not
+									research.
+								</>
 							)}
 						</p>
 					</DialogHeader>

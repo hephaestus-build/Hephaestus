@@ -117,7 +117,7 @@ export function summarizeReport({
 		}
 		case "failed":
 		case "error": {
-			return { text: "Could not load", tone: "error", action: "retry" };
+			return { text: "We could not load", tone: "error", action: "retry" };
 		}
 		case "not-configured": {
 			return { text: "Connect the extension to Hephaestus", tone: "neutral", action: "set-up" };
@@ -141,8 +141,8 @@ export function summarizeReport({
 			return {
 				// A list row cannot choose; the work's own page can.
 				text: readOnly
-					? `Followed in ${state.candidates.length} workspaces. Open it to choose one`
-					: `Followed in ${state.candidates.length} workspaces. Choose one`,
+					? `Followed in ${state.candidates.length} workspaces · open it to choose one`
+					: `Followed in ${state.candidates.length} workspaces · choose one`,
 				tone: "neutral",
 			};
 		}
@@ -157,7 +157,7 @@ export function summarizeReport({
 		parts.push(ACTIVITY_TEXT[activity]);
 	}
 	if (feedback?.status === "error") {
-		parts.push("Your feedback could not load");
+		parts.push("We could not load your comments");
 		tone = "error";
 	} else if (feedback?.status === "ready") {
 		parts.push(feedbackText(feedback.data));

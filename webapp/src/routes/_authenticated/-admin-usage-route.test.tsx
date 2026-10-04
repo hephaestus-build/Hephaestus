@@ -107,7 +107,7 @@ describe("instance AI usage route", () => {
 		mockUsageRoutes({ budgetUsd: 50 });
 		await renderUsageRoute();
 
-		fireEvent.click(screen.getByRole("button", { name: /View usage details for Acme/u }));
+		fireEvent.click(screen.getByRole("button", { name: /^Details for Acme/u }));
 		await screen.findByText("Acme has used 86% of its shared-model budget");
 
 		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/u }));
@@ -141,7 +141,7 @@ describe("instance AI usage route", () => {
 
 		slowPut.resolve();
 
-		await screen.findByText("Could not save the budget");
+		await screen.findByText("We could not save the budget");
 		screen.getByText("The budget service is down.");
 		expect(
 			screen
@@ -166,6 +166,6 @@ describe("instance AI usage route", () => {
 
 		const dialog = await screen.findByRole("dialog");
 		await within(dialog).findByText("A budget above $1,000,000 is refused.");
-		expect(screen.queryByText("Could not save the budget")).toBeNull();
+		expect(screen.queryByText("We could not save the budget")).toBeNull();
 	});
 });

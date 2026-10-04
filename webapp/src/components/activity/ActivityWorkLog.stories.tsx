@@ -169,8 +169,8 @@ export const LoadMoreFailed: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("alert")).toHaveTextContent("Could not load more activity.");
-		await expect(canvas.getByRole("button", { name: "Try again" })).toBeEnabled();
+		await expect(canvas.getByRole("alert")).toHaveTextContent("We could not load more activity.");
+		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
 	},
 };
 

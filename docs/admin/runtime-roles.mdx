@@ -10,11 +10,11 @@ The same artifact can run as an application server, worker pod, or webhook recei
 It can also run all three together as a monolith.
 Three boolean properties control the roles:
 
-| Role | Property | Default |
-| --- | --- | --- |
-| Server | `hephaestus.runtime.server.enabled` | `true` |
-| Worker | `hephaestus.runtime.worker.enabled` | `true` |
-| Webhook | `hephaestus.runtime.webhook.enabled` | `true` |
+| Role    | Property                             | Default |
+| ------- | ------------------------------------ | ------- |
+| Server  | `hephaestus.runtime.server.enabled`  | `true`  |
+| Worker  | `hephaestus.runtime.worker.enabled`  | `true`  |
+| Webhook | `hephaestus.runtime.webhook.enabled` | `true`  |
 
 All three properties default to on, which starts the monolith role set. Heph also requires a connected worker control channel, even when server and worker roles share that JVM. It has no direct Docker fallback.
 
@@ -106,20 +106,20 @@ Each cell shows the value a pod uses when the operator sets **no** environment v
 It uses the profile overlay's value if the overlay specifies one.
 Otherwise, it uses the base default.
 
-| Property | Server | Worker | Webhook | Set by |
-| --- | --- | --- | --- | --- |
-| `hephaestus.runtime.server.enabled` | true | **false** | **false** | profile overlay |
-| `hephaestus.runtime.worker.enabled` | true | true | **false** | profile overlay |
-| `hephaestus.runtime.webhook.enabled` | true | **false** | true | profile overlay |
-| `hephaestus.workspace.init-default` | false | false | false | `prod` profile |
-| `hephaestus.git.enabled` | false | false | false | env default |
-| `hephaestus.sync.nats.enabled` | false | **false** | **true** | env default / profile overlay |
-| `hephaestus.agent.enabled` | false | false | false | env default |
-| `hephaestus.integration.outline.allowed-origins` | empty | empty | empty | env default |
-| `hephaestus.sandbox.gateway.port` | 8081 | 8081 | — | env default (`SANDBOX_API_PORT`) |
-| `hephaestus.sandbox.gateway.requests-per-minute` | 120 | 120 | — | env default (`SANDBOX_API_REQUESTS_PER_MINUTE`) |
-| `hephaestus.sandbox.gateway.max-request-bytes` | 4194304 | 4194304 | — | env default (`SANDBOX_API_MAX_REQUEST_BYTES`) |
-| Needs user-auth wiring | yes | no | no | role gating |
+| Property                                         | Server  | Worker    | Webhook   | Set by                                          |
+| ------------------------------------------------ | ------- | --------- | --------- | ----------------------------------------------- |
+| `hephaestus.runtime.server.enabled`              | true    | **false** | **false** | profile overlay                                 |
+| `hephaestus.runtime.worker.enabled`              | true    | true      | **false** | profile overlay                                 |
+| `hephaestus.runtime.webhook.enabled`             | true    | **false** | true      | profile overlay                                 |
+| `hephaestus.workspace.init-default`              | false   | false     | false     | `prod` profile                                  |
+| `hephaestus.git.enabled`                         | false   | false     | false     | env default                                     |
+| `hephaestus.sync.nats.enabled`                   | false   | **false** | **true**  | env default / profile overlay                   |
+| `hephaestus.agent.enabled`                       | false   | false     | false     | env default                                     |
+| `hephaestus.integration.outline.allowed-origins` | empty   | empty     | empty     | env default                                     |
+| `hephaestus.sandbox.gateway.port`                | 8081    | 8081      | —         | env default (`SANDBOX_API_PORT`)                |
+| `hephaestus.sandbox.gateway.requests-per-minute` | 120     | 120       | —         | env default (`SANDBOX_API_REQUESTS_PER_MINUTE`) |
+| `hephaestus.sandbox.gateway.max-request-bytes`   | 4194304 | 4194304   | —         | env default (`SANDBOX_API_MAX_REQUEST_BYTES`)   |
+| Needs user-auth wiring                           | yes     | no        | no        | role gating                                     |
 
 Bold cells show values that the role's profile overlay specifies, not the base defaults.
 The three `runtime.*` rows in a column show the pod's role set:
@@ -336,7 +336,7 @@ On SIGTERM, the worker does these actions in order:
 
 This is not a plain cancel.
 Another worker's poll claims the job again, within `AGENT_MAX_RETRIES`.
-Only jobs with an exhausted retry budget or a lost fence to concurrent user-cancel become terminally cancelled/failed instead.
+Only jobs with an exhausted retry budget or a lost fence to concurrent user-cancel become terminally canceled/failed instead.
 `timeout=0` skips step 2 and immediately applies the same requeue-first behavior.
 
 The compose template pins `stop_grace_period: 6m` to give the JVM 60s of headroom before Docker SIGKILLs.

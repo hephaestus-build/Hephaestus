@@ -13,7 +13,7 @@ const meta = {
 		errors: [
 			{
 				fieldId: "practice-name",
-				message: "Give the practice a name of at least three characters.",
+				message: "Enter a name of at least 3 characters.",
 			},
 			{ fieldId: "practice-criteria", message: "Say what this practice checks." },
 		],
@@ -48,7 +48,9 @@ export const Default: Story = {
 
 export const EntryMovesFocusToItsField: Story = {
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("link", { name: /Give the practice a name/u }));
+		await userEvent.click(
+			canvas.getByRole("link", { name: /Enter a name of at least 3 characters/u }),
+		);
 		// A frame later: an entry may first have to reveal a collapsed section for its field to exist.
 		await waitFor(async () => expect(canvas.getByLabelText("Name")).toHaveFocus());
 	},
@@ -56,7 +58,7 @@ export const EntryMovesFocusToItsField: Story = {
 
 const collapsedSlugError = {
 	fieldId: "hidden-field",
-	message: "The identifier must be lowercase letters, numbers and hyphens.",
+	message: "Enter an identifier of 3–64 lowercase letters, numbers and single hyphens.",
 	reveal: fn(),
 };
 
@@ -69,7 +71,7 @@ export const EntryRevealsACollapsedSectionFirst: Story = {
 };
 
 export const SingleProblem: Story = {
-	args: { errors: [{ fieldId: "practice-name", message: "Give the practice a name." }] },
+	args: { errors: [{ fieldId: "practice-name", message: "Enter a name." }] },
 	play: async ({ canvas }) => {
 		canvas.getByRole("heading", { name: "There is a problem" });
 	},

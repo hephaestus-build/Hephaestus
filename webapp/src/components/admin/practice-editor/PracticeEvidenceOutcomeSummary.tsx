@@ -51,7 +51,11 @@ export function PracticeEvidenceOutcomeSummary({
 					{/* "Skipped in N reviews" rather than "N reviews were skipped": one review makes the
 					    second read "1 review were skipped". */}
 					<p className="text-sm text-muted-foreground">
-						Skipped in {reviews(skipped)}, because the evidence was not there to review against.
+						Skipped in {reviews(skipped)}
+						{outcome.blockersObserved.length === 0
+							? ", because the evidence was not there to review against"
+							: ""}
+						.
 					</p>
 					{outcome.blockersObserved.length > 0 && (
 						<ul className="space-y-1 text-sm text-muted-foreground">
@@ -63,7 +67,7 @@ export function PracticeEvidenceOutcomeSummary({
 									<CircleAlertIcon className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden />
 									<span>
 										{hasText(blocker.sourceKind)
-											? `${evidenceSourceLabel(blocker.sourceKind, sources)} — ${readinessReasonLabel(blocker.reasonCode)}`
+											? `${evidenceSourceLabel(blocker.sourceKind, sources)}: ${readinessReasonLabel(blocker.reasonCode)}`
 											: readinessReasonLabel(blocker.reasonCode)}{" "}
 										({reviews(blocker.reviewsAffected)})
 									</span>

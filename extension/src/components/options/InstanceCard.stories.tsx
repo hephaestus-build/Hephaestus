@@ -16,7 +16,7 @@ export const Hosted: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.getByText("Hosted Hephaestus")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Change instance…" }));
-		await userEvent.click(canvas.getByRole("button", { name: "Keep it" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Stay connected" }));
 		await expect(args.onDisconnect).not.toHaveBeenCalled();
 		await userEvent.click(canvas.getByRole("button", { name: "Change instance…" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Disconnect" }));

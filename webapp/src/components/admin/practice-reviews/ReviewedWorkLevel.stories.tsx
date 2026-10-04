@@ -112,7 +112,7 @@ export const PullRequest: Story = {
 		// The trace's counts reach the tabs before either is opened.
 		panel.getByRole("tab", { name: "Every practice 12" });
 		panel.getByRole("tab", { name: "What we noticed 5" });
-		await userEvent.click(panel.getByRole("button", { name: "Review this now" }));
+		await userEvent.click(panel.getByRole("button", { name: "Request review" }));
 		await expect(args.onReviewNow).toHaveBeenCalledTimes(1);
 		// The path names both levels behind this one, and a crumb closes down to its own.
 		await userEvent.click(panel.getByRole("button", { name: "Observation" }));
@@ -215,7 +215,7 @@ export const NothingRecorded: Story = {
 		await expect(panel.getByText("No practice was asked about this work")).toBeVisible();
 		await userEvent.click(panel.getByRole("tab", { name: "What we noticed" }));
 		await expect(panel.getByText("Nothing was recorded about this work")).toBeVisible();
-		await expect(panel.queryByText(/Could not load/u)).not.toBeInTheDocument();
+		await expect(panel.queryByText(/We could not load/u)).not.toBeInTheDocument();
 		await expect(panel.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
 	},
 };
@@ -261,7 +261,9 @@ export const TraceFailed: Story = {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByRole("heading", { name: "Observations", level: 3 })).toBeVisible();
 		await userEvent.click(panel.getByRole("tab", { name: "What we noticed" }));
-		await expect(panel.getByText("Could not load what was recorded about this work")).toBeVisible();
+		await expect(
+			panel.getByText("We could not load what was recorded about this work"),
+		).toBeVisible();
 		await userEvent.click(panel.getByRole("button", { name: "Retry" }));
 		if (args.trace.status !== "error") {
 			throw new Error("The story's trace is not the failed one");
@@ -278,7 +280,7 @@ export const Refused: Story = {
 				refusal={{
 					status: "REFUSED",
 					reason: "BUDGET_EXHAUSTED",
-					reasonDescription: "The workspace's AI budget for this month is used up.",
+					reasonDescription: "The workspace’s AI budget for this month is used up.",
 				}}
 				workspaceSlug="demo"
 				canAdminister
@@ -288,7 +290,7 @@ export const Refused: Story = {
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByText("No review was started")).toBeVisible();
-		panel.getByText("The workspace's AI budget for this month is used up.");
+		panel.getByText("The workspace’s AI budget for this month is used up.");
 		panel.getByRole("link", { name: "Open AI usage" });
 	},
 };
@@ -298,7 +300,7 @@ export const Asking: Story = {
 	args: { requesting: true },
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByRole("button", { name: "Asking…" })).toBeDisabled();
+		await expect(panel.getByRole("button", { name: "Requesting review…" })).toBeDisabled();
 	},
 };
 
@@ -310,7 +312,7 @@ export const DocumentCannotBeAsked: Story = {
 		await expect(
 			panel.getByRole("heading", { name: outlineDocument.title, level: 2 }),
 		).toBeVisible();
-		await expect(panel.queryByRole("button", { name: "Review this now" })).not.toBeInTheDocument();
+		await expect(panel.queryByRole("button", { name: "Request review" })).not.toBeInTheDocument();
 	},
 };
 
@@ -325,7 +327,7 @@ export const ObservationsFailed: Story = {
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
 		panel.getByRole("link", { name: /^Pull request #1423 · ls1intum\/Hephaestus/u });
-		await expect(panel.getByText("Could not load observations")).toBeVisible();
+		await expect(panel.getByText("We could not load observations")).toBeVisible();
 		await expect(
 			panel.queryByText("Nothing has been reviewed on this work"),
 		).not.toBeInTheDocument();

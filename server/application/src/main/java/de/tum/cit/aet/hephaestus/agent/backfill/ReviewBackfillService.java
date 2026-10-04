@@ -78,7 +78,7 @@ public class ReviewBackfillService {
         // not enumerable from a repository the way pull requests and issues are. Refused by name rather
         // than silently producing an empty scope, which would read as "nothing to review".
         throw new IllegalArgumentException(
-                "You can review past work only for a pull or merge request or an issue. You cannot review past work of this kind.");
+                "Hephaestus reviews past work only for pull requests, merge requests, and issues.");
     }
 
     private static String statusWords(ReviewBackfillStatus status) {
@@ -106,27 +106,27 @@ public class ReviewBackfillService {
         Instant fromAt = request.fromAt();
         Instant toAt = request.toAt();
         if (!fromAt.isBefore(toAt)) {
-            throw new IllegalArgumentException("The backfill window must start before it ends.");
+            throw new IllegalArgumentException("The period to review must start before it ends.");
         }
         Duration window = Duration.between(fromAt, toAt);
         if (window.compareTo(properties.maxWindow()) > 0) {
-            throw new IllegalArgumentException("The backfill window covers " + window.toDays()
+            throw new IllegalArgumentException("The period covers " + window.toDays()
                     + " days. The limit is "
                     + properties.maxWindow().toDays()
-                    + " days.");
+                    + " days. Choose a shorter period.");
         }
         if (runRepository.existsByWorkspaceIdAndStatusIn(context.id(), UNDER_WAY)) {
             throw new ReviewBackfillConflictException(
-                    "A backfill is already active for this workspace. To start another backfill, first cancel the active backfill.");
+                    "A review of past work is already under way in this workspace. Cancel it before you start another.");
         }
         supersedeUnconfirmed(context.id());
 
         long inScope = countScope(context.id(), kind, fromAt, toAt);
         if (inScope > properties.maxArtifacts()) {
-            throw new IllegalArgumentException("The backfill window covers " + inScope
+            throw new IllegalArgumentException("The period covers " + inScope
                     + " pieces of work. The limit is "
                     + properties.maxArtifacts()
-                    + ". Narrow the window.");
+                    + ". Choose a shorter period.");
         }
         BigDecimal estimate = costEstimator.estimateTotalUsd(context.id(), jobType, (int) inScope);
 
@@ -189,8 +189,8 @@ public class ReviewBackfillService {
         switch (requested) {
             case RUNNING -> {
                 if (!run.getStatus().isConfirmable()) {
-                    throw new ReviewBackfillConflictException(
-                            "You cannot start this backfill because it is " + statusWords(run.getStatus()) + ".");
+                    throw new ReviewBackfillConflictException("You cannot start this review of past work because it is "
+                            + statusWords(run.getStatus()) + ".");
                 }
                 if (run.getStartedAt() == null) {
                     run.setStartedAt(Instant.now());
@@ -209,7 +209,8 @@ public class ReviewBackfillService {
             case CANCELLED -> {
                 if (!run.getStatus().isActive() && run.getStatus() != ReviewBackfillStatus.AWAITING_CONFIRMATION) {
                     throw new ReviewBackfillConflictException(
-                            "You cannot cancel this backfill because it is " + statusWords(run.getStatus()) + ".");
+                            "You cannot cancel this review of past work because it is " + statusWords(run.getStatus())
+                                    + ".");
                 }
                 run.transitionTo(ReviewBackfillStatus.CANCELLED, null);
                 log.info("Review backfill cancelled: runId={}, workspaceId={}", run.getId(), context.id());

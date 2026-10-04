@@ -992,7 +992,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             assertThat(problem.getTitle()).isEqualTo("Invalid workspace request");
             assertThat(problem.getDetail())
                     .isEqualTo("This kind of work does not offer one of the chosen moments. Choose from the moments "
-                            + "that this kind of work offers.");
+                            + "it offers.");
         }
 
         @Test

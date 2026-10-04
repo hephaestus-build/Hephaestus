@@ -199,7 +199,7 @@ describe("Activity", () => {
 		expect(reads.some((url) => url.searchParams.get("login") === "ada")).toBe(false);
 	});
 
-	describe("Review this now", () => {
+	describe("Request review", () => {
 		let asked: unknown[] = [];
 		beforeEach(() => {
 			asked = [];
@@ -220,9 +220,9 @@ describe("Activity", () => {
 			renderRouteAtWithRouter("/w/acme/activity");
 
 			await user.click(
-				await screen.findByRole("button", { name: "Review this now: #42" }, ROUTE_RENDER_WAIT),
+				await screen.findByRole("button", { name: "Request review: #42" }, ROUTE_RENDER_WAIT),
 			);
-			await user.click(screen.getByRole("button", { name: "Review this now: #43" }));
+			await user.click(screen.getByRole("button", { name: "Request review: #43" }));
 
 			await waitFor(() =>
 				expect(asked).toStrictEqual([
@@ -230,7 +230,7 @@ describe("Activity", () => {
 					{ artifactKind: "scm.issue", artifactId: 3102 },
 				]),
 			);
-			expect(screen.queryByRole("button", { name: "Review this now: #44" })).toBeNull();
+			expect(screen.queryByRole("button", { name: "Request review: #44" })).toBeNull();
 		});
 
 		it("says why a review asked for from open work was refused", async () => {
@@ -247,7 +247,7 @@ describe("Activity", () => {
 			renderRouteAtWithRouter("/w/acme/activity");
 
 			await user.click(
-				await screen.findByRole("button", { name: "Review this now: #42" }, ROUTE_RENDER_WAIT),
+				await screen.findByRole("button", { name: "Request review: #42" }, ROUTE_RENDER_WAIT),
 			);
 
 			await screen.findByText("No review was started", undefined, ROUTE_RENDER_WAIT);
@@ -281,9 +281,9 @@ describe("Activity", () => {
 			renderRouteAtWithRouter("/w/acme/activity");
 
 			await user.click(
-				await screen.findByRole("button", { name: "Review this now: #42" }, ROUTE_RENDER_WAIT),
+				await screen.findByRole("button", { name: "Request review: #42" }, ROUTE_RENDER_WAIT),
 			);
-			await user.click(screen.getByRole("button", { name: "Review this now: #43" }));
+			await user.click(screen.getByRole("button", { name: "Request review: #43" }));
 			await waitFor(() => expect(asked).toHaveLength(2));
 			await screen.findByText("Review started");
 			firstAnswer.resolve();
@@ -301,7 +301,7 @@ describe("Activity", () => {
 			renderRouteAtWithRouter("/w/acme/activity");
 
 			await screen.findByText("Retry webhook delivery", undefined, ROUTE_RENDER_WAIT);
-			expect(screen.queryByRole("button", { name: /^Review this now/u })).toBeNull();
+			expect(screen.queryByRole("button", { name: /^Request review/u })).toBeNull();
 		});
 
 		it("offers no review in a user view, which never spends the member's budget", async () => {
@@ -311,7 +311,7 @@ describe("Activity", () => {
 			await screen.findByText("Retry webhook delivery", undefined, ROUTE_RENDER_WAIT);
 			// The view is on, so the absence below is the view's doing.
 			screen.getByText(/read-only/u);
-			expect(screen.queryByRole("button", { name: /^Review this now/u })).toBeNull();
+			expect(screen.queryByRole("button", { name: /^Request review/u })).toBeNull();
 		});
 	});
 
@@ -458,7 +458,7 @@ describe("Activity", () => {
 		renderRouteAtWithRouter("/w/acme/activity");
 
 		await screen.findByText(
-			"Could not load your membership in this workspace",
+			"We could not load your membership in this workspace",
 			undefined,
 			ROUTE_RENDER_WAIT,
 		);

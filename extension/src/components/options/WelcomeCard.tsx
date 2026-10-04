@@ -56,12 +56,12 @@ export function WelcomeCard({
 			<div className="flex flex-col gap-3">
 				<HephMark className="size-12" />
 				<h2 id={titleId} className="text-2xl font-semibold tracking-display">
-					Practice reviews, in context.
+					Practice reviews, in context
 				</h2>
 				<p className="max-w-prose text-base text-muted-foreground">
-					See the practice review of the pull request, merge request or issue you open on GitHub or
-					GitLab. It appears in the page, right after the description. It shows the comments
-					Hephaestus posted for you, with a link to each, and what the review concluded about your
+					The extension shows the practice review of each pull request, merge request or issue you
+					open on GitHub or GitLab. It appears on the page, right after the description. It links to
+					the comments Hephaestus posted for you and shows what the review concluded about your
 					work.
 				</p>
 			</div>
@@ -75,7 +75,7 @@ export function WelcomeCard({
 						onClick={onConnectHosted}
 					>
 						{pending === "hosted" ? <Spinner /> : null}
-						{pending === "hosted" ? "Connecting…" : "Continue with Hephaestus"}
+						{pending === "hosted" ? "Connecting…" : "Connect to Hephaestus"}
 					</Button>
 					<span className="text-sm text-muted-foreground">{hostedHost}</span>
 				</div>
@@ -93,8 +93,8 @@ export function WelcomeCard({
 				<p>
 					On the sites you allow, the extension sends the address of each pull request, merge
 					request or issue to your Hephaestus. It does this when you open the page, to find its
-					practice review. It sends the address of a list row only when you press its Hephaestus
-					button. It never sends the page&apos;s content.{" "}
+					practice review. It sends the address of a list row only when you select its Hephaestus
+					button. It never sends the page’s content.{" "}
 					<ExternalLink href={privacyUrl} allowedOrigin={docsOrigin}>
 						How the extension handles data
 					</ExternalLink>

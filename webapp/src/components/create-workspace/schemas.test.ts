@@ -197,6 +197,6 @@ describe("workspaceDetailsSchema", () => {
 		});
 		assert(!result.success);
 		const slugErrors = result.error.issues.filter((i) => i.path[0] === "workspaceSlug");
-		expect(slugErrors.some((e) => e.message.includes("start with"))).toBe(true);
+		expect(slugErrors.some((e) => e.message.includes("Start with"))).toBe(true);
 	});
 });

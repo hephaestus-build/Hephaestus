@@ -78,7 +78,7 @@ export function AdminWorkspacesTable({
 	if (isError) {
 		return (
 			<p className="py-8 text-center text-sm text-destructive">
-				Failed to load workspaces. Please try again.
+				We could not load workspaces. Reload the page to try again.
 			</p>
 		);
 	}
@@ -94,7 +94,9 @@ export function AdminWorkspacesTable({
 		return (
 			<div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
 				<Building2 className="size-8" aria-hidden />
-				<p className="text-sm">{hasSearch ? "No matching workspaces." : "No workspaces yet."}</p>
+				<p className="text-sm">
+					{hasSearch ? "No workspaces match your search" : "No workspaces yet"}
+				</p>
 			</div>
 		);
 	}

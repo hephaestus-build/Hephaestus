@@ -46,7 +46,7 @@ export const Complete: Story = {
 		await expect(canvas.queryByText(/hasDescription/u)).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: "Review scope and evidence" }));
 		await expect(canvas.getByText("Pull request details")).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: "What it measures first" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Static analysis" }));
 		await expect(canvas.getByText(/hasDescription/u)).toBeVisible();
 	},
 };

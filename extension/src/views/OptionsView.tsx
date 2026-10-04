@@ -75,7 +75,7 @@ function Setup({ developmentBuild }: { developmentBuild: boolean }) {
 					setState({
 						status: "error",
 						target,
-						message: `Chrome did not allow the extension to reach ${host}, so nothing changed. Try again to see Chrome's prompt.`,
+						message: `Chrome did not allow the extension to reach ${host}, so nothing changed. Try again to see Chrome’s prompt.`,
 					});
 					return;
 				}
@@ -86,7 +86,11 @@ function Setup({ developmentBuild }: { developmentBuild: boolean }) {
 				});
 				setState({ status: "idle" });
 			} catch (error) {
-				setState({ status: "error", target, message: messageOf(error, "Connecting failed.") });
+				setState({
+					status: "error",
+					target,
+					message: messageOf(error, "We could not connect. Try again."),
+				});
 			}
 		};
 		void run();
@@ -191,7 +195,7 @@ function useSiteAccess() {
 				setActivity({
 					origin,
 					status: "error",
-					message: messageOf(error, "Chrome could not change the extension's access."),
+					message: messageOf(error, "We could not change the extension’s access. Try again."),
 				});
 			}
 			await refresh();
@@ -252,11 +256,11 @@ function SignedIn({
 				title="Sites"
 				description={
 					<>
-						A practice review appears on pull requests, merge requests and issues only on the sites
-						you allow. There, the extension sends the address of each one to {instance.host} to find
-						its practice review when you open it. On a list, it sends only the address of the row
-						where you press the Hephaestus button. It never sends the page&apos;s content. Remove a
-						site to stop.
+						Practice reviews appear only on the sites you allow. On those sites, the extension sends
+						{instance.host} the address of each pull request, merge request or issue you open, to
+						find its practice review. On a list, it sends only the address of the row whose
+						Hephaestus button you select. It never sends the page’s content. To stop, remove the
+						site.
 					</>
 				}
 			>
@@ -269,7 +273,7 @@ function SignedIn({
 				/>
 			</Card>
 			{sites.anyAllowed ? (
-				<Card title="Where to find it">
+				<Card title="Where to find practice reviews">
 					<UsageGuide />
 				</Card>
 			) : null}
@@ -363,7 +367,7 @@ export function OptionsView() {
 			<Notice
 				icon={CircleAlertIcon}
 				tone="destructive"
-				title="The extension did not answer"
+				title="Settings did not load"
 				action={
 					<Button
 						variant="outline"
@@ -372,7 +376,7 @@ export function OptionsView() {
 							void state.refetch();
 						}}
 					>
-						Try again
+						Retry
 					</Button>
 				}
 			>

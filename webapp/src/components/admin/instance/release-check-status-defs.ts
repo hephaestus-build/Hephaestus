@@ -24,7 +24,7 @@ export const RELEASE_CHECK_STATUS_DEFS: StatusDefs<ReleaseCheckStatus> = {
 		label: "Update available",
 		icon: CircleArrowUpIcon,
 		badgeVariant: "warning",
-		description: "A newer release is published. Upgrading stays your decision.",
+		description: "A newer release is published. You decide when to upgrade.",
 	},
 	FAILED: {
 		label: "Check failed",

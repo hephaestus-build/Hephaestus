@@ -38,7 +38,7 @@ export function useWorkspaceSwitcher() {
 		if (currentWorkspaceSlug !== undefined) {
 			toast.info(`Switched to ${displayName}`, {
 				description:
-					"This page is specific to the previous workspace, so Hephaestus opened the new workspace's home page.",
+					"The page you were on belongs to the previous workspace. We opened the home page of this one instead.",
 			});
 		}
 	};

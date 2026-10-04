@@ -67,7 +67,7 @@ type Story = StoryObj<typeof meta>;
 /**
  * Newest first under a heading per day. A row leads with the practices that slipped, by name, and
  * under it counts the practices that were met, did not apply, or remained undetermined, and how many practices
- * the review reached. "Review this now" is offered only on the rows whose work
+ * the review reached. "Request review" is offered only on the rows whose work
  * the reader may ask about, and feedback is linked where the provider's comment can be addressed
  * and counted elsewhere.
  */
@@ -79,10 +79,10 @@ export const Default: Story = {
 		await expect(screen.getByLabelText("Timeframe")).toHaveTextContent("All time");
 		await expect(screen.getByText("2nd review")).toBeVisible();
 		await expect(
-			screen.getByText("one practice met, one undetermined; three practices reached"),
+			screen.getByText("one practice met, one undetermined · three practices reached"),
 		).toBeVisible();
 		await expect(
-			screen.getByText("one practice met, five did not apply; nine practices reached"),
+			screen.getByText("one practice met, five did not apply · nine practices reached"),
 		).toBeVisible();
 		// A stopped review wrote no reach, so the line says only what it decided.
 		await expect(screen.getByText("one practice met")).toBeVisible();
@@ -98,7 +98,7 @@ export const Default: Story = {
 		await expect(screen.getByText("two pieces of feedback")).toBeVisible();
 		await expect(screen.getByText("one piece of feedback")).toBeVisible();
 
-		const asks = screen.getAllByRole("button", { name: /^Review this now: /u });
+		const asks = screen.getAllByRole("button", { name: /^Request review: /u });
 		await expect(asks).toHaveLength(3);
 		const [firstAsk] = asks;
 		if (!firstAsk) {
@@ -179,7 +179,7 @@ export const EarlierReviewsFailed: Story = {
 	},
 	play: async ({ args }) => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("Could not load earlier reviews.")).toBeVisible();
+		await expect(screen.getByText("We could not load earlier reviews.")).toBeVisible();
 		await userEvent.click(screen.getByRole("button", { name: "View earlier reviews" }));
 		await expect(onLoadMoreOf(args.feed)).toHaveBeenCalledOnce();
 	},
@@ -190,8 +190,8 @@ export const AskingForAReview: Story = {
 	args: { requesting: openProfileReviewRun.reviewedWork },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getAllByText("Asking…")).toHaveLength(2);
-		await expect(screen.getAllByText("Review this now")).toHaveLength(1);
+		await expect(screen.getAllByText("Requesting review…")).toHaveLength(2);
+		await expect(screen.getAllByText("Request review")).toHaveLength(1);
 	},
 };
 
@@ -237,7 +237,7 @@ export const Empty: Story = {
 	args: { feed: feedOf([]) },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("No review of your work yet.")).toBeVisible();
+		await expect(screen.getByText("No reviews of your work yet")).toBeVisible();
 	},
 };
 
@@ -246,8 +246,8 @@ export const FilteredEmpty: Story = {
 	args: { feed: feedOf([]), kind: "docs.document" },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("No review here matches your filters.")).toBeVisible();
-		await expect(screen.queryByText("No review of your work yet.")).toBeNull();
+		await expect(screen.getByText("No reviews match your filters.")).toBeVisible();
+		await expect(screen.queryByText("No reviews of your work yet")).toBeNull();
 	},
 };
 
@@ -266,7 +266,7 @@ export const Failed: Story = {
 	args: { feed: { status: "error", error: new Error("offline"), onRetry: fn() } },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("Could not load reviews of your work")).toBeVisible();
+		await expect(screen.getByText("We could not load reviews of your work")).toBeVisible();
 		await expect(screen.queryByRole("table")).toBeNull();
 	},
 };

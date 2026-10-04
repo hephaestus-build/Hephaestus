@@ -91,8 +91,8 @@ export function RepositoryCard({
 								}}
 								title={
 									repository.hiddenFromContributions
-										? "Show repository contributions"
-										: "Hide repository contributions"
+										? `Show ${repository.nameWithOwner} in contributions`
+										: `Hide ${repository.nameWithOwner} from contributions`
 								}
 							>
 								{repository.hiddenFromContributions ? (

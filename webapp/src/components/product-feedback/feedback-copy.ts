@@ -3,7 +3,7 @@ import type { FeedbackRequest } from "@/api/types.gen";
 export type FeedbackKind = FeedbackRequest["kind"];
 
 /** Who a submission reaches, in the product's words; one home so every screen says the same. */
-export const READERS = "your instance administrators";
+export const READERS = "your instance admins";
 
 interface KindCopy {
 	title: string;
@@ -31,7 +31,7 @@ export const FEEDBACK_KIND_COPY: Record<FeedbackKind, KindCopy> = {
 	},
 	FEEDBACK: {
 		title: "Feedback",
-		detail: "What works, what gets in your way.",
+		detail: "What works and what gets in your way.",
 		heading: "Send feedback",
 		label: "Your feedback",
 		placeholder: "What works well for you, and what does not?",

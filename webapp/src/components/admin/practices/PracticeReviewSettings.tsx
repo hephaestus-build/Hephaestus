@@ -104,7 +104,7 @@ function ReviewStatusSection({
 					<FieldDescription>
 						{!workspace.enabled && modelUnavailable
 							? "This can be turned on once a review model is ready to run."
-							: "New work is reviewed while this is on. Switching it off stops new reviews. Any already running may finish."}
+							: "New work is reviewed while this is on. Turning it off stops new reviews. Any already running may finish."}
 					</FieldDescription>
 				</FieldContent>
 				<Switch
@@ -132,7 +132,7 @@ function ModelReadiness({
 		return (
 			<Alert variant="warning" role="status">
 				<AlertCircle />
-				<AlertTitle>Could not check the review model</AlertTitle>
+				<AlertTitle>We could not check the review model</AlertTitle>
 				<AlertDescription>
 					<Button variant="outline" size="sm" onClick={model.onRetry}>
 						Retry
@@ -200,7 +200,7 @@ function ReviewTimingSection({
 					<AlertCircle />
 					<AlertTitle>Nothing can start a review</AlertTitle>
 					<AlertDescription>
-						Practice reviews are on, but both ways in are switched off.
+						Practice reviews are on, but both ways to start one are turned off.
 					</AlertDescription>
 				</Alert>
 			) : null}
@@ -225,9 +225,9 @@ function ReviewTimingSection({
 				<FieldContent>
 					<FieldLabel htmlFor="trigger-manual">Start requested reviews</FieldLabel>
 					<FieldDescription>
-						The <strong>Review this now</strong> button, a backfill of past work, a recurring check,
-						and <code>/hephaestus review</code> in a GitLab merge request comment. Turning this off
-						stops every one of them.
+						Covers the <strong>Request review</strong> button, a backfill of past work, a recurring
+						check, and <code>/hephaestus review</code> in a GitLab merge request comment. Turning
+						this off stops all of them.
 					</FieldDescription>
 				</FieldContent>
 				<Switch
@@ -313,7 +313,7 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 					Sending feedback
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					Workspace-wide control for comments and mentor messages.
+					These settings apply to all comments and feedback from Heph in the workspace.
 				</p>
 			</div>
 			{paused ? (
@@ -321,7 +321,7 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 					<AlertCircle />
 					<AlertTitle>Sending is paused</AlertTitle>
 					<AlertDescription>
-						Reviews and in-app feedback continue, but no comments or mentor messages leave
+						Reviews and in-app feedback continue, but no comments or feedback from Heph leave
 						Hephaestus. Automatic feedback is not queued for later delivery. Pending approvals
 						remain in the review queue, and a workspace owner or admin can decide them after
 						resuming.
@@ -335,7 +335,7 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 						<StatusBadge def={WORKSPACE_DELIVERY_STATUS_DEFS[settings.deliveryStatus]} />
 					</div>
 					<FieldDescription>
-						Pause all comments and mentor messages without stopping reviews or changing coverage.
+						Pause all comments and feedback from Heph without stopping reviews or changing coverage.
 					</FieldDescription>
 				</FieldContent>
 				<Switch
@@ -351,7 +351,7 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 				<FieldContent>
 					<FieldLabel htmlFor="policy-deliver-merged">Post feedback after merge</FieldLabel>
 					<FieldDescription>
-						A review that finishes after the work merged still posts its feedback.
+						When on, a review that finishes after the work merged still posts its feedback.
 					</FieldDescription>
 					<InheritedSettingHint
 						label="Post feedback after merge"

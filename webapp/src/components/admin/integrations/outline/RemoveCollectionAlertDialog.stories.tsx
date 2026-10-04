@@ -44,7 +44,7 @@ export const Open: Story = {
 		const dialog = within(await screen.findByRole("alertdialog"));
 		dialog.getByText(/all 42 mirrored documents/iu);
 
-		await userEvent.click(dialog.getByRole("button", { name: /remove & erase/iu }));
+		await userEvent.click(dialog.getByRole("button", { name: /remove and erase/iu }));
 		await expect(args.onConfirm).toHaveBeenCalledWith({ collectionId: collection.collectionId });
 	},
 };
@@ -67,7 +67,7 @@ export const Rejected: Story = {
 	},
 	play: async () => {
 		const dialog = within(await screen.findByRole("alertdialog"));
-		await userEvent.click(dialog.getByRole("button", { name: /remove & erase/iu }));
+		await userEvent.click(dialog.getByRole("button", { name: /remove and erase/iu }));
 		await expectSettledVisible(await screen.findByRole("alertdialog"));
 	},
 };

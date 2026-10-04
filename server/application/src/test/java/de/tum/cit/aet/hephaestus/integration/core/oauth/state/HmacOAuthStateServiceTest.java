@@ -238,7 +238,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
         // still validate. This is the load-bearing replay guard.
         assertThatThrownBy(() -> svc.consume(state))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("The OAuth state was already used.");
+                .hasMessage("This connection request was already used. Start the connection again.");
     }
 
     @Test

@@ -35,14 +35,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The one path a review somebody asked for takes, whether through the {@code /hephaestus review} command
- * or the "Review this now" REST endpoint: check standing (see {@link ReviewRequestAuthority}), ask the
+ * or the "Request review" REST endpoint: check standing (see {@link ReviewRequestAuthority}), ask the
  * gate, record the ask in the signal ledger, submit, and return a refusal a person can read.
  *
  * <p>The gate is asked about the kind's declared manual-request signal, not a lifecycle event that did not
  * happen — the artifact trace renders the signal as the reason a review ran.
  *
  * <p>The job's metadata carries no trigger signal: a job with none runs every active practice of the
- * artifact's kind, which is what "review this now" means. The ledger key still names the request signal.
+ * artifact's kind, which is what "Request review" means. The ledger key still names the request signal.
  *
  * <p>{@link ObservationOrigin#MANUAL} is passed explicitly rather than left to the submission request's
  * default, which reads the trigger signal and would misreport this as an unbounded organic signal.

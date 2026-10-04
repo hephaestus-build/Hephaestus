@@ -37,16 +37,16 @@ describe("instance settings route", () => {
 		renderRouteAt("/admin/settings");
 
 		await user.click(
-			await screen.findByRole("button", { name: "Release silent mode…" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Turn off silent mode…" }, ROUTE_RENDER_WAIT),
 		);
 		const dialog = await screen.findByRole("alertdialog");
-		await user.type(within(dialog).getByLabelText(/Type release to confirm/u), "release");
-		await user.click(within(dialog).getByRole("button", { name: "Release silent mode" }));
+		await user.type(within(dialog).getByLabelText(/Type turn off to confirm/u), "turn off");
+		await user.click(within(dialog).getByRole("button", { name: "Turn off silent mode" }));
 
 		await waitFor(() => expect(reads).toBe(2));
 		expect(ifMatch).toBe('"1"');
 		expect(writes).toBe(1);
-		await screen.findByText(/Verify the current state before trying again/u);
+		await screen.findByText(/Check the current state, then try again/u);
 		expect(screen.queryByRole("alertdialog")).toBeNull();
 	});
 
@@ -65,16 +65,16 @@ describe("instance settings route", () => {
 		renderRouteAt("/admin/settings");
 
 		await user.click(
-			await screen.findByRole("button", { name: "Release silent mode…" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Turn off silent mode…" }, ROUTE_RENDER_WAIT),
 		);
 		const dialog = await screen.findByRole("alertdialog");
-		await user.type(within(dialog).getByLabelText(/Type release to confirm/u), "release");
-		await user.click(within(dialog).getByRole("button", { name: "Release silent mode" }));
+		await user.type(within(dialog).getByLabelText(/Type turn off to confirm/u), "turn off");
+		await user.click(within(dialog).getByRole("button", { name: "Turn off silent mode" }));
 
-		await screen.findByText("Could not verify the current instance settings");
+		await screen.findByText("We could not verify the current instance settings");
 		await within(dialog).findByText(/The current settings could not be verified/u);
 		expect(
-			within(dialog).getByRole<HTMLButtonElement>("button", { name: "Release silent mode" })
+			within(dialog).getByRole<HTMLButtonElement>("button", { name: "Turn off silent mode" })
 				.disabled,
 		).toBe(true);
 	});
@@ -83,7 +83,7 @@ describe("instance settings route", () => {
 		{ recipient: "  ops@example.org ", expectedBody: { to: "ops@example.org" } },
 		{ recipient: " ", expectedBody: {} },
 	])(
-		"posts $expectedBody to the test-email endpoint and shows relay acceptance",
+		"posts $expectedBody to the test-email endpoint and shows that the mail server accepted the email",
 		async ({ recipient, expectedBody }) => {
 			const user = userEvent.setup();
 			let body: unknown;
@@ -104,7 +104,7 @@ describe("instance settings route", () => {
 			await user.type(input, recipient);
 			await user.click(screen.getByRole("button", { name: "Send test email" }));
 
-			await screen.findByText("Accepted by relay");
+			await screen.findByText("Handed to mail server");
 			expect(body).toStrictEqual(expectedBody);
 			await screen.findByText("<abc@hephaestus.example>");
 		},
@@ -123,7 +123,7 @@ describe("instance settings route", () => {
 		);
 
 		await screen.findAllByText("Withheld by silent mode");
-		expect(screen.queryByText("Accepted by relay")).toBeNull();
+		expect(screen.queryByText("Handed to mail server")).toBeNull();
 	});
 
 	it("does not leave a previous success visible after the next request fails", async () => {
@@ -143,11 +143,11 @@ describe("instance settings route", () => {
 
 		const send = await screen.findByRole("button", { name: "Send test email" }, ROUTE_RENDER_WAIT);
 		await user.click(send);
-		await screen.findByText("Accepted by relay");
+		await screen.findByText("Handed to mail server");
 		await user.click(send);
 
 		await screen.findByText("Unavailable");
-		expect(screen.queryByText("Accepted by relay")).toBeNull();
+		expect(screen.queryByText("Handed to mail server")).toBeNull();
 	});
 
 	it("can test email when the instance settings cannot be loaded", async () => {
@@ -162,10 +162,10 @@ describe("instance settings route", () => {
 		);
 		renderRouteAt("/admin/settings");
 
-		await screen.findByText("Could not load instance settings", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("We could not load instance settings", undefined, ROUTE_RENDER_WAIT);
 		await user.click(screen.getByRole("button", { name: "Send test email" }));
 
-		await screen.findByText("Accepted by relay");
-		expect(screen.queryByRole("button", { name: "Release silent mode…" })).toBeNull();
+		await screen.findByText("Handed to mail server");
+		expect(screen.queryByRole("button", { name: "Turn off silent mode…" })).toBeNull();
 	});
 });

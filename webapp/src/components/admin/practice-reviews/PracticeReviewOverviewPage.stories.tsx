@@ -170,12 +170,12 @@ export const OverviewFailed: Story = {
 	args: {
 		overview: {
 			status: "error",
-			error: { status: 500, detail: "Something went wrong." },
+			error: { status: 500 },
 			onRetry: fn(),
 		},
 	},
 	play: async ({ args, canvas, userEvent }) => {
-		canvas.getByText("Could not load what the reviews did");
+		canvas.getByText("We could not load what the reviews did");
 		await expect(canvas.queryByRole("heading", { name: "Practices" })).not.toBeInTheDocument();
 		canvas.getByRole("list", { name: "Awaiting your approval" });
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));

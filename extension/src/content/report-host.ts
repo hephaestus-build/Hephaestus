@@ -8,7 +8,7 @@ import markSvg from "@/brand/hephaestus-mark.svg?raw";
  */
 
 export const LOADING_TEXT = "Loading…";
-export const FAILED_TEXT = "Could not load here. Reload the page to try again.";
+export const FAILED_TEXT = "We could not load here. Reload the page to try again.";
 
 // The canonical Heph mark, bundled; the text beside it names it, so it is decorative.
 const MARK = `<span class="mark" aria-hidden="true">${markSvg}</span>`;

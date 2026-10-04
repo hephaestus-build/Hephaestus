@@ -49,7 +49,7 @@ export function RecentAuthActivityCard({
 	let body: ReactNode;
 	if (failed) {
 		body = (
-			<QueryErrorAlert error={error} title="Could not load recent activity" onRetry={onRetry} />
+			<QueryErrorAlert error={error} title="We could not load recent activity" onRetry={onRetry} />
 		);
 	} else if (isLoading) {
 		body = (

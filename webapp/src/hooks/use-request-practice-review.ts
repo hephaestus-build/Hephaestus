@@ -25,7 +25,7 @@ interface RequestPracticeReviewOptions {
 }
 
 /**
- * "Review this now", and the one home of what its answer shows. A started review refreshes the
+ * "Request review", and the one home of what its answer shows. A started review refreshes the
  * asked-about work's trace and the practice profile's latest-review chip; a refusal is `refusal`
  * where a level shows the work, and a toast carrying the server's sentence otherwise.
  *
@@ -69,7 +69,7 @@ export function useRequestPracticeReview(
 			toast.success("Review started");
 		},
 		onError: (error) =>
-			toast.error("Could not ask for a review", {
+			toast.error("We could not request the review", {
 				description: problemDetailOf(error, "Try again in a moment."),
 			}),
 	});

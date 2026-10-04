@@ -137,7 +137,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("11 pieces of feedback.");
-		for (const name of ["Practice", "Outcome", "Place", "Why withheld", "Recipient"]) {
+		for (const name of ["Practice", "Outcome", "Channel", "Why withheld", "Recipient"]) {
 			canvas.getByRole("combobox", { name });
 		}
 		// "Composed" is neither when the feedback was delivered nor when the observation was made.
@@ -188,7 +188,7 @@ export const WhyWithheldFacetOpen: Story = {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Why withheld" }));
 		const listbox = await screen.findByRole("listbox");
 		await within(listbox).findByRole("option", { name: /The work moved on/u });
-		within(listbox).getByRole("option", { name: /The developer's choice/u });
+		within(listbox).getByRole("option", { name: /The developer’s choice/u });
 	},
 };
 
@@ -208,8 +208,8 @@ export const FilterToOneWithholdingFamily: Story = {
 		canvas.getByText("Nearly the same as other feedback from the same review.");
 
 		// A place nothing under that family went to, so the two filters intersect to nothing.
-		await userEvent.click(canvas.getByRole("combobox", { name: "Place" }));
-		const places = await screen.findByRole("listbox", { name: "Place options" });
+		await userEvent.click(canvas.getByRole("combobox", { name: "Channel" }));
+		const places = await screen.findByRole("listbox", { name: "Channel options" });
 		await userEvent.click(await within(places).findByRole("option", { name: /In conversation/u }));
 		await canvas.findByText("No feedback matches these filters");
 		await userEvent.click(canvas.getByRole("button", { name: "Clear all filters" }));
@@ -270,9 +270,9 @@ export const Mobile: Story = {
  */
 export const LoadFailed: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
-	args: { feedback: undefined, error: { status: 500, detail: "Something went wrong." } },
+	args: { feedback: undefined, error: { status: 500 } },
 	play: async ({ canvas }) => {
-		await canvas.findByText("Could not load feedback");
+		await canvas.findByText("We could not load feedback");
 	},
 };
 

@@ -488,9 +488,9 @@ export const EmptyDestinations: Story = {
 			if (!(groupSection instanceof HTMLElement)) {
 				throw new Error(`Group ${group.name} not rendered`);
 			}
-			await expect(within(groupSection).getByText("No practices here.")).toBeVisible();
+			await expect(within(groupSection).getByText("No practices in this group")).toBeVisible();
 		}
-		await expect(canvas.getByText("Nothing unassigned.")).toBeVisible();
+		await expect(canvas.getByText("Nothing unassigned")).toBeVisible();
 		await expectNoPageOverflow();
 	},
 };
@@ -509,7 +509,7 @@ export const CrossGroupDrag: Story = {
 		if (!(destinationGroup instanceof HTMLElement)) {
 			throw new Error("Destination group not rendered");
 		}
-		const destination = within(destinationGroup).getByText("No practices here.");
+		const destination = within(destinationGroup).getByText("No practices in this group");
 		const sourceRow = handle.closest('[data-slot="item"]');
 		if (!(sourceRow instanceof HTMLElement)) {
 			throw new Error("Practice row not rendered");
@@ -624,7 +624,7 @@ export const BlockedDestinationDrag: Story = {
 		if (!destinationGroup) {
 			throw new Error("Blocked destination group not rendered");
 		}
-		const destination = within(destinationGroup).getByText("No practices here.");
+		const destination = within(destinationGroup).getByText("No practices in this group");
 		const start = handle.getBoundingClientRect();
 		const end = destination.getBoundingClientRect();
 
@@ -714,7 +714,7 @@ export const AutonomyIsReadOnlyHere: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "More actions for Set here" }));
 		const menu = within(await screen.findByRole("menu"));
-		await expect(menu.getByRole("menuitem", { name: "Change on Review" })).toHaveAttribute(
+		await expect(menu.getByRole("menuitem", { name: "Change in review settings" })).toHaveAttribute(
 			"href",
 			"/w/demo/admin/practices/review",
 		);

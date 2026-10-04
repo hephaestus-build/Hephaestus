@@ -11,7 +11,7 @@ const PROPOSAL_REJECTION_LABELS: Record<ProposalRejectionReason, string> = {
 	MISSING_CONTEXT: "Missing important context",
 	UNHELPFUL: "Not useful to the recipient",
 	DUPLICATE: "Already covered elsewhere",
-	INAPPROPRIATE_PLACEMENT: "Wrong delivery place",
+	INAPPROPRIATE_PLACEMENT: "Wrong place for this feedback",
 	OTHER: "Something else",
 };
 

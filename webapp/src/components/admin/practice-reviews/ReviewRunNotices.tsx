@@ -29,7 +29,10 @@ export function ReviewRunNotices({ job, outputMayBeIncomplete }: ReviewRunNotice
 			{outputMayBeIncomplete && (
 				<Alert variant={job.status === "FAILED" ? "destructive" : "default"}>
 					<AlertTitle>Review output may be incomplete</AlertTitle>
-					<AlertDescription>The review ended before it completed.</AlertDescription>
+					<AlertDescription>
+						The review ended early. The observations and feedback below may be only part of what it
+						would have found.
+					</AlertDescription>
 				</Alert>
 			)}
 			{hold && (

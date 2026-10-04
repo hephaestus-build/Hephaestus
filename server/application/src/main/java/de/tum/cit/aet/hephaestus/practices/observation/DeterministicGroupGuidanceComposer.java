@@ -51,7 +51,7 @@ final class DeterministicGroupGuidanceComposer {
                                         ? "Your recent feedback shows a strength in "
                                         : "Your recent feedback shows strengths in ")
                         .append(nameList(strengths))
-                        .append(strengths.size() == 1 ? ". Continue to build on it." : ". Continue to build on them.");
+                        .append(strengths.size() == 1 ? ". Keep building on it." : ". Keep building on them.");
             case DEVELOPING ->
                 summary.append("Your recent feedback suggests that ")
                         .append(nameList(gaps))
@@ -63,7 +63,7 @@ final class DeterministicGroupGuidanceComposer {
                 if (samePractices(strengths, gaps)) {
                     summary.append("Your recent feedback is mixed in ")
                             .append(nameList(gaps))
-                            .append(". It shows both strengths and areas to improve.");
+                            .append(", with both strengths and room to grow.");
                 } else {
                     summary.append("Your recent feedback shows a strength in ")
                             .append(nameList(strengths))

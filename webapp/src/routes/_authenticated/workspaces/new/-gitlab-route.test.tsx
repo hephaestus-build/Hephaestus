@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse, type PathParams } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -90,15 +90,17 @@ describe("GitLab workspace wizard", () => {
 		await screen.findByDisplayValue(lrz, {}, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("combobox")).toBeNull();
 
-		await user.type(screen.getByLabelText("Access Token"), "glpat-secret");
-		await user.click(screen.getByRole("button", { name: "Validate Token" }));
+		await user.type(screen.getByLabelText("Access token"), "glpat-secret");
+		await user.click(screen.getByRole("button", { name: "Validate token" }));
 		await screen.findByText("Token valid");
 		await user.click(screen.getByRole("button", { name: "Next" }));
 		await user.click(await screen.findByRole("radio", { name: /Hephaestus/u }));
 		await user.click(screen.getByRole("button", { name: "Next" }));
-		await user.click(await screen.findByRole("button", { name: "Create Workspace" }));
+		await user.click(
+			await within(screen.getByRole("main")).findByRole("button", { name: "Create workspace" }),
+		);
 
-		await screen.findByText('Workspace "Hephaestus" created');
+		await screen.findByText("Workspace “Hephaestus” created");
 		await waitFor(() => {
 			expect(router.state.location.pathname).toBe("/w/hephaestus/activity");
 		});
@@ -113,8 +115,8 @@ describe("GitLab workspace wizard", () => {
 		const requests = serveGitLab({ firstPreflightHeld: firstAnswer.promise });
 		renderRouteAt("/workspaces/new/gitlab");
 
-		const token = await screen.findByLabelText("Access Token", {}, ROUTE_RENDER_WAIT);
-		const validate = screen.getByRole<HTMLButtonElement>("button", { name: "Validate Token" });
+		const token = await screen.findByLabelText("Access token", {}, ROUTE_RENDER_WAIT);
+		const validate = screen.getByRole<HTMLButtonElement>("button", { name: "Validate token" });
 		await user.type(token, "glpat-old");
 		await user.click(validate);
 		await user.clear(token);
@@ -155,12 +157,12 @@ describe("GitLab workspace wizard", () => {
 		renderRouteAt("/workspaces/new/gitlab");
 
 		await screen.findByText(
-			/link your GitLab account on https:\/\/gitlab\.example\.com/u,
+			/connect your GitLab account on https:\/\/gitlab\.example\.com/u,
 			{},
 			ROUTE_RENDER_WAIT,
 		);
-		screen.getByRole("button", { name: "Link GitLab account" });
-		expect(screen.queryByLabelText("Access Token")).toBeNull();
+		screen.getByRole("button", { name: "Connect GitLab account" });
+		expect(screen.queryByLabelText("Access token")).toBeNull();
 	});
 
 	it("explains that the server's instance has no GitLab sign-in", async () => {
@@ -173,7 +175,7 @@ describe("GitLab workspace wizard", () => {
 			ROUTE_RENDER_WAIT,
 		);
 		screen.getByRole("link", { name: "Manage login providers" });
-		expect(screen.queryByLabelText("Access Token")).toBeNull();
+		expect(screen.queryByLabelText("Access token")).toBeNull();
 	});
 
 	it("keeps the token step on a failed group load and recovers on retry", async () => {
@@ -194,14 +196,14 @@ describe("GitLab workspace wizard", () => {
 		renderRouteAt("/workspaces/new/gitlab");
 
 		await user.type(
-			await screen.findByLabelText("Access Token", {}, ROUTE_RENDER_WAIT),
+			await screen.findByLabelText("Access token", {}, ROUTE_RENDER_WAIT),
 			"glpat-secret",
 		);
-		await user.click(screen.getByRole("button", { name: "Validate Token" }));
+		await user.click(screen.getByRole("button", { name: "Validate token" }));
 		await screen.findByText("Token valid");
 		await user.click(screen.getByRole("button", { name: "Next" }));
 
-		await screen.findByText("Failed to load groups");
+		await screen.findByText("We could not load your groups");
 		screen.getByText(detail);
 		expect(screen.queryByRole("radiogroup")).toBeNull();
 
@@ -213,7 +215,7 @@ describe("GitLab workspace wizard", () => {
 		const user = userEvent.setup();
 		serveGitLab();
 		const detail =
-			"Link your GitLab account on https://gitlab.lrz.de before you create a workspace there. Go to Settings → Linked Accounts.";
+			"Connect your GitLab account on https://gitlab.lrz.de before you create a workspace there. Do this in User settings, under Connected accounts.";
 		server.use(
 			http.post("*/workspaces", () =>
 				HttpResponse.json(
@@ -225,15 +227,17 @@ describe("GitLab workspace wizard", () => {
 		renderRouteAt("/workspaces/new/gitlab");
 
 		await user.type(
-			await screen.findByLabelText("Access Token", {}, ROUTE_RENDER_WAIT),
+			await screen.findByLabelText("Access token", {}, ROUTE_RENDER_WAIT),
 			"glpat-secret",
 		);
-		await user.click(screen.getByRole("button", { name: "Validate Token" }));
+		await user.click(screen.getByRole("button", { name: "Validate token" }));
 		await screen.findByText("Token valid");
 		await user.click(screen.getByRole("button", { name: "Next" }));
 		await user.click(await screen.findByRole("radio", { name: /Hephaestus/u }));
 		await user.click(screen.getByRole("button", { name: "Next" }));
-		await user.click(await screen.findByRole("button", { name: "Create Workspace" }));
+		await user.click(
+			await within(screen.getByRole("main")).findByRole("button", { name: "Create workspace" }),
+		);
 
 		await screen.findByText(detail);
 	});

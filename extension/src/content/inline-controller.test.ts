@@ -574,8 +574,8 @@ describe("a repository's list", () => {
 			return [inner?.getAttribute("aria-label"), inner?.getAttribute("aria-expanded")];
 		});
 		expect(labels).toStrictEqual([
-			["Hephaestus review of #12", "false"],
-			["Hephaestus review of #13", "false"],
+			["Practice review of #12", "false"],
+			["Practice review of #13", "false"],
 		]);
 		// Nothing but the buttons: no report, no frame, no lookup.
 		await Promise.resolve();

@@ -138,11 +138,11 @@ public class LoginProviderService {
         if (!registrationId.matches("^[a-z][a-z0-9-]{1,62}$")) {
             throw new ResponseStatusException(
                     HttpStatus.UNPROCESSABLE_CONTENT,
-                    "The registrationId must have 2 to 63 characters. It must start with a lowercase letter. After that, use only lowercase letters, digits, or hyphens.");
+                    "Enter a registration ID of 2 to 63 characters. Start with a lowercase letter, then use only lowercase letters, digits, or hyphens.");
         }
         if (repository.existsByRegistrationId(registrationId)) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "The login provider '" + registrationId + "' already exists.");
+                    HttpStatus.CONFLICT, "The login provider “" + registrationId + "” already exists.");
         }
         LoginProvider provider = new LoginProvider();
         provider.setRegistrationId(registrationId);
@@ -388,7 +388,8 @@ public class LoginProviderService {
         }
         if (type == LoginProvider.ProviderType.OUTLINE && !outlineOriginPolicy.allows(value)) {
             throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_CONTENT, "The instance operator did not approve the Outline origin.");
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "This Outline address is not approved on this instance. Ask your instance operator to approve it.");
         }
         return value;
     }
@@ -420,12 +421,12 @@ public class LoginProviderService {
     private static String sanitizeScopesOrThrow(LoginProvider.ProviderType type, String scopes) {
         String trimmed = scopes.trim();
         if (type == LoginProvider.ProviderType.GITLAB || type == LoginProvider.ProviderType.OUTLINE) {
-            String replacement = type == LoginProvider.ProviderType.GITLAB ? "'read_user'" : "'read'";
+            String replacement = type == LoginProvider.ProviderType.GITLAB ? "“read_user”" : "“read”";
             for (String scope : trimmed.split("\\s+", -1)) {
                 if (scope.equalsIgnoreCase("openid")) {
                     throw new ResponseStatusException(
                             HttpStatus.UNPROCESSABLE_CONTENT,
-                            type + " login uses the plain OAuth2 flow. The scope must not contain 'openid'. Use "
+                            type + " login uses the plain OAuth2 flow. The scope must not contain “openid”. Use "
                                     + replacement
                                     + " instead.");
                 }
@@ -450,7 +451,7 @@ public class LoginProviderService {
         if (!enabled.isEmpty() && isLast) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "You cannot " + verb + " the last enabled login provider. If you do, users cannot sign in.");
+                    "You cannot " + verb + " the last enabled login provider. Without it, no one can sign in.");
         }
     }
 

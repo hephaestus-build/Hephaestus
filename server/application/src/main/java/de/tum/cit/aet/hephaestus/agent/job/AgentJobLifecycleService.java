@@ -80,7 +80,7 @@ public class AgentJobLifecycleService {
 
         if (updated == 0) {
             throw new AgentJobStateConflictException(
-                    "Cannot retry delivery. The job must have status COMPLETED and delivery status FAILED.");
+                    "You can retry delivery only for a completed review whose delivery failed.");
         }
 
         // Reload after the CAS commit so the entity is not stale.
@@ -112,7 +112,7 @@ public class AgentJobLifecycleService {
                     AgentJobTelemetry.Outcome.DELIVERY_FAILED,
                     Duration.between(deliveryStarted, Instant.now()));
             log.warn("Delivery retry failed: jobId={}, error={}", jobId, e.getMessage(), e);
-            throw new AgentJobStateConflictException("The server could not post the feedback. Try again later.", e);
+            throw new AgentJobStateConflictException("We could not post the feedback. Try again in a moment.", e);
         }
 
         return transactionTemplate.execute(status -> requireJob(workspaceId, jobId));

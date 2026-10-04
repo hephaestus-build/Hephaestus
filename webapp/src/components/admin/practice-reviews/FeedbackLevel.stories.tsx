@@ -177,7 +177,7 @@ export const WithdrawFeedback: Story = {
 		const panel = within(await settledDrawerPanel());
 		// The text is private to the developer, and is not reported as never composed.
 		panel.getByText(
-			/written for the developer's own practice pages and is withheld from operators/u,
+			/written for the developer’s own practice pages and is withheld from operators/u,
 		);
 		await userEvent.click(panel.getByRole("button", { name: "Withdraw feedback" }));
 		const reason = await screen.findByRole("textbox", { name: "Reason" });
@@ -240,7 +240,7 @@ export const Disputed: Story = {
 		await expect(panel.getByText("The developer disputes this")).toBeVisible();
 		panel.getByText("This was about a branch I did not write.");
 		panel.getByText(
-			/written for the developer's own practice pages and is withheld from operators/u,
+			/written for the developer’s own practice pages and is withheld from operators/u,
 		);
 		panel.getByRole("button", { name: "Withdraw feedback" });
 	},
@@ -415,7 +415,7 @@ export const InApprovalQueue: Story = {
 		await expect(levelsOpenedBy(steps.getByRole("link", { name: "Next" }))).toEqual([
 			`feedback:${NEXT_ID}`,
 		]);
-		await userEvent.click(panel.getByRole("button", { name: "Approve and next" }));
+		await userEvent.click(panel.getByRole("button", { name: "Approve and open next" }));
 		await expect(args.onApprove).toHaveBeenCalledOnce();
 	},
 };
@@ -433,7 +433,7 @@ export const LastInApprovalQueue: Story = {
 		const panel = within(await settledDrawerPanel());
 		panel.getByText("7 of 7");
 		await expectGenuinelyDisabled(panel.getByRole("button", { name: "Next" }));
-		panel.getByRole("button", { name: "Approve and next" });
+		panel.getByRole("button", { name: "Approve and open next" });
 	},
 };
 
@@ -459,12 +459,14 @@ export const InApprovalQueueReflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async () => {
 		const panel = await settledDrawerPanel();
-		await expect(within(panel).getByRole("button", { name: "Approve and next" })).toBeVisible();
+		await expect(
+			within(panel).getByRole("button", { name: "Approve and open next" }),
+		).toBeVisible();
 		await expectNoPanelOverflow(panel);
 		// The stacked footer shows the steps first, as the tab order reaches them first.
 		const steps = within(panel).getByRole("navigation", { name: "Feedback awaiting approval" });
 		await expect(top(steps)).toBeLessThan(
-			top(within(panel).getByRole("button", { name: "Approve and next" })),
+			top(within(panel).getByRole("button", { name: "Approve and open next" })),
 		);
 		await expect(top(steps)).toBeLessThan(
 			top(within(panel).getByRole("button", { name: "Reject feedback" })),
@@ -533,7 +535,7 @@ export const Loading: Story = {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByRole("heading", { level: 2 })).toHaveAccessibleName("Loading feedback");
 		panel.getByRole("button", { name: "Practice reviews" });
-		await expect(panel.queryByText("Could not load this feedback")).not.toBeInTheDocument();
+		await expect(panel.queryByText("We could not load this feedback")).not.toBeInTheDocument();
 		await expect(
 			panel.queryByRole("button", { name: "Approve for delivery" }),
 		).not.toBeInTheDocument();
@@ -544,13 +546,13 @@ export const LoadFailed: Story = {
 	args: {
 		feedback: {
 			status: "error",
-			error: { status: 500, detail: "Something went wrong." },
+			error: { status: 500 },
 			onRetry: fn(),
 		},
 	},
 	play: async ({ args, userEvent }) => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Could not load this feedback")).toBeVisible();
+		await expect(panel.getByText("We could not load this feedback")).toBeVisible();
 		// With no record to name it, the level is named for what it is.
 		await expect(screen.getByRole("dialog")).toHaveAccessibleName("Feedback");
 		await userEvent.click(panel.getByRole("button", { name: "Retry" }));

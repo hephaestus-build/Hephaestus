@@ -147,7 +147,7 @@ export function FeedbackLevel({
 					{state.status === "error" ? (
 						<QueryErrorAlert
 							error={state.error}
-							title="Could not load this feedback"
+							title="We could not load this feedback"
 							onRetry={state.onRetry}
 						/>
 					) : (
@@ -251,14 +251,14 @@ function WithdrawalPopover({
 							trigger: "Restore feedback",
 							title: "Restore this feedback",
 							description:
-								"It returns to the developer's practice page if its observations can still be shown there. Nothing is sent again.",
+								"It returns to the developer’s practice page if its observations can still be shown there. Nothing is sent again.",
 							placeholder: "Why the feedback was right after all…",
 						}
 					: {
 							trigger: "Withdraw feedback",
 							title: "Withdraw this feedback",
 							description:
-								"It comes off the developer's practice page and out of the feedback given to later reviews and Heph. The observations behind it are unchanged. A developer who already saw it sees that it was withdrawn, not your reason.",
+								"It comes off the developer’s practice page and out of the feedback given to later reviews and Heph. The observations behind it are unchanged. A developer who already saw it sees that it was withdrawn, not your reason.",
 							placeholder: "What the feedback got wrong…",
 						}
 			}
@@ -279,10 +279,12 @@ function WithdrawalAlert({ withdrawal }: { withdrawal: FeedbackWithdrawal }) {
 			<AlertDescription>
 				<p>
 					{withdrawal.withdrawnBy ?? "A workspace admin"} withdrew this feedback{" "}
-					<RelativeTime value={withdrawal.withdrawnAt} />: “{withdrawal.reason}”. It is off the
-					developer’s practice page and out of the feedback given to later reviews and Heph. If the
-					developer had already seen it, their page shows for a while that it was withdrawn. The
-					observations behind it are unchanged.
+					<RelativeTime value={withdrawal.withdrawnAt} />. Reason: “{withdrawal.reason}”
+				</p>
+				<p>
+					It is off the developer’s practice page and out of the feedback given to later reviews and
+					Heph. If the developer had already seen it, their page shows for a while that it was
+					withdrawn. The observations behind it are unchanged.
 				</p>
 			</AlertDescription>
 		</Alert>

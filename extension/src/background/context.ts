@@ -331,10 +331,7 @@ function requiredTotal(total: number | undefined, returned: number): number {
 		total < returned ||
 		(returned === 0 && total !== 0)
 	) {
-		throw new WorkerError(
-			"server",
-			"Hephaestus returned incomplete pagination information. Try loading again.",
-		);
+		throw new WorkerError("server", "Hephaestus returned an incomplete answer. Try again.");
 	}
 	return total;
 }
@@ -353,7 +350,7 @@ function requireOnlyThisWork(
 	if (!works.every((work) => sameWork(work, context))) {
 		throw new WorkerError(
 			"server",
-			"Hephaestus answered with records about other work, so none of them is shown. Open the work in Hephaestus instead.",
+			"Hephaestus returned records about different work, so the extension shows none of them. Open the work in Hephaestus instead.",
 		);
 	}
 }

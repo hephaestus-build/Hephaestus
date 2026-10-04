@@ -292,7 +292,7 @@ export const HelpfulNoteOpen: Story = {
 export const NotHelpfulReasonOpen: Story = {
 	args: { card: { ...card, state: "open" }, usefulness: "UNHELPFUL", commentOpen: true },
 	play: async ({ args, canvas }) => {
-		const field = canvas.getByRole("textbox", { name: "What was missed?" });
+		const field = canvas.getByRole("textbox", { name: "Why was this not helpful?" });
 		await expect(field).toBeRequired();
 		const reasons = within(canvas.getByRole("group", { name: "Reason" })).getAllByRole("button");
 		await expect(reasons.map((reason) => reason.textContent)).toStrictEqual([
@@ -304,7 +304,7 @@ export const NotHelpfulReasonOpen: Story = {
 		await expect(field).not.toHaveAccessibleDescription(/workspace admins/u);
 		await userEvent.click(canvas.getByRole("button", { name: "Not accurate" }));
 		await expect(field).toHaveAccessibleDescription(
-			/workspace admins read your sentence, not the card/u,
+			/Workspace admins read your sentence, not the card/u,
 		);
 		await userEvent.click(canvas.getByRole("button", { name: "Already doing this" }));
 		await userEvent.type(field, "Each of these was already one concern.");
@@ -454,7 +454,7 @@ export const Closed: Story = {
 			...card,
 			state: "closed",
 			cleanWork: twoClean,
-			condition: [text("Closed on 9 September · the practice's review rules changed")],
+			condition: [text("Closed on 9 September · the practice’s review rules changed")],
 			timestamp: inStoryYear("09-09T09:00"),
 		},
 	},
@@ -464,7 +464,7 @@ export const Closed: Story = {
 		await expect(canvas.queryByRole("meter")).toBeNull();
 		await expect(canvas.getByText("Closed 9 September")).toBeVisible();
 		await expect(
-			canvas.getByText("Closed on 9 September · the practice's review rules changed"),
+			canvas.getByText("Closed on 9 September · the practice’s review rules changed"),
 		).toBeVisible();
 		// Closed unresolved, and no answer reopens it.
 		await expect(canvas.queryByRole("group", { name: "Your response" })).toBeNull();

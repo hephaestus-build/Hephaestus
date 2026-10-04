@@ -81,15 +81,15 @@ function ProviderSelectionPage() {
 				<OctagonXIcon aria-hidden="true" />
 				<AlertTitle>Workspace creation is admin-only</AlertTitle>
 				<AlertDescription>
-					An instance admin must create workspaces on this deployment. Ask an admin to set one up
-					for you.
+					An instance admin must create workspaces on this instance. Ask an instance admin to set
+					one up for you.
 				</AlertDescription>
 			</Alert>
 		);
 	} else if (providers.length === 0 && !isError) {
 		providerChoice = (
 			<p className="py-12 text-center text-muted-foreground">
-				No providers are currently available. Contact your administrator.
+				No providers are available. Contact an instance admin.
 			</p>
 		);
 	} else {
@@ -127,16 +127,14 @@ function ProviderSelectionPage() {
 				Back
 			</Link>
 			<div className="mb-8 space-y-1.5">
-				<h1 className="text-2xl font-semibold tracking-tight">Create Workspace</h1>
+				<h1 className="text-2xl font-semibold tracking-tight">Create workspace</h1>
 				<p className="text-muted-foreground">Choose your Git provider to get started.</p>
 			</div>
 			{isError && (
 				<Alert variant="destructive" className="mb-4">
 					<OctagonXIcon aria-hidden="true" />
-					<AlertTitle>Load failure</AlertTitle>
-					<AlertDescription>
-						Could not load provider options. Try refreshing the page.
-					</AlertDescription>
+					<AlertTitle>We could not load the provider options</AlertTitle>
+					<AlertDescription>Reload the page to try again.</AlertDescription>
 				</Alert>
 			)}
 			{providerChoice}

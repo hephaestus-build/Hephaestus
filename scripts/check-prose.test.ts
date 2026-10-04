@@ -16,7 +16,6 @@ import {
 	issueFormAlerts,
 } from "./check-prose.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
-import { uiAlerts } from "./lib/ste-ui.ts";
 import {
 	approvedWords,
 	contractions,
@@ -24,6 +23,7 @@ import {
 	technicalNames,
 	wordAlerts,
 } from "./lib/ste-words.ts";
+import { uiAlerts, uiRuleName } from "./lib/ui-text.ts";
 import {
 	assetFor,
 	executableFromArchive,
@@ -81,6 +81,10 @@ await test("the shared words preserve boundaries, case, and technical names", ()
 	assert.deepEqual(
 		wordAlerts("Don't stop it.").map(({ to }) => to),
 		["do not"],
+	);
+	assert.deepEqual(
+		wordAlerts("You're set. Don't stop it. It won’t run.", "voice").map(({ to }) => to),
+		["do not", "will not"],
 	);
 });
 
@@ -202,14 +206,46 @@ await test("each Vale rule has a passing sample, a failing sample, and a repair 
 	}
 });
 
-await test("the UI report uses the registered oxlint rule and skips machine props", async () => {
-	const directory = await mkdtemp(path.join(tmpdir(), "ste-ui-fixture-"));
+await test("user docs allow positive contractions and spell out negative ones", async () => {
+	const vale = await prepareVale();
+	try {
+		const checks = (file: string) =>
+			(valeAlerts(vale.binary, [file], "error").get(file) ?? []).map(({ Check }) => Check);
+		assert.deepEqual(checks(".vale/fixtures/docs/user/NegativeContractions-good.md"), []);
+		assert.deepEqual(checks(".vale/fixtures/docs/user/NegativeContractions-bad.md"), [
+			"STE.NegativeContractions",
+		]);
+		assert.deepEqual(checks(".vale/fixtures/Contractions-bad.md"), ["STE.Contractions"]);
+	} finally {
+		await vale.dispose();
+	}
+});
+
+await test("the UI report names the check behind each rule message", () => {
+	assert.equal(
+		uiRuleName("Split this sentence. Write no more than 25 words per sentence."),
+		"STE.SentenceLength",
+	);
+	assert.equal(uiRuleName("Write two sentences instead of a semicolon."), "STE.Semicolons");
+	assert.equal(uiRuleName('Write the apostrophe in "it\'s" as ’.'), "UI.Apostrophe");
+	assert.equal(
+		uiRuleName('Write "do not" instead of "don’t". Keep the same meaning.'),
+		"STE.NegativeContractions",
+	);
+	assert.equal(uiRuleName('Write "use" instead of "utilize". Keep the same meaning.'), "STE.Words");
+});
+
+await test("the UI report uses the registered oxlint rule and skips machine props and tests", async () => {
+	const directory = await mkdtemp(path.join(tmpdir(), "ui-text-fixture-"));
 	try {
 		const file = path.join(directory, "sample.tsx");
+		const skipped = path.join(directory, "sample.test.tsx");
 		await writeFile(file, '<p title="Utilize it" className="ensure">Use it.</p>');
-		const alerts = await uiAlerts([file]);
+		await writeFile(skipped, "<p>Utilize it.</p>");
+		const alerts = await uiAlerts([file, skipped]);
 		assert.equal(alerts.length, 1);
 		assert.match(alerts[0]?.message ?? "", /Write "use" instead of "utilize"/u);
+		assert.match(alerts[0]?.filename ?? "", /sample\.tsx$/u);
 		await writeFile(file, "<p>");
 		await assert.rejects(uiAlerts([file]));
 	} finally {

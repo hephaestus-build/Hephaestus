@@ -30,8 +30,8 @@ export function ConsentPrompt({
 			<div className="flex min-w-0 flex-col gap-2">
 				<h2 className="text-sm font-semibold">One step left in Hephaestus</h2>
 				<p className="text-sm text-muted-foreground">
-					Your account on {instanceHost} needs you to read and accept its current notice before the
-					extension can show anything. Open Hephaestus, accept it there, then come back.
+					Until you read and accept the current notice for your account on {instanceHost}, the
+					extension cannot show anything. Open Hephaestus to do that, then select Check again.
 				</p>
 				<div className="flex flex-wrap items-center gap-2 pt-1">
 					<ExternalLink
@@ -43,7 +43,7 @@ export function ConsentPrompt({
 					</ExternalLink>
 					<Button variant="outline" disabled={checking} onClick={onCheckAgain}>
 						{checking ? <Spinner /> : <RefreshCwIcon aria-hidden />}
-						{checking ? "Checking…" : "I have accepted it"}
+						{checking ? "Checking…" : "Check again"}
 					</Button>
 				</div>
 			</div>

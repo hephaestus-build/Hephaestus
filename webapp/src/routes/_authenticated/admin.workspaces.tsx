@@ -48,7 +48,7 @@ function AdminWorkspacesPage() {
 			<PageHeader
 				icon={<Building2 />}
 				title="Workspaces"
-				description="View every workspace on this instance and its ownership and status."
+				description="View every workspace on this instance, with its owner and status."
 			/>
 
 			<InputGroup className="w-full sm:max-w-sm">

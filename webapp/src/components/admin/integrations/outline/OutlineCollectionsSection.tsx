@@ -24,7 +24,7 @@ import { RemoveCollectionAlertDialog } from "./RemoveCollectionAlertDialog";
 
 export type { OutlineMirrorState } from "./OutlineCollectionRow";
 
-/** Shared by the loading and loaded states so the header does not materialise on resolve. */
+/** Shared by the loading and loaded states so the header doesn't materialise on resolve. */
 function CollectionsTableHeader() {
 	return (
 		<TableHeader>
@@ -141,8 +141,8 @@ export function OutlineCollectionsSection({
 					</EmptyMedia>
 					<EmptyTitle>No collections mirrored yet</EmptyTitle>
 					<EmptyDescription>
-						Pick the Outline collections whose documents should reach practice reviews. Only what
-						you select is read.
+						Add the Outline collections whose documents should reach practice reviews. Hephaestus
+						reads only the collections you add.
 					</EmptyDescription>
 				</EmptyHeader>
 				<EmptyContent>

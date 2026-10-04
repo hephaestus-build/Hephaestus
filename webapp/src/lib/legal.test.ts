@@ -35,7 +35,7 @@ describe("isValidLegalProfile", () => {
 
 	// The same pattern is duplicated in webapp/docker/entrypoint.sh so the
 	// container can warn operators before the browser ever loads. Pin the
-	// string verbatim so a widening of one side cannot drift from the other.
+	// string verbatim so a widening of one side can't drift from the other.
 	it("exposes the exact regex source shared with entrypoint.sh", () => {
 		expect(LEGAL_PROFILE_PATTERN_SOURCE).toBe("^[a-z0-9][a-z0-9_-]{0,31}$");
 	});

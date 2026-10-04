@@ -87,7 +87,7 @@ public class AccountBootstrapService {
         if (promoted == 0) {
             // Either an APP_ADMIN already exists (self-disabled) or this account is already one.
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "Bootstrap is not available. An administrator already exists.");
+                    HttpStatus.CONFLICT, "Bootstrap is not available. An instance admin already exists.");
         }
         authEventLogger
                 .event(AuthEvent.EventType.APP_ROLE_CHANGED, AuthEvent.Result.SUCCESS)

@@ -119,7 +119,7 @@ class AccountUnlinkIdentityIntegrationTest extends RealAuthIntegrationTest {
                 .expectBody()
                 .jsonPath("$.detail")
                 .isEqualTo(
-                        "You cannot unlink your only sign-in method. Link another provider first or delete your account.");
+                        "You cannot disconnect your only sign-in method. Connect another provider first, or delete your account.");
 
         assertThat(identityLinkRepository.findActiveByAccountId(persistedId(account.getId())))
                 .hasSize(1);

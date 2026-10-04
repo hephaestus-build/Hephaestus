@@ -12,14 +12,14 @@ The roles rebuild them from PostgreSQL and the upstream provider.
 
 ## What to back up
 
-| Data | Where | Priority |
-| --- | --- | --- |
-| PostgreSQL database | Compose-managed `postgresql-data` volume mounted by `postgres` | **Everything.** Accounts, workspaces, observations, feedback, encrypted provider tokens, JWT signing keys. |
-| `.env` | `/opt/hephaestus/docker/self-host/.env` | **Equal priority.** Its encryption keys protect values inside the database backup. Without them, provider credentials and signing material are unreadable. |
-| Signed release lock and deployment overrides | `release-lock.env` and any operator-owned Compose/configuration files | Restore the exact release and configuration associated with the database, not the latest release. |
-| TLS certificates | `letsencrypt` volume mounted by `reverse-proxy` | Optional — `Let's Encrypt` re-issues when permitted to connect (rate limits permitting). |
-| Repository mirrors and attempt folders | `git-repos` volume (server) and `worker-git-repos` volume (worker), both mounted at `/data/git-repos` | These files are disposable. Do not back them up as review evidence. A missing mirror is cloned again on the next sync or review. Restoring PostgreSQL preserves admitted observations and citation verdicts. In-flight reviews must be retried, not resumed from copied folders. |
-| NATS JetStream | `nats-data` volume | Preserve broker snapshots or cold copies when event-gap recovery/forensics requires them. Never replay a store divergent from PostgreSQL without the runbook recovery checks. |
+| Data                                         | Where                                                                                                 | Priority                                                                                                                                                                                                                                                                         |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL database                          | Compose-managed `postgresql-data` volume mounted by `postgres`                                        | **Everything.** Accounts, workspaces, observations, feedback, encrypted provider tokens, JWT signing keys.                                                                                                                                                                       |
+| `.env`                                       | `/opt/hephaestus/docker/self-host/.env`                                                               | **Equal priority.** Its encryption keys protect values inside the database backup. Without them, provider credentials and signing material are unreadable.                                                                                                                       |
+| Signed release lock and deployment overrides | `release-lock.env` and any operator-owned Compose/configuration files                                 | Restore the exact release and configuration associated with the database, not the latest release.                                                                                                                                                                                |
+| TLS certificates                             | `letsencrypt` volume mounted by `reverse-proxy`                                                       | Optional — `Let's Encrypt` re-issues when permitted to connect (rate limits permitting).                                                                                                                                                                                         |
+| Repository mirrors and attempt folders       | `git-repos` volume (server) and `worker-git-repos` volume (worker), both mounted at `/data/git-repos` | These files are disposable. Do not back them up as review evidence. A missing mirror is cloned again on the next sync or review. Restoring PostgreSQL preserves admitted observations and citation verdicts. In-flight reviews must be retried, not resumed from copied folders. |
+| NATS JetStream                               | `nats-data` volume                                                                                    | Preserve broker snapshots or cold copies when event-gap recovery/forensics requires them. Never replay a store divergent from PostgreSQL without the runbook recovery checks.                                                                                                    |
 
 For production backup automation and recovery gates, start with the
 [production operations runbook](./production-operations-runbook#backup-restore-and-postgresql--jetstream).
@@ -145,14 +145,14 @@ Never point a rehearsal at the production Compose project or volumes.
 Do not combine the backup and restore overlays.
 Keep the clone's provider egress denied.
 Keep `AGENT_ENABLED=false` on server **and** worker.
-Engage Silent Mode before any application role starts.
+Turn on silent mode before any application role starts.
 :::
 
 :::caution CAUTION: Production data and application startup
 Never pipe this file into the production database.
 The restore overlay also refuses direct starts of the server, worker, and webhook roles.
 For later application-health checks, use a separately reviewed isolated override.
-Removal of this brake is an explicit release step, not part of the restore command.
+Turning silent mode off is an explicit step, not part of the restore command.
 :::
 
 1. Choose a recorded UTC target covered by a full backup and uninterrupted archived WAL.
@@ -186,7 +186,7 @@ Removal of this brake is an explicit release step, not part of the restore comma
    The command above waits for promotion before it changes restored data.
    The lockdown transaction:
 
-   - Engages Silent Mode.
+   - Turns on silent mode.
    - Pauses feedback delivery in all workspaces.
    - Disables automatic/manual reviews.
    - Turns off all Heph rows under each workspace's **AI models**, so Heph answers nobody.
@@ -290,7 +290,7 @@ Keep credential rotation disabled.
 11. Complete [broker recovery](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers).
 12. Complete **Prove silence** in the [silent checklist](./production-operations-runbook#silent-deployment-checklist).
 13. Complete **Inspect and decide**.
-14. Complete **Release deliberately** before restoring normal access.
+14. Complete **Turn off silent mode deliberately** before restoring normal access.
 15. Verify sign-in.
 16. Verify workspace relationships and activity up to the recovery timestamp.
 

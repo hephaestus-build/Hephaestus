@@ -11,7 +11,7 @@ public class RepositoryAccessForbiddenException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     public RepositoryAccessForbiddenException(String nameWithOwner) {
-        super("GitHub App installation cannot access repository '" + nameWithOwner
-                + "'. Grant access to the repository. Then try again.");
+        super("The GitHub App installation cannot access repository “" + nameWithOwner
+                + "”. Grant access to the repository, then try again.");
     }
 }

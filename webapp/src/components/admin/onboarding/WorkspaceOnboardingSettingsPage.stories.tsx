@@ -172,7 +172,7 @@ export const Empty: Story = {
 		await expect(canvas.getByText("No integrations to require")).toBeVisible();
 		// "Members connect these…" would point at cards that are not on screen.
 		await expect(canvas.queryByText(/Members connect these/u)).toBeNull();
-		await expect(canvas.getByRole("link", { name: "Integrations" })).toHaveAttribute(
+		await expect(canvas.getByRole("link", { name: "Open integrations" })).toHaveAttribute(
 			"href",
 			"/w/engineering/admin/integrations",
 		);
@@ -262,7 +262,7 @@ export const SaveFailed: Story = {
 		await userEvent.click(canvas.getByRole("switch", { name: SWITCH }));
 		await userEvent.click(canvas.getByRole("button", { name: "Save onboarding settings" }));
 		const alert = canvas.getByRole("alert");
-		await expect(alert).toHaveTextContent("Could not save onboarding settings");
+		await expect(alert).toHaveTextContent("We could not save onboarding settings");
 		await expect(alert).toHaveTextContent("Onboarding settings changed. Reload before saving.");
 		// The draft survives the failure, so the reader can retry without redoing it.
 		await expect(canvas.getByRole("switch", { name: SWITCH })).toBeChecked();

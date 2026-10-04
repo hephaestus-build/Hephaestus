@@ -80,11 +80,11 @@ A database row is not automatically authoritative for the current state of GitHu
 Required capture quality is a fact about the source, recorded once in the catalog as `requiredQuality`.
 Each practice that names the source does not restate it.
 
-| Value                    | Meaning                                                                                                |
-| ------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `ANY_CAPTURE`            | The capture must have succeeded. Whatever it holds, including nothing, is reviewable.                  |
+| Value                    | Meaning                                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `ANY_CAPTURE`            | The capture must have succeeded. Whatever it holds, including nothing, is reviewable.                 |
 | `COMPLETE`               | The capture must cover the whole selected scope. A fragment cannot ground a judgment about the whole. |
-| `COMPLETE_AND_NON_EMPTY` | Complete, and containing something.                                                                    |
+| `COMPLETE_AND_NON_EMPTY` | Complete, and containing something.                                                                   |
 
 The three values form a ladder, not two independent booleans.
 The fourth cell of the cross-product, non-empty but possibly partial, asserts something no source can support.
@@ -244,11 +244,11 @@ It is a door, not an occasion an author opts into.
 
 Each entry in `evidenceRequirements` names a source and the stance the practice takes towards it:
 
-| Stance       | Meaning                                                                                                                                                                               |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `REQUIRED`   | The claim reads this source. If it could not be captured to the quality its contract demands, the review is refused rather than run.                                                  |
+| Stance       | Meaning                                                                                                                                                                       |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `REQUIRED`   | The claim reads this source. If it could not be captured to the quality its contract demands, the review is refused rather than run.                                          |
 | `EXHAUSTIVE` | The claim reads this source and asserts something is *not* in it. Required, and also not satisfiable by a partial capture whatever the source contract's floor happens to be. |
-| `CONTEXTUAL` | Used when present, noted when absent, never a reason to refuse.                                                                                                                       |
+| `CONTEXTUAL` | Used when present, noted when absent, never a reason to refuse.                                                                                                               |
 
 `EXHAUSTIVE` exists because an absence is the one claim a fragment cannot support.
 A partial capture of review threads is consistent with "nobody resolved this one".
@@ -258,28 +258,28 @@ Where the corpus was not whole, the honest answer is `INSUFFICIENT_EVIDENCE`, ne
 
 ```json
 {
-  "signals": ["scm.pull_request.opened", "scm.pull_request.ready"],
-  "evidenceRequirements": [
-    { "sourceKind": "scm.pull-request.core", "stance": "REQUIRED" },
-    { "sourceKind": "scm.pull-request.diff", "stance": "REQUIRED" },
-    { "sourceKind": "scm.repository.tree", "stance": "CONTEXTUAL" }
-  ],
-  "reviewWhen": { "draftStatus": ["NOT_DRAFT"] },
-  "subject": "AUTHOR",
-  "automatedReviewPolicy": {
-    "sourceContractVersion": "1.3.0",
-    "automatedReview": {
-      "mode": "LANGUAGE_MODEL",
-      "evidenceSufficiency": "SUFFICIENT_WHEN_REQUIREMENTS_MET"
-    },
-    "whenEvidenceIsInsufficient": "SKIP_AUTOMATED_REVIEW",
-    "knownLimitations": [
-      {
-        "code": "RUNTIME_BEHAVIOR_NOT_OBSERVED",
-        "description": "Repository evidence does not establish behavior in a deployed runtime."
-      }
-    ]
-  }
+ "signals": ["scm.pull_request.opened", "scm.pull_request.ready"],
+ "evidenceRequirements": [
+  { "sourceKind": "scm.pull-request.core", "stance": "REQUIRED" },
+  { "sourceKind": "scm.pull-request.diff", "stance": "REQUIRED" },
+  { "sourceKind": "scm.repository.tree", "stance": "CONTEXTUAL" }
+ ],
+ "reviewWhen": { "draftStatus": ["NOT_DRAFT"] },
+ "subject": "AUTHOR",
+ "automatedReviewPolicy": {
+  "sourceContractVersion": "1.3.0",
+  "automatedReview": {
+   "mode": "LANGUAGE_MODEL",
+   "evidenceSufficiency": "SUFFICIENT_WHEN_REQUIREMENTS_MET"
+  },
+  "whenEvidenceIsInsufficient": "SKIP_AUTOMATED_REVIEW",
+  "knownLimitations": [
+   {
+    "code": "RUNTIME_BEHAVIOR_NOT_OBSERVED",
+    "description": "Repository evidence does not establish behavior in a deployed runtime."
+   }
+  ]
+ }
 }
 ```
 

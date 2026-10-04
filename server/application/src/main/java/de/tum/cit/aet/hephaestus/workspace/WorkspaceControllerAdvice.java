@@ -115,7 +115,10 @@ public class WorkspaceControllerAdvice {
                         FieldError::getField, Collectors.mapping(FieldError::getDefaultMessage, Collectors.toList())));
 
         return problemWithErrors(
-                HttpStatus.BAD_REQUEST, "Validation failed", "Request body contains invalid fields", errors);
+                HttpStatus.BAD_REQUEST,
+                "Validation failed",
+                "Some fields need changes. Check your entries and try again.",
+                errors);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -126,7 +129,10 @@ public class WorkspaceControllerAdvice {
                         Collectors.mapping(ConstraintViolation::getMessage, Collectors.toList())));
 
         return problemWithErrors(
-                HttpStatus.BAD_REQUEST, "Validation failed", "Request parameters contain invalid values", errors);
+                HttpStatus.BAD_REQUEST,
+                "Validation failed",
+                "Some values need changes. Check your entries and try again.",
+                errors);
     }
 
     @ExceptionHandler(IllegalStateException.class)
@@ -135,7 +141,7 @@ public class WorkspaceControllerAdvice {
         return problem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Workspace operation failed",
-                "The server could not complete the workspace request. Try again later.");
+                "We could not complete the workspace request. Try again in a moment.");
     }
 
     private ProblemDetail problem(HttpStatus status, String title, String detail) {

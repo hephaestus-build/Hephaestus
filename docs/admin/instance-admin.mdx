@@ -1,7 +1,7 @@
 ---
 id: instance-admin
 title: Operate the instance admin console
-description: Manage accounts, workspaces, audits, AI usage, and Silent Mode across the instance.
+description: Manage accounts, workspaces, audits, AI usage, and silent mode across the instance.
 ---
 
 This console requires the instance-admin role.
@@ -12,7 +12,7 @@ Instance administration operates the deployment.
 
 ## Overview
 
-The overview shows Silent Mode, configuration readiness, release information, workspace counts,
+The overview shows silent mode, configuration readiness, release information, workspace counts,
 and recent authentication activity.
 
 1. Before you invite members or enable feedback, check readiness.
@@ -27,7 +27,7 @@ Sensitive access changes require a recent sign-in.
 1. Find the account.
 2. Change its instance role or force sign-out of its sessions.
 
-A linked provider account identifies a person. An instance role does not create workspace membership.
+A connected provider account identifies a person. An instance role does not create workspace membership.
 
 ## Workspaces
 
@@ -42,7 +42,7 @@ It does not give them Heph or a member's private Practice profile in ordinary wo
 
 **View as user** gives access to a member's permitted read-only pages for support.
 It requires a recent sign-in.
-Each read about the member has a **USER_VIEW** audit record with the administrator, member, workspace, and reason.
+Each read about the member has a **USER_VIEW** audit record with the instance admin, member, workspace, and reason.
 If Hephaestus cannot record the audit, it refuses access.
 
 1. Select **View as user**.
@@ -83,20 +83,20 @@ Do not substitute a display name for a provider ID.
 
 Use the [data-protection documentation](./dsms) for identity verification, scope, retention, and
 external-copy obligations. This console is separate from a member's own
-[Danger Zone](/user/user-settings#danger-zone).
+[Danger zone](/user/user-settings#danger-zone).
 
-## Silent Mode
+## Silent mode
 
-New instances start with it engaged. It blocks outbound feedback writes to GitHub, GitLab, and Slack.
+New instances start with silent mode on. It blocks outbound feedback writes to GitHub, GitLab, and Slack.
 Inbound events, sync, practice reviews, and observation storage continue. OAuth, token lifecycle,
 webhook registration, and operator alerts remain available.
 
-A stale settings view cannot release a newer brake.
-If you turn Silent Mode off, Hephaestus does not replay feedback withheld while it was on.
+A stale settings view cannot turn off a newer silent mode setting.
+If you turn silent mode off, Hephaestus does not replay feedback withheld while it was on.
 For incidents, deployment checks, and recovery, follow the [production operations runbook](./production-operations-runbook).
 
-1. Open **Instance admin → Instance settings** to inspect or change Silent Mode.
-2. Before you release it, read the current state.
+1. Open **Instance admin → Instance settings** to inspect or change silent mode.
+2. Before you turn it off, read the current state.
 
 ## Bootstrap and recovery
 

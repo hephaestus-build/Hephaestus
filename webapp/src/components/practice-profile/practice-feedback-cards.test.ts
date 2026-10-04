@@ -79,7 +79,10 @@ describe("toFeedbackCard", () => {
 			timestamp: new Date("2026-08-20T10:05:00Z"),
 		});
 		expect(card.condition).toStrictEqual([
-			{ type: "text", text: "Ticks itself once three pieces of work in a row come back clean" },
+			{
+				type: "text",
+				text: "Resolves on its own once three pieces of work in a row come back clean",
+			},
 		]);
 		expect(card.reviewedWork).toStrictEqual([
 			{ ref: pullRequest(6), date: new Date("2026-08-19"), outcome: "NOT_MET" },
@@ -145,7 +148,7 @@ describe("toFeedbackCard", () => {
 		);
 		expect(closed).toMatchObject({ state: "closed", timestamp: new Date("2026-09-02") });
 		expect(closed.condition).toStrictEqual([
-			{ type: "text", text: "Closed on 2 September · the practice's review rules changed" },
+			{ type: "text", text: "Closed on 2 September · the practice’s review rules changed" },
 		]);
 	});
 
@@ -181,7 +184,10 @@ describe("toFeedbackCard", () => {
 		const card = toFeedbackCard({ ...feedback, ...answered("DISPUTED") }, [group]);
 		expect(card).toMatchObject({ state: "open", timestamp: new Date("2026-08-20T10:05:00Z") });
 		expect(card.condition).toStrictEqual([
-			{ type: "text", text: "Ticks itself once three pieces of work in a row come back clean" },
+			{
+				type: "text",
+				text: "Resolves on its own once three pieces of work in a row come back clean",
+			},
 		]);
 	});
 

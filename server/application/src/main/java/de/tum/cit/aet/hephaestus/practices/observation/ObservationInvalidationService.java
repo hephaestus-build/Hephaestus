@@ -42,12 +42,12 @@ public class ObservationInvalidationService {
         var active = invalidationRepository.findActive(workspaceId, observationId);
         if (valid) {
             active.orElseThrow(() ->
-                            new ResponseStatusException(HttpStatus.CONFLICT, "This observation is not invalidated"))
+                            new ResponseStatusException(HttpStatus.CONFLICT, "This observation is not invalidated."))
                     .restore(accountId, reason.strip(), clock.instant());
             return;
         }
         if (active.isPresent()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "This observation is already invalidated");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This observation is already invalidated.");
         }
         invalidationRepository.save(
                 new ObservationInvalidation(observation, accountId, reason.strip(), clock.instant()));

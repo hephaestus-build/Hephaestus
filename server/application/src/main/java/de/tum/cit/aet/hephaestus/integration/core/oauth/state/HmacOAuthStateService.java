@@ -198,7 +198,7 @@ public class HmacOAuthStateService implements OAuthStateService {
         }
         Instant issued = Instant.ofEpochSecond(issuedAt);
         if (Instant.now().minus(ttl).isAfter(issued)) {
-            throw new IllegalArgumentException("The OAuth state expired.");
+            throw new IllegalArgumentException("The connection request expired. Start the connection again.");
         }
         IntegrationKind kind;
         try {
@@ -217,7 +217,7 @@ public class HmacOAuthStateService implements OAuthStateService {
         // Single-use enforcement via atomic UPDATE inside tryConsume. The HMAC + TTL are
         // already verified — any forged or stale token has been rejected.
         if (nonceStore != null && !nonceStore.tryConsume(nonce, binding)) {
-            throw new IllegalArgumentException("The OAuth state was already used.");
+            throw new IllegalArgumentException("This connection request was already used. Start the connection again.");
         }
         return binding;
     }

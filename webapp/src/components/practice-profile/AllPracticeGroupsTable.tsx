@@ -160,7 +160,7 @@ export function AllPracticeGroupsTable({
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Could not load your practice groups"
+				title="We could not load your practice groups"
 				onRetry={state.onRetry}
 			/>
 		);
@@ -188,9 +188,9 @@ export function AllPracticeGroupsTable({
 			)}
 			empty={{
 				icon: <ClipboardCheckIcon />,
-				title: "No practices set up yet.",
+				title: "No practices set up yet",
 				description:
-					"Practice groups appear here once an admin sets up the practices this workspace reviews.",
+					"Practice groups appear here once a workspace admin sets up the practices this workspace reviews.",
 			}}
 			isLoading={state.status === "loading"}
 			loadingRow={loadingRow}

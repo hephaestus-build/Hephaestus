@@ -119,7 +119,7 @@ describe("AdminInstanceLlmUsageTable", () => {
 		screen.getByRole("columnheader", { name: "Shared-model spend" });
 		screen.getByRole("columnheader", { name: "Provider spend" });
 		const toggle = screen.getByRole("button", {
-			name: "View usage details for Example Workspace",
+			name: "Details for Example Workspace",
 		});
 		expect(toggle.getAttribute("aria-expanded")).toBe("false");
 		// Collapsed, so there is no detail row for `aria-controls` to point at.
@@ -200,7 +200,7 @@ describe("AdminInstanceLlmUsageTable", () => {
 		]);
 
 		expect(rowControlNames()).toStrictEqual([
-			"View usage details for Example Workspace",
+			"Details for Example Workspace",
 			"Set budget for Example Workspace (shared models)",
 		]);
 	});
@@ -208,7 +208,7 @@ describe("AdminInstanceLlmUsageTable", () => {
 	it("withdraws the budget editor on a closed month and says why, once, above the table", () => {
 		renderTable([workspace], { isCurrentMonth: false });
 
-		expect(rowControlNames()).toStrictEqual(["View usage details for Example Workspace"]);
+		expect(rowControlNames()).toStrictEqual(["Details for Example Workspace"]);
 		screen.getByText(/applies from the moment it is saved/iu);
 	});
 
@@ -238,11 +238,11 @@ describe("AdminInstanceLlmUsageTable", () => {
 
 		expect(
 			screen
-				.getByRole("button", { name: "Hide usage details for Example Workspace" })
+				.getByRole("button", { name: "Details for Example Workspace" })
 				.getAttribute("aria-expanded"),
 		).toBe("true");
 		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
-		within(byJobType).getByText("Mentor turn");
+		within(byJobType).getByText("Heph turn");
 		within(byJobType).getByText("$1.75");
 		const byDay = screen.getByRole("table", { name: "AI spend by day" });
 		within(byDay).getByText("Jul 5");

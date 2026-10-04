@@ -21,7 +21,7 @@ public class ConnectionBusyException extends RuntimeException {
         super("Connection " + connectionId
                 + " has an active sync job "
                 + jobId
-                + ". Hephaestus requested its cancellation. Retry the disconnect when the job stops.");
+                + ". Hephaestus asked the job to stop. Disconnect again when it has stopped.");
         this.connectionId = connectionId;
         this.jobId = jobId;
     }

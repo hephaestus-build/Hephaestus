@@ -114,11 +114,11 @@ export function SurveyQuestionnaire({
 
 /** How an answer is given, for the error a Next without one shows. */
 const ANSWER_VERB: Record<Question["type"], string> = {
-	TEXT: "Type an answer",
+	TEXT: "Enter an answer",
 	SINGLE_CHOICE: "Choose an answer",
 	MULTIPLE_CHOICE: "Choose at least one answer",
-	RATING: "Pick a number",
-	NPS: "Pick a number",
+	RATING: "Select a number",
+	NPS: "Select a number",
 };
 
 function chosenOf(value: SurveyResponseDraft["answers"][string]): string[] {

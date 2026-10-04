@@ -34,7 +34,7 @@ export const Empty: Story = {
 export const Saving: Story = {
 	args: { isSaving: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Saving token…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Replacing token…" })).toBeDisabled();
 		await expect(canvas.getByLabelText("New personal access token")).toBeDisabled();
 	},
 };
@@ -80,9 +80,9 @@ export const ExpiringGitLabToken: Story = {
 		attentionProblem: "CREDENTIAL_EXPIRING",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Token expires on 5 July 2026")).toBeVisible();
+		await expect(canvas.getByText("The token expires on 5 July 2026.")).toBeVisible();
 		await expect(
-			canvas.getByText("The token could not be rotated. Replace it below to keep sync available."),
+			canvas.getByText("Hephaestus could not rotate it. Replace it below to keep sync working."),
 		).toBeVisible();
 	},
 };
@@ -90,7 +90,7 @@ export const ExpiringGitLabToken: Story = {
 export const RefusedGitLabToken: Story = {
 	args: { providerLabel: "GitLab", attentionProblem: "CREDENTIAL_REVOKED" },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("GitLab refuses this token")).toBeVisible();
+		await expect(canvas.getByText("GitLab no longer accepts this token")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Replace token" })).toBeDisabled();
 		await userEvent.type(canvas.getByLabelText("New personal access token"), "replacement");
 		await expect(canvas.getByRole("button", { name: "Replace token" })).toBeEnabled();
@@ -100,7 +100,7 @@ export const RefusedGitLabToken: Story = {
 export const GitLabNoExpiry: Story = {
 	args: { providerLabel: "GitLab", tokenExpiryCheckedAt: new Date(STORY_NOW) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Token has no expiry")).toBeVisible();
+		await expect(canvas.getByText("The token has no expiry.")).toBeVisible();
 	},
 };
 

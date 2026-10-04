@@ -21,8 +21,8 @@ export interface ProviderTerminology {
 const TERMS = {
 	GITHUB: {
 		displayName: "GitHub",
-		pullRequest: "Pull Request",
-		pullRequests: "Pull Requests",
+		pullRequest: "Pull request",
+		pullRequests: "Pull requests",
 		pullRequestSigil: "#",
 		pullRequestShort: "PR",
 		pullRequestsShort: "PRs",
@@ -32,8 +32,8 @@ const TERMS = {
 	},
 	GITLAB: {
 		displayName: "GitLab",
-		pullRequest: "Merge Request",
-		pullRequests: "Merge Requests",
+		pullRequest: "Merge request",
+		pullRequests: "Merge requests",
 		pullRequestSigil: "!",
 		pullRequestShort: "MR",
 		pullRequestsShort: "MRs",

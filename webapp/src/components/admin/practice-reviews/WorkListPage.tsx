@@ -55,7 +55,9 @@ export function WorkListPage({
 	const reset = () => onSearchChange({ kind: undefined });
 	let results: ReactNode;
 	if (error != null) {
-		results = <QueryErrorAlert error={error} title="Could not load the work" onRetry={onRetry} />;
+		results = (
+			<QueryErrorAlert error={error} title="We could not load the work" onRetry={onRetry} />
+		);
 	} else if (isLoading) {
 		results = <ReviewResultsSkeleton label="Loading work" rows={REVIEW_PAGE_SIZE} />;
 	} else if (rows.length === 0) {
@@ -73,7 +75,7 @@ export function WorkListPage({
 					<EmptyDescription>
 						{hasFilter
 							? "Other kinds of work may be recorded. Show all work to see them."
-							: "Pull requests, issues, conversations and documents appear here as they sync from a connected integration, including the ones no practice had anything to say about."}
+							: "Pull requests, issues, conversations and documents appear here after they sync from a connected integration. That includes work that no practice had anything to say about."}
 					</EmptyDescription>
 				</EmptyHeader>
 				{hasFilter && (

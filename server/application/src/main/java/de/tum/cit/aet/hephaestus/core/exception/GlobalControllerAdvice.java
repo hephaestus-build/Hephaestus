@@ -41,7 +41,10 @@ public class GlobalControllerAdvice {
 
     @ExceptionHandler(EntityNotFoundException.class)
     ProblemDetail handleNotFound(EntityNotFoundException exception) {
-        log.debug("Handled entity not found exception: message={}", messageOf(exception));
+        log.debug(
+                "Handled entity not found exception: message={}, lookup={}",
+                messageOf(exception),
+                exception.getLookup());
         return problem(HttpStatus.NOT_FOUND, "Resource not found", messageOf(exception));
     }
 
@@ -60,7 +63,7 @@ public class GlobalControllerAdvice {
     @ExceptionHandler(AuthorizationDeniedException.class)
     ProblemDetail handleAuthorizationDenied(AuthorizationDeniedException exception) {
         log.debug("Authorization denied: message={}", messageOf(exception));
-        return problem(HttpStatus.FORBIDDEN, "Access denied", "You do not have permission for this operation.");
+        return problem(HttpStatus.FORBIDDEN, "Access denied", "You do not have permission to do this.");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -83,7 +86,7 @@ public class GlobalControllerAdvice {
         return problem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Change not recorded",
-                "The server refused the change because it could not write the change to the audit log.");
+                "We could not record this change in the audit log, so the change was not saved. Try again in a moment.");
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -102,7 +105,8 @@ public class GlobalControllerAdvice {
             }
         }
         event.log("Request conflicts with database constraints");
-        return problem(HttpStatus.CONFLICT, "Conflict", "The request conflicts with the current resource state.");
+        return problem(
+                HttpStatus.CONFLICT, "Conflict", "This request conflicts with the current data. Reload and try again.");
     }
 
     // VALIDATION EXCEPTIONS
@@ -113,8 +117,8 @@ public class GlobalControllerAdvice {
                 .collect(Collectors.groupingBy(
                         FieldError::getField, Collectors.mapping(FieldError::getDefaultMessage, Collectors.toList())));
 
-        ProblemDetail problem =
-                ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Request body contains invalid fields");
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "Some fields need changes. Check your entries and try again.");
         problem.setTitle("Validation failed");
         problem.setProperty("errors", errors);
         return problem;
@@ -127,8 +131,8 @@ public class GlobalControllerAdvice {
                         violation -> leafProperty(violation).orElse("value"),
                         Collectors.mapping(ConstraintViolation::getMessage, Collectors.toList())));
 
-        ProblemDetail problem =
-                ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Constraint validation failed");
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "Some values need changes. Check your entries and try again.");
         problem.setTitle("Validation failed");
         problem.setProperty("errors", errors);
         return problem;
@@ -152,7 +156,7 @@ public class GlobalControllerAdvice {
         return problem(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "Service unavailable",
-                "An upstream service is not available now. Try again later.");
+                "We could not reach a service that Hephaestus depends on. Try again in a moment.");
     }
 
     // FALLBACK HANDLER
@@ -164,7 +168,7 @@ public class GlobalControllerAdvice {
         return problem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Internal server error",
-                "An unexpected error occurred. Try again later.");
+                "We could not finish that. Try again. If it keeps failing, contact your instance operator.");
     }
 
     @ExceptionHandler(Exception.class)
@@ -177,7 +181,7 @@ public class GlobalControllerAdvice {
         return problem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Internal server error",
-                "An unexpected error occurred. Try again later.");
+                "We could not finish that. Try again. If it keeps failing, contact your instance operator.");
     }
 
     // HELPER METHODS

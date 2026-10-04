@@ -224,7 +224,7 @@ function JobRow({ job }: { job: SyncJob }) {
 							render={
 								<button
 									type="button"
-									aria-label={`Error for job ${job.id}`}
+									aria-label={`Show error for job ${job.id}`}
 									className={cn("inline-flex cursor-help rounded-sm", FOCUS_RING)}
 								/>
 							}

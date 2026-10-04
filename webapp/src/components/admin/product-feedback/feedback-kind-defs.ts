@@ -22,6 +22,6 @@ export const FEEDBACK_KIND_DEFS: StatusDefs<FeedbackItem["kind"]> = {
 		label: "Feedback",
 		icon: MessageSquare,
 		badgeVariant: "secondary",
-		description: "What works and what gets in the way, in the sender's words.",
+		description: "What works and what gets in the way, in the sender’s words.",
 	},
 };

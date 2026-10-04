@@ -11,8 +11,8 @@ describe("getProviderTerms", () => {
 	it("returns GitHub terminology", () => {
 		const terms = getProviderTerms("GITHUB");
 		expect(terms.displayName).toBe("GitHub");
-		expect(terms.pullRequest).toBe("Pull Request");
-		expect(terms.pullRequests).toBe("Pull Requests");
+		expect(terms.pullRequest).toBe("Pull request");
+		expect(terms.pullRequests).toBe("Pull requests");
 		expect(terms.pullRequestShort).toBe("PR");
 		expect(terms.pullRequestsShort).toBe("PRs");
 		expect(terms.repository).toBe("Repository");
@@ -23,8 +23,8 @@ describe("getProviderTerms", () => {
 	it("returns GitLab terminology", () => {
 		const terms = getProviderTerms("GITLAB");
 		expect(terms.displayName).toBe("GitLab");
-		expect(terms.pullRequest).toBe("Merge Request");
-		expect(terms.pullRequests).toBe("Merge Requests");
+		expect(terms.pullRequest).toBe("Merge request");
+		expect(terms.pullRequests).toBe("Merge requests");
 		expect(terms.pullRequestShort).toBe("MR");
 		expect(terms.pullRequestsShort).toBe("MRs");
 		expect(terms.repository).toBe("Project");

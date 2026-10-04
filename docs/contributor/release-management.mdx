@@ -70,6 +70,7 @@ sequenceDiagram
    An ordinary pull request builds only changed `linux/amd64` candidates and aliases the rest from `main`.
    The preflight captures evidence for each image on both published platforms.
    It can capture evidence only for images published by its own run.
+
 3. **The merge is checked again.** The merge commit's push runs CI/CD in full.
    A `main` push repeats source-validation legs only with a version bump, which this commit carries.
    `release.yml` starts only after that run succeeds.
@@ -175,19 +176,19 @@ Pre-merge validation covers the same image subjects and shared evidence checks a
 preflight` job in `cicd.yml` both run them, and the preflight runs the verifier in its default mode,
 which performs every check except signature verification.
 
-| Release evidence check | Can a release be the first to run it? |
-| --- | --- |
-| Manifest matches `security/release-images.json`, both platforms, canonical order | No — `check-release-image-inventory.ts` validates the inventory on every pull request, and `generate-release-evidence.test.ts` feeds the real generator's manifest to the real verifier |
-| Syft, SPDX and CycloneDX describe the same subject and the same packages | No — the preflight generates the triple and validates it |
-| Trivy licence report is bound to its subject | No — the preflight generates and validates it |
-| Vulnerability policy, `linux/amd64` | No — also the build gate in `reusable-docker-build.yml` and, for the pinned upstream digests, `ci-security-scan.yml` |
-| Vulnerability policy, `linux/arm64` | No — `ci-security-scan.yml` for the pinned upstream digests, and the preflight for the images we build, which nothing else scans on this platform |
-| Each platform digest is a member of its published index | No — the preflight resolves and checks index membership over the images its own run pushed |
-| The validation documents re-derive unchanged | No — the preflight verifies twice, the second time comparing rather than writing |
-| SBOM attestation matches the durable evidence | **Yes, structurally.** `cosign attest` creates the attestation during the release. There is nothing to verify before it exists |
-| Image index signature and build provenance carry the release's identity | **Yes, structurally.** The Fulcio certificate identity is the release workflow's, on `refs/heads/main`, and no earlier run can produce one |
-| The manifest names a release version | **Yes, structurally.** Only `plan-release.ts` decides the tag. The preflight substitutes the version the ref carries |
-| The bundle describes the images this run built | No — the preflight and `release.yml` resolve subjects through the image build's published commit tag. `ci-contract.test.ts` requires that tag for every supported event of either caller. See [CI/CD § Image identity](./ci-cd.mdx#image-identity) |
+| Release evidence check                                                           | Can a release be the first to run it?                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Manifest matches `security/release-images.json`, both platforms, canonical order | No — `check-release-image-inventory.ts` validates the inventory on every pull request, and `generate-release-evidence.test.ts` feeds the real generator's manifest to the real verifier                                                            |
+| Syft, SPDX and CycloneDX describe the same subject and the same packages         | No — the preflight generates the triple and validates it                                                                                                                                                                                           |
+| Trivy licence report is bound to its subject                                     | No — the preflight generates and validates it                                                                                                                                                                                                      |
+| Vulnerability policy, `linux/amd64`                                              | No — also the build gate in `reusable-docker-build.yml` and, for the pinned upstream digests, `ci-security-scan.yml`                                                                                                                               |
+| Vulnerability policy, `linux/arm64`                                              | No — `ci-security-scan.yml` for the pinned upstream digests, and the preflight for the images we build, which nothing else scans on this platform                                                                                                  |
+| Each platform digest is a member of its published index                          | No — the preflight resolves and checks index membership over the images its own run pushed                                                                                                                                                         |
+| The validation documents re-derive unchanged                                     | No — the preflight verifies twice, the second time comparing rather than writing                                                                                                                                                                   |
+| SBOM attestation matches the durable evidence                                    | **Yes, structurally.** `cosign attest` creates the attestation during the release. There is nothing to verify before it exists                                                                                                                     |
+| Image index signature and build provenance carry the release's identity          | **Yes, structurally.** The Fulcio certificate identity is the release workflow's, on `refs/heads/main`, and no earlier run can produce one                                                                                                         |
+| The manifest names a release version                                             | **Yes, structurally.** Only `plan-release.ts` decides the tag. The preflight substitutes the version the ref carries                                                                                                                               |
+| The bundle describes the images this run built                                   | No — the preflight and `release.yml` resolve subjects through the image build's published commit tag. `ci-contract.test.ts` requires that tag for every supported event of either caller. See [CI/CD § Image identity](./ci-cd.mdx#image-identity) |
 
 The two signature entries are the verifier's only mode-conditional behavior.
 `ci-contract.test.ts` asserts this: a check gated on anything except `mode === "verify-signatures"` fails the contract test.

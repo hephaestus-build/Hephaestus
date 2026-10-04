@@ -36,8 +36,8 @@ public final class RateLimitResponse {
             throws IOException {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.TOO_MANY_REQUESTS,
-                "You sent too many requests. Try again after " + retryAfterSeconds + " seconds.");
-        problem.setTitle("Too Many Requests");
+                "Too many requests. Wait " + retryAfterSeconds + " seconds, then try again.");
+        problem.setTitle("Too many requests");
         problem.setProperty("retryAfterSeconds", retryAfterSeconds);
         problem.setInstance(URI.create(request.getRequestURI()));
 

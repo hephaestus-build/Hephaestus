@@ -220,7 +220,7 @@ class ConnectionControllerTest extends BaseUnitTest {
         InitiateConnectionRequestDTO req = new InitiateConnectionRequestDTO(IntegrationKind.SLACK, Map.of());
         assertThatThrownBy(() -> bare.initiate(ctx(1L), req, null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("No ConnectionStrategy registered");
+                .hasMessageContaining("This instance cannot connect that integration.");
     }
 
     @Test
@@ -322,7 +322,7 @@ class ConnectionControllerTest extends BaseUnitTest {
                         new UpdateConnectionStatusRequestDTO(IntegrationState.UNINSTALLED, null),
                         null))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("SLACK");
+                .hasMessageContaining("turned off on this instance");
 
         verify(connectionService, never()).disconnect(any(), any(), any());
         verify(connectionService, never()).transition(any(), any());

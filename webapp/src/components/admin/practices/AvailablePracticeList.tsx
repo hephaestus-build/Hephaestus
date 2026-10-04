@@ -128,7 +128,7 @@ function reviewLabel(groupMissing: boolean, available: number, restorable: numbe
 	if (available === 0) {
 		return `Restore group · ${countLabel(restorable)}`;
 	}
-	return `Review group · ${countLabel(available)}`;
+	return `Add group · ${countLabel(available)}`;
 }
 
 function PracticeRow({ practice }: { practice: CatalogPracticeSummary }) {

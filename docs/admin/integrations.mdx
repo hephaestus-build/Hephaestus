@@ -20,7 +20,7 @@ Removal of a monitored repository erases its mirror, not the upstream repository
 ## GitLab
 
 A deployment syncs one GitLab instance. **Create workspace** lets an eligible user select a group on
-that configured instance, using their linked GitLab account and an access token. A login provider
+that configured instance, using their connected GitLab account and an access token. A login provider
 for a different instance permits sign-in, but does not permit a workspace there.
 
 Hephaestus automatically registers group hooks with a signed routing token bound to the connection.
@@ -52,7 +52,7 @@ Channel monitoring and a member's permission to use their messages are separate:
 The workspace connection does not override a member's AI choice.
 
 Use **Reconnect Slack** with the same Slack workspace to replace a bot token without removing
-channels, their consent, mirrored messages, or retention settings. Do not use **Disconnect** for this.
+channels, their consent, mirrored messages, or retention settings. Do not use **Disconnect Slack** for this.
 
 ## Outline
 
@@ -68,7 +68,7 @@ A workspace admin cannot approve a new Outline operator through its URL.
 ### Replace an Outline key without erasing the mirror
 
 The current UI has no key-replacement form for an existing connection.
-**Disconnect** erases the mirror.
+**Disconnect Outline** erases the mirror.
 
 :::caution CAUTION: Outline key secrecy and connection identity
 Keep the key out of shell history, logs, and support tickets.

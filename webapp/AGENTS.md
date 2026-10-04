@@ -1,7 +1,9 @@
 # Webapp
 
 All prose follows the [writing standard](../docs/contributor/simplified-technical-english.md).
-Apply it to docs, UI text, user-facing responses, comments, and repository instructions.
+It has two profiles.
+UI text, user-facing responses, and user docs use the product voice.
+Admin docs, contributor docs, and repository instructions use STE.
 
 React 19 SPA on TanStack Router/Query, Tailwind 4, shadcn primitives over **Base UI**
 (`@base-ui/react`) — not Radix. Vitest + Storybook for tests, oxlint for lint and oxfmt for format,

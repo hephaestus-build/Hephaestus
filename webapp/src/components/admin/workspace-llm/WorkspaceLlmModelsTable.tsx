@@ -6,7 +6,13 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { DataHandlingBadge } from "@/components/practice-vocabulary/DataHandlingBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import {
+	Empty,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "@/components/ui/empty";
 import {
 	Table,
 	TableBody,
@@ -42,6 +48,7 @@ export function WorkspaceLlmModelsTable({
 						<Bot />
 					</EmptyMedia>
 					<EmptyTitle>No models yet</EmptyTitle>
+					<EmptyDescription>Add a model to use this provider.</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
 		);
@@ -115,8 +122,8 @@ export function WorkspaceLlmModelsTable({
 				subject={deleting}
 				onClose={() => setDeleting(null)}
 				title={(model) => `Delete “${model.displayName}”?`}
-				description="Any agent bound to this model will stop working until you bind the model again. This cannot be undone."
-				confirmLabel="Delete"
+				description="Practice reviews and Heph stop using this model wherever you assigned it, until you assign another. You cannot undo this."
+				confirmLabel="Delete model"
 				onConfirm={onDelete}
 			/>
 		</>

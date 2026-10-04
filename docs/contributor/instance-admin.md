@@ -46,7 +46,7 @@ Instance metadata endpoints under `/admin`, all gated by `hasAuthority('app_admi
 | --- | --- |
 | `GET /admin/users` (`adminListUsers`) | Paged account list |
 | `PATCH /admin/users/{id}` (`adminUpdateUser`) | Change an account's app role (last-admin guard. Cannot self-demote) |
-| `DELETE /admin/users/{id}/sessions` (`adminRevokeUserSessions`) | **Force sign-out**: revoke all of an account's active sessions. Audited as `JWT_REVOKED`. |
+| `DELETE /admin/users/{id}/sessions` (`adminRevokeUserSessions`) | **Force sign out**: revoke all of an account's active sessions. Audited as `JWT_REVOKED`. |
 | `GET /admin/workspaces` (`adminListWorkspaces`) | **Metadata-only** overview of every workspace (slug, status, provider, owner login, member count, created-at). Cross-tenant through `@WorkspaceAgnostic`. This endpoint itself returns **no tenant content**. Private user content is reached through [read-only user views](#read-only-user-views). |
 | `GET /admin/audit` (`adminListAuthEvents`) | Read-only viewer over the append-only `auth_event` log (logins, user views, role changes, deletions). Paged, newest-first, filterable by event type. [read-only user views](#read-only-user-views) says what a `USER_VIEW` row carries. |
 | `GET /admin/config-audit` (`adminListConfigAuditEvents`) | Read-only viewer over `config_audit_event` — who changed which workspace setting, when, and from what to what. Rows are immutable inside the retention window (DB trigger). `ConfigAuditRetentionJob` is the only way one leaves. |
@@ -57,7 +57,7 @@ Instance metadata endpoints under `/admin`, all gated by `hasAuthority('app_admi
 | `PUT /admin/workspaces/{workspaceSlug}/llm/budget` (`adminUpdateWorkspaceLlmBudget`) | Set **or clear** a workspace's monthly cap on **shared-model** spend — clearing is `PUT` with `monthlyBudgetUsd: null`, not `DELETE` (there is no `DELETE` mapping. It returns 405). The workspace's cap on its own provider is a different endpoint under `/workspaces/**`, set by the workspace's own admin. |
 | `GET /admin/settings` / `PATCH /admin/settings/silent-mode` | Read or change the instance-wide outbound delivery brake. Releasing requires `If-Match` with the ETag returned by `GET`, so a stale browser cannot release a newer incident response. |
 
-## Instance Silent Mode
+## Instance silent mode
 
 [Instance admin](/admin/instance-admin#silent-mode) owns operator behavior and recovery.
 `GET /admin/settings` returns an ETag. `PATCH /admin/settings/silent-mode` requires `If-Match`

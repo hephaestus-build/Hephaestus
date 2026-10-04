@@ -105,7 +105,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
 			if (state.step === 1) {
 				return state;
 			}
-			// Clear downstream state so stale values do not persist when user changes selection
+			// Clear downstream state so stale values don't persist when user changes selection
 			if (state.step === 2) {
 				return {
 					...state,

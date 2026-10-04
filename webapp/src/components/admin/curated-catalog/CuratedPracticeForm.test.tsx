@@ -275,7 +275,7 @@ describe("CuratedPracticeForm", () => {
 			true,
 		);
 		expect(
-			screen.getByRole<HTMLButtonElement>("button", { name: "Continue with my draft" }).disabled,
+			screen.getByRole<HTMLButtonElement>("button", { name: "Continue with your draft" }).disabled,
 		).toBe(false);
 	});
 

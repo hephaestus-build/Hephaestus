@@ -21,7 +21,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Setup is still finishing. Nothing is owed, so this states the fact and does not shout. */
+/** Setup is still finishing. Nothing is owed, so this states the fact and doesn't shout. */
 export const Pending: Story = {
 	args: { connectionState: "PENDING" },
 	play: async ({ canvas }) => {
@@ -64,7 +64,7 @@ export const CredentialUnreadable: Story = {
 	args: { connectionState: "ACTIVE", credentialsUnreadableSince: new Date("2026-09-05T08:00:00Z") },
 	play: async ({ canvas }) => {
 		canvas.getByText(/the stored token cannot be read/iu);
-		await expect(canvas.getByText(/the connection's page says how to replace it/iu)).toBeVisible();
+		await expect(canvas.getByText(/the connection’s page says how to replace it/iu)).toBeVisible();
 	},
 };
 

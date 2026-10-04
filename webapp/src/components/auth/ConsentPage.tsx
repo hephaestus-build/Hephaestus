@@ -136,7 +136,7 @@ const ANSWERS = [
 	{
 		value: "no",
 		// Consent wording: a change moves `WORDING_VERSION`, so the rule stays off for this string.
-		// oxlint-disable-next-line hephaestus/ste-ui-text
+		// oxlint-disable-next-line hephaestus/ui-text-voice
 		title: "No, don't take part",
 		detail: "Keep my usage and feedback out of the research.",
 	},
@@ -268,12 +268,12 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 									{/* The obligations sit with the box that accepts them. The points above are
 										    what the reader needs in order to decide, not things anyone agrees to. */}
 									{/* Consent wording: a change moves `WORDING_VERSION`, so the rule stays off here. */}
-									{/* oxlint-disable hephaestus/ste-ui-text */}
+									{/* oxlint-disable hephaestus/ui-text-voice */}
 									<FieldDescription>
 										Keep to the work you are entitled to see, and treat feedback as guidance for the
 										person it is addressed to rather than an assessment to pass on.
 									</FieldDescription>
-									{/* oxlint-enable hephaestus/ste-ui-text */}
+									{/* oxlint-enable hephaestus/ui-text-voice */}
 								</FieldContent>
 							</Field>
 						</Section>
@@ -387,7 +387,7 @@ function ConsentBody({
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Could not load your setup"
+				title="We could not load your setup"
 				onRetry={state.onRetry}
 			/>
 		);

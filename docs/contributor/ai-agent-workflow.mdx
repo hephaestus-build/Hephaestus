@@ -74,6 +74,7 @@ Parallel work stays parallel only when contributors avoid manufacturing shared d
    Only release automation owns it.
    Use `/gh-stack` for dependent changes.
    Otherwise, do not make one PR wait for another.
+
 2. **Commit only regeneration caused by the change.** If OpenAPI, ERD, route-tree, or another generator
    produces unrelated drift, stop and report it. One dedicated PR or the owning automation lands that
    drift.
@@ -92,11 +93,11 @@ Do not leave the predictable conflict for later.
 
 ## Slash commands
 
-| Command | Does |
-|---------|------|
-| `/land-pr` | Validate, regenerate, branch, commit, push, and open the PR |
-| `/fix-ci` | Read every failing check in one pass, fix in dependency order, push once |
-| `/resolve-review` | Fetch review threads, decide each, reply and resolve |
+| Command           | Does                                                                     |
+| ----------------- | ------------------------------------------------------------------------ |
+| `/land-pr`        | Validate, regenerate, branch, commit, push, and open the PR              |
+| `/fix-ci`         | Read every failing check in one pass, fix in dependency order, push once |
+| `/resolve-review` | Fetch review threads, decide each, reply and resolve                     |
 
 Each lives in `.claude/skills/<name>/SKILL.md`.
 opencode [reads `.claude/skills/` alongside its own](https://opencode.ai/docs/skills/).
@@ -133,10 +134,10 @@ ignore the field, so there they are ordinary skills the model can reach on its o
 
 ## Instructions live in `AGENTS.md`, once
 
-| File | Covers |
-|---|---|
-| `AGENTS.md` | The repository — layout, quality gates, generated artefacts, migrations, changesets |
-| `webapp/AGENTS.md` | The SPA — component conventions, linting traps, drawers, motion, vocabulary |
+| File               | Covers                                                                                  |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| `AGENTS.md`        | The repository — layout, quality gates, generated artefacts, migrations, changesets     |
+| `webapp/AGENTS.md` | The SPA — component conventions, linting traps, drawers, motion, vocabulary             |
 | `server/AGENTS.md` | The Spring Boot server — build traps, the four test tiers, API and security conventions |
 
 The tools read them differently.

@@ -131,7 +131,7 @@ describe("review level", () => {
 		assert(confirm);
 		await userEvent.click(confirm);
 
-		await within(level).findByText("Cancelled", {}, ROUTE_RENDER_WAIT);
+		await within(level).findByText("Canceled", {}, ROUTE_RENDER_WAIT);
 		expect(
 			requested.some((url) => new URL(url).pathname.endsWith(`/agents/jobs/${RUNNING_RUN}/cancel`)),
 		).toBe(true);

@@ -106,8 +106,8 @@ type Story = StoryObj<typeof meta>;
 
 export const ByJobType: Story = {
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText("PR review")).toBeVisible();
-		await expect(await canvas.findByText("Mentor turn")).toBeVisible();
+		await expect(await canvas.findByText("Pull request review")).toBeVisible();
+		await expect(await canvas.findByText("Heph turn")).toBeVisible();
 	},
 };
 

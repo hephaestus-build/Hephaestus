@@ -25,7 +25,7 @@ public record CreateWorkspaceRequestDTO(
         @Pattern(
                 regexp = "^[a-z0-9][a-z0-9-]{2,50}$",
                 message =
-                        "Slug must be 3-51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens")
+                        "Slug must be 3 to 51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens")
         @Schema(description = "URL-friendly identifier for the workspace", example = "my-workspace")
         @Nullable
         String workspaceSlug,

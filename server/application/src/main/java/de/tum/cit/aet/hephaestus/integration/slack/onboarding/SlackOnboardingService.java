@@ -81,7 +81,7 @@ public class SlackOnboardingService {
         return asBlocks(
                 section(s -> s.text(markdownText("*Check your Hephaestus account access.*\n"
                         + "Link Slack to an active Hephaestus account with a project identity in this workspace. "
-                        + "If you have already linked your account, ask an administrator to check your account "
+                        + "If you have already linked your account, ask a workspace admin to check your account "
                         + "status and workspace membership."))),
                 actions(a -> a.elements(asElements(button(b -> b.text(plainText("Link Hephaestus account"))
                         .url(linkUrl())

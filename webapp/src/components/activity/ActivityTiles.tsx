@@ -48,7 +48,7 @@ export function ActivityTiles({ state, providerType }: ActivityTilesProps) {
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Could not load the summary"
+				title="We could not load the summary"
 				onRetry={state.onRetry}
 			/>
 		);
@@ -78,7 +78,7 @@ export function ActivityTiles({ state, providerType }: ActivityTilesProps) {
 					</li>
 				))}
 			</ul>
-			{isBusy(state) && <span className="sr-only">Loading the summary</span>}
+			{isBusy(state) && <span className="sr-only">Loading the summary…</span>}
 		</div>
 	);
 }

@@ -36,7 +36,9 @@ export const OutputMayBeIncomplete: Story = {
 	args: { job: failed, outputMayBeIncomplete: true },
 	play: async ({ canvas }) => {
 		canvas.getByText("Review output may be incomplete");
-		canvas.getByText("The review ended before it completed.");
+		canvas.getByText(
+			"The review ended early. The observations and feedback below may be only part of what it would have found.",
+		);
 	},
 };
 
@@ -56,7 +58,7 @@ export const HeldForBudget: Story = {
 	args: { job: { ...completed, status: "QUEUED", holdReason: "BUDGET" } },
 	play: async ({ canvas }) => {
 		canvas.getByText("Over the AI budget");
-		canvas.getByText(/parked rather than failed/u);
+		canvas.getByText(/this review is waiting, not failed/u);
 	},
 };
 
@@ -67,7 +69,7 @@ export const HeldForAnUnknownReason: Story = {
 		canvas.getByText("On hold");
 		await expect(canvas.queryByText(/PROVIDER_OUTAGE|Provider outage/u)).not.toBeInTheDocument();
 		canvas.getByText(
-			"This run is parked rather than failed. It resumes on its own once the hold lifts.",
+			"This review is waiting, not failed. It continues on its own when the hold ends.",
 		);
 	},
 };

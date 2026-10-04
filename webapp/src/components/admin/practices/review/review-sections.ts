@@ -13,18 +13,19 @@ export const REVIEW_SECTIONS = [
 		id: "how-much",
 		label: "How much",
 		description:
-			"How far reviews go without you: one setting for the whole workspace, overridden only where a group or a single practice needs something different.",
+			"Set how far reviews go without you for the whole workspace. Override it for a group or a single practice only where it needs something different.",
 	},
 	{
 		id: "when-and-where",
 		label: "When and where",
-		description: "What starts a review, which work it may look at, and how often to keep checking.",
+		description:
+			"Choose what starts a review, which work it may look at, and how often to keep checking.",
 	},
 	{
 		id: "past-work",
 		label: "Past work",
 		description:
-			"Catch up on work that was already there before reviews were switched on. You get an estimate first, then decide whether to run it.",
+			"Catch up on work that was already there before reviews were turned on. You get an estimate first, then decide whether to run it.",
 	},
 ] as const satisfies readonly { id: ReviewSectionId; label: string; description: string }[];
 

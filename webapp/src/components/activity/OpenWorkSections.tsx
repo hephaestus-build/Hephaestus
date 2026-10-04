@@ -28,7 +28,7 @@ import { WorkItemRow } from "./WorkItemRow";
 export type OpenWorkState = PanelState<{ openWork: OpenWork; login: string }>;
 
 /**
- * "Review this now" on the person's own pull requests and assigned issues, the work they may ask a
+ * "Request review" on the person's own pull requests and assigned issues, the work they may ask a
  * review of; a request to review someone else's work never offers it.
  */
 export interface OpenWorkReviewNow {
@@ -75,7 +75,7 @@ export function OpenWorkSections({
 			<Section level={level} size="lg" title={title}>
 				<QueryErrorAlert
 					error={state.error}
-					title="Could not load open work"
+					title="We could not load open work"
 					onRetry={state.onRetry}
 				/>
 			</Section>
@@ -101,7 +101,7 @@ export function OpenWorkSections({
 						{COUNTED.every((group) => ready.groups[group].length === 0) && (
 							<p className="flex items-center gap-2 text-sm text-muted-foreground">
 								<NothingIcon size={16} className={cn("shrink-0", ACTIVITY_TONES.success.text)} />
-								{self ? "Nothing needs you" : "Nothing needs them"}
+								{self ? "Nothing needs you" : "Nothing needs their attention"}
 							</p>
 						)}
 						<WaitingOnOthers
@@ -114,7 +114,7 @@ export function OpenWorkSections({
 						<Truncation
 							lists={[
 								{ list: ready.openWork.reviewRequests, of: `${whose} review requests` },
-								{ list: ready.openWork.teamReviewRequests, of: `${whose} teams' review requests` },
+								{ list: ready.openWork.teamReviewRequests, of: `${whose} teams’ review requests` },
 								{
 									list: ready.openWork.pullRequests,
 									of: `${whose} open ${artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType)}`,
@@ -268,7 +268,7 @@ function WorkList({
 function GroupSkeleton({ rows }: { rows: number }) {
 	return (
 		<div aria-busy="true" className="space-y-2">
-			<span className="sr-only">Loading open work</span>
+			<span className="sr-only">Loading open work…</span>
 			<div aria-hidden className="space-y-2">
 				<Skeleton className="h-4 w-36" />
 				<div className="overflow-hidden rounded-xl border bg-card">

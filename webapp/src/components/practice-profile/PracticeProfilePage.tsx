@@ -72,16 +72,16 @@ const FEEDBACK_TAB_LABELS: Record<FeedbackTab, string> = {
 };
 
 /** No open card; "Newest" lists only open cards, so it says the same. */
-const NO_OPEN_FEEDBACK: FeedbackEmptyProps = { title: "No open feedback yet." };
+const NO_OPEN_FEEDBACK: FeedbackEmptyProps = { title: "No open feedback yet" };
 
 /** What a tab with no cards says where it differs from every other empty list of feedback. */
 const EMPTY_TAB: Record<FeedbackTab, FeedbackEmptyProps> = {
 	newest: NO_OPEN_FEEDBACK,
 	open: NO_OPEN_FEEDBACK,
 	resolved: {
-		title: "No resolved or closed feedback yet.",
+		title: "No resolved or closed feedback yet",
 		description:
-			"A card moves here once the work resolves it, you mark it as addressed, or its practice's review rules change.",
+			"A card moves here once the work resolves it, you mark it as addressed, or its practice’s review rules change.",
 	},
 	all: {},
 };
@@ -157,7 +157,7 @@ export function PracticeProfilePage({
 			<div className="mx-auto w-full max-w-xl">
 				<QueryErrorAlert
 					error={state.error}
-					title="Could not load your practices"
+					title="We could not load your practices"
 					onRetry={state.onRetry}
 				/>
 			</div>

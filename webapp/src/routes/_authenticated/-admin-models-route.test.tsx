@@ -196,7 +196,7 @@ describe("instance AI models route", () => {
 		fireEvent.change(within(form).getByLabelText("Display name"), {
 			target: { value: "Production OpenAI" },
 		});
-		fireEvent.click(within(form).getByRole("button", { name: "Save inactive connection" }));
+		fireEvent.click(within(form).getByRole("button", { name: "Add connection" }));
 
 		const ask = await screen.findByRole("dialog", { name: "Confirm access" });
 		expect(ask.textContent).toContain("sign-in from the last 5 minutes");

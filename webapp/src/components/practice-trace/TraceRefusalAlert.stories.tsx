@@ -65,12 +65,12 @@ export const NoFixExists: Story = {
 			status: "REFUSED",
 			reason: "REQUESTER_QUOTA_EXHAUSTED",
 			reasonDescription:
-				"The person who asked used all of their review requests for this hour. The allowance fills again later.",
+				"The person who asked used all of their review requests for this hour. The allowance refills later.",
 		},
 	},
 	play: async ({ canvas }) => {
 		const alert = within(canvas.getByRole("alert"));
-		await expect(alert.getByText(/The allowance fills again later/u)).toBeVisible();
+		await expect(alert.getByText(/The allowance refills later/u)).toBeVisible();
 		await expect(alert.queryByRole("link")).not.toBeInTheDocument();
 	},
 };
@@ -80,7 +80,7 @@ export const WithoutASentence: Story = {
 	args: { refusal: { status: "REFUSED" } },
 	play: async ({ canvas }) => {
 		const alert = within(canvas.getByRole("alert"));
-		await expect(alert.getByText("No review was started.")).toBeVisible();
+		await expect(alert.getByText("No reason was given.")).toBeVisible();
 		await expect(alert.queryByRole("link")).not.toBeInTheDocument();
 	},
 };

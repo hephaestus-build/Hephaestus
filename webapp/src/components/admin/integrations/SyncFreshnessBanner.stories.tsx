@@ -13,7 +13,7 @@ import { SyncFreshnessBanner } from "./SyncFreshnessBanner";
  * own staleness its worst possible failure — and offline was exactly that silence. Query v5 defaults
  * to `networkMode: "online"`, so a dropped connection *pauses* queries instead of failing them:
  * nothing throws, no `QueryErrorAlert` fires, and a live progress bar simply freezes mid-run looking
- * exactly like a healthy one. The SSE banner does not cover it either — `EventSource` re-enters
+ * exactly like a healthy one. The SSE banner doesn't cover it either — `EventSource` re-enters
  * CONNECTING rather than CLOSED on a network drop.
  *
  * Offline strictly outranks live-push-lost (a dead network makes the polling fallback moot), so it
@@ -64,7 +64,7 @@ export const LivePushUnavailable: Story = {
 	],
 	play: async ({ canvas }) => {
 		canvas.getByText(/live updates are unavailable/iu);
-		canvas.getByText(/refreshing periodically/iu);
+		canvas.getByText(/refreshes on a timer/iu);
 	},
 };
 
@@ -78,9 +78,9 @@ export const Offline: Story = {
 		onlineManager.setOnline(false);
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/you are offline/iu);
+		canvas.getByText(/you’re offline/iu);
 		canvas.getByText(/snapshot/iu);
-		// Announced politely: the reader should not be interrupted, but must not be left guessing.
+		// Announced politely: the reader shouldn't be interrupted, but must not be left guessing.
 		canvas.getByRole("status");
 	},
 };
@@ -101,7 +101,7 @@ export const OfflineOutranksLivePush: Story = {
 		),
 	],
 	play: async ({ canvas }) => {
-		canvas.getByText(/you are offline/iu);
+		canvas.getByText(/you’re offline/iu);
 		await expect(canvas.queryByText(/live updates are unavailable/iu)).not.toBeInTheDocument();
 	},
 };

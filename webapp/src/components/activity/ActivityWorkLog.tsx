@@ -55,7 +55,7 @@ export interface ActivityWorkLogProps {
 
 const SKELETON_ROWS = 4;
 
-const LOAD_MORE_FAILED = "Could not load more activity.";
+const LOAD_MORE_FAILED = "We could not load more activity.";
 
 /**
  * What happened, one row per pull request or issue rather than per event — forty comments on one
@@ -68,7 +68,7 @@ export function ActivityWorkLog({ state, providerType, subject }: ActivityWorkLo
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Could not load activity"
+				title="We could not load activity"
 				onRetry={state.onRetry}
 			/>
 		);
@@ -76,7 +76,7 @@ export function ActivityWorkLog({ state, providerType, subject }: ActivityWorkLo
 	if (state.status === "loading") {
 		return (
 			<div aria-busy="true">
-				<span className="sr-only">Loading activity</span>
+				<span className="sr-only">Loading activity…</span>
 				<div aria-hidden className="space-y-2">
 					<Skeleton className="h-4 w-24" />
 					<div className="overflow-hidden rounded-xl border bg-card">
@@ -138,7 +138,7 @@ function loadMoreLabel(isLoadingMore: boolean, failed: boolean): string {
 	if (isLoadingMore) {
 		return "Loading…";
 	}
-	return failed ? "Try again" : "Show more";
+	return failed ? "Retry" : "Show more";
 }
 
 /** One day's rows, named by the day as a list label rather than a heading, whatever level holds it. */

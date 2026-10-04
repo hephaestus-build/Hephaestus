@@ -118,7 +118,7 @@ export function ObservationLevel({
 					{state.status === "error" ? (
 						<QueryErrorAlert
 							error={state.error}
-							title="Could not load this observation"
+							title="We could not load this observation"
 							onRetry={state.onRetry}
 						/>
 					) : (
@@ -188,9 +188,9 @@ export function ObservationLevel({
 								<EmptyMedia variant="icon">
 									<MessageSquareTextIcon />
 								</EmptyMedia>
-								<EmptyTitle>Nothing was said to anybody about this</EmptyTitle>
+								<EmptyTitle>No feedback came from this observation</EmptyTitle>
 								<EmptyDescription>
-									The observation was recorded and no feedback was composed from it.
+									It was recorded, and no feedback was composed from it.
 								</EmptyDescription>
 							</EmptyHeader>
 						</Empty>
@@ -269,8 +269,10 @@ function InvalidationAlert({ invalidation }: { invalidation: ObservationInvalida
 			<AlertDescription>
 				<p>
 					{invalidation.invalidatedBy ?? "A workspace admin"} marked this observation as incorrect{" "}
-					<RelativeTime value={invalidation.invalidatedAt} />: “{invalidation.reason}”. It no longer
-					counts toward the developer’s standing, their practice page or the mentor, and feedback
+					<RelativeTime value={invalidation.invalidatedAt} />. Reason: “{invalidation.reason}”
+				</p>
+				<p>
+					It no longer counts toward the developer’s standing, their practice page or Heph. Feedback
 					about it that had not reached anyone was stopped. The developer sees it labelled with this
 					reason in their review history.
 				</p>

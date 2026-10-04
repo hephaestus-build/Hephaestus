@@ -134,7 +134,7 @@ function CheckSummary({ release }: { release: ReleaseStatus }) {
 			);
 		}
 		case "NEVER_CHECKED": {
-			return <>{description} The first one runs a minute after start.</>;
+			return <>{description} The first check runs a minute after the server starts.</>;
 		}
 		case "DISABLED": {
 			return (
@@ -264,7 +264,7 @@ function ReleaseBody({ state }: InstanceReleaseCardProps) {
 			)}
 
 			{state.check.status === "error" && (
-				<QueryErrorAlert title="Could not check for updates" error={state.check.error} />
+				<QueryErrorAlert title="We could not check for updates" error={state.check.error} />
 			)}
 
 			<Collapsible>

@@ -73,7 +73,7 @@ const SIGNED_IN: Surface[] = [
 	{ name: "Instance AI usage", path: "/admin/usage" },
 	{ name: "Instance settings", path: "/admin/settings" },
 	{ name: "Login providers", path: "/admin/login-providers" },
-	{ name: "Feedback inbox", path: "/admin/feedback" },
+	{ name: "Product feedback", path: "/admin/feedback" },
 	{ name: "Surveys", path: "/admin/surveys" },
 	{ name: "Person data", path: "/admin/person-data" },
 ];
@@ -313,7 +313,7 @@ base.describe("keyboard", () => {
 
 			const menu = page.getByRole("menu");
 			await expect(menu.getByRole("menuitem", { name: "Settings" })).toBeVisible();
-			await expect(menu).toContainText("Sign Out");
+			await expect(menu).toContainText("Sign out");
 			expect(await axeViolations(page, { overlay: true })).toEqual([]);
 
 			await page.keyboard.press("Escape");
@@ -345,7 +345,7 @@ base.describe("keyboard", () => {
 		"collapsed to icons, the sidebar still names each link and its tooltip can be dismissed",
 		async ({ page }) => {
 			await open(page, "/w/e2e/admin/members");
-			await page.getByRole("banner").getByRole("button", { name: "Toggle Sidebar" }).click();
+			await page.getByRole("banner").getByRole("button", { name: "Toggle sidebar" }).click();
 			// The header slides under the pointer as the sidebar narrows and would open its tooltip.
 			await page.mouse.move(640, 600);
 			await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0);
@@ -433,7 +433,7 @@ base.describe("complete processes, keyboard only", () => {
 		const dialog = page.getByRole("dialog", { name: "Create group" });
 		await expect(dialog.getByRole("textbox", { name: "Name" })).toBeFocused();
 		await page.keyboard.type(name);
-		await tabTo(page, dialog.getByRole("button", { name: "Create", exact: true }));
+		await tabTo(page, dialog.getByRole("button", { name: "Create group", exact: true }));
 		await page.keyboard.press("Enter");
 
 		await expect(dialog).toBeHidden();
@@ -451,7 +451,7 @@ base.describe("complete processes, keyboard only", () => {
 		await expect(page.getByRole("heading", { level: 2, name })).toBeHidden();
 	});
 
-	signedInTest("an idea is sent to the instance administrators", async ({ page }) => {
+	signedInTest("an idea is sent to the instance admins", async ({ page }) => {
 		await open(page, "/w/e2e/admin/members");
 		await page.getByRole("banner").getByRole("button", { name: "Feedback" }).focus();
 		await page.keyboard.press("Enter");

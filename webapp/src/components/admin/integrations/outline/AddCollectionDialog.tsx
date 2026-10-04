@@ -127,7 +127,7 @@ export function AddCollectionDialog({
 				<DialogHeader>
 					<DialogTitle>Add collections to mirror</DialogTitle>
 					<DialogDescription>
-						Pick the Outline collections whose documents Hephaestus should mirror. Only the
+						Select the Outline collections whose documents Hephaestus should mirror. Only the
 						collections you select here are read.
 					</DialogDescription>
 				</DialogHeader>
@@ -209,7 +209,7 @@ function CollectionPicker({
 		);
 	}
 	if (error) {
-		return <QueryErrorAlert error={error} title="Could not reach Outline" onRetry={onRetry} />;
+		return <QueryErrorAlert error={error} title="We could not reach Outline" onRetry={onRetry} />;
 	}
 	if (candidates.length === 0) {
 		return (
@@ -221,8 +221,8 @@ function CollectionPicker({
 					<EmptyTitle>This token cannot see any collections</EmptyTitle>
 					<EmptyDescription>
 						Outline only returns the collections its API key’s user is a member of. In Outline, open
-						the collection, choose <strong>Members</strong>, and add the bot user that owns this key
-						— then reopen this dialog.
+						the collection, choose <strong>Members</strong>, and add the bot user that owns this
+						key. Then reopen this dialog.
 					</EmptyDescription>
 				</EmptyHeader>
 			</Empty>

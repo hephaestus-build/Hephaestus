@@ -68,7 +68,7 @@ it("accepts a workspace update with explicit field choice and the reviewed versi
 		"disabled",
 		true,
 	);
-	fireEvent.click(within(choices).getByRole("radio", { name: "Offered" }));
+	fireEvent.click(within(choices).getByRole("radio", { name: "Proposed" }));
 	fireEvent.click(screen.getByRole("button", { name: "Accept selected fields" }));
 
 	await waitFor(() => expect(receivedTag).toBe('"reviewed-offer"'));

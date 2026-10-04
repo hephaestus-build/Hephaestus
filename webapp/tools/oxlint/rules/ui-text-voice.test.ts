@@ -1,7 +1,7 @@
 import { ruleTester } from "../rule-tester.ts";
-import { steUiText } from "./ste-ui-text.ts";
+import { uiTextVoice } from "./ui-text-voice.ts";
 
-ruleTester.run("ste-ui-text", steUiText, {
+ruleTester.run("ui-text-voice", uiTextVoice, {
 	valid: [
 		{ code: "<p>Fish &amp; chips</p>" },
 		{ code: '<Input title="Fish &amp; chips" />' },
@@ -21,23 +21,59 @@ ruleTester.run("ste-ui-text", steUiText, {
 		{ code: 'notify.error("Utilize it");' },
 		{ code: 'const group = { slug: "utilize", label: "Group" };' },
 		{ code: 'const x = { [label]: "Utilize it" };' },
+		{ code: "<p>You’re set. We’ll tell you when it finishes.</p>" },
+		{ code: "<p>Let’s connect a repository.</p>" },
+		{ code: '<p title="It’s ready">That’s all.</p>' },
+		{ code: 'toast.success("You’re signed in.");' },
+		{ code: `<p>{\`It’s \${name}\`}</p>` },
+		{ code: "<p>You are not a member. It is not saved.</p>" },
+		{ code: "<p>The workspace’s practices.</p>" },
+		{ code: '<meta name="viewport" content="width=device-width; initial-scale=1" />' },
+		{ code: "<code>const a = 1;</code>" },
+		{ code: '<pre>{"if (x) { y(); }"}</pre>' },
+		{ code: "<p>Press <kbd>Ctrl+C</kbd>.</p>" },
+		{ code: '<Dialog confirmLabel="Delete practice" emptyTitle="No practices yet" />' },
 		{
-			code: "<p>Heph can record an observation.</p>",
-			options: [{ vocabulary: true }],
+			// Exactly 25 words is the longest sentence the rule accepts.
+			code: "<p>One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five.</p>",
 		},
 	],
 	invalid: [
-		{ code: "<p>Don&#39;t stop it.</p>", errors: [{ messageId: "word" }] },
+		{
+			code: '<Dialog confirmLabel="Don’t utilize it" />',
+			errors: [{ messageId: "word" }, { messageId: "word" }],
+		},
+		{
+			code: '<Empty emptyTitle="Can’t load; retry" />',
+			errors: [{ messageId: "word" }, { messageId: "semicolon" }],
+		},
+		{ code: "<p>{name}'s plan</p>", errors: [{ messageId: "apostrophe", data: { found: "'s" } }] },
+		{
+			code: `<p>{\`\${name}'s plan\`}</p>`,
+			errors: [{ messageId: "apostrophe" }],
+		},
+		{ code: "<p>Say 'hello'.</p>", errors: [{ messageId: "apostrophe" }] },
+		{ code: "<p>You&#39;re set.</p>", errors: [{ messageId: "apostrophe" }] },
+		{ code: "<p>The workspace's practices.</p>", errors: [{ messageId: "apostrophe" }] },
+		{ code: 'toast.success("You\'re signed in.");', errors: [{ messageId: "apostrophe" }] },
+		{
+			code: "<p>Don&#39;t stop it.</p>",
+			errors: [{ messageId: "word" }, { messageId: "apostrophe" }],
+		},
 		{ code: "<p>Utili&#122;e it.</p>", errors: [{ messageId: "word" }] },
 		{ code: '<Input title="Utili&#122;e it" />', errors: [{ messageId: "word" }] },
 		{ code: '<p>{"Fish &amp; chips"}</p>', errors: [{ messageId: "semicolon" }] },
 		{
-			code: "<p>We’re ready.</p>",
-			errors: [{ messageId: "word", data: { from: "we’re", to: "we are" } }],
+			code: "<p>You can’t undo this.</p>",
+			errors: [{ messageId: "word", data: { from: "can’t", to: "cannot" } }],
 		},
 		{
-			code: "<p>It’s been stopped.</p>",
-			errors: [{ messageId: "word", data: { from: "it’s", to: "it is or it has" } }],
+			code: "<p>It won’t run.</p>",
+			errors: [{ messageId: "word", data: { from: "won’t", to: "will not" } }],
+		},
+		{
+			code: "<p>You’re set, but it isn’t saved.</p>",
+			errors: [{ messageId: "word", data: { from: "isn’t", to: "is not" } }],
 		},
 		{
 			code: "<p>Utilize the workspace.</p>",
@@ -67,11 +103,11 @@ ruleTester.run("ste-ui-text", steUiText, {
 			code: "<p>Use the server to check the workspace and then use the server\n to check the workspace and then use the server to check the workspace again.</p>",
 			errors: [{ messageId: "sentence" }],
 		},
-		{ code: 'toast.error("Couldn\'t save the group.");', errors: [{ messageId: "word" }] },
+		{ code: 'toast.error("Couldn’t save the group.");', errors: [{ messageId: "word" }] },
 		{ code: 'toast("Utilize it");', errors: [{ messageId: "word" }] },
 		{ code: `toast.warning(\`Utilize \${name}\`);`, errors: [{ messageId: "word" }] },
 		{
-			code: 'toast.success("Saved", { description: "Don\'t stop; go." });',
+			code: 'toast.success("Saved", { description: "Don’t stop; go." });',
 			errors: [{ messageId: "word" }, { messageId: "semicolon" }],
 		},
 		{
@@ -98,10 +134,5 @@ ruleTester.run("ste-ui-text", steUiText, {
 			errors: [{ messageId: "word" as const }],
 		})),
 		{ code: 'const group = { "title": "Utilize it" };', errors: [{ messageId: "word" }] },
-		{
-			code: "<p>Quux</p>",
-			options: [{ vocabulary: true }],
-			errors: [{ messageId: "vocabulary" }],
-		},
 	],
 });

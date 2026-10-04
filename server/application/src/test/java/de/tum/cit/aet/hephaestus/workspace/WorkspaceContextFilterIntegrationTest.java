@@ -63,7 +63,7 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
                 .getResponseBody();
 
         assertThat(problem).isNotNull();
-        assertThat(problem.getDetail()).contains("Invalid workspace slug");
+        assertThat(problem.getDetail()).contains("The workspace slug is not valid");
     }
 
     @Test

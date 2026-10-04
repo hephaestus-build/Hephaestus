@@ -66,11 +66,15 @@ export function MemberActivityTable({ state, providerType }: MemberActivityTable
 	const [showAll, setShowAll] = useState(false);
 	if (state.status === "error") {
 		return (
-			<QueryErrorAlert error={state.error} title="Could not load members" onRetry={state.onRetry} />
+			<QueryErrorAlert
+				error={state.error}
+				title="We could not load members"
+				onRetry={state.onRetry}
+			/>
 		);
 	}
 	if (state.status === "ready" && state.members.length === 0) {
-		return <ActivityEmpty icon={<PeopleIcon />} title="No members here" />;
+		return <ActivityEmpty icon={<PeopleIcon />} title="No members yet" />;
 	}
 	const members = state.status === "ready" ? state.members : [];
 	const needle = fold(query.trim());
@@ -154,8 +158,8 @@ export function MemberActivityTable({ state, providerType }: MemberActivityTable
 							<TableCell colSpan={ACTIVITY_CATEGORIES.length + 1} className="p-4 whitespace-normal">
 								<Empty>
 									<EmptyHeader>
-										<EmptyTitle>No results found</EmptyTitle>
-										<EmptyDescription>Edit your search and try again.</EmptyDescription>
+										<EmptyTitle>No members match your search</EmptyTitle>
+										<EmptyDescription>Try a different name.</EmptyDescription>
 									</EmptyHeader>
 								</Empty>
 							</TableCell>
