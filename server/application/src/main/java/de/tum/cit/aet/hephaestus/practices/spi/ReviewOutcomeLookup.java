@@ -18,13 +18,25 @@ public interface ReviewOutcomeLookup {
      *                             needed was not readable — distinct from failure, since nothing broke
      * @param readinessByPracticeSlug eligibility decision by practice slug
      * @param coverageByPracticeSlug outcome for each eligible practice; empty without a valid account
+     * @param answeredByPracticeSlug the completed review whose answer this run reused instead of asking, by
+     *                               practice slug, as the run recorded it when it was prepared
      */
     record ReviewOutcome(
             @NonNull ReviewRunState state,
             boolean insufficientEvidence,
             @Nullable Instant decidedAt,
             @NonNull Map<String, PracticeReadinessOutcome> readinessByPracticeSlug,
-            @NonNull Map<String, PracticeCoverageOutcome> coverageByPracticeSlug) {}
+            @NonNull Map<String, PracticeCoverageOutcome> coverageByPracticeSlug,
+            @NonNull Map<String, UUID> answeredByPracticeSlug) {
+        public ReviewOutcome(
+                ReviewRunState state,
+                boolean insufficientEvidence,
+                @Nullable Instant decidedAt,
+                Map<String, PracticeReadinessOutcome> readinessByPracticeSlug,
+                Map<String, PracticeCoverageOutcome> coverageByPracticeSlug) {
+            this(state, insufficientEvidence, decidedAt, readinessByPracticeSlug, coverageByPracticeSlug, Map.of());
+        }
+    }
 
     enum PracticeCoverageOutcome {
         EVALUATED,

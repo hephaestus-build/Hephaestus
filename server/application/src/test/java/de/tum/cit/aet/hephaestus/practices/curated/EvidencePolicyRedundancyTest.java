@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -60,6 +61,28 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
                                         .supportsComplete())
                                 .as("%s requires complete capture of %s", practice.slug(), need.sourceKind())
                                 .isTrue()));
+    }
+
+    /**
+     * A practice that declares only the change and the repository tree may have its earlier answer reused on
+     * identical code, so its criteria must read nothing else. {@code context/change.json} is the change's own pinned
+     * range; every other staged context file belongs to a source such a practice would have to declare.
+     */
+    @Test
+    void shouldDeclareEveryContextFileACodeOnlyPracticeReads() {
+        Set<SourceKind> code = Set.of(new SourceKind("scm.pull-request.diff"), new SourceKind("scm.repository.tree"));
+        Pattern contextFile = Pattern.compile("context/([a-z_]+\\.[a-z]+)");
+        assertThat(loader.catalog().practices())
+                .filteredOn(practice ->
+                        !practice.definition().evidenceRequirements().isEmpty()
+                                && practice.definition().evidenceRequirements().stream()
+                                        .allMatch(need -> code.contains(need.sourceKind())))
+                .allSatisfy(practice -> assertThat(contextFile
+                                .matcher(practice.definition().criteria())
+                                .results()
+                                .map(match -> match.group(1)))
+                        .as("%s declares only the change and the tree", practice.slug())
+                        .allMatch("change.json"::equals));
     }
 
     @Test

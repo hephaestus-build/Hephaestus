@@ -93,14 +93,16 @@ public class JobTypeHandlerConfiguration {
             PracticeCatalogInjector practiceCatalogInjector,
             GitRepositoryManager gitRepositoryManager,
             JobEvidenceFiles evidenceFiles,
-            PracticeRevisionService practiceRevisionService) {
+            PracticeRevisionService practiceRevisionService,
+            AnsweredPractices answeredPractices) {
         return new PracticeReviewPreparation(
                 workspaceContextBuilder,
                 practiceCatalogInjector,
                 taskEnvelopeWriter,
                 gitRepositoryManager,
                 evidenceFiles,
-                practiceRevisionService);
+                practiceRevisionService,
+                answeredPractices);
     }
 
     @Bean

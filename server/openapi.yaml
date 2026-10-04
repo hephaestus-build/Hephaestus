@@ -9667,6 +9667,13 @@ components:
       type: object
       description: Agent job execution record (job_token intentionally omitted)
       properties:
+        answeredPractices:
+          type: array
+          description: Ready practices this review did not ask because a completed
+            review had already answered them on the same code; available on review
+            detail after evidence capture. Empty when every ready practice was asked.
+          items:
+            $ref: "#/components/schemas/AnsweredPractice"
         availableAt:
           type: string
           format: date-time
@@ -9778,11 +9785,14 @@ components:
           description: "Why a COMPLETED run produced the observations it did. INSUFFICIENT_EVIDENCE\
             \ means no model ran because required evidence was missing, unreadable,\
             \ stale, or unauthorized — so no observations means nothing was assessed,\
-            \ not that nothing was wrong. REVIEWED means the model ran against sufficient\
-            \ evidence."
+            \ not that nothing was wrong. COALESCED means no model ran because a completed\
+            \ review had already answered every ready practice on exactly the same\
+            \ code — its answers are listed in answeredPractices, and this run assessed\
+            \ nothing anew. REVIEWED means the model ran against sufficient evidence."
           enum:
           - REVIEWED
           - INSUFFICIENT_EVIDENCE
+          - COALESCED
         startedAt:
           type: string
           format: date-time
@@ -9837,6 +9847,27 @@ components:
           minLength: 0
       required:
       - questionId
+    AnsweredPractice:
+      type: object
+      description: "A ready practice this review did not ask, because a completed\
+        \ review had already answered it on exactly the same code. Its observation\
+        \ belongs to that review; this review recorded none for it."
+      properties:
+        practiceSlug:
+          type: string
+          description: The practice left out
+        reviewId:
+          type: string
+          format: uuid
+          description: The completed review whose observation answers it
+        revisionId:
+          type: integer
+          format: int64
+          description: The practice revision the earlier answer was made under
+      required:
+      - practiceSlug
+      - reviewId
+      - revisionId
     ArtifactTrace:
       type: object
       description: "Every practice's answer for one artifact, and the occurrences\

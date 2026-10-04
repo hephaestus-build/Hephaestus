@@ -46,6 +46,7 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
             submitter,
             workspaceResolver,
             new PracticeReviewProperties(false, 15, 5, null, 12, 16000),
+            mock(AgentJobRepository.class),
             mock(TransactionTemplate.class));
 
     private final PullRequest pullRequest = pullRequest();

@@ -18,7 +18,7 @@ const meta = {
 	component: ReviewRunNotices,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],
-	args: { job: completed, outputMayBeIncomplete: false },
+	args: { job: completed, practices: undefined, outputMayBeIncomplete: false },
 } satisfies Meta<typeof ReviewRunNotices>;
 
 export default meta;
@@ -71,6 +71,40 @@ export const HeldForAnUnknownReason: Story = {
 		canvas.getByText(
 			"This review is waiting, not failed. It continues on its own when the hold ends.",
 		);
+	},
+};
+
+/**
+ * A push review that asked fewer practices than were ready, because the Ready review of the same code
+ * had already answered the rest. Each answered practice links to the review that answered it,
+ * so the gap between ready and asked reads as reuse, not as practices the review skipped.
+ */
+export const AnsweredByAnEarlierReview: Story = {
+	args: {
+		practices: [
+			{ slug: "removes-duplication-instead-of-copy-pasting", name: "Remove duplication" },
+			{ slug: "handles-errors-instead-of-swallowing-them", name: "Handle errors" },
+		],
+		job: {
+			...completed,
+			answeredPractices: [
+				{
+					practiceSlug: "removes-duplication-instead-of-copy-pasting",
+					revisionId: 1822,
+					reviewId: "aaaaaaaa-1111-1111-1111-111111111111",
+				},
+				{
+					practiceSlug: "handles-errors-instead-of-swallowing-them",
+					revisionId: 1838,
+					reviewId: "aaaaaaaa-1111-1111-1111-111111111111",
+				},
+			],
+		},
+	},
+	play: async ({ canvas }) => {
+		canvas.getByText("2 practices were answered by an earlier review");
+		await expect(canvas.getAllByRole("link", { name: "an earlier review" })).toHaveLength(2);
+		await expect(canvas.getByRole("link", { name: "Remove duplication" })).toBeVisible();
 	},
 };
 

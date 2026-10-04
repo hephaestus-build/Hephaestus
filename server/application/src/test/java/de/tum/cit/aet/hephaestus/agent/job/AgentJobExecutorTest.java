@@ -28,11 +28,13 @@ import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewCoalescedException;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.AnsweredPractice;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
@@ -869,6 +871,87 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .isOne();
             verify(sandboxManager, never()).execute(any());
             // Never staged for an attempt, so nothing else would ever release what the capture put on disk.
+            assertThat(released).isTrue();
+        }
+
+        /**
+         * Every ready practice already answered completes the run as COALESCED through the fenced terminal write, never
+         * starting a sandbox, and still records and releases the evidence it captured. A lost fence writes nothing.
+         */
+        @ParameterizedTest
+        @ValueSource(booleans = {true, false})
+        void coalescedReviewCompletesWithoutStartingTheSandbox(boolean ownsTheJob) {
+            stubClaimableJob();
+            JobTypeHandler handler = mock(JobTypeHandler.class);
+            when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
+            Instant now = Instant.parse("2026-08-03T10:00:00Z");
+            SourceContractVersion version = new SourceContractVersion("1.3.0");
+            SourceKind source = new SourceKind("scm.pull-request.diff");
+            JobFolderIndex manifest = new JobFolderIndex(
+                    version,
+                    "a".repeat(64),
+                    "scm.pull_request",
+                    now,
+                    List.of(new SourceCapture(
+                            source, new SourceCaptureState.NotCollected(SourceAbsenceReason.DISABLED), List.of())));
+            AutomatedReviewReadinessReport readiness = new AutomatedReviewReadinessReport(
+                    version,
+                    "a".repeat(64),
+                    "scm.pull_request",
+                    now,
+                    now,
+                    List.of(new AutomatedReviewReadinessDecision(
+                            "example",
+                            now,
+                            true,
+                            List.of(),
+                            List.of(new SourceReadinessCheck(source, version, now, now, true, List.of())))));
+            var released = new AtomicBoolean();
+            UUID earlier = UUID.fromString("33333333-3333-3333-3333-333333333333");
+            PreparedJobInputs inputs = PreparedJobInputsFixtures.inputs(
+                            new PreparedEvidence(
+                                    Map.of(SandboxLayout.MANIFEST_PATH, "{}".getBytes(UTF_8)),
+                                    Map.of(),
+                                    List.of(() -> released.set(true)),
+                                    manifest),
+                            readiness)
+                    .withAnsweredPractices(List.of(new AnsweredPractice("example", 4L, earlier)));
+            when(handler.prepareInputs(any())).thenThrow(new ReviewCoalescedException("All answered", inputs));
+            when(jobRepository.updateProvenanceDigests(any(), any(), anyInt(), any()))
+                    .thenReturn(1);
+            when(jobRepository.transitionToEvidenceRefused(any(), any(), anyInt(), any(), any()))
+                    .thenReturn(ownsTheJob ? 1 : 0);
+
+            executor.processJob(jobId);
+
+            ArgumentCaptor<AgentJobRepository.ProvenanceStamp> stamp =
+                    ArgumentCaptor.forClass(AgentJobRepository.ProvenanceStamp.class);
+            verify(jobRepository).updateProvenanceDigests(eq(jobId), isNull(), eq(0), stamp.capture());
+            JsonNode snapshot = requireNonNull(stamp.getValue().evidenceSnapshot());
+            assertThat(snapshot.path("answeredPractices")
+                            .get(0)
+                            .path("reviewId")
+                            .asString())
+                    .isEqualTo(earlier.toString());
+            assertThat(snapshot.has("practices")).isFalse();
+            ArgumentCaptor<JsonNode> output = ArgumentCaptor.forClass(JsonNode.class);
+            verify(jobRepository).transitionToEvidenceRefused(eq(jobId), isNull(), eq(0), any(), output.capture());
+            assertThat(output.getValue().path("outcome").asString()).isEqualTo("COALESCED");
+            assertThat(output.getValue()
+                            .path("answeredPractices")
+                            .get(0)
+                            .path("practiceSlug")
+                            .asString())
+                    .isEqualTo("example");
+            assertThat(meterRegistry
+                            .get("agent.job.execution.duration")
+                            .tag("status", ownsTheJob ? "COALESCED" : "OWNERSHIP_LOST")
+                            .timer()
+                            .count())
+                    .isOne();
+            assertThat(meterRegistry.find("practice.review.refused").counter()).isNull();
+            verify(sandboxManager, never()).execute(any());
+            verify(usageRecorder, never()).recordUnverifiable(any(), any());
             assertThat(released).isTrue();
         }
 

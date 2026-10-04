@@ -83,7 +83,8 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
                         PreparedJobInputsFixtures.freezer(),
                         mock(
                                 PracticeRevisionService.class,
-                                invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision())),
+                                invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision()),
+                        mock(AnsweredPractices.class)),
                 new ReviewResultParser(objectMapper),
                 deliveryService);
     }
