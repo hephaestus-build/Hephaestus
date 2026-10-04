@@ -1,5 +1,11 @@
 [
 	".vale/README.md",
+	"docs/admin/dsms/README.md",
+	"docs/admin/dsms/artifact-source-governance.md",
+	"docs/admin/dsms/dpia-prescreen.md",
+	"docs/admin/dsms/personal-data-map.md",
+	"docs/admin/dsms/processor-checklist.md",
+	"docs/admin/dsms/record-of-processing.md",
 	"docs/contributor/simplified-technical-english.md",
 	"docs/user/accessibility.mdx",
 	"docs/user/activity.mdx",
