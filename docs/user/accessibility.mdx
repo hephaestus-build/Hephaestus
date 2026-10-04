@@ -1,84 +1,64 @@
 ---
 title: Accessibility
-description: The accessibility status, evaluation results, known limitations and support channels for Hephaestus.
+description: The accessibility status, evaluation results, known limitations, and support channels for Hephaestus.
 ---
 
 # Accessibility statement
 
 **Last reviewed: 3 October 2026**
 
-Hephaestus aims to be usable by people who navigate with a keyboard, magnify content, use speech
-input, or use a screen reader.
+Hephaestus aims to support people who use a keyboard, magnify content, use speech input, or use a screen reader.
 
 ## Conformance status
 
-We have not established that the Hephaestus web application conforms to
-[WCAG 2.2 Level AA](https://www.w3.org/TR/WCAG22/), and we make no conformance claim.
+We have not established conformance of the Hephaestus web application to [WCAG 2.2 Level AA](https://www.w3.org/TR/WCAG22/).
+We make no conformance claim.
 
-The evaluation is partial. Automated checks and keyboard checks are complete for every page. Nobody
-has yet run the application with a screen reader, so the results below say nothing about how NVDA or
-VoiceOver read it. A claim of AA conformance needs every page and every process to pass with a screen
-reader too.
+The evaluation is partial.
+Automated checks are complete for each page.
+Keyboard checks are complete for the administrator pages.
+Nobody has run the application with a screen reader yet.
+The results below therefore say nothing about how NVDA or VoiceOver read it.
+AA conformance requires full pages and complete processes to meet the applicable success criteria.
 
-This statement covers the Hephaestus single-page application, including how it presents imported
-content. Linked external sites and identity-provider pages are outside its scope.
+This statement covers the Hephaestus single-page application, including its presentation of imported content.
+It excludes linked external sites and identity-provider pages.
 
 ## What we evaluated
 
-On 3 October 2026 we evaluated all 51 pages of the application:
+On 3 October 2026, we evaluated all 51 application pages:
 
-- Automated checks with axe-core 4.13.0 in the light and dark colour schemes, in Chromium 153,
-  Firefox 155 and WebKit 26.6, on Linux. Every page passes.
-- Keyboard checks. For each page we walked the Tab order and checked that every control shows
-  where focus is, that nothing hides it, and that focus can always move on. Every page passes. We
-  also finished three processes without a pointer: signing in and accepting the terms, creating and
-  deleting a practice group, and sending an idea to the instance administrators.
-- Layout checks at 320 and 640 pixels wide, which correspond to 400% and 200% zoom on a
-  1280-pixel window, for sideways scrolling; at the text spacing WCAG 2.2 sets, by eye on a sample of
-  pages; and for motion that never stops.
+- Automated checks used axe-core 4.13.0 in light and dark color schemes on Linux. Browsers were Chromium 153, Firefox 155, and WebKit 26.6. Every page passes.
+- Keyboard checks examined Tab order, visible focus for each control, and unrestricted focus movement on the administrator pages. Each checked page passes. We completed sign-in with terms acceptance without a pointer. We also completed practice group creation and deletion, and idea submission to instance administrators.
+- Layout checks examined horizontal scroll at 320 and 640 pixels wide. These widths correspond to 400% and 200% zoom on a 1280-pixel window. We visually checked a sample of pages at WCAG 2.2 text spacing. We also checked for continuous motion.
 
-The evaluation found sixteen barriers and fixed all of them. They included pages without their own
-title, a skip link hidden behind the sidebar, menu items that screen readers would not have read as
-menu items, and animation that never stopped. The
-[audit record](/contributor/accessibility-audit-record-2026-10-03) lists each one with its fix.
+The evaluation found and fixed sixteen barriers.
+These included pages without individual titles, a skip link behind the sidebar, menu items without screen-reader menu semantics, and continuous animation.
+The [audit record](/contributor/accessibility-audit-record-2026-10-03) lists each barrier and its fix.
 
 ## Known limitations
 
-- Screen readers are not tested. NVDA with Firefox and VoiceOver with Safari have not been run
-  on any page or process, so barriers that only a screen reader reveals may remain. The application
-  now announces the new page's title when you follow a link; we have not confirmed how screen readers
-  voice it.
-- Safari on macOS is not tested with any assistive technology. The WebKit engine passes the same
-  checks on Linux, which is not the same as Safari.
-- Pages with real data are only partly evaluated. The evaluated installation held no synced
-  work, review runs or language-model provider. The pages that show feedback, review results,
-  activity, usage charts and audit entries were checked with sample data in component tests, but not
-  in a live installation. That also covers Heph conversations, which have not been tested
-  against a running instance.
-- The Tab walk ran as an administrator only. A workspace member's pages pass the automated checks
-  but have not been walked with the keyboard.
-- Recovering from a failed request was not tested in any process: nobody made a request fail and
-  checked what the person is told.
-- Some processes were not run. Creating a workspace from a provider, responding to feedback on
-  work, talking with Heph, and deleting an account have not been completed with a keyboard or a
-  screen reader. Signing in through GitHub or GitLab leaves the application, and that handoff has not
-  been tested.
-- Some forms keep a button disabled until you fill in a required field and do not say which
-  field is missing.
-- Imported content. Titles and text that Hephaestus shows from GitHub, GitLab, Slack and Outline
-  are as accessible as their source made them. We do not check them.
+- Screen readers are untested. Nobody ran NVDA with Firefox or VoiceOver with Safari on any page or process. Screen-reader-only barriers may stay. The application now announces new page titles after link navigation. We have not confirmed how screen readers voice them.
+- Safari on macOS is untested with any assistive technology. WebKit passes the same checks on Linux, which is not the same as Safari.
+- Pages with real data are only partly evaluated. The evaluated installation had no synced work, review runs, or language-model provider. Component tests used sample data for feedback, review results, activity, usage charts, and audit entries. We did not check these pages in a live installation. Heph conversations are also untested against a running instance.
+- We performed the Tab walk only as an administrator. Workspace member pages pass automated checks, but we have not checked them by keyboard.
+- We did not test recovery from failed requests in any process. Nobody forced a request failure to check the information shown to the person.
+- Some processes are untested with a keyboard or screen reader. These include workspace creation from a provider, feedback responses on work, Heph conversations, and account deletion. GitHub or GitLab sign-in leaves the application. That handoff is also untested.
+- Some forms disable a button until a required field has a value, without identifying the missing field.
+- Imported GitHub, GitLab, Slack, and Outline titles and text retain their source accessibility. We do not check them.
 
 ## Review
 
-We reviewed this statement on 3 October 2026, from the
-[audit record of that date](/contributor/accessibility-audit-record-2026-10-03). The next review
-follows the first screen-reader evaluation; until then the conformance status above stays as it is.
-The [audit plan](/contributor/accessibility-audit-plan) says how the evaluation is done.
+We reviewed this statement on 3 October 2026 from the [audit record of that date](/contributor/accessibility-audit-record-2026-10-03).
+The next review follows the first screen-reader evaluation.
+Until then, the conformance status above stays unchanged.
+The [audit plan](/contributor/accessibility-audit-plan) describes the evaluation procedure.
 
 ## Feedback and contact
 
-If an accessibility problem prevents you from using Hephaestus, open an
-[accessibility issue](https://github.com/hephaestus-build/Hephaestus/issues/new?template=bug.yml).
-Describe the page and what you were trying to do under What happened? Include the browser,
-version, and assistive technology under Environment. Do not include private workspace data in a
-public report.
+If an accessibility problem prevents your use of Hephaestus:
+
+1. Open an [accessibility issue](https://github.com/hephaestus-build/Hephaestus/issues/new?template=bug.yml).
+2. Under **What happened?**, describe the page and the action you attempted.
+3. Under **Environment**, include the browser, version, and assistive technology.
+4. Do not include private workspace data in a public report.
