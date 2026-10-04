@@ -554,7 +554,7 @@ A direct invitation request returns `503` without email request records.
 Removal of SMTP configuration does not erase preferences.
 Attempts without configuration complete as `NOT_CONFIGURED` rather than waiting for reactivation.
 Existing subscriptions apply to future events after reconfiguration.
-Temporary relay outages and Silent Mode do **not** hide controls.
+Temporary relay outages and silent mode do **not** hide controls.
 Configuration, transport health, and deliberate withholding are separate states.
 
 | Variable | Default | Purpose |
@@ -626,7 +626,7 @@ An account-deletion confirmation expires at its purge deadline.
 
 Its next attempt completes without delivery, records `EXPIRED`, and deletes the registry row.
 The listener handles expiration, not a batch filter.
-Silent Mode, absent or unverified addresses, and refused mailboxes are final outcomes.
+Silent mode, absent or unverified addresses, and refused mailboxes are final outcomes.
 The row completes, and `notification.email.delivery` counts the outcome by `kind` and `outcome`.
 Logs contain the message id, never the address.
 Delivery is at-least-once.

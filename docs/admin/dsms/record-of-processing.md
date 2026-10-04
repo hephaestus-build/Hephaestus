@@ -322,7 +322,7 @@ Privacy statement §7 describes the identity-verification procedure and Art. 12(
 ```text
 Hephaestus provides a self-service account data export:
 
-1. A signed-in contributor requests an export from the in-app settings (account "Danger Zone").
+1. A signed-in contributor requests an export from the in-app settings (account "Danger zone").
 2. The platform compiles a JSON archive of the personal data it holds about that contributor.
 3. The contributor downloads it from the app.
 

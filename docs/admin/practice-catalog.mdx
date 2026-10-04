@@ -1,7 +1,7 @@
 ---
 id: practice-catalog
 title: Practice Catalog
-description: Curate the practices an instance offers, adopt them into a workspace, and review later changes before they apply.
+description: Curate the practices an instance includes, adopt them into a workspace, and review later changes before they apply.
 ---
 
 A practice is a defined way of working that Hephaestus uses to review work.
@@ -27,7 +27,7 @@ flowchart LR
 
 The arrow points only right.
 A release can update an instance entry that nobody customized.
-An instance change alters what the catalog offers.
+An instance change alters what the catalog includes.
 But **nothing rewrites a workspace practice**.
 Thus, adoption lets a workspace rely on its practices staying unchanged.
 
@@ -40,7 +40,7 @@ Where the definition has these sections, the preview also shows:
 - **Review scope and evidence**.
 - **How it decides**.
 - **How feedback is delivered**.
-- **What it measures first**.
+- **Static analysis**.
 
 1. In **Administration → Practice setup**, select **Show catalog**.
 2. Select a practice to read it before you decide.
@@ -86,13 +86,13 @@ A review sees an issue only after closure, never as it was at closure.
 ### Review a later update
 
 Each adopted practice has its own proposal when the instance catalog changes.
-The comparison shows the adopted version, your current version, and the offered version, one changed field at a time.
+The comparison shows the adopted version, your current version, and the proposed version, one changed field at a time.
 A **Conflict** means both sides changed that field.
 A **Local edit** means only your workspace changed it.
 That field stays unchanged.
 
 1. Open **Administration → Practice setup → Review updates**.
-2. For every field that the catalog changed, select **Current** or **Offered**.
+2. For every field that the catalog changed, select **Current** or **Proposed**.
 3. Accept the update.
 
 Your choice creates a new practice revision only for this workspace.
@@ -100,9 +100,9 @@ Earlier observations keep the revision that judged them.
 A change to review rules starts a new recurrence chain.
 Guidance-only changes do not.
 
-You can decline an offered version.
+You can decline a proposed version.
 This does not change the practice or create a revision.
-Hephaestus does not offer that same version again.
+Hephaestus does not propose that same version again.
 You can review a later, different version.
 
 An older release might not have stored the original adopted content.
@@ -115,7 +115,7 @@ In this case, **Comparison base** identifies the base that Hephaestus used:
 A recorded version might not show the original guidance or delivery.
 With either of the latter two bases, Hephaestus makes no field choices for you.
 
-1. Select **Current** or **Offered** for each changed field.
+1. Select **Current** or **Proposed** for each changed field.
 2. Review that comparison with extra care.
 
 The comparison cannot recover content that was never stored.
@@ -162,7 +162,7 @@ All badges are informational.
 | **Same as the catalog** | Your copy matches the catalog | Nothing |
 | **Edited here** | Your definition differs from the adopted version and the catalog | Check **Review updates** for a later catalog proposal |
 | **Catalog changed, yours did not** | Your copy equals its adopted base, but the catalog changed | Open **Practice updates** to accept or decline fields |
-| **Update declined** | You declined this exact catalog version | Nothing. A different version can be offered later |
+| **Update declined** | You declined this exact catalog version | Nothing. A different version can be proposed later |
 | **No longer in the catalog** | The source was excluded or removed | Nothing. Your copy continues to work |
 
 **On the instance**, badges compare the catalog with bundled defaults:
@@ -181,7 +181,7 @@ The comparison includes guidance and declared feedback-delivery behavior, not on
 2. Select fields to accept, or decline this version.
 
 If you accept only some fields, the others stay as you wrote them.
-**Use Hephaestus version** still discards the entire customization.
+**Restore Hephaestus default** still discards the entire customization.
 It is not the update review action.
 
 ## How reliable a practice is
@@ -189,19 +189,19 @@ It is not the update review action.
 Nobody has measured how often any practice is correct.
 Each practice has its author's description of what it checks.
 That description has not been tested against real work.
-The practice states this under **What it reads**.
+The practice states this under **How reliable this is**.
 Thus, a practice starts with approval for each piece of feedback.
 
 1. Keep that setting until you have observed the practice on your own work.
 
-## Curate what the instance offers
+## Curate the instance catalog
 
 **Instance administration → Practice catalog** determines what workspaces can adopt.
 
-1. To change an entry's definition for this instance, select **Customize**.
-2. To remove an entry from the menu, select **Stop offering**.
+1. To change an entry's definition for this instance, select **Edit practice** or **Edit group**.
+2. To stop workspaces from adopting an entry, select **Exclude from workspaces**.
    Workspaces that adopted it keep their copies and see no change.
-3. To discard a customization and return to the bundled definition, select **Use Hephaestus version**.
+3. To discard a customization and return to the bundled definition, select **Restore Hephaestus default**.
 4. To discard custom positions, select **Use Hephaestus order**.
 
 Exclusion of a group also removes its practices from the catalog that workspaces can adopt.

@@ -50,7 +50,7 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Effective autonomy**              | The autonomy in force after resolving practice → group → workspace. Always server-resolved and reported with its source.                                                                                                                    | autonomy override                                                 |
 | **Review coverage**                 | Which work may be reviewed. Repository and person modes follow the [kind of reviewed work](#review-coverage-and-delivery-status).                                                                                      | filter, audience, pilot allowlist, review scope                   |
 | **Sandbox gateway**                 | The only listener a review's sandbox may reach on a worker. Defined for operators in [runtime roles](/admin/runtime-roles).                                                                                                            | LLM proxy port, internal API, agent gateway                       |
-| **Delivery status**                 | Whether new external practice feedback may leave a workspace (`ACTIVE` or `PAUSED`). Pausing does not stop review or erase coverage.                                                                                                       | review status, practice autonomy, Silent Mode                     |
+| **Delivery status**                 | Whether new external practice feedback may leave a workspace (`ACTIVE` or `PAUSED`). Pausing does not stop review or erase coverage.                                                                                                       | review status, practice autonomy, silent mode                     |
 | **Delivery family**                 | Defined in the [practice feedback language](./practice-feedback-language.md).                                                                                                                                                              | delivery status, delivery state                                   |
 
 A practice author defines requirements.
@@ -268,7 +268,7 @@ The two autonomy `PATCH` endpoints take no `If-Match`.
 `deliveryStatus` is a separate workspace brake. `PAUSED` stops external practice feedback without stopping review or deleting coverage.
 Resuming does not release automatic feedback admitted under an earlier rollout revision.
 Undecided proposals remain explicit workflow items and are checked against current policy if later approved.
-Instance Silent Mode remains the stronger instance-wide egress boundary.
+Instance silent mode remains the stronger instance-wide egress boundary.
 
 Automatic admission records the current workspace `revision`.
 Any change to coverage, delivery status, the workspace default autonomy, or post-merge delivery advances it — narrowing as well as widening.
@@ -311,7 +311,7 @@ The same list runs at each `DeliveryPolicyStage` — `COMPOSITION`, `AUTOMATIC`,
   This check already resolves approval authority.
 - **At `COMPOSITION` the contributing practices are not yet known**, so `PRACTICE_AUTHORITY` is
   `NOT_APPLICABLE`. A document or conversation still has a review subject.
-  When that subject is resolved, [review coverage](#review-coverage-and-delivery-status), recipient consent, and target eligibility are checked. External surfaces also apply Silent Mode and the delivery pause.
+  When that subject is resolved, [review coverage](#review-coverage-and-delivery-status), recipient consent, and target eligibility are checked. External surfaces also apply silent mode and the delivery pause.
   `IN_APP` does not, because it never leaves Hephaestus.
 
 The artifact lane is evaluated again at `AUTOMATIC`, at `APPROVED` when a person released it, and at `EGRESS` immediately before the provider call.
@@ -595,7 +595,7 @@ Its rules, in one place:
 | Standing move direction      | `direction: UP`, `DOWN` on a standing or group move. Absent for a move into or out of a silence | `ProfileChangeDTO.Direction`, from `PracticeStandingDTO.Standing.rank()` | derived, never stored |
 | Holds as                     | `holdsAs`                          | `BundledPracticeCatalog`                   | bundled catalog, never stored — defined in the [feedback language](./practice-feedback-language.md) |
 | Signal refusal reason        | —                                  | `SignalStateReason`                        | `artifact_signal.state_reason`                                                |
-| Group dashboard visibility    | `visibleInPracticeDashboards`      | `PracticeGroup.visibleInPracticeDashboards` | `visible_in_practice_dashboards`                                              |
+| Group visibility on practice profiles | `visibleInPracticeDashboards`      | `PracticeGroup.visibleInPracticeDashboards` | `visible_in_practice_dashboards`                                              |
 | Claim currentness            | `claimCurrentness`                 | `ReviewClaimCurrentness`                   | derived API value                                                             |
 | Review-rule fingerprint      | `reviewRuleFingerprint`            | `ReviewRuleFingerprint`                    | `review_rule_fingerprint`                                                     |
 

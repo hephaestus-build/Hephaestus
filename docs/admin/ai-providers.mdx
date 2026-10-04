@@ -32,8 +32,8 @@ The server refuses model activation until the model has a cost declaration.
 
 1. Create the connection.
    It saves disabled: the create form always sends `enabled: false`.
-2. Select **Test & fetch models** for it.
-3. Add a model under that connection, with its upstream model id.
+2. Select **Test and fetch models** for it.
+3. Add a model under that connection, with its upstream model ID.
 4. Declare its price or mark it **No metered API cost**.
 5. Enable the connection.
 6. Enable the model.
@@ -51,9 +51,9 @@ An attempt to skip a stage returns HTTP 400 with a specific message, not a gener
 
 | Attempt | What you get back |
 | --- | --- |
-| Create a model with `enabled: true` | “Create the model as disabled. Set its price. Then activate the model.” |
-| Enable a model with an inactive connection or `UNPRICED` price | “Before you activate the model, activate the connection. Also set a price for the model.” |
-| Reprice an **enabled** model to `UNPRICED` | “To change the price of the model to UNPRICED, first disable the model.” |
+| Create a model with `enabled: true` | “Create the model disabled, set its price, then activate it.” |
+| Enable a model with an inactive connection or `UNPRICED` price | “Activate the connection and set a price before you activate the model.” |
+| Reprice an **enabled** model to `UNPRICED` | “Disable the model before you change its price to UNPRICED.” |
 
 An enabled model without a price would spend money that nobody can account for.
 It would make the month's budget verdict UNVERIFIABLE rather than uncapped.
@@ -137,7 +137,7 @@ It does not relax the private-address check.
 
 :::
 
-## 3. What "Test & fetch models" does
+## 3. What "Test and fetch models" does
 
 The probe sends one credentialled `GET {baseUrl}/models`.
 It needs no separate authentication by you.
@@ -169,7 +169,7 @@ For that draft probe:
 
 1. Enter the base URL.
 2. Enter the key.
-3. Select **Test & fetch models**.
+3. Select **Test and fetch models**.
 
 The probe uses the credential for that call only and never persists it.
 Workspace admins have no draft probe.
@@ -191,12 +191,12 @@ The table preserves the exact result text:
 | What you see | What it means | What to do |
 | --- | --- | --- |
 | “Reachable. Found N models.” | 2xx, with `data[].id` parsed. N can be 0. A 2xx without a `data` array is still reachable. | Nothing. |
-| “Provider returned HTTP 401 / 403” | The endpoint answered. Your key is wrong, expired, or lacks permission. | Re-enter the key. On Azure, check for **API key**, not Bearer. |
-| “Provider returned HTTP 404” | The host is correct but the path is not. Usually, the base URL lacks `/v1` or has an extra path segment. | Correct the base URL. Because it is immutable, create the connection again. |
-| “Provider returned HTTP 3xx” | The probe refuses a redirect. | Enter the URL the provider serves from. |
-| “Could not reach the provider: `<ExceptionName>`” | Nothing answered. Causes include DNS failure, refused connection, TLS failure, a 5 s timeout, or the connect-time address guard. The guard rejects the resolved address. The exception message is withheld because it can contain host details. Only the class name appears. | Check the host from the server, not your laptop. The server log has the same class name at INFO. |
-| “Provider response was too large” | `/models` response over 1 MiB. | Almost certainly not an OpenAI-compatible `/models` endpoint. |
-| “Discovery unsupported.” (any failure) | The banner headline for all these failures. | Save the connection if needed. Enter the model id manually. **A failed probe never blocks anything.** |
+| “The provider answered with HTTP 401 / 403.” | The endpoint answered. Your key is wrong, expired, or lacks permission. | Re-enter the key. On Azure, check for **API key**, not Bearer. |
+| “The provider answered with HTTP 404.” | The host is correct but the path is not. Usually, the base URL lacks `/v1` or has an extra path segment. | Correct the base URL. Because it is immutable, create the connection again. |
+| “The provider answered with HTTP 3xx.” | The probe refuses a redirect. | Enter the URL the provider serves from. |
+| “Hephaestus could not reach the provider (`<ExceptionName>`).” | Nothing answered. Causes include DNS failure, refused connection, TLS failure, a 5 s timeout, or the connect-time address guard. The guard rejects the resolved address. The exception message is withheld because it can contain host details. Only the class name appears. | Check the host from the server, not your laptop. The server log has the same class name at INFO. |
+| “The provider’s response was too large.” | `/models` response over 1 MiB. | Almost certainly not an OpenAI-compatible `/models` endpoint. |
+| “We could not fetch the model list.” (any failure) | The banner headline for all these failures. | Save the connection if needed. Enter the model ID manually. **A failed probe never blocks anything.** |
 
 A workspace admin sees a narrower result:
 
@@ -204,7 +204,7 @@ A workspace admin sees a narrower result:
 Connected. N models available.
 ```
 
-Failures show the same message, but provider model ids never appear.
+Failures show the same message, but provider model IDs never appear.
 
 ### Reasoning effort
 
@@ -359,7 +359,7 @@ This is a common cause of silently stopped workspace reviews.
 If that happens, use [the triage list](./practice-review#when-a-workspace-goes-quiet).
 
 A workspace admin who chooses a model sees its display name, connection name, reasoning effort, and price framing.
-They never see an upstream model id, base URL, or credential.
+They never see an upstream model ID, base URL, or credential.
 
 ## 6. Errors you can hit
 
@@ -438,13 +438,13 @@ A row holds only a model declared as that tier.
 A model from another tier is refused with this exact text:
 
 ```text
-This model is declared as \{tier\}. Assign it to that row.
+This model is declared as \{tier\}. Assign it under \{tier\}.
 ```
 
 An undeclared model is refused with:
 
 ```text
-The data handling of this model is not declared yet. Declare it first, or assign the model to Members who have not chosen.
+This model’s data handling is not declared yet. Declare it first, or assign it to Members who have not chosen.
 ```
 
 If a model's declaration becomes less restrictive, it no longer matches its row.

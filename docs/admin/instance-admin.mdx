@@ -1,7 +1,7 @@
 ---
 id: instance-admin
 title: Operate the instance admin console
-description: Manage accounts, workspaces, audits, AI usage, and Silent Mode across the instance.
+description: Manage accounts, workspaces, audits, AI usage, and silent mode across the instance.
 ---
 
 This console requires the instance-admin role.
@@ -12,7 +12,7 @@ Instance administration operates the deployment.
 
 ## Overview
 
-The overview shows Silent Mode, configuration readiness, release information, workspace counts,
+The overview shows silent mode, configuration readiness, release information, workspace counts,
 and recent authentication activity.
 
 1. Before you invite members or enable feedback, check readiness.
@@ -83,19 +83,19 @@ Do not substitute a display name for a provider ID.
 
 Use the [data-protection documentation](./dsms) for identity verification, scope, retention, and
 external-copy obligations. This console is separate from a member's own
-[Danger Zone](/user/user-settings#danger-zone).
+[Danger zone](/user/user-settings#danger-zone).
 
-## Silent Mode
+## Silent mode
 
 New instances start with it engaged. It blocks outbound feedback writes to GitHub, GitLab, and Slack.
 Inbound events, sync, practice reviews, and observation storage continue. OAuth, token lifecycle,
 webhook registration, and operator alerts remain available.
 
 A stale settings view cannot release a newer brake.
-If you turn Silent Mode off, Hephaestus does not replay feedback withheld while it was on.
+If you turn silent mode off, Hephaestus does not replay feedback withheld while it was on.
 For incidents, deployment checks, and recovery, follow the [production operations runbook](./production-operations-runbook).
 
-1. Open **Instance admin → Instance settings** to inspect or change Silent Mode.
+1. Open **Instance admin → Instance settings** to inspect or change silent mode.
 2. Before you release it, read the current state.
 
 ## Bootstrap and recovery

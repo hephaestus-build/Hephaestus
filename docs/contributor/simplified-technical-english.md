@@ -190,7 +190,7 @@ This table covers the general words.
 | `delete` (the object is gone), `remove` (it leaves a set and stays elsewhere) | `delete` and `remove` as synonyms |
 | `connect`, `disconnect` | `link`, `unlink`, `integrate` |
 | `use`, `with`, `through` | `utilize`, `leverage`, `via` |
-| `try again` | `retry`, `please try again` |
+| `Retry` on a button, `try again` in a sentence | `retry` in a sentence, `please try again` |
 | `you`, `your` | `the user`, `my` (in an action label) |
 
 <!-- vale STE.Contractions = YES -->

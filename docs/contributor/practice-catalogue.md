@@ -65,7 +65,7 @@ The practice editor follows the decisions an author can make confidently:
    Choose the work it applies to.
    Optionally place it in a group.
 2. **Review guidance** — describe what to look for, why it matters, and one concrete example.
-3. **How Hephaestus can help** — choose AI-supported mentoring, human review, or guidance only.
+3. **How this practice is mentored** — choose AI-supported mentoring, human review, or guidance only.
 
 The generated identifier, review signals, and optional static-analysis script are under **Technical settings**.
 A new practice starts with the signals and evidence requirements recommended for its kind of work.
@@ -99,7 +99,7 @@ The practice form starts with one product choice instead of separate model and e
 
 The practice starts with the recommended evidence for its kind of work.
 Most authors should keep it.
-**Customize evidence** reveals each source's display name, privacy class, and contract-required capture quality.
+**Choose sources** reveals each source's display name, privacy class, and contract-required capture quality.
 
 It shows whether the source can be captured whole.
 Thus, an author knows whether an `EXHAUSTIVE` stance is available.
@@ -215,8 +215,8 @@ The workspace UI derives drift by comparing:
 2. The definition copied originally. And
 3. The current effective instance definition.
 
-The ordinary matching state has no badge.
-Exceptions say **Customized for this workspace**, **Instance catalog changed**, or **Not in the current instance catalog**.
+A copy that matches the catalog says **Same as the catalog**.
+Other states say **Edited here**, **Catalog changed, yours did not**, **Update declined**, or **No longer in the catalog**.
 Drift never rewrites the workspace.
 A changed effective instance practice produces a proposal for each workspace that adopted it.
 

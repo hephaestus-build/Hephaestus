@@ -171,7 +171,7 @@ The table contains the exact UI text:
 | Nothing posted | `No comment about it was found on the work.` |
 | Updated | `Every summary comment Hephaestus posted about it now opens with a correction notice, or has since been deleted.` |
 | Inline comments remain | `Inline comments Hephaestus posted about it are still on the work unchanged, because they cannot be edited from here. Any summary comment now carries a correction notice. Remove or answer the inline comments on the pull request or merge request.` |
-| Unresolved | `Hephaestus cannot correct every comment about it. One cause is a summary that it could not edit. Another is a comment that the provider accepted without saying which one it is. A third is a comment that it tried to post and has not confirmed. Check the pull request or merge request and correct it there. Hephaestus keeps checking and updates this if it finds the comment.` |
+| Unresolved | `Hephaestus cannot correct every comment about it. A summary comment could not be edited, the provider did not say which comment it accepted, or a posted comment is unconfirmed. Check the pull request or merge request and correct it there. Hephaestus keeps checking and updates this if it finds the comment.` |
 
 **Restore observation** reverses the correction with a second reason.
 It removes any notice the correction added and resends nothing.
@@ -243,7 +243,7 @@ It does not approve a pull request for merge.
 - **Missing important context**.
 - **Not useful to the recipient**.
 - **Already covered elsewhere**.
-- **Wrong delivery place**.
+- **Wrong place for this feedback**.
 - **Something else**.
 
 1. Add the requested explanation.
@@ -321,7 +321,7 @@ It must enable repository checkout wherever evidence capture runs.
 Until then, every workspace on the instance stays quiet, regardless of configuration.
 
 No instance population flag configures workspace coverage.
-Instance Silent Mode is the separate emergency brake for external delivery.
+Instance silent mode is the separate emergency brake for external delivery.
 [Practice review operations](./practice-review-operations.mdx) covers variables, Compose forwarding, storage, queue metrics, retention, and fixed limits.
 
 Review conditions belong to each practice, not workspace coverage.
@@ -585,13 +585,13 @@ They run automatically after its return, or are dropped if it stays absent for a
    Both counts must be nonzero, and the author must be a covered person.
    **What we noticed** distinguishes an unknown author from excluded work:
 
-   - *"The author is unknown or not a workspace member yet"*.
+   - *“The author is unknown or not yet a member of this workspace”*.
      The repository and base branch are covered.
      The author is not a member on the connected instance, or has no known account.
      Check **Members**, and for GitLab the group's list with inherited members shown.
      Work waits for membership sync to admit the author.
      It then runs without another request if admission occurs within `SIGNAL_LEDGER_PENDING_LAPSE_AFTER` (default seven days).
-   - *"The author, repository, or base branch is outside the workspace's review coverage"*.
+   - *“The author, repository, or base branch is outside this workspace’s review scope”*.
      The repository or base branch is unselected, or the people selection excludes the member.
      This decision is final for the work.
      Broader coverage affects later work.

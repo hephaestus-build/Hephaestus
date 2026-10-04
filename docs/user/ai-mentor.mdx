@@ -6,7 +6,7 @@ description: Ask Heph about practice feedback and recent work in the web app or 
 
 Heph is the conversational AI mentor in Hephaestus.
 It can use your recent work and practice feedback as context.
-You do not need to repeat all the details before you ask a question.
+You do not need to repeat the details before you ask a question.
 
 Heph is one part of the Hephaestus platform.
 [Practice feedback](./ai-code-review) describes automated practice feedback on pull requests, merge requests, and issues.
@@ -20,15 +20,15 @@ Instance admins who are not members cannot use Heph in that workspace.
 
 These conditions apply in each workspace:
 
-- **Heph is not set up in this workspace yet:** a workspace admin needs to set up a model for Heph.
-- **Heph says it is off for you:** you chose **No AI**. **Your AI choice** lets you enable Heph again.
-- **Heph asks you to choose which AI may handle your work:** this workspace needs your AI choice first.
-- **Heph is not set up for your AI choice yet:** no workspace Heph model meets your choice.
+- **Heph is not set up in this workspace yet.** A workspace admin needs to set up a model for Heph.
+- **Heph is off for you.** You chose **No AI**. Select **Change your AI choice** to turn Heph on again.
+- **Choose which AI may handle your work.** This workspace needs your AI choice first.
+- **Heph is not set up for your AI choice yet.** No workspace Heph model meets your choice.
 
 For the last condition, a workspace admin can add a model, or you can change your choice.
 Slack direct messages follow the same rules.
-Where the workspace has no model for Heph, it does not reply.
-In the refusal cases above, it replies with the same reason and starts no conversation.
+If the workspace has no model for Heph, Heph does not reply in Slack.
+In the other cases above, Heph replies in Slack with the same reason and starts no conversation.
 
 ## Start a chat
 
@@ -39,16 +39,16 @@ In the refusal cases above, it replies with the same reason and starts no conver
 5. To start a separate thread, select **New chat**.
 
 Shift+Enter starts a new line.
-Heph's first reply after a quiet period can take longer while it starts up.
+Heph’s first reply after a quiet period can take longer while it starts up.
 The chat explains this while you wait.
-Previous chats appear in the Heph sidebar.
+Previous chats appear under **Chat history** in the sidebar.
 
 1. To continue a previous chat, select its thread.
 
 ## What Heph can use as context
 
-Heph's context depends on your workspace configuration.
-It can include the sources below.
+What Heph can use depends on how your workspace is set up.
+It can use the sources below.
 
 ### Recent work
 
@@ -57,7 +57,7 @@ For your open pull requests and merge requests, it can use these details as Heph
 
 - Whether GitHub or GitLab reported the work as mergeable.
 - The latest pipeline or check result.
-- Each reviewer's latest review.
+- Each reviewer’s latest review.
 - General comments and inline review threads.
 
 An approval or a resolved thread does not prove that the work meets a condition in a comment or thread.
@@ -73,7 +73,7 @@ Heph can use your most recent practice feedback records:
 - Whether Hephaestus recorded a failure to deliver feedback.
 
 This record gives Heph text only for feedback recorded as delivered on your work or practice page, never for conversations.
-It does not necessarily include your full feedback history.
+It may not include your full feedback history.
 A private brief prepared for Heph reaches it separately, as described below.
 A practice that continues to go well appears as such on your practice page, without private feedback there.
 Heph does not treat the absence of feedback as a delivery failure.
@@ -81,7 +81,7 @@ Heph does not treat the absence of feedback as a delivery failure.
 Heph sees only feedback records that it may use in conversation.
 It does not see:
 
-- Feedback proposed for a reviewer to approve, or the reviewer's decision.
+- Feedback proposed for a reviewer to approve, or the reviewer’s decision.
 - Withheld or replaced feedback.
 - Feedback whose evidence is no longer available for conversations.
 - Feedback about a Slack conversation with paused or revoked consent, even if that feedback reached you.
@@ -97,7 +97,7 @@ Heph can use a recent sample of practice review results about your work, from ab
 This includes the latest result for each practice on each piece of work, including not applicable and undetermined results.
 It also includes some earlier results for the same practice on the same work.
 An earlier result stays in your history after you change the work.
-Heph describes it as that review's result at the time, not as a withdrawn result.
+Heph describes it as that review’s result at the time, not as a withdrawn result.
 
 Catch-up reviews of existing work stay separate from reviews that your work triggered or someone requested.
 The sample is bounded and includes only results Heph may use in conversation.
@@ -116,15 +116,15 @@ Heph can also use:
 - Selected team documents from a connected Outline workspace.
 
 Heph uses this context to answer your question.
-It does not have an unrestricted checkout of all connected repositories.
-It may ask for a specific snippet if the available context is not enough.
+It does not have open access to the code in your connected repositories.
+If the context is not enough, it may ask you for a specific snippet.
 
 Heph does not use work deleted on GitHub or GitLab.
 Your activity counts and the practice feedback you already received do not change.
 They record what happened at the time.
 
 A practice review can prepare private feedback for your next conversation with Heph.
-It can send a Slack reminder when Slack is connected, your account is linked, and your settings allow it.
+Hephaestus can then send a Slack reminder, when Slack is connected, your account is linked, and your settings allow it.
 This direct message contains a count, not feedback text.
 It arrives at most once in 24 hours per workspace.
 It does not start a chat.
@@ -132,8 +132,8 @@ It does not start a chat.
 When you next talk to Heph, it receives the prepared feedback and its permitted evidence.
 It can show relevant feedback as a separate part of its reply.
 That feedback counts as delivered only when Heph shows it.
-A completed turn without confirmation of display leaves delivery unconfirmed.
-That feedback does not count as delivered, and Hephaestus does not prepare it again.
+If a turn finishes without confirmation that Heph showed the feedback, delivery stays unconfirmed.
+The feedback does not count as delivered, and Hephaestus does not prepare it again.
 
 ## Questions to try
 
@@ -143,7 +143,7 @@ That feedback does not count as delivered, and Hephaestus does not prepare it ag
 - "What could I try differently on my next review?"
 - "Summarize what we decided in this conversation."
 
-You do not need a template or a fixed session.
+You do not need a template.
 
 1. Ask one specific question.
 2. Continue the conversation where it is useful.
@@ -159,7 +159,7 @@ If an answer does not match the work:
 2. Point Heph to the relevant comment, line, or explanation.
 3. Ask it to reconsider with that evidence.
 
-The developer and human reviewers stay responsible for decisions about the work.
+You and your human reviewers stay responsible for decisions about the work.
 
 ## Use Heph in Slack
 
@@ -168,5 +168,5 @@ Slack direct messages and web-app chats have separate conversation histories.
 
 Workspace admins can separately enable monitored channels as context.
 Monitoring starts only after Hephaestus posts a visible announcement.
-Individual privacy controls apply.
+Each person’s own privacy controls apply.
 [Your data in Hephaestus](./privacy.mdx#your-choices-and-right-to-object) explains the Slack privacy controls and what they do not erase.

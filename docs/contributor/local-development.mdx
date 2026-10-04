@@ -181,7 +181,7 @@ leaves your machine. Its SMTP and inbox ports bind to `127.0.0.1` only. Open [ht
 what the server sent, with the HTML part, the plain-text alternative and the headers side by side.
 
 The quickest end-to-end check is the **Send test email** button on the instance settings page
-(`/admin/settings`). It goes through the same gateway as every notification, including Silent Mode.
+(`/admin/settings`). It goes through the same gateway as every notification, including silent mode.
 
 Templates live in `server/application/src/main/resources/templates/email/` — `html/` and `text/`
 hold the two parts of one message, and `messages.properties` holds the subjects.
@@ -393,7 +393,7 @@ Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://gith
    To hide the GitLab button, leave the client id blank.
 4. Run the application server with `vp run dev:server`. It brings up the Compose services, installs
    the generated-clients module and starts the application module. Open the webapp and click
-   **Sign in with GitHub**.
+   **Continue with GitHub**.
 
 GitLab workspaces are created only on `GITLAB_DEFAULT_SERVER_URL`, falling back to
 `GITLAB_OAUTH_BASE_URL`. Set it consistently on the server and workers. Additional GitLab login
