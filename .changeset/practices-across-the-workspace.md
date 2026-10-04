@@ -8,4 +8,4 @@ Each bar counts every developer by their current standing, the standing that the
 
 A group opens a panel with its bar and a bar for each practice. To see your own standing, trend, and next step, select **Open in your Practice profile** on the group or on one of its practices. Your Practice profile opens with that group or practice open.
 
-A bar appears only when each of its parts holds at least four developers. Thus, every reader sees the same bar, and each part stands for at least three other developers. If not, the bar is held back.
+A bar shows its parts only when each of its parts holds at least four developers. Thus, every reader sees the same bar, and each part stands for at least three other developers. If not, the bar shows only how many developers it counts, with **Split held back** under it.

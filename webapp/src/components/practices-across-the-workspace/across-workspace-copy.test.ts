@@ -59,6 +59,16 @@ describe("splitDescription", () => {
 	});
 });
 
+describe("a split shown only as its total", () => {
+	const totalOnly: WorkspaceSplit = { shape: "TOTAL_ONLY", parts: [], developers: 41 };
+
+	it("names the total and why the parts are held back, and nothing of the reader", () => {
+		expect(splitDescription(totalOnly, "MIXED", context)).toBe(
+			"41 developers with a current standing in this workspace. The split is held back so no one can be singled out.",
+		);
+	});
+});
+
 describe("a split held back", () => {
 	it("gives one short reason and nothing of the reader, never the total", () => {
 		expect(splitDescription(WITHHELD, "MIXED", context)).toBe(
@@ -97,7 +107,7 @@ describe("the hints", () => {
 
 	it("takes the part size from K", () => {
 		expect(barsHint(3, "group")).toContain(
-			"A bar shows only if each of its parts holds at least 3 other developers",
+			"A bar shows its parts only if each part holds at least 3 other developers",
 		);
 	});
 
@@ -113,9 +123,14 @@ describe("the hints", () => {
 		expect(PAGE_PURPOSE).toContain("Your next step is in your Practice profile.");
 	});
 
-	it("says a practice's bar is also held back beside its group's, with no promise about later", () => {
+	it("says a bar then shows only its total", () => {
+		expect(barsHint(3, "group")).toContain("If not, the bar shows only its total");
+		expect(barsHint(3, "practice")).toContain("If not, the bar shows only its total.");
+	});
+
+	it("says a practice's parts are also held back beside its group's, with no promise about later", () => {
 		expect(barsHint(3, "practice")).toContain(
-			"The bar must also single no one out beside the group's bar.",
+			"The parts must also single no one out beside the group’s bar.",
 		);
 		expect(splitDescription(WITHHELD, "MIXED", context)).not.toMatch(/yet/u);
 	});

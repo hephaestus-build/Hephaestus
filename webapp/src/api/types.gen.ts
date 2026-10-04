@@ -7206,9 +7206,13 @@ export type WorkspaceReviewScope = {
 };
 
 /**
- * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict and none yet, all set only for SPLIT
+ * How the developers with a standing split across one practice group or one practice, counted in developers: a part per verdict and none yet, set only for SPLIT, and their total, set for SPLIT and TOTAL_ONLY
  */
 export type WorkspaceSplit = {
+  /**
+   * Every developer the split counts, the parts and none yet together, the reader included when counted; set for SPLIT and TOTAL_ONLY
+   */
+  developers?: number;
   /**
    * Developers with a standing in a group shown but none here; set only for SPLIT
    */
@@ -7220,7 +7224,7 @@ export type WorkspaceSplit = {
   /**
    * How the split may be shown
    */
-  shape: 'SPLIT' | 'WITHHELD';
+  shape: 'SPLIT' | 'TOTAL_ONLY' | 'WITHHELD';
 };
 
 /**

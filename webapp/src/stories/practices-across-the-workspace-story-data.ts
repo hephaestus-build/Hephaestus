@@ -73,8 +73,17 @@ export const threeWay = ([needsAttention, mixedFeedback, goingWell]: [
 		{ standing: "STRENGTH", developers: goingWell },
 	],
 	noneYet: STORY_WITH_A_STANDING - needsAttention - mixedFeedback - goingWell,
+	developers: STORY_WITH_A_STANDING,
 });
 
+/** A split whose parts hold too few: only its total of 28 shows. */
+export const TOTAL_ONLY: WorkspaceSplit = {
+	shape: "TOTAL_ONLY",
+	parts: [],
+	developers: STORY_WITH_A_STANDING,
+};
+
+/** A split the server holds back whole, its total too: too few developers have a standing. */
 export const WITHHELD: WorkspaceSplit = { shape: "WITHHELD", parts: [] };
 
 const practice = (
@@ -92,7 +101,7 @@ const group = (
 ): WorkspaceGroupSplit => ({ ...of, yourStanding, split, practices });
 
 /**
- * Packaging's five practices: three split and two held back.
+ * Packaging's five practices: three split and two shown only as their total.
  * Every part shown holds more than K of the 28 developers with a standing, as CohortPrivacyPolicy requires.
  */
 export const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
@@ -108,12 +117,12 @@ export const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
 		"MIXED",
 		threeWay([6, 7, 8]),
 	),
-	practice("scope-to-one-concern", "Scope the change to one concern", "STRENGTH", WITHHELD),
+	practice("scope-to-one-concern", "Scope the change to one concern", "STRENGTH", TOTAL_ONLY),
 	practice(
 		"mark-ready-and-link",
 		"Mark the change ready and link its issue",
 		"NOT_OBSERVED",
-		WITHHELD,
+		TOTAL_ONLY,
 	),
 	practice("keep-history-clean", "Keep the history readable", "STRENGTH", threeWay([6, 6, 9])),
 ];
@@ -143,12 +152,12 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	groups: [
 		group(ACTING, "MIXED", threeWay([6, 7, 7])),
 		group(COMMUNICATION, "DEVELOPING", threeWay([7, 7, 6])),
-		group(FAILURE, "MIXED", WITHHELD),
+		group(FAILURE, "MIXED", TOTAL_ONLY),
 		PACKAGING_GROUP,
 		group(REVIEWING, "STRENGTH", threeWay([6, 6, 8])),
 		group(TESTING, "NOT_OBSERVED", threeWay([6, 6, 7])),
 		group(ISSUES, "NO_OPPORTUNITY", threeWay([6, 6, 7])),
-		group(MAINTAINABLE, "STRENGTH", WITHHELD),
+		group(MAINTAINABLE, "STRENGTH", TOTAL_ONLY),
 	],
 };
 
@@ -184,10 +193,10 @@ export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
 	})),
 };
 
-/** Every group held back: a part of each split holds too few. */
+/** Every group shown only as its total: a part of each split holds too few. */
 export const TOTAL_ONLY_WORKSPACE: PracticesAcrossWorkspace = {
 	...ACROSS_WORKSPACE,
-	groups: ACROSS_WORKSPACE.groups.map((each) => ({ ...each, split: WITHHELD })),
+	groups: ACROSS_WORKSPACE.groups.map((each) => ({ ...each, split: TOTAL_ONLY })),
 };
 
 export const EMPTY_WORKSPACE: PracticesAcrossWorkspace = { ...ACROSS_WORKSPACE, groups: [] };

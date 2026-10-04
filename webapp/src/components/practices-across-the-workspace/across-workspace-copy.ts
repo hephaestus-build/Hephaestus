@@ -104,10 +104,10 @@ export function tilesHint({
  * shows by the same rule as its group's, and only while it singles no one out beside the group's.
  */
 export function barsHint(minimumOthers: number, scope: StandingScope): string {
-	const rule = `Each bar counts developers by their current standing in the ${scope}, as their Practice profile shows it. You marks your part. A bar shows only if each of its parts holds at least ${minimumOthers} other developers.`;
+	const rule = `Each bar counts developers by their current standing in the ${scope}, as their Practice profile shows it. You marks your part. A bar shows its parts only if each part holds at least ${minimumOthers} other developers.`;
 	return scope === "group"
-		? `${rule} If not, the whole bar is held back, so no one can be singled out.`
-		: `${rule} The bar must also single no one out beside the group's bar. If not, it is held back.`;
+		? `${rule} If not, the bar shows only its total, so no one can be singled out.`
+		: `${rule} The parts must also single no one out beside the group’s bar. If not, the bar shows only its total.`;
 }
 
 /** What the bar and its text alternative need besides the split itself. */
@@ -129,11 +129,17 @@ export function developerCount(count: number): string {
 }
 
 /**
- * What a split held back says under its empty track, the same in every row and for every reason
- * the privacy rule holds one back: a part too small, or a practice too close to its group. More
- * data does not lift the second, so the words promise nothing about later.
+ * What a split held back says under its empty track: the privacy rule holds back its total too,
+ * because too few developers have a standing at all.
  */
 export const HELD_BACK = "Held back so no one can be singled out";
+
+/**
+ * What a split shown only as its total says under its neutral bar, the same in every row and for
+ * every reason the privacy rule holds the parts back: a part too small, or a practice too close to its
+ * group. More data does not lift the second, so the words promise nothing about later.
+ */
+export const SPLIT_HELD_BACK = "Split held back";
 
 /** The reference group a split is a part of: "24 developers with a current standing in this workspace". */
 function referenceGroup(context: SplitContext): string {
@@ -146,7 +152,8 @@ function referenceGroup(context: SplitContext): string {
 
 /**
  * The bar's text alternative: the named reference group, every count, and the part the You marker
- * is on, as the bar shows it. A split held back says only why, as its track does.
+ * is on, as the bar shows it. A split shown as its total says the total and why it holds the
+ * parts back. A split held back says only why, as its track does.
  */
 export function splitDescription(
 	split: WorkspaceSplit,
@@ -155,6 +162,9 @@ export function splitDescription(
 ): string {
 	if (split.shape === "WITHHELD") {
 		return `${HELD_BACK}.`;
+	}
+	if (split.shape === "TOTAL_ONLY") {
+		return `${developerCount(split.developers ?? 0)} with a current standing in this workspace. The split is held back so no one can be singled out.`;
 	}
 	// Each part in the registry's own words and the server's order, so the bar's text says what its
 	// legend says.

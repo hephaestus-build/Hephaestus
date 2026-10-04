@@ -18,8 +18,10 @@ import org.jspecify.annotations.Nullable;
  * their group standing or their practice standing, and both standings that are no verdict fall in none yet. A split
  * shows Needs attention, Mixed feedback, Going well and none yet only when every one of the four holds enough; otherwise the whole split is
  * withheld, never a part of it, since the page states how many developers have a standing and a missing part would
- * be that total less the rest. Omit rather than show a zero. The reader's own standing shows only as the marker on
- * their part of a split, and a split withheld marks no one.
+ * be that total less the rest. Omit rather than show a zero. A split withheld still shows its total, the developers
+ * with a standing it would split, while that total holds more than {@link #MINIMUM_OTHERS}: every split counts the
+ * same developers, so the total says nothing the page total does not. The reader's own standing shows only as the
+ * marker on their part of a split, and a split withheld marks no one.
  *
  * <p>A group's standing is read off its practices, so its developers with a standing are everyone with a standing
  * in any of them, and its split and its practices' splits can be subtracted from each other: two practices of
@@ -52,7 +54,9 @@ public final class CohortPrivacyPolicy {
     public enum Shape {
         /** Needs attention, Mixed feedback, Going well and none yet, each counted. */
         SPLIT,
-        /** No split: one of the four would cover too few. */
+        /** Only the total: one of the four would cover too few, but the total holds enough. */
+        TOTAL_ONLY,
+        /** Nothing: the total itself would cover too few. */
         WITHHELD,
     }
 
@@ -60,14 +64,22 @@ public final class CohortPrivacyPolicy {
     public record Part(Standing standing, int developers) {}
 
     /**
-     * One split as it may be shown: a part per verdict, in {@link #VERDICTS} order, and none yet. Counts include
-     * the reader when the reader is counted, so the bar and the reader's place on it agree; a withheld split has
-     * no parts and no none yet.
+     * One split as it may be shown: a part per verdict, in {@link #VERDICTS} order, none yet, and the total they add
+     * up to. Counts include the reader when the reader is counted, so the bar and the reader's place on it agree. A
+     * split shown as its total only has no parts and no none yet, and a withheld split has no total either.
      */
     public record Split(
-            Shape shape, List<Part> parts, @Nullable Integer noneYet) {
+            Shape shape,
+            List<Part> parts,
+            @Nullable Integer noneYet,
+            @Nullable Integer developers) {
 
-        static final Split WITHHELD = new Split(Shape.WITHHELD, List.of(), null);
+        static final Split WITHHELD = new Split(Shape.WITHHELD, List.of(), null, null);
+
+        /** A split whose parts may not show: its total alone while the total holds enough, otherwise nothing. */
+        static Split heldBack(int developers) {
+            return shows(developers) ? new Split(Shape.TOTAL_ONLY, List.of(), null, developers) : WITHHELD;
+        }
     }
 
     /**
@@ -97,34 +109,33 @@ public final class CohortPrivacyPolicy {
      * fall short of its group's by 1 to K - 1, and every practice of the group is withheld where the practices
      * shown add up to 1 to K - 1 more developers with a standing than the group has, which is how many hold a
      * standing in more than one of them. The group's own split stands, since on its own every part it shows
-     * already holds enough.
+     * already holds enough. A split withheld for either reason still shows its total, the same for every split of
+     * the group.
      *
      * @param withAStanding the standings of every developer with a standing, the reader's included when the
      *     reader has one
      * @param practiceCount how many practices each row carries, which no row says when nobody has a standing
      */
     public static GroupRelease group(List<Row> withAStanding, int practiceCount) {
+        Split heldBack = Split.heldBack(withAStanding.size());
         Split group = split(withAStanding.stream().map(Row::group).toList());
         List<Split> practices = IntStream.range(0, practiceCount)
                 .mapToObj(index -> {
                     Split practice = split(withAStanding.stream()
                             .map(row -> row.practices().get(index))
                             .toList());
-                    return safeCell(hasStanding(group) - hasStanding(practice), group, practice)
-                            ? practice
-                            : Split.WITHHELD;
+                    return safeCell(hasStanding(group) - hasStanding(practice), group, practice) ? practice : heldBack;
                 })
                 .toList();
         List<Split> shown = practices.stream()
-                .filter(practice -> practice.shape() != Shape.WITHHELD)
+                .filter(practice -> practice.shape() == Shape.SPLIT)
                 .toList();
-        if (group.shape() != Shape.WITHHELD && shown.size() > 1) {
+        if (group.shape() == Shape.SPLIT && shown.size() > 1) {
             int overlap =
                     shown.stream().mapToInt(CohortPrivacyPolicy::hasStanding).sum() - hasStanding(group);
             if (!safeCell(overlap, group, group)) {
                 return new GroupRelease(
-                        group,
-                        practices.stream().map(practice -> Split.WITHHELD).toList());
+                        group, practices.stream().map(practice -> heldBack).toList());
             }
         }
         return new GroupRelease(group, practices);
@@ -132,21 +143,21 @@ public final class CohortPrivacyPolicy {
 
     /** Whether a cell two shown splits let a reader work out is none or at least K, or not worked out at all. */
     private static boolean safeCell(int developers, Split one, Split other) {
-        if (one.shape() == Shape.WITHHELD || other.shape() == Shape.WITHHELD) {
+        if (one.shape() != Shape.SPLIT || other.shape() != Shape.SPLIT) {
             return true;
         }
         int size = Math.abs(developers);
         return size == 0 || size >= MINIMUM_OTHERS;
     }
 
-    /** How many a split counts with a standing; none for a withheld split, which has no parts. */
+    /** How many a split counts with a standing; none for a split held back, which has no parts. */
     private static int hasStanding(Split split) {
         return split.parts().stream().mapToInt(Part::developers).sum();
     }
 
     /**
      * One split counted over every developer with a standing, the reader included when they have one: all four
-     * parts, each holding more than K of them, or nothing.
+     * parts, each holding more than K of them, or the split held back.
      */
     static Split split(Collection<Standing> withAStanding) {
         List<Part> parts = VERDICTS.stream()
@@ -157,9 +168,9 @@ public final class CohortPrivacyPolicy {
         int none =
                 withAStanding.size() - parts.stream().mapToInt(Part::developers).sum();
         if (parts.stream().allMatch(part -> shows(part.developers())) && shows(none)) {
-            return new Split(Shape.SPLIT, parts, none);
+            return new Split(Shape.SPLIT, parts, none, withAStanding.size());
         }
-        return Split.WITHHELD;
+        return Split.heldBack(withAStanding.size());
     }
 
     /** The middle half of a figure across the workspace, as the two values that bound it. */

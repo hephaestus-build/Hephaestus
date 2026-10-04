@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
 
-import { threeWay, WITHHELD } from "@/stories/practices-across-the-workspace-story-data";
+import {
+	threeWay,
+	TOTAL_ONLY,
+	WITHHELD,
+} from "@/stories/practices-across-the-workspace-story-data";
 
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 
@@ -23,9 +27,12 @@ const onOpen = fn();
 const ROWS: ComparisonRow[] = [
 	row("acting", "Acting on review feedback", "MIXED", threeWay([6, 7, 7])),
 	row("failure", "Handling failure well", "DEVELOPING", threeWay([4, 9, 9])),
-	row("craft", "Writing maintainable code", "STRENGTH", WITHHELD),
+	row("craft", "Writing maintainable code", "STRENGTH", TOTAL_ONLY),
 	row("testing", "Testing your changes", "NOT_OBSERVED", threeWay([6, 6, 8])),
 ];
+
+const TOTAL_ONLY_NAME =
+	"28 developers with a current standing in this workspace. The split is held back so no one can be singled out.";
 
 const CONTEXT = {
 	readerCounted: true,
@@ -54,30 +61,53 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Both shapes in one table: split and held back, the reader marked only on a split. */
+/** Both shapes in one table: split and total only, the reader marked only on a split. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("table", { name: "All practice groups" })).toBeVisible();
 		await expect(
 			canvas.getByRole("columnheader", { name: "Developers in this workspace" }),
 		).toBeVisible();
-		await expect(canvas.getAllByRole("img")).toHaveLength(3);
-		// A split and a held back track fill the same width, the whole bar column.
+		await expect(canvas.getAllByRole("img")).toHaveLength(4);
+		// A split and a total only bar fill the same width, the whole bar column.
 		const split = canvas.getAllByRole("img")[0]?.getBoundingClientRect().width;
-		const heldBack = canvas
-			.getByText("Held back so no one can be singled out.")
-			.parentElement?.getBoundingClientRect().width;
-		await expect(split).toBe(heldBack);
+		const totalOnly = canvas
+			.getByRole("img", { name: TOTAL_ONLY_NAME })
+			.getBoundingClientRect().width;
+		await expect(split).toBe(totalOnly);
 		await expect(
 			canvas.getByRole("img", { name: /4 Needs attention, 9 Mixed feedback, 9 Going well/u }),
 		).toBeVisible();
-		await expect(canvas.getByText("Held back so no one can be singled out.")).toBeVisible();
+		// The total only row names its total and says the split is held back, and marks no one.
+		const craft = canvas.getAllByRole("row").find((each) => each.textContent.startsWith("Writing"));
+		await expect(craft?.textContent).toContain("Split held back");
+		await expect(craft?.textContent).toContain("28 developers");
+		await expect(craft?.textContent).not.toContain("You");
 		await userEvent.click(canvas.getByRole("button", { name: "Open group Handling failure well" }));
 		await expect(onOpen).toHaveBeenCalledOnce();
 	},
 };
 
-/** Every split held back: an empty track and one short reason per row, and nothing of the reader. */
+/** Every split shown only as its total: a neutral bar, its total and a short label per row. */
+export const TotalOnly: Story = {
+	args: {
+		state: {
+			status: "ready",
+			rows: ROWS.map((each) => ({ ...each, split: TOTAL_ONLY })),
+			context: CONTEXT,
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getAllByRole("img", { name: TOTAL_ONLY_NAME })).toHaveLength(4);
+		await expect(canvas.getAllByText("Split held back")).toHaveLength(4);
+		await expect(canvas.queryByText(/You/u)).toBeNull();
+	},
+};
+
+/**
+ * Every split held back, the total too, as when too few developers have a standing at all: an
+ * empty track and one short reason per row, and nothing of the reader.
+ */
 export const Withheld: Story = {
 	args: {
 		state: {

@@ -127,7 +127,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Test
     @WithUser
-    @DisplayName("an even group splits with the reader counted; a bare or nearly full one is withheld")
+    @DisplayName("an even group splits with the reader counted; a bare or nearly full one shows its total only")
     void shouldSplitAndWithholdByTheCountsOfDevelopersWithAStanding() {
         read().jsonPath("$.minimumOthers")
                 .isEqualTo(3)
@@ -157,13 +157,18 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo(4)
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.noneYet")
                 .isEqualTo(16)
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.developers")
+                .isEqualTo(28)
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.shape")
-                .isEqualTo("WITHHELD")
+                .isEqualTo("TOTAL_ONLY")
                 .jsonPath(groupPart("actionable-issues", "STRENGTH"))
                 .doesNotExist()
+                // A split held back still counts every developer with a standing, as the page total does.
+                .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.developers")
+                .isEqualTo(28)
                 // Every standing holds eight or more, but only three are left at none yet, the reader among them.
                 .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.shape")
-                .isEqualTo("WITHHELD")
+                .isEqualTo("TOTAL_ONLY")
                 .jsonPath(groupPart("code-craftsmanship", "STRENGTH"))
                 .doesNotExist()
                 .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.noneYet")
@@ -214,7 +219,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo(6)
                 // A group with one practice names it, split as the group is.
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].practices[0].split.shape")
-                .isEqualTo("WITHHELD")
+                .isEqualTo("TOTAL_ONLY")
                 // The reader's own learning stays in their profile: the page carries no trend of theirs.
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourDirection")
                 .doesNotExist();
@@ -270,7 +275,10 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo("NOT_OBSERVED")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
                         + ".split.shape")
-                .isEqualTo("WITHHELD");
+                .isEqualTo("TOTAL_ONLY")
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
+                        + ".split.parts.length()")
+                .isEqualTo(0);
     }
 
     @Test

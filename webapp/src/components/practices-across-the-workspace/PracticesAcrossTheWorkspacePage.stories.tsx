@@ -17,7 +17,7 @@ import { PracticesAcrossTheWorkspacePage } from "./PracticesAcrossTheWorkspacePa
 /**
  * The reader's figures beside the workspace's middle half over the window, then every practice
  * group beside how the workspace's developers split across it by their current standing. The
- * reader shows only as the You marker on a split; a split held back marks no one.
+ * reader shows only as the You marker on a split; a split shown as its total marks no one.
  */
 const meta = {
 	component: PracticesAcrossTheWorkspacePage,
@@ -57,7 +57,7 @@ export const Default: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Each bar counts developers by their current standing in the group, as their Practice profile shows it. You marks your part. A bar shows only if each of its parts holds at least 3 other developers. If not, the whole bar is held back, so no one can be singled out.",
+				"Each bar counts developers by their current standing in the group, as their Practice profile shows it. You marks your part. A bar shows its parts only if each part holds at least 3 other developers. If not, the bar shows only its total, so no one can be singled out.",
 			),
 		).toBeVisible();
 		// The window toggle sits in the tiles' heading row, not over the bars.
@@ -99,13 +99,14 @@ export const GroupOpen: Story = {
 };
 
 /**
- * A part holds too few in every group: a dashed track and its reason in every row, the total said
- * once, and no row says anything of the reader.
+ * A part holds too few in every group: a neutral bar with the total and its label in every row,
+ * and no row says anything of the reader.
  */
-export const AllHeldBack: Story = {
+export const AllTotalOnly: Story = {
 	args: { state: { status: "ready", overview: TOTAL_ONLY_WORKSPACE } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(8);
+		await expect(groupsTable(canvas).getAllByText("Split held back")).toHaveLength(8);
+		await expect(groupsTable(canvas).getAllByText("28 developers")).toHaveLength(8);
 		await expect(canvas.queryByText(/^You:/u)).toBeNull();
 		await expect(groupsTable(canvas).queryByText("You")).toBeNull();
 	},

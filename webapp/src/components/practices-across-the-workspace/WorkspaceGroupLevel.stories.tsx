@@ -7,6 +7,7 @@ import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
 import {
 	MANY_PRACTICES,
 	PACKAGING_GROUP,
+	TOTAL_ONLY,
 	WITHHELD,
 } from "@/stories/practices-across-the-workspace-story-data";
 import { expectNoPanelOverflow } from "@/stories/reflow";
@@ -104,28 +105,54 @@ export const Default: Story = {
 			}),
 		);
 		await expect(args.onGoToPractice).toHaveBeenCalledWith("scope-to-one-concern");
-		await expect(table.getAllByText("Held back so no one can be singled out.")).toHaveLength(2);
-		// Why a practice is held back more often than its group, once, over its practices.
+		await expect(table.getAllByText("Split held back")).toHaveLength(2);
+		// Why a practice shows only its total more often than its group, once, over its practices.
 		await expect(
-			level.getByText(/The bar must also single no one out beside the group's bar\./u),
+			level.getByText(/The parts must also single no one out beside the group’s bar\./u),
 		).toBeVisible();
 		// The page's legend sits above the practices it explains.
 		await expect(level.getByRole("list", { name: "What the bars show" })).toBeVisible();
 	},
 };
 
-/** A group held back: the head shows the empty track and its reason, and nothing of the reader. */
-export const GroupHeldBack: Story = {
+/** A group shown only as its total: the head shows the neutral bar, the total and its label. */
+export const GroupTotalOnly: Story = {
 	args: {
 		state: {
 			status: "ready",
-			group: { ...PACKAGING_GROUP, split: WITHHELD },
+			group: { ...PACKAGING_GROUP, split: TOTAL_ONLY },
 			context: CONTEXT,
 		},
 	},
 	play: async () => {
 		const level = within(await settledDrawerPanel());
-		await expect(level.getAllByText("Held back so no one can be singled out.")).toHaveLength(3);
+		// The head's bar and two practices', then the legend's line for it.
+		await expect(level.getAllByText("Split held back")).toHaveLength(4);
+		await expect(
+			level.getAllByRole("img", {
+				name: "28 developers with a current standing in this workspace. The split is held back so no one can be singled out.",
+			}),
+		).toHaveLength(3);
+		await expect(level.queryByText(/^You:/u)).toBeNull();
+	},
+};
+
+/** A group held back, its total too: the head shows the empty track and its reason. */
+export const GroupHeldBack: Story = {
+	args: {
+		state: {
+			status: "ready",
+			group: {
+				...PACKAGING_GROUP,
+				split: WITHHELD,
+				practices: PACKAGING_GROUP.practices.map((one) => ({ ...one, split: WITHHELD })),
+			},
+			context: { ...CONTEXT, developersWithAStanding: undefined },
+		},
+	},
+	play: async () => {
+		const level = within(await settledDrawerPanel());
+		await expect(level.getAllByText("Held back so no one can be singled out.")).toHaveLength(6);
 		await expect(level.queryByText(/^You:/u)).toBeNull();
 		await expect(
 			level.getByRole("button", {

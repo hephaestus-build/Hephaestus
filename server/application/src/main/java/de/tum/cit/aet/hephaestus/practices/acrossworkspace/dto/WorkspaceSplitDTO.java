@@ -9,7 +9,8 @@ import org.jspecify.annotations.Nullable;
 
 @Schema(
         description = "How the developers with a standing split across one practice group or one practice, counted in"
-                + " developers: a part per verdict and none yet, all set only for SPLIT")
+                + " developers: a part per verdict and none yet, set only for SPLIT, and their total, set for SPLIT and"
+                + " TOTAL_ONLY")
 public record WorkspaceSplitDTO(
         @NonNull @Schema(description = "How the split may be shown")
         Shape shape,
@@ -21,7 +22,13 @@ public record WorkspaceSplitDTO(
         List<WorkspaceSplitPartDTO> parts,
 
         @Nullable @Schema(description = "Developers with a standing in a group shown but none here; set only for SPLIT")
-        Integer noneYet) {
+        Integer noneYet,
+
+        @Nullable
+        @Schema(
+                description = "Every developer the split counts, the parts and none yet together, the reader included"
+                        + " when counted; set for SPLIT and TOTAL_ONLY")
+        Integer developers) {
 
     public static WorkspaceSplitDTO from(Split split) {
         return new WorkspaceSplitDTO(
@@ -29,6 +36,7 @@ public record WorkspaceSplitDTO(
                 split.parts().stream()
                         .map(part -> new WorkspaceSplitPartDTO(part.standing(), part.developers()))
                         .toList(),
-                split.noneYet());
+                split.noneYet(),
+                split.developers());
     }
 }

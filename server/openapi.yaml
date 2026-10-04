@@ -20631,8 +20631,13 @@ components:
       type: object
       description: "How the developers with a standing split across one practice group\
         \ or one practice, counted in developers: a part per verdict and none yet,\
-        \ all set only for SPLIT"
+        \ set only for SPLIT, and their total, set for SPLIT and TOTAL_ONLY"
       properties:
+        developers:
+          type: integer
+          format: int32
+          description: "Every developer the split counts, the parts and none yet together,\
+            \ the reader included when counted; set for SPLIT and TOTAL_ONLY"
         noneYet:
           type: integer
           format: int32
@@ -20649,6 +20654,7 @@ components:
           description: How the split may be shown
           enum:
           - SPLIT
+          - TOTAL_ONLY
           - WITHHELD
       required:
       - parts

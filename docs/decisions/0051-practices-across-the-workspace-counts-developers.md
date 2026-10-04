@@ -53,6 +53,12 @@ whoever only has observations that did not apply or stayed undetermined is not o
   reads it each part stands for at least three others; otherwise the whole split is held back, never
   a part of it, since the page states how many developers have a standing and a missing part would
   be that total less the rest. Omit rather than show a small number.
+- **A split held back still shows its total.** The server sends the shape: the split, the total
+  only, or nothing. The total of a split is every developer with a standing, the same for every
+  split, so it says nothing the page total does not. It shows while it holds at least four
+  developers, the rule for a part; below that the split is held back whole. The bar is then one
+  neutral bar with the total and **Split held back** under it, so the row says that the group
+  counts developers but not how they split.
 - **The bars count the current standing.** Every split, for a group and for a practice, counts each
   developer by the standing their Practice profile shows now: the same service, read over the same
   look-back and trend horizon (90 days today), whatever window the tiles show. So the **You** marker
@@ -80,8 +86,8 @@ whoever only has observations that did not apply or stayed undetermined is not o
   it never sets one moment beside a span; read in one pass.
 - The page asks for no estimate first. Every group shows at once. A group opens over the page with
   its bar and its practices' bars, and nothing about the reader beyond the marker: no standing
-  badge, no trend, no window. A held back bar shows its dashed track and the reason, and says nothing
-  of the reader.
+  badge, no trend, no window. A bar that shows only its total, and a held back bar with its dashed
+  track and reason, say nothing of the reader.
 - **The reader's own learning stays in the Practice profile.** The group's panel links to the same
   group in the profile, and each practice row links to the same practice there. Both links say
   **Open in your Practice profile**. The page reads none of the profile's own data.

@@ -62,27 +62,36 @@ class CohortPrivacyPolicyTest {
 
     /** Three in a part are three others to a reader outside it and two to a reader inside: every reader is held back. */
     @Test
-    @DisplayName("a part of three withholds the whole split for every reader, inside it or not")
-    void shouldWithholdTheSplitWhenAStandingHoldsThree() {
-        assertThat(split(developers(3, 7, 8, 6))).isEqualTo(Split.WITHHELD);
+    @DisplayName("a part of three holds back the whole split for every reader, inside it or not, and shows its total")
+    void shouldShowOnlyTheTotalWhenAStandingHoldsThree() {
+        assertThat(split(developers(3, 7, 8, 6))).isEqualTo(totalOnly(24));
     }
 
     @Test
-    @DisplayName("an empty part withholds the split")
-    void shouldWithholdTheSplitWhenAPartIsEmpty() {
-        assertThat(split(developers(0, 9, 9, 6))).isEqualTo(Split.WITHHELD);
+    @DisplayName("an empty part holds back the split")
+    void shouldShowOnlyTheTotalWhenAPartIsEmpty() {
+        assertThat(split(developers(0, 9, 9, 6))).isEqualTo(totalOnly(24));
     }
 
     @Test
-    @DisplayName("three without a standing withhold the split")
-    void shouldWithholdTheSplitWhenNoneYetHoldsThree() {
-        assertThat(split(developers(6, 9, 9, 3))).isEqualTo(Split.WITHHELD);
+    @DisplayName("three without a standing hold back the split")
+    void shouldShowOnlyTheTotalWhenNoneYetHoldsThree() {
+        assertThat(split(developers(6, 9, 9, 3))).isEqualTo(totalOnly(27));
     }
 
     @Test
-    @DisplayName("everyone at a standing is a none yet of zero and withholds the split")
-    void shouldWithholdTheSplitWhenEveryoneHasAStanding() {
-        assertThat(split(developers(6, 6, 6, 0))).isEqualTo(Split.WITHHELD);
+    @DisplayName("everyone at a standing is a none yet of zero and holds back the split")
+    void shouldShowOnlyTheTotalWhenEveryoneHasAStanding() {
+        assertThat(split(developers(6, 6, 6, 0))).isEqualTo(totalOnly(18));
+    }
+
+    /** The total is a part of its own: it shows from K + 1, so it stands for K others whoever reads it. */
+    @Test
+    @DisplayName("a split held back shows its total from four developers and nothing below")
+    void shouldWithholdTheTotalWhenItHoldsThree() {
+        assertThat(split(developers(1, 1, 1, 1))).isEqualTo(totalOnly(4));
+        assertThat(split(developers(1, 1, 1, 0))).isEqualTo(Split.WITHHELD);
+        assertThat(split(developers(4, 5, 6, 4)).developers()).isEqualTo(19);
     }
 
     @Test
@@ -165,7 +174,9 @@ class CohortPrivacyPolicyTest {
 
         assertThat(release.group().shape()).isEqualTo(Shape.SPLIT);
         assertThat(at(release.group(), MIXED)).isEqualTo(9);
-        assertThat(release.practices()).extracting(Split::shape).containsExactly(Shape.WITHHELD, Shape.WITHHELD);
+        assertThat(release.practices()).extracting(Split::shape).containsExactly(Shape.TOTAL_ONLY, Shape.TOTAL_ONLY);
+        // The total is the group's own, so it says nothing the group's split does not.
+        assertThat(release.practices()).extracting(Split::developers).containsOnly(29);
     }
 
     /**
@@ -221,7 +232,7 @@ class CohortPrivacyPolicyTest {
                 withAStanding, withAStanding.getFirst().practices().size());
 
         assertThat(release.group().shape()).isEqualTo(Shape.SPLIT);
-        assertThat(release.practices()).extracting(Split::shape).containsExactly(Shape.WITHHELD);
+        assertThat(release.practices()).containsExactly(totalOnly(20));
     }
 
     @Test
@@ -237,8 +248,12 @@ class CohortPrivacyPolicyTest {
     private static @Nullable Integer hasStanding(Split split) {
         return switch (split.shape()) {
             case SPLIT -> split.parts().stream().mapToInt(Part::developers).sum();
-            case WITHHELD -> null;
+            case TOTAL_ONLY, WITHHELD -> null;
         };
+    }
+
+    private static Split totalOnly(int developers) {
+        return new Split(Shape.TOTAL_ONLY, List.of(), null, developers);
     }
 
     /** The developers a split shows at one verdict. */

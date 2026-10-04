@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { threeWay, WITHHELD } from "@/stories/practices-across-the-workspace-story-data";
+import {
+	threeWay,
+	TOTAL_ONLY,
+	WITHHELD,
+} from "@/stories/practices-across-the-workspace-story-data";
 
 import { WorkspaceSplitBar } from "./WorkspaceSplitBar";
 
@@ -56,8 +60,25 @@ export const ReaderNotCounted: Story = {
 };
 
 /**
- * Held back: an empty track where the bar would be and one short reason, nothing more. The total
- * is said once above the table, never on the row, and the reader is not marked.
+ * A part holds too few: one neutral bar with the total and a short label, so the row says the
+ * group counts but not how. The reader is not marked.
+ */
+export const TotalOnly: Story = {
+	args: { split: TOTAL_ONLY },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("img")).toHaveAccessibleName(
+			"28 developers with a current standing in this workspace. The split is held back so no one can be singled out.",
+		);
+		await expect(canvas.getByText("Split held back")).toBeVisible();
+		await expect(canvas.getByText("28 developers")).toBeVisible();
+		await expect(canvas.queryByText("You")).toBeNull();
+		await expect(canvas.queryByText(/None yet/u)).toBeNull();
+	},
+};
+
+/**
+ * Held back, the total too, as when too few developers have a standing at all: an empty track where
+ * the bar would be and one short reason, nothing more. The reader is not marked.
  */
 export const Withheld: Story = {
 	args: { split: WITHHELD, yourStanding: "NOT_OBSERVED" },

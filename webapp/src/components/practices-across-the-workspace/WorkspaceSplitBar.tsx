@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
 	developerCount,
 	HELD_BACK,
+	SPLIT_HELD_BACK,
 	type SplitContext,
 	splitDescription,
 } from "./across-workspace-copy";
@@ -69,6 +70,9 @@ const SPLIT_PARTS: readonly PartDef[] = [
 /** The empty track of a split held back, dashed so it is never read as a part of none yet. */
 const HELD_BACK_TRACK = cn("h-2 rounded-sm border border-dashed border-current", NEUTRAL_GREY);
 
+/** The one neutral bar of a split shown only as its total, in no verdict's colour. */
+const TOTAL_ONLY_BAR = cn("h-2 rounded-sm bg-current", NEUTRAL_GREY);
+
 /**
  * The reader's place on a bar: the word over a downward pointer. The page's one accent, as the
  * palette in `webapp/AGENTS.md` allows it.
@@ -86,10 +90,32 @@ function YouMarker() {
  * How the developers with a current standing split across one practice group or one practice, as
  * one segmented bar counted in developers: Needs attention, Mixed feedback, Going well and none
  * yet. Each part carries its count under it, with the standing's icon so the parts never rest on
- * colour alone, and the You marker sits over the reader's own part. A split held back is a dashed
- * track of the same width with its reason, and nothing more.
+ * colour alone, and the You marker sits over the reader's own part. A split shown only as its total
+ * is one neutral bar of the same width with the total and a short label, and marks no one. A split
+ * held back is a dashed track of the same width with its reason, and nothing more.
  */
 export function WorkspaceSplitBar({ split, yourStanding, ...context }: WorkspaceSplitBarProps) {
+	if (split.shape === "TOTAL_ONLY") {
+		return (
+			<div className="flex w-full min-w-0 flex-col gap-1">
+				<div
+					role="img"
+					aria-label={splitDescription(split, yourStanding, context)}
+					className="flex w-full min-w-0 flex-col gap-0.5"
+				>
+					{/* The bar at the split's own height and place, under the empty row of the marker. */}
+					<span aria-hidden className="h-5" />
+					<span aria-hidden className={cn("w-full", TOTAL_ONLY_BAR)} />
+					<span aria-hidden className="text-xs text-muted-foreground">
+						{SPLIT_HELD_BACK}
+					</span>
+				</div>
+				<p aria-hidden className="text-right text-xs text-muted-foreground tabular-nums">
+					{developerCount(split.developers ?? 0)}
+				</p>
+			</div>
+		);
+	}
 	if (split.shape === "WITHHELD") {
 		return (
 			<div className="flex w-full min-w-0 flex-col gap-1">
@@ -113,7 +139,7 @@ export function WorkspaceSplitBar({ split, yourStanding, ...context }: Workspace
 			isYours: context.readerCounted && !isSettledStanding(yourStanding),
 		},
 	];
-	const total = parts.reduce((sum, part) => sum + part.count, 0);
+	const total = split.developers ?? parts.reduce((sum, part) => sum + part.count, 0);
 	return (
 		<div className="flex w-full min-w-0 flex-col gap-1">
 			<div role="img" aria-label={description} className="flex w-full min-w-0 gap-0.5">
@@ -193,7 +219,8 @@ export function LevelSplit({
 
 /**
  * What the bars' marks mean, once above each table of bars: each part's icon and swatch, the
- * reader's marker, and the dashed track of a split held back.
+ * reader's marker, and the neutral bar of a split shown only as its total. A track held back says
+ * what it is under itself, so the legend leaves it out.
  */
 export function SplitLegend() {
 	return (
@@ -216,8 +243,8 @@ export function SplitLegend() {
 				<span className="text-muted-foreground">marks your part</span>
 			</li>
 			<li className="inline-flex items-center gap-1.5">
-				<span aria-hidden className={cn("w-4", HELD_BACK_TRACK)} />
-				Held back
+				<span aria-hidden className={cn("w-4", TOTAL_ONLY_BAR)} />
+				{SPLIT_HELD_BACK}
 			</li>
 		</ul>
 	);
