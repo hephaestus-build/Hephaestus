@@ -65,6 +65,472 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
+### v0.81.0
+
+#### 🔴 Check events and pipeline events
+
+The schema migration applies automatically. What needs a hand is the event stream: a GitHub App
+created from an earlier manifest does not subscribe to `check_suite` and `status`, and a GitLab group
+webhook registered by an earlier release does not send pipeline events. Add the two event
+subscriptions under the GitHub App's Permissions & events, and grant Checks and Commit statuses read
+if the app predates them (each installation approves the increase). Enable Pipeline events on each
+GitLab group hook under the group's Settings → Webhooks, or delete the hook so it is registered again
+on the next sync. Until then the head's check state arrives only with the scheduled sync, which reads
+it with the pull request; nothing else is affected.
+
+#### 🔴 Repository capture and agent image upgrade
+
+Deploy matching server, worker and agent images: the agent image now carries runtime contract 3.
+Drain running reviews before upgrading. Review and explicitly update stored source policies to
+contract `1.2.0` using the source-policy upgrade instructions. Startup does not rewrite installed
+policies; historical practice revisions and observations remain unchanged.
+
+Remove `GIT_TREE_MAX_FILES`, `GIT_TREE_MAX_TOTAL_SIZE` and `GIT_TREE_MAX_FILE_SIZE`. A review now
+captures the whole repository at the reviewed commit together with the Git history reachable from it,
+so the retired 32 MiB tree bound is no longer a capacity estimate: provision worker storage for
+repository mirrors, per-attempt snapshots and sandbox input archives. A repository whose checkout plus
+mirrored history exceeds `GIT_MAX_SNAPSHOT_BYTES` (8 GiB by default) is refused whole rather than
+captured in part; raise it for larger monorepos. `GIT_MAX_CONCURRENT_INGESTIONS` (default 2) caps how
+many captured commits a worker writes to PostgreSQL at once.
+
+Review the expanded repository-history scope with your deployment's privacy owner. Files deleted from
+the current checkout can remain accessible in history.
+
+Remove `SANDBOX_DOCKER_CLI`: sandbox inputs and results travel through the authenticated worker
+gateway, not through the Docker CLI or a host-mounted context directory.
+
+Remove `PRACTICE_REVIEW_EXECUTION_CAPTURE_ENABLED`; private execution capture is no longer
+supported. A review retains its admitted observations and their citation verdicts, not its inputs,
+model requests or session transcripts, and archived transcripts from earlier releases are neither
+admission verdicts nor replay evidence.
+
+Remove `HEPHAESTUS_FABRIC_GC_RETENTION_DAYS`; the content-addressed store and its retention sweep are
+gone. Each server and worker container keeps its repository mirrors under its own
+`HEPHAESTUS_FABRIC_ROOT` as `mirrors/<workspace-id>/<repository-id>.git`, beside its attempt folders;
+the shipped Compose files give the worker its own volume for this. A mirror that is missing is cloned
+again on the next sync or review, so the previous release's mirrors need no migration. After the
+upgrade, once no attempt from the previous release is still running, delete the retired `sources/` and
+`cas/` directories and the previous layout's per-job `jobs/<job-id>/` directories under that root. Do
+not remove active attempt folders (`jobs/<workspace-id>/<job-id>/`) or `mirrors/`.
+
+#### 🔴 Leaderboard, leagues and XP retired; Activity replaces them
+
+The leaderboard, leagues and league points, experience points and levels, the league reset, and the
+weekly Slack leaderboard digest are removed. So are the workspace switches **Leaderboard**, **XP and
+level progression** and **Leagues**, the digest's day, time, channel and team settings, and the Slack
+connection card's test message. Every workspace now has **Activity** and **Workspace activity**:
+counts and lists of pull or merge requests, reviews, issues and comments, with members listed by
+name — see [Activity](https://docs.hephaestus.build/user/activity).
+
+**League, XP and leaderboard data is deleted by the upgrade.** The upgrade first attributes each recorded
+merge to the pull request's author (a merge whose author is unknown is no longer counted for anyone) and
+turns Heph off in workspaces that had it switched off, then drops these columns with their data:
+
+- `workspace`: `mentor_enabled`, `leaderboard_enabled`, `progression_enabled`, `leagues_enabled`,
+  `leaderboard_schedule_day`, `leaderboard_schedule_time`, `leaderboard_notification_enabled`,
+  `leaderboard_league_cycle_at`
+- `workspace_membership`: `league_points`
+- `activity_event`: `xp`, with its check constraint and the leaderboard index
+
+Nothing in the new release reads them, and neither the upgrade nor a rollback can bring the values back: a
+rollback recreates the columns empty, with every switch off (Heph included) and every league point and XP
+value at 0. **Before you upgrade,** stop the application, take the regular database backup
+([Backup and restore](https://docs.hephaestus.build/admin/backup-restore)) — restoring it is the only way
+back to the previous release with its data — and, if you want to keep the league and XP history outside
+that backup, export it from the self-host directory:
+
+```bash
+(
+set -eu
+umask 077
+cd /opt/hephaestus/docker/self-host
+dc() { docker compose --env-file .env --env-file release-lock.env "$@"; }
+snapshot_dir=$(mktemp -d "/var/tmp/hephaestus-leaderboard-snapshot-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
+dc exec -T postgres psql -U root -d hephaestus -v ON_ERROR_STOP=1 -c "\copy (SELECT id, slug, mentor_enabled, leaderboard_enabled, progression_enabled, leagues_enabled, leaderboard_schedule_day, leaderboard_schedule_time, leaderboard_notification_enabled, leaderboard_league_cycle_at FROM workspace ORDER BY id) TO STDOUT WITH CSV HEADER" > "$snapshot_dir/workspace.csv"
+dc exec -T postgres psql -U root -d hephaestus -v ON_ERROR_STOP=1 -c "\copy (SELECT m.workspace_id, m.user_id, u.login, m.league_points FROM workspace_membership m JOIN \"user\" u ON u.id = m.user_id ORDER BY m.workspace_id, m.user_id) TO STDOUT WITH CSV HEADER" > "$snapshot_dir/workspace_membership.csv"
+dc exec -T postgres psql -U root -d hephaestus -v ON_ERROR_STOP=1 -c "\copy (SELECT id, workspace_id, actor_id, event_type, occurred_at, xp FROM activity_event WHERE xp <> 0 ORDER BY occurred_at, id) TO STDOUT WITH CSV HEADER" > "$snapshot_dir/activity_event_xp.csv"
+(cd "$snapshot_dir" && sha256sum ./*.csv > SHA256SUMS)
+printf 'Snapshot directory: %s\n' "$snapshot_dir"
+)
+```
+
+The three files hold member logins and per-member scores, which is personal data: move the directory off
+the host with your backups, encrypted, keep it only as long as you need the history, and then delete it. The
+application never reads it back.
+
+**Delete the removed settings.** Remove `LEADERBOARD_NOTIFICATION_ENABLED`, `LEADERBOARD_SCHEDULE_DAY`
+and `LEADERBOARD_SCHEDULE_TIME` from your `.env`, and any `hephaestus.leaderboard.*` override. They are
+no longer read.
+
+**Activity is for the workspace only.** A publicly viewable workspace does not show activity to people
+without a role in it. Old `/w/{workspaceSlug}/user/{username}` links open that member on Workspace
+activity, and `/w/{workspaceSlug}/user/{username}/practice-groups/{groupSlug}` opens the group on the
+Practice profile. Remove clients of the leaderboard, league, profile and Slack-digest endpoints; the
+new read endpoints are under `/workspaces/{workspaceSlug}/activity/`.
+
+#### 🔴 Classify unrecorded copies of "Confirm the outcome before closing the issue"
+
+The upgrade withdraws this practice from automated review and switches off, at server startup, every
+workspace copy whose persisted `source_curated_slug` names `issue-closed-with-unmet-outcome`. A copy with no
+recorded source is left untouched and stays active: it was made and edited before Hephaestus recorded where
+copies came from, and nothing stored distinguishes it from a practice a workspace wrote itself. A matching
+slug is not proof of either, so the upgrade does not decide.
+
+After the upgrade, list the candidates (read-only):
+
+```sql
+SELECT p.workspace_id, p.id, p.slug, p.name, p.autonomy
+FROM practice p
+WHERE p.slug = 'issue-closed-with-unmet-outcome'
+  AND p.source_curated_slug IS NULL;
+```
+
+For each row, confirm with that workspace's administrator whether it is an old copy of the catalog practice
+or the workspace's own practice. For an old copy, have the administrator set it to **Off** under
+**Workspace administration → Practices → Review**, which records the change in the configuration audit
+log; do not update the row directly. A practice the workspace wrote itself needs no action. Until a copy is
+switched off it keeps being reviewed on issue close and can record results from the issue as it stands
+after the close. Results recorded before the upgrade are unchanged.
+
+#### 🔴 Database baseline upgrade path
+
+Before starting v1.0.0, follow the [upgrade-path table](https://docs.hephaestus.build/admin/compatibility-policy#upgrade-paths-to-10).
+It names the required intermediate release and when
+[baseline synchronization](https://docs.hephaestus.build/admin/liquibase-baseline-runbook) is needed.
+Use the signed v1.0.0 target image for synchronization.
+
+Startup and baseline synchronization refuse migration history that has not reached the v0.77.4
+cut-point. Do not mark missing migrations as applied. Stop all writers and test a full backup
+restoration before synchronization. Fresh databases initialize automatically.
+
+#### 🔴 Observation status, behavior assessment and outcome are distinct
+
+Upgrade the server, sandbox runtime and webapp together. Drain running practice reviews before the
+upgrade: old runtimes emit a combined outcome contract that the new server deliberately rejects.
+Before resuming reviews, use the existing catalogue adoption flow to apply the updated bundled
+practice definitions to installed workspace practices. Review instance-level overrides and custom
+criteria for obsolete combined outcome labels and missing-capture instructions. Each observation must identify the specific behavior it assesses and explain that behavior’s desirability in context. Keep the behavior referent stable within the observation; different behaviors under one practice can receive different assessments. Adoption creates
+new practice revisions; historical revisions are deliberately not rewritten, and workspace
+customizations are not silently overwritten.
+
+Custom API consumers and custom runtime integrations must use:
+
+- `assessmentStatus`: `ASSESSED`, `NOT_APPLICABLE` or `UNDETERMINED`.
+- `presence`: `PRESENT` or `ABSENT` only for assessed observations, otherwise null.
+- `assessment`: contextual desirability of the specified behavior, `GOOD` or `BAD` only for assessed observations, otherwise null.
+- `outcome`: read-only `POSITIVE` for PRESENT/GOOD or ABSENT/BAD, `NEGATIVE` for PRESENT/BAD or ABSENT/GOOD, null when unassessed. Never annotate it independently.
+- `severity`: required exactly for negative outcomes, null otherwise.
+
+Use outcome—not assessment alone—for severity, feedback eligibility, counts and trends. Developer summaries expose `positiveCount` and `negativeCount`; standing observations expose their descriptive `kind` separately from outcome.
+
+Observation filters now have an independent assessment-status facet. Review observation counts use
+`undetermined`, not `inconclusive`. Raw historical review outputs remain historical artifacts; they
+are not rewritten to pretend that old runtimes emitted the new contract.
+
+Back up and verify restoration before upgrading. Liquibase maps existing PRESENT/ABSENT rows to
+ASSESSED, NOT_APPLICABLE rows to NOT_APPLICABLE and INCONCLUSIVE rows to UNDETERMINED. It clears
+presence for the two unassessed statuses and clears non-judgmental legacy severity values on non-BAD
+rows under the old assessment-as-verdict convention. It swaps GOOD/BAD on historical ABSENT rows to preserve their original outcome; it does not reinterpret their evidence against new criteria. Historical negative severity values and all evidence are retained. A historical BAD row without severity halts
+the migration: inspect its recorded evidence and repair through an audited operator procedure rather
+than assigning a fabricated default. Do not bypass this precondition.
+
+Downgrading in place is unsupported because the runtime and wire contracts also changed. Recover by
+restoring the verified pre-upgrade backup and the matching application/runtime versions together.
+
+#### 🔴 Review and update stored source policies before resuming reviews
+
+Pause new practice reviews and let in-flight reviews finish before upgrading. This runtime uses source
+contract `1.2.0`; it does not evaluate new reviews under `1.0.0` or `1.1.0`. A complete, verified empty diff now
+qualifies as captured evidence, while each practice still establishes its own occasion and observation.
+
+Review custom practices and instance catalogue overrides through their normal administration endpoints.
+Read the stored definition and replace `automatedReviewPolicy.sourceContractVersion` with `1.2.0` in an
+explicit policy update, preserving the remaining policy fields, bindings and criteria unless the review
+calls for a deliberate change. Merely updating criteria preserves the old policy and is not sufficient.
+Use the catalogue adoption flow for updated bundled definitions and for reviewed instance overrides in
+workspaces. Confirm the effective definition reports `1.2.0` before resuming reviews.
+
+Stored definitions remain readable and editable. Historical review evidence and its original contract
+and catalogue digest remain unchanged; historical readiness reports are not re-derived under the new
+policy. Do not edit stored evidence or rewrite released migrations to change their version.
+
+#### 🔴 Upgrade contextual practice assessment and delivery together
+
+Pause new practice reviews and let in-flight reviews and feedback dispatches finish before upgrading.
+Deploy the matching server and review runtime versions together; deploy the matching webapp for the
+updated assessment explanations. Resume reviews after the updated components are healthy.
+
+Use the existing catalogue adoption flow to apply the updated bundled definitions to workspace
+practices. Review instance overrides and customized criteria as well: each observation identifies a
+specific behavior, records whether it occurred, and assesses whether that behavior is desirable or
+undesirable in its evidenced context. Keep the behavior referent stable within the observation.
+Different behaviors under one practice can have different assessments. Outcomes remain derived from
+presence and assessment; unassessed statuses remain outside the outcome matrix. Catalogue adoption
+creates new revisions and does not rewrite historical judgments or silently replace customizations.
+
+Remove `PRACTICE_REVIEW_PROGRESS_FOOTER` and any
+`hephaestus.practice-review.progress-footer` override. Automatic cross-review progress footers and
+inferred resolved/regressed history summaries are no longer produced. Recorded observations,
+delivered feedback and prepared feedback remain available. Matching a location or omitting a prior
+observation does not establish that a concern was resolved.
+
+Reactions and delivery receipts apply to their exact bound observations. They do not suppress a new
+observation merely because its practice and file match an earlier one. Custom inline-delivery
+integrations must preserve the supplied `deliveryKey` unchanged as an opaque receipt-correlation key;
+newly composed placements use the observation occurrence identity rather than location grouping.
+
+#### 🔴 Research participation uses the consent API only
+
+Custom API clients must stop reading or writing `participateInResearch` on `/user/settings`.
+That endpoint now manages practice-feedback delivery only. Read the current decision through
+`GET /user/consent` and record a research choice through `PUT /user/consent/research`, using the
+current wording version and research organisation returned by the consent API. Use the generated
+OpenAPI contract for the complete request. Do not copy a historical preference flag into a new
+consent decision: the person must answer the wording and organisation shown to them.
+
+The shipped webapp already uses this consent flow. Slack App Home links to User settings instead of
+maintaining a separate research toggle. Historical database records are retained; no destructive
+migration or SMTP activation is required for this change.
+
+#### 🔴 Practice definitions and observation outcomes use a new contract
+
+This is a coordinated pre-1.0 cutover, not a rolling upgrade. The old practice occasion list and
+observation assessment axes are removed. Do not run old workers or API clients against the new server.
+
+1. Stop review scheduling and let reviews finish, or cancel them. Stop every runtime role.
+2. Create a database backup and verify that you can restore it into a separate database.
+3. Only if observations serve an actual research or audit purpose, export the original observation
+   fields while every role is still stopped. The upgrade removes them, they cannot be rebuilt from the
+   new outcome, and a rotating database backup is for recovering this instance, not an archive:
+
+   ```sql
+   \copy (SELECT id, workspace_id, practice_id, practice_revision_id, agent_job_id, assessment_status,
+          presence, assessment, severity, observed_at FROM observation) TO 'observation-axes.csv' CSV HEADER
+   ```
+
+   Record beside it the Hephaestus release and the last applied Liquibase changeset it was taken from.
+   Keep the export encrypted in private custody with access limited to that purpose, and retain and
+   erase it under the retention and erasure rules your organization already applies to that purpose,
+   not your backup rotation. Do not publish it. This step sets no new policy and leaves research
+   archives you have already published unchanged.
+4. Convert custom catalogue files and API payloads to the flat fields `signals`, `evidenceRequirements`, `reviewWhen`,
+   `subject`, and optional `precondition`. The precondition's explanation is `skipReason`.
+   `reviewWhen` is an object of descriptor-owned state selections, not a shared draft flag.
+   For non-draft pull or merge requests use `{"draftStatus":["NOT_DRAFT"]}`; use `{}` for no state
+   restriction. Issues have no draft state, documents expose active or archived, and conversations
+   expose no lifecycle selection. The migration preserves the previous pull-request draft restriction
+   without adding it to other work types.
+   Describe the positive standard in `criteria`; remove matrix-based instructions.
+5. Update integrations to submit `outcome`: `MET`, `NOT_MET`, `NOT_APPLICABLE`, or `UNDETERMINED`.
+   Supply severity exactly for `NOT_MET`. Retain the appropriate evidence warrants.
+6. Deploy matching server, review runtime, webapp, and browser extension versions and let the forward
+   migration finish. Before restarting reviews, update the criteria of persisted practices to describe
+   the positive standard, without matrix instructions: instance customizations first, then workspace
+   copies through catalogue updates, then custom practices in the editor. Then verify practice editing,
+   one review, its recorded result, and delivery.
+
+The migration preserves historical criteria and does not invent missing historical definitions.
+Unsupported or ambiguous existing definitions must not be silently flattened: the migration refuses an
+occasion without a known subject or a true or false draft choice, and any stored definition field the
+new contract does not read. If the migration rejects existing data, keep the instance stopped and
+inspect the reported prerequisite failure.
+Do not disable its checks or change a released migration.
+
+**Recovery:** Stop all roles and restore the verified pre-upgrade database backup together with the
+previous application images. The removed fields cannot be reconstructed reliably from new results;
+there is no automatic reverse conversion. Old positive labels are not evidence that the complete new
+practice standard was met.
+
+#### 🔴 GitHub App: request user authorization during installation
+
+Connecting a GitHub App installation to a workspace now needs the App's own client credentials, and
+the App must request user authorization during installation. Before you upgrade, open the App's
+settings on GitHub and do the following:
+
+1. Under **Identifying and authorizing users**, turn on **Request user authorization (OAuth) during
+   installation**. Set the **Callback URL** to `https://<APP_HOSTNAME>/oauth/callback/github`.
+2. Under **General**, copy the **Client ID** and generate a **client secret**. Set them as
+   `GH_APP_CLIENT_ID` and `GH_APP_CLIENT_SECRET` in `.env`.
+
+Workspaces that are already connected keep working. The upgrade disconnects any GitHub App
+connection that never recorded its installation, because such a connection could not run. It also
+keeps each installation in the first workspace that connected it. Connections the upgrade
+disconnects are recorded in their connection history. See
+[GitHub integration](https://docs.hephaestus.build/admin/github-integration#connecting-an-installation-to-a-workspace).
+
+#### 🔴 Set `WEBHOOK_ROUTING_SECRET` for GitLab group webhooks
+
+GitLab group webhooks now carry a token that names the one workspace they deliver for, signed with a
+new secret. The application server and the webhook receiver refuse to start without it.
+
+1. Generate a value of at least 32 printable characters, for example with `openssl rand -hex 32`. It
+   must differ from `WEBHOOK_SECRET` and from both encryption keys.
+2. Set it as `WEBHOOK_ROUTING_SECRET` for the application server and the webhook receiver; the
+   reference Compose files forward it to both. The self-host `setup.sh` generates it when it is empty.
+3. Deploy. Each GitLab workspace registers its new group webhook on its next sync, or at once with
+   **Sync now**. The group webhook earlier versions registered keeps working; delete it on GitLab once
+   the new one appears, so each event is not received twice.
+
+To rotate the secret later, move the current value to `WEBHOOK_ROUTING_PREVIOUS_SECRET`, set a new
+`WEBHOOK_ROUTING_SECRET`, deploy, let every GitLab workspace sync once, then clear
+`WEBHOOK_ROUTING_PREVIOUS_SECRET` and deploy again.
+
+#### 🔴 Heph follows AI models; the Chat with Heph switch is removed
+
+The workspace switch **Chat with Heph** is removed. Heph is offered to every member of a workspace
+where a Heph model is ready under **Administration → AI models**, in the web app and in Slack direct
+messages, and each member's AI choice still applies.
+
+**Before upgrading**, turn off **Chat with Heph** under **Administration → Settings** in every
+workspace that should not offer Heph. The upgrade carries the switch over: in each workspace where it
+is off, it turns off the Heph model rows, and a workspace admin turns them back on under **AI models**.
+Which rows were on before is not recorded, so undoing this needs a pre-upgrade backup.
+
+The [restore-clone lockdown](https://docs.hephaestus.build/admin/backup-restore) now turns off every
+Heph model row instead of the removed switch; turn them back on under **AI models** after lifting the
+lockdown.
+
+#### 🔴 Heph follows the workspace setting, not per-account grants
+
+Hephaestus no longer reads `mentor_access` rows in `account_feature`. Every member of a workspace
+with **Chat with Heph** turned on can use Heph, in the web app and in Slack direct messages, subject
+to their own AI choice. If you granted `mentor_access` to only some accounts to run a limited pilot,
+turn off **Chat with Heph** under the workspace's **Administration → Settings** before upgrading, in
+every workspace you are not ready to open to all of its members. Leftover `mentor_access` rows have
+no effect and need no clean-up.
+
+#### 🔴 Rename hephaestus.mentor.max-frame-chars to hephaestus.mentor.max-frame-bytes
+
+Earlier releases counted the limit on one message from a Heph sandbox in characters. It now counts
+UTF-8 bytes, and the setting is named for that. If you set `hephaestus.mentor.max-frame-chars`, set the
+same value as `hephaestus.mentor.max-frame-bytes` before upgrading. The old name is ignored, and a value
+left under it falls back to the default of 1 MiB, which is also the largest value allowed. The same
+value admits the same plain-ASCII messages. Text with multi-byte characters uses more of it.
+
+#### 🔴 Connect a worker before serving Heph conversations
+
+Heph no longer starts a sandbox directly on the application server. Before upgrading, configure at least one worker with `HEPHAESTUS_HUB_URL` pointing to the server's `/api/workers/connect` endpoint and `HEPHAESTUS_WORKER_REGISTRATION_TOKEN` matching the server registration configuration. Give the worker spare mentor capacity. You must run a connected worker for Heph. Upgrade the server and workers together; mixed versions are not supported. The server retains chat admission, context and thread persistence; the worker owns the sandbox and LLM proxy.
+
+Without a connected worker, new conversations report “Heph is busy” and can be retried after capacity becomes available. Saved thread history remains in PostgreSQL. Existing live sessions end during the upgrade and are restored on the next turn. The application server can disable its worker role with `hephaestus.runtime.worker.enabled=false`; changes to the reference Compose socket mounts are separate.
+
+#### 🔴 Sandbox cleanup keeps mentor sandbox networks it cannot attribute
+
+Automatic cleanup now removes a mentor conversation's sandbox network, storage and containers only
+after the application container that started them has stopped or restarted. It keeps anything whose
+owner it cannot establish, so two kinds of leftover now need removing by hand:
+
+- Sandbox networks created before this upgrade record no owner and are never removed automatically.
+- An application that cannot identify its own container, because it runs outside Docker or has a
+  customised `hostname:`, records no owner either. If a crash leaves one of its conversation networks
+  behind, that conversation cannot start a new sandbox until you remove it; the error names the
+  network. Keep the default container hostname to avoid this.
+
+A network with no recorded owner can be removed safely only while every application process of this
+installation that uses the Docker daemon is stopped. Plan that pause, then follow
+[Removing leftover sandbox networks](https://docs.hephaestus.build/admin/configuration-readiness#removing-leftover-sandbox-networks).
+Practice review sandboxes need no action.
+
+#### 🔴 Upgrade practice reviews to the frozen workspace folder
+
+Pause new practice reviews and let in-flight reviews finish before upgrading. Deploy the matching
+server and review runtime together. The runtime reads the flat version-3 task and `INDEX.json` from
+the job folder; the old capped capture and artifact-source manifest are removed.
+
+Apply updated bundled practice definitions through catalogue adoption. Review customized practices
+and set their automated-review policy's `sourceContractVersion` to `1.3.0` through practice authoring.
+This creates a new practice revision; do not rewrite historical revisions or approvals. A policy
+pinned to an older source contract does not authorize the expanded folder and is refused before
+model execution. Submit a new review under the updated practice revision rather than reusing an
+old attempt. Resume reviews after the matching components and updated practices are ready.
+
+The wider workspace scope remains subject to existing visibility, member choices, processor routing,
+consent, withdrawal, tenancy, retention and erasure checks. Maintainer engineering approval is not
+controller or DPO approval. Operators must include Slack-thread and person-scoped history in their
+applicable privacy-notice review before deployment; the pending TUM review remains a separate release
+obligation.
+
+#### 🔴 Restrict the new management listener and update custom probes
+
+The default management port is now **9090**, separate from the application port. Outside the supported Compose stacks, management binds to loopback (`127.0.0.1`) by default. For a remote scraper, explicitly set `MANAGEMENT_SERVER_ADDRESS` to a trusted private interface and restrict ingress with firewall policy. `GET /actuator/prometheus` needs no user token on that listener; it is refused on the application port.
+
+The supported Compose stacks already keep 9090 private: they expose it to `shared-network`, do not publish it to the host, and do not route it through the proxy. They bind management to the container’s own `shared-network` address through its network-qualified hostname, not to its sandbox interfaces. Their container probes and proxy readiness checks use the application-port paths and are updated automatically.
+
+**Operators with other deployment configurations:** before starting the new version, restrict management ingress to trusted private services with network and firewall policy. Do not publish the management port to the internet. Update custom management probes to port 9090, or set `MANAGEMENT_PORT` to a port distinct from both the application and sandbox gateway ports. Application-port liveness and readiness probes now use `/livez` and `/readyz`; update custom proxy checks that used `/actuator/health/liveness` or `/actuator/health/readiness` on the application port. See [Scrape metrics](https://docs.hephaestus.build/admin/observability#scrape-metrics) for scrape configuration and alert rules.
+
+#### 🔴 Impersonation replaced by read-only user views
+
+Remove clients of `POST /auth/impersonate` and `POST /auth/impersonate:exit` and the `X-Impersonation-Allow-Writes` header. Drop `hephaestus.auth.impersonation-max-lifetime`. Replace `HEPHAESTUS_AUTH_RATE_LIMIT_IMPERSONATE_CAPACITY` / `_PERIOD` with `HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY` / `_PERIOD` where you override the defaults. Administrators who were inside an impersonation session sign in again.
+
+#### 🔴 Repository coverage no longer stops conversation or document reviews
+
+Selecting repositories, including leaving that selection empty, limits repository-backed practice reviews only. Slack conversations and Outline documents follow the workspace's people selection and their existing collection permissions and AI choices.
+
+If you used selected repositories to stop all practice reviews, turn **Start practice reviews** off before upgrading. Alternatively, an empty selected people list covers nobody across every kind of work. Existing repository and branch selections remain unchanged; this upgrade does not add repositories or activate channels or documents.
+
+#### 🔴 Check your research obligations before upgrading
+
+The research question in setup and in User settings now asks for consent to an area of research, not to one research project.
+The area is how developers work and learn, and how AI systems can review and support that work, including building and running benchmarks and evaluation datasets for such AI systems.
+The wording version changed, so every account answers setup once more.
+An earlier "yes" does not carry over: `participatesInResearch` reports false, and research survey invitations stop, until the account answers.
+
+If `HEPHAESTUS_RESEARCH_ORGANIZATION` is unset, setup is the terms alone and nothing about research changes for you.
+
+If you set it, do these steps before you upgrade:
+
+1. Read "What operators must do" in the [Legal Pages guide](https://docs.hephaestus.build/admin/legal-pages#the-optional-research-question).
+2. Meet each obligation, or unset the variable.
+3. Update your privacy notice with the retention, recipients and withdrawal limits of your research. The TUM notice shows the expected shape.
+4. Choose a research organization name that reads correctly in the sentence "If you say yes, the organization may use your data for research."
+
+Nothing is dropped from the database. Earlier decisions stay in the ledger as history.
+
+#### 🔴 Run the worker container on a single host
+
+The application server now runs without the worker role and without the Docker socket; AI sandboxes run only in `application-worker`, which the single-host install now starts. Before upgrading, run `./setup.sh` in `docker/self-host`: it adds `HEPHAESTUS_WORKER_REGISTRATION_TOKEN` to `.env` and does not change other values. Without that token `docker compose` refuses to start the stack. The worker joins the host's Docker group through `DOCKER_GROUP_ID`; the application server no longer needs it.
+
+The worker adds a container with a 3 GB memory limit (`APPLICATION_WORKER_MEM_LIMIT`); check the host against the install guide's sizing, and lower `APPLICATION_SERVER_MEM_LIMIT`, `APPLICATION_WORKER_MEM_LIMIT` or `WEBHOOK_SERVER_MEM_LIMIT` before starting if it needs smaller limits. `SANDBOX_MAX_CONCURRENT` and the five-minute drain on shutdown now apply to the worker.
+
+`SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` is removed. It let any named container join every sandbox network; now only the worker that starts a sandbox joins its network, as the container Docker identifies by its default hostname. Remove the variable from `.env`. A worker configured with `hephaestus.sandbox.docker.app-server-container-id` directly refuses to start. A worker running outside Docker joins no sandbox network, so practice reviews without internet access are refused there.
+
+#### 🔴 Administrator attribution uses account references
+
+The upgrade removes the historical display-login attribution from silent-mode and instance model settings. The settings, change times and other operational facts are retained. The old values are not matched to names, logins or email addresses. New changes use a stable account reference, which is detached when that account is erased.
+
+Existing `ADMIN` and `USER` connection audit rows lose their untyped `actor_ref` and free-text `detail`. Event types, state changes and times remain. New connection history uses typed account references. Provider and system event references are unchanged.
+
+Before upgrading, take and verify a backup if your retention policy requires the old attribution. This removal cannot be reversed from the upgraded database; recovery requires the verified pre-upgrade backup. Do not backfill attribution by matching display logins to accounts.
+
+The migration also clears membership-history subject references that have no exact contributor ID.
+It retains the recorded role changes and their times. No historical name, login or email is used to
+recover attribution.
+
+Pending integration authorizations must be started again after the upgrade. Older signed OAuth states are rejected rather than interpreting their historical display-login attribution as an account reference.
+
+New pending integration authorizations are tied to the initiating account and removed by person erasure. Existing nonce rows remain without account attribution; no old identity is inferred.
+
+Heph's hidden conversation memory resets once on upgrade. Old runtime journals have no complete
+exact-person provenance, so the migration clears them without matching text, names, logins or emails.
+Every visible message, conversation title and time stays. Recovery of the cleared hidden journals
+requires a verified pre-upgrade backup. Users may need to repeat earlier context to Heph.
+
+Existing source connections are registered for exact person requests, including Slack and Outline
+sources with no account login. This creates only provider reference data and carries native processing
+controls across equivalent origins. It does not change visible content or infer identity ownership.
+If an Outline connection has mirrored documents but no exact provider instance, the upgrade stops and
+names that connection ID. Restore a verified state with its exact source binding before upgrading;
+do not recover a binding from names, logins, email addresses or document content.
+
+#### 🔴 Webhook loss alerts move to backlog
+
+`webhook.stream.unacknowledged.deletions` and `webhook.stream.unacknowledged.gap` are removed: on a
+stream shared by several organisations they reported caught-up consumers as losing messages. An alert
+on either now never fires. Replace it with one on `webhook.stream.consumer.pending` or
+`webhook.stream.consumer.ack.pending` staying above zero or growing for several monitor intervals, and
+keep the one on `webhook.stream.poll.age`. Neither gauge counts lost webhooks; the
+[webhook ingestion operations](https://docs.hephaestus.build/admin/webhook-ingestion-operations) page
+says what they do mean.
+
 ### v0.80.0
 
 #### 🔴 Name your research organisation, and check your legal pages, before upgrading
