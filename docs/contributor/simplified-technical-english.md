@@ -76,7 +76,8 @@ For UI text we take our rules from established UX writing guidance:
 
 Write the way a helpful colleague would speak: direct, calm, and specific.
 
-- Address the reader as **you**. Say what Hephaestus does in the active voice.
+- Address the reader as **you**. Say what happens in the active voice.
+- Say **we** only when the product reports its own failure or change: `We could not save your changes`. Heph says **I** in a conversation.
 - Put the point first. Put a condition before the action that depends on it.
 - Use short, common words. Write for a reading age of 9, as [GOV.UK practice](https://design.homeoffice.gov.uk/accessibility/written-content/readability) recommends, even for expert readers.
 - Write no more than 25 words per sentence ([GOV.UK](https://insidegovuk.blog.gov.uk/2014/08/04/sentence-length-why-25-words-is-our-limit/)).
@@ -109,9 +110,9 @@ Write positive contractions.
 Spell out negative ones.
 
 - Use `you're`, `we'll`, `let's`, `it's`, and `that's`. They are what a person would say, so the text sounds like one. [Microsoft](https://learn.microsoft.com/en-us/style-guide/word-choice/use-contractions) and [Shopify](https://shopify.dev/docs/apps/design/content/grammar-and-mechanics) recommend them.
-- Write `cannot`, `do not`, `does not`, `is not`, `will not`, and `has not`. Do not write `can't`, `don't`, or `won't`. Some readers miss the `n't` ending and read the opposite meaning. Readers with dyslexia and readers who learned English second misread them most ([GOV.UK](https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/style-guides/a-to-z-style-guide/), [Civil Service Analysis Function](https://analysisfunction.civilservice.gov.uk/policy-store/making-analytical-publications-accessible/)). The evidence is practitioner research, not controlled studies.
+- Write `cannot`, `do not`, `does not`, `is not`, `will not`, and `has not`. Do not write `can't`, `don't`, or `won't`. Some readers miss the `n't` ending and read the opposite meaning. Readers with dyslexia and readers who learned English second misread them most ([GOV.UK](https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/writing-guidelines/clear-language/), [Civil Service Analysis Function](https://analysisfunction.civilservice.gov.uk/policy-store/making-analytical-publications-accessible/)). The evidence is practitioner research, not controlled studies.
 - Keep `not` a separate word. `You're not a member` is correct. `You aren't a member` is not.
-- Do not use contractions that are hard to scan: `it'll`, `they'd`, `there'd`, `should've`.
+- Do not use contractions that are hard to scan: `it'll`, `they'd`, `there'd`, `should've`, `they've`.
 - Do not mix forms in one message. If one clause says `you're`, do not write `you are` in the next. Do not write `cannot` in one message of a flow and `can not` in another.
 - Write the apostrophe as `’` (U+2019) in every UI string, so the glyph is the same everywhere.
 
@@ -144,6 +145,7 @@ An error says what happened and what the reader can do.
 It does not blame the reader and does not use a code as its only content.
 [GOV.UK](https://design-system.service.gov.uk/components/error-message/) says to "describe what has happened and tell them how to fix it".
 
+- **Use one form.** A title, a toast, and a detail all start `We could not …`.
 - **Name the cause when you know it.** `We could not reach GitHub` is better than `Something went wrong`.
 - **Use the generic message only for an unknown cause.** Then say what the reader can try: `We could not finish that. Try again. If it keeps failing, contact your workspace admin.`
 - **Say what the system could not do.** Write `We could not save your changes`, not `You entered an invalid name`.
