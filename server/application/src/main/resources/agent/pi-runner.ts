@@ -80,6 +80,7 @@ import {
 import { stopSession } from "./pi-session-lifecycle.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 import { hasText, isBlank } from "./pi-text.ts";
+import { prepareObservationArguments } from "./pi-tool-arguments.ts";
 
 // One session measures and composes. Persisted work/ notes survive context compaction.
 
@@ -349,7 +350,7 @@ const WORKSPACE_ROOT = "/workspace";
 const EVIDENCE_TOOLS = ["read", "grep", "find", "ls"] as const;
 // Codemode runs a script that calls the other tools, so a chain of reads and searches, or a large
 // result filtered down to what a criterion needs, costs one model call rather than one per step.
-const PRACTICE_TOOLS = [...EVIDENCE_TOOLS, "write", "edit", "bash", "codemode"] as const;
+const PRACTICE_TOOLS = [...EVIDENCE_TOOLS, "bash", "codemode"] as const;
 const CWD = process.env.PI_RUNNER_CWD ?? WORKSPACE_ROOT;
 const ENVELOPE_MISMATCH_EXIT = 42;
 const TASK_PATH = `${CWD}/task.json`;
@@ -796,6 +797,29 @@ function hasPersistedReviewState(): boolean {
 interface Validated {
 	observation: NormalizedObservation;
 	notes: string[];
+}
+
+/** Resolve only the path placeholders owned by the task envelope. */
+function orchestratorWithPaths(text: string): string {
+	const {
+		contextRoot,
+		repositoryRoot,
+		manifest,
+		practiceIndex: indexPath,
+		preparedFeedback,
+	} = taskEnvelope.paths;
+	const paths: Record<string, string> = {
+		contextRoot,
+		repositoryRoot,
+		manifest,
+		practiceIndex: indexPath,
+		practiceRoot: nodePath.dirname(indexPath),
+		historyRoot: nodePath.dirname(preparedFeedback),
+	};
+	return text.replaceAll(
+		/<(?<path>contextRoot|repositoryRoot|manifest|practiceIndex|practiceRoot|historyRoot)>/gu,
+		(placeholder, key: string) => paths[key] ?? placeholder,
+	);
 }
 
 function normalizeAndValidateObservation(rawObservation: unknown): Validated {
@@ -1313,8 +1337,7 @@ function record(raw: unknown): Recorded {
 	const { observation, notes } = validated;
 	const index = reviewState.observations.findIndex((draft) => draft.practiceSlug === slug);
 	if (index === -1 && revises !== undefined) {
-		countRefusal(slug);
-		return { kind: "refused", slug, reason: `No draft '${slug}' exists in this review to revise.` };
+		notes.push(`no draft '${slug}' existed to revise; stored as its first draft`);
 	}
 	const previous = reviewState.observations[index];
 	if (previous !== undefined && isDeepStrictEqual(previous, observation)) {
@@ -1466,7 +1489,7 @@ function buildReportObservationTool() {
 		exposure: "model-only",
 		label: "Report Observations",
 		description:
-			"Record one or more evidenced practice observations in local review state, for server admission " +
+			"Record up to three evidenced practice observations per call in local review state, for server admission " +
 			"after the measuring turns. Record one draft per practice. Its draft reference is the practice slug. " +
 			"Correct it explicitly with revises and a complete observation. Send at most one item per practice in a call; repeated practices refuse the whole call.",
 		parameters: {
@@ -1476,6 +1499,7 @@ function buildReportObservationTool() {
 				observations: documentedShape(listSchema(observationSchema, "observations")),
 			},
 		},
+		prepareArguments: prepareObservationArguments,
 		execute: async (toolCallId, params): Promise<AgentToolResult<ReportObservationDetails>> => {
 			if (measurementClosed) {
 				const text = "Measurement is closed; this turn may only compose feedback.";
@@ -1639,8 +1663,9 @@ const PERSIST_DISCIPLINE =
 
 /** What a turn is told once its remaining work only pays for recording what it owes. */
 const RECORD_NUDGE =
-	`This turn has the work left to write its observations and no more. Stop exploring and record what ` +
-	`the inspected evidence supports for the listed practices, in one report_observation call. ${PERSIST_DISCIPLINE}`;
+	`This turn has the work left to write its observations and no more. Stop exploring. ` +
+	`Record what the inspected evidence supports for the listed practices. Send up to three observations ` +
+	`per report_observation call. ${PERSIST_DISCIPLINE}`;
 
 /** Tells the server to retry a review whose admission endpoint was unreachable. */
 const SERVER_UNREACHABLE_EXIT = 75;
@@ -3205,7 +3230,7 @@ ${JSON.stringify({ observations: example }, null, 1)}
  */
 function practicesTurnText(heading: string, slugs: readonly string[], brief: string): string {
 	return `${openingIfNeeded(brief)}${heading}
-Evaluate these practices: ${slugs.join(", ")}. Their criteria follow and decide the outcome. What the brief shows is yours to quote; read more only when a criterion needs it, and when it needs more than one read or search, run them together in one codemode script that prints only the lines you will quote. Record one observation per practice — the outcome the criteria and the evidence support, NOT_APPLICABLE and UNDETERMINED included — with report_observation, every one that is ready in one call.
+Evaluate these practices: ${slugs.join(", ")}. Their criteria follow and decide the outcome. What the brief shows is yours to quote; read more only when a criterion needs it, and when it needs more than one read or search, run them together in one codemode script that prints only the lines you will quote. Record one observation per practice — the outcome the criteria and the evidence support, NOT_APPLICABLE and UNDETERMINED included — with report_observation, up to three observations per call.
 
 ${criteriaOf(slugs)}`;
 }
@@ -3322,15 +3347,14 @@ async function main() {
 	const settingsManager = SettingsManager.create(CWD, AGENT_DIR, SANDBOX_SETTINGS_MANAGER_OPTIONS);
 	// Disable instruction discovery; load only the server-staged orchestrator (see pi-agent-sandbox.ts).
 	const orchestratorPath = `${AGENT_DIR}/AGENTS.md`;
-	const orchestrator = readFileSync(orchestratorPath, "utf8");
+	const orchestrator = orchestratorWithPaths(readFileSync(orchestratorPath, "utf8"));
 	const loader = new DefaultResourceLoader({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
 		settingsManager,
 		...SANDBOX_RESOURCE_LOADER_OPTIONS,
-		agentsFilesOverride: () => ({
-			agentsFiles: [{ path: orchestratorPath, content: orchestrator }],
-		}),
+		systemPrompt: orchestrator,
+		agentsFilesOverride: () => ({ agentsFiles: [] }),
 		// "on" keeps every tool callable directly as well; scripts get no model catalog to call.
 		extensionFactories: [createCodemodeExtension({ mode: "on", models: false })],
 	});
