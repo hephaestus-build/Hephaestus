@@ -48,10 +48,20 @@ const COMMANDS_ROOT = ".opencode/commands";
  */
 const AGENT_ROOTS = [".claude/", ".opencode/", ".agents/"];
 
+/**
+ * The release history is generated and never edited once released, so a path it names is a fact about
+ * the release it describes, not a claim about this checkout.
+ */
+const RELEASE_HISTORY = new Set(["CHANGELOG.md", "MIGRATION.md"]);
+
+/** The current upgrade directions every rendered `MIGRATION.md` is generated from. */
+const MIGRATION_GUIDE_SOURCE = "scripts/templates/migration-guide.md";
+
 const isContributorDoc = (path: string): boolean =>
 	path.startsWith("docs/contributor/")
 		? /\.mdx?$/u.test(path)
-		: !path.includes("/") && path.endsWith(".md");
+		: path === MIGRATION_GUIDE_SOURCE ||
+			(!path.includes("/") && path.endsWith(".md") && !RELEASE_HISTORY.has(path));
 
 /**
  * Codex and Claude Code share no skills directory, so a skill both must reach exists twice. That is
@@ -155,21 +165,6 @@ const INTENTIONALLY_MISSING_PATHS = [
 		reason: "a practice's precompute section, written inside the agent workspace for its turn",
 	},
 	{
-		document: "MIGRATION.md",
-		value: "docker/.env",
-		reason: "a deployment-local secrets file that must stay untracked",
-	},
-	{
-		document: "MIGRATION.md",
-		value: "docker/agent-image-pin.env",
-		reason: "a removed path retained in migration history",
-	},
-	{
-		document: "MIGRATION.md",
-		value: "docker/agent-image-pin.local.env",
-		reason: "a removed path retained in migration history",
-	},
-	{
 		document: "AGENTS.md",
 		value: "server/.env",
 		reason: "a developer-local secrets file that must stay untracked",
@@ -254,9 +249,8 @@ const INTENTIONALLY_MISSING_PATHS = [
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/u;
 const PACKAGE_SHAPED = /-(?:cli|config|core|js|node|package|plugin|react|sdk|test|ts)$/u;
 /**
- * A settings path this product owns, which the release notes name whenever one is renamed —
- * `hephaestus.mentor.docker-cli` reads as a package to the shape test above, and blocked a release
- * for it. An npm name reaches two dots about as often as a Spring property reaches none, so the
+ * A settings path this product owns — `hephaestus.mentor.docker-cli` reads as a package to the shape
+ * test above. An npm name reaches two dots about as often as a Spring property reaches none, so the
  * dotted depth is what separates them; a declared dependency is still recognised as itself.
  */
 const SETTINGS_PATH = /^[a-z0-9-]+(?:\.[a-z0-9-]+){2,}$/u;
