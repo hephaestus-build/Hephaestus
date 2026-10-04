@@ -16,7 +16,7 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
-		title: "This feedback hasn't loaded",
+		title: "This feedback has not loaded",
 		onRetry: fn(),
 	},
 } satisfies Meta<typeof MissingRecordEmpty>;
@@ -40,12 +40,12 @@ export const NothingToRetry: Story = {
 	args: { onRetry: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("button")).toBeNull();
-		await expect(canvas.getByText("This feedback hasn't loaded")).toBeVisible();
+		await expect(canvas.getByText("This feedback has not loaded")).toBeVisible();
 	},
 };
 
 /** The longest title a detail page passes, at the width where it has the least room. */
 export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
-	args: { title: "This work's review activity hasn't loaded" },
+	args: { title: "This work's review activity has not loaded" },
 };

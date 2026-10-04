@@ -259,7 +259,7 @@ function PracticeCatalogRoute() {
 			].filter(Boolean);
 			toast.success("Group updated", { description: changes.join(", ") });
 		},
-		onError: () => toast.error("Couldn't add the group. Nothing was changed."),
+		onError: () => toast.error("Could not add the group. Nothing was changed."),
 	});
 	const adoptCatalogPractice = useMutation({
 		...adoptPracticeMutation(),
@@ -296,11 +296,11 @@ function PracticeCatalogRoute() {
 				if (refreshed.isSuccess) {
 					setStaleLevelKey(detailStackKey(entry));
 				} else {
-					toast.error("The adoption preview changed but couldn't be refreshed");
+					toast.error("The adoption preview changed but could not be refreshed");
 				}
 				return;
 			}
-			toast.error("Couldn't add the practice");
+			toast.error("Could not add the practice");
 		}
 	};
 
@@ -311,7 +311,7 @@ function PracticeCatalogRoute() {
 		catalogTree = (
 			<QueryErrorAlert
 				error={groupsQuery.error ?? practicesQuery.error ?? definitionOptionsQuery.error}
-				title="Couldn't load practices"
+				title="Could not load practices"
 				onRetry={() => {
 					void groupsQuery.refetch();
 					void practicesQuery.refetch();
@@ -475,7 +475,7 @@ function PracticeCatalogRoute() {
 								if (refreshed.isSuccess) {
 									setStaleLevelKey(detailStackKey(entry));
 								} else {
-									toast.error("The group plan changed but couldn't be refreshed");
+									toast.error("The group plan changed but could not be refreshed");
 								}
 							}
 						};
@@ -700,7 +700,7 @@ function PracticeCatalogRoute() {
 					<AlertDialogHeader>
 						<AlertDialogTitle>Delete &ldquo;{deletingPractice?.name}&rdquo;?</AlertDialogTitle>
 						<AlertDialogDescription>
-							This permanently deletes the practice and its observations. This can’t be undone.
+							This permanently deletes the practice and its observations. This cannot be undone.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

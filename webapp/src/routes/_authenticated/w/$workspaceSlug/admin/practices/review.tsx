@@ -134,7 +134,7 @@ function HowMuchSection({
 		return (
 			<QueryErrorAlert
 				error={error}
-				title="Couldn't load the autonomy settings"
+				title="Could not load the autonomy settings"
 				onRetry={() => {
 					void settingsQuery.refetch();
 					void rollupQuery.refetch();
@@ -275,7 +275,7 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 		reviewSettings = (
 			<QueryErrorAlert
 				error={error}
-				title="Couldn't load the review settings"
+				title="Could not load the review settings"
 				onRetry={() => {
 					void reviewSettingsQuery.refetch();
 					void workspaceQuery.refetch();
@@ -384,7 +384,7 @@ function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 			void invalidate();
 		},
 		onError: (error) => {
-			toast.error("Couldn't estimate this backfill", { description: problemDetailOf(error) });
+			toast.error("Could not estimate this backfill", { description: problemDetailOf(error) });
 		},
 	});
 
@@ -399,7 +399,7 @@ function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 			}
 		},
 		onError: (error) => {
-			toast.error("Couldn't update this backfill", { description: problemDetailOf(error) });
+			toast.error("Could not update this backfill", { description: problemDetailOf(error) });
 		},
 	});
 

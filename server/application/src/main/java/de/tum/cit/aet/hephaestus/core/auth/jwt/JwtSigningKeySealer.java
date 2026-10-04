@@ -152,7 +152,7 @@ public class JwtSigningKeySealer {
     private void requireEnabled(String op) {
         if (!enabled) {
             throw new EncryptionException(
-                    "JwtSigningKeySealer is not enabled; cannot " + op + " without a configured key");
+                    "JwtSigningKeySealer is not enabled. It cannot " + op + " without a configured key.");
         }
     }
 }

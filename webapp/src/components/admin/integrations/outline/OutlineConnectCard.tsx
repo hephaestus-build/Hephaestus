@@ -103,7 +103,7 @@ export function OutlineConnectCard({
 					{!connected && (
 						<CardDescription>
 							Mirror Outline collections so their design docs and decision records reach practice
-							reviews as context. Use a dedicated bot-user API token; after connecting you choose
+							reviews as context. Use a dedicated bot-user API token. After you connect, you choose
 							exactly which collections are mirrored.
 						</CardDescription>
 					)}
@@ -112,7 +112,7 @@ export function OutlineConnectCard({
 				<CardContent className="space-y-4">
 					{connected ? (
 						<>
-							{/* Which Outline instance is linked — the one fact the connection plane above doesn't
+							{/* Which Outline instance is linked — the one fact the connection plane above does not
 							    carry. The green check is a claim that syncing works, so it is spent only on ACTIVE;
 							    any other state is explained by the shared notice above this card. */}
 							<div className="flex items-center gap-2 text-sm">

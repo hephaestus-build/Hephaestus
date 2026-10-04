@@ -607,7 +607,7 @@ function TotalsFooter({
 	const canWarn = columns.length > 1;
 
 	// Solid `bg-muted` (not `bg-card`): keeps the shadcn footer's distinct muted tint so the totals read
-	// as a summary rather than one more data row, while staying opaque enough that scrolling rows don't
+	// as a summary rather than one more data row, while staying opaque enough that scrolling rows do not
 	// bleed through the sticky footer (the `bg-muted/50` default would). `border-t-2` sets it apart.
 	return (
 		<TableFooter sticky>
@@ -701,7 +701,7 @@ export function SyncResourcesTable({
 		return (
 			<QueryErrorAlert
 				error={error}
-				title={`We couldn't load the ${resourceNoun} sync state`}
+				title={`We could not load the ${resourceNoun} sync state`}
 				onRetry={onRetry}
 			/>
 		);

@@ -26,7 +26,7 @@ class DormantBindingTest extends BaseUnitTest {
 
         assertThat(reason)
                 .isEqualTo("Nothing connected to this workspace reports the moments this practice watches for "
-                        + "(Closed, Opened); GitHub or GitLab would.")
+                        + "(Closed, Opened). GitHub or GitLab can report them.")
                 // A developer reads this on their own work's trace and cannot connect anything.
                 .doesNotContain("Connect", "scm.", "GITHUB", "GITLAB");
     }
@@ -36,8 +36,9 @@ class DormantBindingTest extends BaseUnitTest {
         var dormant = new DormantBinding(1L, Set.of(ScmSignals.PULL_REQUEST_MERGED), Set.of());
 
         assertThat(dormant.reason(ARTIFACTS::signalDisplayName, DormantBindingTest::integration))
-                .isEqualTo("Nothing Hephaestus can connect reports the moments this practice watches for (Merged), "
-                        + "so it is never reviewed.");
+                .isEqualTo(
+                        "Nothing that Hephaestus can connect reports the moments this practice watches for (Merged), "
+                                + "so no review ever covers this practice.");
     }
 
     @Test

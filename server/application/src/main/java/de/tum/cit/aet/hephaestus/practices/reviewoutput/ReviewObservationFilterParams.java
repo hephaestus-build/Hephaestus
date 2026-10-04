@@ -82,7 +82,8 @@ public record ReviewObservationFilterParams(
         }
         ArtifactKind kind = QueryFilterSupport.artifactKind(artifactKind);
         if (from != null && to != null && from.isAfter(to)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must not be after to");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "The from parameter must not be after the to parameter.");
         }
         return new ObservationQueryFilter(
                 practiceSlug,

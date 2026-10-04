@@ -544,7 +544,7 @@ export async function handleMessage(
 	if (!parsed.success) {
 		return {
 			ok: false,
-			error: { code: "invalid", message: "Unrecognised request." },
+			error: { code: "invalid", message: "Unrecognized request." },
 			generation: await session.generation(),
 		};
 	}

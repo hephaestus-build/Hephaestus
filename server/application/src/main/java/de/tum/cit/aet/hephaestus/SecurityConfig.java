@@ -81,8 +81,8 @@ public class SecurityConfig {
         // Fail-closed: insecure cookies (Secure off, __Host- prefix dropped) are a local-http-E2E-only
         // affordance and must be impossible in production.
         if (!cookieSecure && environment.acceptsProfiles(Profiles.of("prod"))) {
-            throw new IllegalStateException(
-                    "hephaestus.auth.cookie-secure must NOT be false under the 'prod' profile (fail-closed).");
+            throw new IllegalStateException("hephaestus.auth.cookie-secure must not be false with the 'prod' profile. "
+                    + "The server fails closed and does not start.");
         }
         this.corsProperties = corsProperties;
         this.installedClients = installedClients;

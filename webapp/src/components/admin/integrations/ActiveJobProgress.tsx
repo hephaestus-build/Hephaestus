@@ -13,7 +13,7 @@ export interface ActiveJobProgressProps {
 /**
  * What the running job is doing right now, in two layers matching the server's progress contract:
  * `itemsProcessed`/`itemsTotal` are job-global and drive the bar, while `progress.currentStep` is the
- * phase-local sentence ("Backfilling ls1intum/Artemis — issues #4812 → #3200") and `progress.phase`
+ * phase-local sentence ("Backfill of ls1intum/Artemis: issues #4812 → #3200") and `progress.phase`
  * is the chip. `itemsTotal: null` means "not yet known" (a backfill has no high-water marks until its
  * first batch lands), and that path stays a spinner rather than inventing a denominator.
  */

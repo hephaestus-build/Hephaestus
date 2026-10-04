@@ -178,7 +178,7 @@ export function PracticeEvidenceEditor({
 				</div>
 				<CollapsibleContent className="mt-3 space-y-4">
 					<FieldDescription>
-						Choosing a source does not collect or authorize it; instance governance and workspace
+						Choosing a source does not collect or authorize it. Instance governance and workspace
 						integrations control that separately.
 					</FieldDescription>
 					{groupEvidenceSources(options.allowedSources).map((group) => (

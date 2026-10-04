@@ -318,7 +318,7 @@ export const LoadFailed: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	render: (args) => <ReviewRunsPage {...args} />,
 	play: async ({ args, canvas, userEvent }) => {
-		await canvas.findByText("Couldn't load reviews");
+		await canvas.findByText("Could not load reviews");
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalled();
 	},

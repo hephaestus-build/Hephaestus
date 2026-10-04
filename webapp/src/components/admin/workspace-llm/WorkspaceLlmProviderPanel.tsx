@@ -116,7 +116,7 @@ export function WorkspaceLlmProviderPanel({
 			if (problemStatusOf(error) === 403) {
 				setRegistrationDisabled(true);
 			}
-			toast.error("Couldn't connect your provider", { description: problemDetailOf(error) });
+			toast.error("Could not connect your provider", { description: problemDetailOf(error) });
 		},
 	});
 	const updateConnection = useMutation({
@@ -127,7 +127,7 @@ export function WorkspaceLlmProviderPanel({
 			toast.success("Provider updated");
 		},
 		onError: (error) =>
-			toast.error("Couldn't update your provider", { description: problemDetailOf(error) }),
+			toast.error("Could not update your provider", { description: problemDetailOf(error) }),
 	});
 	const deleteConnection = useMutation({
 		...filedUnder(connectionWriteKey, workspaceDeleteLlmConnectionMutation()),
@@ -137,7 +137,7 @@ export function WorkspaceLlmProviderPanel({
 			toast.success("Provider disconnected");
 		},
 		onError: (error) =>
-			toast.error("Couldn't disconnect your provider", { description: problemDetailOf(error) }),
+			toast.error("Could not disconnect your provider", { description: problemDetailOf(error) }),
 	});
 	const probeConnection = useMutation({
 		...filedUnder(probeKey, workspaceProbeLlmConnectionMutation()),
@@ -181,7 +181,7 @@ export function WorkspaceLlmProviderPanel({
 			if (problemStatusOf(error) === 403) {
 				setRegistrationDisabled(true);
 			}
-			toast.error("Couldn't add the model", { description: problemDetailOf(error) });
+			toast.error("Could not add the model", { description: problemDetailOf(error) });
 		},
 	});
 	const updateModel = useMutation({
@@ -192,7 +192,7 @@ export function WorkspaceLlmProviderPanel({
 			toast.success("Model updated");
 		},
 		onError: (error) =>
-			toast.error("Couldn't update the model", { description: problemDetailOf(error) }),
+			toast.error("Could not update the model", { description: problemDetailOf(error) }),
 	});
 	const deleteModel = useMutation({
 		...filedUnder(modelWriteKey, workspaceDeleteLlmModelMutation()),
@@ -201,7 +201,7 @@ export function WorkspaceLlmProviderPanel({
 			toast.success("Model deleted");
 		},
 		onError: (error) =>
-			toast.error("Couldn't delete the model", { description: problemDetailOf(error) }),
+			toast.error("Could not delete the model", { description: problemDetailOf(error) }),
 	});
 	const mutatingModelIds = usePendingMutationIds(modelWriteKey, (variables) =>
 		pathNumber(variables, "id"),

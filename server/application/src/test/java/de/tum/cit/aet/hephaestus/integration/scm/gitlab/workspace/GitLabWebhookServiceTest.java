@@ -275,7 +275,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
             assertThat(result.registered()).isFalse();
-            assertThat(result.failureReason()).contains("unavailable");
+            assertThat(result.failureReason()).contains("not available");
         }
 
         @Test

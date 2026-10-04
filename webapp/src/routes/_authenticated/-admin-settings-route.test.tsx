@@ -71,7 +71,7 @@ describe("instance settings route", () => {
 		await user.type(within(dialog).getByLabelText(/Type release to confirm/u), "release");
 		await user.click(within(dialog).getByRole("button", { name: "Release silent mode" }));
 
-		await screen.findByText("Couldn't verify the current instance settings");
+		await screen.findByText("Could not verify the current instance settings");
 		await within(dialog).findByText(/The current settings could not be verified/u);
 		expect(
 			within(dialog).getByRole<HTMLButtonElement>("button", { name: "Release silent mode" })
@@ -162,7 +162,7 @@ describe("instance settings route", () => {
 		);
 		renderRouteAt("/admin/settings");
 
-		await screen.findByText("Couldn't load instance settings", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("Could not load instance settings", undefined, ROUTE_RENDER_WAIT);
 		await user.click(screen.getByRole("button", { name: "Send test email" }));
 
 		await screen.findByText("Accepted by relay");

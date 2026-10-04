@@ -78,7 +78,7 @@ export function useFeedbackController(
 			);
 		},
 		onError: (error) => {
-			toast.error("Couldn't decide on this feedback", { description: problemDetailOf(error) });
+			toast.error("Could not decide on this feedback", { description: problemDetailOf(error) });
 		},
 	});
 
@@ -91,7 +91,7 @@ export function useFeedbackController(
 		},
 		onError: (error) => {
 			void feedbackQuery.refetch();
-			toast.error("Couldn't change this feedback", { description: problemDetailOf(error) });
+			toast.error("Could not change this feedback", { description: problemDetailOf(error) });
 		},
 	});
 

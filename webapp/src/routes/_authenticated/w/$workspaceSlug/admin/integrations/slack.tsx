@@ -41,7 +41,7 @@ function SlackIntegrationPage() {
 			{slack.loadError && (
 				<QueryErrorAlert
 					error={slack.loadError}
-					title="We couldn't load the Slack connection"
+					title="We could not load the Slack connection"
 					onRetry={slack.retryLoad}
 				/>
 			)}

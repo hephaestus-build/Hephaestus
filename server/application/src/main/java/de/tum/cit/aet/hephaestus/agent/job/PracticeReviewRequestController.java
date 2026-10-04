@@ -99,7 +99,7 @@ public class PracticeReviewRequestController {
             // Same sentence whether there's no such requester or the requester lacks standing: telling
             // them apart would let a caller enumerate who is on a team.
             throw new AccessForbiddenException(
-                    "Only the work's author or assignees, or a workspace admin, can ask for a review of it.");
+                    "Only the author or an assignee of the work, or a workspace admin, can request a review of it.");
         }
         return ResponseEntity.ok(ReviewRequestOutcomeDTO.from(outcome));
     }
@@ -126,14 +126,14 @@ public class PracticeReviewRequestController {
         // A kind that exists but has no front door here: a chat thread or document is reviewed on the
         // occasion its source produces, with nothing for a person to point at and ask about.
         throw new IllegalArgumentException(
-                "A review can be asked for only on a pull or merge request or an issue, not on this kind of work.");
+                "You can request a review only for a pull or merge request or an issue. You cannot request a review for this kind of work.");
     }
 
     private static ArtifactKind parseKind(String raw) {
         try {
             return ArtifactKind.of(raw);
         } catch (IllegalArgumentException malformed) {
-            throw new IllegalArgumentException("This is not a kind of work Hephaestus knows.", malformed);
+            throw new IllegalArgumentException("Hephaestus does not know this kind of work.", malformed);
         }
     }
 

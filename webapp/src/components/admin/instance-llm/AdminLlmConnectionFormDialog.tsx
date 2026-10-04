@@ -278,7 +278,7 @@ function AdminLlmConnectionFormDialogContent({
 						{probeResult && !probeResult.reachable && (
 							<Alert variant="warning">
 								<AlertDescription>
-									Discovery unsupported. {probeResult.message ?? "The provider didn't answer."} You
+									Discovery unsupported. {probeResult.message ?? "The provider did not answer."} You
 									can still save the connection and enter a model id.
 								</AlertDescription>
 							</Alert>

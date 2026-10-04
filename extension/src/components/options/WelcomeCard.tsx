@@ -60,8 +60,9 @@ export function WelcomeCard({
 				</h2>
 				<p className="max-w-prose text-base text-muted-foreground">
 					See the practice review of the pull request, merge request or issue you open on GitHub or
-					GitLab in the page, right after its description: the comments Hephaestus posted for you,
-					with the way to each, and what the review concluded about your work.
+					GitLab. It appears in the page, right after the description. It shows the comments
+					Hephaestus posted for you, with a link to each, and what the review concluded about your
+					work.
 				</p>
 			</div>
 			<div className="flex flex-col gap-2">
@@ -90,9 +91,10 @@ export function WelcomeCard({
 			<div className="flex gap-2.5 rounded-lg bg-muted/60 p-3.5 text-sm text-muted-foreground">
 				<ShieldCheckIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-mentor" />
 				<p>
-					On the sites you allow, the extension looks up each pull request, merge request or issue
-					as you open it, and a list row only when you press its Hephaestus button, by sending its
-					address to your Hephaestus. It never sends the page&apos;s content.{" "}
+					On the sites you allow, the extension sends the address of each pull request, merge
+					request or issue to your Hephaestus. It does this when you open the page, to find its
+					practice review. It sends the address of a list row only when you press its Hephaestus
+					button. It never sends the page&apos;s content.{" "}
 					<ExternalLink href={privacyUrl} allowedOrigin={docsOrigin}>
 						How the extension handles data
 					</ExternalLink>
@@ -105,7 +107,7 @@ export function WelcomeCard({
 			>
 				<div className="flex flex-col gap-3">
 					<p className="text-sm text-muted-foreground">
-						If your organisation runs its own Hephaestus, connect to it instead. You can switch at
+						If your organization runs its own Hephaestus, connect to it instead. You can switch at
 						any time.
 					</p>
 					<InstanceSetupForm

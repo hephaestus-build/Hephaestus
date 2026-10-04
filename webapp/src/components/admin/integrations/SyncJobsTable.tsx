@@ -266,7 +266,7 @@ export function SyncJobsTable({
 }: SyncJobsTableProps) {
 	if (isError) {
 		return (
-			<QueryErrorAlert error={error} title="We couldn't load the job history" onRetry={onRetry} />
+			<QueryErrorAlert error={error} title="We could not load the job history" onRetry={onRetry} />
 		);
 	}
 

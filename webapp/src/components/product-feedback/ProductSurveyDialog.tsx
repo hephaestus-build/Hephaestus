@@ -94,8 +94,8 @@ export function ProductSurveyDialog({
 							{isResearch(survey) ? (
 								<>
 									Part of {studyOf(survey)}, which you agreed to join. Your answers go to that
-									study, linked to your account, and are kept apart from product feedback. Skip
-									anything you’d rather not answer. You can leave the study in{" "}
+									study, linked to your account, and are kept apart from product feedback. Skip any
+									question you prefer not to answer. You can leave the study in{" "}
 									<Link
 										to="/settings"
 										className="underline underline-offset-2"

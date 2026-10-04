@@ -64,8 +64,7 @@ public class PracticeGroupService {
             if (unknown != null) {
                 throw new EntityNotFoundException("PracticeGroup", unknown);
             }
-            throw new IllegalArgumentException(
-                    "orderedSlugs must contain every practice group in the workspace (a complete ordering)");
+            throw new IllegalArgumentException("orderedSlugs must contain every practice group in the workspace.");
         }
         Map<String, PracticeGroup> bySlug = groups.stream().collect(Collectors.toMap(PracticeGroup::getSlug, a -> a));
         int order = 0;

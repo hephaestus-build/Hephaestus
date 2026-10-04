@@ -24,13 +24,13 @@ public class KeywordSlackMentorInputGuard implements SlackMentorInputGuard {
             "kill you", "kys", "i hate you", "you're worthless", "you are worthless", "shut up you", "stupid bot");
 
     static final String SELF_HARM_RESPONSE =
-            "It sounds like you may be going through something really hard, and I'm not the right kind of help for "
-                    + "this. I'm just a coding-practice mentor. Please reach out to someone who can support you right now. In "
+            "It sounds like you may be going through something really hard, and I am not the right kind of help for "
+                    + "this. I am just a coding-practice mentor. Please reach out to someone who can support you right now. In "
                     + "many countries you can call or text a crisis line (for example 988 in the US/Canada), or contact your "
-                    + "local emergency services. You deserve real support, and it's okay to ask for it.";
+                    + "local emergency services. You deserve real support, and it is okay to ask for it.";
 
     static final String THREADING_RESPONSE =
-            "I reply in this DM thread. Hephaestus mentors in DM and uses channel messages only as allowed context.";
+            "I reply in this DM thread. Hephaestus mentors in DM. It uses channel messages only as allowed context.";
 
     @Override
     public Verdict decide(String text) {

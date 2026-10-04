@@ -155,7 +155,7 @@ function ModelsContainer() {
 				setSaveError(target, slotRefusalOf(error));
 				return;
 			}
-			toast.error(`Couldn't save ${PURPOSE_TITLES[target.purpose].toLowerCase()}`, {
+			toast.error(`Could not save ${PURPOSE_TITLES[target.purpose].toLowerCase()}`, {
 				description: problemDetailOf(error),
 			});
 		},
@@ -177,7 +177,7 @@ function ModelsContainer() {
 			toast.success(`${PURPOSE_TITLES[target.purpose]} turned off`);
 		},
 		onError: (error, { target }) => {
-			toast.error(`Couldn't turn off ${PURPOSE_TITLES[target.purpose].toLowerCase()}`, {
+			toast.error(`Could not turn off ${PURPOSE_TITLES[target.purpose].toLowerCase()}`, {
 				description: problemDetailOf(error),
 			});
 		},

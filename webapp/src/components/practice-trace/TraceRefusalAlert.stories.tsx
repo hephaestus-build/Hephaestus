@@ -65,12 +65,12 @@ export const NoFixExists: Story = {
 			status: "REFUSED",
 			reason: "REQUESTER_QUOTA_EXHAUSTED",
 			reasonDescription:
-				"You have asked for as many reviews as an hour allows; the allowance refills.",
+				"The person who asked used all of their review requests for this hour. The allowance fills again later.",
 		},
 	},
 	play: async ({ canvas }) => {
 		const alert = within(canvas.getByRole("alert"));
-		await expect(alert.getByText(/the allowance refills/u)).toBeVisible();
+		await expect(alert.getByText(/The allowance fills again later/u)).toBeVisible();
 		await expect(alert.queryByRole("link")).not.toBeInTheDocument();
 	},
 };

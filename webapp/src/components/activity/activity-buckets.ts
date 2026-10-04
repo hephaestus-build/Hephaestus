@@ -144,7 +144,7 @@ export function bucketSummary(
 		return headline;
 	}
 	const label = bucketLabel(busiest.bucket.start, overview.bucket, span);
-	return `${headline}; busiest ${BUCKET_SIZE_DEFS[overview.bucket].noun} ${label}, ${busiest.count}`;
+	return `${headline}. Busiest ${BUCKET_SIZE_DEFS[overview.bucket].noun} ${label}, ${busiest.count}`;
 }
 
 /** One chart row per bucket with one column: how often any of `kinds` happened in it, together. */

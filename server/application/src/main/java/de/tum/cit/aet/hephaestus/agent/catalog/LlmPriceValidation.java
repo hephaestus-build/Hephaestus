@@ -35,7 +35,7 @@ final class LlmPriceValidation {
         if (pricingMode == PricingMode.PRICED) {
             if (per1mInputUsd == null || per1mOutputUsd == null) {
                 throw new IllegalArgumentException(
-                        "A price requires at least an input rate and an output rate (per 1M tokens).");
+                        "A price needs at least an input rate and an output rate (per 1M tokens).");
             }
             boolean anyNegative = rates.stream().anyMatch(rate -> rate != null && rate.signum() < 0);
             if (anyNegative) {
@@ -44,7 +44,7 @@ final class LlmPriceValidation {
             boolean anyPositive = rates.stream().anyMatch(rate -> rate != null && rate.signum() > 0);
             if (!anyPositive) {
                 throw new IllegalArgumentException(
-                        "A price requires at least one rate greater than zero. For a model without usage charges, choose No metered API cost instead.");
+                        "A price needs at least one rate greater than zero. For a model without usage charges, choose No metered API cost.");
             }
             boolean anyTooLarge =
                     rates.stream().anyMatch(rate -> rate != null && rate.compareTo(MAX_RATE_EXCLUSIVE) >= 0);
@@ -55,11 +55,11 @@ final class LlmPriceValidation {
         } else {
             if (anyRatePresent) {
                 throw new IllegalArgumentException(
-                        "Rates can only be set when the model has a price; clear them or set a price first.");
+                        "You can set rates only when the model has a price. Clear the rates, or set a price first.");
             }
             if (pricingMode == PricingMode.NO_CHARGE && !StringUtils.hasText(note)) {
                 throw new IllegalArgumentException(
-                        "An explanation of why this model has no metered API cost (e.g. self-hosted) is required.");
+                        "Explain why this model has no metered API cost, for example because it is self-hosted.");
             }
         }
     }

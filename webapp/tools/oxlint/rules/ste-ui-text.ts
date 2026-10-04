@@ -1,25 +1,16 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { defineRule, type ESTree } from "@oxlint/plugins";
 import { decodeHTMLStrict } from "entities";
 
-import { asStringArray, isRecord, parseJson } from "../../../../scripts/lib/json.ts";
+import { isRecord } from "../../../../scripts/lib/json.ts";
 import {
 	approvedWords,
-	steRoot,
 	withoutTechnicalNames,
 	wordAlerts,
 } from "../../../../scripts/lib/ste-words.ts";
 
-const enforced = new Set(
-	asStringArray(
-		parseJson(readFileSync(new URL(".vale/enforced-paths.json", steRoot), "utf8")),
-		"STE paths",
-	),
-);
-const root = fileURLToPath(steRoot);
-const textProps = new Set([
+// Names of the JSX props and object keys whose string values are UI text. Object keys cover the
+// vocabulary registries, option lists and form schemas.
+const textNames = new Set([
 	"alt",
 	"aria-label",
 	"aria-description",
@@ -27,6 +18,7 @@ const textProps = new Set([
 	"placeholder",
 	"label",
 	"description",
+	"summary",
 	"message",
 	"error",
 	"helperText",
@@ -38,7 +30,17 @@ const textProps = new Set([
 	"cancelText",
 	"submitText",
 	"buttonText",
+	"note",
+	"content",
+	"detail",
+	"hint",
+	"heading",
+	"caption",
+	"subtitle",
+	"success",
+	"loading",
 ]);
+const toastCalls = new Set(["error", "success", "info", "warning", "message", "loading"]);
 const dictionary = new Set(approvedWords);
 const sentences = new Intl.Segmenter("en", { granularity: "sentence" });
 
@@ -69,16 +71,44 @@ function literalText(node: ESTree.Node): string[] {
 	return [];
 }
 
+function isToastCall(callee: ESTree.Node): boolean {
+	if (callee.type === "Identifier") {
+		return callee.name === "toast";
+	}
+	return (
+		callee.type === "MemberExpression" &&
+		callee.object.type === "Identifier" &&
+		callee.object.name === "toast" &&
+		callee.property.type === "Identifier" &&
+		toastCalls.has(callee.property.name)
+	);
+}
+
+function isCodeElement(node: ESTree.Node): boolean {
+	return (
+		node.type === "JSXElement" &&
+		node.openingElement.name.type === "JSXIdentifier" &&
+		(node.openingElement.name.name === "style" || node.openingElement.name.name === "script")
+	);
+}
+
+function propertyName(key: ESTree.Node): string | undefined {
+	if (key.type === "Identifier") {
+		return key.name;
+	}
+	return key.type === "Literal" && typeof key.value === "string" ? key.value : undefined;
+}
+
 export const steUiText = defineRule({
 	meta: {
 		type: "problem",
 		docs: {
-			description: "Use the STE writing standard for literal UI text on the enforced paths.",
+			description: "Use the STE writing standard for literal UI text.",
 		},
 		schema: [
 			{
 				type: "object",
-				properties: { allPaths: { type: "boolean" }, vocabulary: { type: "boolean" } },
+				properties: { vocabulary: { type: "boolean" } },
 				additionalProperties: false,
 			},
 		],
@@ -92,12 +122,7 @@ export const steUiText = defineRule({
 	},
 	create(context) {
 		const options = context.options[0];
-		const allPaths = isRecord(options) && options.allPaths === true;
 		const vocabulary = isRecord(options) && options.vocabulary === true;
-		const filename = path.relative(root, context.filename).split(path.sep).join("/");
-		if (!allPaths && !enforced.has(filename)) {
-			return {};
-		}
 		function check(node: ESTree.Node, text: string): void {
 			if (vocabulary) {
 				for (const match of withoutTechnicalNames(text).matchAll(/\b[a-z]+\b/giu)) {
@@ -113,7 +138,8 @@ export const steUiText = defineRule({
 			if (text.includes(";")) {
 				context.report({ node, messageId: "semicolon" });
 			}
-			for (const { segment } of sentences.segment(text)) {
+			// A line break in JSX source ends a sentence for the segmenter, so join the lines first.
+			for (const { segment } of sentences.segment(text.replaceAll(/\s+/gu, " "))) {
 				if ([...segment.matchAll(/\b[\p{L}\p{N}]+(?:[-’'][\p{L}\p{N}]+)*\b/gu)].length > 25) {
 					context.report({ node, messageId: "sentence" });
 				}
@@ -126,7 +152,7 @@ export const steUiText = defineRule({
 			JSXAttribute(node) {
 				if (
 					node.name.type !== "JSXIdentifier" ||
-					!textProps.has(node.name.name) ||
+					!textNames.has(node.name.name) ||
 					node.value === null
 				) {
 					return;
@@ -137,12 +163,30 @@ export const steUiText = defineRule({
 					check(value, node.value.type === "Literal" ? decodeHTMLStrict(text) : text);
 				}
 			},
-			JSXExpressionContainer(node) {
-				// Attributes have their own visitor; identifiers and calls need human review.
-				if (node.parent.type !== "JSXAttribute") {
-					for (const text of literalText(node.expression)) {
-						check(node.expression, text);
+			CallExpression(node) {
+				const [message] = node.arguments;
+				if (message !== undefined && isToastCall(node.callee)) {
+					for (const text of literalText(message)) {
+						check(message, text);
 					}
+				}
+			},
+			Property(node) {
+				const name = node.computed ? undefined : propertyName(node.key);
+				if (name !== undefined && textNames.has(name) && node.parent.type === "ObjectExpression") {
+					for (const text of literalText(node.value)) {
+						check(node.value, text);
+					}
+				}
+			},
+			JSXExpressionContainer(node) {
+				// Attributes have their own visitor; identifiers and calls need human review. A style
+				// or script element holds code, not prose.
+				if (node.parent.type === "JSXAttribute" || isCodeElement(node.parent)) {
+					return;
+				}
+				for (const text of literalText(node.expression)) {
+					check(node.expression, text);
 				}
 			},
 		};

@@ -64,7 +64,8 @@ class AccountSecurityEmailIntegrationTest extends BaseIntegrationTest {
                 .filter(m -> recipient(m).equals(account.getPrimaryEmail()))
                 .toList();
         assertThat(messages).hasSize(1);
-        assertThat(messages.getFirst().getSubject()).isEqualTo("Your Hephaestus account security settings changed");
+        assertThat(messages.getFirst().getSubject())
+                .isEqualTo("The security settings of your Hephaestus account changed");
         assertThat(messages.getFirst().getHeader("List-Unsubscribe")).isNull();
     }
 

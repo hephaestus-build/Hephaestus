@@ -196,7 +196,7 @@ class SlackMentorServiceTest extends BaseUnitTest {
                         eq("100.1"),
                         eq(List.of()),
                         eq(
-                                "Check your Hephaestus account status, Slack link, and workspace membership to use the mentor."));
+                                "To use the mentor, check your Hephaestus account status, your Slack link, and your workspace membership."));
         verify(mentorTurnRunner, never()).run(any(), any(), anyLong());
     }
 

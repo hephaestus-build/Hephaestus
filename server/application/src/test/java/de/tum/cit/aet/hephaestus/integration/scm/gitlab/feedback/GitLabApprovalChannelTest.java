@@ -143,7 +143,7 @@ class GitLabApprovalChannelTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> channel.approve(gitlabTarget(), null))
                 .isInstanceOf(FeedbackDeliveryException.class)
-                .hasMessageContaining("rate limit critical");
+                .hasMessageContaining("rate limit is critical");
     }
 
     @Test

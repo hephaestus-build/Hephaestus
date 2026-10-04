@@ -8,6 +8,6 @@ final class InstanceSettingsPreconditionRequiredException extends RuntimeExcepti
     private static final long serialVersionUID = 1L;
 
     InstanceSettingsPreconditionRequiredException() {
-        super("If-Match must contain the current instance settings ETag when releasing Silent Mode");
+        super("To release Silent Mode, the If-Match header must contain the current ETag of the instance settings.");
     }
 }

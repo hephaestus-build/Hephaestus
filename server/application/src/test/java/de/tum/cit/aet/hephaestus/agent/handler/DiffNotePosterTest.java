@@ -118,10 +118,10 @@ class DiffNotePosterTest extends BaseUnitTest {
         assertThat(anchor.filePath()).isEqualTo("src/A.java");
         assertThat(anchor.newLineNumber()).isEqualTo(14);
         assertThat(f.body())
-                .contains("<sub>AI-generated &middot; Answer or dispute it in"
+                .contains("<sub>AI-generated feedback. Answer or dispute it in"
                         + " [Hephaestus](https://hephaestus.example/w/team/feedback/scm.pull_request/42).</sub>")
                 .doesNotContain("React with")
-                .doesNotContain("Why you're seeing this");
+                .doesNotContain("Why you see this");
         assertThat(anchor.startLine()).isEqualTo(10);
         assertThat(f.deliveryKey()).isEqualTo("ck-multi");
     }

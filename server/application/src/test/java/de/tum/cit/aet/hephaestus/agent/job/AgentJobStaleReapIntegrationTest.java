@@ -116,7 +116,7 @@ class AgentJobStaleReapIntegrationTest extends BaseIntegrationTest {
 
         AgentJob reaped = jobRepository.findById(jobId).orElseThrow();
         assertThat(reaped.getStatus()).isEqualTo(AgentJobStatus.TIMED_OUT);
-        assertThat(reaped.getErrorMessage()).contains("Reaped");
+        assertThat(reaped.getErrorMessage()).contains("exceeded its timeout");
 
         LlmUsageEvent event = onlyUsageEvent();
         assertThat(event.getSourceId()).isEqualTo(jobId);

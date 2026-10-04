@@ -28,7 +28,7 @@ import { ReviewRowList } from "./ReviewRow";
  * clean bill of health would be backwards.
  */
 const INSUFFICIENT_EVIDENCE_EXPLANATION =
-	"The review stopped before it assessed anything, because the material it needed was missing, unreadable, out of date, or not something it was allowed to read. No practice was judged — this is not a review that looked and found nothing.";
+	"The review stopped before it assessed anything. The material it needed was missing, unreadable, out of date, or not something it was allowed to read. No practice was judged. This is not a review that looked and found nothing.";
 
 export interface ReviewOutputScope {
 	agentJobId?: string;
@@ -164,7 +164,7 @@ function PreviewSection<T>({
 			{state.status === "error" && (
 				<QueryErrorAlert
 					error={state.error}
-					title={`Couldn't load ${noun}`}
+					title={`Could not load ${noun}`}
 					onRetry={state.onRetry}
 				/>
 			)}

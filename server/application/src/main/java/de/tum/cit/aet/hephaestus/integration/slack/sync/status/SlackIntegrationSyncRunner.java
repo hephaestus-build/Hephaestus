@@ -52,22 +52,28 @@ public class SlackIntegrationSyncRunner implements IntegrationSyncRunner {
      */
     public static SyncProgress progressDetail(WorkspaceSyncSummary summary) {
         StringBuilder step = new StringBuilder();
-        step.append("Synced ")
+        step.append("Hephaestus synced ")
                 .append(summary.synced())
                 .append(" of ")
                 .append(summary.channels())
-                .append(summary.channels() == 1 ? " channel" : " channels");
+                .append(summary.channels() == 1 ? " channel." : " channels.");
         if (summary.ingested() > 0) {
-            step.append(" — ").append(summary.ingested()).append(" messages");
+            step.append(" Hephaestus ingested ")
+                    .append(summary.ingested())
+                    .append(summary.ingested() == 1 ? " message." : " messages.");
         }
         if (summary.skipped() > 0) {
-            step.append(" · ").append(summary.skipped()).append(" skipped");
+            step.append(" The sync skipped ")
+                    .append(summary.skipped())
+                    .append(summary.skipped() == 1 ? " channel." : " channels.");
         }
         if (summary.failed() > 0) {
-            step.append(" · ").append(summary.failed()).append(" failed");
+            step.append(" The sync failed for ")
+                    .append(summary.failed())
+                    .append(summary.failed() == 1 ? " channel." : " channels.");
         }
         if (summary.budgetExhausted()) {
-            step.append(" · request budget exhausted");
+            step.append(" The request budget ran out.");
         }
         return SyncProgress.ofResource(
                 SyncPhase.CHANNELS, step.toString(), null, summary.synced() + summary.skipped(), summary.channels());

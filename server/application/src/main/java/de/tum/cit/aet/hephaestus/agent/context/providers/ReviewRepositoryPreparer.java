@@ -84,7 +84,7 @@ public class ReviewRepositoryPreparer {
         long repositoryId = requireLong(metadata, "repository_id");
         if (repository.getId() != repositoryId
                 || !monitors.existsByWorkspaceIdAndNameWithOwner(workspaceId, repository.getNameWithOwner())) {
-            throw new JobPreparationException("Reviewed repository is not monitored by this workspace");
+            throw new JobPreparationException("This workspace does not monitor the reviewed repository.");
         }
         var kind = connections
                 .findActiveProviderKind(workspaceId)

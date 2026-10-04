@@ -23,13 +23,13 @@ public class AgentBindingSlotMismatchException extends RuntimeException {
 
     public static AgentBindingSlotMismatchException declaredAs(DataHandlingTier declaredTier) {
         return new AgentBindingSlotMismatchException(
-                "This model is declared as a different tier; assign it to that row.", declaredTier);
+                "This model is declared as a different tier. Assign it to that row.", declaredTier);
     }
 
     public static AgentBindingSlotMismatchException undeclared() {
         return new AgentBindingSlotMismatchException(
-                "This model's data handling isn't declared yet. "
-                        + "Declare it first, or assign it to Members who haven't chosen.",
+                "The data handling of this model is not declared yet. "
+                        + "Declare it first, or assign the model to Members who have not chosen.",
                 null);
     }
 

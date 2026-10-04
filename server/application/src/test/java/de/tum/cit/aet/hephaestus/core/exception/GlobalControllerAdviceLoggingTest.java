@@ -55,8 +55,7 @@ class GlobalControllerAdviceLoggingTest {
         var response = advice.handleWebClientRequestException(exception);
 
         assertThat(response.getStatus()).isEqualTo(503);
-        assertThat(response.getDetail())
-                .isEqualTo("An upstream service is temporarily unavailable. Please try again later.");
+        assertThat(response.getDetail()).isEqualTo("An upstream service is not available now. Try again later.");
         assertThat(appender.list).hasSize(1);
         ILoggingEvent event = appender.list.getFirst();
         assertThat(event.getLevel()).isEqualTo(Level.WARN);

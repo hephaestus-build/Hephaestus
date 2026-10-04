@@ -184,7 +184,7 @@ export function SignInPanel({
 			) : null}
 			<p className="text-xs text-muted-foreground">
 				A sign-in window from {instanceHost} opens and closes by itself. You stay signed in until
-				you close Chrome, or at most 7 days; your instance may end it sooner.
+				you close Chrome, or at most 7 days. Your instance may end it sooner.
 			</p>
 		</div>
 	);

@@ -66,7 +66,7 @@ export async function loginAsDevAdmin(page: Page, username = "e2e"): Promise<voi
 		}
 		await page.getByRole("button", { name: "Continue" }).click();
 		// The consent route can mask its URL, so URL changes do not prove submission finished.
-		await expect(page.getByRole("heading", { name: "Let’s get you set up" })).toBeHidden();
+		await expect(page.getByRole("heading", { name: "Get set up" })).toBeHidden();
 		await page.waitForURL((url) => url.pathname !== "/consent");
 	}
 }

@@ -69,12 +69,12 @@ public class WorkspaceRegistryController {
         if (workspaceProperties.creationPolicy() == WorkspaceProperties.CreationPolicy.ADMIN_ONLY
                 && !SecurityUtils.isSuperAdmin()) {
             throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "Workspace creation is restricted to instance admins on this deployment");
+                    HttpStatus.FORBIDDEN, "An instance admin must create workspaces on this deployment.");
         }
 
         if (createWorkspaceRequest.kind() == IntegrationKind.GITLAB
                 && !featureFlagService.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "GitLab workspace creation is not enabled");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "GitLab workspace creation is not enabled.");
         }
 
         Workspace workspace = workspaceService.createWorkspaceWithInitialization(createWorkspaceRequest);

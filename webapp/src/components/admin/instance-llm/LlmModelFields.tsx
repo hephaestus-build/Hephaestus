@@ -161,7 +161,7 @@ const COPY = {
 			"New models are saved inactive. Review the saved price and sharing before activating.",
 		deactivationTitle: "Work on this model stops immediately, in every workspace",
 		deactivationBody:
-			"Practice reviews and Heph can't run on it until you reactivate it, or until each workspace picks another model.",
+			"Practice reviews and Heph cannot run on it until you reactivate it, or until each workspace picks another model.",
 	},
 	workspace: {
 		displayNamePlaceholder: "e.g. GPT-5 mini",
@@ -171,7 +171,7 @@ const COPY = {
 		activeHintCreate: "Starts inactive. Add a price, then activate.",
 		deactivationTitle: "Work on this model stops immediately",
 		deactivationBody:
-			"Practice reviews and Heph can't run until you reactivate this model or pick another.",
+			"Practice reviews and Heph cannot run until you reactivate this model or pick another.",
 	},
 } satisfies Record<LlmAudience, Record<string, string>>;
 
@@ -574,7 +574,7 @@ export function LlmModelFields({
 							</Select>
 							<FieldDescription id={`${idPrefix}-reasoning-effort-description`}>
 								Provider default sends no effort setting. Supported levels and defaults depend on
-								the model and provider. Choose only a supported level; None requests no reasoning.
+								the model and provider. Choose only a supported level. None requests no reasoning.
 							</FieldDescription>
 						</Field>
 					</FieldGroup>

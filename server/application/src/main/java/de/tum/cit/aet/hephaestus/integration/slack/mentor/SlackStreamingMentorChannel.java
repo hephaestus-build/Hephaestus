@@ -392,7 +392,7 @@ public class SlackStreamingMentorChannel implements MentorChannel {
         // A turn that finishes before the first flush tick (or leaves a tail) writes here. No further tick will
         // run, so retry the terminal write inline rather than dropping it on a transient blip.
         boolean unopened = streamTs.get() == null;
-        String body = (unopened && remainder.isBlank()) ? "_(the mentor produced no response)_" : remainder;
+        String body = (unopened && remainder.isBlank()) ? "_(The mentor gave no response.)_" : remainder;
         boolean written = (body.isBlank() && !unopened) || terminalWrite(body);
         try {
             String ts = streamTs.get();
@@ -493,6 +493,6 @@ public class SlackStreamingMentorChannel implements MentorChannel {
     }
 
     private static String safeError(String text) {
-        return (text == null || text.isBlank()) ? "The mentor hit an error." : text;
+        return (text == null || text.isBlank()) ? "The mentor had an error." : text;
     }
 }

@@ -87,7 +87,7 @@ public class SlackMentorService {
                     channelId,
                     threadTs,
                     onboardingService.linkCtaBlocks(),
-                    "Check your Hephaestus account status, Slack link, and workspace membership to use the mentor.");
+                    "To use the mentor, check your Hephaestus account status, your Slack link, and your workspace membership.");
             return;
         }
         long developerId = devOpt.get();

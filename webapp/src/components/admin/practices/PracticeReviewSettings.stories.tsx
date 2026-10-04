@@ -201,8 +201,8 @@ export const OptionLoadFailure: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Couldn't load repositories")).toBeVisible();
-		await expect(canvas.getByText("Couldn't load eligible members")).toBeVisible();
+		await expect(canvas.getByText("Could not load repositories")).toBeVisible();
+		await expect(canvas.getByText("Could not load eligible members")).toBeVisible();
 		await expect(canvas.queryByText("Not monitored")).not.toBeInTheDocument();
 	},
 };
@@ -304,7 +304,7 @@ export const CoveragePreviewUnavailable: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("radio", { name: "All monitored repositories" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
-		await expect(canvas.getByRole("alert")).toHaveTextContent(/^Couldn't estimate the impact\./u);
+		await expect(canvas.getByRole("alert")).toHaveTextContent(/^Could not estimate the impact\./u);
 		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
 		await expect(args.coverage.preview).toHaveBeenCalledTimes(2);
 	},
@@ -357,7 +357,7 @@ export const CoverageSaveRollsBack: Story = {
 		await userEvent.click(canvas.getByRole("radio", { name: "Selected people" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
 		await expect(args.policy.onUpdate).toHaveBeenCalledTimes(1);
-		await expect(canvas.getByRole("alert")).toHaveTextContent(/^Couldn't save the coverage\./u);
+		await expect(canvas.getByRole("alert")).toHaveTextContent(/^Could not save the coverage\./u);
 		await expect(canvas.getByRole("radio", { name: "Selected repositories" })).toBeChecked();
 		await expect(canvas.getByRole("radio", { name: "Selected people" })).toBeChecked();
 	},

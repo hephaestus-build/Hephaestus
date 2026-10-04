@@ -69,7 +69,7 @@ export function useRequestPracticeReview(
 			toast.success("Review started");
 		},
 		onError: (error) =>
-			toast.error("Couldn't ask for a review", {
+			toast.error("Could not ask for a review", {
 				description: problemDetailOf(error, "Try again in a moment."),
 			}),
 	});

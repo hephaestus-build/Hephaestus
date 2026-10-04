@@ -167,7 +167,7 @@ export function ProductFeedbackDialog({
 									/>
 									<FieldContent>
 										<FieldLabel htmlFor={`${id}-context`}>
-											Attach the page and browser you’re on
+											Attach the page and browser you are on
 										</FieldLabel>
 										<FieldDescription className="break-all">
 											<code className="text-xs">{context.pagePath}</code>

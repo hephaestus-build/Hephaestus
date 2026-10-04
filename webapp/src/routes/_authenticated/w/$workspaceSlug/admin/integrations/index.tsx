@@ -45,7 +45,7 @@ function IntegrationsOverview() {
 		catalog = (
 			<QueryErrorAlert
 				error={catalogQuery.error}
-				title="We couldn't load the integration catalog"
+				title="We could not load the integration catalog"
 				onRetry={() => {
 					void catalogQuery.refetch();
 				}}

@@ -8,6 +8,6 @@ public class PracticeReviewPreconditionRequiredException extends RuntimeExceptio
     private static final long serialVersionUID = 1L;
 
     PracticeReviewPreconditionRequiredException() {
-        super("If-Match must contain the current practice-review settings ETag");
+        super("The If-Match header must contain the current ETag of the practice review settings.");
     }
 }

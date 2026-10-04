@@ -109,8 +109,7 @@ public class PracticeService {
             if (unknown != null) {
                 throw new EntityNotFoundException("Practice", unknown);
             }
-            throw new IllegalArgumentException(
-                    "orderedSlugs must contain every practice in the group (a complete ordering)");
+            throw new IllegalArgumentException("orderedSlugs must contain every practice in the group.");
         }
         Map<String, Practice> bySlug = bucket.stream().collect(Collectors.toMap(Practice::getSlug, p -> p));
         int order = 0;
@@ -145,7 +144,8 @@ public class PracticeService {
                 : practicesInGroup(allPractices, destinationGroupId, practice);
 
         if (position > target.size()) {
-            throw new IllegalArgumentException("position exceeds the destination size");
+            throw new IllegalArgumentException(
+                    "position must be from 0 up to the number of practices in the destination.");
         }
         target.add(position, practice);
         practice.setGroup(destination);
@@ -408,7 +408,7 @@ public class PracticeService {
         if (effective.admitsReview()
                 && !fence.effectivePolicy(practice).automatedReview().canAttemptAutomatedReview()) {
             throw new IllegalArgumentException(
-                    "This practice cannot be used in automated reviews with its current review settings");
+                    "Automated reviews cannot use this practice with its current review settings.");
         }
 
         practice.setAutonomy(autonomy);

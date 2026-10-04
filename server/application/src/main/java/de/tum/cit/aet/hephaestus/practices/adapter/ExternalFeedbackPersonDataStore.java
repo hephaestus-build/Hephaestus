@@ -75,7 +75,7 @@ final class ExternalFeedbackPersonDataStore extends JdbcPersonDataStore {
                     throw new ResponseStatusException(
                             HttpStatus.CONFLICT,
                             "Provider feedback dispatch " + row.path("id").asString()
-                                    + " requires inspection but has no exact reviewed-work locator");
+                                    + " needs inspection, but Hephaestus has no exact locator for the reviewed work.");
             }
         }
         return deliveries.stream().distinct().toList();

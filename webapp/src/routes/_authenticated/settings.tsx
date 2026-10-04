@@ -219,7 +219,7 @@ function RouteComponent() {
 			void queryClient.invalidateQueries({ queryKey: memberOnboardingQueryScope() });
 		},
 		onError: () => {
-			toast.error("Couldn’t save your AI choice. Please try again.");
+			toast.error("Could not save your AI choice. Please try again.");
 		},
 	});
 
@@ -240,7 +240,7 @@ function RouteComponent() {
 			toast.success("Account disconnected.");
 		},
 		onError: (error: DefaultError) => {
-			toast.error(problemDetailOf(error, "Couldn't disconnect that account. Please try again."));
+			toast.error(problemDetailOf(error, "Could not disconnect that account. Please try again."));
 		},
 	});
 
@@ -271,7 +271,7 @@ function RouteComponent() {
 			);
 		},
 		onError: (error: DefaultError) => {
-			toast.error(problemDetailOf(error, "Couldn't update Slack preferences. Please try again."));
+			toast.error(problemDetailOf(error, "Could not update Slack preferences. Please try again."));
 		},
 	});
 

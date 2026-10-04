@@ -78,7 +78,7 @@ class GitLabMrResolverTest extends BaseUnitTest {
         stubExecute(Mono.empty());
         assertThatThrownBy(() -> resolver().resolve(1L, "group/project", 42))
                 .isInstanceOf(FeedbackDeliveryException.class)
-                .hasMessageContaining("Null response");
+                .hasMessageContaining("returned no response");
     }
 
     @Test
@@ -117,7 +117,7 @@ class GitLabMrResolverTest extends BaseUnitTest {
         stubExecute(Mono.empty());
         assertThatThrownBy(() -> resolver().resolveIssueGid(1L, "group/project", 7))
                 .isInstanceOf(FeedbackDeliveryException.class)
-                .hasMessageContaining("Null response");
+                .hasMessageContaining("returned no response");
     }
 
     @Test

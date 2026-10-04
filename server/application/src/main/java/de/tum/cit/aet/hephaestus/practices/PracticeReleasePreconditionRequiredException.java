@@ -8,6 +8,6 @@ public class PracticeReleasePreconditionRequiredException extends RuntimeExcepti
     private static final long serialVersionUID = 1L;
 
     public PracticeReleasePreconditionRequiredException() {
-        super("If-Match must name the practice release proposal being reviewed");
+        super("The If-Match header must name the practice release proposal under review.");
     }
 }

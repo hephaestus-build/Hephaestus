@@ -660,7 +660,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .isBadRequest()
                 .expectBody()
                 .jsonPath("$.detail")
-                .isEqualTo("This instance runs no research programme");
+                .isEqualTo("This instance does not run a research program.");
         SurveyDTO product = publish(admin, null, textQuestion());
         assertThat(product.purpose()).isEqualTo(Survey.Purpose.PRODUCT);
         assertThat(product.researchOrganization()).isNull();

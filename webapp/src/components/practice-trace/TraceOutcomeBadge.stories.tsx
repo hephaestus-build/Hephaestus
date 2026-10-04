@@ -25,7 +25,7 @@ const EVERY_LABEL = [
 	"Waiting",
 	"Skipped",
 	"Not reached",
-	"Couldn't assess",
+	"Could not assess",
 	"Turned off",
 	"Not triggered",
 	"Waiting on a connection",

@@ -983,7 +983,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             eq(jobId),
                             eq(AgentJobStatus.FAILED),
                             any(),
-                            eq("Container exited with code 1"),
+                            eq("The container exited with code 1."),
                             eq(Set.of(AgentJobStatus.RUNNING)));
         }
 
@@ -1017,7 +1017,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             eq(jobId),
                             eq(expected),
                             any(),
-                            expected == AgentJobStatus.FAILED ? eq("Container exited with code 2") : isNull(),
+                            expected == AgentJobStatus.FAILED ? eq("The container exited with code 2.") : isNull(),
                             eq(Set.of(AgentJobStatus.RUNNING)));
             assertThat(fresh.getExitCode()).isEqualTo(2);
             assertThat(requireNonNull(fresh.getOutput()).path("rawOutput").asString())
@@ -1093,7 +1093,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             eq(jobId),
                             eq(AgentJobStatus.FAILED),
                             any(),
-                            eq("Container exited with code 42"),
+                            eq("The container exited with code 42."),
                             eq(Set.of(AgentJobStatus.RUNNING)));
         }
 
@@ -1124,7 +1124,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             eq(jobId),
                             eq(AgentJobStatus.TIMED_OUT),
                             any(),
-                            eq("Container timed out"),
+                            eq("The container timed out."),
                             eq(Set.of(AgentJobStatus.RUNNING)));
         }
     }
@@ -1502,7 +1502,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             eq(jobId),
                             eq(AgentJobStatus.FAILED),
                             any(),
-                            eq("Container exited with code " + SandboxLayout.EXIT_SERVER_UNREACHABLE),
+                            eq("The container exited with code " + SandboxLayout.EXIT_SERVER_UNREACHABLE + "."),
                             eq(Set.of(AgentJobStatus.RUNNING)),
                             eq("unreachable-worker"));
         }

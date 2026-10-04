@@ -22,7 +22,8 @@ class EmailRendererTest extends BaseUnitTest {
                     case TEST_MESSAGE -> Map.of();
                     case PRODUCT_FEEDBACK -> Map.of("feedbackKind", "BUG");
                     case ACCOUNT_DELETION_SCHEDULED -> Map.of("purgeAfter", "14 September 2026 at 10:00 UTC");
-                    case ACCOUNT_SECURITY_CHANGED -> Map.of("change", "A sign-in identity was linked to your account.");
+                    case ACCOUNT_SECURITY_CHANGED ->
+                        Map.of("change", "A sign-in identity is now linked to your account.");
                     case SURVEY_ENDED_SUMMARY -> Map.of("invited", 37L, "responded", 23L, "declined", 11L);
                     case SURVEY_INVITATION ->
                         Map.of(
@@ -128,6 +129,6 @@ class EmailRendererTest extends BaseUnitTest {
         assertThat(rendered.subject()).isEqualTo("Your Hephaestus account is scheduled for deletion");
         assertThat(rendered.text())
                 .contains("After 14 September 2026 at 10:00 UTC")
-                .contains("no self-service undo");
+                .contains("You cannot undo this yourself");
     }
 }

@@ -128,7 +128,7 @@ describe("X of Y lines", () => {
 	it("converts both sides at their own precision, written and spoken", () => {
 		const conversion = spendOfCapConversion(43.9, 50, eur);
 		expect(conversion?.text).toBe("≈ €38.59 of €44");
-		expect(conversion?.label).toBe("approximately 38.59 euros of 44 euros");
+		expect(conversion?.label).toBe("about 38.59 euros of 44 euros");
 	});
 
 	it("stays USD-only when either side cannot convert", () => {
@@ -189,7 +189,7 @@ describe("page disclosure", () => {
 
 	it("says the rate in words", () => {
 		render(<FxDisclosure fx={eur} isCurrentMonth />);
-		expect(screen.getByLabelText("1 US dollar is approximately 0.879 euros")).not.toBeNull();
+		expect(screen.getByLabelText("1 US dollar is about 0.879 euros")).not.toBeNull();
 	});
 
 	it("reports nothing without a rate", () => {
@@ -211,7 +211,7 @@ describe("nothing to convert renders no node", () => {
 describe("the live hint under a cap field", () => {
 	it("rounds to whole units, like every other cap figure", () => {
 		expect(fxCapHint(50, eur, true)).toStrictEqual({
-			conversion: { text: "≈ €44", label: "approximately 44 euros" },
+			conversion: { text: "≈ €44", label: "about 44 euros" },
 			tail: " at today's rate.",
 		});
 	});
@@ -237,7 +237,7 @@ describe("the live hint under a cap field", () => {
 describe("screen-reader wording", () => {
 	it("speaks the estimate as words rather than symbols", () => {
 		render(<FxAmount conversion={spendConversion(4.5, eur)} />);
-		const amount = screen.getByLabelText("approximately 3.96 euros");
+		const amount = screen.getByLabelText("about 3.96 euros");
 		expect(amount.textContent).toBe("(≈ €3.96)");
 		expect(amount.getAttribute("role")).toBe("img");
 	});

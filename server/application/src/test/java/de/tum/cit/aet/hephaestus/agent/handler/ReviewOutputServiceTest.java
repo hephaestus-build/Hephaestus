@@ -1429,7 +1429,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                     ValidatedObservation right = validObservation("PR_DESCRIPTION_QUALITY", second);
                     assertThatThrownBy(() -> service.prepare(testJob, List.of(left, right)))
                             .isInstanceOf(ObservationsRefusedException.class)
-                            .hasMessageContaining("one final observation per practice");
+                            .hasMessageContaining("one final observation for each practice");
                 }
             }
             verifyNoInteractions(observationRepository);
@@ -1770,7 +1770,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                     .isInstanceOfSatisfying(
                             ObservationsRefusedException.class,
                             e -> assertThat(e.reasonCode()).isEqualTo("did_not_read_the_diff"))
-                    .hasMessageContaining("answered without reading it");
+                    .hasMessageContaining("answered without reading the change");
             verifyNoInteractions(observationRepository);
         }
 

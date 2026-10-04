@@ -87,8 +87,8 @@ describe("WorkspaceLlmUsagePage", () => {
 	it("gives the right pricing owner an actionable no-price-set warning", async () => {
 		await renderPage();
 
-		screen.getByText("2 runs aren't counted in these totals");
-		screen.getByText(/Add prices for your own models in .*; for shared models, ask your host\./u);
+		screen.getByText("2 runs are not counted in these totals");
+		screen.getByText(/Add prices for your own models in .*\. For shared models, ask your host\./u);
 	});
 
 	it("averages each purse over the run count on its own, never the two summed", async () => {
@@ -119,8 +119,8 @@ describe("WorkspaceLlmUsagePage", () => {
 			[
 				"an unenforceable provider cap",
 				{ ownProviderPaused: true, ownProviderBudgetVerdict: "UNVERIFIABLE" },
-				"Your provider cap can't be enforced",
-				"2 runs on your models have no price, so the cap can't be checked and your provider is paused. Add a price to resume, or remove the cap.",
+				"Your provider cap cannot be enforced",
+				"2 runs on your models have no price, so the cap cannot be checked and your provider is paused. Add a price to resume, or remove the cap.",
 				"/w/acme/admin/models",
 			],
 			[
@@ -133,8 +133,8 @@ describe("WorkspaceLlmUsagePage", () => {
 			[
 				"an unverifiable shared budget",
 				{ instancePaused: true, instanceBudgetVerdict: "UNVERIFIABLE" },
-				"Shared-model spend can't be verified",
-				"2 shared-model runs have no price, so the budget can't be checked and shared models are paused. Only your host can price them.",
+				"Shared-model spend cannot be verified",
+				"2 shared-model runs have no price, so the budget cannot be checked and shared models are paused. Only your host can price them.",
 				null,
 			],
 		])(
@@ -187,13 +187,13 @@ describe("WorkspaceLlmUsagePage", () => {
 				"warns at 80% with the date the pace reaches the cap",
 				{ ownProviderTotalCostUsd: 8.4 },
 				new Date("2026-07-10T12:00:00.000Z"),
-				"You've used 84% of your provider cap$8.40 of $10. At this pace, the cap is reached around July 12.",
+				"You have used 84% of your provider cap$8.40 of $10. At this pace, the cap is reached around July 12.",
 			],
 			[
 				"keeps the warning but withholds a projection the month is too young to support",
 				{ ownProviderTotalCostUsd: 8.4 },
 				new Date("2026-07-02T12:00:00.000Z"),
-				"You've used 84% of your provider cap$8.40 of $10.",
+				"You have used 84% of your provider cap$8.40 of $10.",
 			],
 			["stays quiet below the threshold", {}, new Date("2026-07-10T12:00:00.000Z"), null],
 			[

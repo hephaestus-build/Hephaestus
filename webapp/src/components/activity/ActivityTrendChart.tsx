@@ -74,7 +74,7 @@ export function ActivityTrendChart({
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Couldn't load the chart"
+				title="Could not load the chart"
 				onRetry={state.onRetry}
 			/>
 		);

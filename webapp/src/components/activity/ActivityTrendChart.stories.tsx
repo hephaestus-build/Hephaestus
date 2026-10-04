@@ -46,7 +46,7 @@ export const Default: Story = {
 		await expect(figure(canvasElement, "Average per day")).toBe("0.6");
 		await expect(figure(canvasElement, "vs the previous 30 days")).toBe("−3");
 		const chart = canvas.getByRole("figure");
-		await expect(chart).toHaveAccessibleName(/^18 reviews; busiest day \w+ \d+ \w+, \d+$/u);
+		await expect(chart).toHaveAccessibleName(/^18 reviews\. Busiest day \w+ \d+ \w+, \d+$/u);
 		// One chart per kind, each headed by its name and total.
 		const rows = within(chart).getAllByRole("listitem");
 		await expect(rows.map((row) => row.firstElementChild?.textContent)).toStrictEqual([
@@ -108,7 +108,7 @@ export const TwelveMonths: Story = {
 		// A year of months starts with its year, so September never reads twice.
 		const [firstTick] = canvasElement.querySelectorAll(".recharts-xAxis-tick-labels text");
 		await expect(firstTick?.textContent).toMatch(/^\w{3} \d{4}$/u);
-		await expect(canvas.getByRole("figure")).toHaveAccessibleName(/busiest month \w+ \d{4}/u);
+		await expect(canvas.getByRole("figure")).toHaveAccessibleName(/Busiest month \w+ \d{4}/u);
 	},
 };
 

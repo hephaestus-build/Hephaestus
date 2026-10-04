@@ -37,37 +37,41 @@ public final class SlackConsentBlocks {
     private static final String ACTIVATION_LINE_1 = "*Hephaestus is now active in this channel.*";
 
     private static final String ACTIVATION_LINE_2 =
-            "Starting now, Hephaestus may use new messages and thread replies here as context for private mentoring "
-                    + "about software practices: code reviews, tests, issues, questions, and collaboration.";
+            "From now on, Hephaestus may use new messages and thread replies in this channel as context. "
+                    + "This context helps Hephaestus mentor each person privately about software practices. "
+                    + "Examples are code reviews, tests, issues, questions, and collaboration.";
 
     private static final String SHARED_LINE =
-            "It does not read earlier history and will not reply in this channel. You can stop use of your own channel "
-                    + "messages at any time. This also deletes your already collected channel-message data.";
+            "Hephaestus does not read earlier history. It will not reply in this channel. "
+                    + "You can tell Hephaestus to stop using your own channel messages at any time. "
+                    + "This also deletes the channel-message data that Hephaestus already collected from you.";
 
     private static final String LATE_JOIN_LINE_1 = "*You joined a channel where Hephaestus is active.*";
 
     private static final String LATE_JOIN_LINE_2 =
-            "From now on, your new messages and thread replies here may be used as context for private mentoring "
-                    + "about software practices. Hephaestus does not read earlier history or reply in this channel. Manage this "
-                    + "anytime from App Home.";
+            "From now on, Hephaestus may use your new messages and thread replies in this channel as context. "
+                    + "This context helps Hephaestus mentor you privately about software practices. "
+                    + "Hephaestus does not read earlier history or reply in this channel. "
+                    + "You can manage this at any time in App Home.";
 
     /** Plain-text fallback for the notice (no mrkdwn), shown in notifications + by accessibility tools. */
     private static final String FALLBACK_TEXT =
-            "Hephaestus is now active in this channel. Starting now, Hephaestus may use new messages and thread "
-                    + "replies here as context for private mentoring about software practices: code reviews, tests, issues, "
-                    + "questions, and collaboration. It does not read earlier history and will not reply in this channel. You can "
-                    + "stop use of your own channel messages at any time with Do not use my channel messages. This also deletes "
-                    + "your already collected channel-message data.";
+            "Hephaestus is now active in this channel. From now on, Hephaestus may use new messages and thread "
+                    + "replies in this channel as context. This context helps Hephaestus mentor each person privately about "
+                    + "software practices. Examples are code reviews, tests, issues, questions, and collaboration. "
+                    + "Hephaestus does not read earlier history. It will not reply in this channel. "
+                    + "To stop the use of your own channel messages, select Do not use my channel messages. "
+                    + "This also deletes the channel-message data that Hephaestus already collected from you.";
 
     private static final String LATE_JOIN_FALLBACK_TEXT =
-            "You joined a Hephaestus-monitored channel. From now on, your new messages and thread replies here may be "
-                    + "used as context for private mentoring about software practices. Hephaestus does not read earlier history "
-                    + "or reply in this channel. Manage this anytime from App Home.";
+            "You joined a channel that Hephaestus monitors. From now on, Hephaestus may use your new messages and "
+                    + "thread replies in this channel as context. This context helps Hephaestus mentor you privately about "
+                    + "software practices. Hephaestus does not read earlier history or reply in this channel. "
+                    + "You can manage this at any time in App Home.";
 
     /** Ephemeral confirmation shown to a member right after they opt out via the in-message button. */
-    private static final String CONFIRMATION_TEXT =
-            "Done. Hephaestus will not use your channel messages. Any channel-message data already collected from you "
-                    + "has been deleted.";
+    private static final String CONFIRMATION_TEXT = "Done. Hephaestus will not use your channel messages. "
+            + "Hephaestus deleted the channel-message data that it already collected from you.";
 
     private SlackConsentBlocks() {}
 
@@ -120,9 +124,9 @@ public final class SlackConsentBlocks {
     public static ConfirmationDialogObject channelMessageOptOutConfirm() {
         return ConfirmationDialogObject.builder()
                 .title(plainText("Stop using your channel messages?"))
-                .text(plainText(
-                        "This stops Hephaestus from using your messages in monitored channels and deletes any channel "
-                                + "message data already collected from you. Mentor DMs are not affected."))
+                .text(plainText("Hephaestus stops using your messages in monitored channels. "
+                        + "It also deletes the channel message data that it already collected from you. "
+                        + "This does not change mentor DMs."))
                 .confirm(plainText("Do not use my messages"))
                 .deny(plainText("Cancel"))
                 .style("danger")

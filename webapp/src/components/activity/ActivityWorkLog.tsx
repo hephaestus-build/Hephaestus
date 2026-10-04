@@ -55,7 +55,7 @@ export interface ActivityWorkLogProps {
 
 const SKELETON_ROWS = 4;
 
-const LOAD_MORE_FAILED = "Couldn't load more activity.";
+const LOAD_MORE_FAILED = "Could not load more activity.";
 
 /**
  * What happened, one row per pull request or issue rather than per event — forty comments on one
@@ -66,7 +66,11 @@ export function ActivityWorkLog({ state, providerType, subject }: ActivityWorkLo
 	const nowMs = useNow();
 	if (state.status === "error") {
 		return (
-			<QueryErrorAlert error={state.error} title="Couldn't load activity" onRetry={state.onRetry} />
+			<QueryErrorAlert
+				error={state.error}
+				title="Could not load activity"
+				onRetry={state.onRetry}
+			/>
 		);
 	}
 	if (state.status === "loading") {

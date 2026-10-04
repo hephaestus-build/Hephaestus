@@ -23,8 +23,8 @@ import org.jspecify.annotations.Nullable;
  * chip, per-phase sub-bar) but is not required to.
  *
  * @param phase            which phase of the sync is running
- * @param currentStep      the one human-readable sentence the UI renders, e.g.
- *                         {@code "Backfilling ls1intum/Artemis — issues #4812 → #3200"}
+ * @param currentStep      the one human-readable text the UI renders for the step. For a
+ *                         backfill it names the repository, the kind of work and the number range reached
  * @param currentRepository the resource being worked on (repository / channel / collection), when the
  *                          phase is per-resource; {@code null} for connection-wide phases
  * @param unitsCompleted   phase-local completed units (e.g. repositories done in this phase)

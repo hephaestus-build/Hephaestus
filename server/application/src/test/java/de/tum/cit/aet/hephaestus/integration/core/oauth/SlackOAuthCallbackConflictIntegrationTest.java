@@ -151,7 +151,7 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
                         "description",
                         "This Slack workspace is already connected to the Hephaestus workspace \"Staging\" ("
                                 + source.getWorkspaceSlug()
-                                + "). Disconnect Slack there before connecting it here.");
+                                + "). Disconnect Slack there before you connect it here.");
         assertThat(connectionRepository.findActive(target.getId(), IntegrationKind.SLACK))
                 .isEmpty();
     }

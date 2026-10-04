@@ -303,7 +303,7 @@ export function AdminSurveyComposer({
 										onChange={(event) => patch({ description: event.target.value })}
 									/>
 									<FieldDescription id={fieldId("description-help")}>
-										Members read this before the first question. Say why you’re asking and what the
+										Members read this before the first question. Say why you are asking and what the
 										answers will change.
 									</FieldDescription>
 									{hasText(errors.description) && (
@@ -337,7 +337,7 @@ export function AdminSurveyComposer({
 															<FieldDescription id={fieldId(`purpose-${purpose}-detail`)}>
 																{SURVEY_PURPOSE_DEFS[purpose].description}
 																{purpose === "RESEARCH" &&
-																	` Run by ${researchOrganization}; members who leave the study stop being asked.`}
+																	` Run by ${researchOrganization}. Hephaestus stops asking members who leave the study.`}
 															</FieldDescription>
 														</FieldContent>
 														<RadioGroupItem
@@ -456,7 +456,7 @@ export function AdminSurveyComposer({
 								))}
 								{draft.questions.length > RECOMMENDED_MAX_QUESTIONS && (
 									<FieldDescription className="text-warning">
-										This survey has {draft.questions.length} questions; response rates drop sharply
+										This survey has {draft.questions.length} questions. Response rates drop sharply
 										beyond {RECOMMENDED_MAX_QUESTIONS}.
 									</FieldDescription>
 								)}

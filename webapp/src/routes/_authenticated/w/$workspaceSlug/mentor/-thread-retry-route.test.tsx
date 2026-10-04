@@ -143,7 +143,7 @@ it("shows a streamed capacity refusal as Heph is busy and lets the developer ret
 						data: { state: "busy", reason: null },
 						transient: true,
 					},
-					{ type: "error", errorText: "Heph is busy. Please try again." },
+					{ type: "error", errorText: "Heph is busy. Try again." },
 				],
 				[
 					{ type: "start", messageId: answerId },

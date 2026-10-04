@@ -102,7 +102,7 @@ export const BothAnswered: Story = {
 		await answer(/Yes, take part/u);
 		await expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
 		await expect(screen.getByText("You can change your answer later in settings.")).toBeVisible();
-		await expect(screen.getByText("That's everything. Let's get to work.")).toBeVisible();
+		await expect(screen.getByText("That is everything. You can get to work.")).toBeVisible();
 	},
 };
 
@@ -149,7 +149,7 @@ export const SubmitFailed: Story = {
 		await acceptTerms();
 		await answer(/don't take part/u);
 		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
-		await expect(screen.getByRole("alert")).toHaveTextContent(/weren’t saved/iu);
+		await expect(screen.getByRole("alert")).toHaveTextContent(/were not saved/iu);
 		await expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
 	},
 };

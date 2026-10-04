@@ -170,7 +170,7 @@ public class AgentJobZombieSweeper {
                 jobId,
                 AgentJobStatus.TIMED_OUT,
                 Instant.now(),
-                "Reaped: exceeded timeout (executor may have crashed)",
+                "The job exceeded its timeout. The executor may have crashed.",
                 Set.of(AgentJobStatus.RUNNING));
 
         if (updated > 0) {
@@ -206,7 +206,7 @@ public class AgentJobZombieSweeper {
                                 orphan.getJobId(),
                                 AgentJobStatus.FAILED,
                                 Instant.now(),
-                                "Orphaned: owning worker lost and retry limit reached",
+                                "The worker that owned this job was lost. The retry limit is reached.",
                                 Set.of(AgentJobStatus.RUNNING));
                         if (rows > 0) recordUnverifiableUsage(job);
                         return rows;

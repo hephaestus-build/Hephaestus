@@ -285,12 +285,13 @@ public class WorkspaceProvisioningService {
         WorkspaceProviderAvailability gitLabAvailability = providerAvailability.get(IntegrationKind.GITLAB);
         if (gitLabAvailability == null) {
             throw new IllegalStateException(
-                    "GitLab provider availability port is not configured; cannot resolve default GitLab server URL");
+                    "The GitLab provider availability port is not configured. The default GitLab server URL cannot be resolved.");
         }
         return gitLabAvailability
                 .hintUrl()
-                .orElseThrow(() -> new IllegalStateException(
-                        "GitLab provider availability has no connection hint; default server URL unavailable"));
+                .orElseThrow(
+                        () -> new IllegalStateException(
+                                "The GitLab provider availability has no connection hint. The default server URL is not available."));
     }
 
     /**

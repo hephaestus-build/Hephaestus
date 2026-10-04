@@ -55,7 +55,7 @@ export function usePracticeAutonomyMutations(workspaceSlug: string) {
 			);
 		},
 		onError: (error) =>
-			toast.error("Couldn't change the group", { description: problemDetailOf(error) }),
+			toast.error("Could not change the group", { description: problemDetailOf(error) }),
 		onSettled: () => {
 			if (queryClient.isMutating({ mutationKey: groupMutationKey }) === 1) {
 				void queryClient.invalidateQueries({
@@ -69,7 +69,7 @@ export function usePracticeAutonomyMutations(workspaceSlug: string) {
 	const setPracticeAutonomy = useMutation({
 		...filedUnder(practiceMutationKey, setAutonomyMutation()),
 		onError: (error) =>
-			toast.error("Couldn't change the practice", { description: problemDetailOf(error) }),
+			toast.error("Could not change the practice", { description: problemDetailOf(error) }),
 		// One write, one refetch — except inside a bulk run, which settles once at the end rather than
 		// refetching the list and the rollup after every PATCH in it.
 		onSettled: () => {
@@ -108,10 +108,10 @@ export function usePracticeAutonomyMutations(workspaceSlug: string) {
 		if (failed === 0) {
 			toast.success(`Changed ${changed} ${changed === 1 ? "practice" : "practices"}`);
 		} else if (changed === 0) {
-			toast.error(`Couldn't change ${failed} ${failed === 1 ? "practice" : "practices"}`);
+			toast.error(`Could not change ${failed} ${failed === 1 ? "practice" : "practices"}`);
 		} else {
 			toast.warning(
-				`Changed ${changed} of ${practiceSlugs.length}; ${failed} couldn't be changed.`,
+				`Changed ${changed} of ${practiceSlugs.length}. ${failed} could not be changed.`,
 			);
 		}
 	};

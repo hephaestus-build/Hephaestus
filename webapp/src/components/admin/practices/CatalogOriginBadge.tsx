@@ -32,7 +32,7 @@ function describeOrigin({ origin, kind }: CatalogOriginProps) {
 			label: "Catalog changed, yours did not",
 			explanation:
 				kind === "practice"
-					? "The catalogue changed. Your copy is untouched. Review the proposed fields in Practice updates."
+					? "The catalog changed. Your copy is untouched. Review the proposed fields in Practice updates."
 					: `The catalog now has different ${subject}. Your copy is untouched — bring anything you want across by editing it.`,
 		};
 	}
@@ -40,7 +40,7 @@ function describeOrigin({ origin, kind }: CatalogOriginProps) {
 		return {
 			label: "Update declined",
 			explanation:
-				"You declined this catalogue version. Your copy is unchanged. A different version can be offered later.",
+				"You declined this catalog version. Your copy is unchanged. A different version can be offered later.",
 		};
 	}
 	if (origin.link === "IN_SYNC") {
@@ -53,7 +53,7 @@ function describeOrigin({ origin, kind }: CatalogOriginProps) {
 		label: "Edited here",
 		explanation:
 			kind === "practice"
-				? "This workspace changed the practice. A separate catalogue update may also be waiting in Practice updates."
+				? "This workspace changed the practice. A separate catalog update may also be waiting in Practice updates."
 				: `The ${subject} differ from the version copied into this workspace.`,
 	};
 }

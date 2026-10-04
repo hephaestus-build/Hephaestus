@@ -43,7 +43,7 @@ export function CuratedPracticeCreateLevel({
 			onDone();
 		},
 		onError: (error) =>
-			toast.error("Couldn't create the practice", { description: problemDetailOf(error) }),
+			toast.error("Could not create the practice", { description: problemDetailOf(error) }),
 	});
 
 	let body: ReactNode;
@@ -58,7 +58,7 @@ export function CuratedPracticeCreateLevel({
 			<DrawerBody>
 				<QueryErrorAlert
 					error={catalogQuery.error ?? definitionOptionsQuery.error}
-					title="Couldn't load the practice editor"
+					title="Could not load the practice editor"
 					onRetry={() => {
 						void catalogQuery.refetch();
 						void definitionOptionsQuery.refetch();

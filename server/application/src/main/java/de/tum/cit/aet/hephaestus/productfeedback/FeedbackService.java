@@ -69,7 +69,7 @@ class FeedbackService {
         } catch (DataIntegrityViolationException exception) {
             if (DataIntegrityViolationConstraints.hasName(exception, "uk_product_feedback_rate_limit")) {
                 throw new ResponseStatusException(
-                        HttpStatus.TOO_MANY_REQUESTS, "feedback is limited to once per minute", exception);
+                        HttpStatus.TOO_MANY_REQUESTS, "You can send feedback only once per minute.", exception);
             }
             throw exception;
         }

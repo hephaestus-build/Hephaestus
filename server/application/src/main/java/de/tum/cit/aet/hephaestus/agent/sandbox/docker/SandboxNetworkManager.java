@@ -102,10 +102,10 @@ public class SandboxNetworkManager {
             if (leftover.labels().containsKey(SandboxLabels.SESSION_ID)
                     && !creator.createdBySelf(leftover.labels())
                     && creator.liveness(leftover.labels()) != SandboxCreator.Liveness.GONE) {
-                throw new SandboxInfrastructureException(
-                        "Network " + networkName
-                                + " belongs to a mentor session whose creating application container is still running or"
-                                + " cannot be identified; end the session there, or remove the network once no container uses it");
+                throw new SandboxInfrastructureException("Network " + networkName
+                        + " belongs to a mentor session. The application container that created the session"
+                        + " is still running or cannot be identified."
+                        + " End the session there, or remove the network when no container uses it.");
             }
             log.warn("Removing the network an interrupted run left behind: name={}, id={}", networkName, leftover.id());
             if (!removeUnlessInUse(leftover.id(), networkName)) {

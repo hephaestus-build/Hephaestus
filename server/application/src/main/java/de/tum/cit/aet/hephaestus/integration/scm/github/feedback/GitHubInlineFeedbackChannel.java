@@ -239,7 +239,8 @@ public class GitHubInlineFeedbackChannel implements InlineFeedbackChannel {
                     .block(GRAPHQL_TIMEOUT);
 
             if (response == null) {
-                throw new FeedbackDeliveryException("Null response from AddPullRequestReviewWithThreads");
+                throw new FeedbackDeliveryException(
+                        "The AddPullRequestReviewWithThreads mutation returned no response");
             }
             gitHubProvider.trackRateLimit(scopeId, response);
 

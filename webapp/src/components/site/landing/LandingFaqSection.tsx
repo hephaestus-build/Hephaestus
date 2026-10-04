@@ -9,17 +9,17 @@ const faqItems = [
 	{
 		key: "practice-feedback",
 		q: "What is practice feedback?",
-		a: "Feedback on how the work was done rather than on the code itself. A practice is a defined way of working — scoping a change, writing an issue someone can act on, answering a reviewer, testing, handling failure, changing dependencies deliberately. A curated set of practices ships with Hephaestus, and each piece of feedback names the practice it came from and points back to what it saw.",
+		a: "Feedback on how the work was done rather than on the code itself. A practice is a defined way of working. Examples are scoping a change, writing an issue someone can act on, answering a reviewer, testing, handling failure, and changing dependencies deliberately. A curated set of practices ships with Hephaestus. Each piece of feedback names the practice it came from and points back to what it saw.",
 	},
 	{
 		key: "replaces-review",
 		q: "Does this replace code review?",
-		a: "No, and it does not replace a mentor either. It does not approve a change for merge or grade anyone. It carries the routine feedback nobody has time to give everyone, and leaves the harder judgement and the relationships to people.",
+		a: "No, and it does not replace a mentor either. It does not approve a change for merge or grade anyone. It carries the routine feedback nobody has time to give everyone, and leaves the harder judgment and the relationships to people.",
 	},
 	{
 		key: "feedback-location",
 		q: "Where does feedback appear?",
-		a: "Wherever you are most likely to read it: on the work itself, on your private Practice profile, or in your next conversation with Heph. Feedback on the work waits for a workspace admin's approval by default. Admins choose which repositories are connected, and you can carry on the conversation in the web app or, when Slack is connected, in a direct message.",
+		a: "Wherever you are most likely to read it: on the work itself, on your private Practice profile, or in your next conversation with Heph. Feedback on the work waits for a workspace admin's approval by default. Admins choose which repositories are connected. You can carry on the conversation in the web app or, when Slack is connected, in a direct message.",
 	},
 	{
 		key: "heph-conversation",
@@ -39,7 +39,7 @@ const faqItems = [
 	{
 		key: "cost",
 		q: "What does it cost?",
-		a: "Hephaestus itself is free and MIT-licensed. If you run it yourself you pay your own AI provider, and your hosting costs. The instance admin sets each workspace's monthly cap for shared models; the workspace admin sets the cap for the workspace's own provider.",
+		a: "Hephaestus itself is free and MIT-licensed. If you run it yourself you pay your own AI provider, and your hosting costs. The instance admin sets each workspace's monthly cap for shared models. The workspace admin sets the cap for the workspace's own provider.",
 	},
 	{
 		key: "access",

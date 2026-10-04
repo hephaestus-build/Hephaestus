@@ -292,7 +292,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 											)}
 										</div>
 										<FieldDescription id="group-slug-description">
-											Used in URLs and integrations. It can’t be changed later.
+											Used in URLs and integrations. It cannot be changed later.
 										</FieldDescription>
 										{slugError && <FieldError id="group-slug-error">{slugError}</FieldError>}
 									</Field>

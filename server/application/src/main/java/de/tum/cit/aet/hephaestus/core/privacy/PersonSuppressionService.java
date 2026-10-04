@@ -108,7 +108,7 @@ public class PersonSuppressionService implements PersonProcessingSuppression {
                     Objects.requireNonNullElse(i.teamId(), ""));
             if (owner != null && !owner.equals(requestId))
                 throw new ResponseStatusException(
-                        HttpStatus.CONFLICT, "An erasure request already owns an identity; resume that request");
+                        HttpStatus.CONFLICT, "An erasure request already owns an identity. Resume that request.");
             jdbc.update(
                     "UPDATE person_suppression SET active_request_id=? WHERE provider_id=? AND subject=? AND team_key=?",
                     requestId,

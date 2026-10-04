@@ -279,7 +279,7 @@ function TraceError({ state }: { state: { error: unknown; onRetry: () => void } 
 	return (
 		<QueryErrorAlert
 			error={state.error}
-			title="Couldn't load what was recorded about this work"
+			title="Could not load what was recorded about this work"
 			onRetry={state.onRetry}
 		/>
 	);

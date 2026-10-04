@@ -36,7 +36,7 @@ class EncryptionProfileTest extends BaseUnitTest {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
                             .hasRootCauseMessage(
-                                    "Encryption key is required in production! Set hephaestus.security.encryption-key");
+                                    "An encryption key is required in production. Set hephaestus.security.encryption-key.");
                 });
     }
 
@@ -50,7 +50,7 @@ class EncryptionProfileTest extends BaseUnitTest {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
                             .hasRootCauseMessage(
-                                    "Credential encryption key is required in production! Set hephaestus.security.credential-encryption-key");
+                                    "A credential encryption key is required in production. Set hephaestus.security.credential-encryption-key.");
                 });
     }
 }

@@ -55,7 +55,7 @@ function PracticeReleaseInbox() {
 			if (problemStatusOf(error) === 412) {
 				refresh();
 			}
-			toast.error("Couldn't accept the update", { description: problemDetailOf(error) });
+			toast.error("Could not accept the update", { description: problemDetailOf(error) });
 		},
 	});
 	const decline = useMutation({
@@ -68,7 +68,7 @@ function PracticeReleaseInbox() {
 			if (problemStatusOf(error) === 412) {
 				refresh();
 			}
-			toast.error("Couldn't decline the update", { description: problemDetailOf(error) });
+			toast.error("Could not decline the update", { description: problemDetailOf(error) });
 		},
 	});
 	const proposals = query.data ?? [];
@@ -85,7 +85,7 @@ function PracticeReleaseInbox() {
 		content = (
 			<QueryErrorAlert
 				error={query.error}
-				title="Couldn't load practice updates"
+				title="Could not load practice updates"
 				onRetry={() => {
 					void query.refetch();
 				}}
@@ -100,7 +100,7 @@ function PracticeReleaseInbox() {
 					</EmptyMedia>
 					<EmptyTitle>No updates to review</EmptyTitle>
 					<EmptyDescription>
-						Accepted and declined versions do not appear here again unless the catalogue changes.
+						Accepted and declined versions do not appear here again unless the catalog changes.
 					</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
@@ -149,7 +149,7 @@ function PracticeReleaseInbox() {
 			<PageHeader
 				icon={<Inbox />}
 				title="Practice updates"
-				description="Review catalogue changes before they affect this workspace. Each workspace decides for itself."
+				description="Review catalog changes before they affect this workspace. Each workspace decides for itself."
 				actions={
 					<Button
 						variant="outline"

@@ -28,8 +28,8 @@ export function UsageGuide() {
 				<div className="flex min-w-0 flex-col gap-1">
 					<h3 className="text-sm font-medium">Changes are confirmed</h3>
 					<p className="text-xs text-muted-foreground">
-						Asking for a review opens a small Hephaestus window that shows exactly what will happen;
-						nothing changes until you confirm there. Approving feedback stays in Hephaestus.
+						Asking for a review opens a small Hephaestus window that shows exactly what will happen.
+						Nothing changes until you confirm there. Approving feedback stays in Hephaestus.
 					</p>
 				</div>
 			</li>

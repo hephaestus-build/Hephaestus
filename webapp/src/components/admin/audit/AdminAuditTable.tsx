@@ -77,7 +77,7 @@ export function AdminAuditTable({
 					<EmptyMedia variant="icon">
 						<ScrollText />
 					</EmptyMedia>
-					<EmptyTitle>Couldn&rsquo;t load the audit log</EmptyTitle>
+					<EmptyTitle>Could not load the audit log</EmptyTitle>
 				</EmptyHeader>
 				{onRetry && (
 					<EmptyContent>

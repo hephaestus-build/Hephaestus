@@ -194,7 +194,7 @@ function PracticeAdoptionPlaceholder({
 				) : (
 					<QueryErrorAlert
 						error={state.error}
-						title="Couldn't load the adoption preview"
+						title="Could not load the adoption preview"
 						onRetry={state.onRetry}
 					/>
 				)}

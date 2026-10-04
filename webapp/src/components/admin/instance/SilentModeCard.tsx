@@ -147,11 +147,11 @@ export function SilentModeCard({
 					<DialogHeader>
 						<DialogTitle>Engage silent mode</DialogTitle>
 						<DialogDescription>
-							Nothing will be posted to GitHub, GitLab or Slack from any workspace — no feedback on
-							pull requests, merge requests or issues, no Slack messages, not even the
-							acknowledgement reaction. Reviews keep running and keep costing AI budget; their
-							observations are saved and marked withheld, and anything withheld while silent mode is
-							on is never posted, not even after you release it.
+							Nothing will be posted to GitHub, GitLab or Slack from any workspace. This includes
+							feedback on pull requests, merge requests and issues, Slack messages, and the
+							acknowledgement reaction. Reviews keep running and keep costing AI budget. Their
+							observations are saved and marked withheld. Anything withheld while silent mode is on
+							is never posted, not even after you release it.
 						</DialogDescription>
 					</DialogHeader>
 					<Field>
@@ -191,10 +191,11 @@ export function SilentModeCard({
 					<AlertDialogHeader>
 						<AlertDialogTitle>Release silent mode?</AlertDialogTitle>
 						<AlertDialogDescription>
-							Feedback starts landing on pull requests and merge requests again, and Slack messages
-							go out — for every workspace, immediately. Anything withheld while silent mode was on
-							stays withheld; releasing does not post it. If a bad review is what prompted this,
-							check that it is fixed first: the next completed review posts for real.
+							Hephaestus posts feedback on pull requests and merge requests again, and Slack
+							messages go out. This applies to every workspace, immediately. Anything withheld while
+							silent mode was on stays withheld. Releasing does not post it. If a bad review is what
+							prompted this, check that it is fixed first: the next completed review posts its
+							feedback.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					{releaseDisabled ? (

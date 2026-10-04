@@ -8,7 +8,7 @@ public record EntityTagPrecondition(List<ETag> candidates) {
     public static EntityTagPrecondition parse(String value) {
         List<ETag> candidates = ETag.parse(value);
         if (candidates.isEmpty()) {
-            throw new IllegalArgumentException("If-Match must contain at least one valid entity tag");
+            throw new IllegalArgumentException("The If-Match header must contain at least one valid entity tag.");
         }
         return new EntityTagPrecondition(List.copyOf(candidates));
     }

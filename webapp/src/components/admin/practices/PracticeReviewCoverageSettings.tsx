@@ -196,7 +196,7 @@ export function PracticeReviewCoverageSettings({
 				<p className="text-sm text-muted-foreground">
 					Repository work is reviewed when both its repository and linked person are covered. Slack
 					conversations and Outline documents follow the people selection and their own collection
-					permissions. That person is usually the author; reviewer practices use the reviewer. About{" "}
+					permissions. That person is usually the author. Reviewer practices use the reviewer. About{" "}
 					{settings.coverageSummary.recentReviewVolume} review jobs entered the queue in this
 					workspace during the last {settings.coverageSummary.estimateWindowDays} days.
 				</p>
@@ -255,7 +255,7 @@ export function PracticeReviewCoverageSettings({
 						{repositories.status === "error" ? (
 							<QueryErrorAlert
 								error={repositories.error}
-								title="Couldn't load repositories"
+								title="Could not load repositories"
 								onRetry={repositories.onRetry}
 							/>
 						) : null}
@@ -340,7 +340,7 @@ export function PracticeReviewCoverageSettings({
 						{people.status === "error" ? (
 							<QueryErrorAlert
 								error={people.error}
-								title="Couldn't load eligible members"
+								title="Could not load eligible members"
 								onRetry={people.onRetry}
 							/>
 						) : null}
@@ -467,8 +467,8 @@ function CoverageWorkflowStatus({ workflow, dirty }: { workflow: Workflow; dirty
 		return (
 			<p role="alert" className="max-w-md text-sm text-destructive">
 				{workflow.action === "preview"
-					? "Couldn't estimate the impact. Your draft is unchanged. Try again."
-					: "Couldn't save the coverage. Your draft is unchanged. Try again."}
+					? "Could not estimate the impact. Your draft is unchanged. Try again."
+					: "Could not save the coverage. Your draft is unchanged. Try again."}
 			</p>
 		);
 	}

@@ -28,7 +28,7 @@ public final class GeneratedPaths {
                             || value.contains("}")
                             || Arrays.asList(value.split("/", -1)).contains("..")) {
                         throw new InvalidReviewCoverageException(
-                                "Use a repository-relative generated-path glob of 1 to 512 characters; no negation, parent paths, backslashes or URI variables");
+                                "Use a repository-relative generated-path glob of 1 to 512 characters. Do not use negation, parent paths, backslashes, or URI variables.");
                     }
                     return value;
                 })

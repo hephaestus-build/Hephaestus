@@ -163,9 +163,9 @@ class LlmModelServiceTest extends BaseUnitTest {
                 value = {
                     "PRICED, 3.00, NULL, NULL, an input rate and an output rate, a price missing its output rate",
                     "PRICED, -1.00, 2.00, NULL, zero or greater, a negative rate",
-                    "PRICED, 0, 0, NULL, choose No metered API cost instead, an all-zero price that would bill as verified $0 forever",
-                    "NO_CHARGE, NULL, NULL, NULL, explanation, a model with no metered API cost and no explanation",
-                    "UNPRICED, 1.00, NULL, NULL, clear them or set a price, rates carried by a model with no price",
+                    "PRICED, 0, 0, NULL, choose No metered API cost, an all-zero price that would bill as verified $0 forever",
+                    "NO_CHARGE, NULL, NULL, NULL, Explain why this model has no metered API cost, a model with no metered API cost and no explanation",
+                    "UNPRICED, 1.00, NULL, NULL, Clear the rates, rates carried by a model with no price",
                 })
         void updatePriceRejectsAnInvalidRateCombination(
                 PricingMode pricingMode,
@@ -217,7 +217,7 @@ class LlmModelServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> modelService.updatePrice(7L, request))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("Disable the model");
+                    .hasMessageContaining("first disable the model");
 
             verifyNoInteractions(priceRepository);
         }
@@ -357,7 +357,8 @@ class LlmModelServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> modelService.update(7L, request))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("configure a price");
+                    .hasMessage(
+                            "Before you activate the model, activate the connection. Also set a price for the model.");
             verify(modelRepository, never()).saveAndFlush(any());
         }
 
@@ -465,7 +466,7 @@ class LlmModelServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> modelService.create(3L, active))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("Create the model disabled, set its price, then activate it.");
+                    .hasMessageContaining("Create the model as disabled. Set its price. Then activate the model.");
 
             verify(connectionRepository, never()).findById(any());
             verify(modelRepository, never()).saveAndFlush(any());

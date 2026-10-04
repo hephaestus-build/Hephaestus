@@ -8,7 +8,7 @@ const meta = {
 	parameters: { layout: "padded" },
 	args: {
 		intro:
-			"I'm Heph, the mentor in Hephaestus. I read the work you already do, give you feedback on the practices your project cares about, and talk it through whenever you ask.",
+			"I am Heph, the mentor in Hephaestus. I read the work you already do, give you feedback on the practices your project cares about, and talk it through whenever you ask.",
 		narration: "Two things first.",
 	},
 } satisfies Meta<typeof HephSays>;
@@ -19,7 +19,7 @@ type Story = StoryObj<typeof meta>;
 /** The bubble keeps its width while the narration line changes length under it. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		const bubble = canvas.getByText(/I'm Heph/u).closest("[data-slot=bubble]");
+		const bubble = canvas.getByText(/I am Heph/u).closest("[data-slot=bubble]");
 		const column = bubble?.parentElement;
 		await expect(bubble?.getBoundingClientRect().width).toBe(column?.getBoundingClientRect().width);
 	},

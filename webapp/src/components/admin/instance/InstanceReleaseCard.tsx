@@ -101,7 +101,7 @@ function CheckSummary({ release }: { release: ReleaseStatus }) {
 						<>
 							{" "}
 							v{release.latest.version} was published{" "}
-							<RelativeTime value={release.latest.publishedAt} />; checked {checked}.
+							<RelativeTime value={release.latest.publishedAt} />. Checked {checked}.
 						</>
 					) : null}
 				</>
@@ -118,7 +118,7 @@ function CheckSummary({ release }: { release: ReleaseStatus }) {
 							<RelativeTime value={release.lastAttempt} fallback="at an unknown time" />
 							{release.nextCheck ? (
 								<>
-									; next automatic check <RelativeTime value={release.nextCheck} />
+									. Next automatic check <RelativeTime value={release.nextCheck} />
 								</>
 							) : null}
 							.
@@ -155,7 +155,7 @@ function migrationNote(schemaMigrations: boolean | undefined): string {
 		return "Includes schema migrations: back up before upgrading and read the migration guide.";
 	}
 	if (schemaMigrations === false) {
-		return "No schema migrations in this release; releases in between may still carry some.";
+		return "No schema migrations in this release. Releases in between may still carry some.";
 	}
 	return "Read the release notes for migrations and operator actions before upgrading.";
 }

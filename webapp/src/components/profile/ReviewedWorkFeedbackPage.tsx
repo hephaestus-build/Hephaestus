@@ -23,7 +23,7 @@ export function ReviewedWorkFeedbackPage({ feed, observations }: ReviewedWorkFee
 			<PageHeader
 				icon={<MessageSquareTextIcon />}
 				title="Your feedback on this work"
-				description="Mark an observation addressed or not applicable, or dispute it and say why. Workspace admins read a dispute's explanation; while it stands, a later review of this work does not raise the same point again."
+				description="Mark an observation addressed or not applicable, or dispute it and say why. Workspace admins read a dispute's explanation. While it stands, a later review of this work does not raise the same point again."
 			/>
 			<ReviewRunFeed
 				feed={feed}

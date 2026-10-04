@@ -27,7 +27,10 @@ export function consentRequired(): WorkerError {
 
 /** A result that arrived after the session, instance, workspace or tab it was asked about changed. */
 export function stale(): WorkerError {
-	return new WorkerError("stale", "What you were looking at changed; showing the current page.");
+	return new WorkerError(
+		"stale",
+		"What you were looking at changed. The extension shows the current page.",
+	);
 }
 
 /** The server said no to this reader for this work: not theirs to see or change. */

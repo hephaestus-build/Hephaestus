@@ -41,7 +41,7 @@ export function EmailUnsubscribePage({ state }: { state: EmailUnsubscribeState }
 				{state.status === "error" && !showSpinner && (
 					<CardContent>
 						<p role="alert" className="text-sm text-destructive">
-							We couldn&apos;t confirm the result. You can safely try again.
+							We could not confirm the result. You can safely try again.
 						</p>
 					</CardContent>
 				)}

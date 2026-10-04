@@ -8,6 +8,6 @@ public class StalePracticeReviewSettingsException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     StalePracticeReviewSettingsException() {
-        super("Practice-review settings changed after they were loaded");
+        super("The practice review settings changed after you loaded them.");
     }
 }

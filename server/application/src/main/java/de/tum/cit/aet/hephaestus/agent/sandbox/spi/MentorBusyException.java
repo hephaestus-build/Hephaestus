@@ -7,7 +7,7 @@ public final class MentorBusyException extends InteractiveSandboxException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    public static final String USER_MESSAGE = "Heph is busy. Please try again.";
+    public static final String USER_MESSAGE = "Heph is busy. Try again.";
 
     public MentorBusyException() {
         super(USER_MESSAGE);

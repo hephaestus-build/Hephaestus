@@ -8,6 +8,6 @@ public class InsufficientWorkspacePermissionsException extends RuntimeException 
     private static final long serialVersionUID = 1L;
 
     public InsufficientWorkspacePermissionsException(String workspaceSlug, String message) {
-        super(String.format("Insufficient permissions to access workspace '%s': %s", workspaceSlug, message));
+        super(String.format("You do not have permission to access workspace '%s'. %s", workspaceSlug, message));
     }
 }

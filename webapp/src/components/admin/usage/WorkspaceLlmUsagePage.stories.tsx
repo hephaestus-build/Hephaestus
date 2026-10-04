@@ -55,7 +55,7 @@ export const RetryableServerError: Story = {
 	args: {
 		view: {
 			status: "error",
-			error: { status: 500, detail: "Couldn't build the usage report." },
+			error: { status: 500, detail: "Could not build the usage report." },
 			onRetry: fn(),
 		},
 	},

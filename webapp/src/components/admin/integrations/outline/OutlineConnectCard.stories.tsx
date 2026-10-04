@@ -214,7 +214,7 @@ export const ConnectedButSuspended: Story = {
 	},
 };
 
-/** Setup hasn't finished — the identity line states PENDING plainly, since it resolves on its own. */
+/** Setup has not finished — the identity line states PENDING plainly, since it resolves on its own. */
 export const ConnectedButPending: Story = {
 	args: {
 		connected: true,

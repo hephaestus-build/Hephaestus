@@ -491,7 +491,7 @@ export const NotReviewable: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /Observability/u }));
 		await expect(
-			canvas.getByText("This practice can’t be reviewed automatically, so it stays off."),
+			canvas.getByText("This practice cannot be reviewed automatically, so it stays off."),
 		).toBeVisible();
 		await expect(canvas.getByRole("checkbox", { name: /^Select /u })).toHaveAttribute(
 			"aria-disabled",

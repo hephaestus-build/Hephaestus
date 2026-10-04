@@ -80,7 +80,7 @@ function structureError(error: unknown) {
 	toast.error(
 		problemStatusOf(error) === 412
 			? "The catalog order changed before this move was saved. We reloaded the latest order."
-			: "Couldn't save the catalog order",
+			: "Could not save the catalog order",
 		{ description: problemDetailOf(error) },
 	);
 }
@@ -129,7 +129,7 @@ function AdminCuratedCatalogPage() {
 			toast.error(
 				problemStatusOf(error) === 412
 					? "The catalog changed before this action was saved. We reloaded the practice."
-					: "Couldn't update the practice",
+					: "Could not update the practice",
 				{ description: problemDetailOf(error) },
 			);
 		},
@@ -146,7 +146,7 @@ function AdminCuratedCatalogPage() {
 			toast.error(
 				problemStatusOf(error) === 412
 					? "The catalog changed before this action was saved. We reloaded the group."
-					: "Couldn't update the group",
+					: "Could not update the group",
 				{ description: problemDetailOf(error) },
 			);
 		},
@@ -271,7 +271,7 @@ function AdminCuratedCatalogPage() {
 		body = (
 			<QueryErrorAlert
 				error={catalogQuery.error}
-				title="Couldn't load the practice catalog"
+				title="Could not load the practice catalog"
 				onRetry={() => {
 					void catalogQuery.refetch();
 				}}

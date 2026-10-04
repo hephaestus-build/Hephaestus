@@ -66,7 +66,7 @@ export const Default: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Actions for Ada Admin" }));
 		// A disabled Base UI item has pointer-events:none, so the guard is asserted rather than clicked.
 		const revokeSelf = await screen.findByRole("menuitem", {
-			name: /can't revoke your own admin/iu,
+			name: /cannot revoke your own admin/iu,
 		});
 		await expect(revokeSelf).toHaveAttribute("data-disabled");
 	},

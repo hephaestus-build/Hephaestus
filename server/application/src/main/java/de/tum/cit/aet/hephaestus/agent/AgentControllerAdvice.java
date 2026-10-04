@@ -59,7 +59,7 @@ public class AgentControllerAdvice {
                 HttpStatus.CONFLICT,
                 "concurrent-modification",
                 "Concurrent modification",
-                new IllegalStateException("The record changed while this request was being processed. Try again."));
+                new IllegalStateException("The record changed while the server processed this request. Try again."));
     }
 
     @ExceptionHandler(AgentJobStateConflictException.class)
@@ -113,7 +113,7 @@ public class AgentControllerAdvice {
         problem.setDetail(Optional.ofNullable(exception.getMessage())
                 .map(LoggingUtils::sanitizeForLog)
                 .filter(s -> !s.isBlank())
-                .orElse("The agent request could not be processed."));
+                .orElse("The server could not process this request."));
         return problem;
     }
 }

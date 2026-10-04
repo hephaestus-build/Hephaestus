@@ -57,7 +57,7 @@ function AdminFeedbackInboxPage() {
 			void queryClient.invalidateQueries({ queryKey: adminListProductFeedbackQueryKey() });
 		},
 		onError: (error) =>
-			toast.error("Couldn't update the feedback", { description: problemDetailOf(error) }),
+			toast.error("Could not update the feedback", { description: problemDetailOf(error) }),
 	});
 	const pendingIds = usePendingMutationIds(TRIAGE_KEY, (variables) =>
 		pathString(variables, "feedbackId"),

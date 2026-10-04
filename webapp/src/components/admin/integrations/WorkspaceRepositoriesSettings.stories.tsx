@@ -132,7 +132,7 @@ export const LoadError: Story = {
 		onRetry: fn(),
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/couldn't load the monitored repositories/iu);
+		canvas.getByText(/could not load the monitored repositories/iu);
 		canvas.getByText(/repositories service is unavailable/iu);
 		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalledTimes(1);

@@ -51,9 +51,9 @@ An attempt to skip a stage returns HTTP 400 with a specific message, not a gener
 
 | Attempt | What you get back |
 | --- | --- |
-| Create a model with `enabled: true` | “Create the model disabled, set its price, then activate it.” |
-| Enable a model with an inactive connection or `UNPRICED` price | “Activate the connection and configure a price before activating the model.” |
-| Reprice an **enabled** model to `UNPRICED` | “Disable the model before changing its price to UNPRICED.” |
+| Create a model with `enabled: true` | “Create the model as disabled. Set its price. Then activate the model.” |
+| Enable a model with an inactive connection or `UNPRICED` price | “Before you activate the model, activate the connection. Also set a price for the model.” |
+| Reprice an **enabled** model to `UNPRICED` | “To change the price of the model to UNPRICED, first disable the model.” |
 
 An enabled model without a price would spend money that nobody can account for.
 It would make the month's budget verdict UNVERIFIABLE rather than uncapped.
@@ -81,7 +81,7 @@ An in-place edit would silently point historical runs at an endpoint they never 
 The form's exact explanation is:
 
 ```text
-Endpoint, API shape and authentication can't change. Add a connection instead.
+Endpoint, API shape and authentication cannot change. Add a connection instead.
 ```
 
 To move providers:
@@ -126,7 +126,7 @@ The HTTP 400 rejections have title `Invalid request`:
 | “Provider URLs must not contain credentials or query parameters.” | The URL has userinfo, a query string, or a fragment. Gateways with URL keys (`https://gw/v1?api-key=…`) are refused. That value would enter snapshots, DTOs, and logs. |
 | “Provider host must be a public HTTPS URL” | Non-HTTPS, or a private, link-local, loopback, or CGNAT host address. The SSRF guard has no override. It checks again at connect time to prevent DNS rebinds between save and connection. |
 | “Provider host `<host>` is not in the allowed list” | Instance settings define an egress allowlist without this host. A blank allowlist allows any public host. |
-| — (HTTP 403) “Connecting your own AI provider is disabled on this server.” | A workspace admin tried to add a connection or model with **Let workspaces add providers and models** off. |
+| — (HTTP 403) “This server does not allow you to connect your own AI provider.” | A workspace admin tried to add a connection or model with **Let workspaces add providers and models** off. |
 
 :::caution CAUTION: Keep the loopback exception out of production
 
@@ -268,11 +268,11 @@ Four rates, all **US dollars per 1,000,000 tokens**, stored as `NUMERIC(18,8)`:
 The server enforces these rules with the exact messages below:
 
 ```text
-A price requires at least an input rate and an output rate (per 1M tokens).
+A price needs at least an input rate and an output rate (per 1M tokens).
 ```
 
 ```text
-A price requires at least one rate greater than zero. For a model without usage charges, choose No metered API cost instead.
+A price needs at least one rate greater than zero. For a model without usage charges, choose No metered API cost.
 ```
 
 ```text
@@ -284,7 +284,7 @@ This is not the column's limit.
 Above it, a rate cannot pass through the browser's binary64 representation and return unchanged.
 
 ```text
-Rates can only be set when the model has a price; clear them or set a price first.
+You can set rates only when the model has a price. Clear the rates, or set a price first.
 ```
 
 **Repricing replaces a price, never edits it.**
@@ -417,7 +417,7 @@ Before you enable it:
 For each model, configure its declaration:
 
 1. In either model console, open **Data handling**.
-2. Declare **Operated by** as **Your organisation** or **A provider** under terms your organization accepted.
+2. Declare **Operated by** as **Your organization** or **A provider** under terms your organization accepted.
 3. Before you enable the model, check provider retention and training terms with your provider.
 4. Verify the endpoint, gateway routing, subprocessors, and data-handling agreement.
 5. Declare the agreement's facts, not assumptions from the hostname.
@@ -432,7 +432,7 @@ In workspace **AI models**, each purpose (**Practice reviews** and **Heph**) has
 
 - **In-house**.
 - **Cloud**.
-- **`Members who haven't chosen`**.
+- **`Members who have not chosen`**.
 
 A row holds only a model declared as that tier.
 A model from another tier is refused with this exact text:
@@ -444,7 +444,7 @@ This model is declared as \{tier\}. Assign it to that row.
 An undeclared model is refused with:
 
 ```text
-This model's data handling isn't declared yet. Declare it first, or assign it to Members who haven't chosen.
+The data handling of this model is not declared yet. Declare it first, or assign the model to Members who have not chosen.
 ```
 
 If a model's declaration becomes less restrictive, it no longer matches its row.
@@ -485,7 +485,7 @@ A model with a less restrictive declaration stops serving until reassignment.
 Members see setup again only after you change **Member onboarding** itself.
 Only members who skipped setup or still have a newly required link see it again.
 
-**`Members who haven't chosen`** preserves existing assignments in workspaces that never required member choices.
+**`Members who have not chosen`** preserves existing assignments in workspaces that never required member choices.
 It serves only members without a choice where choice is optional.
 It is never a fallback for someone who chose.
 Existing models upgrade as **Not declared**, with no declaration.

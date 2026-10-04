@@ -78,13 +78,13 @@ public class AuthenticatedGitProviderUserService {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Your account has more than one GitLab identity on " + serverUrl
-                            + ". Unlink the one you don't use in Settings → Linked Accounts.");
+                            + ". Unlink the one you do not use in Settings → Linked Accounts.");
         }
         if (matching.isEmpty()) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Link your GitLab account on " + serverUrl
-                            + " before creating a workspace there. Go to Settings → Linked Accounts.");
+                            + " before you create a workspace there. Go to Settings → Linked Accounts.");
         }
         return resolveOrProvisionUser(matching.getFirst());
     }
@@ -131,8 +131,8 @@ public class AuthenticatedGitProviderUserService {
             // A mutable login cannot substitute for the provider's numeric actor id.
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Linked " + type
-                            + " identity has a non-numeric subject; the account must be re-linked. Go to Settings → Linked Accounts.",
+                    "The linked " + type
+                            + " identity has a non-numeric subject. Link the account again. Go to Settings → Linked Accounts.",
                     e);
         }
     }
@@ -162,7 +162,7 @@ public class AuthenticatedGitProviderUserService {
             // Only current provider evidence can reassign a login; a signup snapshot cannot prove a rename.
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Your saved provider username belongs to a different identity. Refresh or synchronize your provider profile before using account settings.");
+                    "Your saved provider username belongs to a different identity. Refresh your provider profile before you use account settings.");
         }
         userRepository.upsertUser(
                 nativeId,

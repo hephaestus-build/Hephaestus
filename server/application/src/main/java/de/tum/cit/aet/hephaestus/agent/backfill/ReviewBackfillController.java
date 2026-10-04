@@ -63,7 +63,7 @@ public class ReviewBackfillController {
                             schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "A campaign is already under way for this workspace",
+            description = "A backfill is already active for this workspace",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,

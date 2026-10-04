@@ -9,7 +9,6 @@ import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, asStringArray, parseJson } from "./lib/json.ts";
-import { uiAlerts, uiIgnorePatterns } from "./lib/ste-ui.ts";
 import { steRoot } from "./lib/ste-words.ts";
 import { prepareVale, valeAlerts, type ValeAlert } from "./lib/vale.ts";
 
@@ -21,10 +20,8 @@ export function parsePaths(source: string): readonly string[] {
 		throw new Error("Write a nonempty list of unique STE paths.");
 	}
 	for (const file of paths) {
-		if (!/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w.$/-]+\.(?:md|mdx|tsx|ts|ya?ml|json)$/u.test(file)) {
-			throw new Error(
-				`Invalid STE path: ${file}. Write an exact repository-relative prose or UI source path.`,
-			);
+		if (!/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w.$/-]+\.(?:md|mdx|ya?ml|json)$/u.test(file)) {
+			throw new Error(`Invalid STE path: ${file}. Write an exact repository-relative prose path.`);
 		}
 		if (
 			/\.ya?ml$/u.test(file) &&
@@ -37,19 +34,6 @@ export function parsePaths(source: string): readonly string[] {
 		if (file.endsWith(".json") && !/^\.claude\/skills\/[^/]+\/metadata\.json$/u.test(file)) {
 			throw new Error(
 				`STE JSON path is outside skill metadata: ${file}. Add a skill metadata file.`,
-			);
-		}
-		if (/\.tsx?$/u.test(file) && !/^webapp\/src\/.*\.tsx?$/u.test(file)) {
-			throw new Error(
-				`STE UI path is outside webapp/src: ${file}. Add a prose path or a UI source path.`,
-			);
-		}
-		if (
-			/\.tsx?$/u.test(file) &&
-			uiIgnorePatterns.some((pattern) => path.matchesGlob(file, pattern))
-		) {
-			throw new Error(
-				`STE UI path is excluded from prose checks: ${file}. Add a maintained UI source path.`,
 			);
 		}
 	}
@@ -238,13 +222,6 @@ if (process.argv[1] === import.meta.filename) {
 					`${file}:${field}:${alert.Line}: ${alert.Severity} ${alert.Check}: ${alert.Message}`,
 				);
 				errors += Number(alert.Severity === "error");
-			}
-		}
-		const ui = paths.filter((file) => /^webapp\/src\/.*\.tsx?$/u.test(file));
-		for (let offset = 0; offset < ui.length; offset += 50) {
-			for (const alert of await uiAlerts(ui.slice(offset, offset + 50))) {
-				console.log(`${alert.filename}: ${alert.severity}: ${alert.message}`);
-				errors += Number(alert.severity === "error");
 			}
 		}
 		console.log(`STE: ${paths.length} prose paths checked; ${errors} errors.`);

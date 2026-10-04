@@ -50,7 +50,7 @@ public class WorkspaceContextArgumentResolver implements HandlerMethodArgumentRe
         WorkspaceContext context = WorkspaceContextHolder.getContext();
         if (context == null) {
             throw new IllegalStateException(
-                    "WorkspaceContext is not set. Ensure the endpoint is within a workspace-scoped controller "
+                    "WorkspaceContext is not set. Make sure the endpoint is within a workspace-scoped controller "
                             + "or the WorkspaceContextFilter is properly configured.");
         }
         return context;

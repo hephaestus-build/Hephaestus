@@ -108,7 +108,7 @@ export const EditModel: Story = {
 	args: { editing: mockModel },
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
-		await expect(within(dialog).getByRole("radio", { name: "Your organisation" })).toBeChecked();
+		await expect(within(dialog).getByRole("radio", { name: "Your organization" })).toBeChecked();
 		await expectSettledVisible(within(dialog).getByText("In-house"));
 	},
 };
@@ -117,7 +117,7 @@ export const EditLegacyUndeclared: Story = {
 	args: { editing: legacyModel },
 	play: async ({ args }) => {
 		const dialog = await screen.findByRole("dialog");
-		for (const name of ["Your organisation", "A provider"]) {
+		for (const name of ["Your organization", "A provider"]) {
 			await expect(within(dialog).getByRole("radio", { name })).not.toBeChecked();
 		}
 		await expectSettledVisible(within(dialog).getByText("Not declared"));

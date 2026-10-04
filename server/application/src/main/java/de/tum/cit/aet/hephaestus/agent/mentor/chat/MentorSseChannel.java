@@ -250,7 +250,7 @@ final class MentorSseChannel implements MentorChannel {
         try {
             send(UIMessageChunk.DataMentorStatus.of(
                     UIMessageChunk.DataMentorStatus.State.CONFLICT, "another turn is in flight for this thread"));
-            send(new UIMessageChunk.TurnError("Another mentor turn is already in flight for this thread."));
+            send(new UIMessageChunk.TurnError("Another mentor turn is already running in this thread."));
         } catch (ClientDisconnectedException ignored) {
             // send() flagged the disconnect; there is no client left to show the conflict to.
         } finally {

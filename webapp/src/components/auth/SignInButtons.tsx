@@ -20,7 +20,7 @@ export function SignInButtons({ options, onSignIn, devReturnTo }: SignInButtonsP
 	if (options.status === "error") {
 		return (
 			<div className="space-y-3">
-				<p role="alert">We couldn’t load the sign-in options.</p>
+				<p role="alert">We could not load the sign-in options.</p>
 				<Button variant="outline" onClick={options.onRetry}>
 					Try again
 				</Button>

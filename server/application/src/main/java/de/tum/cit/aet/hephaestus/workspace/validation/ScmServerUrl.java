@@ -15,7 +15,7 @@ import java.lang.annotation.Target;
 @Target({FIELD, PARAMETER})
 @Retention(RUNTIME)
 public @interface ScmServerUrl {
-    String message() default "Server URL must use HTTPS and must not point to private/reserved addresses";
+    String message() default "Server URL must use HTTPS and must not point to a private or reserved address";
 
     Class<?>[] groups() default {};
 

@@ -165,7 +165,7 @@ export function PracticeReviewSweepSchedule({
 			{isError ? (
 				<Alert variant="destructive">
 					<AlertCircle />
-					<AlertTitle>Recurring checks couldn’t be loaded</AlertTitle>
+					<AlertTitle>Recurring checks could not be loaded</AlertTitle>
 					<AlertDescription>
 						<p>Whatever is scheduled is still running. This is only about showing it here.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
@@ -386,7 +386,7 @@ function AddScheduleForm({
 					Start checking {chosenKind}
 				</Button>
 				<p className="text-sm text-muted-foreground">
-					Every check can start reviews, so this authorises the AI spend for all of them, not just
+					Every check can start reviews, so this authorizes the AI spend for all of them, not just
 					the first.
 				</p>
 			</div>

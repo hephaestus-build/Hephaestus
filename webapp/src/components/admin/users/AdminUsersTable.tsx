@@ -53,7 +53,7 @@ function statusBadgeVariant(status: AdminAccountView["status"]) {
 
 function changeRoleLabel(isSelfAdmin: boolean, appRole: AppRole) {
 	if (isSelfAdmin) {
-		return "Can't revoke your own admin";
+		return "You cannot revoke your own admin";
 	}
 	return appRole === "APP_ADMIN" ? "Revoke admin" : "Change role";
 }
@@ -134,7 +134,7 @@ function UserRows({
 				<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
 					{hasSearch && (hasNextPage || isFetchingNextPage) ? (
 						// Search filters loaded rows client-side, and the page is still loading more —
-						// don't claim "no users" before every page is in (avoids a false negative).
+						// do not claim "no users" before every page is in (avoids a false negative).
 						<div className="flex flex-col items-center justify-center gap-2">
 							<Spinner aria-hidden />
 							<p className="text-sm text-muted-foreground">Searching all users…</p>
@@ -154,7 +154,7 @@ function UserRows({
 	}
 	return users.map((user) => {
 		const isSelf = user.id != null && user.id === currentUserId;
-		// You can't revoke your own admin — it would lock you out of /admin with no
+		// You cannot revoke your own admin — it would lock you out of /admin with no
 		// in-app recovery (the server rejects it too; this just hides the footgun).
 		const isSelfAdmin = isSelf && user.appRole === "APP_ADMIN";
 		const name = user.displayName ?? "—";

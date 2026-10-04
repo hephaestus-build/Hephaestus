@@ -118,7 +118,7 @@ final class CuratedCatalogModel {
         if (unknown != null) {
             throw new EntityNotFoundException(type, unknown);
         }
-        throw new IllegalArgumentException("orderedSlugs must contain every entry in the list");
+        throw new IllegalArgumentException("orderedSlugs must contain every entry in the list.");
     }
 
     static void validatePracticeGroup(EffectiveCatalog catalog, PracticeDefinition definition) {

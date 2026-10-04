@@ -214,7 +214,7 @@ public class GitLabNoteReconciliationService {
                         null,
                         SyncProgress.ofResource(
                                 SyncPhase.SWEEP,
-                                "Checking notes on " + projectPath + (mergeRequest ? "!" : "#") + iid + " — page "
+                                "Check of notes on " + projectPath + (mergeRequest ? "!" : "#") + iid + ", page "
                                         + page,
                                 projectPath,
                                 null,
@@ -267,7 +267,7 @@ public class GitLabNoteReconciliationService {
                         null,
                         SyncProgress.ofResource(
                                 SyncPhase.SWEEP,
-                                "Confirming missing notes on " + projectPath + (mergeRequest ? "!" : "#") + iid,
+                                "Confirmation of missing notes on " + projectPath + (mergeRequest ? "!" : "#") + iid,
                                 projectPath,
                                 null,
                                 null));

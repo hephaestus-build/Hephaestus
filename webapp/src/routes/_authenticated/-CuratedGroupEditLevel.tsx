@@ -48,7 +48,7 @@ export function CuratedGroupEditLevel({
 			<DrawerBody>
 				<QueryErrorAlert
 					error={groupQuery.error}
-					title="Couldn't load the group"
+					title="Could not load the group"
 					onRetry={() => {
 						void groupQuery.refetch();
 					}}
@@ -102,7 +102,7 @@ function LoadedCuratedGroupEditor({
 			setBaseGroup(latest);
 			setConflict(false);
 		} catch (error) {
-			toast.error("Couldn't load the current version", {
+			toast.error("Could not load the current version", {
 				description: problemDetailOf(error),
 			});
 		}
@@ -125,7 +125,7 @@ function LoadedCuratedGroupEditor({
 				setConflict(true);
 				return;
 			}
-			toast.error("Couldn't update the group", { description: problemDetailOf(error) });
+			toast.error("Could not update the group", { description: problemDetailOf(error) });
 		},
 	});
 	const deleteOverride = useMutation({
@@ -151,7 +151,7 @@ function LoadedCuratedGroupEditor({
 				invalidateCatalog();
 				return;
 			}
-			toast.error("Couldn't apply the default", { description: problemDetailOf(error) });
+			toast.error("Could not apply the default", { description: problemDetailOf(error) });
 		},
 	});
 	const keepCurrentDefinition = useMutation({
@@ -176,7 +176,7 @@ function LoadedCuratedGroupEditor({
 				invalidateCatalog();
 				return;
 			}
-			toast.error("Couldn't keep the saved version", { description: problemDetailOf(error) });
+			toast.error("Could not keep the saved version", { description: problemDetailOf(error) });
 		},
 	});
 

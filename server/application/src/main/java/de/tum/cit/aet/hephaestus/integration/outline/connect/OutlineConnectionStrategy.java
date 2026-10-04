@@ -83,18 +83,18 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
     public ConnectInitiation initiate(InitiateRequest request) {
         Map<String, String> userInput = request.userInput();
         if (userInput == null) {
-            throw new IllegalArgumentException("Outline connect requires 'server_url' and 'token'");
+            throw new IllegalArgumentException("Outline needs 'server_url' and 'token' to connect.");
         }
         String serverUrl = userInput.get(INPUT_SERVER_URL);
         if (serverUrl == null || serverUrl.isBlank()) {
-            throw new IllegalArgumentException("Missing required field: '" + INPUT_SERVER_URL + "'");
+            throw new IllegalArgumentException("The required field '" + INPUT_SERVER_URL + "' is missing.");
         }
         if (!originPolicy.allows(serverUrl)) {
-            throw new IllegalArgumentException("Outline origin is not approved by the instance operator");
+            throw new IllegalArgumentException("The instance operator did not approve this Outline origin.");
         }
         String token = userInput.get(INPUT_TOKEN);
         if (token == null || token.isBlank()) {
-            throw new IllegalArgumentException("Missing required field: '" + INPUT_TOKEN + "'");
+            throw new IllegalArgumentException("The required field '" + INPUT_TOKEN + "' is missing.");
         }
         // Validates the token AND the (admin-supplied) server URL through the SSRF guard before anything
         // is persisted. A bad token or unreachable/blocked host throws, surfacing a structured error.
@@ -107,8 +107,7 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
 
     @Override
     public ConnectFinalization finalizeConnect(IntegrationRef ref, Map<String, String> callbackParams) {
-        return new ConnectFinalization.Failed(
-                "Outline uses API-token paste — finalizeConnect is not applicable; use initiate() output directly");
+        return new ConnectFinalization.Failed("Outline connects with an API token. It has no vendor callback.");
     }
 
     @Override

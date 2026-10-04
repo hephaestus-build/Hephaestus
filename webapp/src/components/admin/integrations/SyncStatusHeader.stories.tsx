@@ -389,7 +389,7 @@ export const LoadError: Story = {
 		error: { failedQuery: "connection", cause: new Error("503 Service Unavailable") },
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/couldn't load the github connection/iu);
+		canvas.getByText(/could not load the github connection/iu);
 		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalledTimes(1);
 	},
@@ -401,6 +401,6 @@ export const StatusLoadError: Story = {
 		error: { failedQuery: "status", cause: new Error("503 Service Unavailable") },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/couldn't load github sync status/iu);
+		canvas.getByText(/could not load github sync status/iu);
 	},
 };

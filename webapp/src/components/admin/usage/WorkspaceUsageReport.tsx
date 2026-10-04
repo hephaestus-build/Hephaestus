@@ -124,13 +124,13 @@ export function WorkspaceUsageReport({
 					<CircleAlert aria-hidden />
 					<AlertTitle>
 						{unpricedEventCount === 1
-							? "1 run isn't counted in these totals"
-							: `${unpricedEventCount.toLocaleString()} runs aren't counted in these totals`}
+							? "1 run is not counted in these totals"
+							: `${unpricedEventCount.toLocaleString()} runs are not counted in these totals`}
 					</AlertTitle>
 					<AlertDescription>
 						<p>
 							They have no price set, so real spend may be higher. Add prices for your own models in{" "}
-							<AiModelsLink workspaceSlug={workspaceSlug} />; for shared models, ask your host.
+							<AiModelsLink workspaceSlug={workspaceSlug} />. For shared models, ask your host.
 						</p>
 					</AlertDescription>
 				</Alert>

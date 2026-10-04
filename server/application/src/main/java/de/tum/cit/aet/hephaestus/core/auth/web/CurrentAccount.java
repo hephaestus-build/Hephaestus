@@ -30,7 +30,7 @@ public final class CurrentAccount {
         try {
             return Long.parseLong(jwt.getSubject());
         } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "token subject is not an account id", e);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "The token subject is not an account ID.", e);
         }
     }
 
@@ -63,12 +63,12 @@ public final class CurrentAccount {
         Jwt jwt = requireJwt();
         String id = jwt.getId();
         if (id == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "token has no jti");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "The token has no jti.");
         }
         try {
             return UUID.fromString(id);
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "token jti is malformed", e);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "The token jti is not valid.", e);
         }
     }
 
@@ -86,7 +86,7 @@ public final class CurrentAccount {
         try {
             return UUID.fromString(sid);
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "token sid is malformed", e);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "The token sid is not valid.", e);
         }
     }
 
@@ -162,7 +162,7 @@ public final class CurrentAccount {
     private static Jwt requireJwt() {
         Jwt jwt = jwtOrNull();
         if (jwt == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "not authenticated");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "You are not signed in.");
         }
         return jwt;
     }

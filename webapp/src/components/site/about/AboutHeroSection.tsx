@@ -10,8 +10,8 @@ export function AboutHeroSection() {
 			</h1>
 			<p className="mx-auto max-w-2xl text-xl leading-relaxed text-pretty text-muted-foreground">
 				Hephaestus is an open-source AI mentor for software teams. It reads the work developers
-				already do against the practices their project cares about, then says what went well, what
-				could be better, and a way to get there.
+				already do against the practices their project cares about. Then it says what went well,
+				what could be better, and a way to get there.
 			</p>
 		</section>
 	);

@@ -80,7 +80,7 @@ import org.springframework.data.web.PagedModel;
             @Tag(
                     name = "Practice review trace",
                     description =
-                            "Why each practice did or did not run on one piece of work; readable by any workspace member"),
+                            "Why each practice did or did not run on one piece of work. Any workspace member can read it."),
         },
         servers = {@Server(url = "/", description = "Default Server URL")},
         security = {@SecurityRequirement(name = "bearerAuth")})
@@ -89,8 +89,8 @@ import org.springframework.data.web.PagedModel;
         type = SecuritySchemeType.HTTP,
         scheme = "bearer",
         bearerFormat = "JWT",
-        description = "Hephaestus-native JWT bearer authentication. The SPA normally authenticates via the "
-                + "`__Host-HEPHAESTUS_AT` session cookie; this scheme documents the equivalent bearer token.")
+        description = "Hephaestus-native JWT bearer authentication. The SPA normally authenticates through the "
+                + "`__Host-HEPHAESTUS_AT` session cookie. This scheme documents the equivalent bearer token.")
 public class OpenAPIConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAPIConfiguration.class);

@@ -118,7 +118,7 @@ export function ObservationLevel({
 					{state.status === "error" ? (
 						<QueryErrorAlert
 							error={state.error}
-							title="Couldn't load this observation"
+							title="Could not load this observation"
 							onRetry={state.onRetry}
 						/>
 					) : (

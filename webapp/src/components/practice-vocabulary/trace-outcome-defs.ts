@@ -57,7 +57,7 @@ export const TRACE_OUTCOME_DEFS: StatusDefs<TraceOutcome> = {
 		description: "The practice was eligible, but the review ended before it was evaluated.",
 	},
 	NOT_ASSESSABLE: {
-		label: "Couldn't assess",
+		label: "Could not assess",
 		icon: CircleHelpIcon,
 		badgeVariant: "warning",
 		description:

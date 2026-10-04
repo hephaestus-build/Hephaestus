@@ -60,7 +60,7 @@ const choices = [
 		key: "productFeedback",
 		label: "New product feedback",
 		description:
-			"Get an email when new product feedback arrives. Review it in the private instance-admin inbox; resolving it does not notify the sender.",
+			"Get an email when new product feedback arrives. Review it in the private instance-admin inbox. Resolving it does not notify the sender.",
 	},
 ] as const;
 

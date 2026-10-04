@@ -66,7 +66,7 @@ export function MemberActivityTable({ state, providerType }: MemberActivityTable
 	const [showAll, setShowAll] = useState(false);
 	if (state.status === "error") {
 		return (
-			<QueryErrorAlert error={state.error} title="Couldn't load members" onRetry={state.onRetry} />
+			<QueryErrorAlert error={state.error} title="Could not load members" onRetry={state.onRetry} />
 		);
 	}
 	if (state.status === "ready" && state.members.length === 0) {

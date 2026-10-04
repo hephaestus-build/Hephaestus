@@ -96,7 +96,7 @@ describe("contextual sign-in", () => {
 		renderRouteAtWithRouter("/login?error=__proto__");
 		await screen.findByText("Something went wrong", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.getByRole("alert").textContent).toContain(
-			"We couldn't sign you in. Please try again.",
+			"We could not sign you in. Please try again.",
 		);
 	});
 

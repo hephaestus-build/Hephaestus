@@ -85,7 +85,7 @@ const tokenCountSchema = z
 const rateSchema = z
 	.number()
 	.refine(Number.isFinite, "Enter an amount in USD.")
-	.min(0, "Rates can't be negative.");
+	.min(0, "Rates cannot be negative.");
 
 const LLM_CONNECTION_FORM_FIELDS = ["displayName", "baseUrl"] as const;
 

@@ -88,7 +88,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
     void shouldRejectMissingProductionSecret() {
         assertThatThrownBy(() -> configuredService(null, null, true))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("required for OAuth state HMAC");
+                .hasMessageContaining("Production needs one of them for the OAuth state HMAC.");
     }
 
     @Test
@@ -99,7 +99,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> second.consume(state))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("signature mismatch");
+                .hasMessageContaining("signature of the OAuth state is not correct");
     }
 
     @Test
@@ -113,7 +113,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
         var service = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
         assertThatThrownBy(() -> service.consume(state))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("OAuth state malformed");
+                .hasMessage("The OAuth state has an incorrect format.");
     }
 
     @ParameterizedTest
@@ -122,7 +122,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
         var service = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
         assertThatThrownBy(() -> service.issue(42, IntegrationKind.GITHUB, accountId))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("OAuth state actor malformed");
+                .hasMessage("The actor value of the OAuth state has an incorrect format.");
     }
 
     @Test
@@ -159,7 +159,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
         String state = a.issue(42L, IntegrationKind.GITHUB);
         assertThatThrownBy(() -> b.consume(state))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("signature mismatch");
+                .hasMessageContaining("signature of the OAuth state is not correct");
     }
 
     @Test
@@ -224,7 +224,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("nonce store wired: first consume wins, second is rejected as already-consumed")
+    @DisplayName("nonce store wired: first consume wins, second is rejected as already used")
     void singleUseEnforcedWithNonceStore() {
         InMemoryNonceStore store = new InMemoryNonceStore();
         HmacOAuthStateService svc = HmacOAuthStateService.withNonceStore(SECRET, Duration.ofMinutes(10), store);
@@ -238,7 +238,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
         // still validate. This is the load-bearing replay guard.
         assertThatThrownBy(() -> svc.consume(state))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("already consumed");
+                .hasMessage("The OAuth state was already used.");
     }
 
     @Test

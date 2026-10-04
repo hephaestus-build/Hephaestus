@@ -44,7 +44,7 @@ export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreat
 			onPublished(survey.id);
 		},
 		onError: (error) =>
-			toast.error("Couldn't publish the survey. Your draft is still here.", {
+			toast.error("Could not publish the survey. Your draft is still here.", {
 				description: problemDetailOf(error),
 			}),
 	});
@@ -70,7 +70,7 @@ export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreat
 				<DrawerBody>
 					<QueryErrorAlert
 						error={workspacesQuery.error ?? consentQuery.error}
-						title="The survey composer couldn't be loaded"
+						title="The survey composer could not be loaded"
 						onRetry={() => {
 							void workspacesQuery.refetch();
 							void consentQuery.refetch();

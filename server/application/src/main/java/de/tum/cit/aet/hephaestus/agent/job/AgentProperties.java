@@ -74,7 +74,7 @@ public record AgentProperties(
                     "hephaestus.agent.heartbeat-interval must be <= " + MAX_HEARTBEAT_INTERVAL
                             + " (half the "
                             + WORKER_LEASE_TTL
-                            + " worker lease), or every worker is orphaned while its jobs are still running; got: "
+                            + " worker lease). A higher value orphans every worker while its jobs still run. Got: "
                             + heartbeatInterval);
         }
         if (payloadRetention == null || payloadRetention.isNegative() || payloadRetention.isZero()) {

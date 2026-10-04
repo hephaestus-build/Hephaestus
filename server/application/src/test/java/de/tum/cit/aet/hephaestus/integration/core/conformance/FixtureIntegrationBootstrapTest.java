@@ -86,7 +86,7 @@ class FixtureIntegrationBootstrapTest extends BaseUnitTest {
                 .as("the reason names what would report it, so it is actionable rather than merely true")
                 .containsExactly(FixtureIntegration.KIND);
         assertThat(dormant.getFirst().reason(signal -> "Widget assembled", kind -> "Fixture"))
-                .endsWith("(Widget assembled); Fixture would.");
+                .endsWith("(Widget assembled). Fixture can report them.");
     }
 
     @Test

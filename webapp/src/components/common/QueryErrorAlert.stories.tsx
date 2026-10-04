@@ -18,7 +18,7 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
-		title: "We couldn't load the job history",
+		title: "We could not load the job history",
 		onRetry: fn(),
 	},
 } satisfies Meta<typeof QueryErrorAlert>;
@@ -40,7 +40,7 @@ export const ServiceUnavailable: Story = {
 };
 
 /**
- * 403 — the reader isn't allowed. Retrying re-asks a question already answered, so the button is
+ * 403 — the reader is not allowed. Retrying re-asks a question already answered, so the button is
  * withheld even though the caller passed `onRetry`, and the copy points at the actual way out.
  */
 export const Forbidden: Story = {
@@ -54,7 +54,7 @@ export const Forbidden: Story = {
 	},
 };
 
-/** 404 — deleted in another tab, most likely. A reload helps; a retry doesn't. */
+/** 404 — deleted in another tab, most likely. A reload helps; a retry does not. */
 export const NotFound: Story = {
 	args: {
 		error: { status: 404, detail: "This connection no longer exists." },
@@ -71,7 +71,7 @@ export const NotFound: Story = {
  */
 export const Conflict: Story = {
 	args: {
-		title: "We couldn't start the sync",
+		title: "We could not start the sync",
 		error: { status: 409, detail: "A sync is already running for this connection." },
 	},
 	play: async ({ canvas }) => {
@@ -137,7 +137,7 @@ export const ReflowWithLongDetail: Story = {
 		chromatic: { viewports: [320] },
 	},
 	args: {
-		title: "Couldn't load the instance delivery state",
+		title: "Could not load the instance delivery state",
 		error: {
 			status: 503,
 			detail:

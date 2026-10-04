@@ -121,7 +121,7 @@ export function WorkspaceScmTokenSettings({
 						</FieldDescription>
 						{error != null && (
 							<FieldError id={`${id}-error`}>
-								{problemDetailOf(error, "Couldn't replace the token. Try again.")}
+								{problemDetailOf(error, "Could not replace the token. Try again.")}
 							</FieldError>
 						)}
 					</Field>

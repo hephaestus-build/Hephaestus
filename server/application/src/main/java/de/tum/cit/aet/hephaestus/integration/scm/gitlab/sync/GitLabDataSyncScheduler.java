@@ -857,7 +857,7 @@ public class GitLabDataSyncScheduler {
                         // (unitsCompleted/unitsTotal travel on the same record).
                         SyncProgress.ofResource(
                                 SyncPhase.REPOSITORIES,
-                                "Syncing " + repo.getNameWithOwner(),
+                                "Sync of " + repo.getNameWithOwner(),
                                 repo.getNameWithOwner(),
                                 reposProcessed,
                                 totalRepos));

@@ -19,7 +19,7 @@ function row(card: Scope, title: string): Scope {
 	return within(card.getByRole("group", { name: title }));
 }
 
-const UNCHOSEN_ROW = "Members who haven't chosen";
+const UNCHOSEN_ROW = "Members who have not chosen";
 
 function previewRow(card: Scope, term: string): HTMLElement {
 	const dt = card.getByText(term, { selector: "dt" });
@@ -244,7 +244,7 @@ export const LoadForbidden: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText("Couldn't load AI models")).toBeVisible();
+		await expect(await canvas.findByText("Could not load AI models")).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Retry" })).toBeNull();
 	},
 };

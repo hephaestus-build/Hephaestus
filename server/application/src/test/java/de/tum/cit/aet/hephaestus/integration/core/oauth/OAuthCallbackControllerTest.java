@@ -214,7 +214,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     @Test
     void badState_jsonRequest_returns400() {
         when(oauthStateService.consume("tampered"))
-                .thenThrow(new IllegalArgumentException("OAuth state signature mismatch"));
+                .thenThrow(new IllegalArgumentException("The signature of the OAuth state is not correct."));
 
         ResponseEntity<?> response = controller.callbackGet(
                 "slack", "tampered", null, null, Map.of("code", "c", "state", "tampered"), jsonRequest());
@@ -223,7 +223,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
         assertThat(body.getProperties()).containsEntry("error", "invalid_state");
-        assertThat(body.getDetail()).contains("signature mismatch");
+        assertThat(body.getDetail()).contains("signature of the OAuth state");
         // Critical: strategy NEVER invoked when the state is bad.
         assertThat(slackStrategy.finalizeCalls).isEqualTo(0);
         verify(callbackService, never()).findOrCreatePendingConnection(anyLong(), any());
@@ -373,7 +373,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 .thenReturn(pending);
         slackStrategy.nextFinalization = new ConnectFinalization.Completed("T1", new BearerToken("t", null), null);
         when(callbackService.completeConnection(any(), any(), any()))
-                .thenThrow(new IllegalStateException("Illegal transition for connection 7: UNINSTALLED → ACTIVE"));
+                .thenThrow(new IllegalStateException("Connection 7 cannot change from UNINSTALLED to ACTIVE."));
 
         ResponseEntity<?> response =
                 controller.callbackGet("slack", "s", null, null, Map.of("code", "c", "state", "s"), jsonRequest());
@@ -393,7 +393,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 .thenReturn(pending);
         slackStrategy.nextFinalization = new ConnectFinalization.Completed("T1", new BearerToken("t", null), null);
         when(callbackService.completeConnection(any(), any(), any()))
-                .thenThrow(new IllegalStateException("Illegal transition for connection 7: UNINSTALLED → ACTIVE"));
+                .thenThrow(new IllegalStateException("Connection 7 cannot change from UNINSTALLED to ACTIVE."));
 
         ResponseEntity<?> response =
                 controller.callbackGet("slack", "s", null, null, Map.of("code", "c", "state", "s"), htmlRequest());

@@ -30,22 +30,22 @@ final class SurveyQuestions {
     static void validateDefinition(List<QuestionDTO> questions) {
         Set<String> ids = new HashSet<>();
         for (QuestionDTO q : questions) {
-            if (!ids.add(q.id())) throw bad("question ids must be unique");
+            if (!ids.add(q.id())) throw bad("Each question ID must be unique.");
             boolean choice = q.type() == QuestionType.SINGLE_CHOICE || q.type() == QuestionType.MULTIPLE_CHOICE;
             if (choice
                     && (q.options().size() < 2
                             || new HashSet<>(q.options()).size() != q.options().size()))
-                throw bad("choice questions need at least two unique options");
-            if (!choice && !q.options().isEmpty()) throw bad("only choice questions accept options");
-            if (!choice && q.allowOther()) throw bad("only choice questions accept another answer");
+                throw bad("A choice question needs at least two unique options.");
+            if (!choice && !q.options().isEmpty()) throw bad("Only a choice question can have options.");
+            if (!choice && q.allowOther()) throw bad("Only a choice question can allow another answer.");
             boolean labelled = q.lowLabel() != null
                     && !q.lowLabel().isBlank()
                     && q.highLabel() != null
                     && !q.highLabel().isBlank();
             if (q.type() == QuestionType.RATING && !labelled)
-                throw bad("rating questions need labels for both ends of the scale");
+                throw bad("A rating question needs labels for both ends of the scale.");
             if (q.type() != QuestionType.RATING && (q.lowLabel() != null || q.highLabel() != null))
-                throw bad("only rating questions accept scale labels");
+                throw bad("Only a rating question can have scale labels.");
         }
     }
 
@@ -53,19 +53,20 @@ final class SurveyQuestions {
     static List<AnswerDTO> validateAnswers(List<QuestionDTO> questions, List<AnswerDTO> answers) {
         Map<String, AnswerDTO> byQuestion = new HashMap<>();
         for (AnswerDTO answer : answers) {
-            if (byQuestion.put(answer.questionId(), answer) != null) throw bad("a question was answered twice");
+            if (byQuestion.put(answer.questionId(), answer) != null)
+                throw bad("The response answers a question twice.");
         }
         List<AnswerDTO> normalized = new ArrayList<>();
         for (QuestionDTO question : questions) {
             AnswerDTO answer = byQuestion.remove(question.id());
             AnswerDTO checked = answer == null ? null : check(question, answer);
             if (checked == null) {
-                if (question.required()) throw bad("a required question was not answered");
+                if (question.required()) throw bad("The response does not answer a required question.");
                 continue;
             }
             normalized.add(checked);
         }
-        if (!byQuestion.isEmpty()) throw bad("an answer names a question this survey does not ask");
+        if (!byQuestion.isEmpty()) throw bad("An answer names a question that this survey does not ask.");
         return normalized;
     }
 
@@ -73,11 +74,11 @@ final class SurveyQuestions {
         int fields = (answer.text() != null ? 1 : 0)
                 + (answer.choices() != null ? 1 : 0)
                 + (answer.rating() != null ? 1 : 0);
-        if (fields > 1) throw bad("an answer carries more than one value");
+        if (fields > 1) throw bad("An answer must have only one value.");
         return switch (question.type()) {
             case TEXT -> {
                 if (answer.text() == null) {
-                    if (fields > 0) throw bad("a text question expects text");
+                    if (fields > 0) throw bad("A text question needs a text answer.");
                     yield null;
                 }
                 String text = answer.text().strip();
@@ -85,12 +86,12 @@ final class SurveyQuestions {
             }
             case SINGLE_CHOICE, MULTIPLE_CHOICE -> {
                 if (answer.choices() == null) {
-                    if (fields > 0) throw bad("a choice question expects choices");
+                    if (fields > 0) throw bad("A choice question needs a choice answer.");
                     yield null;
                 }
                 if (answer.choices().isEmpty()) yield null;
                 if (question.type() == QuestionType.SINGLE_CHOICE
-                        && answer.choices().size() > 1) throw bad("a single-choice question takes one choice");
+                        && answer.choices().size() > 1) throw bad("A single-choice question accepts only one choice.");
                 List<String> choices = new ArrayList<>(answer.choices().size());
                 boolean hasOther = false;
                 for (String choice : answer.choices()) {
@@ -98,21 +99,22 @@ final class SurveyQuestions {
                         choices.add(choice);
                         continue;
                     }
-                    if (!question.allowOther() || hasOther) throw bad("a choice is not one of the question's options");
+                    if (!question.allowOther() || hasOther)
+                        throw bad("A choice is not one of the options of the question.");
                     hasOther = true;
                     choices.add(choice.strip());
                 }
-                if (new HashSet<>(choices).size() != choices.size()) throw bad("a choice was given twice");
+                if (new HashSet<>(choices).size() != choices.size()) throw bad("A choice appears twice in the answer.");
                 yield new AnswerDTO(question.id(), null, List.copyOf(choices), null);
             }
             case RATING, NPS -> {
                 if (answer.rating() == null) {
-                    if (fields > 0) throw bad("a scale question expects a rating");
+                    if (fields > 0) throw bad("A scale question needs a rating.");
                     yield null;
                 }
                 int min = question.type() == QuestionType.NPS ? NPS_MIN : RATING_MIN;
                 int max = question.type() == QuestionType.NPS ? NPS_MAX : RATING_MAX;
-                if (answer.rating() < min || answer.rating() > max) throw bad("rating is outside the scale");
+                if (answer.rating() < min || answer.rating() > max) throw bad("The rating is outside the scale.");
                 yield new AnswerDTO(question.id(), null, null, answer.rating());
             }
         };

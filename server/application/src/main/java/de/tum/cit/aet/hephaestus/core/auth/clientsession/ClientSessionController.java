@@ -49,11 +49,11 @@ public class ClientSessionController {
      * without a valid CSRF token is refused with Spring Security's plain JSON error, not a problem detail.
      */
     private static final String CSRF_REFUSED =
-            "The request carries the browser session cookie without a valid CSRF token; refused before the"
-                    + " endpoint runs";
+            "The request carries the browser session cookie without a valid CSRF token."
+                    + " The server refuses it before the endpoint runs.";
 
-    private static final String TOO_MANY_REQUESTS =
-            "Too many installed-client requests from this address; retry after the Retry-After seconds";
+    private static final String TOO_MANY_REQUESTS = "This address sent too many installed-client requests."
+            + " Wait the number of seconds in the Retry-After header, then try again.";
 
     private final ClientSessionService sessionService;
     private final InstalledClientRegistry registry;
@@ -141,8 +141,8 @@ public class ClientSessionController {
         return sessionService
                 .exchange(body.clientId(), body.redirectUri(), body.code(), body.codeVerifier(), request)
                 .map(ClientSessionController::tokens)
-                .orElseThrow(
-                        () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sign-in could not be completed"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "The server could not complete the sign-in."));
     }
 
     @PostMapping("/refresh")
@@ -161,7 +161,7 @@ public class ClientSessionController {
                             schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(
             responseCode = "401",
-            description = "The session has ended; sign in again",
+            description = "The session has ended. Sign in again.",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
@@ -183,7 +183,7 @@ public class ClientSessionController {
         return sessionService
                 .refresh(body.refreshToken(), request)
                 .map(ClientSessionController::tokens)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "The session has ended"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "The session has ended."));
     }
 
     @PostMapping("/logout")
@@ -224,7 +224,7 @@ public class ClientSessionController {
                     && cookie.getValue() != null
                     && !cookie.getValue().isBlank()) {
                 throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST, "A browser session cannot be used for an installed-client sign-in");
+                        HttpStatus.BAD_REQUEST, "You cannot use a browser session for an installed-client sign-in.");
             }
         }
     }

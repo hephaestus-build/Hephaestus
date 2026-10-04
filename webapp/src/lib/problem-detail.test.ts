@@ -42,9 +42,7 @@ describe("problemDetailOf", () => {
 		expect(problemDetailOf(new TypeError("Failed to fetch"), "Could not save the model")).toBe(
 			"Could not save the model",
 		);
-		expect(problemDetailOf({ message: "boom" })).toBe(
-			"An unexpected error occurred. Please try again.",
-		);
+		expect(problemDetailOf({ message: "boom" })).toBe("An unexpected error occurred. Try again.");
 	});
 
 	it("still prefers `detail` over a `message` sitting beside it", () => {
@@ -58,12 +56,10 @@ describe("problemDetailOf", () => {
 	});
 
 	it("falls back to a generic message for unhandled shapes", () => {
-		expect(problemDetailOf(null)).toBe("An unexpected error occurred. Please try again.");
-		expect(problemDetailOf(undefined)).toBe("An unexpected error occurred. Please try again.");
-		expect(problemDetailOf({ status: 500 })).toBe(
-			"An unexpected error occurred. Please try again.",
-		);
-		expect(problemDetailOf(42)).toBe("An unexpected error occurred. Please try again.");
+		expect(problemDetailOf(null)).toBe("An unexpected error occurred. Try again.");
+		expect(problemDetailOf(undefined)).toBe("An unexpected error occurred. Try again.");
+		expect(problemDetailOf({ status: 500 })).toBe("An unexpected error occurred. Try again.");
+		expect(problemDetailOf(42)).toBe("An unexpected error occurred. Try again.");
 	});
 });
 

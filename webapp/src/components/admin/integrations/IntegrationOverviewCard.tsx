@@ -213,7 +213,7 @@ function OverviewBody({
 		return (
 			<QueryErrorAlert
 				error={statusError}
-				title="We couldn't load sync status"
+				title="We could not load sync status"
 				onRetry={onRetryStatus}
 			/>
 		);

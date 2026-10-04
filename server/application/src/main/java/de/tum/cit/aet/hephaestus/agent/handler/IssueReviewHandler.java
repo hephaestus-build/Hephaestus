@@ -302,7 +302,7 @@ public class IssueReviewHandler implements JobTypeHandler {
         }
         if (result.status() == PracticeFeedbackDispatchService.Result.Status.SUPPRESSED) return;
         throw new JobDeliveryException(
-                "Issue review package dispatch is awaiting reconciliation: jobId=" + job.getId());
+                "The dispatch of the issue review package waits for reconciliation. jobId=" + job.getId());
     }
 
     private void recordSuppressed(

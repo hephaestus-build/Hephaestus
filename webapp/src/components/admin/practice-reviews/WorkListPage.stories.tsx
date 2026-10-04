@@ -158,7 +158,7 @@ export const LoadFailed: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	render: (args) => <WorkListPage {...args} />,
 	play: async ({ canvas }) => {
-		await canvas.findByText("Couldn't load the work");
+		await canvas.findByText("Could not load the work");
 		canvas.getByText(/Unknown artifact kind/u);
 		await expect(canvas.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
 	},
@@ -169,7 +169,7 @@ export const LoadFailedWithoutAnAnswer: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	render: (args) => <WorkListPage {...args} />,
 	play: async ({ args, canvas, userEvent }) => {
-		await canvas.findByText("Couldn't load the work");
+		await canvas.findByText("Could not load the work");
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledTimes(1);
 	},

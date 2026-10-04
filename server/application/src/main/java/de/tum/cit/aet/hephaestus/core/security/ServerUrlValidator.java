@@ -146,7 +146,7 @@ public final class ServerUrlValidator {
             throw new IllegalArgumentException("Server URL must not point to a link-local address");
         }
         if (addr.isSiteLocalAddress()) {
-            throw new IllegalArgumentException("Server URL must not point to a private/site-local address");
+            throw new IllegalArgumentException("Server URL must not point to a private or site-local address");
         }
         if (addr.isAnyLocalAddress()) {
             throw new IllegalArgumentException("Server URL must not point to a wildcard address");

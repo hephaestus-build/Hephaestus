@@ -18,7 +18,7 @@ describe("cookie consent", () => {
 		// reset the module-level snapshot cache between tests.
 		localStorage.clear();
 		getStoredConsent();
-		// drain any reopen flag so it can't leak between tests
+		// drain any reopen flag so it cannot leak between tests
 		closeConsentReopen();
 	});
 	afterEach(() => localStorage.clear());

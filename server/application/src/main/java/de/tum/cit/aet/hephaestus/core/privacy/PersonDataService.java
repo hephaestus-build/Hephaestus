@@ -133,7 +133,7 @@ public class PersonDataService {
                     person.accountId().toString());
             if (Boolean.TRUE.equals(busy))
                 throw new ResponseStatusException(
-                        HttpStatus.CONFLICT, "An erasure request already owns this account; resume that request");
+                        HttpStatus.CONFLICT, "An erasure request already owns this account. Resume that request.");
         }
         suppression.suppress(person, id);
         if (person.accountId() != null) {
@@ -230,14 +230,14 @@ public class PersonDataService {
         if (!externalCopiesRemoved && !deliveries(selected).isEmpty())
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Remove provider feedback using the un-deliver runbook and confirm removal first");
+                    "Use the un-deliver runbook to remove the provider feedback. Then confirm the removal.");
     }
 
     private void requireUnchanged(PersonDataRequest r, Map<String, PersonDataSelection> selected) {
         PersonScope scope = scope(r);
         if (!scope.equals(withEvidenceJobs(resolver.resolve(scope.accountId(), scope.identities())))
                 || !selected.equals(registry.select(scope)))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "The preview scope changed; create a new preview");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "The preview scope changed. Create a new preview.");
     }
 
     private PersonScope withEvidenceJobs(PersonScope resolved) {

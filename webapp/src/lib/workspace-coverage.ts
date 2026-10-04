@@ -32,13 +32,13 @@ export function workspaceCoverage(
 	if (!mentor) {
 		return {
 			level: "partial",
-			sentence: `Practice reviews run in ${data.workspaceName} within this answer. Heph isn't set up here yet.`,
+			sentence: `Practice reviews run in ${data.workspaceName} within this answer. Heph is not set up here yet.`,
 		};
 	}
 	if (!practiceReviews) {
 		return {
 			level: "partial",
-			sentence: `Heph runs in ${data.workspaceName} within this answer. Practice reviews aren't set up here yet.`,
+			sentence: `Heph runs in ${data.workspaceName} within this answer. Practice reviews are not set up here yet.`,
 		};
 	}
 	return { level: "covered" };

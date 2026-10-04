@@ -117,10 +117,10 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
         for (JsonNode reason : decision.path("reasonCodes")) {
             String code = reason.asString(null);
             if ("NO_AUTOMATED_REVIEW".equals(code)) {
-                return "This practice is guidance only, so it is not reviewed automatically.";
+                return "This practice is guidance only, so no automatic review covers it.";
             }
             if ("DECLARED_EVIDENCE_INSUFFICIENT".equals(code)) {
-                return "This practice needs human review, so it is not reviewed automatically.";
+                return "This practice needs human review, so no automatic review covers it.";
             }
         }
         return null;
@@ -163,15 +163,11 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
     }
 
     private static String sourceProblem(@Nullable String code, String source) {
-        String sentence =
-                switch (code == null ? "" : code) {
-                    case "SOURCE_NOT_AVAILABLE" -> source + " was not captured.";
-                    case "SOURCE_INCOMPLETE" -> "Only part of " + source + " was captured.";
-                    case "SOURCE_EMPTY" -> "Nothing was captured from " + source + ".";
-                    default -> source + " could not be read.";
-                };
-        // Character.toUpperCase is locale-independent; a quoted name starts with a quotation mark and is
-        // left as it is.
-        return Character.toUpperCase(sentence.charAt(0)) + sentence.substring(1);
+        return switch (code == null ? "" : code) {
+            case "SOURCE_NOT_AVAILABLE" -> "The review did not capture " + source + ".";
+            case "SOURCE_INCOMPLETE" -> "The review captured only part of " + source + ".";
+            case "SOURCE_EMPTY" -> "The review captured nothing from " + source + ".";
+            default -> "The review could not read " + source + ".";
+        };
     }
 }

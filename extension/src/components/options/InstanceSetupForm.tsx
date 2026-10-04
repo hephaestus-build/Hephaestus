@@ -58,7 +58,7 @@ export function InstanceSetupForm({
 					inputMode="url"
 					autoComplete="url"
 					required
-					placeholder="https://hephaestus.your-organisation.example"
+					placeholder="https://hephaestus.your-organization.example"
 					value={origin}
 					onChange={(event) => setOrigin(event.target.value)}
 					aria-invalid={invalid ? true : undefined}
@@ -66,7 +66,7 @@ export function InstanceSetupForm({
 					className={INPUT_CLASSES}
 				/>
 				<p id={originHintId} className="text-xs text-muted-foreground">
-					The address your organisation runs Hephaestus at. It must use HTTPS.
+					The address your organization runs Hephaestus at. It must use HTTPS.
 				</p>
 			</div>
 			{developmentBuild ? (

@@ -107,7 +107,7 @@ export function AdminInstanceLlmUsageTable({
 	onEditSharedModelBudget,
 }: AdminInstanceLlmUsageTableProps) {
 	if (error != null) {
-		return <QueryErrorAlert error={error} title="Couldn't load AI usage" onRetry={onRetry} />;
+		return <QueryErrorAlert error={error} title="Could not load AI usage" onRetry={onRetry} />;
 	}
 	if (rows.length === 0 && !isLoading) {
 		return (
@@ -380,7 +380,7 @@ function WorkspaceUsageDetails({
 			) : (
 				<QueryErrorAlert
 					error={error}
-					title={`Couldn't load usage details for ${workspace.displayName}`}
+					title={`Could not load usage details for ${workspace.displayName}`}
 					onRetry={onRetry}
 				/>
 			)}

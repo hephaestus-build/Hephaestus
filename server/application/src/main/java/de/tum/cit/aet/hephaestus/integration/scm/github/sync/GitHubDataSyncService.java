@@ -659,7 +659,7 @@ public class GitHubDataSyncService {
                             // (unitsCompleted/unitsTotal travel on the same record).
                             SyncProgress.ofResource(
                                     SyncPhase.REPOSITORIES,
-                                    "Syncing " + sanitizeForLog(target.repositoryNameWithOwner()),
+                                    "Sync of " + sanitizeForLog(target.repositoryNameWithOwner()),
                                     sanitizeForLog(target.repositoryNameWithOwner()),
                                     reposProcessed,
                                     syncTargets.size()));

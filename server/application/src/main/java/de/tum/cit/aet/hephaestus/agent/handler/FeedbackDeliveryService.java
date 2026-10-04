@@ -73,7 +73,8 @@ class FeedbackDeliveryService {
             return true;
         }
         if (result.status() == PracticeFeedbackDispatchService.Result.Status.SUPPRESSED) return true;
-        throw new JobDeliveryException("Review package dispatch is awaiting reconciliation: jobId=" + job.getId());
+        throw new JobDeliveryException(
+                "The dispatch of the review package waits for reconciliation. jobId=" + job.getId());
     }
 
     void deliverFeedback(AgentJob job, @Nullable DeliveryContent delivery, Set<String> contributingPracticeSlugs) {
@@ -102,7 +103,8 @@ class FeedbackDeliveryService {
             return;
         }
         if (result.status() == PracticeFeedbackDispatchService.Result.Status.SUPPRESSED) return;
-        throw new JobDeliveryException("Review package dispatch is awaiting reconciliation: jobId=" + job.getId());
+        throw new JobDeliveryException(
+                "The dispatch of the review package waits for reconciliation. jobId=" + job.getId());
     }
 
     /**

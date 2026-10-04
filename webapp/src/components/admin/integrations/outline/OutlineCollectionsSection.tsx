@@ -24,7 +24,7 @@ import { RemoveCollectionAlertDialog } from "./RemoveCollectionAlertDialog";
 
 export type { OutlineMirrorState } from "./OutlineCollectionRow";
 
-/** Shared by the loading and loaded states so the header doesn't materialise on resolve. */
+/** Shared by the loading and loaded states so the header does not materialise on resolve. */
 function CollectionsTableHeader() {
 	return (
 		<TableHeader>
@@ -97,7 +97,7 @@ export function OutlineCollectionsSection({
 		content = (
 			<QueryErrorAlert
 				error={error}
-				title="We couldn't load the mirrored collections"
+				title="We could not load the mirrored collections"
 				onRetry={onRetry}
 			/>
 		);
@@ -163,7 +163,7 @@ export function OutlineCollectionsSection({
 					<CardDescription>
 						Documents in mirrored collections are kept in sync and reach practice reviews as
 						context. Pausing a collection <strong>freezes syncing but keeps its documents</strong>
-						{"; "}removing it <strong>erases every mirrored document</strong> from Hephaestus.
+						{". "}Removing it <strong>erases every mirrored document</strong> from Hephaestus.
 					</CardDescription>
 					<CardAction>
 						<Button size="sm" onClick={() => setAddOpen(true)}>

@@ -45,7 +45,8 @@ public class EmailUnsubscribeController {
     public ResponseEntity<Void> unsubscribe(
             @PathVariable String token, @RequestParam("List-Unsubscribe") String action) {
         if (!"One-Click".equals(action)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Expected a one-click unsubscribe request");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "The request must be a one-click unsubscribe request.");
         }
         subscriptions.unsubscribe(token);
         return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();

@@ -153,7 +153,7 @@ function Counts({
 		return (
 			<QueryErrorAlert
 				error={counts.error}
-				title="Couldn't load this practice's counts"
+				title="Could not load this practice's counts"
 				onRetry={counts.onRetry}
 			/>
 		);

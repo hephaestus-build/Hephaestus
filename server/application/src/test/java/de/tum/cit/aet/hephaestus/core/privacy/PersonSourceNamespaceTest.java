@@ -41,6 +41,6 @@ class PersonSourceNamespaceTest extends BaseUnitTest {
         assertThatThrownBy(() -> connection.setConfig(
                         new ConnectionConfig.OutlineConfig("https://another.example", null, null, Set.of())))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("cannot change provider instance");
+                .hasMessageContaining("cannot change its provider instance");
     }
 }

@@ -61,7 +61,7 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		icon: CircleSlashIcon,
 		badgeVariant: "outline",
 		description:
-			"Your work was reviewed, but nothing here could be judged: either these practices did not apply to it, or the evidence did not settle the question.",
+			"Your work was reviewed, but nothing here could be judged. Either these practices did not apply to it, or the evidence did not settle the question.",
 		predicate: { one: "has nothing to report", many: "have nothing to report" },
 	},
 	NOT_OBSERVED: {
@@ -84,7 +84,7 @@ export const PRACTICE_STANDING_DEFS: Record<PracticeGroupStandingValue, Practice
 		NO_OPPORTUNITY: {
 			...PRACTICE_GROUP_STANDING_DEFS.NO_OPPORTUNITY,
 			description:
-				"Your work was reviewed, but this practice could not be judged on it: either it did not apply, or the evidence did not settle the question.",
+				"Your work was reviewed, but this practice could not be judged on it. Either it did not apply, or the evidence did not settle the question.",
 		},
 		NOT_OBSERVED: {
 			...PRACTICE_GROUP_STANDING_DEFS.NOT_OBSERVED,

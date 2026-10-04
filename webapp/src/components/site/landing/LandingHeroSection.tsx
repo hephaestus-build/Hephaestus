@@ -231,7 +231,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						id="landing-hero-heading"
 						className="relative z-10 mt-5 max-w-3xl text-4xl font-bold tracking-display text-balance sm:text-5xl md:text-6xl"
 					>
-						Learn from the work you’re{" "}
+						Learn from the work you are{" "}
 						<span className="relative inline-block whitespace-nowrap">
 							already doing
 							<span
@@ -298,7 +298,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 					<HeroScene />
 					<figcaption className="sr-only">
 						One change through a project. The issue #412 has no acceptance criteria, so the pull
-						request grew to 34 files and picked up an unrelated rename; a reviewer asks a good
+						request grew to 34 files and picked up an unrelated rename. A reviewer asks a good
 						question that never gets answered before the merge. Hephaestus points back to the issue
 						as the place to start.
 					</figcaption>

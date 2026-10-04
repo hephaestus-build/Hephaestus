@@ -42,7 +42,7 @@ public record PracticePrecondition(
         // Named the way PracticePreconditionClause names its fields: the editor's label, then the key typed.
         if (skipReason.isBlank()) {
             throw new IllegalArgumentException(
-                    "“Otherwise skip” (skipReason) needs a sentence saying why the practice does not apply.");
+                    "“Otherwise skip” (skipReason) needs a sentence that says why the practice does not apply.");
         }
         if (skipReason.length() > MAX_SENTENCE_LENGTH) {
             throw new IllegalArgumentException(

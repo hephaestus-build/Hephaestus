@@ -127,7 +127,7 @@ async function renderModelsRoute(bindings: () => AgentBinding[], aiChoiceRequire
 }
 
 type PurposeTitle = "Practice reviews" | "Heph";
-const UNCHOSEN = "Members who haven't chosen";
+const UNCHOSEN = "Members who have not chosen";
 
 function row(purpose: PurposeTitle, title: string = UNCHOSEN): HTMLElement {
 	return within(screen.getByRole("region", { name: purpose })).getByRole("group", {
@@ -352,7 +352,7 @@ it("shows a slot refusal that names no tier as the server phrased it", async () 
 					type: "about:blank",
 					title: "Conflict",
 					status: 409,
-					detail: "This model's data handling isn't declared yet.",
+					detail: "This model's data handling is not declared yet.",
 				},
 				{ status: 409 },
 			),
@@ -363,7 +363,7 @@ it("shows a slot refusal that names no tier as the server phrased it", async () 
 	fireEvent.click(saveButton("Practice reviews", "In-house"));
 
 	await within(row("Practice reviews", "In-house")).findByText(
-		"This model's data handling isn't declared yet.",
+		"This model's data handling is not declared yet.",
 	);
 });
 

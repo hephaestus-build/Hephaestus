@@ -102,7 +102,7 @@ public class GitLabSummaryChannel implements SummaryChannel {
         }
 
         if (response == null) {
-            throw new FeedbackDeliveryException("Null response from createNote mutation");
+            throw new FeedbackDeliveryException("The createNote mutation returned no response");
         }
 
         // Surface TOP-LEVEL GraphQL errors with their real reason — createNote returns no payload at all when
@@ -136,7 +136,7 @@ public class GitLabSummaryChannel implements SummaryChannel {
      */
     private String resolveNoteable(long scopeId, String subject) {
         if (gitLabProvider.isRateLimitCritical(scopeId)) {
-            throw new FeedbackDeliveryException("GitLab rate limit critical for scope " + scopeId);
+            throw new FeedbackDeliveryException("The GitLab rate limit is critical for scope " + scopeId);
         }
         if (isIssueSubject(subject)) {
             MrCoordinates issue = GitLabMrResolver.parseIssueSubjectExternalId(subject);
@@ -158,10 +158,10 @@ public class GitLabSummaryChannel implements SummaryChannel {
     public UpdateOutcome updateSummary(FeedbackTarget target, String externalId, FeedbackContent content) {
         long scopeId = target.ref().workspaceId();
         if (externalId == null || externalId.isBlank()) {
-            throw new FeedbackDeliveryException("Cannot edit a GitLab note in place: external note id is missing");
+            throw new FeedbackDeliveryException("Cannot edit a GitLab note in place. The external note id is missing.");
         }
         if (gitLabProvider.isRateLimitCritical(scopeId)) {
-            return UpdateOutcome.transientFailure("GitLab rate limit critical for scope " + scopeId);
+            return UpdateOutcome.transientFailure("The GitLab rate limit is critical for scope " + scopeId);
         }
         String body = escapeSlashCommands(content.externalBody());
 
@@ -182,7 +182,7 @@ public class GitLabSummaryChannel implements SummaryChannel {
         }
 
         if (response == null) {
-            return UpdateOutcome.transientFailure("Null response from updateNote mutation");
+            return UpdateOutcome.transientFailure("The updateNote mutation returned no response");
         }
 
         // A DELETED note surfaces as a TOP-LEVEL GraphQL error (the global id resolves to nothing), NOT a

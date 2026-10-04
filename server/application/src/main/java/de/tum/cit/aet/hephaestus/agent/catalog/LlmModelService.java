@@ -88,7 +88,7 @@ public class LlmModelService {
     @Transactional
     public LlmModel create(Long connectionId, CreateLlmModelRequestDTO request) {
         if (Boolean.TRUE.equals(request.enabled())) {
-            throw new IllegalArgumentException("Create the model disabled, set its price, then activate it.");
+            throw new IllegalArgumentException("Create the model as disabled. Set its price. Then activate the model.");
         }
         LlmConnection connection = connectionRepository
                 .findById(connectionId)
@@ -146,7 +146,7 @@ public class LlmModelService {
                 priceRepository.findByModelIdAndEffectiveToIsNull(model.getId()).orElse(null);
         if (!model.getConnection().isEnabled() || price == null || price.getPricingMode() == PricingMode.UNPRICED) {
             throw new IllegalArgumentException(
-                    "Activate the connection and configure a price before activating the model.");
+                    "Before you activate the model, activate the connection. Also set a price for the model.");
         }
     }
 
@@ -205,7 +205,8 @@ public class LlmModelService {
                 .orElseThrow(() -> new EntityNotFoundException("LlmModel", modelId));
         validatePriceRequest(request);
         if (model.isEnabled() && request.pricingMode() == PricingMode.UNPRICED) {
-            throw new IllegalArgumentException("Disable the model before changing its price to UNPRICED.");
+            throw new IllegalArgumentException(
+                    "To change the price of the model to UNPRICED, first disable the model.");
         }
 
         Instant now = Instant.now();
@@ -304,7 +305,7 @@ public class LlmModelService {
         Set<Long> unknown = new LinkedHashSet<>(workspaceIds);
         unknown.removeAll(found);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Cannot share with unknown workspace(s): "
+            throw new IllegalArgumentException("Cannot share with unknown workspaces: "
                     + unknown.stream().map(String::valueOf).collect(Collectors.joining(", ")));
         }
     }

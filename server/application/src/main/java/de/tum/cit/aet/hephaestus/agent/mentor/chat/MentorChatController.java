@@ -55,13 +55,13 @@ public class MentorChatController {
         String userMessage = extractUserMessage(body.message());
         if (userMessage == null || userMessage.isBlank()) {
             SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MS);
-            shortCircuitError(emitter, "User message text is empty.");
+            shortCircuitError(emitter, "The message text is empty.");
             return emitter;
         }
         int maxPromptChars = mentorAgentProperties.maxPromptChars();
         if (userMessage.length() > maxPromptChars) {
             SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MS);
-            shortCircuitError(emitter, "User message is too long (max " + maxPromptChars + " characters).");
+            shortCircuitError(emitter, "The message is too long. The maximum is " + maxPromptChars + " characters.");
             return emitter;
         }
 

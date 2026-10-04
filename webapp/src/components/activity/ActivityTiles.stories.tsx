@@ -57,7 +57,7 @@ export const Default: Story = {
 		const pullRequests = canvas.getByRole("link", { name: /^Pull requests/u });
 		await expect(within(pullRequests).getByText("2 more than the previous 30 days")).toBeVisible();
 		await expect(pullRequests).toHaveAccessibleDescription(
-			/^3 pull requests merged; busiest day .+\. 2 more than the previous 30 days$/u,
+			/^3 pull requests merged\. Busiest day .+\. 2 more than the previous 30 days$/u,
 		);
 		const reviews = canvas.getByRole("link", { name: /^Reviews/u });
 		await expect(within(reviews).getByText("3 fewer than the previous 30 days")).toBeVisible();
@@ -115,7 +115,7 @@ export const TwelveMonths: Story = {
 	play: async ({ canvas }) => {
 		const comments = canvas.getByRole("link", { name: /^Comments/u });
 		await expect(comments).toHaveAccessibleDescription(
-			/^1692 comments; busiest month \w+ \d{4}, \d+$/u,
+			/^1692 comments\. Busiest month \w+ \d{4}, \d+$/u,
 		);
 		await expect(columns(comments)).toBe(
 			differenceInCalendarMonths(STORY_NOW, rangeStart(STORY_NOW, "1y")) + 1,

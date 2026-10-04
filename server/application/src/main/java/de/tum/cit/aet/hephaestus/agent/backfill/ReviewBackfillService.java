@@ -78,16 +78,16 @@ public class ReviewBackfillService {
         // not enumerable from a repository the way pull requests and issues are. Refused by name rather
         // than silently producing an empty scope, which would read as "nothing to review".
         throw new IllegalArgumentException(
-                "Past work can be reviewed only for pull or merge requests and issues, not for this kind of work.");
+                "You can review past work only for a pull or merge request or an issue. You cannot review past work of this kind.");
     }
 
     private static String statusWords(ReviewBackfillStatus status) {
         return switch (status) {
-            case AWAITING_CONFIRMATION -> "waiting to be confirmed";
+            case AWAITING_CONFIRMATION -> "waiting for confirmation";
             case RUNNING -> "already running";
             case PAUSED -> "paused";
             case COMPLETED -> "already finished";
-            case CANCELLED -> "already cancelled";
+            case CANCELLED -> "already canceled";
         };
     }
 
@@ -111,20 +111,20 @@ public class ReviewBackfillService {
         Duration window = Duration.between(fromAt, toAt);
         if (window.compareTo(properties.maxWindow()) > 0) {
             throw new IllegalArgumentException("The backfill window covers " + window.toDays()
-                    + " days; the limit is "
+                    + " days. The limit is "
                     + properties.maxWindow().toDays()
-                    + ".");
+                    + " days.");
         }
         if (runRepository.existsByWorkspaceIdAndStatusIn(context.id(), UNDER_WAY)) {
             throw new ReviewBackfillConflictException(
-                    "A backfill is already under way for this workspace. Cancel it before starting another.");
+                    "A backfill is already active for this workspace. To start another backfill, first cancel the active backfill.");
         }
         supersedeUnconfirmed(context.id());
 
         long inScope = countScope(context.id(), kind, fromAt, toAt);
         if (inScope > properties.maxArtifacts()) {
             throw new IllegalArgumentException("The backfill window covers " + inScope
-                    + " pieces of work; the limit is "
+                    + " pieces of work. The limit is "
                     + properties.maxArtifacts()
                     + ". Narrow the window.");
         }
@@ -190,7 +190,7 @@ public class ReviewBackfillService {
             case RUNNING -> {
                 if (!run.getStatus().isConfirmable()) {
                     throw new ReviewBackfillConflictException(
-                            "This backfill is " + statusWords(run.getStatus()) + ", so it cannot be started.");
+                            "You cannot start this backfill because it is " + statusWords(run.getStatus()) + ".");
                 }
                 if (run.getStartedAt() == null) {
                     run.setStartedAt(Instant.now());
@@ -209,7 +209,7 @@ public class ReviewBackfillService {
             case CANCELLED -> {
                 if (!run.getStatus().isActive() && run.getStatus() != ReviewBackfillStatus.AWAITING_CONFIRMATION) {
                     throw new ReviewBackfillConflictException(
-                            "This backfill is " + statusWords(run.getStatus()) + ", so it cannot be cancelled.");
+                            "You cannot cancel this backfill because it is " + statusWords(run.getStatus()) + ".");
                 }
                 run.transitionTo(ReviewBackfillStatus.CANCELLED, null);
                 log.info("Review backfill cancelled: runId={}, workspaceId={}", run.getId(), context.id());

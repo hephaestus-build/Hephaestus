@@ -134,7 +134,7 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.deliverFeedback(job, delivery()))
                 .isInstanceOf(JobDeliveryException.class)
-                .hasMessageContaining("awaiting reconciliation");
+                .hasMessageContaining("waits for reconciliation");
     }
 
     @Test

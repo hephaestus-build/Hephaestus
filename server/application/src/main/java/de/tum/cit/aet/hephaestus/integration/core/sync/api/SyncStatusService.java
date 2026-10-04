@@ -208,10 +208,10 @@ public class SyncStatusService {
         Connection connection = connectionAdminService.findInWorkspaceOrThrow(workspaceId, connectionId);
         if (connection.getState() != IntegrationState.ACTIVE) {
             throw new SyncStateConflictException(
-                    "Cannot trigger sync: connection " + connectionId
-                            + " is not ACTIVE (state="
+                    "Cannot trigger a sync. Connection " + connectionId
+                            + " is not ACTIVE. Its state is "
                             + connection.getState()
-                            + ")",
+                            + ".",
                     Map.of("connectionId", connectionId, "connectionState", connection.getState()));
         }
         // Only RECONCILIATION and BACKFILL are client-triggerable. INITIAL is lifecycle-owned: it runs
@@ -221,7 +221,7 @@ public class SyncStatusService {
         // as an allowlist, so any future non-client type is rejected by default rather than by omission.
         if (type != SyncJobType.RECONCILIATION && type != SyncJobType.BACKFILL) {
             throw new SyncStateConflictException(
-                    "Cannot trigger a " + type + " sync: only RECONCILIATION and BACKFILL are client-triggerable",
+                    "Cannot trigger a " + type + " sync. A client can trigger only RECONCILIATION and BACKFILL syncs.",
                     Map.of("requestedType", type));
         }
 
@@ -249,7 +249,7 @@ public class SyncStatusService {
                 }));
             } catch (TaskRejectedException e) {
                 // The row was created but no body will run — finalize it so it doesn't hold the slot.
-                syncJobService.failStarted(started, "Sync dispatch rejected (executor saturated)");
+                syncJobService.failStarted(started, "The server is busy and could not start the sync.");
                 throw e;
             }
             return new TriggerOutcome(SyncJobDTO.from(started.job()), true);
@@ -259,11 +259,12 @@ public class SyncStatusService {
             if (e.activeJob().getType() != type) {
                 SyncJob active = e.activeJob();
                 throw new SyncStateConflictException(
-                        "Cannot start " + type
-                                + " sync: a "
+                        "Cannot start a " + type
+                                + " sync. A "
                                 + active.getType()
-                                + " sync is already running for connection "
-                                + connectionId,
+                                + " sync already runs for connection "
+                                + connectionId
+                                + ".",
                         Map.of(
                                 "conflictingJobId",
                                 active.getId(),

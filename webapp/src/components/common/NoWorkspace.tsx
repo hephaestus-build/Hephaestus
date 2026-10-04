@@ -21,7 +21,7 @@ export function NoWorkspace({ headingLevel = 1 }: { headingLevel?: 1 | 2 }) {
 				<EmptyTitle role="heading" aria-level={headingLevel}>
 					No workspace
 				</EmptyTitle>
-				<EmptyDescription>You&apos;re not a member of any workspace yet.</EmptyDescription>
+				<EmptyDescription>You are not a member of any workspace yet.</EmptyDescription>
 			</EmptyHeader>
 			<Link to="/workspaces/new" className={buttonVariants()}>
 				<PlusIcon className="mr-2 size-4" />

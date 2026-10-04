@@ -362,7 +362,7 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 .isEqualTo(502)
                 .expectBody()
                 .jsonPath("$.title")
-                .isEqualTo("The Outline server could not be reached")
+                .isEqualTo("Hephaestus could not reach the Outline server")
                 .jsonPath("$.type")
                 .isEqualTo("/problems/outline-unreachable");
     }

@@ -317,7 +317,7 @@ public class WorkspaceContextFilter implements Filter {
                     history.getRedirectExpiresAt());
             ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.GONE);
             problem.setTitle("Workspace slug expired");
-            problem.setDetail("Redirect for this workspace slug has expired");
+            problem.setDetail("The redirect for this workspace slug has expired.");
             problem.setProperty("oldSlug", oldSlug);
             problem.setProperty("expiredAt", history.getRedirectExpiresAt());
             response.setStatus(HttpStatus.GONE.value());
@@ -397,7 +397,7 @@ public class WorkspaceContextFilter implements Filter {
     private void sendWorkspaceMembershipForbiddenError(HttpServletResponse response, String slug) throws IOException {
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
         problem.setTitle("Membership required");
-        problem.setDetail("You must be a member of workspace " + slug + " to access this resource.");
+        problem.setDetail("To access this resource, you must be a member of workspace " + slug + ".");
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(problem));
@@ -406,7 +406,7 @@ public class WorkspaceContextFilter implements Filter {
     private void sendWorkspaceUnauthorizedError(HttpServletResponse response, String slug) throws IOException {
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.UNAUTHORIZED);
         problem.setTitle("Authentication required");
-        problem.setDetail("You must sign in to access workspace " + slug + ".");
+        problem.setDetail("To access workspace " + slug + ", you must sign in.");
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(problem));

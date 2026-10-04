@@ -74,8 +74,8 @@ public class DevLoginService {
         // prod (application.yml). The same idiom guards JwtSigningKeyService / AuthSecurityConfig.
         if (enabled && environment.acceptsProfiles(Profiles.of("prod"))) {
             throw new IllegalStateException(
-                    "hephaestus.auth.dev-login-enabled must NOT be true under the 'prod' profile — "
-                            + "a passwordless sign-in is fail-closed in production.");
+                    "hephaestus.auth.dev-login-enabled must not be true under the 'prod' profile. "
+                            + "A passwordless sign-in is fail-closed in production.");
         }
         if (enabled) {
             log.warn("auth.dev-login: PASSWORDLESS dev sign-in POST /auth/dev-login is ENABLED "

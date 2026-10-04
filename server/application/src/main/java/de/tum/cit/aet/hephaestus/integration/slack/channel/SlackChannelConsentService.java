@@ -266,7 +266,7 @@ public class SlackChannelConsentService {
                 }
                 case PENDING ->
                     throw new SlackChannelConsentViolationException(
-                            "PENDING is only reachable via discovery/registration, not a consent transition.");
+                            "A consent transition cannot set the state PENDING. Only discovery or registration sets it.");
             }
 
             recordAudit(workspaceId, slackChannelId, from, target, reason);
@@ -323,8 +323,8 @@ public class SlackChannelConsentService {
                     case REVOKED -> false; // only register() may start a fresh setup
                 };
         if (!allowed) {
-            throw new SlackChannelConsentViolationException("Illegal Slack channel consent transition " + from + " → "
-                    + target + " for channel " + slackChannelId);
+            throw new SlackChannelConsentViolationException("The Slack channel " + slackChannelId
+                    + " cannot change its consent state from " + from + " to " + target + ".");
         }
     }
 

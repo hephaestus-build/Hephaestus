@@ -43,13 +43,13 @@ public class GitLabConnectionStrategy implements ConnectionStrategy {
 
     @Override
     public ConnectInitiation initiate(InitiateRequest request) {
-        throw new IllegalArgumentException("A GitLab connection is made by creating a GitLab workspace");
+        throw new IllegalArgumentException("You make a GitLab connection when you create a GitLab workspace.");
     }
 
     @Override
     public ConnectFinalization finalizeConnect(IntegrationRef ref, Map<String, String> callbackParams) {
         return new ConnectFinalization.Failed(
-                "GitLab has no vendor callback; its connection is made by creating a GitLab workspace");
+                "GitLab has no vendor callback. You make a GitLab connection when you create a GitLab workspace.");
     }
 
     @Override

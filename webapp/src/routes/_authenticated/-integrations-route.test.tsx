@@ -12,7 +12,7 @@ vi.setConfig({ testTimeout: 30_000 });
 vi.mock("@/hooks/use-sync-events", () => ({ useSyncEvents: () => false }));
 
 const CONFLICT =
-	'This Slack workspace is already connected to the Hephaestus workspace "Staging" (staging). Disconnect Slack there before connecting it here.';
+	'This Slack workspace is already connected to the Hephaestus workspace "Staging" (staging). Disconnect Slack there before you connect it here.';
 
 function failureRedirect() {
 	const query = new URLSearchParams({

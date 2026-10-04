@@ -26,7 +26,7 @@ class ReviewOutcomeLookupAdapterTest extends BaseUnitTest {
                 ]}
                 """);
 
-        assertThat(adapter.blockers(decision)).containsExactly("Only part of “Code changes” was captured.");
+        assertThat(adapter.blockers(decision)).containsExactly("The review captured only part of “Code changes”.");
     }
 
     @Test
@@ -40,9 +40,9 @@ class ReviewOutcomeLookupAdapterTest extends BaseUnitTest {
 
         assertThat(adapter.blockers(decision))
                 .containsExactly(
-                        "“Code changes” was not captured.",
-                        "Nothing was captured from “Code changes”.",
-                        "“Code changes” could not be read.");
+                        "The review did not capture “Code changes”.",
+                        "The review captured nothing from “Code changes”.",
+                        "The review could not read “Code changes”.");
     }
 
     /**
@@ -59,9 +59,9 @@ class ReviewOutcomeLookupAdapterTest extends BaseUnitTest {
                 """);
 
         assertThat(ReviewOutcomeLookupAdapter.limitation(humanReview))
-                .isEqualTo("This practice needs human review, so it is not reviewed automatically.");
+                .isEqualTo("This practice needs human review, so no automatic review covers it.");
         assertThat(ReviewOutcomeLookupAdapter.limitation(guidanceOnly))
-                .isEqualTo("This practice is guidance only, so it is not reviewed automatically.");
+                .isEqualTo("This practice is guidance only, so no automatic review covers it.");
         assertThat(adapter.blockers(humanReview)).isEmpty();
         assertThat(adapter.blockers(guidanceOnly)).isEmpty();
         assertThat(ReviewOutcomeLookupAdapter.limitation(mapper.readTree("{\"reasonCodes\": []}")))
@@ -82,9 +82,9 @@ class ReviewOutcomeLookupAdapterTest extends BaseUnitTest {
 
         assertThat(adapter.blockers(decision))
                 .containsExactly(
-                        "A required source was not captured.",
-                        "Nothing was captured from a required source.",
-                        "A required source could not be read.")
+                        "The review did not capture a required source.",
+                        "The review captured nothing from a required source.",
+                        "The review could not read a required source.")
                 .allSatisfy(blocker -> assertThat(blocker).doesNotContain("scm.", "Not A Kind", "_"));
     }
 }

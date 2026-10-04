@@ -24,8 +24,6 @@
 	],
 
 	"rules": {
-		// The writing standard uses an exact path ratchet. Unlisted files need a prose review.
-		"hephaestus/ste-ui-text": "error",
 		// -- Design system ---------------------------------------------------------------------------
 		// No `settings.shadcn`: `components.json` names the theme CSS and the registry path.
 		// `shadcn/require-static-classes` stays off: it cannot resolve an imported vocabulary map or a
@@ -212,6 +210,16 @@
 	// the later one's copy of a rule REPLACES the earlier one's options instead of merging with them.
 	// Entries whose globs overlap but set different rules are fine, and there are several below.
 	"overrides": [
+		{
+			// UI text follows the writing standard in all of `src`. The next entry turns the rule off
+			// for tests, which assert on text, and for mocks, which reproduce what the server sends.
+			"files": ["src/**"],
+			"rules": { "hephaestus/ste-ui-text": "error" }
+		},
+		{
+			"files": ["**/*.test.ts", "**/*.test.tsx", "src/mocks/**"],
+			"rules": { "hephaestus/ste-ui-text": "off" }
+		},
 		{
 			// Vocabulary maps are consumed indirectly, beyond the plugin's one-hop analysis.
 			// Scanning all strings everywhere misreads element ids such as "outline-token" as CSS.

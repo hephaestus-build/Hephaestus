@@ -87,7 +87,7 @@ Only the named rule stops inside the marked span.
 Other rules still apply there, and the named rule applies again after the span.
 
 The report scans Markdown and MDX in the three docs trees.
-For UI source, it scans literal JSX text and text props, including stories.
+For UI source, it scans literal JSX text and text props, including stories, in `webapp/src`.
 It excludes generated clients, the route tree, tests, and mock data.
 A dash in the report means that the UI rule does not implement that check.
 Counts are alerts, not unique sentences or confirmed defects.

@@ -234,7 +234,7 @@ The server sends a session's proxy route and turn billing binding to its worker.
 The worker resolves provider keys and never sends them to the sandbox.
 PostgreSQL remains the billing record.
 
-When no worker can admit a new session, Heph says **“Heph is busy. Please try again.”** A drain rejects
+When no worker can admit a new session, Heph says **“Heph is busy. Try again.”** A drain rejects
 new sessions and ends existing streams. After idle eviction, a drain or a worker restart, the next
 turn opens a session on an available worker and restores the saved `session_jsonl`. Sticky server
 affinity retains the live placement. Changing the model, route, image, runtime inputs or limits

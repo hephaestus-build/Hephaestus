@@ -250,7 +250,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                         fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null))))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(fixture.jobId().toString())
-                .hasMessageContaining("no exact reviewed-work inspection locator");
+                .hasMessageContaining("no exact locator for the reviewed-work inspection");
         assertThat(jdbc.queryForObject(
                         "SELECT delivery_comment_id FROM agent_job WHERE id=?", String.class, fixture.jobId()))
                 .isEqualTo("legacy-11");
@@ -345,7 +345,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                         fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null))))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(fixture.dispatchId().toString())
-                .hasMessageContaining("no exact reviewed-work locator");
+                .hasMessageContaining("needs inspection, but Hephaestus has no exact locator for the reviewed work");
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM feedback_dispatch WHERE id=?", Long.class, fixture.dispatchId()))
                 .isEqualTo(1);

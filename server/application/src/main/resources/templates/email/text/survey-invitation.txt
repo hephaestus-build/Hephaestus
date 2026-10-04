@@ -1,8 +1,8 @@
 [(#{email.survey-invitation.subject})]
 
-[(${research ? 'A research survey is available in your Hephaestus workspace.' : 'A product survey is available in your Hephaestus workspace.'})] Taking part is optional. Sign in to read its purpose and decide whether to respond.
+[(${research ? 'A research survey is available in your Hephaestus workspace.' : 'A product survey is available in your Hephaestus workspace.'})] You do not have to take part. Sign in to read its purpose. Then decide if you want to respond.
 
-[(${reminder == true ? 'This is your one reminder. You can ignore or decline the survey; no further reminder is scheduled.' : ''})]
+[(${reminder == true ? 'This is your only reminder. You can ignore or decline the survey. No further reminder is scheduled.' : ''})]
 
 Open the survey: [(${webappUrl})]/w/[(${workspaceSlug})]?survey=[(${surveyId})]
 
