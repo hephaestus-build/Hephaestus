@@ -60,9 +60,9 @@ export function WelcomeCard({
 				</h2>
 				<p className="max-w-prose text-base text-muted-foreground">
 					The extension shows the practice review of each pull request, merge request or issue you
-					open on GitHub or GitLab. It appears on the page, right after the description. It lists
-					the comments Hephaestus posted for you, each with a link, and what the review concluded
-					about your work.
+					open on GitHub or GitLab. It appears on the page, right after the description. It links to
+					the comments Hephaestus posted for you and shows what the review concluded about your
+					work.
 				</p>
 			</div>
 			<div className="flex flex-col gap-2">

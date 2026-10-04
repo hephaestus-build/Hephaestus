@@ -4,9 +4,9 @@ title: Chrome extension
 description: See practice reviews in the GitHub or GitLab page for the pull request, merge request, or issue you view.
 ---
 
-The Hephaestus Chrome extension adds a **practice review** to the pull request, merge request, or issue page that is open in your tab.
+The Hephaestus Chrome extension puts a **practice review** in the pull request, merge request, or issue page open in your tab.
 It appears after the description.
-It shows the comments Hephaestus posted there for you, with links to them, the review time, and the conclusions about your work.
+It shows comments Hephaestus posted there for you, links to them, the review time, and conclusions about your work.
 
 **Open in Hephaestus** opens the same records in the app, on the page called **Your feedback on this work**.
 That page also shows each earlier review of the work.
@@ -28,8 +28,8 @@ You need:
 1. If sign-in says **This instance does not know this extension**, ask its operators to allow it.
 
 The extension is not yet in the Chrome Web Store.
-Instance operators either install it through your organization’s Chrome settings or give you a package with installation instructions.
-The package method needs Chrome developer mode.
+Instance operators either install it through your organization’s Chrome settings or supply a package with installation instructions.
+The package method requires Chrome developer mode.
 
 ## Connect it to your Hephaestus
 
@@ -57,7 +57,7 @@ If you close the window before you finish, nothing changes and you can try again
 ### Allow it on GitHub and GitLab
 
 The extension reads nothing on a site until you allow it.
-Settings list the sites that your workspaces connect to: `github.com`, `gitlab.com`, or your organization’s GitLab address.
+Settings list sites connected to your workspaces: `github.com`, `gitlab.com`, or your organization’s GitLab address.
 Each site needs its own permission, and Chrome asks each time.
 
 1. In extension settings, select **Allow** beside each site you need.
@@ -71,7 +71,7 @@ If no site appears, you do not yet belong to a workspace that is connected to Gi
 
 ## The practice review on the page
 
-On supported pages, the review sits in the page’s content column:
+On supported pages, the review uses the page’s content column:
 
 - On a GitHub pull request, after its description and before the conversation.
 - On a GitHub issue, after its description and before the activity.
@@ -82,21 +82,21 @@ On supported pages, the review sits in the page’s content column:
 The review starts as one line, and the line has the same height in every state.
 It shows, in order:
 
-1. A pending or deferred decision recorded for your review, such as *Review decision pending*.
+1. A pending or deferred decision recorded for your review, such as _Review decision pending_.
 2. The number of comments Hephaestus recorded as posted for you on this work.
 3. The latest review time.
-4. How many practices the review could not finish, such as *1 practice incomplete*.
+4. How many practices the review could not finish, such as _1 practice incomplete_.
 
-For example: *3 comments for you · reviewed 2 hr. ago*.
+For example: _3 comments for you · reviewed 2 hr. ago_.
 
 1. Select the line to expand the report in place.
 2. Select it again to close the report.
 
-The page moves down to make room instead of showing an overlay.
+The page moves down to make room, without an overlay.
 The extension remembers that the report is open while you stay on the same work in that tab.
 This includes when you switch to the changes and back.
-While the report loads, the line reads *Loading…*.
-If the report cannot start at all, it says *We could not load here*.
+While the report loads, the line reads _Loading…_.
+If the report cannot start at all, it says _We could not load here_.
 
 1. If the report cannot start, reload the page.
 
@@ -114,18 +114,18 @@ The expanded report is one flat list, with no further expansion controls:
 On the changes page, comments on lines appear first.
 The comment list shows what Hephaestus recorded when it posted.
 Someone may have changed or deleted a comment since then.
-A comment with no recorded address says *no link recorded*.
+A comment with no recorded address says _no link recorded_.
 A comment posted while the rest of its feedback could not be posted names no practice.
 
-Workspace admins also get **Review details**, including instance administrators who work in the workspace.
+Workspace admins also get **Review details**, including instance admins who work in the workspace.
 It shows each developer’s observations, each piece of feedback’s delivery state, and each review run.
 A run there can be canceled or its results retried.
 
 **No recorded comments does not mean no problems.**
-*No recorded comments for you* only means that Hephaestus recorded no comment for you on this work.
+_No recorded comments for you_ only means that Hephaestus recorded no comment for you on this work.
 It is not a clean result.
 The work may be unreviewed, or no practice may check the event that occurred.
-*Review status unavailable* means your account has no review trace available.
+_Review status unavailable_ means your account has no available review trace.
 It does not prove the work was never reviewed.
 
 ## Previewing work from a list
@@ -174,8 +174,8 @@ Your instance may set a shorter limit.
 
 1. After sign-in ends, sign in again from settings.
 
-Under **User settings**, the session appears as *Browser extension in Chrome on …*.
-Ending that session there, signing out everywhere, or an administrator ending your sessions also signs the extension out.
+Under **User settings**, the session appears as _Browser extension in Chrome on …_.
+Ending that session there, signing out everywhere, or an instance admin ending your sessions also signs the extension out.
 
 1. To sign out, select **Sign out** in extension settings.
 
@@ -193,18 +193,18 @@ Signing out, or changing the Hephaestus address, clears the extension’s conten
 
 ## When something is not right
 
-| The report says | What it means |
-| --- | --- |
-| We could not load here | The report did not start. |
-| We could not load | Your Hephaestus did not answer. |
-| We could not load your feedback | The report loaded, but your comments did not. |
-| Connect the extension to Hephaestus | The extension is not connected yet. |
-| Sign in to … to see it | Your sign-in ended. |
-| One step left in Hephaestus | Your account needs a web-app step, such as acceptance of the current notice. |
-| Not available for this work | No workspace connects to this site, or the work is not in an accessible workspace. |
-| Followed in 2 workspaces | More than one workspace follows this work. The extension never chooses for you. |
-| No recorded comments for you | Hephaestus recorded no comment for you here. [What the report shows](#what-the-report-shows) explains the limits. |
-| Not refreshed | Hephaestus did not answer the latest refresh. The report shows its last answer and that answer’s time. |
+| The report starts with              | What it means                                                                                                     |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| We could not load here              | The report did not start.                                                                                         |
+| We could not load                   | Your Hephaestus did not answer.                                                                                   |
+| We could not load your comments     | The report loaded, but your comments did not.                                                                     |
+| Connect the extension to Hephaestus | The extension is not connected yet.                                                                               |
+| Sign in to … to see it              | Your sign-in ended.                                                                                               |
+| One step left in Hephaestus         | Your account needs a web-app step, such as acceptance of the current notice.                                      |
+| Not available for this work         | No workspace connects to this site, or the work is not in an accessible workspace.                                |
+| Followed in 2 workspaces            | Multiple workspaces follow this work. The extension never chooses for you.                                        |
+| No recorded comments for you        | Hephaestus recorded no comment for you here. [What the report shows](#what-the-report-shows) explains the limits. |
+| Not refreshed                       | Hephaestus did not answer the latest refresh. The report shows its last answer and that answer’s time.            |
 
 For **We could not load here**:
 
@@ -217,7 +217,7 @@ For **We could not load**:
 1. Check your connection.
 2. Select **Retry**.
 
-For **We could not load your feedback**:
+For **We could not load your comments**:
 
 1. Open the report.
 2. Select **Retry**.

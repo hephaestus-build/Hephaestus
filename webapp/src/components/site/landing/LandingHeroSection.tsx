@@ -3,7 +3,7 @@ import { CircleCheck, MessageSquare, Square } from "lucide-react";
 import { motion, stagger } from "motion/react";
 import { useMediaQuery } from "usehooks-ts";
 import { LandingSignInCta } from "@/components/auth/LandingSignInCta";
-import { GitHubIcon, GitLabIcon } from "@/components/icons/brand";
+import { GitHubIcon, GitLabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -192,7 +192,7 @@ export function HeroScene() {
 					<LandingHephFigure
 						className={styles.heroHeph}
 						lead="Start with #412, not the pull request."
-						body="Write the acceptance criteria down and the scope stops moving. The review gets shorter."
+						body="Write the acceptance criteria down and the scope stops moving. The review gets short."
 					/>
 				</LandingCluster>
 			</LandingSceneList>
@@ -249,7 +249,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 							The mentoring feedback a senior would give.
 						</span>{" "}
 						<span className="text-muted-foreground">
-							For everyone, not only the people they have time for.
+							For every developer, not only the ones a senior has time for.
 						</span>
 					</motion.p>
 
@@ -290,6 +290,14 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						<Badge variant="secondary" size="lg">
 							<GitLabIcon />
 							GitLab
+						</Badge>
+						<Badge variant="secondary" size="lg">
+							<SlackIcon />
+							Slack
+						</Badge>
+						<Badge variant="secondary" size="lg">
+							<OutlineIcon />
+							Outline
 						</Badge>
 					</motion.p>
 				</motion.div>

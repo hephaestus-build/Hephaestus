@@ -31,16 +31,38 @@ export interface RowPreviewProps {
 export const ROW_COMMENT_LINKS = 2;
 
 /** A text-sized control, as the row's own meta line would have one. */
-function TextButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function TextButton({
+	onClick,
+	label,
+	children,
+}: {
+	onClick: () => void;
+	label?: string;
+	children: ReactNode;
+}) {
 	return (
 		<button
 			type="button"
+			aria-label={label}
 			onClick={onClick}
-			className="text-link shrink-0 rounded-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+			className="text-link shrink-0 rounded-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
 		>
 			{children}
 		</button>
 	);
+}
+
+/** Names what a Retry in the row retries: one row's button cannot lean on the row around it. */
+function retryLabel(
+	stale: RowPreviewProps["stale"],
+	feedback: RowPreviewProps["feedback"],
+): string {
+	if (stale !== undefined) {
+		return "Retry refreshing the practice review";
+	}
+	return feedback?.status === "error"
+		? "Retry loading comments"
+		: "Retry loading the practice review";
 }
 
 /**
@@ -102,7 +124,11 @@ export function RowPreview({
 	// The row has no list to put a failed part's retry in, nor a failed refresh's; the line carries it.
 	switch (feedback?.status === "error" || stale !== undefined ? "retry" : summary.action) {
 		case "retry": {
-			action = <TextButton onClick={onRetry}>Retry</TextButton>;
+			action = (
+				<TextButton onClick={onRetry} label={retryLabel(stale, feedback)}>
+					Retry
+				</TextButton>
+			);
 			break;
 		}
 		case "set-up":

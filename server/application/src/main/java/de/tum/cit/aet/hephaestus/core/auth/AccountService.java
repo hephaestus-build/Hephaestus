@@ -120,9 +120,10 @@ public class AccountService {
         IdentityLink target = active.stream()
                 .filter(il -> il.getId().equals(identityLinkId))
                 .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "We could not find that connected account. Reload the page and try again."));
+                .orElseThrow(
+                        () -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "We could not find that connected account. It may have been deleted. Reload the page to see what is current."));
         if (active.size() <= 1) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -132,7 +133,8 @@ public class AccountService {
         if (identityLinkRepository.deleteByIdAndAccountId(identityLinkId, accountId) == 0) {
             // Lost a race (concurrently removed) — nothing to do; surface as not-found.
             throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND, "We could not find that connected account. Reload the page and try again.");
+                    HttpStatus.NOT_FOUND,
+                    "We could not find that connected account. It may have been deleted. Reload the page to see what is current.");
         }
         // The link row is now gone, so don't reference its id in the audit (its auth_event FK is
         // ON DELETE SET NULL anyway); account + provider record who unlinked which provider.

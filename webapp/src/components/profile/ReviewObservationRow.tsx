@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import { ChevronDownIcon } from "lucide-react";
-import { Fragment, type ReactNode, useId, useState } from "react";
+import { Fragment, type ReactNode, useState } from "react";
 
 import type { FeedbackResponseRequest, ObservationDetail } from "@/api/types.gen";
 import { FOCUS_RING, FOCUS_RING_INSET } from "@/components/common/focus";
@@ -43,18 +43,17 @@ function ReviewerText({ children }: { children: string }) {
 
 interface DetailSectionProps {
 	label: string;
-	labelId?: string;
 	className?: string;
 	children: ReactNode;
 }
 
 /** A section of the open row: its label in the muted kicker, then what it carries. */
-function DetailSection({ label, labelId, className, children }: DetailSectionProps) {
+function DetailSection({ label, className, children }: DetailSectionProps) {
 	return (
 		<div className={cn("flex min-w-0 flex-col gap-1", className)}>
 			{/* The row's anchor is its summary, so a label naming one of its details carries no
 			    weight of its own. */}
-			<SectionLabel id={labelId} as="span" className="font-normal">
+			<SectionLabel as="span" className="font-normal">
 				{label}
 			</SectionLabel>
 			{children}
@@ -276,7 +275,6 @@ function ObservationResponse({
 	onRespond,
 	pendingResponse,
 }: ObservationResponseProps) {
-	const labelId = useId();
 	// The resolution whose comment band is open; recorded only once Send or Skip closes it.
 	const [pendingResolution, setPendingResolution] = useState<FeedbackResolution>();
 	const isPending = pendingResponse !== undefined;
@@ -310,8 +308,12 @@ function ObservationResponse({
 	};
 	return (
 		<>
-			<DetailSection label="Your response" labelId={labelId} className="gap-2.5 px-4 pb-4">
-				<div role="group" aria-labelledby={labelId} className="flex flex-wrap items-center gap-2">
+			<DetailSection label="Your response" className="gap-2.5 px-4 pb-4">
+				<div
+					role="group"
+					aria-label={`Your response to ${observation.practiceName}`}
+					className="flex flex-wrap items-center gap-2"
+				>
 					{statusValues(FEEDBACK_RESOLUTION_DEFS).map((value) => {
 						const def = FEEDBACK_RESOLUTION_DEFS[value];
 						return (

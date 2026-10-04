@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-Text in the web app, the browser extension, emails, and the messages that Hephaestus posts to Slack, GitHub and GitLab is friendlier and clearer. Error messages say what happened and what to do next, and buttons name the action they run. The wording of some API errors changed, so a script that matches on that text must change.
+Error messages in the web app, the browser extension, emails, and the notes that Hephaestus posts to Slack, GitHub and GitLab now say what happened and what to do next. Buttons name the action they run, and everyday contractions such as "you’re" are back. Turning off silent mode now asks you to type "turn off" instead of "release". The wording of some API error messages changed.

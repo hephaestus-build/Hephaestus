@@ -41,7 +41,10 @@ public class GlobalControllerAdvice {
 
     @ExceptionHandler(EntityNotFoundException.class)
     ProblemDetail handleNotFound(EntityNotFoundException exception) {
-        log.debug("Handled entity not found exception: message={}", messageOf(exception));
+        log.debug(
+                "Handled entity not found exception: message={}, lookup={}",
+                messageOf(exception),
+                exception.getLookup());
         return problem(HttpStatus.NOT_FOUND, "Resource not found", messageOf(exception));
     }
 

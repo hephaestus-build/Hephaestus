@@ -54,6 +54,6 @@ export async function discoverInstance(
 	}
 	throw new WorkerError(
 		"invalid",
-		"No Hephaestus instance answered at that address. Check the address, and check that Chrome allowed access.",
+		"No Hephaestus instance answered at that address. Check the address and that you allowed access in Chrome.",
 	);
 }

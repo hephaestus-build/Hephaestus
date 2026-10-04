@@ -374,7 +374,8 @@ public class WorkspaceContextFilter implements Filter {
     private void sendWorkspaceNotFoundError(HttpServletResponse response, String slug) throws IOException {
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
         problem.setTitle("Resource not found");
-        problem.setDetail("Workspace not found: " + slug);
+        problem.setDetail(
+                "We could not find the workspace “" + slug + "”. Check the address, or choose another workspace.");
         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(problem));

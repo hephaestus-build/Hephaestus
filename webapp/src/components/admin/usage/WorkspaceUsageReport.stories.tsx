@@ -74,7 +74,7 @@ export const NoSharedBudget: Story = {
 		report: { ...capped, instanceMonthlyBudgetUsd: undefined },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("No shared-model budget set by your host");
+		canvas.getByText("No shared-model budget set by an instance admin");
 		await expect(
 			canvas.queryByRole("progressbar", { name: "Shared-model budget used" }),
 		).toBeNull();

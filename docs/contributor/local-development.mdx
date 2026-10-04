@@ -160,14 +160,14 @@ Every host-side port is configurable so multiple Hephaestus instances (or other 
 
 #### Default port map
 
-| Service            | Default | Variable           | Config location |
-| ------------------ | ------- | ------------------ | --------------- |
-| PostgreSQL         | 5432    | `POSTGRES_PORT`    | `server/.env`   |
-| Application server | 8080    | `SERVER_PORT`      | `server/.env`   |
-| Sandbox gateway    | 8081    | `SANDBOX_API_PORT` | `server/.env`   |
-| Mailpit SMTP       | 1025    | `MAILPIT_SMTP_PORT`| `server/.env`   |
-| Mailpit UI         | 8025    | `MAILPIT_UI_PORT`  | `server/.env`   |
-| Webapp (Vite dev)  | 4200    | `WEBAPP_PORT`      | Shell env only  |
+| Service            | Default | Variable            | Config location |
+| ------------------ | ------- | ------------------- | --------------- |
+| PostgreSQL         | 5432    | `POSTGRES_PORT`     | `server/.env`   |
+| Application server | 8080    | `SERVER_PORT`       | `server/.env`   |
+| Sandbox gateway    | 8081    | `SANDBOX_API_PORT`  | `server/.env`   |
+| Mailpit SMTP       | 1025    | `MAILPIT_SMTP_PORT` | `server/.env`   |
+| Mailpit UI         | 8025    | `MAILPIT_UI_PORT`   | `server/.env`   |
+| Webapp (Vite dev)  | 4200    | `WEBAPP_PORT`       | Shell env only  |
 
 :::tip Pre-flight check
 Run `vp run check:ports` before starting the stack. It checks the six ports above. A NATS

@@ -170,7 +170,7 @@ export const OverviewFailed: Story = {
 	args: {
 		overview: {
 			status: "error",
-			error: { status: 500, detail: "Something went wrong." },
+			error: { status: 500 },
 			onRetry: fn(),
 		},
 	},

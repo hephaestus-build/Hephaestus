@@ -47,14 +47,9 @@ JavaScript strings keep their literal meaning.
 
 ## Product voice
 
-The user docs in `docs/user/` use the product voice, and the UI rule checks UI text with the same contraction profile.
-`.vale.ini` has a section for `**/docs/user/**`.
-It swaps `STE.Contractions` for `STE.NegativeContractions`, which rejects only negative contractions.
-It also turns off the vocabulary, passive voice, and `-ing` suggestions, which describe STE.
-The UI rule reads the same negative list through the `voice` profile in `scripts/lib/ste-words.ts`.
-
-`.vale/fixtures/docs/user/` repeats the path of the real docs on purpose.
-The `**/docs/user/**` glob matches it, so the fixtures prove the section.
+The [writing standard](../docs/contributor/simplified-technical-english.md) defines the product voice.
+`.vale.ini` scopes it to `docs/user/`, and the `voice` profile in `scripts/lib/ste-words.ts` gives the UI rule the same negative contraction list.
+`.vale/fixtures/docs/user/` repeats the path of the real docs on purpose, because the `**/docs/user/**` glob must match the fixtures.
 Do not move them.
 
 ## Issue and discussion forms

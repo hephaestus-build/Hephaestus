@@ -107,7 +107,7 @@ describe("AdminLlmConnectionFormDialog", () => {
 			target: { value: "https://gw.example.com/v1?api-key=SECRET" },
 		});
 
-		fireEvent.click(screen.getByRole("button", { name: "Save inactive connection" }));
+		fireEvent.click(screen.getByRole("button", { name: "Add connection" }));
 
 		const rejection = validateLlmConnectionForm({
 			displayName: "Gateway",

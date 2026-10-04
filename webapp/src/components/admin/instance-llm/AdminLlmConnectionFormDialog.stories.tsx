@@ -64,18 +64,18 @@ export const DiscoveryUnsupported: Story = {
 		),
 	},
 	play: async () => {
-		await userEvent.type(await screen.findByLabelText("Base URL"), "https://example.com");
+		const baseUrl = await screen.findByLabelText("Base URL");
+		await userEvent.clear(baseUrl);
+		await userEvent.type(baseUrl, "https://example.com");
 		await userEvent.click(screen.getByRole("button", { name: "Test and fetch models" }));
 		await expectSettledVisible(await screen.findByText(/could not fetch the model list/iu));
-		await expect(screen.getByRole("button", { name: /save inactive connection/iu })).toBeEnabled();
+		await expect(screen.getByRole("button", { name: "Add connection" })).toBeEnabled();
 	},
 };
 
 export const ValidationError: Story = {
 	play: async () => {
-		await userEvent.click(
-			await screen.findByRole("button", { name: /save inactive connection/iu }),
-		);
+		await userEvent.click(await screen.findByRole("button", { name: "Add connection" }));
 		await expectSettledVisible(await screen.findByText(/enter a display name/iu));
 	},
 };
@@ -87,7 +87,7 @@ export const MobileReflow: Story = {
 		chromatic: { viewports: [320, 375, 768] },
 	},
 	play: async () => {
-		await screen.findByRole("button", { name: /save inactive connection/iu });
+		await screen.findByRole("button", { name: "Add connection" });
 		await expectDialogFitsViewport();
 	},
 };

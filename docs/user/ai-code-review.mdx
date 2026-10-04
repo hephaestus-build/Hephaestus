@@ -4,8 +4,8 @@ title: Practice feedback
 description: How Hephaestus reviews pull requests, merge requests, and issues for engineering practices.
 ---
 
-Practice feedback is about an observable way of working.
-Examples are changes that are easy to review, explanations of why a change is needed, and useful replies to reviewers.
+Practice feedback concerns an observable way of working.
+Examples include changes that are easy to review, explanations of why they are necessary, and useful responses to reviewers.
 
 When practice reviews are on, Hephaestus uses AI to check eligible work against your workspace’s practices.
 Eligible work includes pull requests, merge requests, and issues.
@@ -58,8 +58,8 @@ Admins can then act on it:
 - **Withdraw the feedback** on your Practice profile when correct observations led to incorrect feedback. See [Practice profile](./practice-profile.mdx).
 
 Neither action takes back words already sent.
-A summary comment gets a correction notice where the provider allows edits.
-Inline comments and earlier words from Heph stay as they are.
+A summary comment gets a correction notice where the provider permits edits.
+Inline comments and earlier words from Heph stay unchanged.
 
 ## Pull requests and merge requests
 
@@ -97,7 +97,7 @@ This is feedback on the practice, not an approval of the change.
 
 If new commits trigger another review, Hephaestus posts a new summary.
 It can describe what was resolved, what remains, and what is new.
-The earlier summary stays as it is, so the conversation keeps an accurate history of feedback that people may have read or answered.
+The earlier summary stays unchanged, so the conversation keeps an accurate history of feedback that people may have read or answered.
 
 ### Read inline comments
 
@@ -114,9 +114,9 @@ Some comments include a suggested code change.
 ### Ask for a review
 
 There are two ways to ask.
-Only the work’s author, assignees, and workspace admins can use them.
-Each person has an hourly limit.
-Hephaestus refuses requests over the limit instead of adding them to a queue.
+Only the work’s author, assignees, and workspace admins may use them.
+Each person has an hourly allowance.
+Hephaestus refuses requests above this limit instead of adding them to a queue.
 
 **From the app.** In a workspace that reviews practices, [Activity](./activity#request-a-review) shows **Request review** for your open pull requests and assigned issues.
 For your own work with recorded review results, it also appears beside each row of [Reviews of your work](./practice-profile#reviews-of-your-work).
@@ -140,7 +140,7 @@ The practices that watch the work might also be off.
 The command is case-insensitive.
 Text before the command stops Hephaestus from seeing it.
 Hephaestus ignores it after the merge request closes or merges.
-Workspace settings decide whether Hephaestus accepts it.
+Workspace settings determine whether Hephaestus accepts it.
 
 GitHub pull requests have no such command.
 On a GitHub pull request, select **Request review** instead.
@@ -163,19 +163,19 @@ Feedback on your Practice profile and in Heph has separate delivery checks and d
 
 A practice’s review state and its feedback delivery are separate:
 
-| State or condition | Meaning |
-| --- | --- |
-| **Reviewed** | The review measured the practice. It can still have no delivered feedback. |
-| **Running** | A review is reading the work. |
-| **Waiting** | The review has not started yet. |
-| **Skipped** | Review settings stopped this occurrence before a review began. |
-| **Not reached** | The practice was eligible, but the review ended before it evaluated it. |
-| **We could not assess** | The review could not settle the practice from the evidence it could reach. |
-| **Turned off** | The practice is off in this workspace. |
-| **Not triggered** | Nothing happened that this practice watches for. |
-| **Waiting on a connection** | The practice needs an integration the workspace has not connected. |
-| **Expired** | The occasion became too old before a review reached it. |
-| **Failed** | A review started but could not finish. |
+| State or condition          | Meaning                                                                    |
+| --------------------------- | -------------------------------------------------------------------------- |
+| **Reviewed**                | The review measured the practice. It can still have no delivered feedback. |
+| **Running**                 | A review is reading the work.                                              |
+| **Waiting**                 | The review has not started yet.                                            |
+| **Skipped**                 | Review settings stopped this occurrence before a review began.             |
+| **Not reached**             | The practice was eligible, but the review ended before it evaluated it.    |
+| **We could not assess**     | The review could not settle the practice from the evidence it could reach. |
+| **Turned off**              | The practice is off in this workspace.                                     |
+| **Not triggered**           | Nothing happened that this practice watches for.                           |
+| **Waiting on a connection** | The practice needs an integration the workspace has not connected.         |
+| **Expired**                 | The occasion became too old before a review reached it.                    |
+| **Failed**                  | A review started but could not finish.                                     |
 
 An observation can be **Met**, **Not met**, **Not applicable**, or **Undetermined**.
 **Met** and **Not met** say whether the captured evidence shows that the work meets the practice or falls materially short of it.
@@ -213,7 +213,7 @@ For example, it might check that the issue records why it closed.
 Hephaestus reads an issue’s current state when the review runs.
 By then, people may have selected, cleared, or added checklist boxes.
 They may have completed or attached sub-issues, or reopened and closed the issue again.
-So the catalog practice that checks checklists and sub-issues at closure needs a human reviewer.
+The catalog practice that checks completion of checklists and sub-issues at closure therefore requires human review.
 Hephaestus does not review a workspace copy recorded as adopted from the catalog.
 
 A copy without that record counts as the workspace’s own practice.
@@ -223,7 +223,7 @@ Earlier results stay unchanged.
 
 ## Practices and urgency
 
-The practices depend on your workspace. Common ones cover:
+The exact practices depend on your workspace. Common areas include:
 
 - work prepared for review
 - issues with clear actions
@@ -261,6 +261,6 @@ Their observations stay stored and may be visible to workspace admins.
 This setting does not delete earlier comments or observations.
 
 Each practice decides whether it reviews drafts, and no single workspace switch controls it.
-Most practices wait until the work is marked ready.
+Most practices wait until the work is ready for review.
 A few run on drafts on purpose.
 Marking a draft ready does not always start a review by itself.

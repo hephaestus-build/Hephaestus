@@ -21,42 +21,42 @@ Each fact has these fields:
 Requirements are `REQUIRED`, `RECOMMENDED`, or `OPTIONAL`.
 Status is one of:
 
-| Status | Meaning |
-| --- | --- |
-| `SATISFIED` | The applicable check passed. |
+| Status            | Meaning                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------- |
+| `SATISFIED`       | The applicable check passed.                                                            |
 | `ACTION_REQUIRED` | An applicable check failed. Required deployment facts with this status prevent startup. |
-| `NOT_CONFIGURED` | An optional setting is absent. |
-| `NOT_APPLICABLE` | The check does not apply to this process's runtime roles. |
+| `NOT_CONFIGURED`  | An optional setting is absent.                                                          |
+| `NOT_APPLICABLE`  | The check does not apply to this process's runtime roles.                               |
 
 The table names variables inside the application container. In the supported self-host stack,
 Compose maps `POSTGRES_PASSWORD` to `DATABASE_PASSWORD` and owns the runtime-role values.
 
-| Setting | Application environment variable |
-| --- | --- |
-| `spring.datasource.url` | `DATABASE_URL` |
-| `spring.datasource.username` | `DATABASE_USERNAME` |
-| `spring.datasource.password` | `DATABASE_PASSWORD` |
-| `hephaestus.runtime.server.enabled` | `HEPHAESTUS_RUNTIME_SERVER_ENABLED` |
-| `hephaestus.runtime.worker.enabled` | `HEPHAESTUS_RUNTIME_WORKER_ENABLED` |
-| `hephaestus.runtime.webhook.enabled` | `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED` |
-| `hephaestus.host-url` | `APPLICATION_HOST_URL` |
-| `hephaestus.security.encryption-key` | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` |
+| Setting                                         | Application environment variable                |
+| ----------------------------------------------- | ----------------------------------------------- |
+| `spring.datasource.url`                         | `DATABASE_URL`                                  |
+| `spring.datasource.username`                    | `DATABASE_USERNAME`                             |
+| `spring.datasource.password`                    | `DATABASE_PASSWORD`                             |
+| `hephaestus.runtime.server.enabled`             | `HEPHAESTUS_RUNTIME_SERVER_ENABLED`             |
+| `hephaestus.runtime.worker.enabled`             | `HEPHAESTUS_RUNTIME_WORKER_ENABLED`             |
+| `hephaestus.runtime.webhook.enabled`            | `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED`            |
+| `hephaestus.host-url`                           | `APPLICATION_HOST_URL`                          |
+| `hephaestus.security.encryption-key`            | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`            |
 | `hephaestus.security.credential-encryption-key` | `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` |
-| `hephaestus.webhook.secret` | `WEBHOOK_SECRET` |
-| `hephaestus.webhook.routing.secret` | `WEBHOOK_ROUTING_SECRET` |
-| `hephaestus.webhook.routing.previous-secret` | `WEBHOOK_ROUTING_PREVIOUS_SECRET` |
-| `hephaestus.sync.nats.enabled` | `NATS_ENABLED` |
-| `hephaestus.sync.nats.server` | `NATS_SERVER` |
-| `hephaestus.sync.nats.username` | `NATS_USERNAME` |
-| `hephaestus.sync.nats.password` | `NATS_PASSWORD` |
-| `hephaestus.auth.state-cookie-key` | `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` |
-| `hephaestus.llm.egress.allow-loopback` | `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` |
-| `hephaestus.agent.image.require-digest` | `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` |
-| `hephaestus.agent.image.reference` | `HEPHAESTUS_AGENT_IMAGE_REFERENCE` |
-| `hephaestus.sandbox.docker.container-runtime` | `SANDBOX_DOCKER_CONTAINER_RUNTIME` |
-| `hephaestus.sentry.dsn` | `SENTRY_DSN` |
-| `spring.mail.host` | `SPRING_MAIL_HOST` |
-| `hephaestus.email.from` | `HEPHAESTUS_EMAIL_FROM` |
+| `hephaestus.webhook.secret`                     | `WEBHOOK_SECRET`                                |
+| `hephaestus.webhook.routing.secret`             | `WEBHOOK_ROUTING_SECRET`                        |
+| `hephaestus.webhook.routing.previous-secret`    | `WEBHOOK_ROUTING_PREVIOUS_SECRET`               |
+| `hephaestus.sync.nats.enabled`                  | `NATS_ENABLED`                                  |
+| `hephaestus.sync.nats.server`                   | `NATS_SERVER`                                   |
+| `hephaestus.sync.nats.username`                 | `NATS_USERNAME`                                 |
+| `hephaestus.sync.nats.password`                 | `NATS_PASSWORD`                                 |
+| `hephaestus.auth.state-cookie-key`              | `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`              |
+| `hephaestus.llm.egress.allow-loopback`          | `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK`          |
+| `hephaestus.agent.image.require-digest`         | `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST`         |
+| `hephaestus.agent.image.reference`              | `HEPHAESTUS_AGENT_IMAGE_REFERENCE`              |
+| `hephaestus.sandbox.docker.container-runtime`   | `SANDBOX_DOCKER_CONTAINER_RUNTIME`              |
+| `hephaestus.sentry.dsn`                         | `SENTRY_DSN`                                    |
+| `spring.mail.host`                              | `SPRING_MAIL_HOST`                              |
+| `hephaestus.email.from`                         | `HEPHAESTUS_EMAIL_FROM`                         |
 
 ## Runtime roles
 
@@ -176,7 +176,7 @@ The browser never stores them in local storage.
 A session ends at `hephaestus.auth.session-max-lifetime` (default `7d`), regardless of activity.
 Access token renewal stays within that deadline, never past it.
 
-Reads through a [user view](/contributor/instance-admin#read-only-user-views) have a per-instance-administrator budget.
+Reads through a [user view](/contributor/instance-admin#read-only-user-views) have a per-instance-admin budget.
 `hephaestus.auth.rate-limit.user-view.capacity` per `hephaestus.auth.rate-limit.user-view.period` defaults to 120 per minute.
 Every read about the viewed member counts, so one page usually uses several.
 If the rate-limit store is unavailable, the server refuses views rather than permitting them without a budget.
@@ -227,13 +227,13 @@ For the single-host deployment, keep the local Unix socket default. Docker-speci
 The gateway keeps its independent `hephaestus.sandbox.gateway.*` settings.
 Resource limits, capacity, and workspace transfer limits remain under `hephaestus.sandbox.*`.
 
-| Property under `hephaestus.sandbox.docker` | Environment variable                     | Default                       |
-| ------------------------------------------ | ---------------------------------------- | ----------------------------- |
-| `host`                                     | `SANDBOX_DOCKER_HOST`                    | `unix:///var/run/docker.sock` |
-| `tls-verify`                               | `SANDBOX_DOCKER_TLS_VERIFY`              | `false`                       |
-| `cert-path`                                | `SANDBOX_DOCKER_CERT_PATH`               | unset                         |
-| `container-runtime`                        | `SANDBOX_DOCKER_CONTAINER_RUNTIME`       | Docker daemon default         |
-| `owner`                                    | `SANDBOX_DOCKER_OWNER`                   | `default`                     |
+| Property under `hephaestus.sandbox.docker` | Environment variable               | Default                       |
+| ------------------------------------------ | ---------------------------------- | ----------------------------- |
+| `host`                                     | `SANDBOX_DOCKER_HOST`              | `unix:///var/run/docker.sock` |
+| `tls-verify`                               | `SANDBOX_DOCKER_TLS_VERIFY`        | `false`                       |
+| `cert-path`                                | `SANDBOX_DOCKER_CERT_PATH`         | unset                         |
+| `container-runtime`                        | `SANDBOX_DOCKER_CONTAINER_RUNTIME` | Docker daemon default         |
+| `owner`                                    | `SANDBOX_DOCKER_OWNER`             | `default`                     |
 
 Compose forwards these variables only to `application-worker`.
 `application-server` runs without the worker role.
@@ -293,6 +293,7 @@ Establish the owner before you remove the network.
    Leave that network.
    If the creator no longer exists, stopped, or restarted, automatic cleanup removes the network on its next pass.
    No manual action is necessary.
+
 3. If the creator record is absent or unreadable, stop this installation's application processes on this Docker daemon.
    Include the application server and workers with this `owner`.
    Only this pause proves the network unused: no process can start or attach a sandbox.
@@ -311,6 +312,7 @@ Establish the owner before you remove the network.
 
    If an attached container has another id, a sandbox still uses the network.
    Leave that network.
+
 6. If the app-server container is still attached, disconnect it by its full id:
 
    ```bash
@@ -402,7 +404,7 @@ Without a sender address, every notification is withheld and recorded as `NOT_CO
 This optional readiness fact never prevents startup.
 
 Personal settings do not expose SMTP setup warnings.
-Administrators configure the capability in instance settings.
+Instance admins configure the capability in instance settings.
 See the supported no-email behavior in the setup guide.
 [Production setup → Email](./production-setup#email) gives configuration and verification instructions.
 Before email activation, complete the processing review in the [processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).

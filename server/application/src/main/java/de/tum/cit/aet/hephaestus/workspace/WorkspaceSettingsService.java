@@ -40,15 +40,17 @@ public class WorkspaceSettingsService {
         IntegrationKind kind = connectionService
                 .findActiveProviderKind(workspaceId)
                 .filter(k -> k == IntegrationKind.GITHUB || k == IntegrationKind.GITLAB)
-                .orElseThrow(() -> new IllegalStateException("Cannot rotate PAT for workspace " + workspaceId
-                        + ": no active GitHub or GitLab Connection. Bind a provider first."));
+                .orElseThrow(
+                        () -> new IllegalStateException(
+                                "This workspace has no connection to GitHub or GitLab. Connect one before you replace its token."));
         // The write says whether a token was there to replace; it never reads the old one, since this
         // is the way out for a token the server can no longer read, and it refuses a row whose mode
         // takes no token.
         BearerTokenReplacement rotation = connectionService
                 .rotateBearerToken(workspaceId, kind, new BearerToken(token, null))
-                .orElseThrow(() -> new IllegalStateException(
-                        "Cannot rotate PAT for workspace " + workspaceId + ": no active " + kind + " Connection."));
+                .orElseThrow(
+                        () -> new IllegalStateException(
+                                "This workspace has no active connection to update. Connect GitHub or GitLab, then try again."));
         boolean hadToken = rotation.replacedExisting();
         // rotatedAt is what makes this row exist at all: rotating an already-set token leaves every
         // other component identical, and ConfigAuditRecorder drops an UPDATE whose diff is empty — so

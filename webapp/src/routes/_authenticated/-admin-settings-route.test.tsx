@@ -83,7 +83,7 @@ describe("instance settings route", () => {
 		{ recipient: "  ops@example.org ", expectedBody: { to: "ops@example.org" } },
 		{ recipient: " ", expectedBody: {} },
 	])(
-		"posts $expectedBody to the test-email endpoint and shows relay acceptance",
+		"posts $expectedBody to the test-email endpoint and shows that the mail server accepted the email",
 		async ({ recipient, expectedBody }) => {
 			const user = userEvent.setup();
 			let body: unknown;
@@ -104,7 +104,7 @@ describe("instance settings route", () => {
 			await user.type(input, recipient);
 			await user.click(screen.getByRole("button", { name: "Send test email" }));
 
-			await screen.findByText("Accepted by relay");
+			await screen.findByText("Handed to mail server");
 			expect(body).toStrictEqual(expectedBody);
 			await screen.findByText("<abc@hephaestus.example>");
 		},
@@ -123,7 +123,7 @@ describe("instance settings route", () => {
 		);
 
 		await screen.findAllByText("Withheld by silent mode");
-		expect(screen.queryByText("Accepted by relay")).toBeNull();
+		expect(screen.queryByText("Handed to mail server")).toBeNull();
 	});
 
 	it("does not leave a previous success visible after the next request fails", async () => {
@@ -143,11 +143,11 @@ describe("instance settings route", () => {
 
 		const send = await screen.findByRole("button", { name: "Send test email" }, ROUTE_RENDER_WAIT);
 		await user.click(send);
-		await screen.findByText("Accepted by relay");
+		await screen.findByText("Handed to mail server");
 		await user.click(send);
 
 		await screen.findByText("Unavailable");
-		expect(screen.queryByText("Accepted by relay")).toBeNull();
+		expect(screen.queryByText("Handed to mail server")).toBeNull();
 	});
 
 	it("can test email when the instance settings cannot be loaded", async () => {
@@ -165,7 +165,7 @@ describe("instance settings route", () => {
 		await screen.findByText("We could not load instance settings", undefined, ROUTE_RENDER_WAIT);
 		await user.click(screen.getByRole("button", { name: "Send test email" }));
 
-		await screen.findByText("Accepted by relay");
+		await screen.findByText("Handed to mail server");
 		expect(screen.queryByRole("button", { name: "Turn off silent mode…" })).toBeNull();
 	});
 });

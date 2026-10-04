@@ -8,15 +8,15 @@ Activity shows work you and your workspace already do on GitHub or GitLab.
 It shows what needs you now, how much you did over a time range, and the work involved.
 It counts and lists work, never scores work or ranks people.
 
-The sidebar has two activity pages under **Dashboards**:
+The sidebar has two pages under **Dashboards**:
 
 - **Activity** is your own page. A workspace without practice reviews opens here. A workspace with practice reviews opens on your [Practice profile](./practice-profile.mdx).
 - **Workspace activity** shows everyone in the workspace or one team.
 
 Every workspace has both pages, and no setting turns them on.
 They show work in the workspace’s repositories.
-Everyone with a workspace role sees it, whatever their own GitHub or GitLab access.
-On GitLab, the pages say *merge request* where this guide says *pull request*.
+Everyone with a workspace role sees it, regardless of their individual GitHub or GitLab access.
+On GitLab, the pages say _merge request_ where this guide says _pull request_.
 They use GitLab’s own icons and colors.
 
 Pull requests and issues open on GitHub or GitLab, where you act on them.
@@ -27,18 +27,18 @@ The only thing you can start here is a practice review of your own work, with [R
 
 **Needs you** lists the open pull requests that wait for you, in three groups:
 
-| Group | What is in it |
-| --- | --- |
+| Group                | What is in it                                                          |
+| -------------------- | ---------------------------------------------------------------------- |
 | **Review requested** | Pull requests that ask for your review and that nobody has settled yet |
-| **Returned to you** | Your pull requests with requested changes or failed checks |
-| **Approved** | Your pull requests that reviewers approved |
+| **Returned to you**  | Your pull requests with requested changes or failed checks             |
+| **Approved**         | Your pull requests that reviewers approved                             |
 
 Each pull request shows its reviewers as faces.
 A mark on each face shows the review state: approved, changes requested, commented, or still requested.
 When no work waits for you, the section says **Nothing needs you**.
 
 Below that, **Waiting on others** starts collapsed.
-It holds pull requests where someone else acts next:
+It holds pull requests where someone else must act next:
 
 - **Waiting for review**: your pull requests that reviewers have not reviewed yet.
 - **Drafts**: your draft pull requests.
@@ -54,7 +54,7 @@ If the author asks you again, it stays under **Review requested** until another 
 
 On GitHub, and GitLab before 16.11, your earlier approval still counts toward the pull request’s decision.
 On GitLab 16.11 and later, a new request for your review removes that approval.
-When there is no decision, only a request for changes covers a pull request.
+Without a decision, only a request for changes covers a pull request.
 GitHub gives no decision where a branch needs no review.
 GitLab gives none until Hephaestus reads the merge request’s approvals.
 The request returns to **Review requested** when the covering approval or request for changes no longer stands.
@@ -75,10 +75,10 @@ To see these requests, open **Waiting on others**.
 It closes again when you leave the page.
 
 **Assigned issues** lists open issues assigned to you.
-Each list shows only the most recently updated work.
-When there is more, a line below the list says how many items it shows.
+Each list includes only the most recently updated work.
+When more work exists, a line below the list states how many it shows.
 
-Requests for changes on merge requests need GitLab Premium.
+Requests for changes on merge requests require GitLab Premium.
 Without it, GitLab work never shows changes requested, and requests for changes do not count.
 
 ### Request a review
@@ -86,8 +86,8 @@ Without it, GitLab work never shows changes requested, and requests for changes 
 In a workspace with practice reviews, your open pull requests and assigned issues have **Request review**, in any group.
 It requests an immediate review against the workspace’s practices.
 A pull request that only asks for your review has no button, because it is someone else’s work.
-While Hephaestus takes the request, the button reads **Requesting review…**.
-Then a message says that the review started, or why it did not.
+While Hephaestus receives the request, the button reads **Requesting review…**.
+A message then states that the review started or explains why it did not.
 
 After the review records a result about your work, it appears under [Reviews of your work](./practice-profile.mdx#reviews-of-your-work).
 [Ask for a review](./ai-code-review#ask-for-a-review) explains who may ask and how often.
@@ -98,15 +98,15 @@ After the review records a result about your work, it appears under [Reviews of 
 
 The page shows one tile for each kind of work:
 
-| Tile | Its number | Also shown |
-| --- | --- | --- |
-| **Pull requests** | Your merged pull requests | Pull requests you opened, and yours closed without a merge |
-| **Reviews** | Your reviews of other people’s pull requests | Approvals, requests for changes, and reviews with comments only |
-| **Comments** | Your comments | Comments in pull request or issue conversations, and comments on code |
-| **Issues** | Issues you opened | Your closed issues |
+| Tile              | Its number                                   | Also shown                                                            |
+| ----------------- | -------------------------------------------- | --------------------------------------------------------------------- |
+| **Pull requests** | Your merged pull requests                    | Pull requests you opened, and yours closed without a merge            |
+| **Reviews**       | Your reviews of other people’s pull requests | Approvals, requests for changes, and reviews with comments only       |
+| **Comments**      | Your comments                                | Comments in pull request or issue conversations, and comments on code |
+| **Issues**        | Issues you opened                            | Your closed issues                                                    |
 
 Below the number, each tile compares it with the previous period of the same length.
-For example, *4 more than the previous 30 days*.
+For example, _4 more than the previous 30 days_.
 Bars then show the number over the range, from the first day to today, in your time zone.
 Each bar is one day for 7 or 30 days, one week for 90 days, or one month for 12 months.
 
@@ -126,14 +126,14 @@ Rows share one scale, so their heights are comparable.
 The number at the top line of each row is the scale’s maximum.
 **Show as table** lists the same numbers for each day, week, or month.
 
-When you change the range, the previous figures stay on screen, without their colors, until the new figures arrive.
+When you change the range, the previous figures stay visible without their colors until the new figures arrive.
 If this takes more than a moment, **Updating…** appears beside the range.
 
-These rules decide who gets a count:
+These criteria determine who receives a count:
 
-- **A merge counts for the pull request’s author**, whoever selected the button. A close without a merge also counts for the author. A pull request with an unknown author counts for nobody.
-- **A closed issue counts for the issue’s author**, whoever closed it.
-- **A review of your own pull request does not count.** A review is about someone else’s work. Your comments on your own pull request do count as comments.
+- **A merge counts for the pull request’s author**, regardless of who selected the button. A close without a merge also counts for the author. A pull request with an unknown author counts for nobody.
+- **A closed issue counts for the issue’s author**, regardless of who closed it.
+- **A review of your own pull request does not count.** A review concerns another person’s work. Your comments on your own pull request do count as comments.
 - **Bots do not count.**
 
 A count states how much happened, not how good the work was.
@@ -143,12 +143,13 @@ Planning, pairing, and help in chat do not appear here.
 
 **Timeline** lists your work in the range, newest first and grouped by day.
 Each pull request or issue has one row.
-The row shows its events, such as *Merged*, *Approved*, *Commented*, or your number of comments.
-Forty comments on one pull request produce one row with *40*, not forty rows.
+The row shows its events, such as _Merged_, _Approved_, _Commented_, or your number of comments.
+Forty comments on one pull request produce one row with _40_, not forty rows.
 **Show more** loads older work.
 
-Timeline counts and tile counts follow the same rules, so the rows for a range add up to its tiles.
-If GitHub or GitLab removes a pull request or issue, its row stays, without a link, so the counts stay accurate.
+Timeline counts and tile counts follow the same criteria, so the rows for a range add up to its tiles.
+If GitHub or GitLab removes a pull request or issue, its row stays without a link.
+This keeps the counts accurate.
 
 ### Copy as Markdown
 
@@ -180,8 +181,8 @@ The member view includes a GitHub or GitLab profile link.
 With a team selected, counts apply to that team and match the member’s table row.
 
 A workspace admin can hide a member or team from workspace activity.
-A hidden member disappears from every count and list here.
-A hidden team disappears from **Team** and does not count toward its parent team.
+A hidden member leaves each count and list here.
+A hidden team leaves **Team** and does not count toward its parent team.
 This changes only Workspace activity.
 The member’s own Activity page stays unchanged.
 Requests to a hidden team still appear under **Requested from your team** for its members.

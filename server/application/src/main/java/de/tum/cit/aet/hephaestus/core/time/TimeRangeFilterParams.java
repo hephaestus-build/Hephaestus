@@ -39,7 +39,7 @@ public record TimeRangeFilterParams(
         Instant start = from != null ? from : end.minus(DEFAULT_WIDTH);
         if (start.isAfter(end)) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "The from parameter must not be after the to parameter.");
+                    HttpStatus.BAD_REQUEST, "The start of the range must not be after its end.");
         }
         if (Duration.between(start, end).compareTo(Duration.ofDays(MAX_DAYS)) > 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A range spans at most " + MAX_DAYS + " days");

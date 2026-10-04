@@ -40,7 +40,7 @@ const DRAFT_KEPT = "Your draft is still here.";
 function submissionError(error: unknown, subject: "survey" | "feedback"): string {
 	const status = problemStatusOf(error);
 	if (status === undefined) {
-		return `We could not send that. ${DRAFT_KEPT} Check your connection and try again.`;
+		return `We could not send that. ${DRAFT_KEPT} Check your connection, then try again.`;
 	}
 	if (status === 429) {
 		return `Wait a minute before sending more feedback. ${DRAFT_KEPT}`;

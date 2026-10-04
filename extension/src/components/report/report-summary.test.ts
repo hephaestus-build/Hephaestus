@@ -124,7 +124,7 @@ describe("report summary", () => {
 				feedback: { status: "error", message: "failed" },
 			}),
 		).toMatchObject({
-			text: "We could not load your feedback · reviewed 1 hr. ago",
+			text: "We could not load your comments · reviewed 1 hr. ago",
 			tone: "error",
 		});
 	});

@@ -343,7 +343,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), 5L))
                 .isInstanceOf(OAuthCallbackService.InstanceConnectedElsewhereException.class)
                 .hasMessage("This GitHub App installation is already connected to another Hephaestus workspace."
-                        + " An administrator of that workspace must disconnect GitHub there first.");
+                        + " A workspace admin there must disconnect GitHub first.");
     }
 
     @Test

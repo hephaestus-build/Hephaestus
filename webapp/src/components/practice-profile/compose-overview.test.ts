@@ -127,7 +127,7 @@ describe("a sentence's opening", () => {
 				),
 			}),
 		);
-		expect(plain(composed.changed)).toBe("Two practices changed in the latest review.");
+		expect(plain(composed.changed)).toBe("Two practices changed since the latest run.");
 	});
 
 	it("leaves a practice name alone, as the link it is", () => {
@@ -158,7 +158,7 @@ describe("composeOverview", () => {
 
 	it("says that nothing moved when a run found no change", () => {
 		const composed = composeOverview(overview({}));
-		expect(plain(composed.changed)).toBe("Nothing moved in the latest review.");
+		expect(plain(composed.changed)).toBe("Nothing moved since the latest run.");
 		expect(composed.restCount).toBe(0);
 	});
 
@@ -168,7 +168,7 @@ describe("composeOverview", () => {
 				changes: [1, 2].map((n) => change("FIRST_OBSERVED", `first-${n}`, `First ${n}`)),
 			}),
 		);
-		expect(plain(composed.changed)).toBe("Two practices changed in the latest review.");
+		expect(plain(composed.changed)).toBe("Two practices changed since the latest run.");
 		expect(composed.restCount).toBe(2);
 	});
 
@@ -180,7 +180,7 @@ describe("composeOverview", () => {
 				],
 			}),
 		);
-		expect(plain(composed.changed)).toBe("One practice changed in the latest review.");
+		expect(plain(composed.changed)).toBe("One practice changed since the latest run.");
 		expect(composed.rest.map((paragraph) => paragraph.title)).toStrictEqual(["Moved up"]);
 	});
 

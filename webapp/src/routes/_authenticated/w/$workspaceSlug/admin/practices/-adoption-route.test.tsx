@@ -70,7 +70,7 @@ function planUnreadableAfterTheFirstRead() {
 		return reads === 1
 			? HttpResponse.json(preview)
 			: HttpResponse.json(
-					{ title: "Service Unavailable", status: 503, detail: "Try again later." },
+					{ title: "Service Unavailable", status: 503, detail: "Try again in a moment." },
 					{ status: 503 },
 				);
 	});
@@ -148,7 +148,7 @@ describe("catalog adoption over practice setup", () => {
 
 		await screen.findByRole("heading", { name: "Instance catalog" }, ROUTE_RENDER_WAIT);
 		expect(screen.queryByText("Available")).toBeNull();
-		await screen.findByText("Name unavailable");
+		await screen.findByText("Name in use");
 		screen.getByRole("link", { name: /Describe what changed and why/u });
 		screen.getByRole("link", {
 			name: /Include enough issue context, see why it cannot be added/u,

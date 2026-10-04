@@ -47,8 +47,10 @@ describe("review route", () => {
 		await screen.findByRole("heading", { name: "Review settings" }, ROUTE_RENDER_WAIT);
 		await screen.findByRole("button", { name: /Hygiene/u }, ROUTE_RENDER_WAIT);
 
-		screen.getByText("2 practices: 1 off and 1 review before sending. 1 practice set by hand.");
-		screen.getByText("2 practices: 1 off and 1 review before sending.");
+		screen.getByText(
+			"2 practices: 1 set to off and 1 set to review before sending. 1 practice set by hand.",
+		);
+		screen.getByText("2 practices: 1 set to off and 1 set to review before sending.");
 		expect(screen.queryByText("States the motivation")).toBeNull();
 	});
 

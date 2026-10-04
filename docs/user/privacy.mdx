@@ -34,9 +34,9 @@ Acceptance is not research consent.
 
 The second decision appears only if the organization that runs your instance also runs a study.
 The screen names that organization.
-{/*vale STE.NegativeContractions = NO*/}
+{/* vale STE.NegativeContractions = NO */}
 It offers **Yes, take part** or **No, don't take part**, with the same service if you do not participate.
-{/*vale STE.NegativeContractions = YES*/}
+{/* vale STE.NegativeContractions = YES */}
 Neither answer starts selected. Both need one selection.
 Without a configured study, the terms alone complete setup.
 
@@ -137,8 +137,8 @@ Access differs by role and destination:
 - Members can read [Activity](./activity) without individual source-platform permission checks. Normal member access keeps your Practice profile, its feedback, and Heph conversations private. Workspace admins can read observations, delivery metadata, and dispute explanations. They cannot read private practice-page or conversation feedback text, ratings, or other private response notes.
 - A publicly viewable workspace shows members, teams, repositories, and practices to anyone without sign-in. Activity, practice pages, feedback, and Heph conversations are not public. Your instance’s contributor list is also public.
 - Feedback on GitHub, GitLab, or Slack is visible to that destination’s audience.
-- Instance administrators can use **View as user** to read activity, practice pages, feedback, and existing Heph conversations. This includes access before your first Hephaestus sign-in. Each read has a recorded reason. This access cannot send messages, answer questions, or make choices for you. It does not count as you seeing feedback. Workspace administrators do not have this access.
-- Instance operators can access stored data for operation and privacy requests. Instance administrators can read product-feedback and survey submissions.
+- Instance admins can use **View as user** to read activity, practice pages, feedback, and existing Heph conversations. This includes access before your first Hephaestus sign-in. Each read has a recorded reason. This access cannot send messages, answer questions, or make choices for you. It does not count as you seeing feedback. Workspace admins do not have this access.
+- Instance operators can access stored data for operation and privacy requests. Instance admins can read product-feedback and survey submissions.
 
 ## Your choices and right to object
 
@@ -172,7 +172,7 @@ Existing research data includes research survey answers.
 
 ### Email notifications
 
-Optional invitations, connection alerts, and administrator updates start off where offered.
+Optional invitations, connection alerts, and **New product feedback** emails start off where offered.
 
 1. Choose each category in **User settings → Email notifications**.
 2. To unsubscribe without sign-in, use the unsubscribe link in an email.
@@ -236,7 +236,7 @@ The privacy contact handles requests for these additional records:
 - Product-feedback submissions and survey responses.
 - Other retained copies.
 
-An instance administrator can resolve your exact provider identities, preview the scope, and download one JSON file for the wider request.
+An instance admin can resolve your exact provider identities, preview the scope, and download one JSON file for the wider request.
 It includes selected source content mirrored locally.
 It excludes credentials, other people’s profiles, raw Git objects, and hidden runtime journals.
 Access and portability are different rights.
@@ -306,6 +306,7 @@ The sections above describe account and export timing.
 - **GitHub and GitLab:** active copies stay while a workspace monitors the source. Removal of the last relevant connection or repository monitor removes them. Shared sources stay for other workspaces that monitor them. Contributor profiles can stay independently and require operator-assisted erasure.
 
   An unavailable repository, or one that loses access, keeps stored work while monitored. A removed GitLab note leaves live context only after successful reconciliation. Historical review copies do not change automatically.
+
 - **Slack channel threads:** retention uses a rolling period measured from the latest message. An active thread can still contain much older messages. This period does not apply to mentor DMs.
 - **Outline:** selected content stays while its collection and connection stay active.
 - **Web chats, Slack mentor DMs, and memberships:** records stay with the workspace. Workspace removal or verified person erasure removes them.

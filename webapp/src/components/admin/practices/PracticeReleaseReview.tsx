@@ -194,7 +194,8 @@ export function PracticeReleaseReview({
 				</Button>
 			</div>
 			<p className="text-xs text-muted-foreground">
-				Declining leaves this practice unchanged. A different catalog version can be proposed later.
+				Declining leaves this practice unchanged. A different catalog version will be proposed
+				again.
 			</p>
 		</section>
 	);

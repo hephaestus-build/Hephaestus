@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/empty";
 
 export interface MissingRecordEmptyProps {
-	/** What did not arrive, as a sentence: "This feedback has not loaded". */
+	/** What did not arrive, as a sentence: "We could not load this feedback". */
 	title: string;
 	onRetry?: () => void;
 	className?: string;
@@ -39,7 +39,9 @@ export function MissingRecordEmpty({ title, onRetry, className }: MissingRecordE
 					<CloudOffIcon />
 				</EmptyMedia>
 				<EmptyTitle>{title}</EmptyTitle>
-				<EmptyDescription>The request did not finish. You may be offline.</EmptyDescription>
+				<EmptyDescription>
+					The request did not finish. Check your connection, then try again.
+				</EmptyDescription>
 			</EmptyHeader>
 			{onRetry && (
 				<EmptyContent>

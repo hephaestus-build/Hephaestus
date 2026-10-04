@@ -18,10 +18,10 @@ export type EmailTestOutcome = EmailTestResponse["outcome"];
 
 export const EMAIL_TEST_OUTCOME_DEFS: StatusDefs<EmailTestOutcome> = {
 	SENT: {
-		label: "Accepted by relay",
+		label: "Handed to mail server",
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
-		description: "The relay accepted the message. Look for the message ID in the relay’s log.",
+		description: "The mail server accepted the message. Look for the message ID in its log.",
 	},
 	EXPIRED: {
 		label: "Expired",
@@ -34,7 +34,7 @@ export const EMAIL_TEST_OUTCOME_DEFS: StatusDefs<EmailTestOutcome> = {
 		icon: PlugZapIcon,
 		badgeVariant: "outline",
 		description:
-			"No relay host or no sender address is set. Configure SPRING_MAIL_HOST and HEPHAESTUS_EMAIL_FROM.",
+			"The mail server host or the sender address is not set. Configure SPRING_MAIL_HOST and HEPHAESTUS_EMAIL_FROM.",
 	},
 	SILENT_MODE: {
 		label: "Withheld by silent mode",
@@ -56,11 +56,11 @@ export const EMAIL_TEST_OUTCOME_DEFS: StatusDefs<EmailTestOutcome> = {
 		description: "The recipient must be one valid email address. Check it and try again.",
 	},
 	REJECTED: {
-		label: "Rejected by relay",
+		label: "Rejected by mail server",
 		icon: MailXIcon,
 		badgeVariant: "destructive",
 		description:
-			"The relay rejected this email. Check the recipient and relay policy before trying again.",
+			"The mail server rejected this email. Check the recipient and the server’s policy, then try again.",
 	},
 	UNSUBSCRIBED: {
 		label: "Not subscribed",
@@ -76,10 +76,10 @@ export const EMAIL_TEST_OUTCOME_DEFS: StatusDefs<EmailTestOutcome> = {
 			"Sending is paused. The email attempt limit was reached, or capacity could not be checked. Try again in a moment.",
 	},
 	UNAVAILABLE: {
-		label: "Relay unavailable",
+		label: "Mail server unavailable",
 		icon: BanIcon,
 		badgeVariant: "destructive",
 		description:
-			"The relay could not be reached or refused the credentials. Check host, port, TLS and the account.",
+			"We could not reach the mail server, or it refused the credentials. Check the host, port, TLS and the account.",
 	},
 };

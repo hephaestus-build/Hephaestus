@@ -442,7 +442,7 @@ export const AtScale: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByText(
-				/^100 practices: 6 off, 89 review before sending and 5 send automatically\. \d+ practices and \d+ groups set by hand\.$/u,
+				/^100 practices: 6 set to off, 89 set to review before sending and 5 set to send automatically\. \d+ practices and \d+ groups set by hand\.$/u,
 			),
 		).toBeVisible();
 		await expect(canvas.getAllByRole("radiogroup")).toHaveLength(26);

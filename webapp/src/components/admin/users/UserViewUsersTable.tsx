@@ -35,9 +35,9 @@ const SKELETON_COLUMNS = ["w-40", "w-28", null];
 
 function accountLabel(user: UserViewUser): string {
 	if (user.accountId == null) {
-		return "No linked account";
+		return "No account yet";
 	}
-	return user.accountStatus === "ACTIVE" ? "Linked account" : "Account unavailable";
+	return user.accountStatus === "ACTIVE" ? "Active account" : "Account not active";
 }
 
 function UsersTableHeader() {

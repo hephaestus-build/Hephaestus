@@ -55,7 +55,7 @@ export interface PageReportProps {
 function reviewedSentence(context: ReadyContext): string {
 	const reviewed = reviewedAt(context);
 	if (context.trace === null) {
-		return "Your review status is unavailable.";
+		return "No review history is available for your account on this work.";
 	}
 	if (reviewed === undefined) {
 		return "No completed practice review recorded.";

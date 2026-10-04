@@ -290,15 +290,15 @@ public class WorkspaceMembershipService {
 
         User userReference = entityManager.find(User.class, userId);
         if (userReference == null) {
-            throw new IllegalArgumentException("We could not find that user. Reload the page and try again.");
+            throw new IllegalArgumentException(
+                    "We could not find that user. It may have been deleted. Reload the page to see what is current.");
         }
 
         // Check if membership already exists
         Optional<WorkspaceMembership> existing =
                 workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(workspace.getId(), userId);
         if (existing.isPresent()) {
-            throw new IllegalArgumentException(
-                    "Membership already exists for workspace " + workspace.getId() + " and user " + userId);
+            throw new IllegalArgumentException("This user is already a member of this workspace.");
         }
 
         WorkspaceMembership membership = new WorkspaceMembership();
@@ -338,7 +338,8 @@ public class WorkspaceMembershipService {
         } else {
             User user = entityManager.find(User.class, userId);
             if (user == null) {
-                throw new IllegalArgumentException("We could not find that user. Reload the page and try again.");
+                throw new IllegalArgumentException(
+                        "We could not find that user. It may have been deleted. Reload the page to see what is current.");
             }
 
             WorkspaceMembership membership = createMembershipInternal(workspace, user, role);
@@ -397,8 +398,9 @@ public class WorkspaceMembershipService {
     public WorkspaceMembership updateMemberVisibility(Long workspaceId, Long userId, boolean hidden) {
         WorkspaceMembership membership = workspaceMembershipRepository
                 .findByWorkspace_IdAndUser_Id(workspaceId, userId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("We could not find that member. Reload the page and try again."));
+                .orElseThrow(
+                        () -> new IllegalArgumentException(
+                                "We could not find that member. It may have been deleted. Reload the page to see what is current."));
         var before = new WorkspaceAuditSnapshots.RoleSnapshot(
                 membership.getRole() == null ? null : membership.getRole().name(), membership.isHidden());
         membership.setHidden(hidden);
@@ -438,8 +440,9 @@ public class WorkspaceMembershipService {
     public WorkspaceMembership getMembership(Long workspaceId, Long userId) {
         return workspaceMembershipRepository
                 .findByWorkspace_IdAndUser_Id(workspaceId, userId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException("We could not find that member. Reload the page and try again."));
+                .orElseThrow(
+                        () -> new IllegalArgumentException(
+                                "We could not find that member. It may have been deleted. Reload the page to see what is current."));
     }
 
     /**

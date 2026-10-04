@@ -16,10 +16,10 @@ We do not claim conformance.
 
 The evaluation is partial.
 Automated checks are complete for each page.
-Keyboard checks are complete for the administrator pages.
+Keyboard checks are complete for the admin pages.
 Nobody has run the application with a screen reader yet.
-So the results below say nothing about how NVDA or VoiceOver read it.
-AA conformance requires every full page and every complete process to meet the applicable success criteria.
+The results below therefore say nothing about how NVDA or VoiceOver read it.
+AA conformance requires full pages and complete processes to meet the applicable success criteria.
 
 This statement covers the Hephaestus single-page application, including how it shows imported content.
 It does not cover linked external sites or identity-provider pages.
@@ -29,8 +29,8 @@ It does not cover linked external sites or identity-provider pages.
 On 3 October 2026, we evaluated all 51 application pages:
 
 - Automated checks used axe-core 4.13.0 in light and dark color schemes on Linux. Browsers were Chromium 153, Firefox 155, and WebKit 26.6. Every page passes.
-- Keyboard checks on the administrator pages examined Tab order, visible focus on each control, and focus traps. Each checked page passes. Using only a keyboard, we signed in and accepted the terms. We also created and deleted a practice group and sent an idea to instance administrators.
-- Layout checks looked for horizontal scroll at 320 and 640 pixels wide. These widths correspond to 400% and 200% zoom on a 1280-pixel window. We checked a sample of pages by eye at WCAG 2.2 text spacing. We also checked for continuous motion.
+- Keyboard checks on the admin pages examined Tab order, visible focus on each control, and focus traps. Each checked page passes. Using only a keyboard, we signed in and accepted the terms. We also created and deleted a practice group and sent an idea to instance admins.
+- Layout checks examined horizontal scroll at 320 and 640 pixels wide. These widths correspond to 400% and 200% zoom on a 1280-pixel window. We visually checked a sample of pages at WCAG 2.2 text spacing. We also checked for continuous motion.
 
 The evaluation found and fixed sixteen barriers.
 These included pages without their own titles, a skip link hidden behind the sidebar, menu items without screen-reader menu semantics, and continuous animation.
@@ -41,17 +41,17 @@ The [audit record](/contributor/accessibility-audit-record-2026-10-03) lists eac
 - Screen readers are untested. Nobody ran NVDA with Firefox or VoiceOver with Safari on any page or process. Barriers that affect only screen-reader users may remain. After you follow a link, the application now announces the new page title. We have not confirmed how screen readers voice it.
 - Safari on macOS is untested with any assistive technology. WebKit passes the same checks on Linux, but that is not the same as testing Safari.
 - Pages with real data are only partly evaluated. The evaluated installation had no synced work, review runs, or language-model provider. Component tests used sample data for feedback, review results, activity, usage charts, and audit entries. We did not check these pages in a live installation. Heph conversations are also untested against a running instance.
-- We checked Tab order only as an administrator. Workspace member pages pass automated checks, but we have not checked them by keyboard.
+- We checked Tab order only as an instance admin. Workspace member pages pass automated checks, but we have not checked them by keyboard.
 - We did not test recovery from failed requests in any process. Nobody forced a request to fail to check what the page tells you.
 - Some processes are untested with a keyboard or screen reader. These include workspace creation from a provider, feedback responses on work, Heph conversations, and account deletion. GitHub or GitLab sign-in leaves the application. That handoff is also untested.
 - Some forms keep a button disabled until a required field has a value. They do not say which field is missing.
-- Imported GitHub, GitLab, Slack, and Outline titles and text keep the accessibility of their source. We do not check them.
+- Imported GitHub, GitLab, Slack, and Outline titles and text retain their source accessibility. We do not check them.
 
 ## Review
 
 We reviewed this statement on 3 October 2026 from the [audit record of that date](/contributor/accessibility-audit-record-2026-10-03).
 The next review follows the first screen-reader evaluation.
-Until then, the conformance status above does not change.
+Until then, the conformance status above stays unchanged.
 The [audit plan](/contributor/accessibility-audit-plan) describes the evaluation procedure.
 
 ## Feedback and contact

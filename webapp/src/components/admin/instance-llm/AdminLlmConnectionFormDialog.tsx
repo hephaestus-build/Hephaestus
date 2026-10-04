@@ -223,8 +223,7 @@ function AdminLlmConnectionFormDialogContent({
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit connection" : "Add connection"}</DialogTitle>
 					<DialogDescription>
-						Connect an endpoint that implements an OpenAI API. Add and price models after you save
-						the connection.
+						Connect an endpoint that implements an OpenAI API. Add and price its models next.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -300,7 +299,7 @@ function AdminLlmConnectionFormDialogContent({
 						Cancel
 					</Button>
 					<Button type="submit" disabled={isSubmitting}>
-						{isEdit ? "Save changes" : "Save inactive connection"}
+						{isEdit ? "Save changes" : "Add connection"}
 					</Button>
 				</DialogFooter>
 			</DialogForm>

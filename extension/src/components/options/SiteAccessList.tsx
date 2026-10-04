@@ -57,7 +57,7 @@ function SiteRow({
 				<span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
 					<ProviderIcon className="size-4" />
 				</span>
-				<div className="flex min-w-0 flex-1 flex-col">
+				<div className="flex min-w-0 flex-1 basis-40 flex-col">
 					<p className="text-sm font-medium break-all">{host(entry.origin)}</p>
 					<p className="text-xs text-muted-foreground">
 						{provider} · used by {entry.workspaces.join(", ")}

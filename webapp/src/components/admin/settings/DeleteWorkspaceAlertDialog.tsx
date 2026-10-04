@@ -70,7 +70,7 @@ export function DeleteWorkspaceAlertDialog({
 							<li>practice feedback and mentor conversations</li>
 							<li>locally stored integration and AI-provider credentials</li>
 						</ul>
-						<p>These stay:</p>
+						<p>These survive:</p>
 						<ul className="list-disc space-y-1 pl-5">
 							<li>
 								messages and comments Hephaestus posted to external providers, including GitHub,

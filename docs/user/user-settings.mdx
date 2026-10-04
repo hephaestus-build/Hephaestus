@@ -33,7 +33,7 @@ On your first visit, a workspace can ask you to finish a setup, even though you 
 The setup page has two parts: your AI choice and any Slack or Outline accounts the workspace requires.
 Setup neither approves you nor creates your membership.
 
-You answer the AI question once, for all workspaces on this Hephaestus deployment.
+You answer the AI question once across all workspaces on this Hephaestus deployment.
 Another workspace never asks it again.
 Its setup page appears only if it requires an account you have not connected.
 Your answer is a boundary, not a model selection.
@@ -41,12 +41,12 @@ Anything stricter also qualifies, and nothing switches you to a less strict answ
 
 The cards compare three answers on the same four rows:
 
-| | **In-house** | **Cloud** | **No AI** |
-| --- | --- | --- | --- |
-| **AI help** | Feedback and Heph | Feedback and Heph | No new feedback or Heph replies |
-| **Models** | Only models your organization runs, usually smaller models | In-house models plus cloud models, usually the strongest available | None |
-| **Speed** | Your organization’s capacity can make replies slower | More capacity, usually faster | Not applicable |
-| **Sent to** | Only systems your organization runs | Also a cloud provider your organization configured. Its agreement sets retention and access. | Nowhere. Sync and stored work continue. |
+|             | **In-house**                                               | **Cloud**                                                                                    | **No AI**                               |
+| ----------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------- |
+| **AI help** | Feedback and Heph                                          | Feedback and Heph                                                                            | No new feedback or Heph replies         |
+| **Models**  | Only models your organization runs, usually smaller models | In-house models plus cloud models, usually the strongest available                           | None                                    |
+| **Speed**   | Your organization’s capacity can make replies slower       | More capacity, usually faster                                                                | Not applicable                          |
+| **Sent to** | Only systems your organization runs                        | Also a cloud provider your organization configured. Its agreement sets retention and access. | Nowhere. Sync and stored work continue. |
 
 Each workspace sets up its own models within these answers.
 If no model in the current workspace meets an answer, its card says **not set up here yet**.
@@ -100,7 +100,7 @@ Research participation is separate.
 
 ### Connect the accounts your workspace uses
 
-A required account must match the Slack team or Outline instance that this workspace uses.
+A required account must match the Slack team or Outline instance configured for this workspace.
 An account on a different team or instance does not count.
 Connecting an account identifies you on that service but does not turn on AI.
 

@@ -40,7 +40,7 @@ export function AiChoiceSection({
 					Your AI choice
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					One answer covers every workspace you’re in on this Hephaestus instance.
+					One answer for every workspace you’re in on this Hephaestus instance.
 				</p>
 			</div>
 

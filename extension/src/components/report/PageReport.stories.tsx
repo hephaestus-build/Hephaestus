@@ -210,7 +210,9 @@ export const ReviewStatusUnavailable: Story = {
 		await expect(canvas.getByRole("button", { expanded: true })).toHaveAccessibleName(
 			"Practice review No recorded comments for you · review status unavailable",
 		);
-		await expect(canvas.getByText("Your review status is unavailable.")).toBeVisible();
+		await expect(
+			canvas.getByText("No review history is available for your account on this work."),
+		).toBeVisible();
 		await expect(canvas.getByText("No observations about your work here.")).toBeVisible();
 	},
 };
@@ -252,7 +254,7 @@ export const FeedbackFailed: Story = {
 	},
 	play: async ({ canvas, args }) => {
 		await expect(canvas.getByRole("button", { expanded: true })).toHaveAccessibleName(
-			/We could not load your feedback/u,
+			/We could not load your comments/u,
 		);
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();
@@ -264,7 +266,7 @@ export const ObservationsFailed: Story = {
 		expanded: true,
 		observations: {
 			status: "error",
-			message: "We could not reach Hephaestus. Check your connection and try again.",
+			message: "We could not reach Hephaestus. Check your connection, then try again.",
 		},
 	},
 	play: async ({ canvas, args }) => {

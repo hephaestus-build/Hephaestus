@@ -139,9 +139,8 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 						<AlertDialogTitle>{resetLabel}?</AlertDialogTitle>
 						<AlertDialogDescription>
 							This replaces the customization and discards unsaved changes. It does not change
-							whether workspace administrators can add the practice. Existing workspace copies
-							remain unchanged. Future updates apply automatically until the practice is customized
-							again.
+							whether workspace admins can add the practice. Existing workspace copies remain
+							unchanged. Future updates apply automatically until the practice is customized again.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

@@ -13,8 +13,8 @@ For a release deployment, the host verifies two signatures:
 
 | Artifact                                    | Signed by              | Answers                                                  |
 | ------------------------------------------- | ---------------------- | -------------------------------------------------------- |
-| The channel (`channels/<env>.json`)         | the promotion workflow | *may this host move, and who said so*                    |
-| The release lock (`release-<version>.json`) | the release workflow   | *which source commit and image digests are this release* |
+| The channel (`channels/<env>.json`)         | the promotion workflow | _may this host move, and who said so_                    |
+| The release lock (`release-<version>.json`) | the release workflow   | _which source commit and image digests are this release_ |
 
 The host rejects a new channel commit that does not descend from its last accepted channel commit.
 It also rejects lower release versions and older commits unless `allowRollback` is set. These checks
@@ -81,14 +81,14 @@ A release never replaces the tooling that verifies it.
 
 6. Install the units:
 
-      ```bash
-      sudo install -m 644 \
-        /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.service \
-        /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.timer \
-        /etc/systemd/system/
-      sudo systemctl daemon-reload
-      sudo systemctl enable --now hephaestus-reconcile.timer
-      ```
+   ```bash
+   sudo install -m 644 \
+     /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.service \
+     /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.timer \
+     /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now hephaestus-reconcile.timer
+   ```
 
    The units are copies because systemd needs them on the root filesystem at boot.
    The reconciler keeps both at the host's release.
@@ -110,13 +110,13 @@ Operators write the per-stack files in `/etc/hephaestus` (`app.env`, `core.env`)
 
 1. Before the first reconcile, copy these settings from the previous deployment:
 
-   | Setting                                                                                                                                                                                                                          | What it must be                                                                                                                                                                                                             |
-   | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`                                                                                                                                                                                             | The previous deployment's value. It encrypted the server's stored values other than integration credentials.                                                                                                    |
-   | `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`                                                                                                                                                                                  | The previous deployment's value, or the master key if the installation never set it separately. It encrypted integration credentials. A different key makes them unreadable without a warning.       |
+   | Setting                                                                                                                                                                                                                          | What it must be                                                                                                                                                                                                   |
+   | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`                                                                                                                                                                                             | The previous deployment's value. It encrypted the server's stored values other than integration credentials.                                                                                                      |
+   | `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`                                                                                                                                                                                  | The previous deployment's value, or the master key if the installation never set it separately. It encrypted integration credentials. A different key makes them unreadable without a warning.                    |
    | `HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED`, `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION`, `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY`, `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY_VERSION` | The previous deployment's values, if it rotated credential keys. Each stored credential names the key version that wrote it. A credential under the prior key remains readable only while that key is configured. |
-   | `WEBHOOK_SECRET`                                                                                                                                                                                                                 | what the providers were registered to sign with                                                                                                                                                                             |
-   | `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`                                                                                                                                                                                               | optional. A new one only invalidates sign-ins that are in flight at the moment of the switch                                                                                                                                |
+   | `WEBHOOK_SECRET`                                                                                                                                                                                                                 | what the providers were registered to sign with                                                                                                                                                                   |
+   | `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`                                                                                                                                                                                               | optional. A new one only invalidates sign-ins that are in flight at the moment of the switch                                                                                                                      |
 
    A host with its own edge keeps certificates in the `proxy_letsencrypt` volume.
    In a release worktree, the old bind-mounted `acme.json` is under `docker/letsencrypt/`.

@@ -361,7 +361,7 @@ function AdminCuratedCatalogPage() {
 			<PageHeader
 				icon={<LibraryBig />}
 				title="Practice catalog"
-				description="Choose which groups and practices workspace administrators can add. Changes here never rewrite existing workspace practices."
+				description="Choose which groups and practices workspace admins can add. Changes here never rewrite existing workspace practices."
 				actions={
 					<div className="flex flex-wrap gap-2">
 						{writePending ? (

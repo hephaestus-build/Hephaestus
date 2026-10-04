@@ -126,7 +126,7 @@ public enum SignalStateReason {
             case COOLDOWN_ACTIVE -> "This work already had a review within this workspace’s cooldown period.";
             case REQUEST_COOLDOWN_ACTIVE -> "A review of this work was already requested a short time ago.";
             case REQUESTER_QUOTA_EXHAUSTED ->
-                "The person who asked used all of their review requests for this hour. The allowance refills later.";
+                "The person who asked used all of their review requests for this hour. The allowance refills.";
             case CONCURRENT_DUPLICATE -> "The same review was already running.";
             case COALESCED -> "A later change to this work replaced this update before a review started.";
             case OUT_OF_REVIEW_SCOPE ->

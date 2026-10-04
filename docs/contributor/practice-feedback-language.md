@@ -259,6 +259,9 @@ Its link above remains their source.
 | **Instance** | One deployment that hosts workspaces. |
 | **Integration** | A connection to GitHub, GitLab, Slack, or Outline. |
 | **Runtime role** | The server, worker, or webhook part of one application. |
+| **Instance admin** | A person with the admin role for the whole deployment. |
+| **Workspace admin** | A person with the admin role in one workspace. |
+| **Instance operator** | The person or team who runs the deployment. Readers contact them for faults that no admin can fix. |
 | **Server** | The service that handles application requests. |
 | **Worker** | The runtime role that executes background work. |
 | **Webhook** | A provider's HTTP event request. |

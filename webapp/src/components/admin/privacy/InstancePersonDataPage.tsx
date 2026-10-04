@@ -320,7 +320,7 @@ function RequestCard({
 					{request.state === "FAILED" &&
 						`Stores already erased stay erased. Resume to finish the rest (failure code ${request.failureCode ?? "unknown"}).`}
 					{request.state === "COMPLETE" &&
-						"The audit record keeps store counts and the acting administrator, not erased content or identities. Provider records that still exist upstream can be mirrored again, but Hephaestus does not process them."}
+						"The audit record keeps store counts and the acting admin, not erased content or identities. Provider records that still exist upstream can be mirrored again, but Hephaestus does not process them."}
 					{request.state === "EXPIRED" && "Preview again to export or erase."}
 				</CardDescription>
 			</CardHeader>

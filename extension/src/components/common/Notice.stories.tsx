@@ -28,7 +28,7 @@ export const Info: Story = {
 	args: {
 		tone: "info",
 		icon: InfoIcon,
-		title: "Sign-in was cancelled",
+		title: "Sign-in was canceled",
 		children: "Nothing changed. To try again, choose a way to sign in.",
 	},
 };
@@ -47,7 +47,7 @@ export const WithAction: Story = {
 		tone: "destructive",
 		icon: CircleAlertIcon,
 		title: "We could not reach Hephaestus",
-		children: "Check your connection.",
+		children: "Check your connection, then select Retry.",
 		action: <Button size="sm">Retry</Button>,
 	},
 	play: async ({ canvas }) => {

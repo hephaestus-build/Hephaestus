@@ -164,8 +164,8 @@ export function EmailPreferencesSection({
 						!isAppAdmin &&
 						(state.preferences.productFeedback || state.preferences.surveySummaries) && (
 							<p className="text-sm text-muted-foreground">
-								You can turn off your previous administrator subscriptions here. They are not sent
-								unless you have instance-admin access.
+								You can turn off your previous instance admin subscriptions here. They do not send
+								while you lack instance admin access.
 							</p>
 						)}
 					{!optOutOnly && !state.preferences.emailAvailable && (

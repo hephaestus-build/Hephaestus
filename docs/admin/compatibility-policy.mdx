@@ -14,13 +14,13 @@ The [CHANGELOG](https://github.com/hephaestus-build/Hephaestus/blob/main/CHANGEL
 
 Semantic versioning applies to the surfaces an operator or API consumer depends on:
 
-| Surface | What is covered |
-| --- | --- |
-| **Database migration chain** | Startup applies pending Liquibase changesets in changelog order. Thus, a newer release builds on the previous release's schema. Migrations run automatically when the application server starts. |
-| **Runtime prerequisites** | The minimum PostgreSQL major version, the required outbound network destinations, and any required external services. Adding one is a breaking change. |
-| **Configuration keys** | Environment variables and `hephaestus.*` properties documented in the [Install](./install.mdx) guide (base install) and [Integrations & Reference Deployment](./production-setup.mdx) (per-integration bundles). Renames and removals are breaking changes. |
+| Surface                      | What is covered                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Database migration chain** | Startup applies pending Liquibase changesets in changelog order. Thus, a newer release builds on the previous release's schema. Migrations run automatically when the application server starts.                                                                                                                                                                                |
+| **Runtime prerequisites**    | The minimum PostgreSQL major version, the required outbound network destinations, and any required external services. Adding one is a breaking change.                                                                                                                                                                                                                          |
+| **Configuration keys**       | Environment variables and `hephaestus.*` properties documented in the [Install](./install.mdx) guide (base install) and [Integrations & Reference Deployment](./production-setup.mdx) (per-integration bundles). Renames and removals are breaking changes.                                                                                                                     |
 | **Docker Compose interface** | Service names, image names, the signed release-lock contract, and required environment variables of the published Compose files. This includes the self-hosted stack (`docker/self-host/compose.yaml`, see the [Install guide](./install.mdx)). It also includes the reference deployment (`docker/compose.app.yaml`, `docker/compose.core.yaml`, `docker/compose.proxy.yaml`). |
-| **REST API** | The endpoints described by the published [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml). |
+| **REST API**                 | The endpoints described by the published [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml).                                                                                                                                                                                                                                 |
 
 Other surfaces can change in any release without notice:
 
@@ -31,11 +31,11 @@ Other surfaces can change in any release without notice:
 
 ## Version numbers
 
-| Bump | Meaning |
-| --- | --- |
+| Bump                | Meaning                                                                                                                                                                                                                                                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Major** (`X`.y.z) | You must act before or during the upgrade. Causes include required new, removed, or renamed configuration keys, manual or destructive migrations, and removed APIs. The release notes say what to do. [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) has the details. |
-| **Minor** (x.`Y`.z) | New functionality. The upgrade needs no action. It can include new *optional* configuration keys. |
-| **Patch** (x.y.`Z`) | Bug and security fixes. The upgrade needs no action. |
+| **Minor** (x.`Y`.z) | New functionality. The upgrade needs no action. It can include new _optional_ configuration keys.                                                                                                                                                                                                              |
+| **Patch** (x.y.`Z`) | Bug and security fixes. The upgrade needs no action.                                                                                                                                                                                                                                                           |
 
 Any release may include database migrations that run automatically on startup — the release notes flag
 them with a "back up before upgrading" banner.
@@ -51,7 +51,7 @@ This exception ends with the 1.0.0 release.
 
 1. Read the release notes.
 2. Test the upgrade in staging first.
-:::
+   :::
 
 ## Upgrade guarantee
 
@@ -70,11 +70,11 @@ Fresh databases initialize automatically.
 
 ### Upgrade paths to 1.0
 
-| Installed release | Required path to 1.0 |
-| --- | --- |
-| ≤ v0.77.3 | Install v0.77.4 and start it once → [baseline synchronization runbook](./liquibase-baseline-runbook.md) → 1.0 |
-| v0.77.4 | [Baseline synchronization runbook](./liquibase-baseline-runbook.md) → 1.0 |
-| ≥ v0.78.0 | Upgrade directly to 1.0. The baseline is already synchronized |
+| Installed release | Required path to 1.0                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------- |
+| ≤ v0.77.3         | Install v0.77.4 and start it once → [baseline synchronization runbook](./liquibase-baseline-runbook.md) → 1.0 |
+| v0.77.4           | [Baseline synchronization runbook](./liquibase-baseline-runbook.md) → 1.0                                     |
+| ≥ v0.78.0         | Upgrade directly to 1.0. The baseline is already synchronized                                                 |
 
 The database history, not the image tag alone, determines whether it has reached the cut-point.
 Startup and the runbook's synchronization command refuse nonempty migration history without the
@@ -104,12 +104,12 @@ provides no dedicated self-hosted support and expects operators to upgrade regul
 All images (`webapp`, `application-server`, `agent-pi`, `postgres`) under
 `ghcr.io/hephaestus-build/` are published with:
 
-| Tag | Meaning | Stability |
-| --- | --- | --- |
-| `X.Y.Z` | Exact release | Human-readable label. Production uses the signed digest lock |
-| `X.Y` | Latest patch of a minor release | Moves on every patch release |
-| `latest` | Latest release | Moves on every release |
-| `main`, `<sha>` | Unreleased development builds | **Unsupported** — never deploy these |
+| Tag             | Meaning                         | Stability                                                    |
+| --------------- | ------------------------------- | ------------------------------------------------------------ |
+| `X.Y.Z`         | Exact release                   | Human-readable label. Production uses the signed digest lock |
+| `X.Y`           | Latest patch of a minor release | Moves on every patch release                                 |
+| `latest`        | Latest release                  | Moves on every release                                       |
+| `main`, `<sha>` | Unreleased development builds   | **Unsupported** — never deploy these                         |
 
 Releases published before the `ls1intum` → `hephaestus-build` organization transfer remain under
 `ghcr.io/ls1intum/hephaestus/` — GHCR packages do not transfer between organizations, and their

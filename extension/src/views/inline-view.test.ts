@@ -106,7 +106,7 @@ it("says a failed feedback refresh failed, rather than keep old comments under a
 	});
 	await vi.waitFor(() => expect(container.textContent).toContain("Hephaestus ran into a problem."));
 	// The context refreshed fine; the feedback did not, and none of the old comments remain.
-	expect(container.textContent).toContain("We could not load your feedback");
+	expect(container.textContent).toContain("We could not load your comments");
 	expect(container.textContent).not.toContain("Descriptive merge request");
 	expect(container.querySelector("[role=alert]")).not.toBeNull();
 });

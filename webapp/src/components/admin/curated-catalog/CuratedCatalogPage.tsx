@@ -173,7 +173,7 @@ export function CuratedCatalogPage({
 					</EmptyMedia>
 					<EmptyTitle>The catalog is empty</EmptyTitle>
 					<EmptyDescription>
-						Create a group or practice, then include it for workspace administrators.
+						Create a group or practice, then include it for workspace admins.
 					</EmptyDescription>
 				</EmptyHeader>
 				<EmptyContent>
@@ -297,7 +297,7 @@ export function CuratedCatalogPage({
 						<AlertDialogDescription>
 							{excludingPractice?.effectivelyOffered === false
 								? "Its group is already excluded. This keeps the practice excluded if the group is included again. Existing workspace copies will not change."
-								: "Workspace administrators will no longer be able to add this practice. Existing workspace copies will not change. You can include it again later."}
+								: "Workspace admins will no longer be able to add this practice. Existing workspace copies will not change. You can include it again later."}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -329,8 +329,8 @@ export function CuratedCatalogPage({
 						<AlertDialogTitle>Exclude group “{excludingGroup?.definition.name}”?</AlertDialogTitle>
 						<AlertDialogDescription>
 							{practicesExcludedWithGroup.length === 0
-								? "Workspace administrators will no longer be able to add this group. No additional practices are affected. Existing workspace copies will not change."
-								: `Workspace administrators will no longer be able to add this group. This also excludes ${practicesExcludedWithGroup.length} included ${
+								? "Workspace admins will no longer be able to add this group. No additional practices are affected. Existing workspace copies will not change."
+								: `Workspace admins will no longer be able to add this group. This also excludes ${practicesExcludedWithGroup.length} included ${
 										practicesExcludedWithGroup.length === 1 ? "practice" : "practices"
 									}. Existing workspace copies will not change.`}
 						</AlertDialogDescription>

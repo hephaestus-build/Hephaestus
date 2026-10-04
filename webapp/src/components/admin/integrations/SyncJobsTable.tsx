@@ -132,7 +132,7 @@ function JobProgressPanel({ progress }: { progress: SyncJobProgress }) {
 			)}
 			{hasUnits && (
 				<>
-					<dt className="text-muted-foreground">Items in phase</dt>
+					<dt className="text-muted-foreground">Units in phase</dt>
 					<dd className="tabular-nums">
 						{unitsCompleted?.toLocaleString() ?? "–"}
 						{unitsTotal != null && ` / ${unitsTotal.toLocaleString()}`}
@@ -224,7 +224,7 @@ function JobRow({ job }: { job: SyncJob }) {
 							render={
 								<button
 									type="button"
-									aria-label={`Error for job ${job.id}`}
+									aria-label={`Show error for job ${job.id}`}
 									className={cn("inline-flex cursor-help rounded-sm", FOCUS_RING)}
 								/>
 							}

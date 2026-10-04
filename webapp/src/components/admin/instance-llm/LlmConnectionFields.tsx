@@ -213,7 +213,7 @@ export function LlmConnectionFields({
 								Use the Responses API
 							</FieldLabel>
 							<FieldDescription>
-								Clear this box only if the endpoint serves Chat Completions alone.
+								Turn this off only if the endpoint serves Chat Completions alone.
 							</FieldDescription>
 						</FieldContent>
 					</Field>
@@ -281,8 +281,8 @@ export function LlmConnectionFields({
 					</ComboboxContent>
 				</Combobox>
 				<FieldDescription>
-					For example, Logos, Azure, or a gateway. Its mark does not say who operates the model or
-					where data stays.
+					For example, Logos, Azure, or a gateway. A logo does not show who runs the model or where
+					data stays.
 				</FieldDescription>
 			</Field>
 

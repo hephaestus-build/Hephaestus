@@ -46,8 +46,8 @@ An empty gate applies the practice to all work of the selected kind.
 
 ```json
 {
-  "skipReason": "the change touches no Swift source file",
-  "anyOf": [{ "changedPathMatches": ["**/*.swift"] }]
+	"skipReason": "the change touches no Swift source file",
+	"anyOf": [{ "changedPathMatches": ["**/*.swift"] }]
 }
 ```
 
@@ -69,16 +69,16 @@ A keyword list that misses unfamiliar APIs or file names cannot establish the ab
 Use these questions to organize a draft.
 They are not mandatory headings or a word-count target.
 
-| Decision | What the author must make clear |
-| --- | --- |
-| Applicability | What fact makes this expectation relevant? What ordinary cases need no observation? |
-| Standard | What observable requirements must the reviewed work meet? |
-| Evidence | Which captured sources can establish each claim? Who authored them, and when? |
-| Conformance | What evidence establishes the complete standard or a material shortfall? |
-| Absence | What complete, bounded search justifies a claim of missing required behavior or absence of harmful behavior? |
-| Uncertainty | What unresolved question prevents a judgment, even with the required evidence captured? |
-| Consequence | Why does a not-met observation matter? What consequence justifies its severity? |
-| Feedback | What specific change could the developer make? When would no corrective feedback be useful? |
+| Decision      | What the author must make clear                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------ |
+| Applicability | What fact makes this expectation relevant? What ordinary cases need no observation?                          |
+| Standard      | What observable requirements must the reviewed work meet?                                                    |
+| Evidence      | Which captured sources can establish each claim? Who authored them, and when?                                |
+| Conformance   | What evidence establishes the complete standard or a material shortfall?                                     |
+| Absence       | What complete, bounded search justifies a claim of missing required behavior or absence of harmful behavior? |
+| Uncertainty   | What unresolved question prevents a judgment, even with the required evidence captured?                      |
+| Consequence   | Why does a not-met observation matter? What consequence justifies its severity?                              |
+| Feedback      | What specific change could the developer make? When would no corrective feedback be useful?                  |
 
 1. Prefer “identify a material decision whose rationale the reviewer needs” to a keyword test for “because.”
 2. Prefer the consequence of a missing check to a criterion that makes every missing heading MAJOR.
@@ -89,12 +89,12 @@ They are not mandatory headings or a word-count target.
 
 Use one outcome for conformance within the recorded evidence boundary:
 
-| Outcome | Example for verification guidance on a persistence change |
-| --- | --- |
-| `MET` | Complete instructions save a setting, restart the app, and check the saved value without destruction of that value. |
-| `NOT_MET` | A required restart check is missing, or the instructions claim an in-memory preview proves persistence. |
-| `NOT_APPLICABLE` | The work has no material behavior that requires this verification. |
-| `UNDETERMINED` | Adequate captured evidence contains an unresolved conflict about the required behavior. |
+| Outcome          | Example for verification guidance on a persistence change                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `MET`            | Complete instructions save a setting, restart the app, and check the saved value without destruction of that value. |
+| `NOT_MET`        | A required restart check is missing, or the instructions claim an in-memory preview proves persistence.             |
+| `NOT_APPLICABLE` | The work has no material behavior that requires this verification.                                                  |
+| `UNDETERMINED`   | Adequate captured evidence contains an unresolved conflict about the required behavior.                             |
 
 One useful instruction alone does not establish conformance to the complete standard.
 Absence claims need a complete bounded search.

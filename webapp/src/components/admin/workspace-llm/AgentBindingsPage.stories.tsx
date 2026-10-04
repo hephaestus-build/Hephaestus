@@ -137,7 +137,7 @@ export const NothingCovered: Story = {
 	play: async ({ canvas }) => {
 		const reviews = purposeCard(canvas, "Practice reviews");
 		for (const term of ["In-house", "Cloud"]) {
-			await expect(previewRow(reviews, term)).toHaveTextContent("Nothing runs for them");
+			await expect(previewRow(reviews, term)).toHaveTextContent("No model is used");
 		}
 		await expect(previewRow(reviews, UNCHOSEN_ROW)).toHaveTextContent(
 			"My OpenAI key (Not declared)",
@@ -151,7 +151,7 @@ export const ChoiceRequired: Story = {
 	play: async ({ canvas }) => {
 		const reviews = purposeCard(canvas, "Practice reviews");
 		await expect(reviews.queryByText(UNCHOSEN_ROW, { selector: "dt" })).toBeNull();
-		await expect(row(reviews, UNCHOSEN_ROW).getByText(/serves no one now/u)).toBeVisible();
+		await expect(row(reviews, UNCHOSEN_ROW).getByText(/no one uses it now/u)).toBeVisible();
 	},
 };
 
@@ -209,7 +209,7 @@ export const BoundModelMovedNoAlternative: Story = {
 		const picker = inHouse.getByRole("combobox", { name: /In-house/u });
 		await expect(picker).toBeDisabled();
 		await expect(picker).toHaveAccessibleDescription(
-			"GPT-5 is now declared as Cloud and no longer serves this assignment. Clear the assignment, or ask your host for a model declared as In-house.",
+			"GPT-5 is now declared as Cloud and no longer serves this assignment. Clear the assignment, or ask an instance admin for a model declared as In-house.",
 		);
 		await expect(inHouse.getByRole("button", { name: /^Clear assignment/u })).toBeEnabled();
 	},
@@ -224,7 +224,7 @@ export const NoModelsAvailable: Story = {
 	play: async ({ canvas }) => {
 		const reviews = purposeCard(canvas, "Practice reviews");
 		await expect(row(reviews, "Cloud").getByText(/No model declared as/u)).toHaveTextContent(
-			"No model declared as Cloud is available here yet. Ask your host, or add one under your own providers.",
+			"No model declared as Cloud is available yet. Ask an instance admin, or add one under your own providers.",
 		);
 		await expect(
 			row(reviews, UNCHOSEN_ROW).getByText(/No models are available yet/u),
@@ -244,7 +244,7 @@ export const LoadForbidden: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText("We could not load AI models")).toBeVisible();
+		await expect(await canvas.findByText("You do not have access to AI models")).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Retry" })).toBeNull();
 	},
 };
@@ -257,12 +257,12 @@ export const ProjectReviewsDisabled: Story = {
 		await expect(card.getByText("Practice reviews off")).toBeVisible();
 		for (const term of ["In-house", "Cloud", UNCHOSEN_ROW]) {
 			await expect(previewRow(card, term)).toHaveTextContent(
-				"Nothing runs for them (Practice reviews off)",
+				"No model is used (Practice reviews off)",
 			);
 		}
 		// Heph is on but unbound here: nothing runs, and no switch is to blame.
 		await expect(previewRow(purposeCard(canvas, "Heph"), "In-house")).toHaveTextContent(
-			/^Nothing runs for them$/u,
+			/^No model is used$/u,
 		);
 		await expect(card.getByRole("link", { name: "Open Review: When and where" })).toHaveAttribute(
 			"href",

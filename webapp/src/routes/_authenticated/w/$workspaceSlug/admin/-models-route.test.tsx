@@ -285,13 +285,13 @@ describe("workspace AI models route", () => {
 		expect(previewTerm("Practice reviews", UNCHOSEN)?.nextElementSibling?.textContent).toBe(
 			"GPT Test (Not declared)",
 		);
-		expect(within(row("Practice reviews")).queryByText(/serves no one now/u)).toBeNull();
+		expect(within(row("Practice reviews")).queryByText(/no one uses it now/u)).toBeNull();
 	});
 
 	it("drops the unchosen preview row once the workspace requires the choice", async () => {
 		await renderModelsRoute(() => [binding("PRACTICE_REVIEW", 20)], true);
 		expect(previewTerm("Practice reviews", UNCHOSEN)).toBeNull();
-		within(row("Practice reviews")).getByText(/serves no one now/u);
+		within(row("Practice reviews")).getByText(/no one uses it now/u);
 	});
 
 	it("keeps one row pending while its sibling of the same purpose stays editable", async () => {

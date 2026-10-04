@@ -45,30 +45,30 @@ It can capture evidence only for images that its run published.
 
 ## Quality gates
 
-| Job | Checks | Local command |
-| --- | --- | --- |
-| Quality → App Server | Spotless and PMD, NullAway policy, the PMD canary when PMD inputs changed, artifact-source contracts, setting delivery per runtime role | `vp run gate:server`, `gate:java-nullness`, `gate:contracts`, `gate:env` |
-| Quality → Tooling and Docs | toolchain and agent-runtime pins, the runner and lint contracts, `gate:agents`, load-test format and syntax, agent specs, instruction mirrors, docs format and `docs:lint`, Mermaid parse | `vp run gate:agents`, `gate:docs`, `test:agents` |
-| Quality → Webapp | `vp check`, presentational components, story prose, docs color tokens, unit tests, Vite build with a `routeTree.gen.ts` diff | `vp run check:webapp`, `test:webapp`, `build:webapp` |
-| Quality → Webapp: Stories | Storybook interaction tests, `export:assets` diff, Storybook build, Chromatic | `vp run test:webapp:stories` |
-| Quality → Extension | `vp check` for `extension/`, format, unit and story tests, the production zip and its manifest check. Keeps the zip as `extension-chrome-*` | `vp run ci:extension` |
-| Quality → Windows | Every gate that needs neither Gradle, Docker nor the agent sandbox, on `windows-latest`, uncached | `vp run --no-cache ci:windows` |
-| Quality → Clean install | `vp install --frozen-lockfile` on a runner with Node and the launcher and nothing else, then `gate:toolchain` and the hooks path | `vp install` |
-| Build → App Server: Package | `./gradlew :application:bootJar :application:testClasses`. Uploads the classes and JARs once | — |
-| Build → App Server: Generated artifacts | `generate:api` diff against the packaged JAR. `db:check-drift`, which replays `master.xml` and diffs the JPA model. ERD diff | `vp run generate:api`, `db:check-drift`, `db:generate-erd-docs` |
-| Build → App Server: Database | Gradle `databaseTest` task against PostgreSQL. The PostgreSQL 18 backup-restore drill | `vp run test:postgres-restore` |
-| Build → Webapp: E2E | Playwright against the packaged JAR | `vp run --filter webapp test:e2e` |
-| Build → Extension: E2E | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR | `vp run test:extension:e2e` |
-| Build → App Server image | `pack build` from the packaged JAR, signed, attested and policy-scanned | — |
-| Test → App Server: Unit and architecture, App Server: Integration | compiled from source | `vp run test:server:verification`, `test:server:integration` |
-| Security → New dependency risk | dependency review. Pull requests only | — |
-| Security → Dependencies, secrets, and policy | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, `security.txt` expiry, changelog immutability guard, legacy-reference guards | — |
-| Changesets → Verify changesets | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze | `vp run gate:changesets` |
-| Compose → Render compose stacks | the self-hosted, preview and reference stacks render | `vp run gate:preview-stack` |
-| Docker → Webapp, Agent: Pi, Postgres (pg_partman), Tag unchanged images | Dockerfile images. Aliases for unchanged ones | — |
-| Supported-host boot smoke | `docker/self-host/setup.sh`, then PostgreSQL, NATS and the application server from this run's own images, waiting for the application to report healthy | — |
-| Actionlint, Zizmor | workflow lint with ShellCheck warnings. Zizmor at medium confidence | — |
-| PR → Validate PR | Conventional Commit title. Every commit’s primary author resolves to the pull request author’s GitHub account (including bot accounts). The PR body follows attribution policy | — |
+| Job                                                                     | Checks                                                                                                                                                                                    | Local command                                                            |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Quality → App Server                                                    | Spotless and PMD, NullAway policy, the PMD canary when PMD inputs changed, artifact-source contracts, setting delivery per runtime role                                                   | `vp run gate:server`, `gate:java-nullness`, `gate:contracts`, `gate:env` |
+| Quality → Tooling and Docs                                              | toolchain and agent-runtime pins, the runner and lint contracts, `gate:agents`, load-test format and syntax, agent specs, instruction mirrors, docs format and `docs:lint`, Mermaid parse | `vp run gate:agents`, `gate:docs`, `test:agents`                         |
+| Quality → Webapp                                                        | `vp check`, presentational components, story prose, docs color tokens, unit tests, Vite build with a `routeTree.gen.ts` diff                                                              | `vp run check:webapp`, `test:webapp`, `build:webapp`                     |
+| Quality → Webapp: Stories                                               | Storybook interaction tests, `export:assets` diff, Storybook build, Chromatic                                                                                                             | `vp run test:webapp:stories`                                             |
+| Quality → Extension                                                     | `vp check` for `extension/`, format, unit and story tests, the production zip and its manifest check. Keeps the zip as `extension-chrome-*`                                               | `vp run ci:extension`                                                    |
+| Quality → Windows                                                       | Every gate that needs neither Gradle, Docker nor the agent sandbox, on `windows-latest`, uncached                                                                                         | `vp run --no-cache ci:windows`                                           |
+| Quality → Clean install                                                 | `vp install --frozen-lockfile` on a runner with Node and the launcher and nothing else, then `gate:toolchain` and the hooks path                                                          | `vp install`                                                             |
+| Build → App Server: Package                                             | `./gradlew :application:bootJar :application:testClasses`. Uploads the classes and JARs once                                                                                              | —                                                                        |
+| Build → App Server: Generated artifacts                                 | `generate:api` diff against the packaged JAR. `db:check-drift`, which replays `master.xml` and diffs the JPA model. ERD diff                                                              | `vp run generate:api`, `db:check-drift`, `db:generate-erd-docs`          |
+| Build → App Server: Database                                            | Gradle `databaseTest` task against PostgreSQL. The PostgreSQL 18 backup-restore drill                                                                                                     | `vp run test:postgres-restore`                                           |
+| Build → Webapp: E2E                                                     | Playwright against the packaged JAR                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
+| Build → Extension: E2E                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR                                                                                           | `vp run test:extension:e2e`                                              |
+| Build → App Server image                                                | `pack build` from the packaged JAR, signed, attested and policy-scanned                                                                                                                   | —                                                                        |
+| Test → App Server: Unit and architecture, App Server: Integration       | compiled from source                                                                                                                                                                      | `vp run test:server:verification`, `test:server:integration`             |
+| Security → New dependency risk                                          | dependency review. Pull requests only                                                                                                                                                     | —                                                                        |
+| Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, `security.txt` expiry, changelog immutability guard, legacy-reference guards                                            | —                                                                        |
+| Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze                                                                                                     | `vp run gate:changesets`                                                 |
+| Compose → Render compose stacks                                         | the self-hosted, preview and reference stacks render                                                                                                                                      | `vp run gate:preview-stack`                                              |
+| Docker → Webapp, Agent: Pi, Postgres (pg_partman), Tag unchanged images | Dockerfile images. Aliases for unchanged ones                                                                                                                                             | —                                                                        |
+| Supported-host boot smoke                                               | `docker/self-host/setup.sh`, then PostgreSQL, NATS and the application server from this run's own images, waiting for the application to report healthy                                   | —                                                                        |
+| Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                       | —                                                                        |
+| PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the pull request author’s GitHub account (including bot accounts). The PR body follows attribution policy            | —                                                                        |
 
 The browser jobs retain `webapp-e2e-results` and `extension-e2e-results`, each including
 `e2e-server.log`, for seven days on success as well as failure. Inspect server startup and shutdown output even when browser assertions
@@ -184,18 +184,18 @@ changesets rather than adding one. [Release management](./release-management.mdx
 
 ## Security and supply-chain controls
 
-| Control | Timing | Enforcement | Destination |
-| --- | --- | --- | --- |
-| Dependency vulnerability gate | Security workflow | owns the dependency verdict. Blocks fixable high or critical findings in every dependency the checkout resolves | required Security workflow |
-| GitHub dependency review | pull requests | reports the advisories a pull request introduces, with their patched versions. Holds no verdict | Security workflow summary |
-| TruffleHog and GitHub push protection | pull requests and pushes | block verified secrets | Security workflow and repository protection |
-| Trivy filesystem scan | Security workflow | a scanner error blocks. Findings of every severity are report-only | code scanning |
-| Semgrep TLS policy | pull requests, merge groups, and `main` pushes | fails on a rule violation or a scanner error | code scanning and a run artifact |
-| Image vulnerability policy | image build and release | blocks fixable high or critical findings | build summary and release evidence |
-| Weekly image rescans | `rescan-main-images.yml`, `rescan-release-images.yml` | the `main` rescan upserts one tracking issue. The release rescan fails and comments on the vulnerability response issue | issues and run artifacts |
-| OpenSSF Scorecard | `main` pushes, branch-protection changes, and weekly. Never on pull requests | reports | code scanning and a run artifact |
-| Scorecard ratchet | the same events, plus on demand | fails when a check scores below `security/scorecard-baseline.json`. On a push, only for the checks that commit decides | job summary and a run artifact |
-| Renovate | configured schedule and vulnerability alerts | pull requests require normal review and CI | dependency dashboard |
+| Control                               | Timing                                                                       | Enforcement                                                                                                             | Destination                                 |
+| ------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Dependency vulnerability gate         | Security workflow                                                            | owns the dependency verdict. Blocks fixable high or critical findings in every dependency the checkout resolves         | required Security workflow                  |
+| GitHub dependency review              | pull requests                                                                | reports the advisories a pull request introduces, with their patched versions. Holds no verdict                         | Security workflow summary                   |
+| TruffleHog and GitHub push protection | pull requests and pushes                                                     | block verified secrets                                                                                                  | Security workflow and repository protection |
+| Trivy filesystem scan                 | Security workflow                                                            | a scanner error blocks. Findings of every severity are report-only                                                      | code scanning                               |
+| Semgrep TLS policy                    | pull requests, merge groups, and `main` pushes                               | fails on a rule violation or a scanner error                                                                            | code scanning and a run artifact            |
+| Image vulnerability policy            | image build and release                                                      | blocks fixable high or critical findings                                                                                | build summary and release evidence          |
+| Weekly image rescans                  | `rescan-main-images.yml`, `rescan-release-images.yml`                        | the `main` rescan upserts one tracking issue. The release rescan fails and comments on the vulnerability response issue | issues and run artifacts                    |
+| OpenSSF Scorecard                     | `main` pushes, branch-protection changes, and weekly. Never on pull requests | reports                                                                                                                 | code scanning and a run artifact            |
+| Scorecard ratchet                     | the same events, plus on demand                                              | fails when a check scores below `security/scorecard-baseline.json`. On a push, only for the checks that commit decides  | job summary and a run artifact              |
+| Renovate                              | configured schedule and vulnerability alerts                                 | pull requests require normal review and CI                                                                              | dependency dashboard                        |
 
 Image scanning also reads embedded SBOMs shipped by image builders. Trivy's third-party-SBOM
 advisory describes that additional inventory's provenance. It does not mean the image was scanned
@@ -398,11 +398,11 @@ change its score.
 
 ## Environments
 
-| Environment | Eligibility | Deploys on | Approval |
-| --- | --- | --- | --- |
-| Preview (Coolify) | same-repository PR with the `preview` label | every push. Never waits for tests | none |
-| Staging | every published release | release publication | none |
-| Production | the same release after staging | release publication | required reviewer |
+| Environment       | Eligibility                                 | Deploys on                        | Approval          |
+| ----------------- | ------------------------------------------- | --------------------------------- | ----------------- |
+| Preview (Coolify) | same-repository PR with the `preview` label | every push. Never waits for tests | none              |
+| Staging           | every published release                     | release publication               | none              |
+| Production        | the same release after staging              | release publication               | required reviewer |
 
 ### GitHub environment setup
 
@@ -460,7 +460,7 @@ gh api -X DELETE "repos/hephaestus-build/Hephaestus/environments/preview%2Fpr-<n
 Automating it would mean giving a scheduled workflow an administration-scoped credential, which is a
 larger grant than tidy settings are worth.
 
-Deployments are serialized, never parallel, and each one deploys the pull request's *current* head.
+Deployments are serialized, never parallel, and each one deploys the pull request's _current_ head.
 A burst of pushes therefore produces one deployment of the newest commit rather than one per commit.
 If you push while a deployment is in flight, that run stands down rather than deploying a commit that
 is no longer the head. The new push starts the next deployment and nothing needs relabeling.
@@ -494,23 +494,23 @@ redeploy preserves an already-seeded database — and configure its AI access ag
 
 ### When the comment says nothing deployed
 
-| Comment says | What to do |
-| --- | --- |
-| does not carry the `preview` label | Add the label |
-| is behind `main` on schema | Merge `main` in. The next push previews automatically |
-| comes from a fork | Push the branch to this repository |
-| was opened by a … , not a repository collaborator | Nothing. Previews need push access |
-| changes trusted deployment policy | Land that change first — a preview never runs a pull request's own edits to `.github/workflows/**`, `.github/actions/**` or `docker/preview/**` |
+| Comment says                                      | What to do                                                                                                                                      |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| does not carry the `preview` label                | Add the label                                                                                                                                   |
+| is behind `main` on schema                        | Merge `main` in. The next push previews automatically                                                                                           |
+| comes from a fork                                 | Push the branch to this repository                                                                                                              |
+| was opened by a … , not a repository collaborator | Nothing. Previews need push access                                                                                                              |
+| changes trusted deployment policy                 | Land that change first — a preview never runs a pull request's own edits to `.github/workflows/**`, `.github/actions/**` or `docker/preview/**` |
 
 ### When the preview failed
 
-| Comment says | What it means |
-| --- | --- |
-| CI never published images for this commit | An image build failed, or was still running when the deploy gave up. Check the CI run. The next push retries. |
-| Coolify reported a failed preview deployment | The stack did not start. Open the deployment log link in the comment. |
-| Coolify finished, but the preview did not return HTTP 2xx | Containers started but the app never became healthy. |
-| Timed out waiting for Coolify … | The deploy outlasted its budget. The next push retries. |
-| The preview host is full (n/m) | Drop the label from one of the named pull requests |
+| Comment says                                              | What it means                                                                                                 |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| CI never published images for this commit                 | An image build failed, or was still running when the deploy gave up. Check the CI run. The next push retries. |
+| Coolify reported a failed preview deployment              | The stack did not start. Open the deployment log link in the comment.                                         |
+| Coolify finished, but the preview did not return HTTP 2xx | Containers started but the app never became healthy.                                                          |
+| Timed out waiting for Coolify …                           | The deploy outlasted its budget. The next push retries.                                                       |
+| The preview host is full (n/m)                            | Drop the label from one of the named pull requests                                                            |
 
 `cleanup-preview.yml` sends the signed close event and marks the GitHub deployment inactive. If
 Coolify rejects the event the job fails and `reconcile-previews.yml` retries nightly, starting from
@@ -523,40 +523,40 @@ Why the label is the authority, and which alternatives were priced and declined,
 
 ## Workflows
 
-| Workflow | Trigger | Purpose |
-| --- | --- | --- |
-| `cicd.yml` | PR, merge group, push to main, manual | Validates changes before merge and builds final-SHA images after merge. The release evidence gate runs over the images the run built on the Version PR's branch, and wherever the `release-preflight` dispatch input asks for it |
-| `review-policy.yml` | PR opened, reopened, synchronized, ready for review, edited | Approves a listed maintainer's pull request so the ruleset's required approval is met. Does nothing for anyone else |
-| `pull-request.yml` | PR opened, edited, synchronized, reopened, ready for review | Validates the title against the exported policy in `commitlint.config.ts`, without installing the workspace. Checks that every commit resolves to the pull request's author. Assigns the author when the pull request opens |
-| `ci-quality-gates.yml` | Called by cicd.yml | Selects quality legs, clean-install verification and story tests |
-| `ci-quality-leg.yml` | Called by ci-quality-gates.yml | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg |
-| `cache-toolchain.yml` | Main push changing install inputs or setup | Seeds trusted Linux and Windows install caches without repeating quality gates |
-| `ci-build.yml` | Called by cicd.yml | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml |
-| `ci-tests.yml` | Called by cicd.yml | The server unit, architecture and integration suites, compiled from source |
-| `ci-docker-build.yml` | Called by cicd.yml | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images |
-| `reusable-docker-build.yml` | Called by cicd.yml and ci-docker-build.yml | Builds, signs, attests, and blocks on the release vulnerability policy for the `linux/amd64` image |
-| `ci-security-scan.yml` | Called by cicd.yml | Dependency review on pull requests. Trivy dependency scan, secret detection and repository policy checks |
-| `dependency-graph.yml` | PR, push to main | Resolves and uploads the verified Gradle dependency graph with read-only permissions |
-| `submit-dependency-graph.yml` | Successful dependency-graph workflow | Submits snapshot data without executing code from the originating run |
-| `verify-changesets.yml` | Called by cicd.yml | Tests changeset and version-sync policy and enforces release-note presence |
-| `ci-compose-validate.yml` | Called by cicd.yml | Validates rendered reference and self-hosted Compose stacks |
-| `openapi-autocommit.yml` | `autocommit-openapi` label | Regenerates the OpenAPI spec and client and commits them to the pull request |
-| `security-mutation.yml` | PR touching the suite's inputs, manual | Runs the security mutation suite |
-| `scorecard.yml` | Push to main, branch-protection change, weekly | Publishes the OpenSSF Scorecard |
-| `semgrep.yml` | Pull request, push to main, merge group | Tests and scans the repository's own TLS rule pack |
-| `rescan-main-images.yml` | Weekly, manual | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings |
-| `rescan-release-images.yml` | Weekly, manual | Rescans the latest published release's images and reports drift on the vulnerability response issue |
-| `ci-profile.yml` | Weekly, manual | Reports advisory performance budgets and profiles server test tiers |
-| `ci-server-clean-reference.yml` | Weekly, manual | Records cold server phases and compares generated JARs |
-| `scorecard-ratchet.yml` | Push to main, branch-protection change, weekly, manual | Fails when a Scorecard check drops below the committed baseline. A push fails only for the checks its own commit decides |
-| `deploy-preview.yml` | `preview` label added, or a push, reopen or ready-for-review on a labelled PR | Waits for this commit's attested CI images, deploys them, and registers the native GitHub deployment |
-| `cleanup-preview.yml` | Label removed, or PR closed | Removes and verifies resources, then retains a cleanup tombstone |
-| `reconcile-previews.yml` | Nightly, manual | Re-sends teardown for any preview environment whose pull request is closed or unlabelled |
-| `cd-docs.yml`, `cd-docs-teardown.yml` | `docs/**` on push and pull requests. PR closed | Publishes the docs site and its pull-request previews |
-| `version-pr.yml` | Successful CI/CD completion for the current main tip | Maintains the accumulating Version PR (changesets) and dispatches CI/CD on its branch, release evidence preflight included |
-| `release.yml` | Successful CI/CD push on `main` | Publishes the release and promotes the moving series and latest image tags |
-| `release-upgrade.yml` | Called by `release.yml`, weekly | Boots the previous stable release with seeded data, then the candidate against the same database |
-| `promote.yml` | Manual dispatch, or automatically for staging | Signs the channel a host follows. Hosts pull and apply it themselves |
+| Workflow                              | Trigger                                                                       | Purpose                                                                                                                                                                                                                          |
+| ------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cicd.yml`                            | PR, merge group, push to main, manual                                         | Validates changes before merge and builds final-SHA images after merge. The release evidence gate runs over the images the run built on the Version PR's branch, and wherever the `release-preflight` dispatch input asks for it |
+| `review-policy.yml`                   | PR opened, reopened, synchronized, ready for review, edited                   | Approves a listed maintainer's pull request so the ruleset's required approval is met. Does nothing for anyone else                                                                                                              |
+| `pull-request.yml`                    | PR opened, edited, synchronized, reopened, ready for review                   | Validates the title against the exported policy in `commitlint.config.ts`, without installing the workspace. Checks that every commit resolves to the pull request's author. Assigns the author when the pull request opens      |
+| `ci-quality-gates.yml`                | Called by cicd.yml                                                            | Selects quality legs, clean-install verification and story tests                                                                                                                                                                 |
+| `ci-quality-leg.yml`                  | Called by ci-quality-gates.yml                                                | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg                                                                                                                                     |
+| `cache-toolchain.yml`                 | Main push changing install inputs or setup                                    | Seeds trusted Linux and Windows install caches without repeating quality gates                                                                                                                                                   |
+| `ci-build.yml`                        | Called by cicd.yml                                                            | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml                                                                                                                        |
+| `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, compiled from source                                                                                                                                                       |
+| `ci-docker-build.yml`                 | Called by cicd.yml                                                            | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images                                                                                                                                             |
+| `reusable-docker-build.yml`           | Called by cicd.yml and ci-docker-build.yml                                    | Builds, signs, attests, and blocks on the release vulnerability policy for the `linux/amd64` image                                                                                                                               |
+| `ci-security-scan.yml`                | Called by cicd.yml                                                            | Dependency review on pull requests. Trivy dependency scan, secret detection and repository policy checks                                                                                                                         |
+| `dependency-graph.yml`                | PR, push to main                                                              | Resolves and uploads the verified Gradle dependency graph with read-only permissions                                                                                                                                             |
+| `submit-dependency-graph.yml`         | Successful dependency-graph workflow                                          | Submits snapshot data without executing code from the originating run                                                                                                                                                            |
+| `verify-changesets.yml`               | Called by cicd.yml                                                            | Tests changeset and version-sync policy and enforces release-note presence                                                                                                                                                       |
+| `ci-compose-validate.yml`             | Called by cicd.yml                                                            | Validates rendered reference and self-hosted Compose stacks                                                                                                                                                                      |
+| `openapi-autocommit.yml`              | `autocommit-openapi` label                                                    | Regenerates the OpenAPI spec and client and commits them to the pull request                                                                                                                                                     |
+| `security-mutation.yml`               | PR touching the suite's inputs, manual                                        | Runs the security mutation suite                                                                                                                                                                                                 |
+| `scorecard.yml`                       | Push to main, branch-protection change, weekly                                | Publishes the OpenSSF Scorecard                                                                                                                                                                                                  |
+| `semgrep.yml`                         | Pull request, push to main, merge group                                       | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
+| `rescan-main-images.yml`              | Weekly, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings                                                                                                  |
+| `rescan-release-images.yml`           | Weekly, manual                                                                | Rescans the latest published release's images and reports drift on the vulnerability response issue                                                                                                                              |
+| `ci-profile.yml`                      | Weekly, manual                                                                | Reports advisory performance budgets and profiles server test tiers                                                                                                                                                              |
+| `ci-server-clean-reference.yml`       | Weekly, manual                                                                | Records cold server phases and compares generated JARs                                                                                                                                                                           |
+| `scorecard-ratchet.yml`               | Push to main, branch-protection change, weekly, manual                        | Fails when a Scorecard check drops below the committed baseline. A push fails only for the checks its own commit decides                                                                                                         |
+| `deploy-preview.yml`                  | `preview` label added, or a push, reopen or ready-for-review on a labelled PR | Waits for this commit's attested CI images, deploys them, and registers the native GitHub deployment                                                                                                                             |
+| `cleanup-preview.yml`                 | Label removed, or PR closed                                                   | Removes and verifies resources, then retains a cleanup tombstone                                                                                                                                                                 |
+| `reconcile-previews.yml`              | Nightly, manual                                                               | Re-sends teardown for any preview environment whose pull request is closed or unlabelled                                                                                                                                         |
+| `cd-docs.yml`, `cd-docs-teardown.yml` | `docs/**` on push and pull requests. PR closed                                | Publishes the docs site and its pull-request previews                                                                                                                                                                            |
+| `version-pr.yml`                      | Successful CI/CD completion for the current main tip                          | Maintains the accumulating Version PR (changesets) and dispatches CI/CD on its branch, release evidence preflight included                                                                                                       |
+| `release.yml`                         | Successful CI/CD push on `main`                                               | Publishes the release and promotes the moving series and latest image tags                                                                                                                                                       |
+| `release-upgrade.yml`                 | Called by `release.yml`, weekly                                               | Boots the previous stable release with seeded data, then the candidate against the same database                                                                                                                                 |
+| `promote.yml`                         | Manual dispatch, or automatically for staging                                 | Signs the channel a host follows. Hosts pull and apply it themselves                                                                                                                                                             |
 
 ### Commits a workflow makes
 
@@ -575,15 +575,15 @@ credential is still `GITHUB_TOKEN`, so these commits start no further workflow r
 
 ### Shared setup actions
 
-| Action | Contract |
-| --- | --- |
-| `setup-toolchain` | Installs the Node.js version pinned in `package.json`. With `install` set to `none`, it installs nothing else, so `node scripts/…` jobs reach no package registry. `frozen` adds pinned pnpm and restores its store cache. It caches the pnpm executable by platform and version, with two download retries on a miss. It installs the launcher through SHA-pinned `setup-vp` with `node-manager: false`. The launcher runs the lockfile's `vite-plus` |
-| `setup-caches` | Sets up the JDK from `.java-version`, validates the wrapper and uses the official Gradle action for dependency and build caches. The trusted package job publishes caches. Consumers are read-only |
-| `restore-server-build` | Downloads and validates the packaged JARs, compiled tests and resources. Outputs the executable JAR path without recompiling or installing local artifacts |
-| `setup-browsers` | Restores the exact Playwright browser version and installs Chromium system dependencies |
-| `setup-release-security-tools` | Installs Cosign, Trivy, and optionally Syft for release-evidence jobs |
-| `download-trivy-db` | Downloads with retries and mirror fallback, or restores the CI run's immutable advisory artifact. Checks freshness at consumption and records metadata as requested — [database identity](./vulnerability-remediation.mdx#advisory-database-identity) owns the rerun contract |
-| `ghcr-login` | Authenticates Docker to GHCR |
+| Action                         | Contract                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `setup-toolchain`              | Installs the Node.js version pinned in `package.json`. With `install` set to `none`, it installs nothing else, so `node scripts/…` jobs reach no package registry. `frozen` adds pinned pnpm and restores its store cache. It caches the pnpm executable by platform and version, with two download retries on a miss. It installs the launcher through SHA-pinned `setup-vp` with `node-manager: false`. The launcher runs the lockfile's `vite-plus` |
+| `setup-caches`                 | Sets up the JDK from `.java-version`, validates the wrapper and uses the official Gradle action for dependency and build caches. The trusted package job publishes caches. Consumers are read-only                                                                                                                                                                                                                                                     |
+| `restore-server-build`         | Downloads and validates the packaged JARs, compiled tests and resources. Outputs the executable JAR path without recompiling or installing local artifacts                                                                                                                                                                                                                                                                                             |
+| `setup-browsers`               | Restores the exact Playwright browser version and installs Chromium system dependencies                                                                                                                                                                                                                                                                                                                                                                |
+| `setup-release-security-tools` | Installs Cosign, Trivy, and optionally Syft for release-evidence jobs                                                                                                                                                                                                                                                                                                                                                                                  |
+| `download-trivy-db`            | Downloads with retries and mirror fallback, or restores the CI run's immutable advisory artifact. Checks freshness at consumption and records metadata as requested — [database identity](./vulnerability-remediation.mdx#advisory-database-identity) owns the rerun contract                                                                                                                                                                          |
+| `ghcr-login`                   | Authenticates Docker to GHCR                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 Browser jobs install Playwright's system dependencies using the runner's Ubuntu package sources,
 with APT configuration scoped to that installation process. Unrelated vendor repositories do not
@@ -678,17 +678,17 @@ Release-version pushes repeat those checks. Main still packages and publishes im
 Same-repository pull requests also run `Build` and `Docker` regardless of paths, because
 previews need every image at the head SHA. No other event has a preview.
 
-| Selects | Paths |
-| --- | --- |
-| Quality → Webapp | `webapp/**`, `docs/images/readme/**`, `docs/src/css/custom.css`, the root oxlint and oxfmt configs, the four `scripts/check-*` files it runs, root package files |
-| Quality → Extension | `extension/**`. Webapp files imported by path: vocabulary registries, trace formatting, status definitions, sign-in providers, text helpers, and their imports. Webapp lint plugin and stylesheet. Root oxlint and oxfmt configs, `scripts/install-browser-deps.ts`, and root package files |
-| Quality → App Server | `server/**` except `AGENTS.md` and `CLAUDE.md`, `scripts/run-gradlew.ts`, `docker/compose.app.yaml`, `docker/compose.core.yaml`, root package files |
-| Quality → Tooling and Docs | `scripts/**`, `docker/agents/**`, `load-tests/**`, `docs/**`, tsconfigs, oxlint and oxfmt configs, `.changeset/**`, `commitlint.config.ts`, instruction files, `renovate.json`, `openapitools.json` |
-| Every quality leg | `vite.config.ts`, `.vite-hooks/**`, `.java-version`, `cicd.yml`, `ci-quality-gates.yml`, `ci-quality-leg.yml` and the setup actions: the task graph, the hooks and the JDK decide every leg's verdict, so a change to one runs all of them |
-| Build artifact gates | contracts: the App Server paths, `docker/postgres/**`, or either generated client and its generator config (`api-clients`). E2E: webapp source and the server main sources. Extension E2E: `extension/**`, the vocabulary registries and the server main sources. Image: `server/application/src/main/**`, the Gradle build scripts, catalog, locks and wrapper, `server/application/project.toml`, `server/generated-clients/**` |
-| Docker images | `webapp-image`: the webapp build inputs and non-test source. `agent-images`: `docker/agents/**`. `postgres-image`: `docker/postgres/**` |
-| Supported-host boot smoke | `docker/**`, `application*.yml`, and the sources Spring binds configuration from — `**/*Properties.java` and `Application.java`. `ci-contract.test.ts` fails if a source carrying `@ConfigurationProperties` or `@ConfigurationPropertiesScan` is not selected |
-| CI config | one filter per leg naming its own workflow files and actions. Any `.github/workflows/**` or `.github/actions/**` change runs Actionlint and Zizmor |
+| Selects                    | Paths                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Quality → Webapp           | `webapp/**`, `docs/images/readme/**`, `docs/src/css/custom.css`, the root oxlint and oxfmt configs, the four `scripts/check-*` files it runs, root package files                                                                                                                                                                                                                                                                  |
+| Quality → Extension        | `extension/**`. Webapp files imported by path: vocabulary registries, trace formatting, status definitions, sign-in providers, text helpers, and their imports. Webapp lint plugin and stylesheet. Root oxlint and oxfmt configs, `scripts/install-browser-deps.ts`, and root package files                                                                                                                                       |
+| Quality → App Server       | `server/**` except `AGENTS.md` and `CLAUDE.md`, `scripts/run-gradlew.ts`, `docker/compose.app.yaml`, `docker/compose.core.yaml`, root package files                                                                                                                                                                                                                                                                               |
+| Quality → Tooling and Docs | `scripts/**`, `docker/agents/**`, `load-tests/**`, `docs/**`, tsconfigs, oxlint and oxfmt configs, `.changeset/**`, `commitlint.config.ts`, instruction files, `renovate.json`, `openapitools.json`                                                                                                                                                                                                                               |
+| Every quality leg          | `vite.config.ts`, `.vite-hooks/**`, `.java-version`, `cicd.yml`, `ci-quality-gates.yml`, `ci-quality-leg.yml` and the setup actions: the task graph, the hooks and the JDK decide every leg's verdict, so a change to one runs all of them                                                                                                                                                                                        |
+| Build artifact gates       | contracts: the App Server paths, `docker/postgres/**`, or either generated client and its generator config (`api-clients`). E2E: webapp source and the server main sources. Extension E2E: `extension/**`, the vocabulary registries and the server main sources. Image: `server/application/src/main/**`, the Gradle build scripts, catalog, locks and wrapper, `server/application/project.toml`, `server/generated-clients/**` |
+| Docker images              | `webapp-image`: the webapp build inputs and non-test source. `agent-images`: `docker/agents/**`. `postgres-image`: `docker/postgres/**`                                                                                                                                                                                                                                                                                           |
+| Supported-host boot smoke  | `docker/**`, `application*.yml`, and the sources Spring binds configuration from — `**/*Properties.java` and `Application.java`. `ci-contract.test.ts` fails if a source carrying `@ConfigurationProperties` or `@ConfigurationPropertiesScan` is not selected                                                                                                                                                                    |
+| CI config                  | one filter per leg naming its own workflow files and actions. Any `.github/workflows/**` or `.github/actions/**` change runs Actionlint and Zizmor                                                                                                                                                                                                                                                                                |
 
 `docker/agents/**` is in both the tooling and the agent-image filters: `test:agents` and
 `typecheck:agents` cover the precompute tree, and the same tree builds the agent image.
@@ -738,7 +738,7 @@ Thus, a scan-only rerun scans that build's artifact.
 
 `ci-contract.test.ts` asserts the whole contract.
 The build must publish every consumer-resolved tag for that consumer's event.
-No job resolves an image by the run that built it. A run-scoped tag names the attempt rather than the artifact, and GitHub's *re-run failed jobs*
+No job resolves an image by the run that built it. A run-scoped tag names the attempt rather than the artifact, and GitHub's _re-run failed jobs_
 gives the retried job a new attempt number.
 
 ## Build once
@@ -958,13 +958,13 @@ vp run fix:agents            # check:agents, applying every safe fix
 vp run typecheck:agents      # Agent + precompute TypeScript
 ```
 
-| Issue | Solution |
-| --- | --- |
-| Formatting errors | Run `vp run format` |
+| Issue                                               | Solution                                       |
+| --------------------------------------------------- | ---------------------------------------------- |
+| Formatting errors                                   | Run `vp run format`                            |
 | Lint errors (agent runtime, precompute, `scripts/`) | Run `vp run fix:agents`, then fix what remains |
-| TypeScript errors | Run `vp run typecheck` to see details |
-| OpenAPI out of sync | Run `vp run generate:api` |
-| Database schema drift | Run `vp run db:draft-changelog` |
+| TypeScript errors                                   | Run `vp run typecheck` to see details          |
+| OpenAPI out of sync                                 | Run `vp run generate:api`                      |
+| Database schema drift                               | Run `vp run db:draft-changelog`                |
 
 ## Adding a new service
 
@@ -1018,14 +1018,14 @@ The Stories job reports visual coverage separately from interaction tests and th
 Storybook interaction tests are the gate.
 Chromatic's verdict appears in a step summary, with a warning for unverified coverage. Neither a preview link nor a passing job is visual approval. Review the linked build.
 
-| Verdict | Meaning and action |
-| --- | --- |
-| `tested-build` | The returned build has captured snapshots and a terminal successful JUnit report with no unfinished or failed test cases. It may be a reused approved build, not new captures in this CI run. |
-| `inherited` | The returned build reused baseline snapshots without new captures. Valid TurboSnap coverage, but not a newly tested recovery baseline. |
-| `quota-skipped` | An account limit blocked coverage. The job still passes with a warning. An account owner resolves the limit. |
-| `failed` | Visual differences or component/interaction errors need review. Fix errors. Accept only intentional, inspected differences. |
-| `unavailable` | Chromatic failed or returned insufficient coverage evidence, for example an unfinished build after an account limit. The job still passes with a warning. Inspect the build, action logs and account limits. |
-| `policy-skipped` | Fork PRs and `dependabot/` or `renovate/` branches do not run credentialed visual tests. Interaction tests still run. This is not visual approval. |
+| Verdict          | Meaning and action                                                                                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tested-build`   | The returned build has captured snapshots and a terminal successful JUnit report with no unfinished or failed test cases. It may be a reused approved build, not new captures in this CI run.                |
+| `inherited`      | The returned build reused baseline snapshots without new captures. Valid TurboSnap coverage, but not a newly tested recovery baseline.                                                                       |
+| `quota-skipped`  | An account limit blocked coverage. The job still passes with a warning. An account owner resolves the limit.                                                                                                 |
+| `failed`         | Visual differences or component/interaction errors need review. Fix errors. Accept only intentional, inspected differences.                                                                                  |
+| `unavailable`    | Chromatic failed or returned insufficient coverage evidence, for example an unfinished build after an account limit. The job still passes with a warning. Inspect the build, action logs and account limits. |
+| `policy-skipped` | Fork PRs and `dependabot/` or `renovate/` branches do not run credentialed visual tests. Interaction tests still run. This is not visual approval.                                                           |
 
 `scripts/report-chromatic.ts` requires both the action's public outputs and its fresh JUnit report.
 The workflow removes the previous report before invoking Chromatic and uses one explicit report
@@ -1064,6 +1064,7 @@ to bypass the policy.
    Supply `CHROMATIC_PROJECT_TOKEN` through the environment, never a committed file or command
    argument. `--force-rebuild` prevents same-commit build reuse. `--only-changed=false` requests
    full snapshots instead of TurboSnap inheritance.
+
 3. Verify in Chromatic that the build captured snapshots and completed testing. Inspect every
    difference and component/interaction error. CI never auto-accepts, including on `main`:
    manually accept only intentional, inspected differences, then rerun the check. Never accept

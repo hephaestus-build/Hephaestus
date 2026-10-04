@@ -276,7 +276,7 @@ export function WorkspaceLlmProviderPanel({
 					</EmptyHeader>
 					{!registrationBlocked && (
 						<Button onClick={openCreateConnection}>
-							<Plus className="size-4" aria-hidden /> Connect provider
+							<Plus className="size-4" aria-hidden /> Add connection
 						</Button>
 					)}
 				</Empty>

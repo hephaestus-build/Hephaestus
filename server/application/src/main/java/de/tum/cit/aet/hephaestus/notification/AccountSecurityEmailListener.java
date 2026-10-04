@@ -44,7 +44,7 @@ public class AccountSecurityEmailListener {
                 switch (event.kind()) {
                     case IDENTITY_LINKED -> "A sign-in identity is now linked to your account.";
                     case IDENTITY_UNLINKED -> "A sign-in identity is no longer linked to your account.";
-                    case APP_ROLE_CHANGED -> "Your instance administrator access changed.";
+                    case APP_ROLE_CHANGED -> "Your instance admin access changed.";
                 };
         var rendered = renderer.render(EmailKind.ACCOUNT_SECURITY_CHANGED, Map.of("change", change));
         var result = gateway.send(EmailMessage.of(EmailKind.ACCOUNT_SECURITY_CHANGED, recipient.get(), rendered));

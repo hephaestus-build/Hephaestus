@@ -59,12 +59,12 @@ const ERROR_COPY: Record<string, { title: string; description: string }> = {
 		// extension, so the server refuses to hand it a sign-in rather than redirect to it.
 		title: "This extension cannot sign in here",
 		description:
-			"This Hephaestus instance does not allow that browser extension to sign in. Ask an admin to add its extension ID, then try again from the extension.",
+			"This Hephaestus instance does not allow that browser extension to sign in. Ask an instance admin to add its extension ID, then try again from the extension.",
 	},
 	unknown_provider: {
 		title: "Provider is not configured",
 		description:
-			"This Hephaestus instance does not have that sign-in provider configured. Ask an admin to check the login provider settings.",
+			"This Hephaestus instance does not have that sign-in provider configured. Ask an instance admin to check the login provider settings.",
 	},
 };
 

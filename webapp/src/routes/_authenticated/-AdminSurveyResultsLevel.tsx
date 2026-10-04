@@ -55,7 +55,7 @@ export function AdminSurveyResultsLevel({
 				queryKey: adminPreviewSurveyEmailInvitationsQueryKey({ path }),
 			});
 			toast.success(
-				`${summary.queued} ${summary.queued === 1 ? "invitation" : "invitations"} queued in this batch. Relay acceptance appears separately.`,
+				`${summary.queued} ${summary.queued === 1 ? "invitation" : "invitations"} requested in this batch. Invitations handed to the mail server are counted separately.`,
 			);
 		},
 		onError: async () => {

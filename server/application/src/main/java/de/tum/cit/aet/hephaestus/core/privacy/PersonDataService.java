@@ -107,7 +107,7 @@ public class PersonDataService {
         PersonScope person = mapper.readValue(Objects.requireNonNull(initial.scopeJson()), PersonScope.class);
         if (Objects.equals(person.accountId(), administratorId))
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "Another administrator must authorize this erasure.");
+                    HttpStatus.CONFLICT, "Another instance admin must authorize this erasure.");
         copyFence.holdForErasure();
         writeFence.holdForErasure(person.identities());
         requireActiveAdministratorAndLockAccount(administratorId, person.accountId());
@@ -160,8 +160,7 @@ public class PersonDataService {
                 administratorId,
                 Objects.requireNonNullElse(personAccountId, -1L));
         if (!eligible.contains(true))
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "An active instance administrator must authorize erasure.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "An active instance admin must authorize erasure.");
     }
 
     public void run(UUID id) {
@@ -309,6 +308,7 @@ public class PersonDataService {
 
     private static ResponseStatusException notFound() {
         return new ResponseStatusException(
-                HttpStatus.NOT_FOUND, "We could not find that request. Reload the page and try again.");
+                HttpStatus.NOT_FOUND,
+                "We could not find that request. It may have been deleted. Reload the page to see what is current.");
     }
 }

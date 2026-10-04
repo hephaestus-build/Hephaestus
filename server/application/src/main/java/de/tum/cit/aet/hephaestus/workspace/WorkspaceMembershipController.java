@@ -118,7 +118,7 @@ public class WorkspaceMembershipController {
     private User requireCurrentUser() {
         return userRepository
                 .getCurrentUser()
-                .orElseThrow(() -> new AccessForbiddenException("User not authenticated"));
+                .orElseThrow(() -> new AccessForbiddenException("You are not signed in."));
     }
 
     private WorkspaceMembership requireMembership(Long workspaceId, Long userId) {

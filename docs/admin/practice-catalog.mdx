@@ -13,17 +13,17 @@ Its location determines its owner and what a change affects.
 ```mermaid
 flowchart LR
     accTitle: The three places a practice definition lives
-    accDescr: Hephaestus ships bundled defaults. An instance administrator customizes them in the instance catalog. The catalog determines what workspaces can adopt. A workspace administrator adopts an independent copy. The administrator reviews later updates before they apply.
+    accDescr: Hephaestus ships bundled defaults. An instance admin customizes them in the instance catalog. The catalog determines what workspaces can adopt. A workspace admin adopts an independent copy. The workspace admin reviews later updates before they apply.
     Bundled[Bundled defaults<br/>shipped with Hephaestus] -->|upgrade, unless customized| Catalog[Instance catalog<br/>what workspaces may adopt]
-    Catalog -->|adoption, by an administrator| Copy[Workspace practice<br/>an independent copy]
+    Catalog -->|adoption, by a workspace admin| Copy[Workspace practice<br/>an independent copy]
     Copy -->|never flows back| Catalog
 ```
 
-| Scope | Owner | Changing it affects |
-|---|---|---|
-| Bundled defaults | Hephaestus releases | Every instance that has not customized the entry |
-| Instance catalog | Instance administrator | What workspaces may adopt next, and what updates existing adopters can review |
-| Workspace practice | Workspace administrator | Reviews in that one workspace |
+| Scope              | Owner               | Changing it affects                                                           |
+| ------------------ | ------------------- | ----------------------------------------------------------------------------- |
+| Bundled defaults   | Hephaestus releases | Every instance that has not customized the entry                              |
+| Instance catalog   | Instance admin      | What workspaces may adopt next, and what updates existing adopters can review |
+| Workspace practice | Workspace admin     | Reviews in that one workspace                                                 |
 
 The arrow points only right.
 A release can update an instance entry that nobody customized.
@@ -157,22 +157,22 @@ All badges are informational.
 
 **In a workspace**, badges compare your copy with the catalog:
 
-| Badge | Meaning | What to do |
-|---|---|---|
-| **Same as the catalog** | Your copy matches the catalog | Nothing |
-| **Edited here** | Your definition differs from the adopted version and the catalog | Check **Review updates** for a later catalog proposal |
-| **Catalog changed, yours did not** | Your copy equals its adopted base, but the catalog changed | Open **Practice updates** to accept or decline fields |
-| **Update declined** | You declined this exact catalog version | Nothing. A different version can be proposed later |
-| **No longer in the catalog** | The source was excluded or removed | Nothing. Your copy continues to work |
+| Badge                              | Meaning                                                          | What to do                                            |
+| ---------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------- |
+| **Same as the catalog**            | Your copy matches the catalog                                    | Nothing                                               |
+| **Edited here**                    | Your definition differs from the adopted version and the catalog | Check **Review updates** for a later catalog proposal |
+| **Catalog changed, yours did not** | Your copy equals its adopted base, but the catalog changed       | Open **Practice updates** to accept or decline fields |
+| **Update declined**                | You declined this exact catalog version                          | Nothing. A different version can be proposed later    |
+| **No longer in the catalog**       | The source was excluded or removed                               | Nothing. Your copy continues to work                  |
 
 **On the instance**, badges compare the catalog with bundled defaults:
 
-| Badge | Meaning |
-|---|---|
-| **Customized on this instance** | You edited the entry. The bundled definition has not changed |
-| **Hephaestus update available** | You edited the entry, and a release changed the bundled definition |
-| **No Hephaestus default** | You created the entry here |
-| **Removed from Hephaestus defaults** | A release removed the entry. Your customization still applies |
+| Badge                                | Meaning                                                            |
+| ------------------------------------ | ------------------------------------------------------------------ |
+| **Customized on this instance**      | You edited the entry. The bundled definition has not changed       |
+| **Hephaestus update available**      | You edited the entry, and a release changed the bundled definition |
+| **No Hephaestus default**            | You created the entry here                                         |
+| **Removed from Hephaestus defaults** | A release removed the entry. Your customization still applies      |
 
 An update never silently replaces a customization.
 The comparison includes guidance and declared feedback-delivery behavior, not only review criteria.

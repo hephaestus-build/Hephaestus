@@ -182,7 +182,7 @@ export const Empty: Story = {
 		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Practice groups appear here once an admin sets up the practices this workspace reviews.",
+				"Practice groups appear here once a workspace admin sets up the practices this workspace reviews.",
 			),
 		).toBeVisible();
 	},

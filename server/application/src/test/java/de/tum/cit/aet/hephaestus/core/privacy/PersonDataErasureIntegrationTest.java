@@ -804,7 +804,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         UUID requestId = preview.request().getId();
         assertThatThrownBy(() -> personData.requestErasure(requestId, personId, true))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Another administrator");
+                .hasMessageContaining("Another instance admin");
         personData.requestErasure(requestId, administratorId, true);
         personData.run(requestId);
         var receipt = personData.get(requestId).request();

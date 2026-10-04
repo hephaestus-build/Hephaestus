@@ -546,7 +546,7 @@ export const LoadFailed: Story = {
 	args: {
 		feedback: {
 			status: "error",
-			error: { status: 500, detail: "Something went wrong." },
+			error: { status: 500 },
 			onRetry: fn(),
 		},
 	},

@@ -244,8 +244,9 @@ export function AgentBindingsPage({
 							<div className="space-y-1">
 								<h2 className="text-lg font-semibold">Model assignments</h2>
 								<p className="text-sm text-muted-foreground">
-									A member’s AI choice is a ceiling. Each member gets the loosest ready assignment
-									at or below it, never a looser one.
+									A member who chooses Cloud gets the Cloud assignment when it is ready, and the
+									In-house one when it is not. A member who chooses In-house gets only the In-house
+									assignment.
 								</p>
 							</div>
 							{PURPOSES.map((meta) => (
@@ -374,7 +375,7 @@ interface BindingPreviewProps {
 }
 
 /**
- * Who gets which model, judged the way the server does: the ceiling rule over this purpose's rows,
+ * Who gets which model, judged the way the server does: the rule above over this purpose's rows,
  * behind the purpose's own switch. The developer's card shows the same answer.
  */
 function BindingPreview({
@@ -385,11 +386,11 @@ function BindingPreview({
 }: BindingPreviewProps) {
 	const served = (choice: MemberAiChoice | null): ReactNode => {
 		if (practiceReviewsOff) {
-			return `Nothing runs for them (${PRACTICE_REVIEWS_OFF})`;
+			return `No model is used (${PRACTICE_REVIEWS_OFF})`;
 		}
 		const binding = bindingFor(choice, bindings);
 		if (!binding) {
-			return "Nothing runs for them";
+			return "No model is used";
 		}
 		const model = modelOf(binding, availableModels);
 		return (
@@ -573,7 +574,7 @@ function BindingRow({
 								and no longer serves this assignment.{" "}
 								{noModels ? (
 									<>
-										Clear the assignment, or ask your host for a model declared as{" "}
+										Clear the assignment, or ask an instance admin for a model declared as{" "}
 										<span className="font-medium">{tierLabel}</span>.
 									</>
 								) : (
@@ -584,11 +585,11 @@ function BindingRow({
 							noModels && (
 								<FieldDescription id={modelHintId}>
 									{undeclared ? (
-										"No models are available yet. Ask your host to share one, or connect your own AI provider below."
+										"No models are available yet. Ask an instance admin to share one, or connect your own AI provider below."
 									) : (
 										<>
 											No model declared as <span className="font-medium">{tierLabel}</span> is
-											available here yet. Ask your host, or add one under your own providers.
+											available yet. Ask an instance admin, or add one under your own providers.
 										</>
 									)}
 								</FieldDescription>
@@ -706,7 +707,7 @@ function bindingAudience(undeclared: boolean, required: boolean, tierLabel: stri
 		return `For members whose AI choice allows ${tierLabel}.`;
 	}
 	if (required) {
-		return "For members who have not chosen yet, where the choice is optional. Every member here must choose, so it serves no one now.";
+		return "For members who have not chosen yet, when choosing is optional. Every member here must choose, so no one uses it now.";
 	}
-	return "For members who have not chosen yet, where the choice is optional. It never serves a member who chose.";
+	return "For members who have not chosen yet, when choosing is optional. A member who has chosen never uses it.";
 }

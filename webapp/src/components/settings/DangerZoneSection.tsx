@@ -82,7 +82,7 @@ function DataExportRow() {
 			}
 		},
 		onError: () => {
-			toast.error("We could not request your data export. Try again later.");
+			toast.error("We could not request your data export. Try again.");
 		},
 	});
 
@@ -140,7 +140,7 @@ function DataExportRow() {
 			anchor.remove();
 			URL.revokeObjectURL(url);
 		} catch {
-			toast.error("We could not download your export. Try again later.");
+			toast.error("We could not download your export. Try again.");
 		}
 		setIsDownloading(false);
 	};
@@ -216,7 +216,7 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 			await onAccountDeleted();
 		},
 		onError: () => {
-			toast.error("We could not delete your account. Try again later.");
+			toast.error("We could not delete your account. Try again.");
 		},
 	});
 

@@ -81,8 +81,8 @@ function ProviderSelectionPage() {
 				<OctagonXIcon aria-hidden="true" />
 				<AlertTitle>Workspace creation is admin-only</AlertTitle>
 				<AlertDescription>
-					An instance admin must create workspaces on this instance. Ask an admin to set one up for
-					you.
+					An instance admin must create workspaces on this instance. Ask an instance admin to set
+					one up for you.
 				</AlertDescription>
 			</Alert>
 		);

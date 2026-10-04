@@ -152,7 +152,7 @@ function CheckSummary({ release }: { release: ReleaseStatus }) {
 
 function migrationNote(schemaMigrations: boolean | undefined): string {
 	if (schemaMigrations === true) {
-		return "Includes schema migrations: back up before upgrading and read the upgrade guide.";
+		return "Includes schema migrations: back up before upgrading and read the migration guide.";
 	}
 	if (schemaMigrations === false) {
 		return "No schema migrations in this release. Releases in between may still carry some.";

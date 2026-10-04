@@ -43,7 +43,7 @@ export function forbidden(
 export function network(): WorkerError {
 	return new WorkerError(
 		"network",
-		"We could not reach Hephaestus. Check your connection and try again.",
+		"We could not reach Hephaestus. Check your connection, then try again.",
 	);
 }
 

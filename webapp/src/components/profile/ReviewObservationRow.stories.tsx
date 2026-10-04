@@ -160,7 +160,9 @@ export const Default: Story = {
 			canvas.getByText("private static final Duration TIMEOUT = Duration.ofSeconds(90);"),
 		).toBeVisible();
 		await expect(canvas.getByText("agent.timeout: 90s")).toBeVisible();
-		const response = canvas.getByRole("group", { name: "Your response" });
+		const response = canvas.getByRole("group", {
+			name: "Your response to Explain significant decisions",
+		});
 		await expect(
 			within(response)
 				.getAllByRole("button")
@@ -313,7 +315,9 @@ export const FeedbackPending: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Not applicable" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Skip" }));
 		await expect(args.onRespond).toHaveBeenCalledOnce();
-		const response = canvas.getByRole("group", { name: "Your response" });
+		const response = canvas.getByRole("group", {
+			name: "Your response to Explain significant decisions",
+		});
 		await expect(within(response).getByRole("button", { name: "Not applicable" })).toHaveAttribute(
 			"aria-pressed",
 			"true",

@@ -101,9 +101,9 @@ public class ConnectionService {
                 .findActive(workspaceId, IntegrationKind.GITLAB)
                 .isPresent();
         if (github && gitlab) {
-            throw new IllegalStateException("Workspace " + workspaceId
-                    + " has ACTIVE Connections for both GITHUB and GITLAB. "
-                    + "An operator must fix this outside the application.");
+            throw new IllegalStateException(
+                    "This workspace has active GitHub and GitLab connections, which Hephaestus does not support. "
+                            + "Ask your instance operator to fix it.");
         }
         if (github) return Optional.of(IntegrationKind.GITHUB);
         if (gitlab) return Optional.of(IntegrationKind.GITLAB);

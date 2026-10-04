@@ -26,16 +26,16 @@ An operator-owned silent run requires the silent deployment checklist first.
 
 A switch cannot recall a request that a provider already accepted.
 
-| Control and location | What it stops | What it does not stop |
-| --- | --- | --- |
-| **Silent mode**, instance settings | New SCM, Slack, and email writes through the egress gateway. This includes edits, inline comments, approvals, reactions, mentor replies, reminders, and retries. It covers all email from the notification module. Withheld email is final and does not send when silent mode is turned off. | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, and operator-alert exemptions |
-| `AGENT_ENABLED=false`, deployment environment on submitting servers and claiming workers | Queued review runtime. Recreate affected containers to apply it | Already-running sandboxes, interactive mentor, sync, or every external write. Not a runtime global AI stop |
-| Workspace **Review settings** controls: **Start from work activity**, **Start requested reviews** | Their respective review entry points | Other workspaces, existing work, or external delivery already in progress |
-| Workspace/group/practice autonomy **Off** | Reviewing those practices under the effective inherited policy | Other practices and other AI features. A workspace default does not override explicit group/practice choices |
-| Workspace **Sending feedback → Send feedback** off | External practice feedback and mentor delivery for that workspace | Measurement and in-app feedback. Not an instance restore boundary |
-| Recipient **Comments and Slack reminders** off | Covered feedback comments and related reminders for that recipient | All other recipients, integration plumbing, or all mentor activity |
-| Every **Heph** row turned off under the workspace's **AI models**.  `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on applicable roles | Respective mentor/Slack features | SCM writes, other AI work, or restored database credentials |
-| Model/connection disabled. Each funding source's budget set to zero | Work using that model/connection or budget | Other funding sources. Already-incurred costs. Budgets are not strict reservations |
+| Control and location                                                                                                                | What it stops                                                                                                                                                                                                                                                                                | What it does not stop                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Silent mode**, instance settings                                                                                                  | New SCM, Slack, and email writes through the egress gateway. This includes edits, inline comments, approvals, reactions, mentor replies, reminders, and retries. It covers all email from the notification module. Withheld email is final and does not send when silent mode is turned off. | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, and operator-alert exemptions |
+| `AGENT_ENABLED=false`, deployment environment on submitting servers and claiming workers                                            | Queued review runtime. Recreate affected containers to apply it                                                                                                                                                                                                                              | Already-running sandboxes, interactive mentor, sync, or every external write. Not a runtime global AI stop                       |
+| Workspace **Review settings** controls: **Start from work activity**, **Start requested reviews**                                   | Their respective review entry points                                                                                                                                                                                                                                                         | Other workspaces, existing work, or external delivery already in progress                                                        |
+| Workspace/group/practice autonomy **Off**                                                                                           | Reviewing those practices under the effective inherited policy                                                                                                                                                                                                                               | Other practices and other AI features. A workspace default does not override explicit group/practice choices                     |
+| Workspace **Sending feedback → Send feedback** off                                                                                  | External practice feedback and mentor delivery for that workspace                                                                                                                                                                                                                            | Measurement and in-app feedback. Not an instance restore boundary                                                                |
+| Recipient **Comments and Slack reminders** off                                                                                      | Covered feedback comments and related reminders for that recipient                                                                                                                                                                                                                           | All other recipients, integration plumbing, or all mentor activity                                                               |
+| Every **Heph** row turned off under the workspace's **AI models**. `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on applicable roles | Respective mentor/Slack features                                                                                                                                                                                                                                                             | SCM writes, other AI work, or restored database credentials                                                                      |
+| Model/connection disabled. Each funding source's budget set to zero                                                                 | Work using that model/connection or budget                                                                                                                                                                                                                                                   | Other funding sources. Already-incurred costs. Budgets are not strict reservations                                               |
 
 [Practice review](./practice-review#autonomy-coverage-and-delivery) defines workspace and recipient
 controls. There is no independent per-channel toggle matrix. For an immediate all-AI stop, stop
@@ -65,7 +65,7 @@ Turning silent mode off affects all workspaces and never flushes suppressed feed
 2. For the running instance, read back silent mode.
 3. For a clone, use the pre-boot isolation below instead.
 4. Record exceptions.
-   Zero *content delivery* is not zero network traffic.
+   Zero _content delivery_ is not zero network traffic.
 
 5. **Capture rollback**. Stop ingress.
 6. Stop application writers, including remote workers and active sandboxes.
@@ -379,7 +379,7 @@ An empty broker does not remove those jobs/proposals or prevent source sync from
 ## Access and erasure for one person
 
 Use **Instance administration → Person data**.
-Only an instance administrator with a recent sign-in can create a preview, download an export, or start erasure.
+Only an instance admin with a recent sign-in can create a preview, download an export, or start erasure.
 Requests and replies go through the privacy contact in the instance notice.
 This page is not a data-subject request portal.
 
@@ -434,7 +434,7 @@ This page is not a data-subject request portal.
 24. For erasure, do not create a second request to bypass a failed job.
 25. For erasure, before replying, check **Erasure complete** and the per-store receipt.
 
-The receipt retains the acting administrator, operational state, times, and counts.
+The receipt retains the acting instance admin, operational state, times, and counts.
 It retains neither erased content nor selected subject keys.
 Completion clears working request keys.
 Expiry clears abandoned previews.
@@ -556,15 +556,15 @@ Deleting in-app data does not delete a provider comment. If external copies must
 
    The query deliberately omits bodies.
 
-      ```sql
-      SELECT f.id, f.agent_job_id, f.artifact_kind, f.artifact_id,
-             f.delivery_state, f.replaces_id, p.id AS placement_id,
-             p.placement_type, p.posted_comment_ref, p.chat_message_id
-      FROM feedback f
-      LEFT JOIN feedback_placement p ON p.feedback_id = f.id
-      WHERE f.workspace_id = :'workspace_id'::bigint
-        AND f.id = :'feedback_id'::uuid;
-      ```
+   ```sql
+   SELECT f.id, f.agent_job_id, f.artifact_kind, f.artifact_id,
+          f.delivery_state, f.replaces_id, p.id AS placement_id,
+          p.placement_type, p.posted_comment_ref, p.chat_message_id
+   FROM feedback f
+   LEFT JOIN feedback_placement p ON p.feedback_id = f.id
+   WHERE f.workspace_id = :'workspace_id'::bigint
+     AND f.id = :'feedback_id'::uuid;
+   ```
 
 8. For conversational placements, follow `chat_message_id` through `chat_message.thread_id` to the workspace-scoped `mentor_slack_thread.chat_thread_id` mapping.
 
@@ -585,14 +585,14 @@ Deleting in-app data does not delete a provider comment. If external copies must
 18. Do not turn off application silent mode for cleanup.
 19. Select the endpoint for the actual placement:
 
-       | Placement | Provider API |
-       | --- | --- |
-       | GitHub issue or pull-request summary comment | `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}` — [issue comments](https://docs.github.com/en/rest/issues/comments#delete-an-issue-comment) |
-       | GitHub inline review comment | `DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}` — [review comments](https://docs.github.com/en/rest/pulls/comments#delete-a-review-comment-for-a-pull-request) |
-       | GitLab issue or merge-request note | `DELETE /projects/:id/issues/:issue_iid/notes/:note_id` or `DELETE /projects/:id/merge_requests/:merge_request_iid/notes/:note_id` — [notes](https://docs.gitlab.com/api/notes/) |
-       | GitLab discussion/diff note | Use its discussion and note IDs — [discussions](https://docs.gitlab.com/api/discussions/#delete-a-merge-request-discussion-note) |
-       | Slack feedback or mentor reply | `chat.delete` with the exact channel and message `ts`, using a token permitted to delete that author's message — [Slack API](https://docs.slack.dev/reference/methods/chat.delete/) |
-       | Outline | No current external feedback destination. Do not delete source documents as a substitute for removing feedback |
+    | Placement                                    | Provider API                                                                                                                                                                        |
+    | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | GitHub issue or pull-request summary comment | `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}` — [issue comments](https://docs.github.com/en/rest/issues/comments#delete-an-issue-comment)                             |
+    | GitHub inline review comment                 | `DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}` — [review comments](https://docs.github.com/en/rest/pulls/comments#delete-a-review-comment-for-a-pull-request)           |
+    | GitLab issue or merge-request note           | `DELETE /projects/:id/issues/:issue_iid/notes/:note_id` or `DELETE /projects/:id/merge_requests/:merge_request_iid/notes/:note_id` — [notes](https://docs.gitlab.com/api/notes/)    |
+    | GitLab discussion/diff note                  | Use its discussion and note IDs — [discussions](https://docs.gitlab.com/api/discussions/#delete-a-merge-request-discussion-note)                                                    |
+    | Slack feedback or mentor reply               | `chat.delete` with the exact channel and message `ts`, using a token permitted to delete that author's message — [Slack API](https://docs.slack.dev/reference/methods/chat.delete/) |
+    | Outline                                      | No current external feedback destination. Do not delete source documents as a substitute for removing feedback                                                                      |
 
     A submitted GitHub review/approval is not an issue comment.
     A `404` can mean hidden/inaccessible, not deleted.
@@ -633,15 +633,15 @@ rules. Use the instrumented metrics in [Practice review operations](./practice-r
 and [Webhook ingestion operations](./webhook-ingestion-operations). Configure thresholds against your
 traffic and recovery objectives. Assign an owner and test the alert delivery route.
 
-| Signal | Contain and diagnose | Recovery proof |
-| --- | --- | --- |
-| Poison events / repeated consumer failures | Preserve stream sequence, kind, reason and delivery count, not raw payloads in logs. Current poison handling **ACKs** at the retry limit. It does not move data to a durable DLQ. NATS maximum-delivery advisories are not a DLQ either. Recover the retained event before retention expires if authorized. Never raise the retry cap to hide a poison loop. | Reproduce with a sanitized fixture, fix the cause, replay one controlled event under silence, then reconcile the bounded gap. Healthy subsequent events continue. |
-| Dead-letter alert from deployment tooling | Identify which system owns the queue. Do not assume an application replay endpoint exists. Preserve IDs/configuration and restrict payload access. | Redrive only after fixing the cause, with a bounded batch and verified delivery idempotency. Record irrecoverable events. |
-| Rising oldest queue age, stale sampler, failed jobs | Check eligible/held/running separately, worker availability, readiness, model bindings, database and provider health. Do not delete jobs or reset leases manually. | Oldest age falls and new work completes. Held work is explained rather than silently counted as healthy. |
-| `UNCERTAIN` / failed dispatch | Turn on silent mode if content safety is in doubt. Restore provider lookup/credentials. Never clear the write fence or create a new dispatch to bypass uncertainty. | Existing provider objects are reconciled without duplicate creates, including inline placements. |
-| Budget breach / unpriced usage | Identify shared versus workspace-owned funding. Pause each affected budget/model. For runaway global spend stop all AI processes/egress. Silent mode does not stop spending. | Validate usage ledger against provider billing, explain unpriced buckets and in-flight overshoot. Observe a bounded fresh run before restoring caps. Budget-held work can resume automatically. |
-| Backup stale / restore failed | Preserve the last good backup, check destination credentials, disk, WAL coverage and encryption-key recovery. Escalate at the agreed RPO, not after the next deploy. | A new off-host backup and isolated restore succeed within measured objectives. |
-| Broker storage exhaustion | Follow the documented broker/receiver restart order after freeing space. Keep ingress loss visible. Do not purge streams merely to clear an alert. | Receiver durable acknowledgments and consumption recover. Inventory missing events and verify configured bounds. |
+| Signal                                              | Contain and diagnose                                                                                                                                                                                                                                                                                                                                         | Recovery proof                                                                                                                                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Poison events / repeated consumer failures          | Preserve stream sequence, kind, reason and delivery count, not raw payloads in logs. Current poison handling **ACKs** at the retry limit. It does not move data to a durable DLQ. NATS maximum-delivery advisories are not a DLQ either. Recover the retained event before retention expires if authorized. Never raise the retry cap to hide a poison loop. | Reproduce with a sanitized fixture, fix the cause, replay one controlled event under silence, then reconcile the bounded gap. Healthy subsequent events continue.                               |
+| Dead-letter alert from deployment tooling           | Identify which system owns the queue. Do not assume an application replay endpoint exists. Preserve IDs/configuration and restrict payload access.                                                                                                                                                                                                           | Redrive only after fixing the cause, with a bounded batch and verified delivery idempotency. Record irrecoverable events.                                                                       |
+| Rising oldest queue age, stale sampler, failed jobs | Check eligible/held/running separately, worker availability, readiness, model bindings, database and provider health. Do not delete jobs or reset leases manually.                                                                                                                                                                                           | Oldest age falls and new work completes. Held work is explained rather than silently counted as healthy.                                                                                        |
+| `UNCERTAIN` / failed dispatch                       | Turn on silent mode if content safety is in doubt. Restore provider lookup/credentials. Never clear the write fence or create a new dispatch to bypass uncertainty.                                                                                                                                                                                          | Existing provider objects are reconciled without duplicate creates, including inline placements.                                                                                                |
+| Budget breach / unpriced usage                      | Identify shared versus workspace-owned funding. Pause each affected budget/model. For runaway global spend stop all AI processes/egress. Silent mode does not stop spending.                                                                                                                                                                                 | Validate usage ledger against provider billing, explain unpriced buckets and in-flight overshoot. Observe a bounded fresh run before restoring caps. Budget-held work can resume automatically. |
+| Backup stale / restore failed                       | Preserve the last good backup, check destination credentials, disk, WAL coverage and encryption-key recovery. Escalate at the agreed RPO, not after the next deploy.                                                                                                                                                                                         | A new off-host backup and isolated restore succeed within measured objectives.                                                                                                                  |
+| Broker storage exhaustion                           | Follow the documented broker/receiver restart order after freeing space. Keep ingress loss visible. Do not purge streams merely to clear an alert.                                                                                                                                                                                                           | Receiver durable acknowledgments and consumption recover. Inventory missing events and verify configured bounds.                                                                                |
 
 ## Model pricing update
 

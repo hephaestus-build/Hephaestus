@@ -388,7 +388,8 @@ public class LoginProviderService {
         }
         if (type == LoginProvider.ProviderType.OUTLINE && !outlineOriginPolicy.allows(value)) {
             throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_CONTENT, "The instance operator did not approve the Outline origin.");
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "This Outline address is not approved on this instance. Ask your instance operator to approve it.");
         }
         return value;
     }

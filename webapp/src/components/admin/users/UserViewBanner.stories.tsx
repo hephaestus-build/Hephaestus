@@ -27,7 +27,7 @@ export const Default: Story = {
 export const WithoutAccount: Story = {
 	args: { hasAccount: false },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/No linked Hephaestus account/u)).toBeVisible();
+		await expect(canvas.getByText(/no Hephaestus account yet/u)).toBeVisible();
 	},
 };
 

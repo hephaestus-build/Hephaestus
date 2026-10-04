@@ -90,7 +90,8 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
             throw new IllegalArgumentException("The required field “" + INPUT_SERVER_URL + "” is missing.");
         }
         if (!originPolicy.allows(serverUrl)) {
-            throw new IllegalArgumentException("The instance operator did not approve this Outline origin.");
+            throw new IllegalArgumentException(
+                    "This Outline address is not approved on this instance. Ask your instance operator to approve it.");
         }
         String token = userInput.get(INPUT_TOKEN);
         if (token == null || token.isBlank()) {

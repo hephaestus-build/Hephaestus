@@ -100,9 +100,9 @@ Tone changes with the situation.
 Write positive contractions.
 Spell out negative ones.
 
-- Use `you're`, `we'll`, `let's`, `it's`, and `that's`. They sound like a person. [Microsoft](https://learn.microsoft.com/en-us/style-guide/word-choice/use-contractions) and [Shopify](https://shopify.dev/docs/apps/design/content/grammar-and-mechanics) recommend contractions.
+- Prefer `you're`, `we'll`, `let's`, `it's`, and `that's` in conversational text. They sound like a person. [Microsoft](https://learn.microsoft.com/en-us/style-guide/word-choice/use-contractions) and [Shopify](https://shopify.dev/docs/apps/design/content/grammar-and-mechanics) recommend contractions.
 - Write `cannot`, `do not`, `does not`, `is not`, `will not`, and `has not`. Some readers miss the `n't` ending and read the opposite meaning ([GOV.UK](https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/writing-guidelines/clear-language/)). People with dyslexia and people who read English as a second language misread them more ([Civil Service Analysis Function](https://analysisfunction.civilservice.gov.uk/policy-store/making-analytical-publications-accessible/)). Microsoft and Shopify allow negative contractions. Banning them is a project decision.
-- Keep `not` a separate word. `You're not a member` is correct. `You aren't a member` is not.
+- Keep `not` a separate word. `You are not a member` and `You're not a member` are correct. `You aren't a member` is not.
 - Do not use contractions that are hard to scan: `it'll`, `they'd`, `there'd`, `should've`, `they've`.
 - Do not mix forms in one message. If one clause says `you're`, the next does not say `you are`.
 - Write the apostrophe as `’` (U+2019) in UI text, so the glyph is the same everywhere.
@@ -120,7 +120,7 @@ Humans check the other points.
 - Say `select`, not `click` or `tap`. Say `enter` for typing and `turn on` or `turn off` for a switch.
 - Show a pending action in the control: `Saving…`, `Connecting…`. Use the single character `…`, not three dots.
 - Do not end a fragment with a period. Fragments are buttons, labels, headings, tabs, badges, and one-clause toasts. End every sentence with a period.
-- Do not use an exclamation mark. Do not join clauses with an em dash.
+- Do not join clauses with an em dash.
 
 ### Accessible names
 
@@ -174,7 +174,7 @@ This table covers general words.
 | Use | Avoid |
 | --- | --- |
 | `sign in`, `sign out` | `log in`, `login`, `log out` |
-| `select`, `enter`, `turn on` | `click`, `tap`, `toggle`, `type in` |
+| `select`, `enter`, `turn on` | `click`, `tap`, `type in` |
 | `could not`, `cannot` | `failed to`, `unable to` |
 | `delete` (the object is gone), `remove` (it leaves a set and stays elsewhere) | `delete` and `remove` as synonyms |
 | `connect`, `disconnect` | `link`, `unlink`, `integrate` |
@@ -192,7 +192,7 @@ Follow every rule above, plus these:
 - Write the label of a UI element exactly as the UI shows it, in bold.
 - Do not mention repository tooling or source paths.
 
-Vale keeps the 25-word limit for sentences and the 20-word limit for steps and list items.
+Vale also checks sentence length there: 25 words, and 20 for steps and list items.
 
 ## STE for contributor and operator prose
 
@@ -315,7 +315,6 @@ Vocabulary, passive voice, and noun or adjective `-ing` checks give suggestions,
 They apply to STE prose only.
 The open word list is not the ASD dictionary and does not cover every valid technical word or inflected form.
 A part-of-speech tagger can also be wrong.
-Do not make these checks errors merely to claim full compliance.
 
 No tool can check tone, a button that names its action, or an error that gives the next step.
 Reviewers check those points on the rendered screen.

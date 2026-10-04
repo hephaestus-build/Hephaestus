@@ -136,7 +136,7 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
 
         assertThat(problem.getDetail())
                 .isEqualTo("This GitHub App installation is already connected to another Hephaestus workspace."
-                        + " An administrator of that workspace must disconnect GitHub there first.");
+                        + " A workspace admin there must disconnect GitHub first.");
         assertThat(problem.getProperties()).containsEntry("error", "connected_elsewhere");
         assertThat(connectionRepository.findActive(target.getId(), IntegrationKind.GITHUB))
                 .isEmpty();

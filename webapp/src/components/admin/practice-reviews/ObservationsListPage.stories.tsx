@@ -326,7 +326,7 @@ export const LoadFailed: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	args: {
 		observations: undefined,
-		error: { status: 500, detail: "Something went wrong." },
+		error: { status: 500 },
 	},
 	play: async ({ canvas }) => {
 		await canvas.findByText("We could not load observations");

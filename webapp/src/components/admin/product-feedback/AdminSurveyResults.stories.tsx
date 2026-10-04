@@ -126,6 +126,7 @@ export const NoResponses: Story = {
 				questions: surveySummary.questions.map((question) => ({
 					...question,
 					answered: 0,
+					other: question.other === undefined ? undefined : 0,
 					counts: question.counts.map((count) => ({ ...count, count: 0 })),
 					average: undefined,
 					score: undefined,

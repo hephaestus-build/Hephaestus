@@ -50,7 +50,8 @@ public class PracticeGroupService {
     @Transactional
     public void reorder(WorkspaceContext ctx, List<String> orderedSlugs) {
         if (new HashSet<>(orderedSlugs).size() != orderedSlugs.size()) {
-            throw new IllegalArgumentException("orderedSlugs must not contain duplicate slugs");
+            throw new IllegalArgumentException(
+                    "The order lists a practice group twice. Reload the page and try again.");
         }
         lockWorkspace(ctx);
         List<PracticeGroup> groups = practiceGroupRepository.findByWorkspaceIdOrderByDisplayOrderAscNameAsc(ctx.id());
@@ -64,7 +65,8 @@ public class PracticeGroupService {
             if (unknown != null) {
                 throw new EntityNotFoundException("PracticeGroup", unknown);
             }
-            throw new IllegalArgumentException("orderedSlugs must contain every practice group in the workspace.");
+            throw new IllegalArgumentException(
+                    "The practice groups changed. Reload the page to see the current order.");
         }
         Map<String, PracticeGroup> bySlug = groups.stream().collect(Collectors.toMap(PracticeGroup::getSlug, a -> a));
         int order = 0;

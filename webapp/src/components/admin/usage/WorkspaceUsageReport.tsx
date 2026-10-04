@@ -137,7 +137,8 @@ export function WorkspaceUsageReport({
 					<AlertDescription>
 						<p>
 							They have no price set, so real spend may be higher. Add prices for your own models in{" "}
-							<AiModelsLink workspaceSlug={workspaceSlug} />. For shared models, ask your host.
+							<AiModelsLink workspaceSlug={workspaceSlug} />. For shared models, ask an instance
+							admin.
 						</p>
 					</AlertDescription>
 				</Alert>
@@ -272,8 +273,8 @@ function CapHeadline({ spendUsd, capUsd, titleFx }: CapHeadlineProps) {
 const PURSE_COPY = {
 	shared: {
 		spendLabel: "Shared-model spend",
-		capDescription: "Shared-model budget · set by your host",
-		noCapDescription: "No shared-model budget set by your host",
+		capDescription: "Shared-model budget · set by an instance admin",
+		noCapDescription: "No shared-model budget set by an instance admin",
 		meterLabel: "Shared-model budget used",
 	},
 	provider: {

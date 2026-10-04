@@ -102,8 +102,8 @@ export const NoModelsForTier: Story = {
 		<div className="space-y-2">
 			<ModelPicker {...args} />
 			<p id="model-picker-empty" className="text-sm text-muted-foreground">
-				No model declared as <span className="font-medium">Cloud</span> is available here yet. Ask
-				your host, or add one under your own providers.
+				No model declared as <span className="font-medium">Cloud</span> is available yet. Ask an
+				instance admin, or add one under your own providers.
 			</p>
 		</div>
 	),

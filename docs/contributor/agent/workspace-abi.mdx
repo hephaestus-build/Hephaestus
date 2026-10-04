@@ -187,7 +187,7 @@ See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/dec
   receives this directory as its fifth argument and reads it through `lib/change.ts`.
 - **`work/`** — agent + precompute scratch. The Pi agent may write here. The server never
   collects it.
-- **`out/`** — the *only* directory the sandbox collects after the run. `runner-debug.json` carries the per-turn trace.
+- **`out/`** — the _only_ directory the sandbox collects after the run. `runner-debug.json` carries the per-turn trace.
   This covers calls, tool calls by name, stored and refused observations with refusal reasons, compactions, and provider retries.
   The server keeps this trace in the job output.
   Thus, production friction is read from the job record, not a transcript.
@@ -197,12 +197,12 @@ See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/dec
 - **`task.json`** — the [task envelope](#task-envelope).
 - **`.pi*`** / `inputs/practices/` / `work/precompute*` / `work/analysis/` / `out/`
   — internal control surfaces. AI-readable as configured by the orchestrator, but
-  *not* part of the public agent ABI. Subject to change without a `schemaVersion` bump.
+  _not_ part of the public agent ABI. Subject to change without a `schemaVersion` bump.
 
 ## Pull request records
 
 What each `context/` file of a pull request review carries, field by field.
-A key listed as *when present* is absent — never `null` — when the provider recorded nothing.
+A key listed as _when present_ is absent — never `null` — when the provider recorded nothing.
 Comment and review lists run oldest first.
 Lists have no record-count cap.
 
@@ -303,15 +303,15 @@ Unreadable or invalid JSON, unsupported versions, blank prompts and invalid path
 
 All seven input-location fields are required:
 
-| Field | Location |
-|-------|----------|
-| `contextRoot` | Captured context directory, including `metadata.json` and `change.json` when applicable |
-| `repositoryRoot` | Captured repository directory |
-| `manifest` | Source and artifact index (`INDEX.json`) |
-| `practiceIndex` | Practice index file. Practice documents share its directory |
-| `compositionRequest` | Feedback-composition request file |
-| `preparedFeedback` | Previously prepared feedback file. Review history shares its directory |
-| `precomputeScripts` | Per-practice TypeScript script directory |
+| Field                | Location                                                                                |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| `contextRoot`        | Captured context directory, including `metadata.json` and `change.json` when applicable |
+| `repositoryRoot`     | Captured repository directory                                                           |
+| `manifest`           | Source and artifact index (`INDEX.json`)                                                |
+| `practiceIndex`      | Practice index file. Practice documents share its directory                             |
+| `compositionRequest` | Feedback-composition request file                                                       |
+| `preparedFeedback`   | Previously prepared feedback file. Review history shares its directory                  |
+| `precomputeScripts`  | Per-practice TypeScript script directory                                                |
 
 Values are relative to `/workspace`, use `/` separators, and cannot be empty or consist only of Unicode separators.
 Absolute paths, `.` or `..` components, empty components, backslashes, colons and control characters are rejected.
@@ -347,17 +347,17 @@ Files are read into memory, never extracted to the worker filesystem.
 
 ## Exit codes
 
-| Code | Meaning |
-|------|---------|
-| 0    | Success — `out/result.json` is complete, from the first attempt or from the recovery retry |
-| 1    | No complete review output after the initial attempt *and* the recovery retry |
+| Code | Meaning                                                                                                      |
+| ---- | ------------------------------------------------------------------------------------------------------------ |
+| 0    | Success — `out/result.json` is complete, from the first attempt or from the recovery retry                   |
+| 1    | No complete review output after the initial attempt _and_ the recovery retry                                 |
 | 2    | Fatal runner error — an unhandled rejection or uncaught exception. Debug and usage files are persisted first |
-| 3    | Watchdog hard-kill (budget + grace exceeded). Writes `out/watchdog-killed.json` first |
-| 42   | Task-envelope contract drift: malformed envelope, unsupported version, blank prompt, or invalid paths |
-| 43   | Result archive upload did not complete before the upload deadline or was refused |
-| 75   | The review finished, but the call admitting its observations never reached the server |
-| 76   | No practice was reached, and every model call the run made went unanswered |
-| 124  | The work deadline stopped the runner child. Result upload was still attempted |
+| 3    | Watchdog hard-kill (budget + grace exceeded). Writes `out/watchdog-killed.json` first                        |
+| 42   | Task-envelope contract drift: malformed envelope, unsupported version, blank prompt, or invalid paths        |
+| 43   | Result archive upload did not complete before the upload deadline or was refused                             |
+| 75   | The review finished, but the call admitting its observations never reached the server                        |
+| 76   | No practice was reached, and every model call the run made went unanswered                                   |
+| 124  | The work deadline stopped the runner child. Result upload was still attempted                                |
 
 `137` is a container SIGKILL from the runtime, not a runner code.
 The server treats `0` as success, `42` as drift, `124` as a timeout, and `75` and `76` as attempts to repeat.

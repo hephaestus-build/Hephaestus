@@ -138,9 +138,10 @@ export function SignInPanel({
 				tone="warning"
 				title="This instance does not know this extension"
 			>
-				{instanceHost} has not registered this extension, so it cannot sign you in. Ask its operator
-				to add the extension id <code className="font-mono break-all">{available.extensionId}</code>{" "}
-				to the instance’s browser extension ids.
+				{instanceHost} has not registered this extension, so it cannot sign you in. Ask the instance
+				operator to add the extension id{" "}
+				<code className="font-mono break-all">{available.extensionId}</code> to the instance’s
+				browser extension ids.
 			</Notice>
 		);
 	}
@@ -149,7 +150,7 @@ export function SignInPanel({
 		<div className="flex flex-col gap-4">
 			{available.options.length === 0 && !available.devSignIn ? (
 				<p className="text-sm text-muted-foreground">
-					{instanceHost} offers no way to sign in. Ask its operator to set one up.
+					{instanceHost} offers no way to sign in. Ask the instance operator to set one up.
 				</p>
 			) : null}
 			{available.options.length === 0 ? null : (

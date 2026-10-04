@@ -571,8 +571,8 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 					    this form. Prose still gets a reading width of its own. */}
 					<div className="space-y-10">
 						<p className="max-w-2xl text-sm text-muted-foreground">
-							Define one observable way of working. The same definition should make sense to a
-							developer, a peer, a human mentor, and an automated reviewer.
+							Define one way of working that someone can observe. Write it so that developers,
+							mentors and automated reviewers read it the same way.
 						</p>
 
 						<section className="space-y-4">
@@ -598,7 +598,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 										aria-invalid={hasText(shownErrors.name)}
 										aria-describedby={hasText(shownErrors.name) ? "practice-name-error" : undefined}
 									/>
-									<FieldDescription>Use a short, action-oriented name.</FieldDescription>
+									<FieldDescription>Start with a verb and keep it short.</FieldDescription>
 									{hasText(shownErrors.name) && (
 										<FieldError id="practice-name-error">{shownErrors.name}</FieldError>
 									)}
@@ -648,10 +648,10 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 							<Field data-invalid={hasText(shownErrors.criteria) ? "true" : undefined}>
 								<FieldLabel htmlFor="practice-criteria">What to look for *</FieldLabel>
 								<FieldDescription id="practice-criteria-description">
-									Describe one observable way of working, what shows it, and when a reviewer should
-									stay silent. Do not ask the reviewer to infer intent or facts outside the selected
-									work. For example: “Look for a description that explains the behavior change and
-									why. Stay silent for automated dependency updates.” Markdown is supported.
+									Describe what shows this practice and when a reviewer should stay silent. Do not
+									ask the reviewer to infer intent or facts outside the selected work. For example:
+									“Look for a description that explains the behavior change and why. Stay silent for
+									automated dependency updates.” Markdown is supported.
 								</FieldDescription>
 								<Textarea
 									id="practice-criteria"

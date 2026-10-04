@@ -270,7 +270,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("DEVELOPING")
                     .jsonPath("$[0].guidance")
                     .isEqualTo(
-                            "Your recent feedback points to “PR Description Quality” as the next practice to focus on.")
+                            "Your recent feedback suggests that “PR Description Quality” is the next practice to work on.")
                     .jsonPath("$[0].guidanceSource")
                     .isEqualTo("RULE_BASED")
                     .jsonPath("$[0].direction")
@@ -496,7 +496,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("MIXED")
                     .jsonPath("$[0].guidance")
                     .isEqualTo("Your recent feedback shows a strength in “Actionable Review Comments”. "
-                            + "Next, focus on “PR Description Quality”.")
+                            + "Next, work on “PR Description Quality”.")
                     .jsonPath("$[0].observations.length()")
                     .isEqualTo(2)
                     .jsonPath("$[0].observations[0].title")

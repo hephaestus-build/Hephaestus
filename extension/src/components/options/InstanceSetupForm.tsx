@@ -97,7 +97,7 @@ export function InstanceSetupForm({
 					{pending ? "Connecting…" : "Connect instance"}
 				</Button>
 				<p className="text-xs text-muted-foreground">
-					Chrome asks before the extension may reach this address.
+					Chrome asks you to let the extension reach this address.
 				</p>
 			</div>
 		</form>

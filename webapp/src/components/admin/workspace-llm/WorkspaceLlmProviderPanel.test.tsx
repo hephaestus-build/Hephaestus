@@ -176,7 +176,7 @@ describe("WorkspaceLlmProviderPanel", () => {
 		server.use(http.get("*/workspaces/demo/llm/connections", () => HttpResponse.json([])));
 		renderPanel(false);
 		await screen.findByText("New workspace providers and models are disabled");
-		expect(screen.queryByRole("button", { name: "Connect provider" })).toBeNull();
+		expect(screen.queryByRole("button", { name: "Add connection" })).toBeNull();
 	});
 
 	it("does not present a failed model request as an empty catalog", async () => {

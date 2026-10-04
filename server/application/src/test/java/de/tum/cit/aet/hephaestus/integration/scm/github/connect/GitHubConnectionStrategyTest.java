@@ -92,7 +92,7 @@ class GitHubConnectionStrategyTest extends BaseUnitTest {
         assertThatThrownBy(() -> strategy()
                         .initiate(new ConnectionStrategy.InitiateRequest(7L, IntegrationKind.GITHUB, Map.of(), 7L)))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("client-id");
+                .hasMessageContaining("sign-in is not set up");
         verifyNoInteractions(oauthStateService);
     }
 
@@ -101,7 +101,7 @@ class GitHubConnectionStrategyTest extends BaseUnitTest {
         assertThatThrownBy(() -> strategy(null)
                         .initiate(new ConnectionStrategy.InitiateRequest(7L, IntegrationKind.GITHUB, Map.of(), 7L)))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("installation-url");
+                .hasMessageContaining("We could not start the GitHub App installation");
     }
 
     @Test

@@ -653,7 +653,7 @@ function composeChange(
 	const rest = changes.filter(isRestKind);
 	if (rest.length === 0) {
 		return {
-			changed: hadRun ? sentence("Nothing moved in the latest review.") : [],
+			changed: hadRun ? sentence("Nothing moved since the latest run.") : [],
 			named: [],
 			restCount: 0,
 		};
@@ -667,7 +667,7 @@ function composeChange(
 		sentences.push(
 			named.length > 0
 				? sentence(`${counted(counts.practices, counts.groups, "more ")} changed as well.`)
-				: sentence(`${counted(counts.practices, counts.groups)} changed in the latest review.`),
+				: sentence(`${counted(counts.practices, counts.groups)} changed since the latest run.`),
 		);
 	}
 	return { changed: paragraph(sentences), named, restCount: hidden.length };

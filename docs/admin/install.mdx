@@ -11,15 +11,15 @@ can work but are unsupported.
 
 The stack you get:
 
-| Service | What it is |
-| --- | --- |
-| `reverse-proxy` | Traefik — TLS through `Let's Encrypt`, routes `/`, `/api`, `/webhooks` |
-| `webapp` | React SPA served by nginx |
-| `application-server` | Spring Boot API |
+| Service              | What it is                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| `reverse-proxy`      | Traefik — TLS through `Let's Encrypt`, routes `/`, `/api`, `/webhooks`                       |
+| `webapp`             | React SPA served by nginx                                                                    |
+| `application-server` | Spring Boot API                                                                              |
 | `application-worker` | Same image, worker profile — runs the AI sandboxes. The only service given the Docker socket |
-| `webhook-server` | Same image, webhook profile — keeps receiving events while the app restarts |
-| `postgres` | PostgreSQL 18 + pg_partman (custom image — vanilla `postgres:18` is **not** a drop-in) |
-| `nats-server` | NATS JetStream event buffer |
+| `webhook-server`     | Same image, webhook profile — keeps receiving events while the app restarts                  |
+| `postgres`           | PostgreSQL 18 + pg_partman (custom image — vanilla `postgres:18` is **not** a drop-in)       |
+| `nats-server`        | NATS JetStream event buffer                                                                  |
 
 Docker Compose on one Linux host supports all 1.x releases.
 **Hephaestus 2.0 runs on Kubernetes only**.
@@ -36,9 +36,9 @@ for the decision and the conditions that would reverse it.
 
 Hephaestus supports the specified single-host stack on the following native (not emulated) hosts:
 
-| Distribution | CPU architecture |
-| --- | --- |
-| Ubuntu 24.04 LTS | x86-64 (`amd64`) |
+| Distribution     | CPU architecture       |
+| ---------------- | ---------------------- |
+| Ubuntu 24.04 LTS | x86-64 (`amd64`)       |
 | Ubuntu 24.04 LTS | ARMv8 64-bit (`arm64`) |
 
 Both require Docker Engine 28 or newer and Docker Compose 2.24.4 or newer.
@@ -51,12 +51,12 @@ Only the listed native hosts and the unmodified self-hosted Compose topology are
   It is not a measured requirement.
   It covers these memory limits, which are ceilings, not reservations:
 
-  | Container | Memory limit | Setting |
-  | --- | --- | --- |
-  | `application-server` | 5 GB | `APPLICATION_SERVER_MEM_LIMIT` |
-  | `application-worker` | 3 GB | `APPLICATION_WORKER_MEM_LIMIT` |
-  | `webhook-server` | 2 GB | `WEBHOOK_SERVER_MEM_LIMIT` |
-  | each concurrent review sandbox | 4 GiB | `SANDBOX_MEMORY_BYTES`, `SANDBOX_MAX_CONCURRENT` (default 1) |
+  | Container                      | Memory limit | Setting                                                      |
+  | ------------------------------ | ------------ | ------------------------------------------------------------ |
+  | `application-server`           | 5 GB         | `APPLICATION_SERVER_MEM_LIMIT`                               |
+  | `application-worker`           | 3 GB         | `APPLICATION_WORKER_MEM_LIMIT`                               |
+  | `webhook-server`               | 2 GB         | `WEBHOOK_SERVER_MEM_LIMIT`                                   |
+  | each concurrent review sandbox | 4 GiB        | `SANDBOX_MEMORY_BYTES`, `SANDBOX_MAX_CONCURRENT` (default 1) |
 
   PostgreSQL, NATS, Traefik, and the webapp have no limit.
   A limit caps a container but reserves nothing.
@@ -66,6 +66,7 @@ Only the listed native hosts and the unmodified self-hosted Compose topology are
   The kernel can kill a container or sandbox.
 
   To use a smaller memory budget, lower the limits in `.env` before the first start.
+
 - These are deployment limits, not a claim that all workloads fit. Before raising webhook volume,
   mentor concurrency, or `SANDBOX_MAX_CONCURRENT`, reproduce the release's
   [Compose capacity qualification](https://github.com/hephaestus-build/Hephaestus/tree/main/load-tests) on
@@ -119,9 +120,9 @@ It also generates these values:
 - Routing secret.
 - Message-broker credentials.
 - Worker registration token.
-It does not replace non-empty values and never prints a secret.
-Changing either encryption key on an existing installation makes everything encrypted under the old
-one unreadable.
+  It does not replace non-empty values and never prints a secret.
+  Changing either encryption key on an existing installation makes everything encrypted under the old
+  one unreadable.
 
 Everything below runs from `/opt/hephaestus/docker/self-host`. After step 2 supplies the remaining
 required values, `docker compose config` renders the effective configuration. Before then it exits
@@ -143,13 +144,13 @@ credential key only with the [credential-key rotation procedure](./credential-ke
 2. Fill in the remaining **REQUIRED** values.
 3. Do not replace the generated internal secrets manually.
 
-   | Variable | What / how |
-   | --- | --- |
-   | `APP_HOSTNAME` | Your public hostname, for example, `hephaestus.example.com` |
-   | `ACME_EMAIL` | `Let's Encrypt` expiry notices |
-   | One login provider | GitHub OAuth (`GH_OAUTH_CLIENT_ID` / `_SECRET`) or GitLab OAuth (`GITLAB_OAUTH_CLIENT_ID` / `_SECRET` and its base URL), from step 3. One is enough. |
-   | `DOCKER_GROUP_ID` | Host group ID that can access `/var/run/docker.sock`. Use the command below. A wrong value prevents every sandbox start. |
-   | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` | From step 4 — set it **before** first boot |
+   | Variable                           | What / how                                                                                                                                           |
+   | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `APP_HOSTNAME`                     | Your public hostname, for example, `hephaestus.example.com`                                                                                          |
+   | `ACME_EMAIL`                       | `Let's Encrypt` expiry notices                                                                                                                       |
+   | One login provider                 | GitHub OAuth (`GH_OAUTH_CLIENT_ID` / `_SECRET`) or GitLab OAuth (`GITLAB_OAUTH_CLIENT_ID` / `_SECRET` and its base URL), from step 3. One is enough. |
+   | `DOCKER_GROUP_ID`                  | Host group ID that can access `/var/run/docker.sock`. Use the command below. A wrong value prevents every sandbox start.                             |
+   | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` | From step 4 — set it **before** first boot                                                                                                           |
 
 4. To find `DOCKER_GROUP_ID`, run:
 
@@ -162,8 +163,8 @@ credential key only with the [credential-key rotation procedure](./credential-ke
    - A database password change does not update an initialized PostgreSQL volume.
    - State-cookie key rotation invalidates OAuth flows in progress.
    - Webhook secret rotation requires the same change at each configured provider.
-   The GitLab routing secret is never entered anywhere.
-   GitLab group hooks stop delivery until registration repeats if you rotate the secret incorrectly.
+     The GitLab routing secret is never entered anywhere.
+     GitLab group hooks stop delivery until registration repeats if you rotate the secret incorrectly.
 
 5. Rotate it as [production setup](./production-setup#gitlab-rollout-bundle) describes.
 6. Back up `.env` with the database as [Backup & Restore](./backup-restore) describes.
@@ -204,7 +205,7 @@ An open tab and a provider that still posts to the old name continue to work thr
 The proxy redirects only what a browser loads.
 
 The login callback uses the address where the request arrived.
-A sign-in *started* at `/api/login/...` on another name asks the provider to return to that name.
+A sign-in _started_ at `/api/login/...` on another name asks the provider to return to that name.
 The provider refuses because its only registered callback uses `APP_HOSTNAME`.
 Normal access avoids this problem: the proxy redirects the browser before sign-in starts.
 
@@ -227,7 +228,7 @@ not sign-in. The steps below configure GitHub. For GitLab, use the
 [GitLab rollout bundle](./production-setup#gitlab-rollout-bundle).
 
 GitHub login needs a plain **OAuth App**.
-This is *not* the GitHub App for data access: see [GitHub integration](./github-integration).
+This is _not_ the GitHub App for data access: see [GitHub integration](./github-integration).
 Without a login provider, the instance boots but shows **no sign-in button**.
 
 1. Open [github.com/settings/developers](https://github.com/settings/developers), or your organization's equivalent settings.
@@ -326,14 +327,14 @@ Each has a variable reference in [Integrations & Reference Deployment](./product
    docker compose up -d
    ```
 
-| Add-on | What it gives you | Where |
-| --- | --- | --- |
-| GitLab | GitLab login, workspaces, and sync (webhooks auto-register here) | [GitLab bundle](./production-setup#gitlab-rollout-bundle) |
-| Slack | Mentor in Slack, channel ingestion | [Slack app setup](./production-setup#slack-app-configuration) |
-| Outline | Wiki as a content source for reviews | [Outline integration](./production-setup#outline-integration) |
-| AI practice review | Automated PR feedback from the coding agent | [Practice review](./practice-review#deployment) |
-| Email | Optional invitations, summaries, and connection alerts. Configure `SPRING_MAIL_*` and `HEPHAESTUS_EMAIL_FROM` | [Email setup](./production-setup#email) |
-| An AI provider | The model everything AI runs on — required by the row above | [Connect an AI Provider](./ai-providers) |
+| Add-on             | What it gives you                                                                                             | Where                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| GitLab             | GitLab login, workspaces, and sync (webhooks auto-register here)                                              | [GitLab bundle](./production-setup#gitlab-rollout-bundle)     |
+| Slack              | Mentor in Slack, channel ingestion                                                                            | [Slack app setup](./production-setup#slack-app-configuration) |
+| Outline            | Wiki as a content source for reviews                                                                          | [Outline integration](./production-setup#outline-integration) |
+| AI practice review | Automated PR feedback from the coding agent                                                                   | [Practice review](./practice-review#deployment)               |
+| Email              | Optional invitations, summaries, and connection alerts. Configure `SPRING_MAIL_*` and `HEPHAESTUS_EMAIL_FROM` | [Email setup](./production-setup#email)                       |
+| An AI provider     | The model everything AI runs on — required by the row above                                                   | [Connect an AI Provider](./ai-providers)                      |
 
 AI practice review requires both the environment bundle above and a model that the workspace can run on.
 The bundle contains `AGENT_ENABLED` and `GIT_CHECKOUT_ENABLED`.
@@ -450,13 +451,13 @@ Never reconstruct an old lock or resolve mutable image tags.
 
 ## Troubleshooting
 
-| Symptom | Cause / fix |
-| --- | --- |
-| `application-server` exits: *ProxyTrustGuard* | `HEPHAESTUS_TRUSTED_PROXIES` is blank. The Compose default is non-blank. Your override therefore set it to empty. Unset the override. If you changed the network, you can instead set it to match `reverse-proxy`'s IP. |
-| Exits: encryption-key length error | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` must be exactly 32 printable, non-space ASCII characters. Restore the original key for an existing database. On a new installation, clear the invalid value. Then rerun `./setup.sh`. |
-| Login page has no sign-in button | No login provider configured: both `GH_OAUTH_CLIENT_ID` **and** `_SECRET` must be non-empty (a half-filled pair is skipped and logged at ERROR). |
-| OAuth redirect loop / cookie never sticks | A proxy in front of Traefik is injecting a `Domain=` attribute on cookies, which browsers reject for `__Host-` cookies. Serve the stack directly on ports 80/443. |
-| Signed in but not admin | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` did not match. On the account's **first** login, the server logs (INFO) the exact `provider subject username` it saw. Copy that into the allowlist. Restart. (For an account that already existed, check that log line from its first sign-in, or use the numeric id.) |
-| GitHub webhook deliveries show `401` | `WEBHOOK_SECRET` on GitHub differs from `.env` — must be byte-identical. |
-| Data appears only ~hourly | No GitHub webhook configured (see step 6). |
-| `docker compose down`/`logs` aborts with "variable is missing" | Required `.env` values are validated for every subcommand. Fill them (dummy values are fine) before teardown. |
+| Symptom                                                        | Cause / fix                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `application-server` exits: _ProxyTrustGuard_                  | `HEPHAESTUS_TRUSTED_PROXIES` is blank. The Compose default is non-blank. Your override therefore set it to empty. Unset the override. If you changed the network, you can instead set it to match `reverse-proxy`'s IP.                                                                                   |
+| Exits: encryption-key length error                             | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` must be exactly 32 printable, non-space ASCII characters. Restore the original key for an existing database. On a new installation, clear the invalid value. Then rerun `./setup.sh`.                                                                                |
+| Login page has no sign-in button                               | No login provider configured: both `GH_OAUTH_CLIENT_ID` **and** `_SECRET` must be non-empty (a half-filled pair is skipped and logged at ERROR).                                                                                                                                                          |
+| OAuth redirect loop / cookie never sticks                      | A proxy in front of Traefik is injecting a `Domain=` attribute on cookies, which browsers reject for `__Host-` cookies. Serve the stack directly on ports 80/443.                                                                                                                                         |
+| Signed in but not admin                                        | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` did not match. On the account's **first** login, the server logs (INFO) the exact `provider subject username` it saw. Copy that into the allowlist. Restart. (For an account that already existed, check that log line from its first sign-in, or use the numeric id.) |
+| GitHub webhook deliveries show `401`                           | `WEBHOOK_SECRET` on GitHub differs from `.env` — must be byte-identical.                                                                                                                                                                                                                                  |
+| Data appears only ~hourly                                      | No GitHub webhook configured (see step 6).                                                                                                                                                                                                                                                                |
+| `docker compose down`/`logs` aborts with "variable is missing" | Required `.env` values are validated for every subcommand. Fill them (dummy values are fine) before teardown.                                                                                                                                                                                             |

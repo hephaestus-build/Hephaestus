@@ -669,7 +669,10 @@ function PracticeCatalogRoute() {
 								);
 							}}
 						>
-							{catalog.deleteGroup.isPending ? "Deleting group…" : "Keep practices unassigned"}
+							{catalog.deleteGroup.isPending &&
+							catalog.deleteGroup.variables.query?.deletePractices !== true
+								? "Deleting group…"
+								: "Keep practices unassigned"}
 						</AlertDialogAction>
 						<AlertDialogAction
 							variant="destructive"
@@ -687,7 +690,8 @@ function PracticeCatalogRoute() {
 								);
 							}}
 						>
-							{catalog.deleteGroup.isPending
+							{catalog.deleteGroup.isPending &&
+							catalog.deleteGroup.variables.query?.deletePractices === true
 								? "Deleting group and practices…"
 								: "Delete group and practices"}
 						</AlertDialogAction>

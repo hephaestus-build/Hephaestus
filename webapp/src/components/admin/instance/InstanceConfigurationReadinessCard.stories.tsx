@@ -55,7 +55,7 @@ const emailNotConfigured = fact("notification.email", "spring.mail.host", "email
 	requirement: "OPTIONAL",
 	status: "NOT_CONFIGURED",
 	explanation:
-		"Email is optional. If you set a relay host, hephaestus.email.from must name the sender address.",
+		"Email is optional. If you set a mail server host, hephaestus.email.from must name the sender address.",
 });
 
 const workerRuntime = fact(

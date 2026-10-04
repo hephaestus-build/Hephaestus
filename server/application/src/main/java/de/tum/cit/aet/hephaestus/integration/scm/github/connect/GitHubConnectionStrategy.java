@@ -75,11 +75,11 @@ public class GitHubConnectionStrategy implements ConnectionStrategy {
     public ConnectInitiation initiate(InitiateRequest request) {
         if (installationUrl == null) {
             throw new IllegalStateException(
-                    "hephaestus.integration.github.app.installation-url is not configured. Hephaestus cannot start the GitHub App installation.");
+                    "We could not start the GitHub App installation because it is not set up on this instance. Ask your instance operator to set it up.");
         }
         if (!userAuthorization.isConfigured()) {
             throw new IllegalStateException(
-                    "hephaestus.integration.github.app.client-id and client-secret are not configured. Hephaestus cannot verify a GitHub App installation.");
+                    "We could not verify the GitHub App installation because its sign-in is not set up on this instance. Ask your instance operator to set it up.");
         }
         String state = oauthStateService.issue(request.workspaceId(), IntegrationKind.GITHUB, request.actorAccountId());
         String separator = installationUrl.contains("?") ? "&" : "?";

@@ -184,7 +184,7 @@ export function PracticeGroupDetailLevel({
 			empty={{
 				icon: <ClipboardCheckIcon />,
 				title: "No practices yet",
-				description: "Practices appear here once an admin adds them to this group.",
+				description: "Practices appear here once a workspace admin adds them to this group.",
 			}}
 			isLoading={isLoading}
 			loadingRow={loadingRow}

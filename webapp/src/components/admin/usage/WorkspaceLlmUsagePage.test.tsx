@@ -58,7 +58,7 @@ describe("WorkspaceLlmUsagePage", () => {
 		await renderPage();
 
 		screen.getByText("Shared-model spend so far");
-		screen.getByText("Shared-model budget · set by your host");
+		screen.getByText("Shared-model budget · set by an instance admin");
 		screen.getByText("Your provider spend so far");
 		screen.getByText("Provider cap · set by you, billed by your provider");
 
@@ -88,7 +88,9 @@ describe("WorkspaceLlmUsagePage", () => {
 		await renderPage();
 
 		screen.getByText("2 runs are not counted in these totals");
-		screen.getByText(/Add prices for your own models in .*\. For shared models, ask your host\./u);
+		screen.getByText(
+			/Add prices for your own models in .*\. For shared models, ask an instance admin\./u,
+		);
 	});
 
 	it("averages each purse over the run count on its own, never the two summed", async () => {
@@ -127,14 +129,14 @@ describe("WorkspaceLlmUsagePage", () => {
 				"an exhausted shared budget",
 				{ instancePaused: true, instanceBudgetVerdict: "EXHAUSTED", instanceTotalCostUsd: 25 },
 				"Shared-model budget reached",
-				"Paused until August 1 (UTC), or until your host raises the budget. Practice reviews and Heph can keep running on your own models.",
+				"Paused until August 1 (UTC), or until an instance admin raises the budget. Practice reviews and Heph can keep running on your own models.",
 				"/w/acme/admin/models",
 			],
 			[
 				"an unverifiable shared budget",
 				{ instancePaused: true, instanceBudgetVerdict: "UNVERIFIABLE" },
 				"Shared-model spend cannot be verified",
-				"2 shared-model runs have no price, so the budget cannot be checked and shared models are paused. Only your host can price them.",
+				"2 shared-model runs have no price, so the budget cannot be checked and shared models are paused. Only an instance admin can price them.",
 				null,
 			],
 		])(

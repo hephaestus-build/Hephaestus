@@ -71,19 +71,20 @@ sequenceDiagram
   - A line number of `diff.patch` itself that names one line of the cited file.
   - An empty stray field.
   - A WITHHOLD's own NOT_MET observations.
- A refusal names every problem of an item at once.
-  It gives the field, the received value, and the accepted values.
-  It states facts instead of doubting the outcome. A resend of an already recorded result is an error that names what is still owed.
-  An identical resend of a refused item gets the same answer at once.
-  A third identical send ends the turn. An unreadable list shows where it breaks and is charged to no practice. A call cut off at the model's output limit reaches its tool incomplete.
-  The model is told that the cut caused the error.
-  A second cut in the turn ends it. Progress and repetition
-  limits stop unproductive turns. Recorded results are saved under `work/notes/`.
-  The session is Pi's coding-agent `AgentSession`. Pi 1.0 also ships the experimental harness `pi-durable`.
-  It checkpoints every model call and tool call so a crashed run can resume. It is not used.
-  A review runs once in a sandbox that is discarded with its storage.
-  The server retries a failed run from the captured evidence.
-  `pi-durable` has no codemode.
+    A refusal names every problem of an item at once.
+    It gives the field, the received value, and the accepted values.
+    It states facts instead of doubting the outcome. A resend of an already recorded result is an error that names what is still owed.
+    An identical resend of a refused item gets the same answer at once.
+    A third identical send ends the turn. An unreadable list shows where it breaks and is charged to no practice. A call cut off at the model's output limit reaches its tool incomplete.
+    The model is told that the cut caused the error.
+    A second cut in the turn ends it. Progress and repetition
+    limits stop unproductive turns. Recorded results are saved under `work/notes/`.
+    The session is Pi's coding-agent `AgentSession`. Pi 1.0 also ships the experimental harness `pi-durable`.
+    It checkpoints every model call and tool call so a crashed run can resume. It is not used.
+    A review runs once in a sandbox that is discarded with its storage.
+    The server retries a failed run from the captured evidence.
+    `pi-durable` has no codemode.
+
 - **Work, not time, bounds a turn.** Each turn gets its own model-call and output-token budget.
   Each practice it carries adds `PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS`.
   The budget is never less than three practices' worth, whatever earlier turns spent

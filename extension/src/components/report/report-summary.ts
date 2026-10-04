@@ -157,7 +157,7 @@ export function summarizeReport({
 		parts.push(ACTIVITY_TEXT[activity]);
 	}
 	if (feedback?.status === "error") {
-		parts.push("We could not load your feedback");
+		parts.push("We could not load your comments");
 		tone = "error";
 	} else if (feedback?.status === "ready") {
 		parts.push(feedbackText(feedback.data));

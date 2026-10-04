@@ -169,7 +169,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 						<AlertDialogTitle>{resetLabel}?</AlertDialogTitle>
 						<AlertDialogDescription>
 							This replaces the customization and discards unsaved changes. It does not change
-							whether workspace administrators can add the group. Existing workspace copies remain
+							whether workspace admins can add the group. Existing workspace copies remain
 							unchanged. Future updates apply automatically until the group is customized again.
 						</AlertDialogDescription>
 					</AlertDialogHeader>

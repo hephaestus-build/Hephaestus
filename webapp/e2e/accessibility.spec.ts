@@ -451,7 +451,7 @@ base.describe("complete processes, keyboard only", () => {
 		await expect(page.getByRole("heading", { level: 2, name })).toBeHidden();
 	});
 
-	signedInTest("an idea is sent to the instance administrators", async ({ page }) => {
+	signedInTest("an idea is sent to the instance admins", async ({ page }) => {
 		await open(page, "/w/e2e/admin/members");
 		await page.getByRole("banner").getByRole("button", { name: "Feedback" }).focus();
 		await page.keyboard.press("Enter");

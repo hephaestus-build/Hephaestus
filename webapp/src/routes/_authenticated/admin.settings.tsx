@@ -55,7 +55,7 @@ function WorkspaceSettingsPage() {
 		onSuccess: (data) => {
 			const def = EMAIL_TEST_OUTCOME_DEFS[data.outcome];
 			if (data.outcome === "SENT") {
-				toast.success(`The mail relay accepted the test email to ${data.to ?? "your address"}.`);
+				toast.success(`The mail server accepted the test email to ${data.to ?? "your address"}.`);
 			} else {
 				toast.warning(def.label, { description: def.description });
 			}
@@ -112,7 +112,7 @@ function WorkspaceSettingsPage() {
 			<PageHeader
 				icon={<Settings2 />}
 				title="Instance settings"
-				description="Instance-wide operator controls. These apply across every workspace and override workspace settings while active."
+				description="Instance-wide controls. These apply across every workspace and override workspace settings while active."
 			/>
 
 			<div className="space-y-4">
