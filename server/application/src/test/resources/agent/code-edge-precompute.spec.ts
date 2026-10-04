@@ -278,3 +278,26 @@ void test("the error practice lists the fallbacks and bare returns its criteria 
 		rmSync(root, { recursive: true, force: true });
 	}
 });
+
+void test("a fixed URL remains a lead, not proof of an unhandled runtime failure", async () => {
+	const { root, script } = await stage("handles-errors-instead-of-swallowing-them");
+	try {
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([
+				added("App/Endpoint.swift", [
+					'guard let url = URL(string: "https://example.org/items") else { return }',
+				]),
+			]),
+			metadata,
+		);
+		assert.equal(result.hints.length, 1);
+		assert.match(
+			result.directions.join(" "),
+			/A valid fixed URL has no runtime-dependent parse failure/u,
+		);
+		assert.match(result.directions.join(" "), /already recorded by its handler/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
