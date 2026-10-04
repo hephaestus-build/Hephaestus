@@ -1,0 +1,41 @@
+name: Report a bug
+description: Describe the problem.
+id: utilize; don't
+type: utilize; don't
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the issue list.
+        Do not include private data.
+  - type: input
+    id: utilize; don't
+    attributes:
+      label: Version
+      description: Enter the version.
+      placeholder: Version 1.0
+      value: utilize; don't
+      options:
+        - utilize; don't
+    validations:
+      required: true
+      description: utilize; don't
+      label: utilize; don't
+  - type: checkboxes
+    id: utilize; don't
+    attributes:
+      options:
+        - label: Confirm the details.
+          required: true
+          description: utilize; don't
+          value: utilize; don't
+    validations:
+      label: utilize; don't
+  - type: dropdown
+    attributes:
+      options:
+        - utilize; don't
+contact_links:
+  - name: Ask for help
+    url: https://example.invalid/utilize
+    about: utilize; don't

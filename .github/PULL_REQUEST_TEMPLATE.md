@@ -1,22 +1,22 @@
-<!-- Thanks for contributing. Use the title format in CONTRIBUTING.md and delete sections that do not apply. -->
+<!-- Thank you for your contribution. Use the title format in CONTRIBUTING.md. Delete sections that do not apply. -->
 
 ## What changed and why
 
-<!-- Start with the problem, then explain the solution and why this approach is appropriate. -->
+<!-- Start with the problem. Then explain the solution and why this approach is appropriate. -->
 
 <!-- Link related work with "Fixes #123" when merging this PR should close it. -->
 
 ## How to test
 
-<!-- List the behavior you exercised and the exact steps or commands needed to reproduce it. -->
+<!-- List the behavior that you tested. Give the exact steps or commands to reproduce it. -->
 
 ## Release impact
 
-<!-- Link the changeset and state any operator action. If neither applies, explain why. -->
+<!-- Link the changeset. State any operator action. If neither applies, explain why. -->
 
 ## Notes for reviewers
 
-<!-- Call out risks, tradeoffs, follow-up work, or the best place to begin reviewing. Delete if unnecessary. -->
+<!-- State risks, tradeoffs, follow-up work, or the best place to start the review. If this section is unnecessary, delete it. -->
 
 ## Visual evidence
 

@@ -1,15 +1,17 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse } from "yaml";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
-import { asStringArray, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, asString, asStringArray, parseJson } from "./lib/json.ts";
 import { uiAlerts, uiIgnorePatterns } from "./lib/ste-ui.ts";
 import { steRoot } from "./lib/ste-words.ts";
-import { prepareVale, valeAlerts } from "./lib/vale.ts";
+import { prepareVale, valeAlerts, type ValeAlert } from "./lib/vale.ts";
 
 export const enforcedList = ".vale/enforced-paths.json";
 
@@ -19,9 +21,22 @@ export function parsePaths(source: string): readonly string[] {
 		throw new Error("Write a nonempty list of unique STE paths.");
 	}
 	for (const file of paths) {
-		if (!/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w.$/-]+\.(?:md|mdx|tsx|ts)$/u.test(file)) {
+		if (!/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w.$/-]+\.(?:md|mdx|tsx|ts|ya?ml|json)$/u.test(file)) {
 			throw new Error(
 				`Invalid STE path: ${file}. Write an exact repository-relative prose or UI source path.`,
+			);
+		}
+		if (
+			/\.ya?ml$/u.test(file) &&
+			!/^\.github\/(?:ISSUE|DISCUSSION)_TEMPLATE\/[^/]+\.ya?ml$/u.test(file)
+		) {
+			throw new Error(
+				`STE YAML path is outside the form-template directories: ${file}. Add an issue or discussion form.`,
+			);
+		}
+		if (file.endsWith(".json") && !/^\.claude\/skills\/[^/]+\/metadata\.json$/u.test(file)) {
+			throw new Error(
+				`STE JSON path is outside skill metadata: ${file}. Add a skill metadata file.`,
 			);
 		}
 		if (/\.tsx?$/u.test(file) && !/^webapp\/src\/.*\.tsx?$/u.test(file)) {
@@ -84,10 +99,106 @@ export function checkRatchet(
 	return paths;
 }
 
+export function issueFormProse(source: string) {
+	const form = asRecord(parse(source), "issue form");
+	const fields: { field: string; text: string }[] = [];
+	const add = (record: Record<string, unknown>, key: string, prefix = "") => {
+		if (Object.hasOwn(record, key)) {
+			const field = prefix + key;
+			fields.push({ field, text: asString(record[key], field) });
+		}
+	};
+	for (const key of ["name", "description"]) {
+		add(form, key);
+	}
+	if (Object.hasOwn(form, "body")) {
+		for (const [index, value] of asArray(form.body, "issue form body").entries()) {
+			const block = asRecord(value, `body[${index}]`);
+			if (!Object.hasOwn(block, "attributes")) {
+				continue;
+			}
+			const prefix = `body[${index}].attributes.`;
+			const attributes = asRecord(block.attributes, prefix);
+			for (const key of ["label", "description", "placeholder"]) {
+				add(attributes, key, prefix);
+			}
+			if (block.type === "markdown") {
+				add(attributes, "value", prefix);
+			}
+			if (block.type === "checkboxes" && Object.hasOwn(attributes, "options")) {
+				for (const [optionIndex, option] of asArray(
+					attributes.options,
+					`${prefix}options`,
+				).entries()) {
+					const optionPrefix = `${prefix}options[${optionIndex}].`;
+					add(asRecord(option, optionPrefix), "label", optionPrefix);
+				}
+			}
+		}
+	}
+	if (Object.hasOwn(form, "contact_links")) {
+		for (const [index, value] of asArray(form.contact_links, "contact links").entries()) {
+			add(asRecord(value, `contact_links[${index}]`), "name", `contact_links[${index}].`);
+		}
+	}
+	return fields;
+}
+
+export function issueFormAlerts(binary: string, file: string, level = "error") {
+	return proseFieldAlerts(binary, file, issueFormProse(readFileSync(file, "utf8")), level);
+}
+
+export function skillMetadataAlerts(binary: string, file: string, level = "error") {
+	const metadata = asRecord(parseJson(readFileSync(file, "utf8")), "skill metadata");
+	return proseFieldAlerts(
+		binary,
+		file,
+		[{ field: "abstract", text: asString(metadata.abstract, "abstract") }],
+		level,
+	);
+}
+
+function proseFieldAlerts(
+	binary: string,
+	file: string,
+	fields: readonly { field: string; text: string }[],
+	level: string,
+) {
+	if (fields.length === 0) {
+		return [];
+	}
+	const directory = mkdtempSync(path.join(tmpdir(), "ste-issue-form-"));
+	try {
+		const inputs = fields.map(({ field, text }, index) => {
+			const target = path.join(directory, `${index}.md`);
+			writeFileSync(target, text);
+			return { field, target };
+		});
+		const files = inputs.map(({ target }) => target);
+		const alerts = new Map<string, ValeAlert[]>();
+		for (let offset = 0; offset < files.length; offset += 50) {
+			for (const [target, list] of valeAlerts(binary, files.slice(offset, offset + 50), level)) {
+				alerts.set(target, list);
+			}
+		}
+		return inputs.flatMap(({ field, target }) =>
+			(alerts.get(target.replaceAll("\\", "/")) ?? []).map((alert) => ({
+				field,
+				alert,
+			})),
+		);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+}
+
 if (process.argv[1] === import.meta.filename) {
 	const args = process.argv.slice(2);
 	const base = isSet(process.env.PR_BASE_SHA) ? process.env.PR_BASE_SHA : "origin/main";
-	const paths = args.length > 0 ? args : [...checkRatchet(base)];
+	const paths = args.length > 0 ? parsePaths(JSON.stringify(args)) : [...checkRatchet(base)];
+	for (const file of paths) {
+		readFileSync(file);
+	}
 	const files = paths.filter((file) => /\.mdx?$/u.test(file));
 	const vale = await prepareVale();
 	try {
@@ -102,6 +213,30 @@ if (process.argv[1] === import.meta.filename) {
 			const located = [...alerts].flatMap(([file, list]) => list.map((alert) => ({ file, alert })));
 			for (const { file, alert } of located) {
 				console.log(`${file}:${alert.Line}: ${alert.Severity} ${alert.Check}: ${alert.Message}`);
+				errors += Number(alert.Severity === "error");
+			}
+		}
+		for (const file of paths.filter((item) => /\.ya?ml$/u.test(item))) {
+			for (const { field, alert } of issueFormAlerts(
+				vale.binary,
+				file,
+				args.length > 0 ? "suggestion" : "error",
+			)) {
+				console.log(
+					`${file}:${field}:${alert.Line}: ${alert.Severity} ${alert.Check}: ${alert.Message}`,
+				);
+				errors += Number(alert.Severity === "error");
+			}
+		}
+		for (const file of paths.filter((item) => item.endsWith(".json"))) {
+			for (const { field, alert } of skillMetadataAlerts(
+				vale.binary,
+				file,
+				args.length > 0 ? "suggestion" : "error",
+			)) {
+				console.log(
+					`${file}:${field}:${alert.Line}: ${alert.Severity} ${alert.Check}: ${alert.Message}`,
+				);
 				errors += Number(alert.Severity === "error");
 			}
 		}

@@ -5,7 +5,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        Search [existing issues](https://github.com/hephaestus-build/Hephaestus/issues?q=is%3Aissue) first. Use [Support](https://github.com/hephaestus-build/Hephaestus/discussions/categories/support) for setup questions. Report vulnerabilities privately through [GitHub Security Advisories](https://github.com/hephaestus-build/Hephaestus/security/advisories/new). Remove secrets and personal data from all evidence.
+        Search [existing issues](https://github.com/hephaestus-build/Hephaestus/issues?q=is%3Aissue) first.
+        Use [Support](https://github.com/hephaestus-build/Hephaestus/discussions/categories/support) for setup questions.
+        Report vulnerabilities privately through [GitHub Security Advisories](https://github.com/hephaestus-build/Hephaestus/security/advisories/new).
+        Remove secrets and personal data from all evidence.
 
   - type: textarea
     id: problem
@@ -46,7 +49,7 @@ body:
     attributes:
       label: Environment
       description: Include relevant details such as browser, operating system, and deployment method.
-      placeholder: Firefox 142 on Ubuntu 24.04; self-hosted with Docker Compose
+      placeholder: Firefox 142 on Ubuntu 24.04. Self-hosted with Docker Compose.
 
   - type: textarea
     id: logs
@@ -59,4 +62,4 @@ body:
     id: evidence
     attributes:
       label: Screenshots, recordings, or files
-      description: Optionally attach evidence or a minimal reproduction.
+      description: You can attach evidence or a minimal reproduction.
