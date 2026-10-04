@@ -21,7 +21,11 @@ function line(value: unknown): unknown {
 		return value;
 	}
 	const digits = /^(?:\d+|L\d+|\[L\d+\])$/iu.exec(value.trim());
-	return digits === null ? value : Number(value.replaceAll(/[^0-9]/gu, ""));
+	if (digits === null) {
+		return value;
+	}
+	const coordinate = Number(value.replaceAll(/[^0-9]/gu, ""));
+	return Number.isSafeInteger(coordinate) ? coordinate : value;
 }
 
 /** Repair transport forms before Pi validates scalar types, never outcomes, quotes, paths, or sides. */

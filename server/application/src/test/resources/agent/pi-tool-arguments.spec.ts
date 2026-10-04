@@ -63,6 +63,8 @@ void test("reads only decimal line coordinates from numbered views", () => {
 		"-10",
 		"10-12",
 		"line 10",
+		"9007199254740993",
+		"[L9007199254740993]",
 		null,
 	]) {
 		const input = {

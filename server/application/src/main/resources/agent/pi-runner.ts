@@ -1648,8 +1648,9 @@ const PERSIST_DISCIPLINE =
 
 /** What a turn is told once its remaining work only pays for recording what it owes. */
 const RECORD_NUDGE =
-	`This turn has the work left to write its observations and no more. Stop exploring and record what ` +
-	`the inspected evidence supports for the listed practices, with up to three observations per report_observation call. ${PERSIST_DISCIPLINE}`;
+	`This turn has the work left to write its observations and no more. Stop exploring. ` +
+	`Record what the inspected evidence supports for the listed practices. Send up to three observations ` +
+	`per report_observation call. ${PERSIST_DISCIPLINE}`;
 
 /** Tells the server to retry a review whose admission endpoint was unreachable. */
 const SERVER_UNREACHABLE_EXIT = 75;
