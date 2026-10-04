@@ -5,13 +5,36 @@ import { parseArgs } from "node:util";
 import { Client } from "pg";
 
 import { isLoopbackHost, positivePort, readEnvFile } from "./lib/env.ts";
+import {
+	type ArtifactRef,
+	type Bucket,
+	type Citation,
+	DEVELOPERS,
+	FIRST_JOB,
+	ID_PREFIX,
+	LOGIN_PREFIX,
+	NATIVE_ID_BASE,
+	type Outcome,
+	READER_RUNS,
+	type Severity,
+	SKIPPERS_PER_PRACTICE,
+	SPLITS,
+	TABLE,
+	bucketOf,
+	daysAgo,
+	isProblem,
+	readerCards,
+	seedId,
+} from "./lib/practices-demo.ts";
 
 /**
- * Seeds the development database with a workspace of synthetic developers, so Practices across the
- * workspace has a split to show: 40 members with clearly synthetic logins, each with completed
- * practice reviews of pull requests and issues already synced into the workspace and the
- * observations those reviews recorded. Every run is complete and no feedback is written, so no
- * sweeper, dispatcher or worker picks any of it up and nothing reaches a provider.
+ * Seeds the development database with a demo of Practices across the workspace and the Practice
+ * profile: 40 synthetic developers with clearly synthetic logins, each with completed practice
+ * reviews of pull requests and issues already synced into the workspace and the observations those
+ * reviews recorded, and for the reader, an existing member, a written history of reviews and the
+ * in-app feedback composed from it. What the demo holds is in `scripts/lib/practices-demo.ts`.
+ * Every run is complete and the only feedback is the reader's in-app feedback, so no sweeper,
+ * dispatcher or worker picks any of it up and nothing reaches a provider.
  *
  * An observation counts only against the revision its practice is reviewed under now, and only the
  * server fingerprints a revision, so the seed asks the running server for the revision a review would
@@ -19,26 +42,13 @@ import { isLoopbackHost, positivePort, readEnvFile } from "./lib/env.ts";
  * and the seed keeps their ids on its own first job, so removing the seed rewinds exactly those and
  * no revision a real review appended. Nothing is written before dev sign-in has answered and the
  * account it signed in is found in this database, which proves the server and the seed share it.
+ * The reader's feedback goes through the server too, so its rows are the ones the application writes.
  *
  *     node scripts/seed-practices-across-the-workspace.ts          # remove the seed's rows, then insert them
  *     node scripts/seed-practices-across-the-workspace.ts remove   # remove the seed's rows only
  *
- * Flags, environment and defaults: docs/contributor/local-development.mdx § Seeding Practices
- * across the workspace.
- *
- * The reader, an existing member (`--reader`, default `ValentinGruener`), gets synthetic reviews too,
- * under the same revisions, so the page shows their own place on every split and their own figures
- * on the tiles. Their observations say they are synthetic and carry the seed's ids, so removing the
- * seed removes them and leaves every real observation about the reader in place.
- *
- * Each practice group gets its own split of the 40 developers over Needs attention, Mixed feedback,
- * Going well and no standing, chosen so the page shows every shape the privacy rule allows: most
- * groups and practices split, and a few are held back because one part holds too few. A part shows
- * with four developers in it, the reader counted. In a group with several practices, about six of
- * its developers each leave one practice unreviewed, so the group less any practice, and the
- * practices less the group, count at least three whatever real reviews add. The
- * developers' runs reach back up to about 75 days, so the 30 day window reads fewer of them than the
- * all time does.
+ * Flags, environment and defaults: docs/contributor/local-development.mdx § Seeding the practices
+ * demo.
  */
 
 const { values: flags, positionals } = parseArgs({
@@ -64,102 +74,9 @@ const ISSUE_REPOSITORY = setting(
 	"SEED_ISSUE_REPOSITORY",
 	"HephaestusTest/MaxTestRepo",
 );
-
 const READER_LOGIN = setting("reader", "SEED_READER_LOGIN", "ValentinGruener");
 
-const DEVELOPERS = 40;
-/** Logins no provider hands out to a person, so a synthetic developer is never mistaken for one. */
-const LOGIN_PREFIX = "synthetic-developer-";
-/** Provider ids far above any real account's, so the seed never collides with a synced user. */
-const NATIVE_ID_BASE = 990_000_000;
-/** A UUID v4 prefix no real row carries; the fourth group says which table the row is in. */
-const ID_PREFIX = "5eed0000-ac05-4000";
-const TABLE = { job: "8000", observation: "8001" } as const;
-/** The seed's first job, which keeps the ids of the revisions the server appended for the seed. */
-const FIRST_JOB = `${ID_PREFIX}-${TABLE.job}-${(1).toString(16).padStart(12, "0")}`;
 const EVIDENCE_CONTRACT_VERSION = "1.0.0";
-
-type Bucket = "needs" | "mixed" | "well" | "none";
-
-/**
- * How the 40 developers split in each group: Needs attention, Mixed feedback, Going well, none.
- * A group not listed here has no practice a pull request or issue review can observe, so nobody
- * gets a standing in it and the page withholds its split.
- */
-const SPLITS: Record<string, [number, number, number, number]> = {
-	"acting-on-review-feedback": [9, 9, 9, 13],
-	"delivery-and-version-control-discipline": [9, 10, 9, 12],
-	"robust-error-handling": [6, 10, 10, 14],
-	"secure-by-default-changes": [10, 9, 9, 12],
-	"review-ready-work": [9, 9, 10, 12],
-	"decisions-and-documentation": [9, 9, 9, 13],
-	"constructive-code-review": [10, 10, 9, 11],
-	// Two at Needs attention, the reader aside: the split is held back.
-	"testing-discipline": [2, 12, 13, 13],
-	// Three with a standing: held back.
-	"issue-traceability-and-lifecycle": [1, 1, 1, 37],
-	"actionable-issue-authoring": [9, 9, 10, 12],
-	"code-craftsmanship": [10, 9, 9, 12],
-};
-
-/** How many developers with a standing in a group leave each of its practices unreviewed. */
-const SKIPPERS_PER_PRACTICE = 6;
-
-/**
- * The reader's own bucket per group, in the order of `SPLITS`: every standing and a group with none,
- * so the You marker lands on each part of a split somewhere on the page.
- */
-const READER_BUCKETS: readonly Bucket[] = [
-	"mixed",
-	"needs",
-	"well",
-	"needs",
-	"well",
-	"none",
-	"mixed",
-];
-
-/** Which bucket developer `index` falls in for the group at `groupIndex`, shuffled per group. */
-function bucketOf(
-	split: [number, number, number, number],
-	groupIndex: number,
-	index: number,
-): Bucket {
-	const position = (index * 7 + groupIndex * 5) % DEVELOPERS;
-	const [needs, mixed, well] = split;
-	if (position < needs) {
-		return "needs";
-	}
-	if (position < needs + mixed) {
-		return "mixed";
-	}
-	return position < needs + mixed + well ? "well" : "none";
-}
-
-/**
- * Whether the run `newest` places from the newest is a problem for a developer in `bucket`. Under
- * the standing's recency weights, clean then one slip then clean reads Mixed feedback, and two slips
- * on the newest two pieces of work read Needs attention.
- */
-function isProblem(bucket: Bucket, newest: number): boolean {
-	if (bucket === "mixed") {
-		return newest === 1;
-	}
-	if (bucket === "needs") {
-		return newest !== 2;
-	}
-	return false;
-}
-
-/** The moment `days` before now at `hour` UTC, so a re-run stays inside the look-back. */
-function daysAgo(days: number, hour: number): string {
-	const day = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-	return new Date(`${day}T${String(hour).padStart(2, "0")}:00:00Z`).toISOString();
-}
-
-function seedId(table: string, ordinal: number): string {
-	return `${ID_PREFIX}-${table}-${ordinal.toString(16).padStart(12, "0")}`;
-}
 
 interface Artifact {
 	id: number;
@@ -167,7 +84,7 @@ interface Artifact {
 	title: string;
 	url: string;
 	repository: string;
-	kind: "scm.pull_request" | "scm.issue";
+	kind: ArtifactRef["kind"];
 }
 
 interface SeedPractice {
@@ -177,6 +94,11 @@ interface SeedPractice {
 	groupSlug: string;
 	kind: Artifact["kind"];
 }
+
+const repositoryOf = (kind: ArtifactRef["kind"]): string =>
+	kind === "scm.pull_request" ? PULL_REQUEST_REPOSITORY : ISSUE_REPOSITORY;
+const issueTypeOf = (kind: ArtifactRef["kind"]): string =>
+	kind === "scm.pull_request" ? "PULL_REQUEST" : "ISSUE";
 
 /** The practices a pull request or issue review observes in a group the seed splits. */
 async function seedPractices(client: Client, workspaceId: number): Promise<SeedPractice[]> {
@@ -209,17 +131,15 @@ async function seedPractices(client: Client, workspaceId: number): Promise<SeedP
 	);
 }
 
-async function artifactsOf(
-	client: Client,
-	repository: string,
-	kind: Artifact["kind"],
-): Promise<Artifact[]> {
+/** Every synced pull request or issue of one kind, the pool the synthetic developers' runs draw from. */
+async function artifactsOf(client: Client, kind: Artifact["kind"]): Promise<Artifact[]> {
+	const repository = repositoryOf(kind);
 	const rows = await client.query<{ id: number; number: number; title: string; html_url: string }>(
 		`SELECT i.id, i.number, i.title, i.html_url FROM issue i
 		 JOIN repository r ON r.id = i.repository_id
 		 WHERE r.name_with_owner = $1 AND i.issue_type = $2
 		 ORDER BY i.number`,
-		[repository, kind === "scm.pull_request" ? "PULL_REQUEST" : "ISSUE"],
+		[repository, issueTypeOf(kind)],
 	);
 	// A developer's runs step three apart through the pool, up to seven pull requests and four issues;
 	// a pool at least that long whose length three does not divide keeps every run on its own work.
@@ -256,8 +176,18 @@ async function removeSeed(client: Client, workspaceId: number): Promise<void> {
 		[FIRST_JOB],
 	);
 	const pattern = `${ID_PREFIX}-%`;
-	await client.query("DELETE FROM observation WHERE id::text LIKE $1", [pattern]);
-	await client.query("DELETE FROM agent_job WHERE id::text LIKE $1", [pattern]);
+	const jobs = "SELECT id FROM agent_job WHERE id::text LIKE $1";
+	// Whatever hangs off the seed's jobs leaves with them, including rows the server wrote while the
+	// demo was clicked through: an answer the reader gave, an approval. Responses, evidence bindings,
+	// placements, dispatches and withdrawals cascade from feedback; an approval has no foreign key.
+	const feedback = `SELECT id FROM feedback WHERE id::text LIKE $1 OR agent_job_id IN (${jobs})`;
+	await client.query(`DELETE FROM feedback_approval WHERE feedback_id IN (${feedback})`, [pattern]);
+	await client.query(`DELETE FROM feedback WHERE id IN (${feedback})`, [pattern]);
+	await client.query(
+		`DELETE FROM observation WHERE id::text LIKE $1 OR agent_job_id IN (${jobs})`,
+		[pattern],
+	);
+	await client.query(`DELETE FROM agent_job WHERE id IN (${jobs})`, [pattern]);
 	// Only a revision the server appended for the seed, still current, still differing from the one
 	// before it only in its fingerprint, and pinned by no observation goes back to the one before it,
 	// which is the revision the next review would replace with this same one.
@@ -285,6 +215,8 @@ async function removeSeed(client: Client, workspaceId: number): Promise<void> {
 	await client.query("DELETE FROM practice_revision WHERE id = ANY($1::bigint[])", [
 		rewound.rows.map((row) => row.id),
 	]);
+	// A synthetic developer leaves with their membership. The organization sync may already have
+	// dropped the membership, so the user goes whenever no workspace holds them any more.
 	const synthetic = `SELECT id FROM "user" WHERE login LIKE '${LOGIN_PREFIX}%' AND native_id >= ${NATIVE_ID_BASE}`;
 	await client.query(
 		`DELETE FROM workspace_membership WHERE workspace_id = $1 AND user_id IN (${synthetic})`,
@@ -404,6 +336,14 @@ function isPinnedRevision(value: unknown): value is PinnedRevision {
 	);
 }
 
+/** A refusal from a dev endpoint says the flag it needs, since that is the usual cause. */
+async function refusal(response: Response, what: string): Promise<Error> {
+	const detail = await response.text().catch(() => "");
+	return new Error(
+		`The server refused ${what} with ${response.status}; is HEPHAESTUS_DEV_SEED_ENABLED set? ${detail}`.trim(),
+	);
+}
+
 /**
  * Asks the running server for the revision a review would pin for each practice: it keeps one under
  * the current fingerprint scheme and appends one otherwise, and says which it appended.
@@ -423,9 +363,7 @@ async function pinReviewRevisions(
 		signal: AbortSignal.timeout(30_000),
 	});
 	if (!response.ok) {
-		throw new Error(
-			`The server refused the practice revisions with ${response.status}; is HEPHAESTUS_DEV_SEED_ENABLED set?`,
-		);
+		throw await refusal(response, "the practice revisions");
 	}
 	const body: unknown = await response.json();
 	if (!Array.isArray(body) || !body.every(isPinnedRevision)) {
@@ -448,20 +386,96 @@ async function readerOf(client: Client, workspaceId: number): Promise<number> {
 	return id;
 }
 
-async function seed(
-	client: Client,
-	workspaceId: number,
-	appendedRevisionIds: number[],
-): Promise<{ jobs: number; observations: number }> {
-	const practices = await seedPractices(client, workspaceId);
-	const groupIndex = new Map(Object.keys(SPLITS).map((slug, index) => [slug, index]));
-	const pullRequests = await artifactsOf(client, PULL_REQUEST_REPOSITORY, "scm.pull_request");
-	const issues = await artifactsOf(client, ISSUE_REPOSITORY, "scm.issue");
-	const developers = await insertDevelopers(client, workspaceId);
-	const reader = await readerOf(client, workspaceId);
-	// The reader reviews last, so every synthetic developer keeps the runs and ordinals it had before.
-	const readerIndex = developers.length;
+/** The pull request or issue a reader's run names, looked up by number; never invented. */
+async function artifactOf(client: Client, ref: ArtifactRef): Promise<Artifact> {
+	const repository = repositoryOf(ref.kind);
+	const rows = await client.query<{ id: number; title: string; html_url: string }>(
+		`SELECT i.id, i.title, i.html_url FROM issue i
+		 JOIN repository r ON r.id = i.repository_id
+		 WHERE r.name_with_owner = $1 AND i.number = $2 AND i.issue_type = $3`,
+		[repository, ref.number, issueTypeOf(ref.kind)],
+	);
+	const row = rows.rows[0];
+	if (!row) {
+		throw new Error(`${repository}#${ref.number} is not synced into this database`);
+	}
+	return {
+		id: row.id,
+		number: ref.number,
+		title: row.title,
+		url: row.html_url,
+		repository,
+		kind: ref.kind,
+	};
+}
 
+/** Counts of the rows written, for the summary line. */
+interface Counts {
+	jobs: number;
+	observations: number;
+}
+
+/** What the reader's rows need to know to carry the reader's feedback. */
+interface ReaderRows {
+	readerId: number;
+	jobIds: Map<string, string>;
+	observationIds: Map<string, string>;
+}
+
+/** Writes jobs and observations under the seed's ids, counting them; the first job keeps the appended revisions. */
+class SeedWriter {
+	jobs = 0;
+	observations = 0;
+	readonly #client: Client;
+	readonly #workspaceId: number;
+	readonly #appendedRevisionIds: number[];
+
+	constructor(client: Client, workspaceId: number, appendedRevisionIds: number[]) {
+		this.#client = client;
+		this.#workspaceId = workspaceId;
+		this.#appendedRevisionIds = appendedRevisionIds;
+	}
+
+	async job(artifact: Artifact, at: string): Promise<string> {
+		this.jobs += 1;
+		const jobId = seedId(TABLE.job, this.jobs);
+		await insertJob(this.#client, this.#workspaceId, jobId, artifact, at);
+		if (jobId === FIRST_JOB) {
+			await this.#client.query("UPDATE agent_job SET config_snapshot = $2 WHERE id = $1", [
+				jobId,
+				JSON.stringify({ seedAppendedRevisionIds: this.#appendedRevisionIds }),
+			]);
+		}
+		return jobId;
+	}
+
+	async observation(row: Omit<ObservationRow, "id" | "ordinal" | "workspaceId">): Promise<string> {
+		this.observations += 1;
+		const id = seedId(TABLE.observation, this.observations);
+		await insertObservation(this.#client, {
+			...row,
+			id,
+			ordinal: this.observations,
+			workspaceId: this.#workspaceId,
+		});
+		return id;
+	}
+}
+
+/**
+ * The synthetic developers' runs: each practice group splits them by `SPLITS`, and in a group of
+ * several practices the m-th developer with a standing leaves practice m modulo their count
+ * unreviewed, the first `SKIPPERS_PER_PRACTICE` times round.
+ */
+async function seedDevelopers(
+	client: Client,
+	writer: SeedWriter,
+	developers: number[],
+	practices: SeedPractice[],
+): Promise<void> {
+	const pullRequests = await artifactsOf(client, "scm.pull_request");
+	const issues = await artifactsOf(client, "scm.issue");
+	const groupIndex = new Map(Object.keys(SPLITS).map((slug, index) => [slug, index]));
 	/** Each group's seeded practices, in one order, so a developer's skipped practice is stable. */
 	const practicesOf = new Map<string, string[]>();
 	for (const practice of practices) {
@@ -473,28 +487,15 @@ async function seed(
 	for (const slugs of practicesOf.values()) {
 		slugs.sort();
 	}
-
-	/** The bucket developer `index` falls in for one practice's group; the reader's is fixed. */
 	const groupBucketFor = (groupSlug: string, index: number): Bucket => {
 		const split = SPLITS[groupSlug];
 		const group = groupIndex.get(groupSlug);
-		if (split === undefined || group === undefined) {
-			return "none";
-		}
-		return index === readerIndex
-			? (READER_BUCKETS[group % READER_BUCKETS.length] ?? "none")
-			: bucketOf(split, group, index);
+		return split === undefined || group === undefined ? "none" : bucketOf(split, group, index);
 	};
-
-	/**
-	 * The bucket developer `index` falls in for one practice: their group's, except in a group of
-	 * several practices, where the m-th developer with a standing leaves practice m modulo their
-	 * count unreviewed, the first `SKIPPERS_PER_PRACTICE` times round.
-	 */
 	const bucketFor = (practice: SeedPractice, index: number): Bucket => {
 		const bucket = groupBucketFor(practice.groupSlug, index);
 		const slugs = practicesOf.get(practice.groupSlug) ?? [];
-		if (bucket === "none" || index === readerIndex || slugs.length < 2) {
+		if (bucket === "none" || slugs.length < 2) {
 			return bucket;
 		}
 		const ordinal = Array.from({ length: index }, (_, earlier) => earlier).filter(
@@ -506,12 +507,11 @@ async function seed(
 		return skips ? "none" : bucket;
 	};
 
-	let jobs = 0;
-	let observations = 0;
-	for (const [index, developerId] of [...developers, reader].entries()) {
+	for (const [index, developerId] of developers.entries()) {
 		for (const kind of ["scm.pull_request", "scm.issue"] as const) {
-			const pool = kind === "scm.pull_request" ? pullRequests : issues;
-			const runCount = kind === "scm.pull_request" ? 3 + (index % 5) : 3 + (index % 2);
+			const isPullRequest = kind === "scm.pull_request";
+			const pool = isPullRequest ? pullRequests : issues;
+			const runCount = isPullRequest ? 3 + (index % 5) : 3 + (index % 2);
 			const observed = practices
 				.filter((practice) => practice.kind === kind)
 				.map((practice) => ({ practice, bucket: bucketFor(practice, index) }))
@@ -521,38 +521,101 @@ async function seed(
 				if (artifact === undefined) {
 					continue;
 				}
-				const at =
-					kind === "scm.pull_request"
-						? daysAgo(2 + newest * 11 + (index % 7), 9 + (index % 8))
-						: daysAgo(4 + newest * 13 + (index % 5), 10 + (index % 6));
-				jobs += 1;
-				const jobId = seedId(TABLE.job, jobs);
-				await insertJob(client, workspaceId, jobId, artifact, at);
-				if (jobId === FIRST_JOB) {
-					await client.query("UPDATE agent_job SET config_snapshot = $2 WHERE id = $1", [
-						jobId,
-						JSON.stringify({ seedAppendedRevisionIds: appendedRevisionIds }),
-					]);
-				}
+				const at = isPullRequest
+					? daysAgo(2 + newest * 11 + (index % 7), hour(9 + (index % 8)))
+					: daysAgo(4 + newest * 13 + (index % 5), hour(10 + (index % 6)));
+				const jobId = await writer.job(artifact, at);
 				for (const { practice, bucket } of observed) {
-					observations += 1;
-					await insertObservation(client, {
-						id: seedId(TABLE.observation, observations),
-						ordinal: observations,
-						workspaceId,
+					const problem = isProblem(bucket, newest);
+					await writer.observation({
 						jobId,
 						practice,
 						artifact,
 						developerId,
-						problem: isProblem(bucket, newest),
+						outcome: problem ? "NOT_MET" : "MET",
+						severity: problem ? "MINOR" : undefined,
+						summary: problem
+							? "Synthetic observation: this work did not meet the practice."
+							: "Synthetic observation: this work met the practice.",
+						citation: {
+							sourceKind: isPullRequest ? "scm.pull-request.core" : "scm.issue.core",
+							path: isPullRequest ? "description" : "body",
+							startLine: 1,
+							endLine: 1,
+							quote: artifact.title,
+						},
 						at,
 					});
 				}
 			}
 		}
 	}
-	return { jobs, observations };
 }
+
+/** The reader's runs, written after every check passed; returns the ids their feedback cites. */
+async function seedReader(
+	writer: SeedWriter,
+	readerId: number,
+	artifacts: Map<string, Artifact>,
+	bySlug: Map<string, SeedPractice>,
+): Promise<ReaderRows> {
+	const jobIds = new Map<string, string>();
+	const observationIds = new Map<string, string>();
+	for (const run of READER_RUNS) {
+		const artifact = artifacts.get(run.key);
+		if (artifact === undefined) {
+			throw new Error(`Unresolved work for run ${run.key}`);
+		}
+		const jobId = await writer.job(artifact, run.at);
+		jobIds.set(run.key, jobId);
+		for (const observation of run.observations) {
+			const practice = bySlug.get(observation.practice);
+			if (practice === undefined) {
+				throw new Error(`Unresolved practice ${observation.practice}`);
+			}
+			const id = await writer.observation({
+				jobId,
+				practice,
+				artifact,
+				developerId: readerId,
+				outcome: observation.outcome,
+				severity: observation.severity,
+				summary: observation.summary,
+				rationale: observation.rationale,
+				citation: observation.citation,
+				at: run.at,
+			});
+			observationIds.set(`${run.key}/${observation.practice}`, id);
+		}
+	}
+	return { readerId, jobIds, observationIds };
+}
+
+async function seed(
+	client: Client,
+	workspaceId: number,
+	appendedRevisionIds: number[],
+): Promise<Counts & ReaderRows> {
+	const practices = await seedPractices(client, workspaceId);
+	const bySlug = new Map(practices.map((practice) => [practice.slug, practice]));
+	const readerId = await readerOf(client, workspaceId);
+	const readerArtifacts = new Map<string, Artifact>();
+	for (const run of READER_RUNS) {
+		readerArtifacts.set(run.key, await artifactOf(client, run.artifact));
+		const missing = run.observations.find((observation) => !bySlug.has(observation.practice));
+		if (missing !== undefined) {
+			throw new Error(
+				`Practice ${missing.practice} is not installed or not reviewed in ${WORKSPACE_SLUG}`,
+			);
+		}
+	}
+	const writer = new SeedWriter(client, workspaceId, appendedRevisionIds);
+	await seedDevelopers(client, writer, await insertDevelopers(client, workspaceId), practices);
+	const reader = await seedReader(writer, readerId, readerArtifacts, bySlug);
+	return { jobs: writer.jobs, observations: writer.observations, ...reader };
+}
+
+const hour = (value: number): string => `${String(value).padStart(2, "0")}:00`;
 
 async function insertJob(
 	client: Client,
@@ -605,28 +668,35 @@ async function insertJob(
 	);
 }
 
-async function insertObservation(
-	client: Client,
-	row: {
-		id: string;
-		ordinal: number;
-		workspaceId: number;
-		jobId: string;
-		practice: SeedPractice;
-		artifact: Artifact;
-		developerId: number;
-		problem: boolean;
-		at: string;
-	},
-): Promise<void> {
-	const isPullRequest = row.artifact.kind === "scm.pull_request";
+interface ObservationRow {
+	id: string;
+	ordinal: number;
+	workspaceId: number;
+	jobId: string;
+	practice: SeedPractice;
+	artifact: Artifact;
+	developerId: number;
+	outcome: Outcome;
+	/** Required exactly for NOT_MET (`Outcome.validate`). */
+	severity: Severity | undefined;
+	summary: string;
+	rationale?: string;
+	citation: Citation;
+	at: string;
+}
+
+async function insertObservation(client: Client, row: ObservationRow): Promise<void> {
 	const citation = {
-		sourceKind: isPullRequest ? "scm.pull-request.core" : "scm.issue.core",
-		artifactPath: `${row.artifact.repository}#${row.artifact.number}`,
-		path: isPullRequest ? "description" : "body",
-		startLine: 1,
-		endLine: 1,
-		quote: row.artifact.title,
+		sourceKind: row.citation.sourceKind,
+		artifactPath:
+			row.citation.sourceKind === "scm.pull-request.diff"
+				? "inputs/context/diff.patch"
+				: `${row.artifact.repository}#${row.artifact.number}`,
+		path: row.citation.path,
+		...(row.citation.side ? { side: row.citation.side } : {}),
+		startLine: row.citation.startLine,
+		endLine: row.citation.endLine,
+		quote: row.citation.quote,
 		quoteRedacted: false,
 	};
 	await client.query(
@@ -634,7 +704,7 @@ async function insertObservation(
 			id, occurrence_key, agent_job_id, practice_id, artifact_kind, artifact_id, about_user_id,
 			summary, outcome, severity, evidence, evidence_rationale, observed_at,
 			practice_revision_id, origin, workspace_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, $12, $13, 'LIVE', $14)`,
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'LIVE', $15)`,
 		[
 			row.id,
 			`seed-practices-across-${row.ordinal}`,
@@ -643,13 +713,11 @@ async function insertObservation(
 			row.artifact.kind,
 			row.artifact.id,
 			row.developerId,
-			row.problem
-				? "Synthetic observation: this work did not meet the practice."
-				: "Synthetic observation: this work met the practice.",
-			// `Outcome.validate`: a severity exactly on NOT_MET.
-			row.problem ? "NOT_MET" : "MET",
-			row.problem ? "MINOR" : null,
+			row.summary,
+			row.outcome,
+			row.severity ?? null,
 			JSON.stringify({ citations: [citation] }),
+			row.rationale ?? null,
 			row.at,
 			row.practice.revisionId,
 			row.workspaceId,
@@ -657,13 +725,35 @@ async function insertObservation(
 	);
 }
 
+/** Writes the reader's in-app feedback through the server, which writes it as a review would. */
+async function writeReaderFeedback(
+	{ server, token }: DevServer,
+	workspaceId: number,
+	rows: ReaderRows,
+): Promise<number> {
+	const cards = readerCards(rows.readerId, rows.jobIds, rows.observationIds);
+	const response = await fetch(
+		`${server}/api/dev/in-app-feedback?${new URLSearchParams({ workspaceId: String(workspaceId) })}`,
+		{
+			method: "POST",
+			headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+			body: JSON.stringify(cards),
+			signal: AbortSignal.timeout(30_000),
+		},
+	);
+	if (!response.ok) {
+		throw await refusal(response, "the reader's feedback");
+	}
+	return cards.length;
+}
+
 async function main(): Promise<void> {
 	const [mode = "seed", ...rest] = positionals;
 	if ((mode !== "seed" && mode !== "remove") || rest.length > 0) {
 		throw new Error(`Unknown mode ${positionals.join(" ")}; use "seed" (the default) or "remove"`);
 	}
-	const server = path.join(import.meta.dirname, "..", "server");
-	const env = { ...(await readEnvFile(path.join(server, ".env"))), ...process.env };
+	const serverDirectory = path.join(import.meta.dirname, "..", "server");
+	const env = { ...(await readEnvFile(path.join(serverDirectory, ".env"))), ...process.env };
 	const host = env.POSTGRES_HOST ?? "localhost";
 	// The seed writes straight into the database, so it refuses every host but this machine's.
 	if (!isLoopbackHost(host)) {
@@ -693,7 +783,7 @@ async function main(): Promise<void> {
 		await client.query("COMMIT");
 		if (mode === "remove") {
 			console.log(
-				`Removed the synthetic developers and the synthetic reviews of ${READER_LOGIN} from ${WORKSPACE_SLUG}.`,
+				`Removed the synthetic developers and the demo reviews and feedback of ${READER_LOGIN} from ${WORKSPACE_SLUG}.`,
 			);
 			return;
 		}
@@ -708,14 +798,23 @@ async function main(): Promise<void> {
 			`Practice revisions a review would pin: ${pinned.map((revision) => `${revision.slug}@${revision.revisionNumber}`).join(" ")}; ${appended.length} appended for the seed`,
 		);
 		await client.query("BEGIN");
-		const counts = await seed(
+		const seeded = await seed(
 			client,
 			workspaceId,
 			appended.map((revision) => revision.revisionId),
 		);
 		await client.query("COMMIT");
+		// After the commit: the server reads the observations the feedback stands on.
+		const cards = await writeReaderFeedback(devServer, workspaceId, seeded).catch(
+			(error: unknown) => {
+				throw new Error(
+					"The reviews are written but the reader's feedback is not; run the seed again",
+					{ cause: error },
+				);
+			},
+		);
 		console.log(
-			`Seeded ${DEVELOPERS} synthetic developers and synthetic reviews of ${READER_LOGIN} in ${WORKSPACE_SLUG}: ${counts.jobs} agent_job, ${counts.observations} observation`,
+			`Seeded ${DEVELOPERS} synthetic developers and the demo of ${READER_LOGIN} in ${WORKSPACE_SLUG}: ${seeded.jobs} agent_job, ${seeded.observations} observation, ${cards} feedback`,
 		);
 	} catch (error) {
 		await client.query("ROLLBACK").catch(() => undefined);
