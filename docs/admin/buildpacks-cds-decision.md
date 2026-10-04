@@ -40,6 +40,17 @@ The build uses the run image without changes.
 The server needs no `git` binary.
 `GitRepositoryManager` and `GitDiffOperations` use JGit.
 
+## Dependency scan coverage
+
+The dependency security gate checks the server runtime and the Gradle plugin classpath separately.
+The plugin classpath includes the Spring Boot buildpack platform and the GraphQL and OpenAPI generators.
+Its native Gradle lockfile is included in the checkout scan and the submitted GitHub dependency graph.
+A container scan does not check these build dependencies.
+See [dependency security controls](/contributor/ci-cd#security-and-supply-chain-controls) for the scan inputs and policy.
+
+CI builds the image with `pack`, not Gradle's `bootBuildImage` task.
+The plugin classpath still takes part in the security gate even when that task is not used.
+
 ## Why not Spring AOT processing (`spring.aot.enabled=true`)
 
 AOT evaluates conditional bean registration at build time.

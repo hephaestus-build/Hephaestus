@@ -499,17 +499,23 @@ with the change.
 
 ### Updating Java dependencies
 
-Edit `server/gradle/libs.versions.toml`, then resolve the graphs and exercise the changed tools.
+Edit `server/gradle/libs.versions.toml` for library and plugin versions.
+Edit `server/build.gradle.kts` for plugin-classpath BOMs and transitive constraints.
+Then resolve the graphs and exercise the changed tools.
 Strict dependency locking rejects missing lock state as well as version drift. Do not delete a
 lockfile or disable verification to make an update pass.
-The root `dependencies` report covers both projects, including PMD's auxiliary classpath, so
-Renovate's standard lock and checksum commands refresh the same graphs used by source builds.
+
+The root `dependencies` report covers both projects, including PMD's auxiliary classpath.
+The `buildEnvironment` report covers the separately locked plugin classpath in
+`server/buildscript-gradle.lockfile`. Renovate's standard lock and checksum commands refresh the
+same graphs used by source builds.
+
 Set `GRADLE_USER_HOME` to an empty temporary directory and disable configuration caching when
 generating metadata, so cached resolution cannot omit parent POM or module-descriptor checksums:
 
 ```sh
 ./server/gradlew -p server --no-configuration-cache \
-  :application:dependencies :generated-clients:dependencies \
+  dependencies buildEnvironment \
   --write-locks --write-verification-metadata sha256
 ./server/gradlew -p server --no-configuration-cache \
   :application:check :application:bootJar --write-locks --write-verification-metadata sha256

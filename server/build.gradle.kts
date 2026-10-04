@@ -1,10 +1,16 @@
 import io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension
 
-// Keep the code generators' transitive security fixes within the API lines their plugins use.
+// Keep build plugins' transitive security fixes within the API lines they use.
 // These dependencies run at build time and do not reach the application image.
 buildscript {
+    dependencies {
+        classpath(platform("com.fasterxml.jackson:jackson-bom:2.22.3"))
+        classpath(platform("tools.jackson:jackson-bom:3.1.7"))
+    }
+    dependencyLocking { lockMode.set(LockMode.STRICT) }
     configurations.classpath {
         resolutionStrategy {
+            activateDependencyLocking()
             force("com.graphql-java:graphql-java:20.9")
             force("com.github.jknack:handlebars:4.5.2")
             force("org.freemarker:freemarker:2.3.35")

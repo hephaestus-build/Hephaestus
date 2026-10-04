@@ -849,12 +849,43 @@ void describe("CI contract", () => {
 			for (const input of [
 				"server/application/gradle.lockfile",
 				"server/settings-gradle.lockfile",
+				"server/buildscript-gradle.lockfile",
 			]) {
 				assert.ok(paths.includes(input), `${gate} must include ${input}`);
 			}
 		}
 		for (const gate of ["e2e", "extension-e2e"]) {
 			assert.ok(asArray(filters[gate], `${gate} paths`).includes(".java-version"));
+		}
+	});
+
+	void test("the security scan includes the locked plugin classpath and both Jackson API families", async () => {
+		const lock = await readFile("server/buildscript-gradle.lockfile", "utf8");
+		for (const family of ["com.fasterxml.jackson", "tools.jackson"]) {
+			const bom = new RegExp(
+				`${family.replaceAll(".", String.raw`\.`)}:jackson-bom:([^=\\n]+)=classpath`,
+				"u",
+			).exec(lock);
+			const version = bom?.[1];
+			assert.ok(isSet(version), `${family} BOM must be locked`);
+			for (const module of ["jackson-core", "jackson-databind"]) {
+				assert.ok(lock.includes(`${family}.core:${module}:${version}=classpath`));
+			}
+		}
+		for (const plugin of [
+			"org.springframework.boot:spring-boot-buildpack-platform:",
+			"org.openapitools:openapi-generator:",
+			"io.github.kobylynskyi:graphql-java-codegen:",
+		]) {
+			assert.ok(lock.includes(plugin), `${plugin} must be in the scanned lockfile`);
+		}
+		const workflow = parseDocument(
+			await readFile(".github/workflows/ci-security-scan.yml", "utf8"),
+		);
+		for (const name of ["Trivy dependency scan", "Enforce dependency vulnerability policy"]) {
+			const scan = stepInputs(namedStep(workflow, ["jobs", "security-scan"], name));
+			assert.equal(scan.get("scan-type"), "fs");
+			assert.equal(scan.get("scan-ref"), ".");
 		}
 	});
 
@@ -2333,7 +2364,10 @@ void describe("CI contract", () => {
 		assert.equal(setup.get("dependency-graph"), "generate-and-upload");
 		const resolve = namedStep(workflow, ["jobs", "generate"], "Resolve the dependency graph");
 		assert.equal(resolve.get("working-directory"), "server");
-		assert.equal(resolve.get("run"), "./gradlew dependencies --no-configuration-cache");
+		assert.equal(
+			resolve.get("run"),
+			"./gradlew dependencies buildEnvironment --no-configuration-cache",
+		);
 		assert.equal(
 			workflow.getIn(["jobs", "generate", "env", "GITHUB_DEPENDENCY_GRAPH_JOB_CORRELATOR"]),
 			"server",
