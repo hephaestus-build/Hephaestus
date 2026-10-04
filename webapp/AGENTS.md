@@ -418,6 +418,7 @@ Nothing else paints a ground.
 **10, the accent**: `mentor` marks only what should attract attention.
 Use at most one `variant="mentor"` button per surface.
 The accent marks new content, the current selection or sort, and links on hover or focus.
+On Practices across the workspace, it also marks the reader: the **You** marker on a bar and the pin on a tile.
 
 A link is plain text at rest, except a count that opens its list.
 That count uses `InlineLink tone="count"`, with a faint `decoration-border` underline at rest.
