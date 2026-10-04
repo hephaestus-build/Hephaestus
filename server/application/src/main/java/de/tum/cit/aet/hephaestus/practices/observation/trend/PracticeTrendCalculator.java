@@ -23,7 +23,7 @@ final class PracticeTrendCalculator {
             String practiceSlug, List<Observation> observations, Instant cutoff, TrendProperties properties) {
         OpportunityBundler.Bundles bundles =
                 OpportunityBundler.bundle(observations, cutoff, properties.getBundleSize());
-        int missing = bundles.opportunitiesUntilComparable(properties.getMinBundleSize());
+        int missing = bundles.opportunitiesUntilComparable(properties.getBundleSize(), properties.getMinBundleSize());
         List<EvidenceOpportunity> trail = OpportunityBundler.cappedTrail(bundles.trail(), properties.getBundleSize());
         TrendSupport support = TrendSupportFactory.forPractice(
                 properties, bundles.current().size(), bundles.previous().size(), missing, trail);

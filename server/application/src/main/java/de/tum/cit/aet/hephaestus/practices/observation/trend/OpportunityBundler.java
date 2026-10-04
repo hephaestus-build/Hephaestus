@@ -101,8 +101,12 @@ final class OpportunityBundler {
 
     record Bundles(
             List<EvidenceOpportunity> current, List<EvidenceOpportunity> previous, List<EvidenceOpportunity> trail) {
-        int opportunitiesUntilComparable(int minimumBundleSize) {
-            return Math.max(0, minimumBundleSize - previous.size());
+        /**
+         * How many more decided opportunities a comparison needs. The previous bundle fills only once the current
+         * one is full, so what the current bundle lacks counts before what the previous one lacks.
+         */
+        int opportunitiesUntilComparable(int bundleSize, int minimumBundleSize) {
+            return Math.max(0, bundleSize - current.size()) + Math.max(0, minimumBundleSize - previous.size());
         }
     }
 }

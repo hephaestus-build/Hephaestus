@@ -694,7 +694,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .jsonPath("$[0].direction")
                     .isEqualTo("INSUFFICIENT_EVIDENCE")
                     .jsonPath("$[0].trendSupport.opportunitiesUntilComparable")
-                    .isEqualTo(4)
+                    .isEqualTo(6)
                     .jsonPath("$[0].observations.length()")
                     .isEqualTo(2);
         }
