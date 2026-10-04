@@ -28,27 +28,15 @@ import {
 } from "./lib/practices-demo.ts";
 
 /**
- * Seeds the development database with a demo of Practices across the workspace and the Practice
- * profile: 40 synthetic developers with clearly synthetic logins, each with completed practice
- * reviews of pull requests and issues already synced into the workspace and the observations those
- * reviews recorded, and for the reader, an existing member, a written history of reviews and the
- * in-app feedback composed from it. What the demo holds is in `scripts/lib/practices-demo.ts`.
- * Every run is complete and the only feedback is the reader's in-app feedback, so no sweeper,
- * dispatcher or worker picks any of it up and nothing reaches a provider.
- *
- * An observation counts only against the revision its practice is reviewed under now, and only the
- * server fingerprints a revision, so the seed asks the running server for the revision a review would
- * pin, through dev sign-in, before it writes. The server says which revisions that request appended,
- * and the seed keeps their ids on its own first job, so removing the seed rewinds exactly those and
- * no revision a real review appended. Nothing is written before dev sign-in has answered and the
- * account it signed in is found in this database, which proves the server and the seed share it.
- * The reader's feedback goes through the server too, so its rows are the ones the application writes.
+ * Writes the practices demo (`scripts/lib/practices-demo.ts`) into the development database, or
+ * removes it.
  *
  *     node scripts/seed-practices-across-the-workspace.ts          # remove the seed's rows, then insert them
  *     node scripts/seed-practices-across-the-workspace.ts remove   # remove the seed's rows only
  *
- * Flags, environment and defaults: docs/contributor/local-development.mdx § Seeding the practices
- * demo.
+ * What it writes, its flags, and its safety checks: docs/contributor/local-development.mdx
+ * § Seeding the practices demo. The seed keeps the ids of the practice revisions the server appended
+ * for it on its first job, so a removal rewinds those and no revision a real review appended.
  */
 
 const { values: flags, positionals } = parseArgs({
@@ -141,12 +129,12 @@ async function artifactsOf(client: Client, kind: Artifact["kind"]): Promise<Arti
 		 ORDER BY i.number`,
 		[repository, issueTypeOf(kind)],
 	);
-	// A developer's runs step three apart through the pool, up to seven pull requests and four issues;
-	// a pool at least that long whose length three does not divide keeps every run on its own work.
+	// A developer's runs take consecutive entries of the pool, so up to seven pull requests and four
+	// issues keep each run on its own work.
 	const needed = kind === "scm.pull_request" ? 7 : 4;
-	if (rows.rows.length < needed || rows.rows.length % 3 === 0) {
+	if (rows.rows.length < needed) {
 		throw new Error(
-			`${repository} has ${rows.rows.length} synced ${kind} rows, which cannot keep each run on its own work`,
+			`${repository} has ${rows.rows.length} synced ${kind} rows; the seed needs at least ${needed}`,
 		);
 	}
 	return rows.rows.map((row) => ({
@@ -517,7 +505,7 @@ async function seedDevelopers(
 				.map((practice) => ({ practice, bucket: bucketFor(practice, index) }))
 				.filter(({ bucket }) => bucket !== "none");
 			for (let newest = 0; newest < runCount; newest += 1) {
-				const artifact = pool[(index * 5 + newest * 3) % pool.length];
+				const artifact = pool[(index * 5 + newest) % pool.length];
 				if (artifact === undefined) {
 					continue;
 				}

@@ -747,7 +747,7 @@ export const READER_RUNS: SeedRun[] = [
  * The reader's in-app feedback: one card per practice, composed once a problem recurred on two pieces
  * of work, so the page shows each state a card takes. Two are new and unread. Two were read and are
  * still open, one of them disputed. Three were resolved by the work, as three clean pieces of work in a
- * row followed them; the reader also marked two of those addressed, but later than the work. One the
+ * row followed them; the reader also marked all three addressed, but later than the work. One the
  * reader marked addressed before the work could, and one the reader marked not applicable.
  */
 export const READER_CARDS: SeedCard[] = [

@@ -2,10 +2,10 @@
 "hephaestus": minor
 ---
 
-Developers can open **Across the workspace** under their Practice profile. The page shows where the developers in the workspace stand in each practice group. It counts developers and never names them. **You** marks your own part of each bar, and the four figures at the top show your own values beside the workspace's typical range.
+Developers can open **Across the workspace** under **Practice profile** in the sidebar. The page shows where the developers in the workspace stand in each practice group. It counts developers and never names one. **You** marks your own part of each bar.
 
-Each bar counts every developer by their current standing, the standing that their Practice profile shows. Thus, your marker always agrees with your profile. The range of the last 30 days, the last 90 days, or all time changes only three of the four figures. Open feedback counts the feedback that is open now, for every developer that the page counts, reviewed or not.
+Each bar counts every developer by the standing that their Practice profile shows now. Thus, your marker always agrees with your profile. A bar shows its parts only when each part holds at least four developers. Thus, each part stands for at least three developers other than its reader, and every reader sees the same bar. If not, the bar shows only how many developers it counts, with **Split held back** under it.
 
-A group opens a panel with its bar and a bar for each practice. To see your own standing, trend, and next step, select **Open in your Practice profile** on the group or on one of its practices. Your Practice profile opens with that group or practice open.
+Four figures show your own values beside the typical range of the workspace. They count pieces of work reviewed, practices going well, practices needing attention, and open feedback. **Last 30 days**, **Last 90 days**, or **All time** changes the first three. Open feedback counts what is open now.
 
-A bar shows its parts only when each of its parts holds at least four developers. Thus, every reader sees the same bar, and each part stands for at least three other developers. If not, the bar shows only how many developers it counts, with **Split held back** under it.
+Select a group to see its bar and a bar for each of its practices. To see your own standing, trend, and next step there, select **Open in your Practice profile**.

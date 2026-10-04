@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-In your Practice profile, older reviews now load when you scroll to the end of a list. **View earlier reviews** stays for the keyboard, and **Retry** appears if older reviews cannot load.
+On your Practice profile, older reviews load when you scroll to the end of the list. **View earlier reviews** stays for the keyboard. If older reviews cannot load, select **Retry**.

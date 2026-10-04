@@ -189,46 +189,34 @@ A flag has priority over its environment variable.
 
 The reader's reviews name pull requests 1, 2, 4, 16, 17, and 19 to 23, and issues 13 and 14.
 The seed stops before it writes if the workspace did not sync them.
+The synthetic members need at least 7 synced pull requests and 4 synced issues in these repositories.
 
 #### Removal and repeated runs
 
-Every row that the seed writes has an ID that starts with `5eed0000-ac05-4000`.
+The seed marks what it writes: review, observation, and feedback IDs start with `5eed0000-ac05-4000`, and member logins start with `synthetic-developer-`.
 The seed removes its earlier rows before it writes, so you can run it again at any time.
-The removal deletes these rows:
-
-- The synthetic members, their memberships, and their users.
-- The reviews and observations of the seed, including those about the reader.
-- The reader's demo feedback, and the answers that you gave to it in the browser.
-- The practice revisions that the server appended for the seed.
-
-The removal does not change the reader's real reviews, observations, or feedback.
+Removal also deletes the answers that you gave to the demo feedback in the browser.
+It does not change the reader's real reviews, observations, or feedback.
 It refuses to run while a review in the workspace is running or queued.
 
 The organization sync runs when the server starts and every night.
-It removes members that the GitHub organization does not list, which includes the synthetic members.
-After a server restart, run the seed again to restore them.
+It removes the synthetic members, because the GitHub organization does not list them.
+After a server restart, run the seed again.
 
 #### How the seed writes
 
-The seed writes reviews and observations directly into the database.
-It connects with the `POSTGRES_*` values in `server/.env`.
+The seed writes reviews and observations directly into the database with the `POSTGRES_*` values in `server/.env`.
 It refuses a `POSTGRES_HOST` that is not a loopback address.
-
-Before the seed writes, it signs in through dev sign-in as an existing dev administrator.
-If there is none, it signs in as `seed-admin`.
-It then checks that the account is in the database that it is about to write.
+Before it writes, it signs in to the running server through dev sign-in and finds that account in the database.
 Thus, it never writes to a database that no dev server reads.
 
-An observation counts only when its practice revision has the current review rule fingerprint.
-Only the server computes a fingerprint.
-Thus, the seed asks the server for the revision that a review would pin.
-A practice whose current revision is older than the fingerprint scheme gets a new revision with the same definition.
-The seed keeps the IDs of the revisions that it appended.
-Removal rewinds only those revisions, and only when no observation pins them.
+Two dev endpoints do the work that only the server can do.
+They exist only when `HEPHAESTUS_DEV_SEED_ENABLED` is `true`:
 
-The seed sends the reader's feedback to a dev endpoint of the server.
-The server writes it with the same body layout and thread key that a review uses.
-Both dev endpoints exist only when `HEPHAESTUS_DEV_SEED_ENABLED` is `true`.
+- The seed asks the server for the practice revision that a review would pin. An observation counts only under the current review rule fingerprint.
+  Removal rewinds only the revisions that the server appended for the seed.
+- The seed sends the reader's feedback to the server, which writes it as a review writes it.
+
 All reviews are complete, and the only feedback is in-app feedback.
 Thus, no worker picks up the demo, and nothing goes to a provider.
 

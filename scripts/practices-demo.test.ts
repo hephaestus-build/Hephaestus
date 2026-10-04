@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
+import { asArray, asRecord, asString, readJsonFileSync } from "./lib/json.ts";
 import {
 	type Bucket,
 	DEVELOPERS,
@@ -12,23 +14,32 @@ import {
 	readerCards,
 } from "./lib/practices-demo.ts";
 
-/** A part of a split shows only with this many developers in it, the reader counted. */
+/** A part of a split shows only with this many developers in it, the reader counted (`CohortPrivacyPolicy`). */
 const SMALLEST_PART = 4;
 
-/** Which group each practice the reader is reviewed on sits in, as the bundled catalog has it. */
-const GROUP_OF: Record<string, string> = {
-	"validates-and-escapes-untrusted-input": "secure-by-default-changes",
-	"changes-dependencies-deliberately": "secure-by-default-changes",
-	"scope-one-reviewable-change": "review-ready-work",
-	"describe-what-and-why": "review-ready-work",
-	"honours-linked-issue-acceptance-criteria": "review-ready-work",
-	"ready-and-traceable-handoff": "review-ready-work",
-	"commit-subjects-explain-each-change": "review-ready-work",
-	"leaves-useful-specific-review-comments": "constructive-code-review",
-	"ships-tests-with-the-change": "testing-discipline",
-	"issue-has-checkable-outcome": "actionable-issue-authoring",
-	"issue-states-an-actionable-problem": "actionable-issue-authoring",
-};
+const catalog = readJsonFileSync(
+	fileURLToPath(
+		new URL(
+			"../server/application/src/main/resources/practices/default-catalog.json",
+			import.meta.url,
+		),
+	),
+);
+
+/** Each bundled practice's group, from the catalog the seed's workspace installs. */
+const GROUP_OF = new Map(
+	asArray(asRecord(catalog, "catalog").groups, "groups").flatMap((entry) => {
+		const group = asRecord(entry, "group");
+		const slug = asString(group.slug, "group slug");
+		return asArray(group.practices, "practices").map(
+			(practice) => [asString(asRecord(practice, "practice").slug, "practice slug"), slug] as const,
+		);
+	}),
+);
+
+const readerPractices = new Set(
+	READER_RUNS.flatMap((run) => run.observations.map((observation) => observation.practice)),
+);
 
 interface Reading {
 	work: string;
@@ -64,15 +75,16 @@ function classify(share: number): Bucket {
 
 /**
  * The reader's standing per group, read the way the server reads it: the newest four pieces of work
- * weighted by recency, a practice's share averaged over the group (`StandingScale`).
+ * weighted by `PracticeStandingService.STANDING_DECAY`, a practice's share averaged over the group.
  */
 function readerBuckets(): Map<string, Bucket> {
-	const weights = [1, 0.4, 0.16, 0.064];
+	const weights = [0, 1, 2, 3].map((age) => 0.4 ** age);
 	const full = weights.reduce((sum, weight) => sum + weight, 0);
 	const shares = new Map<string, number[]>();
-	for (const [practice, group] of Object.entries(GROUP_OF)) {
+	for (const practice of readerPractices) {
+		const group = GROUP_OF.get(practice);
 		const decided = readings(practice).toReversed().slice(0, weights.length);
-		if (decided.length === 0) {
+		if (group === undefined || decided.length === 0) {
 			continue;
 		}
 		const missed = decided.reduce(
@@ -94,6 +106,20 @@ function readerBuckets(): Map<string, Bucket> {
 	return buckets;
 }
 
+void test("the demo names only groups and practices that the catalog ships", () => {
+	const groups = new Set(GROUP_OF.values());
+	assert.deepEqual(
+		Object.keys(SPLITS).filter((group) => !groups.has(group)),
+		[],
+	);
+	assert.deepEqual(
+		[...readerPractices, ...READER_CARDS.map((card) => card.practice)].filter(
+			(practice) => !GROUP_OF.has(practice),
+		),
+		[],
+	);
+});
+
 void test("each group splits the synthetic developers by its numbers", () => {
 	for (const [groupIndex, [group, split]] of Object.entries(SPLITS).entries()) {
 		const counts = { needs: 0, mixed: 0, well: 0, none: 0 };
@@ -114,13 +140,22 @@ void test("the reader's groups take every standing", () => {
 
 void test("only testing discipline and issue traceability are held back", () => {
 	const buckets = readerBuckets();
+	const groups = Object.values(SPLITS);
+	// Every split counts the same developers: everyone with a standing in some group, the reader too.
+	const withAStanding =
+		1 +
+		Array.from({ length: DEVELOPERS }, (_, index) => index).filter((index) =>
+			groups.some((split, groupIndex) => bucketOf(split, groupIndex, index) !== "none"),
+		).length;
 	const heldBack = Object.entries(SPLITS)
 		.filter(([group, [needs, mixed, well]]) => {
-			const reader = buckets.get(group);
+			const reader = buckets.get(group) ?? "none";
 			const parts = { needs, mixed, well };
-			return Object.entries(parts).some(
-				([bucket, count]) => count + (reader === bucket ? 1 : 0) < SMALLEST_PART,
+			const counted = Object.entries(parts).map(
+				([bucket, count]) => count + (reader === bucket ? 1 : 0),
 			);
+			const noneYet = withAStanding - counted.reduce((sum, count) => sum + count, 0);
+			return [...counted, noneYet].some((count) => count < SMALLEST_PART);
 		})
 		.map(([group]) => group);
 	assert.deepEqual(heldBack, ["testing-discipline", "issue-traceability-and-lifecycle"]);
