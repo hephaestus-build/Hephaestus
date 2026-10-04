@@ -3,26 +3,36 @@ package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 import static de.tum.cit.aet.hephaestus.practices.model.Outcome.MET;
 import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_MET;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspacePracticeSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
+import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,6 +61,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private PracticesAcrossWorkspaceService acrossWorkspaceService;
 
     private Workspace workspace;
     private User reader;
@@ -187,6 +200,35 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo("WITHHELD")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourDirection")
                 .exists();
+    }
+
+    @Test
+    @DisplayName("every reader, and a caller nothing was read for, sees the same practices in catalog order")
+    void shouldListTheSamePracticesWhenReadersDifferInTheirOwnEvidence() {
+        Practice atomic = persistPractice(workspace, packagingGroup, "atomic", "Atomic commits", null);
+        for (int index = 0; index < 18; index++) {
+            standing(atomic, developer("across-dev-" + index), index);
+        }
+        // Only the reader has evidence on a practice review is no longer admitted for.
+        Practice retired = persistPractice(workspace, packagingGroup, "retired", "Retired", null);
+        strength(retired, reader, NEWEST);
+        retired.setAutonomy(PracticeAutonomy.OFF);
+        practiceRepository.saveAndFlush(retired);
+
+        List<List<Object>> withEvidence = shapes(readAs(reader));
+        List<List<Object>> without = shapes(readAs(developer("across-dev-1")));
+        List<List<Object>> nothingRead = shapes(readAs(null));
+
+        assertThat(withEvidence).isEqualTo(without).isEqualTo(nothingRead);
+        PracticesAcrossWorkspaceDTO page = readAs(null);
+        assertThat(page.groups())
+                .filteredOn(group -> group.groupSlug().equals("review-ready-work"))
+                .singleElement()
+                .satisfies(group -> assertThat(group.practices())
+                        .extracting(WorkspacePracticeSplitDTO::practiceSlug, WorkspacePracticeSplitDTO::yourStanding)
+                        .containsExactly(
+                                tuple("atomic", PracticeStandingDTO.Standing.NOT_OBSERVED),
+                                tuple("explain", PracticeStandingDTO.Standing.NOT_OBSERVED)));
     }
 
     @Test
@@ -384,6 +426,32 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .expectStatus()
                 .isOk()
                 .expectBody();
+    }
+
+    /** The page as the service composes it for {@code developer}, or for a caller who is no developer when null. */
+    private PracticesAcrossWorkspaceDTO readAs(@Nullable User developer) {
+        if (developer != null) {
+            CurrentScmIdentityHolder.set(developer.getId(), developer.getLogin(), Set.of(developer.getId()));
+        }
+        try {
+            return acrossWorkspaceService.read(
+                    WorkspaceContext.fromWorkspace(workspace, null, null), PracticesAcrossWorkspaceWindow.ALL_TIME);
+        } finally {
+            CurrentScmIdentityHolder.clear();
+        }
+    }
+
+    /** Every group's split and its practices' names and splits: what reads the same whoever reads it. */
+    private static List<List<Object>> shapes(PracticesAcrossWorkspaceDTO page) {
+        return page.groups().stream()
+                .map(group -> List.<Object>of(
+                        group.groupSlug(),
+                        group.split(),
+                        group.practices().stream()
+                                .map(practice ->
+                                        List.of(practice.practiceSlug(), practice.practiceName(), practice.split()))
+                                .toList()))
+                .toList();
     }
 
     private PracticeGroup group(Workspace in, String slug, String name) {

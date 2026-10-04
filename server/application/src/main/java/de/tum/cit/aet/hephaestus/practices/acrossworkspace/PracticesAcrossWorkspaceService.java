@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitDTO
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceTileDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.InAppFeedbackService;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
@@ -74,6 +75,8 @@ public class PracticesAcrossWorkspaceService {
         Map<Long, StandingSnapshot> snapshots = practiceStandingService.getWorkspaceStandingSnapshots(
                 workspaceId, read, since == null ? Instant.EPOCH : since, now);
         StandingSnapshot yours = reader == null ? NOTHING_READ : snapshots.getOrDefault(reader, NOTHING_READ);
+        // The practices every reader sees, whatever their own evidence says.
+        Map<String, List<Practice>> eligiblePractices = practiceStandingService.eligiblePracticesByGroup(workspaceId);
 
         List<PracticeGroup> groups = practiceGroupService.listGroups(context, true);
         Map<Long, Map<String, PracticeGroupStandingDTO>> groupStandings = new HashMap<>();
@@ -95,27 +98,24 @@ public class PracticesAcrossWorkspaceService {
         List<WorkspaceGroupSplitDTO> rows = new ArrayList<>();
         for (PracticeGroup group : groups) {
             PracticeGroupStandingDTO yourGroup = Objects.requireNonNull(yourGroups.get(group.getSlug()));
-            List<PracticeStandingDTO> practices = yours.practices().values().stream()
-                    .map(StandingSnapshot.PracticeStanding::dto)
-                    .filter(practice -> group.getSlug().equals(practice.groupSlug()))
-                    .toList();
+            List<Practice> practices = eligiblePractices.getOrDefault(group.getSlug(), List.of());
             Function<Long, Row> rowOf = developer -> new Row(
                     Bucket.of(Objects.requireNonNull(Objects.requireNonNull(groupStandings.get(developer))
                                     .get(group.getSlug()))
                             .standing()),
                     practices.stream()
                             .map(practice ->
-                                    practiceBucket(snapshots.getOrDefault(developer, NOTHING_READ), practice.slug()))
+                                    practiceBucket(snapshots.getOrDefault(developer, NOTHING_READ), practice.getSlug()))
                             .toList());
             GroupRelease release =
                     CohortPrivacyPolicy.group(observed.stream().map(rowOf).toList(), practices.size());
             List<WorkspacePracticeSplitDTO> practiceSplits = new ArrayList<>();
             for (int index = 0; index < practices.size(); index++) {
-                PracticeStandingDTO practice = practices.get(index);
+                Practice practice = practices.get(index);
                 practiceSplits.add(new WorkspacePracticeSplitDTO(
-                        practice.slug(),
-                        practice.name(),
-                        practice.standing(),
+                        practice.getSlug(),
+                        practice.getName(),
+                        yourStanding(yours, practice.getSlug()),
                         WorkspaceSplitDTO.from(release.practices().get(index))));
             }
             rows.add(new WorkspaceGroupSplitDTO(
@@ -167,6 +167,14 @@ public class PracticesAcrossWorkspaceService {
                         openMiddle == null ? null : openMiddle.low(),
                         openMiddle == null ? null : openMiddle.high()),
                 rows);
+    }
+
+    /** The reader's own standing in a practice, or not observed when nothing of theirs was read. */
+    private static PracticeStandingDTO.Standing yourStanding(StandingSnapshot yours, String practiceSlug) {
+        StandingSnapshot.PracticeStanding practice = yours.practices().get(practiceSlug);
+        return practice == null
+                ? PracticeStandingDTO.Standing.NOT_OBSERVED
+                : practice.dto().standing();
     }
 
     /** A practice the developer's snapshot does not list is one nothing reached for them: none yet. */

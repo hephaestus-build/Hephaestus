@@ -53,12 +53,14 @@ attention, Mixed feedback and Going well, counted in developers.
   bound, and reads every standing and trend over all of it by the same rule as the shorter windows.
   The page opens on the last 30 days.
 - The observed total shows only while it holds three others.
-- A group's practices are split by the same rule over the same observed developers. Because a
-  group's developers with a standing are everyone with a standing in any of its practices, the cells
-  a reader can work out by subtraction must each hold none or at least three: a practice whose
-  developers with a standing fall short of its group's by one or two is withheld, and every practice
-  of a group is withheld when the practices shown add up to one or two more developers with a
-  standing than the group has. A practice therefore is withheld more often than its group.
+- A group's practices are the ones review is admitted for, in catalog order, the same list for every
+  reader whatever their own evidence holds; a practice switched off is not listed. Each is split by the
+  same rule over the same observed developers. Because a group's developers with a standing are
+  everyone with a standing in any of its practices, the cells a reader can work out by subtraction
+  must each hold none or at least three: a practice whose developers with a standing fall short of
+  its group's by one or two is withheld, and every practice of a group is withheld when the practices
+  shown add up to one or two more developers with a standing than the group has. A practice therefore
+  is withheld more often than its group.
 - The tiles show the reader's own figure and the middle half of the observed developers, the 25th
   to the 75th percentile interpolated and rounded, never a minimum, maximum, average or count at one
   value, and only from six others, twice K. The open feedback tile counts per developer what their Practice

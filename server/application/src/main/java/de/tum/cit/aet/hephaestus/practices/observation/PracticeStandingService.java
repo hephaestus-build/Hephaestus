@@ -166,6 +166,24 @@ public class PracticeStandingService {
                 .toList();
     }
 
+    /**
+     * The practices review is admitted for in the workspace today, per group slug, each group's in catalog order:
+     * the same list whoever asks, so a reader's own evidence never adds a practice or reorders one.
+     */
+    public Map<String, List<Practice>> eligiblePracticesByGroup(Long workspaceId) {
+        Map<String, List<Practice>> byGroup = new LinkedHashMap<>();
+        eligibility(workspaceId).practices().stream()
+                .sorted(Comparator.comparingInt(Practice::getDisplayOrder).thenComparing(Practice::getName))
+                .forEach(practice -> {
+                    PracticeGroup group = practice.getGroup();
+                    if (group != null) {
+                        byGroup.computeIfAbsent(group.getSlug(), slug -> new ArrayList<>())
+                                .add(practice);
+                    }
+                });
+        return byGroup;
+    }
+
     /** The practices review is admitted for in the workspace today, and their slugs per group slug. */
     private Eligibility eligibility(Long workspaceId) {
         PracticeAutonomy workspaceDefault =

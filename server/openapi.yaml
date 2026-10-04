@@ -19991,8 +19991,8 @@ components:
           description: Group slug
         practices:
           type: array
-          description: "The group's practices on the reader's own profile, each split\
-            \ on its own, in the profile's order"
+          description: "The group's practices review is admitted for, the same for\
+            \ every reader, each split on its own, in catalog order"
           items:
             $ref: "#/components/schemas/WorkspacePracticeSplit"
         split:

@@ -6787,7 +6787,7 @@ export type WorkspaceGroupSplit = {
    */
   groupSlug: string;
   /**
-   * The group's practices on the reader's own profile, each split on its own, in the profile's order
+   * The group's practices review is admitted for, the same for every reader, each split on its own, in catalog order
    */
   practices: Array<WorkspacePracticeSplit>;
   /**
