@@ -298,11 +298,11 @@ optional **Service receiving requests** on its connection. Their marks appear be
 in this workspace, and name different facts: who made the model and which service receives its
 requests. Leave either blank when you cannot confirm it. Neither field sets the data-handling tier;
 **Operated by** does. For example, an OpenAI model served by Azure can show both marks. A private
-endpoint does not by itself mean your organisation operates the model: Microsoft-managed
+endpoint does not by itself mean your organization operates the model: Microsoft-managed
 [Foundry inference](https://learn.microsoft.com/en-us/azure/foundry/concepts/deployments-overview)
-is provider-operated, while a model your organisation runs on its own Azure machines can be
+is provider-operated, while a model your organization runs on its own Azure machines can be
 declared in-house. **Logos** is the AI service in Edutelligence, with its own webapp and mark; it
-is not an Edutelligence brand choice. Your organisation can run Logos itself, or a provider can run
+is not an Edutelligence brand choice. Your organization can run Logos itself, or a provider can run
 it. Select the Logos mark only when this connection actually receives requests through Logos; then
 declare **Operated by** from your deployment and agreement, not from that mark. Hephaestus does not
 infer these facts from a model ID or connection URL. Choose
@@ -310,7 +310,7 @@ display names you are happy for developers to read. The setup page is hidden by 
 enabling it, and wait until every runtime role has been upgraded before assigning models by tier.
 
 1. In either model console, declare each model's **Data handling** with one fact, **Operated by**:
-   **Your organisation**, or **A provider** under terms your organisation accepted. This declaration
+   **Your organization**, or **A provider** under terms your organization accepted. This declaration
    does not verify a provider's retention or training terms. Check those terms with your provider
    before you enable the model. From the operator fact Hephaestus derives one tier,
    **In-house** or **Cloud**, and shows it as a badge wherever the model appears. Declare what the

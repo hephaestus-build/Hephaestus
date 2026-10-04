@@ -96,7 +96,8 @@ class SlackChannelMetadataRefresherTest extends BaseUnitTest {
 
         refresher.refreshWorkspace(WS);
 
-        verify(consentService).pauseForPlatformEvent(WS, CHANNEL, "The sync found that the bot is not in the channel.");
+        verify(consentService)
+                .pauseForPlatformEvent(WS, CHANNEL, "The sync found that the bot was removed from the channel.");
     }
 
     @Test

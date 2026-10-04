@@ -129,7 +129,7 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext> {
         if (isProd() && hasUnsealedActiveKey()) {
             throw new IllegalStateException(
                     "Active JWT signing key is stored unsealed (encryption_key_id=" + UNSEALED_KEY_ID
-                            + "). Refusing to operate in prod — a DB read would let an attacker forge any token. "
+                            + "). Hephaestus refuses to operate in prod because a database read would let an attacker forge any token. "
                             + "Rotate the legacy row out before deploying (ADR 0017 / auth-cutover runbook).");
         }
     }
@@ -186,7 +186,8 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext> {
     public JWK currentSigningKey() {
         List<JWK> keys = loadJwkSet().getKeys();
         if (keys.isEmpty()) {
-            throw new IllegalStateException("no active JWT signing key — ensureActiveKey() must run before issuance");
+            throw new IllegalStateException(
+                    "There is no active JWT signing key. ensureActiveKey() must run before issuance.");
         }
         return keys.get(0); // ordering enforced by repository.findActive()
     }

@@ -50,7 +50,7 @@ type LinkableProvider = IdentityProviderView & { registrationId: string };
  */
 const LINK_ONLY_RATIONALE: Record<string, string> = {
 	SLACK: "Connect Slack to manage your channel-message preference and reach the mentor in a DM.",
-	OUTLINE: "Connect Outline so the documents you write there are recognised as your work.",
+	OUTLINE: "Connect Outline so the documents you write there are recognized as your work.",
 };
 
 export interface LinkedAccountsSectionProps {

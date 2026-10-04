@@ -386,7 +386,7 @@ function AddScheduleForm({
 					Start checking {chosenKind}
 				</Button>
 				<p className="text-sm text-muted-foreground">
-					Every check can start reviews, so this authorises the AI spend for all of them, not just
+					Every check can start reviews, so this authorizes the AI spend for all of them, not just
 					the first.
 				</p>
 			</div>

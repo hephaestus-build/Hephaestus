@@ -221,7 +221,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "Leave undeclared" }));
 		screen.getByText("Rows holding this model as Cloud stop serving");
-		fireEvent.click(screen.getByRole("radio", { name: "Your organisation" }));
+		fireEvent.click(screen.getByRole("radio", { name: "Your organization" }));
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onUpdate).toHaveBeenCalledTimes(3);
 		expect(onUpdate.mock.calls[2]?.[1]).toStrictEqual(

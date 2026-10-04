@@ -155,7 +155,7 @@ public final class ConfigurationReadinessEvaluator {
                 ConfigurationRequirement.REQUIRED,
                 true,
                 validNatsRoleContract(server, webhook),
-                "NATS must be enabled for the server and webhook roles. NATS must be disabled on a worker-only process.",
+                "NATS must be enabled for ingestion in the server and webhook roles. NATS must be disabled on a worker-only process.",
                 "nats");
         add(
                 facts,
@@ -205,7 +205,7 @@ public final class ConfigurationReadinessEvaluator {
                 ConfigurationRequirement.RECOMMENDED,
                 worker,
                 "runsc".equals(property("hephaestus.sandbox.docker.container-runtime")),
-                "Use gVisor (runsc) for stronger agent sandbox isolation.",
+                "gVisor (runsc) gives stronger agent sandbox isolation. We recommend it.",
                 "sandbox-isolation");
         String legacySandboxKey = firstConfiguredLegacySandboxKey();
         add(

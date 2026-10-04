@@ -24,7 +24,7 @@ public class SlackAssistantEventHandler {
     static final List<SuggestedPrompt> PROMPTS = List.of(
             new SuggestedPrompt("What needs attention?", "What software project practice should I focus on next?"),
             new SuggestedPrompt("Review my recent work", "Review my recent pull requests, reviews, and issues."),
-            new SuggestedPrompt("Check my reviews", "What is the trend of my code reviews and review comments?"),
+            new SuggestedPrompt("Check my reviews", "How are my code reviews and review comments trending?"),
             new SuggestedPrompt("Follow up", "What feedback or project-practice issue should I revisit?"));
 
     private final SlackWorkspaceResolver workspaceResolver;

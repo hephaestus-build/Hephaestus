@@ -33,7 +33,7 @@ class DeterministicGroupGuidanceComposerTest {
                 DeterministicGroupGuidanceComposer.compose(PracticeGroupStandingDTO.Standing.DEVELOPING, List.of(gap));
 
         assertThat(guidance)
-                .isEqualTo("Your recent feedback shows that “Test Coverage” is the next practice to work on. "
+                .isEqualTo("Your recent feedback suggests that “Test Coverage” is the next practice to work on. "
                         + "What good looks like: Cover new behaviour with focused tests.");
     }
 

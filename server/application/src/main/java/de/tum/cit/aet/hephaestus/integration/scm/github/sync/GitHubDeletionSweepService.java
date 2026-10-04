@@ -286,10 +286,8 @@ public class GitHubDeletionSweepService {
                     ? "Checked for deleted items. Hephaestus could not verify some repositories."
                     : "Checked for deleted items. Hephaestus found none.";
         }
-        return "Retired " + outcome.total() + " item" + (outcome.total() == 1 ? ". It" : "s. They")
-                + " no longer exist"
-                + (outcome.total() == 1 ? "s" : "")
-                + " upstream.";
+        return "Retired " + outcome.total()
+                + (outcome.total() == 1 ? " item that was deleted upstream." : " items that were deleted upstream.");
     }
 
     private static void report(

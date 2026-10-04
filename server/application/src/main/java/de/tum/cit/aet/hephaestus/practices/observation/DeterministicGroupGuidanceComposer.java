@@ -53,7 +53,7 @@ final class DeterministicGroupGuidanceComposer {
                         .append(nameList(strengths))
                         .append(strengths.size() == 1 ? ". Continue to build on it." : ". Continue to build on them.");
             case DEVELOPING ->
-                summary.append("Your recent feedback shows that ")
+                summary.append("Your recent feedback suggests that ")
                         .append(nameList(gaps))
                         .append(
                                 gaps.size() == 1

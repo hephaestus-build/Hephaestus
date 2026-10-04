@@ -230,12 +230,12 @@ describe("AdminLlmModelFormDialog", () => {
 		const onSave = renderDialog();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
 		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
-		fireEvent.click(screen.getByRole("radio", { name: "Your organisation" }));
+		fireEvent.click(screen.getByRole("radio", { name: "Your organization" }));
 		fireEvent.click(screen.getByRole("button", { name: "Leave undeclared" }));
 		expect(screen.queryByRole("button", { name: "Leave undeclared" })).toBeNull();
 		// The cards clear too: the group stays controlled through the reset.
 		expect(
-			screen.getByRole("radio", { name: "Your organisation" }).getAttribute("aria-checked"),
+			screen.getByRole("radio", { name: "Your organization" }).getAttribute("aria-checked"),
 		).toBe("false");
 		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
 		expect(onSave.mock.calls[0]?.[0].metadata).toStrictEqual(

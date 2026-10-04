@@ -88,7 +88,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
     void shouldRejectMissingProductionSecret() {
         assertThatThrownBy(() -> configuredService(null, null, true))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("required for OAuth state HMAC");
+                .hasMessageContaining("Production needs one of them for the OAuth state HMAC.");
     }
 
     @Test

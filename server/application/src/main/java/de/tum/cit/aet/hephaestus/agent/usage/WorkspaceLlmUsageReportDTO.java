@@ -47,7 +47,7 @@ public record WorkspaceLlmUsageReportDTO(
 
         @NonNull
         @Schema(
-                description = "Whether host-funded (shared-model) spend is within its cap, has reached it, or can't "
+                description = "Whether host-funded (shared-model) spend is within its cap, has reached it, or cannot "
                         + "be confirmed because some shared-model usage has no price set.")
         LlmBudgetVerdict instanceBudgetVerdict,
 

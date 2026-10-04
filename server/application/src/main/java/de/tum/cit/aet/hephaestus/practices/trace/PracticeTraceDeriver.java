@@ -81,7 +81,7 @@ final class PracticeTraceDeriver {
             return entry(
                     practice,
                     PracticeTraceOutcome.REVIEWED,
-                    "Hephaestus reviewed this practice on this work.",
+                    "The review checked this practice on this work.",
                     occasion,
                     output.latestObservedAt(),
                     output.latestReviewId(),
@@ -122,7 +122,7 @@ final class PracticeTraceDeriver {
                 return entry(
                         practice,
                         PracticeTraceOutcome.REVIEWED,
-                        "Hephaestus reviewed this practice on this work. It has nothing to report.",
+                        "The review checked this practice on this work. It has nothing to report.",
                         occurrence,
                         review.decidedAt(),
                         occurrence.reviewId(),
@@ -169,7 +169,7 @@ final class PracticeTraceDeriver {
             return entry(
                     practice,
                     PracticeTraceOutcome.TURNED_OFF,
-                    "This workspace turned the practice off. Hephaestus does not review it here.",
+                    "This workspace turned the practice off, so no review covers it here.",
                     latest,
                     null,
                     null,
@@ -230,7 +230,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.PENDING,
-                        reasonCopy(occurrence.stateReason(), "Hephaestus recorded this and will try again."),
+                        reasonCopy(occurrence.stateReason(), "The work is recorded. The review tries again."),
                         occurrence,
                         null,
                         null,
@@ -239,7 +239,8 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.SKIPPED,
-                        reasonCopy(occurrence.stateReason(), "Hephaestus recorded this and chose not to review it."),
+                        reasonCopy(
+                                occurrence.stateReason(), "The work is recorded, and no review covers it on purpose."),
                         occurrence,
                         null,
                         null,
@@ -260,7 +261,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.PENDING,
-                        "Hephaestus recorded this. It has not decided what to do yet.",
+                        "The work is recorded. No decision about it exists yet.",
                         occurrence,
                         null,
                         null,

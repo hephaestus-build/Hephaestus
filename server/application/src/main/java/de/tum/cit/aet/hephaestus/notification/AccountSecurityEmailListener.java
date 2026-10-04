@@ -42,8 +42,8 @@ public class AccountSecurityEmailListener {
         }
         String change =
                 switch (event.kind()) {
-                    case IDENTITY_LINKED -> "Someone linked a sign-in identity to your account.";
-                    case IDENTITY_UNLINKED -> "Someone removed a sign-in identity from your account.";
+                    case IDENTITY_LINKED -> "A sign-in identity is now linked to your account.";
+                    case IDENTITY_UNLINKED -> "A sign-in identity is no longer linked to your account.";
                     case APP_ROLE_CHANGED -> "Your instance administrator access changed.";
                 };
         var rendered = renderer.render(EmailKind.ACCOUNT_SECURITY_CHANGED, Map.of("change", change));

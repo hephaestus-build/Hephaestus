@@ -78,7 +78,7 @@ public class ReviewBackfillService {
         // not enumerable from a repository the way pull requests and issues are. Refused by name rather
         // than silently producing an empty scope, which would read as "nothing to review".
         throw new IllegalArgumentException(
-                "You can review past work only for a pull request, a merge request or an issue. You cannot review past work of this kind.");
+                "You can review past work only for a pull or merge request or an issue. You cannot review past work of this kind.");
     }
 
     private static String statusWords(ReviewBackfillStatus status) {

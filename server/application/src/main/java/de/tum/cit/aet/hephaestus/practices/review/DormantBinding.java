@@ -35,7 +35,7 @@ public record DormantBinding(Long practiceId, Set<SignalName> signals, Set<Integ
         String moments = signals.stream().map(signalName).distinct().sorted().collect(Collectors.joining(", "));
         if (raisedByAnyOf.isEmpty()) {
             return "Nothing that Hephaestus can connect reports the moments this practice watches for (" + moments
-                    + "). Hephaestus never reviews this practice.";
+                    + "), so no review ever covers this practice.";
         }
         String integrations =
                 raisedByAnyOf.stream().map(integrationName).sorted().collect(Collectors.joining(" or "));

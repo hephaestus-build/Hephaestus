@@ -402,7 +402,7 @@ public class GitHubDataSyncScheduler {
                                 // repeating it in the step text renders the same fact twice.
                                 SyncProgress.ofResource(
                                         SyncPhase.REPOSITORIES,
-                                        "Syncing " + target.repositoryNameWithOwner(),
+                                        "Sync of " + target.repositoryNameWithOwner(),
                                         target.repositoryNameWithOwner(),
                                         reposProcessed,
                                         totalRepos));

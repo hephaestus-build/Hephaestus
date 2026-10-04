@@ -19,7 +19,9 @@ const enforced = new Set(
 	),
 );
 const root = fileURLToPath(steRoot);
-const textProps = new Set([
+// Names of the JSX props and object keys whose string values are UI text. Object keys cover the
+// vocabulary registries, option lists and form schemas.
+const textNames = new Set([
 	"alt",
 	"aria-label",
 	"aria-description",
@@ -27,6 +29,7 @@ const textProps = new Set([
 	"placeholder",
 	"label",
 	"description",
+	"summary",
 	"message",
 	"error",
 	"helperText",
@@ -38,18 +41,6 @@ const textProps = new Set([
 	"cancelText",
 	"submitText",
 	"buttonText",
-]);
-// Object keys whose string values are UI text: the vocabulary registries, option lists and form schemas.
-const textKeys = new Set([
-	"label",
-	"description",
-	"title",
-	"message",
-	"summary",
-	"placeholder",
-	"tooltip",
-	"helperText",
-	"emptyText",
 	"note",
 	"content",
 	"detail",
@@ -172,7 +163,7 @@ export const steUiText = defineRule({
 			JSXAttribute(node) {
 				if (
 					node.name.type !== "JSXIdentifier" ||
-					!textProps.has(node.name.name) ||
+					!textNames.has(node.name.name) ||
 					node.value === null
 				) {
 					return;
@@ -194,7 +185,7 @@ export const steUiText = defineRule({
 			},
 			Property(node) {
 				const name = propertyName(node.key);
-				if (name !== undefined && textKeys.has(name) && node.parent.type === "ObjectExpression") {
+				if (name !== undefined && textNames.has(name) && node.parent.type === "ObjectExpression") {
 					for (const text of literalText(node.value)) {
 						check(node.value, text);
 					}

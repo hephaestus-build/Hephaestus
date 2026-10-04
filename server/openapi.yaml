@@ -54,6 +54,9 @@ tags:
   name: Outline collections
 - description: The starting catalog copied into new workspaces
   name: Admin Practice Catalog
+- description: Why each practice did or did not run on one piece of work. Any workspace
+    member can read it.
+  name: Practice review trace
 - description: Instance-wide operator settings
   name: Instance Settings
 - description: Current instance definitions visible to workspace administrators
@@ -130,9 +133,6 @@ tags:
 - description: "Workspace-scoped \"bring your own\" AI provider connections, models\
     \ and settings"
   name: Workspace LLM
-- description: Why each practice did or did not run on one piece of work; readable
-    by any workspace member
-  name: Practice review trace
 - description: Active sessions
   name: Account
 - description: |-
@@ -2268,7 +2268,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: The session has ended; sign in again
+          description: The session has ended. Sign in again.
         "403":
           content:
             application/json: {}
@@ -5079,8 +5079,8 @@ paths:
           description: The Outline server could not be reached or answered with an
             error
         "503":
-          description: Outline is rate-limiting requests; the Retry-After header carries
-            the seconds to wait before retrying
+          description: Outline limited the request rate. The Retry-After header carries
+            the seconds to wait before retrying.
       summary: List the Outline collections available to mirror (live proxy; doubles
         as connectivity probe)
       tags:
@@ -9495,7 +9495,7 @@ components:
         instanceBudgetVerdict:
           type: string
           description: "Whether shared-model spend is within the instance cap, has\
-            \ reached it, or can't be confirmed because some shared-model usage has\
+            \ reached it, or cannot be confirmed because some shared-model usage has\
             \ no price set."
           enum:
           - WITHIN
@@ -19304,7 +19304,7 @@ components:
           description: Enable automatic practice reviews triggered by PR events
         practiceReviewManualTriggerEnabled:
           type: boolean
-          description: Enable manual practice reviews triggered via bot command
+          description: Enable manual practice reviews triggered through a bot command
         practicesEnabled:
           type: boolean
           description: Enable the practice review feature
@@ -19718,8 +19718,8 @@ components:
             enabled
         practiceReviewManualTriggerEnabled:
           type: boolean
-          description: Whether manual practice reviews triggered via bot command are
-            enabled
+          description: Whether manual practice reviews triggered through a bot command
+            are enabled
         practicesEnabled:
           type: boolean
           description: Whether practice reviews are on
@@ -20137,7 +20137,7 @@ components:
         instanceBudgetVerdict:
           type: string
           description: "Whether host-funded (shared-model) spend is within its cap,\
-            \ has reached it, or can't be confirmed because some shared-model usage\
+            \ has reached it, or cannot be confirmed because some shared-model usage\
             \ has no price set."
           enum:
           - WITHIN
@@ -20431,7 +20431,7 @@ components:
     bearerAuth:
       bearerFormat: JWT
       description: Hephaestus-native JWT bearer authentication. The SPA normally authenticates
-        via the `__Host-HEPHAESTUS_AT` session cookie; this scheme documents the equivalent
-        bearer token.
+        through the `__Host-HEPHAESTUS_AT` session cookie. This scheme documents the
+        equivalent bearer token.
       scheme: bearer
       type: http

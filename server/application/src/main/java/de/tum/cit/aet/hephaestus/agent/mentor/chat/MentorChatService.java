@@ -455,7 +455,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     "Mentor turn timed out waiting for agent_end (threadId={}): {}",
                     request.threadId(),
                     timeout.toString());
-            failTurn(turn, state, channel, cookie, timeout, "The mentor turn took too long and stopped. Try again.");
+            failTurn(turn, state, channel, cookie, timeout, "The mentor turn took too long and stopped.");
             outcome = MentorChatMetrics.Outcome.TIMEOUT;
         } catch (ClientDisconnectedException disconnect) {
             if (clientHolder.get() == null) {
@@ -894,7 +894,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             return "The mentor had an unexpected error. Try again.";
         }
         if (e instanceof TimeoutException) {
-            return "The mentor turn took too long and stopped. Try again.";
+            return "The mentor turn took too long and stopped.";
         }
         if (e instanceof ClientDisconnectedException) {
             // Should never surface to a still-connected client, but guard anyway.

@@ -29,7 +29,7 @@ class PracticeFeedbackCommentFormatterTest extends BaseUnitTest {
                 .contains(PullRequestCommentPoster.summaryMarkerFor(job))
                 .contains("Test body content")
                 .contains(
-                        "<sub>Practice review · model&lt;&amp;&gt;. This feedback is AI-generated and can be inaccurate."
+                        "<sub>Practice review &middot; model&lt;&amp;&gt;. This feedback is AI-generated and can be inaccurate."
                                 + " Answer or dispute it in"
                                 + " [Hephaestus](https://hephaestus.example.com/w/team/feedback/scm.pull_request/42).</sub>")
                 .doesNotContain("React with")
@@ -55,7 +55,7 @@ class PracticeFeedbackCommentFormatterTest extends BaseUnitTest {
         assertThat(result)
                 .startsWith("Approved feedback\n\n")
                 .contains(
-                        "<sub>Practice review · model&lt;&amp;&gt;. This feedback is AI-generated and can be inaccurate."
+                        "<sub>Practice review &middot; model&lt;&amp;&gt;. This feedback is AI-generated and can be inaccurate."
                                 + " Answer or dispute it in"
                                 + " [Hephaestus](https://hephaestus.example/w/team/feedback/scm.pull_request/42).</sub>")
                 .endsWith(

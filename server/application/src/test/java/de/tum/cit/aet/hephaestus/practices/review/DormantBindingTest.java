@@ -37,8 +37,8 @@ class DormantBindingTest extends BaseUnitTest {
 
         assertThat(dormant.reason(ARTIFACTS::signalDisplayName, DormantBindingTest::integration))
                 .isEqualTo(
-                        "Nothing that Hephaestus can connect reports the moments this practice watches for (Merged). "
-                                + "Hephaestus never reviews this practice.");
+                        "Nothing that Hephaestus can connect reports the moments this practice watches for (Merged), "
+                                + "so no review ever covers this practice.");
     }
 
     @Test
@@ -47,7 +47,7 @@ class DormantBindingTest extends BaseUnitTest {
                 1L, Set.of(SignalName.of("scm.pull_request.retired_moment")), Set.of(IntegrationKind.GITHUB));
 
         assertThat(dormant.reason(ARTIFACTS::signalDisplayName, DormantBindingTest::integration))
-                .contains("(A moment that this version no longer offers)")
+                .contains("(A moment this version no longer offers)")
                 .doesNotContain("scm.", "retired_moment");
     }
 

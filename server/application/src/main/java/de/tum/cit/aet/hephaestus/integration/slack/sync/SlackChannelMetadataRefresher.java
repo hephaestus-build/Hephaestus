@@ -103,7 +103,7 @@ public class SlackChannelMetadataRefresher {
                             workspaceId, channelId, "The sync found that the channel is archived.");
                 } else if (!info.member()) {
                     consentService.pauseForPlatformEvent(
-                            workspaceId, channelId, "The sync found that the bot is not in the channel.");
+                            workspaceId, channelId, "The sync found that the bot was removed from the channel.");
                 }
             }
             case ConversationLookup.NotFound(var ignored) -> {

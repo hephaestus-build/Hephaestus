@@ -145,7 +145,7 @@ public class PracticeService {
 
         if (position > target.size()) {
             throw new IllegalArgumentException(
-                    "position must not be larger than the number of practices in the destination.");
+                    "position must be from 0 up to the number of practices in the destination.");
         }
         target.add(position, practice);
         practice.setGroup(destination);

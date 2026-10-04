@@ -199,7 +199,7 @@ export type AdminWorkspaceLlmUsage = {
    */
   events: number;
   /**
-   * Whether shared-model spend is within the instance cap, has reached it, or can't be confirmed because some shared-model usage has no price set.
+   * Whether shared-model spend is within the instance cap, has reached it, or cannot be confirmed because some shared-model usage has no price set.
    */
   instanceBudgetVerdict: 'WITHIN' | 'EXHAUSTED' | 'UNVERIFIABLE';
   /**
@@ -6318,7 +6318,7 @@ export type UpdateWorkspaceFeaturesRequest = {
    */
   practiceReviewAutoTriggerEnabled?: boolean;
   /**
-   * Enable manual practice reviews triggered via bot command
+   * Enable manual practice reviews triggered through a bot command
    */
   practiceReviewManualTriggerEnabled?: boolean;
   /**
@@ -6648,7 +6648,7 @@ export type Workspace = {
    */
   practiceReviewAutoTriggerEnabled: boolean;
   /**
-   * Whether manual practice reviews triggered via bot command are enabled
+   * Whether manual practice reviews triggered through a bot command are enabled
    */
   practiceReviewManualTriggerEnabled: boolean;
   /**
@@ -6927,7 +6927,7 @@ export type WorkspaceLlmUsageReport = {
    */
   fx?: FxRateInfo;
   /**
-   * Whether host-funded (shared-model) spend is within its cap, has reached it, or can't be confirmed because some shared-model usage has no price set.
+   * Whether host-funded (shared-model) spend is within its cap, has reached it, or cannot be confirmed because some shared-model usage has no price set.
    */
   instanceBudgetVerdict: 'WITHIN' | 'EXHAUSTED' | 'UNVERIFIABLE';
   /**
@@ -8811,7 +8811,7 @@ export type RefreshClientSessionErrors = {
    */
   400: ProblemDetail;
   /**
-   * The session has ended; sign in again
+   * The session has ended. Sign in again.
    */
   401: ProblemDetail;
   /**
@@ -11231,7 +11231,7 @@ export type ListOutlineCollectionCandidatesErrors = {
    */
   502: unknown;
   /**
-   * Outline is rate-limiting requests; the Retry-After header carries the seconds to wait before retrying
+   * Outline limited the request rate. The Retry-After header carries the seconds to wait before retrying.
    */
   503: unknown;
 };

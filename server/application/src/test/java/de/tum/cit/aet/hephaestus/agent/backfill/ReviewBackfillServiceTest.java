@@ -170,7 +170,7 @@ class ReviewBackfillServiceTest extends BaseUnitTest {
     void aConversationThreadCannotBeBackfilled() {
         assertThatThrownBy(() -> ReviewBackfillService.jobTypeFor(ArtifactKinds.CONVERSATION_THREAD))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("You can review past work only for a pull request, a merge request or an issue. "
+                .hasMessage("You can review past work only for a pull or merge request or an issue. "
                         + "You cannot review past work of this kind.");
     }
 

@@ -36,7 +36,7 @@ public interface ArtifactCatalog {
         return descriptorFor(signal.artifactKind())
                 .flatMap(descriptor -> descriptor.signal(signal))
                 .map(Signal::displayName)
-                .orElseGet(() -> UnknownVocabulary.label(
-                        "signal", signal.value(), "A moment that this version no longer offers"));
+                .orElseGet(() ->
+                        UnknownVocabulary.label("signal", signal.value(), "A moment this version no longer offers"));
     }
 }

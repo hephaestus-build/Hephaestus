@@ -99,15 +99,15 @@ public class HmacOAuthStateService implements OAuthStateService {
         }
         if (environment.matchesProfiles("prod")) {
             throw new IllegalStateException(
-                    "Set hephaestus.integration.oauth-state.secret (or hephaestus.webhook.secret) — required for OAuth state HMAC in production.");
+                    "Set hephaestus.integration.oauth-state.secret or hephaestus.webhook.secret. Production needs one of them for the OAuth state HMAC.");
         }
         if (environment.matchesProfiles("specs", "cds-training")) {
             log.debug("Created an ephemeral OAuth-state secret for artifact generation");
         } else {
             log.warn(
-                    "No hephaestus.integration.oauth-state.secret / hephaestus.webhook.secret configured; "
-                            + "generating an EPHEMERAL dev-only OAuth-state secret. State tokens won't survive a restart "
-                            + "and webhook HMAC will not match any vendor secret — set the secret for real integration testing.");
+                    "Neither hephaestus.integration.oauth-state.secret nor hephaestus.webhook.secret is configured. "
+                            + "Hephaestus generates a temporary dev-only OAuth-state secret. State tokens do not survive a restart. "
+                            + "The webhook HMAC does not match any vendor secret. For real integration testing, set the secret.");
         }
         byte[] ephemeral = new byte[32];
         RANDOM.nextBytes(ephemeral);
@@ -122,7 +122,7 @@ public class HmacOAuthStateService implements OAuthStateService {
             @Nullable String configuredSecret, @Nullable Duration ttl, @Nullable OAuthStateNonceStore nonceStore) {
         if (configuredSecret == null || configuredSecret.isBlank()) {
             throw new IllegalStateException(
-                    "Set hephaestus.integration.oauth-state.secret (or hephaestus.webhook.secret) — required for OAuth state HMAC.");
+                    "Set hephaestus.integration.oauth-state.secret or hephaestus.webhook.secret. The OAuth state HMAC needs one of them.");
         }
         this.secret = configuredSecret.getBytes(StandardCharsets.UTF_8);
         this.ttl = ttl == null ? DEFAULT_TTL : ttl;

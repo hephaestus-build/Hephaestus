@@ -112,7 +112,7 @@ public class PiEventToUiChunkTranslator {
         // text block first so the AI SDK reducer doesn't crash on an `error` chunk
         // following an unmatched `*-start` (vercel/ai#11700).
         List<UIMessageChunk> out = new ArrayList<>(closeOpenStreamingBlocks(state));
-        out.add(new UIMessageChunk.TurnError("The mentor turn took too long and stopped. Try again."));
+        out.add(new UIMessageChunk.TurnError("The mentor turn took too long and stopped."));
         return out;
     }
 

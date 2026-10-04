@@ -14,7 +14,7 @@ const faqItems = [
 	{
 		key: "replaces-review",
 		q: "Does this replace code review?",
-		a: "No, and it does not replace a mentor either. It does not approve a change for merge or grade anyone. It carries the routine feedback nobody has time to give everyone, and leaves the harder judgement and the relationships to people.",
+		a: "No, and it does not replace a mentor either. It does not approve a change for merge or grade anyone. It carries the routine feedback nobody has time to give everyone, and leaves the harder judgment and the relationships to people.",
 	},
 	{
 		key: "feedback-location",

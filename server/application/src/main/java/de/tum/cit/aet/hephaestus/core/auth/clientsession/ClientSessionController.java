@@ -161,7 +161,7 @@ public class ClientSessionController {
                             schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(
             responseCode = "401",
-            description = "The session has ended; sign in again",
+            description = "The session has ended. Sign in again.",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,

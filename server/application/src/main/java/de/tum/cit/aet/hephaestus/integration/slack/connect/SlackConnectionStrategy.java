@@ -82,7 +82,7 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
     @Override
     public ConnectInitiation initiate(InitiateRequest request) {
         if (redirectUri == null || redirectUri.isBlank()) {
-            throw new IllegalStateException("Slack redirect URI must be configured");
+            throw new IllegalStateException("The Slack redirect URI is not configured.");
         }
         String state = oauthStateService.issue(request.workspaceId(), IntegrationKind.SLACK, request.actorAccountId());
         StringBuilder url = new StringBuilder(AUTHORIZE_URL)

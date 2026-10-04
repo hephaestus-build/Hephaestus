@@ -159,8 +159,8 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                                     new PracticeReadinessOutcome(
                                             false,
                                             List.of(
-                                                    "Hephaestus captured only part of “Code changes”.",
-                                                    "Hephaestus did not capture “Review threads”."),
+                                                    "The review captured only part of “Code changes”.",
+                                                    "The review did not capture “Review threads”."),
                                             null,
                                             null)))),
                     Map.of());
@@ -169,7 +169,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
             assertThat(entry.explanation())
                     .isEqualTo(
                             "The review could not read the evidence this practice needs. "
-                                    + "Hephaestus captured only part of “Code changes”. Hephaestus did not capture “Review threads”.");
+                                    + "The review captured only part of “Code changes”. The review did not capture “Review threads”.");
         }
 
         /**
@@ -188,13 +188,13 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                                     new PracticeReadinessOutcome(
                                             false,
                                             List.of(),
-                                            "This practice needs human review. Hephaestus does not review it automatically.",
+                                            "This practice needs human review, so no automatic review covers it.",
                                             null)))),
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.SKIPPED);
             assertThat(entry.explanation())
-                    .isEqualTo("This practice needs human review. Hephaestus does not review it automatically.")
+                    .isEqualTo("This practice needs human review, so no automatic review covers it.")
                     .doesNotContain("could not read", "captured");
             assertThat(entry.reviewId()).isEqualTo(RUN);
         }

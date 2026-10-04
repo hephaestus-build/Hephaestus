@@ -172,7 +172,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                                     HttpStatus.CONFLICT,
                                     "Legacy provider feedback job "
                                             + row.path("id").asString()
-                                            + " has no exact locator for the reviewed work");
+                                            + " has no exact locator for the reviewed-work inspection");
                         return new ExternalDelivery(row.path("workspaceId").asLong(), locator.asString());
                     })
                     .distinct()

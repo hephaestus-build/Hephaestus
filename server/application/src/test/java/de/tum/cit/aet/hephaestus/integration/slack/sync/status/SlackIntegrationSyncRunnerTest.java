@@ -94,10 +94,8 @@ class SlackIntegrationSyncRunnerTest extends BaseUnitTest {
         assertThat(detail.unitsCompleted()).isEqualTo(3);
         assertThat(detail.unitsTotal()).isEqualTo(3);
         assertThat(detail.currentStep())
-                .contains("2 of 3 channels")
-                .contains("7 messages")
-                .contains("1 skipped")
-                .contains("1 failed")
-                .contains("request budget ran out");
+                .isEqualTo("Hephaestus synced 2 of 3 channels. Hephaestus ingested 7 messages."
+                        + " The sync skipped 1 channel. The sync failed for 1 of them."
+                        + " The request budget ran out.");
     }
 }

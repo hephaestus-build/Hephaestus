@@ -220,7 +220,7 @@ class ConnectionControllerTest extends BaseUnitTest {
         InitiateConnectionRequestDTO req = new InitiateConnectionRequestDTO(IntegrationKind.SLACK, Map.of());
         assertThatThrownBy(() -> bare.initiate(ctx(1L), req, null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("No ConnectionStrategy registered");
+                .hasMessageContaining("No ConnectionStrategy is registered");
     }
 
     @Test

@@ -106,7 +106,7 @@ export function WelcomeCard({
 			>
 				<div className="flex flex-col gap-3">
 					<p className="text-sm text-muted-foreground">
-						If your organisation runs its own Hephaestus, connect to it instead. You can switch at
+						If your organization runs its own Hephaestus, connect to it instead. You can switch at
 						any time.
 					</p>
 					<InstanceSetupForm

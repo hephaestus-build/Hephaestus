@@ -158,7 +158,7 @@ public class OAuthCallbackController {
                     kind.name(),
                     "kind_mismatch",
                     "The state was issued for kind=" + binding.kind()
-                            + ". The request used the callback path /oauth/callback/"
+                            + ". The request replayed it against the callback path /oauth/callback/"
                             + kindPathSegment + ".",
                     HttpStatus.BAD_REQUEST,
                     wantsJson);

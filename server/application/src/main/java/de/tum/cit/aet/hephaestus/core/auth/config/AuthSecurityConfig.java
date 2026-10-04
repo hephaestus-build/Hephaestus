@@ -224,8 +224,9 @@ public class AuthSecurityConfig {
         if (environment.matchesProfiles("specs", "cds-training")) {
             log.debug("Created an ephemeral state-cookie key for artifact generation");
         } else {
-            log.warn("auth: hephaestus.auth.state-cookie-key is unset — generated ephemeral 256-bit key for this boot. "
-                    + "In-flight logins will not survive a restart. Set the env var for stable behaviour.");
+            log.warn(
+                    "auth: hephaestus.auth.state-cookie-key is unset. Hephaestus generated an ephemeral 256-bit key for this boot. "
+                            + "In-flight logins do not survive a restart. Set the env var for stable behavior.");
         }
         return ephemeral;
     }

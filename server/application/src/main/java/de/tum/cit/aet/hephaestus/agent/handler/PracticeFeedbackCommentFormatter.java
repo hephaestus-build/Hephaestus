@@ -73,7 +73,7 @@ class PracticeFeedbackCommentFormatter {
 
         String modelName = snapshotModelName(job.getConfigSnapshot());
         if (modelName != null && !modelName.isBlank()) {
-            sb.append(" · ").append(HtmlUtils.htmlEscape(modelName));
+            sb.append(" &middot; ").append(HtmlUtils.htmlEscape(modelName));
         }
         sb.append(". This feedback is AI-generated and can be inaccurate. ")
                 .append(respondLink(job))

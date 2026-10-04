@@ -119,7 +119,7 @@ public class ConnectionController {
 
         ConnectionStrategy strategy = strategies.get(body.kind());
         if (strategy == null) {
-            throw new IllegalArgumentException("No ConnectionStrategy registered for kind=" + body.kind());
+            throw new IllegalArgumentException("No ConnectionStrategy is registered for kind=" + body.kind());
         }
 
         // Strategy-level validation failures (e.g. missing 'pat' for GitLab) surface as
