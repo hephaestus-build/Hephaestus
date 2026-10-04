@@ -3,9 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { WorkspaceSplit } from "@/api/types.gen";
 
 import {
-	groupsHint,
+	barsHint,
 	PAGE_PURPOSE,
-	practicesHint,
 	type SplitContext,
 	splitDescription,
 	tilesHint,
@@ -97,13 +96,13 @@ describe("the hints", () => {
 	});
 
 	it("takes the part size from K", () => {
-		expect(groupsHint(3)).toContain(
+		expect(barsHint(3, "group")).toContain(
 			"A bar shows only if each of its parts holds at least 3 other developers",
 		);
 	});
 
 	it("says a bar counts the current standing, as the profile shows it, and names no window", () => {
-		for (const hint of [groupsHint(3), practicesHint(3)]) {
+		for (const hint of [barsHint(3, "group"), barsHint(3, "practice")]) {
 			expect(hint).toContain("current standing");
 			expect(hint).toContain("as their Practice profile shows it");
 			expect(hint).not.toMatch(/days|All time/u);
@@ -115,7 +114,7 @@ describe("the hints", () => {
 	});
 
 	it("says a practice's bar is also held back beside its group's, with no promise about later", () => {
-		expect(practicesHint(3)).toContain(
+		expect(barsHint(3, "practice")).toContain(
 			"The bar must also single no one out beside the group's bar.",
 		);
 		expect(splitDescription(WITHHELD, "MIXED", context)).not.toMatch(/yet/u);

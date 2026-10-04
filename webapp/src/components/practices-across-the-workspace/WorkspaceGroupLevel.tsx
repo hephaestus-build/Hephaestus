@@ -10,7 +10,7 @@ import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { DrawerBody } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { OPEN_IN_YOUR_PROFILE, practicesHint, type SplitContext } from "./across-workspace-copy";
+import { barsHint, OPEN_IN_YOUR_PROFILE, type SplitContext } from "./across-workspace-copy";
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 import { LevelSplit, SplitLegend } from "./WorkspaceSplitBar";
 
@@ -122,7 +122,7 @@ function GroupPractices({
 			{state.status === "loading" && <Skeleton className="h-10 w-full max-w-2xl" />}
 			{state.status === "ready" && state.group.practices.length > 0 && (
 				<p className="max-w-2xl text-sm text-muted-foreground">
-					{practicesHint(state.context.minimumOthers)}
+					{barsHint(state.context.minimumOthers, "practice")}
 				</p>
 			)}
 			{/* What the bars show, the page's own legend, above the table it explains. */}

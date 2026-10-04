@@ -6,6 +6,7 @@ import {
 	isSettledStanding,
 	PRACTICE_GROUP_STANDING_DEFS,
 	type PracticeGroupStandingValue,
+	type StandingScope,
 } from "@/components/practice-vocabulary/practice-group-standing-defs";
 import { NONE_YET_SEGMENT } from "@/components/practice-vocabulary/standing-counts";
 
@@ -58,6 +59,9 @@ export const windowPhrase = (window: AcrossWorkspaceWindow): string => WINDOW_DE
 /** The window as the tiles' heading. */
 export const windowHeading = (window: AcrossWorkspaceWindow): string => WINDOW_DEFS[window].label;
 
+/** The page's short name: its entry in the sidebar and the first crumb of its levels' path. */
+export const ACROSS_THE_WORKSPACE = "Across the workspace";
+
 /**
  * What the page is for, under its title. The page is a view of the workspace, not the reader's
  * profile, so it sends the reader to the profile for their own next step.
@@ -94,20 +98,16 @@ export function tilesHint({
 }
 
 /**
- * The line under All practice groups on what a bar counts and when a part is not shown: a part
- * shows from K + 1 developers, the reader counted, so it stands for K others whoever reads it. A bar
- * counts the current standing, the one each developer's Practice profile shows, whatever the window.
+ * The line over a table of bars on what a bar counts and when a part is not shown: a part shows
+ * from K + 1 developers, the reader counted, so it stands for K others whoever reads it. A bar
+ * counts the current standing, the one each developer's Practice profile shows. A practice's bar
+ * shows by the same rule as its group's, and only while it singles no one out beside the group's.
  */
-export function groupsHint(minimumOthers: number): string {
-	return `Each bar counts developers by their current standing in the group, as their Practice profile shows it. You marks your part. A bar shows only if each of its parts holds at least ${minimumOthers} other developers. If not, the whole bar is held back, so no one can be singled out.`;
-}
-
-/**
- * The line over a group's practices on when their bars show: by the same rule as a group's, and
- * only while a practice's bar set against its group's singles no one out.
- */
-export function practicesHint(minimumOthers: number): string {
-	return `Each bar counts developers by their current standing in the practice, as their Practice profile shows it. You marks your part. A bar shows only if each of its parts holds at least ${minimumOthers} other developers. The bar must also single no one out beside the group's bar. If not, it is held back.`;
+export function barsHint(minimumOthers: number, scope: StandingScope): string {
+	const rule = `Each bar counts developers by their current standing in the ${scope}, as their Practice profile shows it. You marks your part. A bar shows only if each of its parts holds at least ${minimumOthers} other developers.`;
+	return scope === "group"
+		? `${rule} If not, the whole bar is held back, so no one can be singled out.`
+		: `${rule} The bar must also single no one out beside the group's bar. If not, it is held back.`;
 }
 
 /** What the bar and its text alternative need besides the split itself. */

@@ -1,6 +1,7 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { Activity, Building2, ChartNoAxesGantt, Compass, UserRound, Users } from "lucide-react";
 
+import { ACROSS_THE_WORKSPACE } from "@/components/practices-across-the-workspace/across-workspace-copy";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
 	SidebarGroup,
@@ -45,7 +46,7 @@ export function NavDashboards({
 		},
 		{
 			to: "/w/$workspaceSlug/practices-across-the-workspace",
-			label: "Across the workspace",
+			label: ACROSS_THE_WORKSPACE,
 			icon: ChartNoAxesGantt,
 			active: onAcrossTheWorkspace,
 		},

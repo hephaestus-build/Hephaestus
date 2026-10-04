@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import {
 	type AcrossWorkspaceWindow,
-	groupsHint,
+	barsHint,
 	PAGE_PURPOSE,
 	tilesHint,
 	type SplitContext,
@@ -114,7 +114,7 @@ export function PracticesAcrossTheWorkspacePage({
 				<Section
 					size="lg"
 					title={ALL_PRACTICE_GROUPS}
-					description={overview && groupsHint(overview.minimumOthers)}
+					description={overview && barsHint(overview.minimumOthers, "group")}
 				>
 					<SplitLegend />
 					{/* The bars count the current standing, so a new window leaves them as they are. */}

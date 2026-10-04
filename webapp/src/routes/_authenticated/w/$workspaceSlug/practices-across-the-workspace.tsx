@@ -6,7 +6,11 @@ import {
 	getPracticesAcrossWorkspaceOptions,
 	getPracticesAcrossWorkspaceTilesOptions,
 } from "@/api/@tanstack/react-query.gen";
-import type { PracticesAcrossWorkspace, PracticesAcrossWorkspaceTiles } from "@/api/types.gen";
+import type {
+	PracticesAcrossWorkspace,
+	PracticesAcrossWorkspaceTiles,
+	WorkspaceGroupSplit,
+} from "@/api/types.gen";
 import {
 	combinePanelStates,
 	type LoadState,
@@ -27,6 +31,7 @@ import {
 	practiceLevel,
 } from "@/components/practice-profile/practice-profile-search";
 import {
+	ACROSS_THE_WORKSPACE,
 	DEFAULT_WINDOW,
 	WINDOW_VALUES,
 } from "@/components/practices-across-the-workspace/across-workspace-copy";
@@ -52,9 +57,6 @@ const searchSchema = z
 		window: z.enum(WINDOW_VALUES).default(DEFAULT_WINDOW).catch(DEFAULT_WINDOW),
 	})
 	.extend(detailStackSchema(LEVEL_KINDS).shape);
-
-/** The page under the levels, as the first crumb of their path. */
-const PAGE_LABEL = "Across the workspace";
 
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/practices-across-the-workspace",
@@ -120,7 +122,7 @@ function PracticesAcrossTheWorkspace() {
 	const overview = state.status === "ready" ? state.overview : undefined;
 	const group = overview?.groups.find((each) => each.groupSlug === openGroupSlug);
 	const pathAt = levelPathAt(stack, {
-		pageLabel: PAGE_LABEL,
+		pageLabel: ACROSS_THE_WORKSPACE,
 		labelOf: () => group?.groupName ?? "Group",
 		onClose: stackControls.close,
 	});
@@ -147,7 +149,7 @@ function PracticesAcrossTheWorkspace() {
 						key={entry.id}
 						nested={level.nested}
 						path={pathAt(level.depth)}
-						state={levelState(overview, entry.id)}
+						state={levelState(overview, group)}
 						onGoToProfile={() => goToProfile([practiceGroupLevel(entry.id)])}
 						onGoToPractice={(practiceSlug) =>
 							goToProfile([practiceGroupLevel(entry.id), practiceLevel(practiceSlug)])
@@ -159,15 +161,17 @@ function PracticesAcrossTheWorkspace() {
 	);
 }
 
-/** The open group's level: loading with the page, missing from it, or the group and its context. */
+/**
+ * The open group's level: loading with the page, missing from it, or the group, which the route
+ * found once for the level and its crumb, and its context.
+ */
 function levelState(
 	overview: PracticesAcrossWorkspace | undefined,
-	groupSlug: string,
+	group: WorkspaceGroupSplit | undefined,
 ): WorkspaceGroupLevelState {
 	if (overview === undefined) {
 		return { status: "loading" };
 	}
-	const group = overview.groups.find((each) => each.groupSlug === groupSlug);
 	return group === undefined
 		? { status: "missing" }
 		: { status: "ready", group, context: splitContextOf(overview) };
