@@ -35,9 +35,11 @@ public interface ConversationThreadProjection {
     /**
      * The ordered-turns payload for a single settled thread under conversation review. No participant
      * firewall — the review judges the thread as reviewed work — but the same
-     * {@code consent_state = 'ACTIVE'} gate and quarantine envelope apply.
+     * {@code consent_state = 'ACTIVE'} gate and quarantine envelope apply. Each turn states whether
+     * {@code reviewedMemberId} wrote it ({@code underReview}). That member is the one participant the review is
+     * about. The other turns are context, not the reviewed work.
      */
-    ObjectNode buildThreadPayload(long workspaceId, String channelId, String threadTs);
+    ObjectNode buildThreadPayload(long workspaceId, String channelId, String threadTs, long reviewedMemberId);
 
     /**
      * Whether the thread exists and its channel's consent is {@code ACTIVE}.

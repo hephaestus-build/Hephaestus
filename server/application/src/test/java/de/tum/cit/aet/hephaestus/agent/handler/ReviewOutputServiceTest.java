@@ -17,6 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
 import de.tum.cit.aet.hephaestus.agent.context.HistoricalGitEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
@@ -52,6 +53,7 @@ import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.io.StringReader;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -1391,6 +1393,98 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("no longer authorized");
             verify(conversationSourceLiveness).isDeliverableThread(1L, 77L, "C123", "1700000000.100000", 789L);
+        }
+    }
+
+    @Nested
+    class ConversationCitations {
+
+        private static final String THREAD = "context/conversation_thread.json";
+        private static final String THREAD_DIGEST = "9".repeat(64);
+
+        /** Written as the content source writes it, with the default pretty printer. */
+        private static final String THREAD_JSON = """
+                {
+                  "channel" : "C123",
+                  "messages" : [ {
+                    "ts" : "1700000000.100000",
+                    "text" : "Can someone look at the failing build?",
+                    "underReview" : false
+                  }, {
+                    "ts" : "1700000000.200000",
+                    "text" : "It is broken. Fix it.",
+                    "underReview" : true
+                  } ]
+                }
+                """;
+
+        @BeforeEach
+        void conversationReview() {
+            testJob.setJobType(AgentJobType.CONVERSATION_REVIEW);
+            ObjectNode metadata = objectMapper.createObjectNode();
+            metadata.put("artifact_kind", ArtifactKinds.CONVERSATION_THREAD.value());
+            metadata.put("slack_thread_id", 77L);
+            metadata.put("slack_channel_id", "C123");
+            metadata.put("slack_thread_ts", "1700000000.100000");
+            metadata.put("about_user_id", 789L);
+            testJob.setMetadata(metadata);
+            when(conversationSourceLiveness.isDeliverableThread(1L, 77L, "C123", "1700000000.100000", 789L))
+                    .thenReturn(true);
+            ObjectNode snapshot = (ObjectNode) Objects.requireNonNull(testJob.getEvidenceSnapshot());
+            EvidenceSnapshotFixtures.artifact(
+                    snapshot,
+                    EvidenceSnapshotFixtures.availableSource(snapshot, "slack.conversation.thread", null),
+                    THREAD,
+                    THREAD_DIGEST);
+            when(cas.containsUtf8AtLines(eq(testJob), eq(THREAD), eq(THREAD_DIGEST), anyString(), anyInt(), anyInt()))
+                    .thenReturn(Optional.of(true));
+            lenient()
+                    .when(cas.inspect(eq(testJob), eq(THREAD), eq(THREAD_DIGEST), any()))
+                    .thenAnswer(invocation -> Optional.of(invocation
+                            .<JobEvidenceFiles.TextInspection<?>>getArgument(3)
+                            .inspect(new StringReader(THREAD_JSON))));
+        }
+
+        private ValidatedObservation citingLine(Outcome outcome, int line, String quote) {
+            ValidatedObservation observation = validObservation("pr-description-quality", outcome);
+            ObjectNode citation = firstCitation(observation);
+            citation.put("sourceKind", "slack.conversation.thread");
+            citation.put("artifactPath", THREAD);
+            citation.put("path", "conversation_thread.json");
+            citation.put("startLine", line);
+            citation.put("endLine", line);
+            citation.put("quote", quote);
+            citation.remove("side");
+            return observation;
+        }
+
+        @Test
+        @DisplayName("a NOT_MET that cites only another participant's turn is withheld with its reason")
+        void shouldWithholdANotMetWhenItCitesOnlyAnotherParticipant() {
+            var observations = List.of(citingLine(Outcome.NOT_MET, 5, "Can someone look at the failing build?"));
+
+            assertThatThrownBy(() -> service.prepare(testJob, observations))
+                    .isInstanceOfSatisfying(ObservationsRefusedException.class, refused -> {
+                        JsonNode failure = refused.verificationFailures().get(0);
+                        assertThat(failure.path("reasonCode").asString()).isEqualTo("NOT_THE_REVIEWED_PARTICIPANT");
+                        assertThat(failure.path("observationIndex").asInt()).isZero();
+                    });
+        }
+
+        @Test
+        @DisplayName("a NOT_MET that cites a turn of the participant under review is admitted")
+        void shouldAdmitANotMetWhenItCitesTheParticipantUnderReview() {
+            var observations = List.of(citingLine(Outcome.NOT_MET, 9, "It is broken. Fix it."));
+
+            assertThatCode(() -> service.prepare(testJob, observations)).doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("a MET may rest on another participant's turn, which is context")
+        void shouldAdmitAMetThatCitesAnotherParticipant() {
+            var observations = List.of(citingLine(Outcome.MET, 5, "Can someone look at the failing build?"));
+
+            assertThatCode(() -> service.prepare(testJob, observations)).doesNotThrowAnyException();
         }
     }
 

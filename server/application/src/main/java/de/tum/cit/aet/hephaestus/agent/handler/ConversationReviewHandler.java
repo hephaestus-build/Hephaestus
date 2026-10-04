@@ -143,7 +143,9 @@ public class ConversationReviewHandler implements JobTypeHandler {
                 + SandboxLayout.CONTEXT_PREFIX
                 + "project_inventory.json for cross-artifact awareness of the workspace's issues/PRs if "
                 + "present, then evaluate each communication practice in inputs/practices/ against the thread and "
-                + "persist every justified observation via the report_observation tool. Evidence should quote the exact turn(s) "
+                + "persist every justified observation via the report_observation tool. The review is about one "
+                + "participant: judge only the turns marked \"underReview\": true. The other turns are context. "
+                + "Evidence should quote the exact turn(s) "
                 + "you assessed. Follow "
                 + SandboxLayout.ORCHESTRATOR_PATH
                 + " for the observation schema and rules.";

@@ -113,7 +113,7 @@ class SlackConversationProjectorIntegrationTest extends BaseIntegrationTest {
             assertThat(thread.path("messages").get(0).path("text").asString()).isEqualTo("other participant reply");
         });
         assertThat(projector
-                        .buildThreadPayload(workspace, "C1", "100.0")
+                        .buildThreadPayload(workspace, "C1", "100.0", 100L)
                         .path("messages")
                         .size())
                 .isEqualTo(1);
