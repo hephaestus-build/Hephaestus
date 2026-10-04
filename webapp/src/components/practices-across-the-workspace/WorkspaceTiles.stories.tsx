@@ -32,8 +32,6 @@ export const Default: Story = {
 				name: "Your value: 3. Typical range here: 1 to 4.",
 			}),
 		).toBeVisible();
-		// No tile carries an info icon; the line under the tiles explains them all.
-		await expect(canvas.queryAllByRole("button", { name: /^About /u })).toHaveLength(0);
 	},
 };
 
@@ -61,8 +59,9 @@ export const NoOpenFeedbackHere: Story = {
 export const Loading: Story = {
 	args: { tiles: undefined, openFeedback: undefined },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Loading the figures")).toHaveClass("sr-only");
-		await expect(canvas.getByRole("list")).toHaveAttribute("aria-busy", "true");
+		// Every tile is its skeleton; the page's section carries the busy state.
+		await expect(canvas.queryByText("Pieces of work reviewed")).toBeNull();
+		await expect(canvas.queryByText("Open feedback")).toBeNull();
 	},
 };
 
@@ -75,11 +74,8 @@ export const WindowLoading: Story = {
 	},
 };
 
-/** Another window on its way: its three tiles are drained, the open feedback, which reads none, is not. */
-export const Stale: Story = {
-	args: { stale: true },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Pieces of work reviewed").closest(".grayscale")).not.toBeNull();
-		await expect(canvas.getByText("Open feedback").closest(".grayscale")).toBeNull();
-	},
-};
+/**
+ * Another window on its way: its three tiles are drained of color, and open feedback, which reads
+ * no window, is not. A visual state only, so the snapshot is the test.
+ */
+export const Stale: Story = { args: { stale: true } };

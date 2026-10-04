@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
+import { ACTIVITY_RANGE_OPTIONS } from "@/components/activity/activity-range";
 import { withStandardPage } from "@/stories/decorators";
 
-import { ACTIVITY_RANGE_OPTIONS } from "./activity-range";
 import { RangeControls } from "./RangeControls";
 
 const meta = {

@@ -22,38 +22,32 @@ const split = (
 
 describe("splitDescription", () => {
 	it("names the whole, every count in the server's order, and the part the marker is on", () => {
-		expect(splitDescription(split(6, 7, 7, 8), "MIXED", true)).toBe(
+		expect(splitDescription(split(6, 7, 7, 8), "MIXED")).toBe(
 			"28 developers with a current standing in this workspace: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet. The You marker is on Mixed feedback.",
 		);
 	});
 
 	it.each(["NOT_OBSERVED", "NO_OPPORTUNITY"] as const)(
-		"puts a counted reader whose standing is %s on none yet",
+		"puts a reader whose standing is %s on none yet",
 		(standing) => {
-			expect(splitDescription(split(6, 7, 7, 8), standing, true)).toMatch(
+			expect(splitDescription(split(6, 7, 7, 8), standing)).toMatch(
 				/The You marker is on none yet\.$/u,
 			);
 		},
 	);
 
-	it("marks no one when the reader is not counted", () => {
-		expect(splitDescription(split(6, 7, 7, 8), "MIXED", false)).toMatch(/, 8 none yet\.$/u);
-	});
-
 	it("marks no one when the server sends no marker", () => {
-		expect(splitDescription(split(6, 7, 7, 8), undefined, true)).toMatch(/, 8 none yet\.$/u);
+		expect(splitDescription(split(6, 7, 7, 8), undefined)).toMatch(/, 8 none yet\.$/u);
 	});
 
 	it("gives a total-only split its total and reason, and nothing of the reader", () => {
-		expect(
-			splitDescription({ shape: "TOTAL_ONLY", parts: [], developers: 1 }, undefined, true),
-		).toBe(
+		expect(splitDescription({ shape: "TOTAL_ONLY", parts: [], developers: 1 }, undefined)).toBe(
 			"1 developer with a current standing in this workspace. The split is held back so no one can be singled out.",
 		);
 	});
 
 	it("gives a withheld split its reason alone, with no total and no promise about later", () => {
-		expect(splitDescription({ shape: "WITHHELD", parts: [] }, undefined, true)).toBe(
+		expect(splitDescription({ shape: "WITHHELD", parts: [] }, undefined)).toBe(
 			"Held back so no one can be singled out.",
 		);
 	});
@@ -67,7 +61,7 @@ describe("shownSplit", () => {
 	];
 	it.each(incomplete)("holds back %s rather than drawing a 0", (_, wire) => {
 		expect(shownSplit(wire)).toBeUndefined();
-		expect(splitDescription(wire, undefined, true)).toBe("Held back so no one can be singled out.");
+		expect(splitDescription(wire, undefined)).toBe("Held back so no one can be singled out.");
 	});
 });
 
@@ -80,16 +74,16 @@ describe("tilesHint", () => {
 	const WITH_A_BAND = { yours: 3, middle: { low: 1, high: 4 } };
 
 	it.each([
-		["DAYS_30", "the 41 developers in this workspace who have a standing in the last 30 days,"],
-		["DAYS_90", "the 41 developers in this workspace who have a standing in the last 90 days,"],
-		["ALL_TIME", "the 41 developers in this workspace who have a standing so far,"],
+		["DAYS_30", "the 41 developers in this workspace who have a standing in the last 30 days by"],
+		["DAYS_90", "the 41 developers in this workspace who have a standing in the last 90 days by"],
+		["ALL_TIME", "the 41 developers in this workspace who have a standing so far by"],
 	] as const)("names the %s window in the toggle's words", (window, phrase) => {
 		expect(tilesHint({ ...tiles, window }, WITH_A_BAND)[0]).toContain(phrase);
 	});
 
 	it("names no count where the server held the total back", () => {
 		const [band] = tilesHint({ minimumOthersForMiddleHalf: 6, window: "DAYS_30" }, WITH_A_BAND);
-		expect(band).toContain("takes the developers in this workspace who have a standing");
+		expect(band).toContain("sorts the developers in this workspace who have a standing");
 	});
 
 	it("agrees count, noun and verb in the singular", () => {
@@ -98,7 +92,9 @@ describe("tilesHint", () => {
 			WITH_A_BAND,
 		);
 		expect(band).toContain("the 1 developer in this workspace who has a standing");
-		expect(band).toContain("only when at least 1 other developer has a standing.");
+		expect(band).toContain(
+			"at least 2 developers are counted, so at least 1 developer other than you.",
+		);
 	});
 
 	it("says when open feedback shows its band only while it has none", () => {
@@ -108,23 +104,34 @@ describe("tilesHint", () => {
 		// A band at nought is still a band: the tile says most have none in its place.
 		expect(tilesHint(tiles, { yours: 0, middle: { low: 0, high: 0 } })[1]).toBe(open);
 		expect(tilesHint(tiles, { yours: 3 })[1]).toBe(
-			`${open} Its band shows only when this page counts at least 6 other developers.`,
+			`${open} Its band shows only when this page counts at least 7 developers.`,
 		);
 	});
 });
 
-describe("barsHint", () => {
-	// The server shows a part only above K with the reader counted (CohortPrivacyPolicy), so K = 3
-	// means a floor of 4 and 3 others whoever reads the bar.
-	it("names the part floor as K + 1 and the others it leaves as K", () => {
+describe("the disclosure floor", () => {
+	// The server shows a count only above K others with the reader counted (CohortPrivacyPolicy):
+	// K = 3 is a floor of 4 for a bar, and K = 6 a floor of 7 for the typical range.
+	it("names a bar's floor as K + 1 and the others it leaves as K", () => {
 		const hint = barsHint(3, "group");
-		expect(hint).toContain("only when each part holds at least 4 developers.");
-		expect(hint).toContain("So each part stands for at least 3 developers other than you.");
+		expect(hint).toContain("A count shows only when it holds at least 4 developers.");
+		expect(hint).toContain(
+			"So each count stands for at least 3 developers other than you, whoever reads it",
+		);
 	});
 
-	it("adds the practice-only differencing rule, and only for a practice", () => {
-		const rule = "beside its group’s bar, it would single out fewer than 3 developers.";
-		expect(barsHint(3, "practice")).toContain(rule);
-		expect(barsHint(3, "group")).not.toContain(rule);
+	it("names the typical range's floor from its own K", () => {
+		expect(
+			tilesHint({ minimumOthersForMiddleHalf: 6, window: "DAYS_30" }, { yours: 1 })[0],
+		).toContain(
+			"The band shows only when at least 7 developers are counted, so at least 6 developers other than you.",
+		);
+	});
+
+	it("gives groups and practices each their own differencing rule at the same floor", () => {
+		expect(barsHint(3, "group")).toMatch(/single out fewer than 4 developers between them\.$/u);
+		expect(barsHint(3, "practice")).toMatch(
+			/it and its group’s bar together would single out fewer than 4 developers\.$/u,
+		);
 	});
 });

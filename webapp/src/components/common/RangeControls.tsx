@@ -1,6 +1,6 @@
 import { useSpinDelay } from "spin-delay";
 
-import { FilterToggle, type FilterOption } from "@/components/common/FilterToggle";
+import { FilterToggle, type FilterOption } from "./FilterToggle";
 
 export interface RangeControlsProps<TRange extends string> {
 	/** The ranges the page offers, in the order the toggle shows them. */

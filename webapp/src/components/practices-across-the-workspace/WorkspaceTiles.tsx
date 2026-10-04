@@ -110,10 +110,9 @@ const TILE_DEFS: readonly TileDef[] = [
  */
 export function WorkspaceTiles(props: WorkspaceTilesProps) {
 	const stale = props.stale === true;
-	const busy = props.tiles === undefined || props.openFeedback === undefined || stale;
 	return (
 		<div className="@container">
-			<ul aria-busy={busy ? true : undefined} className={STAT_TILE_GRID}>
+			<ul className={STAT_TILE_GRID}>
 				{TILE_DEFS.map((def) => {
 					const read = def.read(props);
 					return (
@@ -127,7 +126,6 @@ export function WorkspaceTiles(props: WorkspaceTilesProps) {
 					);
 				})}
 			</ul>
-			{busy && <span className="sr-only">Loading the figures</span>}
 		</div>
 	);
 }

@@ -62,8 +62,6 @@ export interface PracticeTableFrameProps<TRow> extends PracticeTableBody<TRow> {
 	head: ReactNode;
 	/** The empty state spans this many columns. */
 	columns: number;
-	/** A row after the loaded rows, such as an `InfiniteListEnd`. */
-	end?: ReactNode;
 }
 
 /**
@@ -80,7 +78,6 @@ export function PracticeTableFrame<TRow>({
 	empty,
 	isLoading = false,
 	loadingRow,
-	end,
 }: PracticeTableFrameProps<TRow>) {
 	let body: ReactNode;
 	if (isLoading) {
@@ -108,14 +105,7 @@ export function PracticeTableFrame<TRow>({
 			</TableRow>
 		);
 	} else {
-		body = (
-			<>
-				{rows.map((row) => (
-					<Fragment key={rowKey(row)}>{renderRow(row)}</Fragment>
-				))}
-				{end}
-			</>
-		);
+		body = rows.map((row) => <Fragment key={rowKey(row)}>{renderRow(row)}</Fragment>);
 	}
 	return (
 		// `shrink-0`: an `overflow-hidden` flex item has no automatic minimum size, so a level's column

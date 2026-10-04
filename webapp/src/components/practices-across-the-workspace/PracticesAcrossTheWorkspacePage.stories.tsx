@@ -13,11 +13,6 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { PracticesAcrossTheWorkspacePage } from "./PracticesAcrossTheWorkspacePage";
 
-/**
- * The reader's figures beside the workspace's middle half over the window, then every practice
- * group beside how the workspace's developers split across it by their current standing. The
- * reader shows only as the You marker on a split; a split shown as its total marks no one.
- */
 const meta = {
 	component: PracticesAcrossTheWorkspacePage,
 	tags: ["autodocs"],
@@ -38,28 +33,33 @@ const groupsTable = (canvas: {
 	getByRole: (role: "table", options: { name: string }) => HTMLElement;
 }) => within(canvas.getByRole("table", { name: "All practice groups" }));
 
+const figuresSection = (canvas: {
+	getByRole: (role: "heading", options: { level: number; name: string }) => HTMLElement;
+}) => canvas.getByRole("heading", { level: 2, name: "Your figures" }).closest("section");
+
 export const Default: Story = {
 	play: async ({ canvas, args }) => {
-		// The hints carry the response's own numbers: 26 in the window, 6 for a band, 3 for a part.
+		// The hints carry the response's own numbers: 26 in the window, a floor of 7 for the band
+		// (6 others), and a floor of 4 for a count (3 others).
 		await expect(
 			canvas.getByText(
-				/Hephaestus takes the 26 developers in this workspace who have a standing in the last 30 days/u,
+				/Hephaestus sorts the 26 developers in this workspace who have a standing in the last 30 days/u,
 			),
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				/A tile shows the band only when at least 6 other developers have a standing\./u,
+				/The band shows only when at least 7 developers are counted, so at least 6 developers other than you\./u,
 			),
 		).toBeVisible();
 		await expect(
-			canvas.getByText(
-				/only when each part holds at least 4 developers\. So each part stands for at least 3 developers other than you\./u,
-			),
+			canvas.getByText(/A count shows only when it holds at least 4 developers\./u),
 		).toBeVisible();
 		// Only the tiles read the window: the toggle sits in their section, and the bars name none.
-		await expect(
-			canvas.getByRole("heading", { level: 2, name: "Last 30 days" }).closest("section"),
-		).toContainElement(canvas.getByRole("toolbar", { name: "Time range" }));
+		await expect(figuresSection(canvas)).toContainElement(
+			canvas.getByRole("toolbar", { name: "Time range" }),
+		);
+		// The window is the section's description, not its heading.
+		await expect(canvas.getByText("Last 30 days", { selector: "p" })).toBeVisible();
 		await expect(
 			canvas.getByRole("heading", { level: 2, name: "All practice groups" }).closest("section")
 				?.textContent,
@@ -88,10 +88,7 @@ export const GroupOpen: Story = {
 	},
 };
 
-/**
- * Too few developers with a standing: every middle half, every split and their total are held back
- * by the server, and the page says only how many pieces of the reader's own work were reviewed.
- */
+/** Too few developers with a standing: every range, split and total is held back. */
 export const Withheld: Story = {
 	args: {
 		state: { status: "ready", overview: GATED_WORKSPACE },
@@ -101,21 +98,17 @@ export const Withheld: Story = {
 		// No count of them, where the server held the total back.
 		await expect(canvas.queryByText(/\d+ developers\s+with a standing/u)).toBeNull();
 		await expect(
-			canvas.getByText(
-				/^The grey band is the typical range\. To find it, Hephaestus takes the developers in this workspace/u,
-			),
+			canvas.getByText(/Hephaestus sorts the developers in this workspace who have a standing/u),
 		).toBeVisible();
 		// Open feedback has no band either, and its line says when it would.
 		await expect(
-			canvas.getByText(/Its band shows only when this page counts at least 6 other developers\.$/u),
+			canvas.getByText(/Its band shows only when this page counts at least 7 developers\.$/u),
 		).toBeVisible();
 		await expect(
 			canvas.getAllByText("Needs more data before the workspace shows here."),
 		).toHaveLength(4);
-		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(8);
-		await expect(
-			canvas.queryAllByRole("img", { name: /developers with a standing/u }),
-		).toHaveLength(0);
+		// Once for the whole table, not once per group.
+		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(1);
 	},
 };
 
@@ -125,15 +118,10 @@ export const ManyGroups: Story = {
 	play: async ({ canvas }) => {
 		const table = groupsTable(canvas);
 		await expect(table.getAllByRole("button", { name: /^Open group /u })).toHaveLength(26);
-		await expect(table.queryByRole("button", { name: /^Show more/u })).toBeNull();
 	},
 };
 
-/**
- * Another window's figures on their way: the last tiles stay, drained of their colours under the
- * new heading, and only their section says it is busy. The bars count the current standing, so
- * the window leaves them as they are.
- */
+/** Another window on its way: the last figures stay, and only their section is busy. */
 export const SwitchingWindow: Story = {
 	args: {
 		tiles: { status: "ready", tiles: ACROSS_WORKSPACE_TILES, stale: true },
@@ -142,21 +130,17 @@ export const SwitchingWindow: Story = {
 	play: async ({ canvas }) => {
 		const table = canvas.getByRole("table", { name: "All practice groups" });
 		await expect(table).toBeVisible();
-		await expect(
-			canvas.getByRole("heading", { level: 2, name: "Last 90 days" }).closest("section"),
-		).toHaveAttribute("aria-busy", "true");
+		await expect(figuresSection(canvas)).toHaveAttribute("aria-busy", "true");
+		await expect(canvas.getByText("Pieces of work reviewed")).toBeVisible();
 		await expect(
 			canvas.getByRole("heading", { level: 2, name: "All practice groups" }).closest("section"),
 		).not.toHaveAttribute("aria-busy");
-		await expect(table.closest(".grayscale")).toBeNull();
-		await expect(canvas.getByText("Pieces of work reviewed").closest(".grayscale")).not.toBeNull();
 	},
 };
 
 export const Empty: Story = {
 	args: { state: { status: "ready", overview: EMPTY_WORKSPACE } },
 	play: async ({ canvas }) => {
-		// The Practice profile's words for the same state.
 		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
 	},
 };
@@ -164,7 +148,7 @@ export const Empty: Story = {
 export const Loading: Story = {
 	args: { state: { status: "loading" }, tiles: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Loading the figures")).toHaveClass("sr-only");
+		await expect(figuresSection(canvas)).toHaveAttribute("aria-busy", "true");
 		await expect(canvas.getByRole("table", { name: "All practice groups" })).toHaveAttribute(
 			"aria-busy",
 			"true",
@@ -172,20 +156,29 @@ export const Loading: Story = {
 	},
 };
 
+const onRetryOverview = fn();
+
+/** Every region reads the overview, so its failure takes the page, with no window toggle to press. */
 export const LoadError: Story = {
-	args: { state: { status: "error", error: new Error("Network down"), onRetry: fn() } },
+	args: { state: { status: "error", error: new Error("Network down"), onRetry: onRetryOverview } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("We could not load the workspace")).toBeVisible();
-		await expect(canvas.queryByRole("table", { name: "All practice groups" })).toBeNull();
+		await expect(canvas.getByText("We could not load the practice groups")).toBeVisible();
+		await expect(canvas.queryByRole("toolbar", { name: "Time range" })).toBeNull();
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
+		await expect(onRetryOverview).toHaveBeenCalledOnce();
 	},
 };
 
-/** The window's tiles failed: their section says so, and the bars, which read no window, stay. */
+const onRetryTiles = fn();
+
+/** The window's figures failed: their section says so, and the bars, which read no window, stay. */
 export const TilesLoadError: Story = {
-	args: { tiles: { status: "error", error: new Error("Network down"), onRetry: fn() } },
+	args: { tiles: { status: "error", error: new Error("Network down"), onRetry: onRetryTiles } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("We could not load the figures")).toBeVisible();
+		await expect(canvas.getByText("We could not load your figures")).toBeVisible();
 		await expect(canvas.getByRole("table", { name: "All practice groups" })).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
+		await expect(onRetryTiles).toHaveBeenCalledOnce();
 	},
 };
 

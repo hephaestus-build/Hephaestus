@@ -26,10 +26,11 @@ import {
 
 export interface WorkspaceSplitBarProps {
 	split: WorkspaceSplit;
-	/** The part the You marker is on, while the reader is counted and the split shows its parts. */
+	/**
+	 * The part the You marker is on. The server sends it only on a split that shows its parts and
+	 * counts the reader, so its absence is the unmarked bar.
+	 */
 	yourStanding?: PracticeGroupStandingValue;
-	/** Whether the reader is one of the developers the split counts. */
-	readerCounted: boolean;
 }
 
 interface PartDef {
@@ -80,21 +81,17 @@ function YouMarker() {
  * bar and marks no one. A split held back whole is a dashed track with its reason. All three take
  * the same width and height, so rows of mixed shapes line up.
  */
-export function WorkspaceSplitBar({
-	split: wire,
-	yourStanding,
-	readerCounted,
-}: WorkspaceSplitBarProps) {
+export function WorkspaceSplitBar({ split: wire, yourStanding }: WorkspaceSplitBarProps) {
 	const split = shownSplit(wire);
 	if (split === undefined) {
 		return (
 			<div className="flex w-full min-w-0 flex-col gap-1">
-				<span aria-hidden className={cn("mt-5 w-full", HELD_BACK_TRACK)} />
+				<HeldBackTrack />
 				<p className="text-xs text-muted-foreground">{HELD_BACK}.</p>
 			</div>
 		);
 	}
-	const description = splitDescription(wire, yourStanding, readerCounted);
+	const description = splitDescription(wire, yourStanding);
 	const total = (
 		<p aria-hidden className="text-right text-xs text-muted-foreground tabular-nums">
 			{splitTotalText(split)}
@@ -119,12 +116,12 @@ export function WorkspaceSplitBar({
 		...split.parts.map((part) => ({
 			def: standingPart(part.standing),
 			count: part.developers,
-			isYours: readerCounted && part.standing === yourStanding,
+			isYours: part.standing === yourStanding,
 		})),
 		{
 			def: NONE_YET_PART,
 			count: split.noneYet,
-			isYours: readerCounted && yourStanding !== undefined && !isSettledStanding(yourStanding),
+			isYours: yourStanding !== undefined && !isSettledStanding(yourStanding),
 		},
 	];
 	return (
@@ -158,6 +155,14 @@ export function WorkspaceSplitBar({
 			{total}
 		</div>
 	);
+}
+
+/**
+ * The empty track of a split held back whole, at a bar's height and place. A table whose every
+ * split is held back draws it alone and says the reason once.
+ */
+export function HeldBackTrack() {
+	return <span aria-hidden className={cn("mt-5 w-full", HELD_BACK_TRACK)} />;
 }
 
 /** The bar's lines while it loads: the marker's row, the bar, the counts, then the total. */

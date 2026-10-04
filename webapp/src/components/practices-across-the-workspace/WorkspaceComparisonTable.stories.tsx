@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
 
-import { threeWay, TOTAL_ONLY } from "@/stories/practices-across-the-workspace-story-data";
+import {
+	threeWay,
+	TOTAL_ONLY,
+	WITHHELD,
+} from "@/stories/practices-across-the-workspace-story-data";
 
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 
@@ -42,7 +46,7 @@ const meta = {
 	args: {
 		"aria-label": "All practice groups",
 		subjectHead: "Practice group",
-		state: { status: "ready", rows: ROWS, readerCounted: true },
+		state: { status: "ready", rows: ROWS },
 		rowLink: () => ({ text: "Open group", onOpen }),
 		empty: { title: "No practices set up yet", description: "They appear once set up." },
 	},
@@ -79,6 +83,17 @@ export const Default: Story = {
 	},
 };
 
+/** Every split held back: the reason shows once above the table, not once per row. */
+export const AllHeldBack: Story = {
+	args: {
+		state: { status: "ready", rows: ROWS.map((each) => ({ ...each, split: WITHHELD })) },
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(1);
+		await expect(canvas.getAllByRole("button", { name: /^Open group /u })).toHaveLength(4);
+	},
+};
+
 /** Each loading row in the shape of the row it stands for, its link cell left empty. */
 export const Loading: Story = {
 	args: { state: { status: "loading" } },
@@ -89,7 +104,7 @@ export const Loading: Story = {
 };
 
 export const Empty: Story = {
-	args: { state: { status: "ready", rows: [], readerCounted: true } },
+	args: { state: { status: "ready", rows: [] } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
 	},

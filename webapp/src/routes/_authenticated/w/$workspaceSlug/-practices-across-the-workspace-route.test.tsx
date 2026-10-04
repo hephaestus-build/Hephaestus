@@ -133,15 +133,15 @@ describe("Practices across the workspace", () => {
 			{ name: "Practices of Packaging work for review" },
 			ROUTE_RENDER_WAIT,
 		);
+		// The group's own bar, and its one practice that splits the same way.
 		expect(
 			level.getAllByRole("img", {
-				name: /^28 developers with a current standing in this workspace: .* The You marker is on Needs attention\.$/u,
-			}).length,
-		).toBeGreaterThan(0);
-		// No standing badge, no trend, no window: the reader's own learning is in their profile.
+				name: "28 developers with a current standing in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
+			}),
+		).toHaveLength(2);
+		// No standing badge and no window: the reader's own learning is in their profile.
 		expect(level.queryByRole("button", { name: "Needs attention" })).toBeNull();
 		expect(level.queryByText(/^Last \d+ days$/u)).toBeNull();
-		expect(level.queryByText(/^You:/u)).toBeNull();
 		// The level asks for nothing of its own: the page's one read carries every practice's split.
 		expect(overviewReads()).toHaveLength(1);
 		expect(profileReads()).toStrictEqual([]);
@@ -197,16 +197,21 @@ describe("Practices across the workspace", () => {
 		expect(profileReads()).toStrictEqual([]);
 	});
 
-	it("says it could not load the workspace when the read fails", async () => {
+	it("says it could not load the practice groups when the overview fails, in the open level too", async () => {
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/practices/workspace-overview", () =>
 				HttpResponse.json({ title: "Internal Server Error" }, { status: 500 }),
 			),
 		);
-		renderRouteAtWithRouter(PAGE);
+		const { router } = renderRouteAtWithRouter(GROUP_OPEN);
 
-		await screen.findByText("We could not load the workspace", undefined, ROUTE_RENDER_WAIT);
+		const level = within(
+			await screen.findByRole("dialog", { name: "Practice group" }, ROUTE_RENDER_WAIT),
+		);
+		await level.findByText("We could not load the practice groups", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("table", { name: "All practice groups" })).toBeNull();
+		// The address still names the group, so the level stays open over the failure.
+		expect(router.state.location.search.detail).toStrictEqual(["practice-group:review-ready-work"]);
 	});
 
 	it("keeps the group open when the tiles fail", async () => {
@@ -217,7 +222,7 @@ describe("Practices across the workspace", () => {
 		);
 		renderRouteAtWithRouter(GROUP_OPEN);
 
-		await screen.findByText("We could not load the figures", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("We could not load your figures", undefined, ROUTE_RENDER_WAIT);
 		await screen.findByRole("dialog", { name: "Packaging work for review" }, ROUTE_RENDER_WAIT);
 	});
 });

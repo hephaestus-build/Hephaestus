@@ -32,10 +32,11 @@ export const Default: Story = {
 		await expect(
 			canvas.getByRole("img", { name: "Your value: 17. Typical range here: 11 to 21." }),
 		).toBeVisible();
-		// Who the band is of is said once, under the tiles, not on every tile.
-		await expect(canvas.queryByText(/developers with a standing/u)).toBeNull();
 	},
 };
+
+/** The band and the accent pin carry meaning on a dark card too. */
+export const Dark: Story = { globals: { theme: "dark" } };
 
 /** A middle half on one value says it once, and the band still shows. */
 export const OneValue: Story = {

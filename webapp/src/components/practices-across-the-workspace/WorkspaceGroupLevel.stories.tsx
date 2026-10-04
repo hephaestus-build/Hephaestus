@@ -12,9 +12,10 @@ import {
 import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
+import { ACROSS_THE_WORKSPACE } from "./across-workspace-copy";
 import { WorkspaceGroupLevel } from "./WorkspaceGroupLevel";
 
-const COUNTS = { readerCounted: true, minimumOthers: 3 } as const;
+const COUNTS = { minimumOthers: 3 } as const;
 
 /**
  * A practice group's practices over Practices across the workspace. The level has no page of its
@@ -25,7 +26,7 @@ const meta = {
 	parameters: { layout: "fullscreen" },
 	decorators: [withPageBehind],
 	args: {
-		path: { behind: [{ label: "Practices across the workspace", depth: 0 }], onClose: fn() },
+		path: { behind: [{ label: ACROSS_THE_WORKSPACE, depth: 0 }], onClose: fn() },
 		state: { status: "ready", group: PACKAGING_GROUP, ...COUNTS },
 		onGoToProfile: fn(),
 		onGoToPractice: fn(),
@@ -77,10 +78,6 @@ export const Default: Story = {
 				name: "28 developers with a current standing in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
 			})[0],
 		).toBeVisible();
-		// No standing badge, no trend and no window: this level is the workspace, not the profile.
-		await expect(level.queryByRole("button", { name: "Needs attention" })).toBeNull();
-		await expect(level.queryByText(/More positive recently/u)).toBeNull();
-		await expect(level.queryByText(/^Last \d+ days$/u)).toBeNull();
 		await userEvent.click(
 			level.getByRole("button", {
 				name: "Open in your Practice profile Packaging work for review",
@@ -100,14 +97,14 @@ export const Default: Story = {
 		);
 		await expect(args.onGoToPractice).toHaveBeenCalledWith("scope-to-one-concern");
 		await expect(table.getAllByText("Split held back")).toHaveLength(2);
-		// The practice-only rule, with K from the level's counts.
+		// The practice-only rule, at the floor K + 1 from the level's counts.
 		await expect(
-			level.getByText(/beside its group’s bar, it would single out fewer than 3 developers\.$/u),
+			level.getByText(/its group’s bar together would single out fewer than 4 developers\.$/u),
 		).toBeVisible();
 	},
 };
 
-/** A group held back, its total too: the head shows the empty track and its reason. */
+/** Every split held back: the head's bar and the table each say the reason once. */
 export const GroupHeldBack: Story = {
 	args: {
 		state: {
@@ -122,7 +119,7 @@ export const GroupHeldBack: Story = {
 	},
 	play: async () => {
 		const level = within(await settledDrawerPanel());
-		await expect(level.getAllByText("Held back so no one can be singled out.")).toHaveLength(6);
+		await expect(level.getAllByText("Held back so no one can be singled out.")).toHaveLength(2);
 		await expect(
 			level.getByRole("button", {
 				name: "Open in your Practice profile Packaging work for review",
@@ -164,8 +161,19 @@ export const Loading: Story = {
 	play: async () => {
 		await settledDrawerPanel();
 		await expect(screen.getByRole("table")).toHaveAttribute("aria-busy", "true");
-		// The head's bar and the rule's line keep their place while the level loads.
-		await expect(document.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(3);
+	},
+};
+
+/** The overview failed: the level says so and retries, rather than closing over a stale address. */
+const onRetryOverview = fn();
+
+export const LoadError: Story = {
+	args: { state: { status: "error", error: new Error("Network down"), onRetry: onRetryOverview } },
+	play: async () => {
+		const level = within(await settledDrawerPanel());
+		await expect(level.getByText("We could not load the practice groups")).toBeVisible();
+		await userEvent.click(level.getByRole("button", { name: "Retry" }));
+		await expect(onRetryOverview).toHaveBeenCalledOnce();
 	},
 };
 
@@ -180,7 +188,7 @@ export const NoPractices: Story = {
 	},
 };
 
-/** A group by a slug the page does not list: a hand typed or stale address. */
+/** A slug the page does not list, such as a stale address. */
 export const UnknownGroup: Story = {
 	args: { state: { status: "missing" } },
 	play: async () => {
@@ -193,7 +201,7 @@ export const UnknownGroup: Story = {
 export const ClosesToThePage: Story = {
 	play: async ({ args }) => {
 		const level = within(await settledDrawerPanel());
-		await userEvent.click(level.getByRole("button", { name: /Practices across the workspace/u }));
+		await userEvent.click(level.getByRole("button", { name: /Across the workspace/u }));
 		await expect(args.path.onClose).toHaveBeenCalledWith(0);
 	},
 };

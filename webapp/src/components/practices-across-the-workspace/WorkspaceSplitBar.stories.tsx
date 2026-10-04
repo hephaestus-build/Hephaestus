@@ -31,7 +31,6 @@ const meta = {
 	args: {
 		split: threeWay([6, 7, 7]),
 		yourStanding: "MIXED",
-		readerCounted: true,
 	},
 } satisfies Meta<typeof WorkspaceSplitBar>;
 
@@ -51,21 +50,7 @@ export const Default: Story = {
 /** The parts and the You marker carry color meaning, so dark mode is asserted, not assumed. */
 export const Dark: Story = { globals: { theme: "dark" } };
 
-/** A reader with no current standing is in no count: no part carries the marker, and no word says it. */
-export const ReaderNotCounted: Story = {
-	args: { readerCounted: false },
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByText("You")).toBeNull();
-		await expect(canvas.getByRole("img")).toHaveAccessibleName(
-			"28 developers with a current standing in this workspace: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet.",
-		);
-	},
-};
-
-/**
- * A part holds too few: one neutral bar with the total and a short label, so the row says the
- * group counts but not how. The reader is not marked.
- */
+/** A part would hold too few: one neutral bar with the total, and no marker. */
 export const TotalOnly: Story = {
 	args: { split: TOTAL_ONLY, yourStanding: undefined },
 	play: async ({ canvas }) => {
@@ -75,22 +60,16 @@ export const TotalOnly: Story = {
 		await expect(canvas.getByText("Split held back")).toBeVisible();
 		await expect(canvas.getByText("28 developers")).toBeVisible();
 		await expect(canvas.queryByText("You")).toBeNull();
-		await expect(canvas.queryByText(/None yet/u)).toBeNull();
 	},
 };
 
-/**
- * Held back, the total too, as when too few developers have a standing at all: an empty track where
- * the bar would be and one short reason, nothing more. The reader is not marked.
- */
+/** The total would hold too few as well: an empty track and its reason. */
 export const Withheld: Story = {
 	args: { split: WITHHELD, yourStanding: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("img")).toBeNull();
 		await expect(canvas.getByText("Held back so no one can be singled out.")).toBeVisible();
-		await expect(canvas.queryByText(/developers with a/u)).toBeNull();
-		await expect(canvas.queryByText(/You/u)).toBeNull();
-		await expect(canvas.queryByText(/None yet/u)).toBeNull();
+		await expect(canvas.queryByText("You")).toBeNull();
 	},
 };
 

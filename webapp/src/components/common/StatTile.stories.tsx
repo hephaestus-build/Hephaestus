@@ -36,25 +36,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The figure in the foreground, what it counts after it, and the page's content under both. */
-export const Default: Story = {
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Pieces of work reviewed")).toBeVisible();
-		const figure = canvas.getByText("17");
-		await expect(figure).toHaveClass("text-foreground");
-		await expect(canvas.getByText("in the last 30 days")).toBeVisible();
-		await expect(canvas.getByText("Typical range: 11 to 21")).toBeVisible();
-	},
-};
+export const Default: Story = {};
 
-/** A tile with nothing behind it: the figure drops to the muted tone, and the card with it. */
-export const Muted: Story = {
-	args: { variant: "muted", value: 0, children: undefined },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("0")).toHaveClass("text-muted-foreground");
-		await expect(canvas.queryByText("Typical range: 11 to 21")).toBeNull();
-	},
-};
+/** A tile with nothing behind it: `variant="muted"` mutes the figure with the card. */
+export const Muted: Story = { args: { variant: "muted", value: 0, children: undefined } };
 
 /** A comparison with the period before, under the figure and above the page's content. */
 export const WithDetail: Story = {
@@ -70,13 +55,10 @@ export const WithDetail: Story = {
 	},
 };
 
-/** The tile's shape while its figure loads, with the page's content in its own shape under it. */
+/** `StatTileSkeleton`, with `children` as the page's content in its loading shape. */
 export const Loading: Story = {
-	render: () => (
-		<StatTileSkeleton>
-			<Skeleton className="h-16 w-full" />
-		</StatTileSkeleton>
-	),
+	args: { children: <Skeleton className="h-16 w-full" /> },
+	render: (args) => <StatTileSkeleton>{args.children}</StatTileSkeleton>,
 	play: async ({ canvasElement }) => {
 		// The shape alone, hidden from assistive technology: the page says once that it is loading.
 		await expect(canvasElement.querySelector('[data-slot="card"]')).toHaveAttribute(

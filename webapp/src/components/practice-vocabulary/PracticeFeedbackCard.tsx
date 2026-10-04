@@ -1,7 +1,6 @@
 import { Meter } from "@base-ui/react/meter";
 import { ArrowRightIcon, CheckIcon, ChevronRightIcon, ClockIcon, PackageIcon } from "lucide-react";
-import { type ComponentType, type Ref, useId, useState } from "react";
-import { useSpinDelay } from "spin-delay";
+import { type ComponentType, type Ref, useId } from "react";
 
 import { cn } from "cn";
 import type { InAppEvidence, ReviewedWorkRef } from "@/api/types.gen";
@@ -49,13 +48,16 @@ const NOT_HELPFUL_REASONS: ResponseReason<NotHelpfulReason>[] = [
 /** The note under a rating; the reason comes only with a "not helpful" one. */
 export type FeedbackComment = ResponseComment<NotHelpfulReason>;
 
+/** The band under a card's footer: the rating's comment, or the sentence a dispute carries. */
+export type FeedbackBand = "comment" | "dispute";
+
+/** The control whose write is in flight, so "Saving…" lands on it and nowhere else. */
+export type ResponseControl = "rating" | "answer" | "send" | "disagree";
+
 /**
  * An answer that resolves the feedback, the card's own way to close it beside the work coming back
  * clean. A dispute leaves the feedback open, so it has its own Disagree button.
  */
-/** The band under a card's footer: the rating's comment, or the sentence a dispute carries. */
-export type FeedbackBand = "comment" | "dispute";
-
 export type ResolvingAnswer = Exclude<FeedbackResolution, "DISPUTED">;
 
 const RESOLVING_ANSWERS: ResolvingAnswer[] = ["ADDRESSED", "NOT_APPLICABLE"];
@@ -150,11 +152,13 @@ export interface FeedbackRatingProps {
 	 * Disagree opens `dispute`, and Send and Skip close either.
 	 */
 	openBand?: FeedbackBand;
-	/**
-	 * A response is being written: the button just pressed, if it is still the chosen one, says it is
-	 * saving, and every other response control waits for it.
-	 */
+	/** A response is being written, so every response control waits. */
 	isPending?: boolean;
+	/**
+	 * The control to say "Saving…" on, once a write has outlasted the delay that keeps a quick one
+	 * silent. The caller owns it, because two cards for one piece of feedback share one write.
+	 */
+	saving?: ResponseControl;
 	/**
 	 * A press on a rating button, the chosen one included: the caller decides that a second press
 	 * withdraws. Without it the card has no rating buttons, as a control nobody can answer is hidden
@@ -229,6 +233,7 @@ export function PracticeFeedbackCard({
 	resolution,
 	openBand,
 	isPending = false,
+	saving,
 	onRate,
 	onSendComment,
 	onSkipComment,
@@ -243,28 +248,8 @@ export function PracticeFeedbackCard({
 }: PracticeFeedbackCardProps) {
 	const headingId = useId();
 	const responseId = useId();
-	// Which control asked for the write in flight, so "Saving…" lands on it and not on a pressed
-	// button in another row. The mutation cannot say: its variables are the whole response, and
-	// "Not accurate" and the dispute band both write DISPUTED with a comment. "send" needs no band
-	// name, as `openBand` holds at most one.
-	const [lastPressed, setLastPressed] = useState<"rating" | "answer" | "send" | "disagree">(
-		"rating",
-	);
 	const shownTimestamp = formatTimestamp(timestamp, state, new Date(useNow()));
-	// `ssr: false`: its default shows "Saving…" at once on a card that mounts with a write in flight.
-	const showSaving = useSpinDelay(isPending, { delay: 1000, minDuration: 500, ssr: false });
-	const sendComment =
-		onSendComment &&
-		((comment: FeedbackComment) => {
-			setLastPressed("send");
-			onSendComment(comment);
-		});
-	const sendDispute =
-		onSendDispute &&
-		(({ comment }: ResponseComment) => {
-			setLastPressed("send");
-			onSendDispute(comment);
-		});
+	const sendDispute = onSendDispute && (({ comment }: ResponseComment) => onSendDispute(comment));
 	const resolved = state === "resolved";
 	// No work can tick a closed card, so it draws no count towards the threshold.
 	const closed = state === "closed";
@@ -444,7 +429,7 @@ export function PracticeFeedbackCard({
 							{RESOLVING_ANSWERS.map((value) => {
 								const def = FEEDBACK_RESOLUTION_DEFS[value];
 								const pressed = resolution === value;
-								const saving = showSaving && pressed && lastPressed === "answer";
+								const savingHere = pressed && saving === "answer";
 								return (
 									<ResponseButton
 										key={value}
@@ -452,13 +437,10 @@ export function PracticeFeedbackCard({
 										pressed={pressed}
 										disabled={isPending}
 										className="bg-background"
-										onClick={() => {
-											setLastPressed("answer");
-											onResolve(value);
-										}}
+										onClick={() => onResolve(value)}
 									>
-										{saving && <Spinner />}
-										{saving ? "Saving…" : def.label}
+										{savingHere && <Spinner />}
+										{savingHere ? "Saving…" : def.label}
 									</ResponseButton>
 								);
 							})}
@@ -477,20 +459,17 @@ export function PracticeFeedbackCard({
 						statusValues(FEEDBACK_USEFULNESS_DEFS).map((value) => {
 							const { icon: Icon, label } = FEEDBACK_USEFULNESS_DEFS[value];
 							const pressed = usefulness === value;
-							const saving = showSaving && pressed && lastPressed === "rating";
+							const savingHere = pressed && saving === "rating";
 							return (
 								<ResponseButton
 									key={value}
 									tone={toneOf(FEEDBACK_USEFULNESS_DEFS[value].badgeVariant)}
 									pressed={pressed}
 									disabled={isPending}
-									onClick={() => {
-										setLastPressed("rating");
-										onRate(value);
-									}}
+									onClick={() => onRate(value)}
 								>
-									{saving ? <Spinner /> : <Icon aria-hidden />}
-									{saving ? "Saving…" : label}
+									{savingHere ? <Spinner /> : <Icon aria-hidden />}
+									{savingHere ? "Saving…" : label}
 								</ResponseButton>
 							);
 						})}
@@ -498,11 +477,8 @@ export function PracticeFeedbackCard({
 						<DisagreeButton
 							disputed={resolution === "DISPUTED"}
 							isPending={isPending}
-							saving={showSaving && lastPressed === "disagree"}
-							onClick={() => {
-								setLastPressed("disagree");
-								onDisagree();
-							}}
+							saving={saving === "disagree"}
+							onClick={onDisagree}
 						/>
 					)}
 				</div>
@@ -525,7 +501,7 @@ export function PracticeFeedbackCard({
 						"Workspace admins read your sentence, not the card, and can correct its observations or withdraw it. The card stays open until then."
 					}
 					isPending={isPending}
-					sending={showSaving && lastPressed === "send"}
+					sending={saving === "send"}
 					onSend={sendDispute}
 					onSkip={onSkipComment}
 				/>
@@ -537,8 +513,8 @@ export function PracticeFeedbackCard({
 					label="What worked about this feedback?"
 					placeholder="Optional: what helped, or what you did"
 					isPending={isPending}
-					sending={showSaving && lastPressed === "send"}
-					onSend={sendComment}
+					sending={saving === "send"}
+					onSend={onSendComment}
 					onSkip={onSkipComment}
 				/>
 			)}
@@ -558,8 +534,8 @@ export function PracticeFeedbackCard({
 								: undefined
 						}
 						isPending={isPending}
-						sending={showSaving && lastPressed === "send"}
-						onSend={sendComment}
+						sending={saving === "send"}
+						onSend={onSendComment}
 						onSkip={onSkipComment}
 					/>
 				)}

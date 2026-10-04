@@ -1,19 +1,22 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { Activity, Building2, ChartNoAxesGantt, Compass, UserRound, Users } from "lucide-react";
+import { Activity, Building2, ChartNoAxesGantt, ChevronRight, Compass, Users } from "lucide-react";
 
 import { ACROSS_THE_WORKSPACE } from "@/components/practices-across-the-workspace/across-workspace-copy";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
 	SidebarGroup,
 	SidebarGroupLabel,
 	SidebarMenu,
+	SidebarMenuAction,
 	SidebarMenuButton,
 	SidebarMenuItem,
+	SidebarMenuSub,
 	SidebarMenuSubButton,
 	SidebarMenuSubItem,
+	useSidebar,
 } from "@/components/ui/sidebar";
 
-import { NavSection } from "./NavSection";
+import { useSectionOpen } from "./NavSection";
 
 export function NavDashboards({
 	workspaceSlug,
@@ -34,60 +37,68 @@ export function NavDashboards({
 		matchRoute({ to: "/w/$workspaceSlug/workspace-activity", fuzzy: true }),
 	);
 	const onTeams = Boolean(matchRoute({ to: "/w/$workspaceSlug/teams", fuzzy: true }));
-	const onPracticePages = onPracticeProfile || onAcrossTheWorkspace;
-	// The profile links nowhere else, so the icon-only sidebar offers both pages as a menu.
-	const practicePages = [
-		{
-			to: "/w/$workspaceSlug/practice-profile",
-			label: "Your profile",
-			icon: UserRound,
-			active: onPracticeProfile,
-		},
-		{
-			to: "/w/$workspaceSlug/practices-across-the-workspace",
-			label: ACROSS_THE_WORKSPACE,
-			icon: ChartNoAxesGantt,
-			active: onAcrossTheWorkspace,
-		},
-	] as const;
+	const [practicesOpen, setPracticesOpen] = useSectionOpen(onAcrossTheWorkspace);
+	// On a phone the sidebar is a sheet with full labels, never icon-only.
+	const { isMobile, state } = useSidebar();
+	const iconOnly = !isMobile && state === "collapsed";
+	const acrossLink = (
+		<Link to="/w/$workspaceSlug/practices-across-the-workspace" params={{ workspaceSlug }} />
+	);
 
 	return (
 		<SidebarGroup>
 			<SidebarGroupLabel>Dashboards</SidebarGroupLabel>
 			<SidebarMenu>
+				{/* The profile is the parent's own link, so one press reaches it from anywhere, and the
+				    chevron beside it, not the label, discloses the workspace view. */}
 				{practicesEnabled && (
-					<NavSection
-						label="Practice profile"
-						icon={<Compass />}
-						active={onPracticePages}
-						menu={practicePages.map((page) => (
-							<DropdownMenuItem
-								key={page.to}
-								render={
-									<Link
-										to={page.to}
-										params={{ workspaceSlug }}
-										aria-current={page.active ? "page" : undefined}
-									/>
-								}
-							>
-								<page.icon aria-hidden />
-								{page.label}
-							</DropdownMenuItem>
-						))}
+					<Collapsible
+						open={practicesOpen}
+						onOpenChange={setPracticesOpen}
+						render={<SidebarMenuItem />}
 					>
-						{practicePages.map((page) => (
-							<SidebarMenuSubItem key={page.to}>
-								<SidebarMenuSubButton
-									isActive={page.active}
-									render={<Link to={page.to} params={{ workspaceSlug }} />}
-								>
-									<page.icon aria-hidden />
-									<span>{page.label}</span>
-								</SidebarMenuSubButton>
-							</SidebarMenuSubItem>
-						))}
-					</NavSection>
+						<SidebarMenuButton
+							tooltip="Practice profile"
+							isActive={onPracticeProfile || (onAcrossTheWorkspace && !practicesOpen)}
+							render={<Link to="/w/$workspaceSlug/practice-profile" params={{ workspaceSlug }} />}
+						>
+							<Compass />
+							<span>Practice profile</span>
+						</SidebarMenuButton>
+						<CollapsibleTrigger
+							render={
+								<SidebarMenuAction
+									aria-label="Practice profile pages"
+									className="aria-expanded:rotate-90"
+								/>
+							}
+						>
+							<ChevronRight aria-hidden />
+						</CollapsibleTrigger>
+						<CollapsibleContent>
+							<SidebarMenuSub aria-label="Practice profile">
+								<SidebarMenuSubItem>
+									<SidebarMenuSubButton isActive={onAcrossTheWorkspace} render={acrossLink}>
+										<ChartNoAxesGantt aria-hidden />
+										<span>{ACROSS_THE_WORKSPACE}</span>
+									</SidebarMenuSubButton>
+								</SidebarMenuSubItem>
+							</SidebarMenuSub>
+						</CollapsibleContent>
+					</Collapsible>
+				)}
+				{/* The icon-only sidebar hides the chevron and the sub list, so the view gets its own icon. */}
+				{practicesEnabled && iconOnly && (
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							tooltip={ACROSS_THE_WORKSPACE}
+							isActive={onAcrossTheWorkspace}
+							render={acrossLink}
+						>
+							<ChartNoAxesGantt />
+							<span>{ACROSS_THE_WORKSPACE}</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
 				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton

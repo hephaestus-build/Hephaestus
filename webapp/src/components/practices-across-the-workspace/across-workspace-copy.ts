@@ -57,14 +57,28 @@ export const ACROSS_THE_WORKSPACE = "Across the workspace";
 /** One action from the group's header and from each practice row, so one label. */
 export const OPEN_IN_YOUR_PROFILE = "Open in your Practice profile";
 
+/** The overview failed: the bars and the practice groups' levels have nothing to show. */
+export const GROUPS_LOAD_ERROR = "We could not load the practice groups";
+
 /** Digits always: a count of developers sits beside other figures, never in running prose. */
 const developers = (n: number) => count(n, "developer", "developers", true);
-const otherDevelopers = (n: number) => count(n, "other developer", "other developers", true);
 
 /**
- * The lines under the tiles. Built only from the response, so they hold for every reply: no count
- * where the server held the total back, the server's threshold, and a line on whether open
- * feedback, which reads no window, has a band of its own. One paragraph for each.
+ * The one home of the disclosure arithmetic. The server shows a count only when it holds more than
+ * `minimumOthers` developers with the reader counted, so the floor is `minimumOthers + 1` and every
+ * shown count stands for `minimumOthers` others, whoever reads it.
+ */
+function disclosure(minimumOthers: number) {
+	return {
+		floor: developers(minimumOthers + 1),
+		others: `${developers(minimumOthers)} other than you`,
+	};
+}
+
+/**
+ * The lines under the tiles, built only from the response so they hold for every reply: no count
+ * where the server held the total back, the band's floor, and whether open feedback, which reads
+ * no window, has a band of its own. One paragraph for each.
  */
 export function tilesHint(
 	{
@@ -81,43 +95,36 @@ export function tilesHint(
 		developersWithAStandingInWindow === undefined
 			? "the developers"
 			: `the ${developers(developersWithAStandingInWindow)}`;
-	const threshold = otherDevelopers(minimumOthersForMiddleHalf);
+	const { floor, others } = disclosure(minimumOthersForMiddleHalf);
 	const band = [
-		"The grey band is the typical range.",
-		`To find it, Hephaestus takes ${sorted} in this workspace who ${developersWithAStandingInWindow === 1 ? "has" : "have"} a standing ${windowPhrase(window)}, and sorts them by their value.`,
+		"The band is the typical range.",
+		`Hephaestus sorts ${sorted} in this workspace who ${developersWithAStandingInWindow === 1 ? "has" : "have"} a standing ${windowPhrase(window)} by their value.`,
 		"The band covers the middle half: a quarter of them are below it, and a quarter are above it.",
 		"Your marker shows your value.",
-		`A tile shows the band only when at least ${threshold} ${minimumOthersForMiddleHalf === 1 ? "has" : "have"} a standing.`,
+		`The band shows only when at least ${floor} are counted, so at least ${others}.`,
 	].join(" ");
 	const open = "Open feedback counts what is open now, for every developer that this page counts.";
 	return [
 		band,
 		openFeedback.middle === undefined
-			? `${open} Its band shows only when this page counts at least ${threshold}.`
+			? `${open} Its band shows only when this page counts at least ${floor}.`
 			: open,
 	];
 }
 
-/**
- * The line over a table of bars, in the words of `docs/user/practice-profile.mdx` § The bars. The
- * server shows a part only when it holds more than `minimumOthers` developers with the reader
- * counted, so the hint names that floor and the others it leaves whoever reads the bar.
- */
+/** The line over a table of bars, in the words of `docs/user/practice-profile.mdx` § The bars. */
 export function barsHint(minimumOthers: number, scope: StandingScope): string {
-	const others = `${developers(minimumOthers)} other than you`;
-	const rule = [
+	const { floor, others } = disclosure(minimumOthers);
+	return [
 		`Each bar counts developers by their current standing in the ${scope}, as their Practice profile shows it.`,
 		"The You marker shows your part.",
-		`A bar shows its parts only when each part holds at least ${developers(minimumOthers + 1)}.`,
-		`So each part stands for at least ${others}.`,
+		`A count shows only when it holds at least ${floor}.`,
+		`So each count stands for at least ${others}, whoever reads it, and every reader sees the same bars.`,
 		"If a part would hold fewer, the bar shows only its number of developers.",
-	];
-	if (scope === "practice") {
-		rule.push(
-			`A practice’s bar also shows only its number if, beside its group’s bar, it would single out fewer than ${developers(minimumOthers)}.`,
-		);
-	}
-	return rule.join(" ");
+		scope === "group"
+			? `The groups are also held back together when they would single out fewer than ${floor} between them.`
+			: `A practice is also held back when it and its group’s bar together would single out fewer than ${floor}.`,
+	].join(" ");
 }
 
 /**
@@ -163,7 +170,6 @@ export const splitTotalText = (split: ShownSplit): string => developers(split.de
 export function splitDescription(
 	wire: WorkspaceSplit,
 	yourStanding: PracticeGroupStandingValue | undefined,
-	readerCounted: boolean,
 ): string {
 	const split = shownSplit(wire);
 	if (split === undefined) {
@@ -178,7 +184,7 @@ export function splitDescription(
 	);
 	const noneYet = `${split.noneYet} ${NONE_YET_SEGMENT.inSentence}`;
 	const counts = `${whole}: ${[...parts, noneYet].join(", ")}.`;
-	if (!readerCounted || yourStanding === undefined) {
+	if (yourStanding === undefined) {
 		return counts;
 	}
 	const yourPart = isSettledStanding(yourStanding)

@@ -13,7 +13,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell, TableHead } from "@/components/ui/table";
 
-import { WorkspaceSplitBar, WorkspaceSplitBarSkeleton } from "./WorkspaceSplitBar";
+import { HELD_BACK, shownSplit } from "./across-workspace-copy";
+import { HeldBackTrack, WorkspaceSplitBar, WorkspaceSplitBarSkeleton } from "./WorkspaceSplitBar";
 
 /** One practice group or one practice. */
 export interface ComparisonRow {
@@ -29,7 +30,7 @@ export interface ComparisonRow {
 
 export type ComparisonTableState =
 	| { status: "loading" }
-	| { status: "ready"; rows: readonly ComparisonRow[]; readerCounted: boolean };
+	| { status: "ready"; rows: readonly ComparisonRow[] };
 
 export interface WorkspaceComparisonTableProps {
 	"aria-label": string;
@@ -45,7 +46,8 @@ export interface WorkspaceComparisonTableProps {
 
 /**
  * Practice groups or practices, each beside its split, in the practice table frame. Every row is
- * listed with no paging, as the Practice profile lists them.
+ * listed with no paging, as the Practice profile lists them. When every split is held back, the
+ * reason shows once above the table, not once per row.
  */
 export function WorkspaceComparisonTable({
 	"aria-label": label,
@@ -55,49 +57,51 @@ export function WorkspaceComparisonTable({
 	openKey,
 	empty,
 }: WorkspaceComparisonTableProps) {
-	const ready = state.status === "ready" ? state : undefined;
+	const rows = state.status === "ready" ? state.rows : [];
+	const allHeldBack = rows.length > 0 && rows.every((row) => shownSplit(row.split) === undefined);
 	return (
-		<PracticeTableFrame
-			aria-label={label}
-			columns={3}
-			head={
-				<>
-					<TableHead className="w-96">{subjectHead}</TableHead>
-					<TableHead>Developers in this workspace</TableHead>
-					<TableHead className="w-32">
-						<span className="sr-only">Open</span>
-					</TableHead>
-				</>
-			}
-			rows={ready?.rows ?? []}
-			rowKey={(row) => row.key}
-			renderRow={(row) => (
-				<PracticeTableRow open={row.key === openKey} link={{ ...rowLink(row), name: row.name }}>
-					<SubjectCell badge={row.subject} className={OPEN_ROW_BAR} />
-					<TableCell className="align-top whitespace-normal">
-						{ready !== undefined && (
-							<WorkspaceSplitBar
-								split={row.split}
-								yourStanding={row.yourStanding}
-								readerCounted={ready.readerCounted}
-							/>
-						)}
-					</TableCell>
-				</PracticeTableRow>
-			)}
-			empty={{ icon: <ClipboardCheckIcon />, ...empty }}
-			isLoading={state.status === "loading"}
-			loadingRow={
-				<>
-					<TableCell>
-						<Skeleton className="h-5 w-48 rounded-full" />
-					</TableCell>
-					<TableCell className="align-top">
-						<WorkspaceSplitBarSkeleton />
-					</TableCell>
-					<TableCell />
-				</>
-			}
-		/>
+		<>
+			{allHeldBack && <p className="text-sm text-muted-foreground">{HELD_BACK}.</p>}
+			<PracticeTableFrame
+				aria-label={label}
+				columns={3}
+				head={
+					<>
+						<TableHead className="w-96">{subjectHead}</TableHead>
+						<TableHead>Developers in this workspace</TableHead>
+						<TableHead className="w-32">
+							<span className="sr-only">Open</span>
+						</TableHead>
+					</>
+				}
+				rows={rows}
+				rowKey={(row) => row.key}
+				renderRow={(row) => (
+					<PracticeTableRow open={row.key === openKey} link={{ ...rowLink(row), name: row.name }}>
+						<SubjectCell badge={row.subject} className={OPEN_ROW_BAR} />
+						<TableCell className="align-top whitespace-normal">
+							{allHeldBack ? (
+								<HeldBackTrack />
+							) : (
+								<WorkspaceSplitBar split={row.split} yourStanding={row.yourStanding} />
+							)}
+						</TableCell>
+					</PracticeTableRow>
+				)}
+				empty={{ icon: <ClipboardCheckIcon />, ...empty }}
+				isLoading={state.status === "loading"}
+				loadingRow={
+					<>
+						<TableCell>
+							<Skeleton className="h-5 w-48 rounded-full" />
+						</TableCell>
+						<TableCell className="align-top">
+							<WorkspaceSplitBarSkeleton />
+						</TableCell>
+						<TableCell />
+					</>
+				}
+			/>
+		</>
 	);
 }

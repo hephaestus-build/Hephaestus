@@ -6,8 +6,8 @@ import {
 	type ActivityRange,
 	ACTIVITY_RANGE_OPTIONS,
 } from "@/components/activity/activity-range";
-import { RangeControls } from "@/components/activity/RangeControls";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { RangeControls } from "@/components/common/RangeControls";
 import { Section } from "@/components/layout/Section";
 
 import { PracticeCountsTable } from "./PracticeCountsTable";

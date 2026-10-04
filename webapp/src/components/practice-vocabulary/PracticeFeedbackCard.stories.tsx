@@ -217,13 +217,9 @@ export const Resolved: Story = {
 		},
 		usefulness: "HELPFUL",
 	},
-	play: async ({ args, canvas }) => {
+	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Resolved")).toBeVisible();
 		await expect(canvas.queryByText("Open")).toBeNull();
-		// The success wash is the work's alone.
-		await expect(canvas.getByRole("article", { name: args.card.headline })).toHaveClass(
-			"from-success/5",
-		);
 		await expect(canvas.getByText("3 of 3 clean")).toBeVisible();
 		await expect(canvas.getByText("Resolved 9 September")).toBeVisible();
 		// Each reference carries its own "(opens in a new tab)", so the words are matched around
@@ -262,8 +258,6 @@ export const MarkedAsAddressed: Story = {
 		await expect(
 			canvas.getByText("Marked as addressed on 9 September. Your next work confirms it."),
 		).toBeVisible();
-		const article = canvas.getByRole("article", { name: args.card.headline });
-		await expect(article).not.toHaveClass("from-success/5");
 		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
 		const response = within(canvas.getByRole("group", { name: "Your response" }));
 		const addressed = response.getByRole("button", { name: "Addressed" });
@@ -536,24 +530,17 @@ export const Withdrawn: Story = {
 	},
 };
 
-/**
- * Every response control waits at once, but "Saving…" appears only after a second (`spin-delay`),
- * and only on the control that asked. Send waits without claiming to send.
- */
+/** Every response control waits, and only the control that wrote says "Saving…". Send waits without claiming to send. */
 export const RatingPending: Story = {
 	args: {
 		card: { ...card, state: "open" },
 		usefulness: "HELPFUL",
 		openBand: "comment",
 		isPending: true,
+		saving: "rating",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Helpful" })).toBeDisabled();
-		await expect(canvas.queryByRole("button", { name: "Saving…" })).toBeNull();
-		await expect(
-			await canvas.findByRole("button", { name: "Saving…" }, { timeout: 2000 }),
-		).toBeDisabled();
-		await expect(canvas.queryByRole("button", { name: "Helpful" })).toBeNull();
+		await expect(canvas.getByRole("button", { name: "Saving…" })).toBeDisabled();
 		await expect(canvas.getByRole("button", { name: "Not helpful" })).toBeDisabled();
 		await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
 	},

@@ -16,8 +16,8 @@ export interface InfiniteListEndProps extends MorePages {
 /**
  * The end of a paged list: it asks for the next page when it scrolls into view. The button stays,
  * because a keyboard needs it, and it is the only retry after a failure, so a failed page never
- * loads again on its own. TanStack Query has no sentinel and the repo had none, so this pairs
- * `useInfiniteQuery`'s `fetchNextPage` (through `MorePages`) with motion's `useInView`.
+ * loads again on its own. TanStack Query ships no sentinel, so this pairs `useInfiniteQuery`'s
+ * `fetchNextPage` (through `MorePages`) with motion's `useInView`.
  */
 export function InfiniteListEnd({
 	hasMore,

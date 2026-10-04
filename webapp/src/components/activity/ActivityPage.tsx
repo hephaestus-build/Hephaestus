@@ -15,13 +15,13 @@ import {
 } from "@/components/ui/empty";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 
+import { RangeControls } from "@/components/common/RangeControls";
 import type { ActivityOverviewState } from "./activity-buckets";
 import { ACTIVITY_RANGE_DEFS, type ActivityRange, ACTIVITY_RANGE_OPTIONS } from "./activity-range";
 import { ActivityTiles } from "./ActivityTiles";
 import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
 import { CopyMarkdownButton } from "./CopyMarkdownButton";
 import { type OpenWorkReviewNow, OpenWorkSections, type OpenWorkState } from "./OpenWorkSections";
-import { RangeControls } from "./RangeControls";
 
 /** Whose activity the page reads: the account's login in this workspace, once the membership says. */
 export type ActivityAccount =

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useSpinDelay } from "spin-delay";
 
 import { getInAppFeedbackOptions } from "@/api/@tanstack/react-query.gen";
 import type { FeedbackResponseRequest, PracticeGroup } from "@/api/types.gen";
@@ -12,6 +13,7 @@ import type {
 	FeedbackRatingProps,
 	PracticeFeedbackCardEntry,
 	ResolvingAnswer,
+	ResponseControl,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { useFeedbackResponseWrite } from "@/hooks/use-feedback-response-write";
 
@@ -108,6 +110,15 @@ interface OpenBand {
 }
 
 /**
+ * The control a write came from. The mutation cannot say: its variables are the whole response,
+ * and "Not accurate" and the dispute band both write DISPUTED with a comment.
+ */
+interface WriteFrom {
+	feedbackId: string;
+	control: ResponseControl;
+}
+
+/**
  * Nothing in flight and nothing to wait for. A query held back by `enabled` reports `isPending`
  * for as long as it is held, which a page reads as a skeleton that never resolves; with the
  * reading disabled the feedback is settled and empty instead.
@@ -133,6 +144,7 @@ export function useInAppFeedback({
 	enabled = true,
 }: InAppFeedbackRequest): InAppFeedback {
 	const [openBand, setOpenBand] = useState<OpenBand>();
+	const [lastWrite, setLastWrite] = useState<WriteFrom>();
 	const feedbackQuery = useQuery({
 		...getInAppFeedbackOptions({ path: { workspaceSlug } }),
 		enabled,
@@ -146,22 +158,37 @@ export function useInAppFeedback({
 	const responseOf = (feedbackId: string): FeedbackResponseRequest | undefined =>
 		pendingResponses.get(feedbackId) ?? feedback.find((item) => item.id === feedbackId)?.response;
 
+	const writeFrom = (
+		feedbackId: string,
+		control: ResponseControl,
+		response: FeedbackResponseRequest,
+	) => {
+		setLastWrite({ feedbackId, control });
+		write(feedbackId, response);
+	};
+	// A quick write says nothing; a slow one says "Saving…" after a second, for at least 500ms.
+	// `ssr: false`: its default shows the word at once when a page mounts with a write in flight.
+	const showSaving = useSpinDelay(
+		lastWrite !== undefined && pendingResponses.has(lastWrite.feedbackId),
+		{ delay: 1000, minDuration: 500, ssr: false },
+	);
+
 	const rate = (feedbackId: string, usefulness: FeedbackUsefulness) => {
 		const next = nextRating(responseOf(feedbackId), usefulness);
-		write(feedbackId, next);
+		writeFrom(feedbackId, "rating", next);
 		setOpenBand(next.usefulness === undefined ? undefined : { feedbackId, band: "comment" });
 	};
 	const resolve = (feedbackId: string, answer: ResolvingAnswer) => {
-		write(feedbackId, nextResolution(responseOf(feedbackId), answer));
+		writeFrom(feedbackId, "answer", nextResolution(responseOf(feedbackId), answer));
 	};
 	const send = (feedbackId: string, comment: FeedbackComment) => {
-		write(feedbackId, withComment(responseOf(feedbackId), comment));
+		writeFrom(feedbackId, "send", withComment(responseOf(feedbackId), comment));
 		setOpenBand(undefined);
 	};
 	const disagree = (feedbackId: string) => {
 		const current = responseOf(feedbackId);
 		if (current?.resolution === "DISPUTED") {
-			write(feedbackId, withoutDispute(current));
+			writeFrom(feedbackId, "disagree", withoutDispute(current));
 			setOpenBand(undefined);
 			return;
 		}
@@ -169,7 +196,7 @@ export function useInAppFeedback({
 		setOpenBand(open ? undefined : { feedbackId, band: "dispute" });
 	};
 	const sendDispute = (feedbackId: string, comment: string) => {
-		write(feedbackId, withDispute(responseOf(feedbackId), comment));
+		writeFrom(feedbackId, "send", withDispute(responseOf(feedbackId), comment));
 		setOpenBand(undefined);
 	};
 
@@ -180,6 +207,7 @@ export function useInAppFeedback({
 			resolution: responseOf(feedbackId)?.resolution,
 			openBand: openBand?.feedbackId === feedbackId ? openBand.band : undefined,
 			isPending: pendingResponses.has(feedbackId),
+			saving: showSaving && lastWrite?.feedbackId === feedbackId ? lastWrite.control : undefined,
 			onRate: (usefulness) => rate(feedbackId, usefulness),
 			onSendComment: (comment) => send(feedbackId, comment),
 			onSkipComment: () => setOpenBand(undefined),

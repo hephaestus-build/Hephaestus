@@ -11,12 +11,7 @@ import type {
 	PracticesAcrossWorkspaceTiles,
 	WorkspaceGroupSplit,
 } from "@/api/types.gen";
-import {
-	combinePanelStates,
-	type LoadState,
-	type PanelState,
-	queryLoadState,
-} from "@/components/common/panel-state";
+import { type PanelState, panelState, queryLoadState } from "@/components/common/panel-state";
 import {
 	type DetailStackEntry,
 	detailStackKey,
@@ -68,8 +63,8 @@ function PracticesAcrossTheWorkspace() {
 	const { window, detail } = Route.useSearch();
 	const navigate = useNavigate();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
-	// The overview reads no window, so a new window does not refetch it.
 	const enabled = featureState.practicesEnabled === true;
+	// The overview reads no window, so a new window does not refetch it.
 	const query = useQuery({
 		...getPracticesAcrossWorkspaceOptions({ path: { workspaceSlug } }),
 		enabled,
@@ -97,17 +92,20 @@ function PracticesAcrossTheWorkspace() {
 		return <Navigate to="/w/$workspaceSlug" params={{ workspaceSlug }} replace />;
 	}
 
+	// Both queries wait on the feature read, so its failure is theirs.
 	const featureLoad = queryLoadState({ ...featureState, isPending: featureState.isLoading });
-	const loadState = combinePanelStates([featureLoad, queryLoadState(query)]);
 	const state: PanelState<{ overview: PracticesAcrossWorkspace }> =
-		loadState.status === "ready" && query.data !== undefined
-			? { status: "ready", overview: query.data }
-			: settling(loadState);
-	const tilesLoad = combinePanelStates([featureLoad, queryLoadState(tilesQuery)]);
+		featureLoad.status === "error"
+			? featureLoad
+			: panelState(query, (overview) => ({ status: "ready" as const, overview }));
 	const tiles: PanelState<{ tiles: PracticesAcrossWorkspaceTiles; stale: boolean }> =
-		tilesLoad.status === "ready" && tilesQuery.data !== undefined
-			? { status: "ready", tiles: tilesQuery.data, stale: tilesQuery.isPlaceholderData }
-			: settling(tilesLoad);
+		featureLoad.status === "error"
+			? featureLoad
+			: panelState(tilesQuery, (data) => ({
+					status: "ready" as const,
+					tiles: data,
+					stale: tilesQuery.isPlaceholderData,
+				}));
 	const overview = state.status === "ready" ? state.overview : undefined;
 	const group = overview?.groups.find((each) => each.groupSlug === openGroupSlug);
 	const pathAt = levelPathAt(stack, {
@@ -127,17 +125,13 @@ function PracticesAcrossTheWorkspace() {
 				onOpenGroup={(groupSlug) => stackControls.open({ kind: "practice-group", id: groupSlug })}
 			/>
 			{/* Only the overview feeds the level, so a failed tiles read leaves it open. */}
-			<DetailDrawerStack
-				stack={state.status === "error" ? [] : stack}
-				size="detailWide"
-				onClose={stackControls.close}
-			>
+			<DetailDrawerStack stack={stack} size="detailWide" onClose={stackControls.close}>
 				{(entry, level) => (
 					<WorkspaceGroupLevel
 						key={entry.id}
 						nested={level.nested}
 						path={pathAt(level.depth)}
-						state={levelState(overview, group)}
+						state={levelState(state, group)}
 						onGoToProfile={() => goToProfile([practiceGroupLevel(entry.id)])}
 						onGoToPractice={(practiceSlug) =>
 							goToProfile([practiceGroupLevel(entry.id), practiceLevel(practiceSlug)])
@@ -150,22 +144,13 @@ function PracticesAcrossTheWorkspace() {
 }
 
 function levelState(
-	overview: PracticesAcrossWorkspace | undefined,
+	state: PanelState<{ overview: PracticesAcrossWorkspace }>,
 	group: WorkspaceGroupSplit | undefined,
 ): WorkspaceGroupLevelState {
-	if (overview === undefined) {
-		return { status: "loading" };
+	if (state.status !== "ready") {
+		return state;
 	}
 	return group === undefined
 		? { status: "missing" }
-		: {
-				status: "ready",
-				group,
-				readerCounted: overview.readerCounted,
-				minimumOthers: overview.minimumOthers,
-			};
-}
-
-function settling(state: LoadState): PanelState<never> {
-	return state.status === "error" ? state : { status: "loading" };
+		: { status: "ready", group, minimumOthers: state.overview.minimumOthers };
 }
