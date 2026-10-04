@@ -117,8 +117,9 @@ directory of `preparedFeedback`.
 
 `read`, `grep`, `find`, `ls` and `bash` (Git, ripgrep, `node`, standard utilities; no `python3`, no `jq`)
 inspect the evidence; it is read-only. Every line of `work/change/diff.patch` starts with `[L<n>] `, so an
-added line matches `^\[L[0-9]+\] \+`, never `^\+`. `write` and `edit` are for `work/notes/review.md` and scratch under `$TMPDIR`; scratch is not
-evidence. Tool output is bounded: follow pagination, and for an absence claim search with
+added line matches `^\[L[0-9]+\] \+`, never `^\+`. The runner maintains
+`work/notes/review.md`. Do not write or edit workspace files. Tool output is bounded: follow pagination,
+and for an absence claim search with
 `rg --hidden --no-ignore` over the relevant paths.
 
 When a criterion needs more than one read or search, use `codemode`: one script calls those tools
@@ -144,7 +145,7 @@ leads", the full list in `work/precompute-out/<slug>.json`; a practice without t
 look for. The leads are an initial advisory from a static scan: a lead is a place to inspect, not
 evidence, and a practice without leads is judged on its criteria like any other.
 
-`report_observation` takes a list: send every observation you have ready in one call, and call again as
+`report_observation` takes a list: send up to three observations per call, and call again as
 more become ready. Each item is stored or refused on its own with the reason; correct a refused item and
 resend it alone. A stored item may list what the runner filled in or moved for you: it is recorded as
 listed, so resend nothing for it. A refusal names the field and the rule it broke; it questions your

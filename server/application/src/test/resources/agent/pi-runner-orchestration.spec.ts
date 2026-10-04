@@ -133,6 +133,7 @@ interface CustomTool {
 	name: string;
 	description: string;
 	parameters: unknown;
+	prepareArguments?: (args: unknown) => unknown;
 	execute: (id: string, input: unknown) => Promise<unknown>;
 }
 
@@ -219,6 +220,11 @@ if (scenario !== undefined && scenario !== "") {
 			createCodemodeExtension: () => () => undefined,
 			getAgentDir: () => cwd,
 			DefaultResourceLoader: class {
+				constructor(options: { systemPrompt: string; agentsFilesOverride: () => unknown }) {
+					assert.ok(cwd !== undefined && cwd !== "");
+					writeFileSync(nodePath.join(cwd, "system-prompt.md"), options.systemPrompt);
+					assert.deepEqual(options.agentsFilesOverride(), { agentsFiles: [] });
+				}
 				readonly loaded = Promise.resolve();
 				async reload() {
 					await this.loaded;
@@ -248,7 +254,11 @@ if (scenario !== undefined && scenario !== "") {
 				const tool = (name: string) => {
 					const found = options.customTools.find((item) => item.name === name);
 					assert.ok(found, `${name} is registered`);
-					return found;
+					return {
+						...found,
+						execute: async (id: string, args: unknown) =>
+							found.execute(id, found.prepareArguments?.(args) ?? args),
+					};
 				};
 				return {
 					extensionsResult: { errors: [] },
@@ -880,6 +890,34 @@ if (scenario !== undefined && scenario !== "") {
 								record("replacement-witness:preserved");
 								return;
 							}
+							if (scenario === "argument-repairs") {
+								const encoded = (quote: string, endLine = "[L10]") => ({
+									observations: JSON.stringify([
+										{
+											...observation("test-practice", "Unsafe authentication call"),
+											evidence: JSON.stringify({
+												citations: JSON.stringify([
+													{ ...changeCitation, startLine: "[L10]", endLine, quote },
+												]),
+											}),
+										},
+									]),
+								});
+								await assert.rejects(
+									report.execute("invalid-quote", encoded("invented();")),
+									/citation does not match/u,
+								);
+								await assert.rejects(
+									report.execute("invalid-range", encoded("insecure();", "[L999]")),
+									/citation does not match/u,
+								);
+								assert.equal(existsSync(nodePath.join(cwd, "out/review-state.json")), false);
+								const reply = await report.execute("valid-transport", encoded("+ insecure();"));
+								assert.ok(isRecord(reply) && isRecord(reply.details));
+								assert.equal(reply.details.inserted, 1);
+								assert.equal(reply.details.refused, 0);
+								return;
+							}
 							if (scenario === "draft-revision") {
 								const positive = {
 									...observation("test-practice", "Authentication call"),
@@ -889,7 +927,30 @@ if (scenario !== undefined && scenario !== "") {
 								const negative = observation("test-practice", "Authentication call");
 								const readState = () =>
 									readObservations(nodePath.join(cwd, "out/review-state.json"));
-								const first = await report.execute("first", { observations: [positive] });
+								await assert.rejects(
+									report.execute("wrong-draft", {
+										observations: [{ ...positive, revises: "second-practice" }],
+									}),
+									/revises must name/u,
+								);
+								await assert.rejects(
+									report.execute("invalid-first", {
+										observations: [
+											{
+												...positive,
+												revises: "test-practice",
+												evidence: {
+													citations: [{ ...changeCitation, quote: "notInTheDiff();" }],
+												},
+											},
+										],
+									}),
+									/citation does not match/u,
+								);
+								assert.equal(existsSync(nodePath.join(cwd, "out/review-state.json")), false);
+								const first = await report.execute("first", {
+									observations: [{ ...positive, revises: "test-practice" }],
+								});
 								record(`draft-first:${JSON.stringify(first)}`);
 								assert.ok(isRecord(first) && isRecord(first.details));
 								assert.equal(first.details.inserted, 1);
@@ -1181,6 +1242,7 @@ if (scenario !== undefined && scenario !== "") {
 		"replacement-witness",
 		"comment-undecided",
 		"draft-revision",
+		"argument-repairs",
 		"finish",
 		"refusal-cap",
 		"repeat",
@@ -1211,6 +1273,8 @@ if (scenario !== undefined && scenario !== "") {
 					"does not ask the composer once more after the run reaches its safety ceiling",
 				"provider-error":
 					"a provider error the SDK does not retry is a failure of the provider, not a review that found nothing",
+				"argument-repairs":
+					"repairs observation transport without accepting a false quote or an overlong range",
 				batch: "normalizes corrections and answers distinct practices per item",
 				"draft-revision":
 					"replaces only an explicitly corrected valid draft and refuses an ambiguous batch atomically",
@@ -1247,7 +1311,13 @@ if (scenario !== undefined && scenario !== "") {
 					mkdirSync(nodePath.join(cwd, "catalog/practices"), { recursive: true });
 					mkdirSync(nodePath.join(cwd, "evidence"), { recursive: true });
 					mkdirSync(nodePath.join(cwd, "work/change"), { recursive: true });
-					writeFileSync(nodePath.join(cwd, "AGENTS.md"), "Review the staged evidence.");
+					writeFileSync(
+						nodePath.join(cwd, "AGENTS.md"),
+						readFileSync(
+							new URL("../../../main/resources/agent/pi-orchestrator.md", import.meta.url),
+							"utf8",
+						),
+					);
 					writeFileSync(
 						nodePath.join(cwd, "feedback-composer.md"),
 						"Compose from admitted observations.",
@@ -1550,11 +1620,24 @@ if (scenario !== undefined && scenario !== "") {
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
+						case "argument-repairs": {
+							assert.equal(child.status, 0, child.stderr);
+							const result = readObservations(nodePath.join(cwd, "out/result.json"));
+							assert.equal(result.length, 1);
+							assert.equal(result[0]?.outcome, "NOT_MET");
+							assert.ok(isRecord(result[0].evidence));
+							assert.deepEqual(result[0].evidence.citations, [
+								{ ...changeCitation, quote: " insecure();" },
+							]);
+							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
 						case "draft-revision": {
 							assert.equal(child.status, 0, child.stderr);
 							assert.match(
 								events.find((event) => event.startsWith("draft-first:")) ?? "",
 								/stored/u,
+								child.stderr,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("draft-duplicate:")) ?? "",
@@ -1603,6 +1686,27 @@ if (scenario !== undefined && scenario !== "") {
 						}
 						case "batch": {
 							assert.equal(child.status, 0, child.stderr);
+							const system = readFileSync(nodePath.join(cwd, "system-prompt.md"), "utf8");
+							assert.doesNotMatch(
+								system,
+								/<(?:contextRoot|repositoryRoot|manifest|practiceIndex|practiceRoot|historyRoot)>/u,
+							);
+							for (const path of [
+								"evidence/commits.json",
+								"repos/primary/",
+								"evidence/manifest.json",
+								"catalog/practices/index.json",
+								"catalog/practices",
+								"history/observations.json",
+							]) {
+								assert.ok(system.includes(path), path);
+							}
+							assert.doesNotMatch(system, /`(?:write|edit)`|tools\.(?:write|edit)\(/u);
+							assert.match(system, /up to three observations per call/u);
+							assert.match(
+								readFileSync(nodePath.join(cwd, "prompt-1.md"), "utf8"),
+								/up to three observations per call/u,
+							);
 							assert.match(
 								events.find((event) => event.startsWith("resent:")) ?? "",
 								/already recorded; this item changed nothing, so do not send it again/u,
@@ -1623,7 +1727,7 @@ if (scenario !== undefined && scenario !== "") {
 							assert.match(reply, /"terminate":true/u);
 							assert.match(
 								events.find((event) => event.startsWith("create:session")) ?? "",
-								/tools=read,grep,find,ls,write,edit,bash,codemode,report_observation$/u,
+								/tools=read,grep,find,ls,bash,codemode,report_observation$/u,
 							);
 							assert.ok(
 								events.includes("exposure:report_observation=model-only"),
