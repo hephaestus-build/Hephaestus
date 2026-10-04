@@ -14,9 +14,13 @@ import de.tum.cit.aet.hephaestus.practices.observation.ReviewedWorkKey;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
 public final class InAppFeedbackRouter {
@@ -98,19 +102,39 @@ public final class InAppFeedbackRouter {
      * goes for a pull request whose re-review came back clean: a piece of work counts once, at its newest
      * review ({@link LatestRun}), so a problem a later run no longer found is neither counted nor cited.
      *
+     * <p>The row cited is the newest live run's: a requested review is a self-selected sample and raises no card,
+     * but its verdict still says whether the work has the problem now, so a requested re-review that came back clean
+     * drops the work and one that found the problem again keeps the live row. A backfilled run never supersedes
+     * a live or requested one, and its problem stands only for work neither has judged.
+     *
      * <p>Which of a run's several problems on one piece of work stands for it is decided by
      * {@link ObservationOrder#worstFirst()}, not by the order the rows came back in: they all carry that
      * run's moment, so repository order would let the example the developer is shown be the mildest problem
      * on that work. The pieces of work keep the window's order.
      */
     public static List<Observation> problemsIn(List<Observation> evidence) {
+        List<Observation> unbackfilled = evidence.stream()
+                .filter(observation -> observation.getOrigin() != ObservationOrigin.BACKFILL)
+                .toList();
+        Set<ReviewedWorkKey> judged =
+                unbackfilled.stream().map(ReviewedWorkKey::of).collect(Collectors.toSet());
+        Set<ReviewedWorkKey> stillProblems = LatestRun.perWork(unbackfilled).stream()
+                .filter(InAppFeedbackRouter::isProblem)
+                .map(ReviewedWorkKey::of)
+                .collect(Collectors.toSet());
+        Set<UUID> citable = new HashSet<>();
+        LatestRun.perWork(withOrigin(evidence, ObservationOrigin.LIVE)).stream()
+                .filter(observation ->
+                        isProblem(observation) && stillProblems.contains(ReviewedWorkKey.of(observation)))
+                .forEach(observation -> citable.add(observation.getId()));
+        LatestRun.perWork(withOrigin(evidence, ObservationOrigin.BACKFILL)).stream()
+                .filter(observation -> isProblem(observation) && !judged.contains(ReviewedWorkKey.of(observation)))
+                .forEach(observation -> citable.add(observation.getId()));
+
         Comparator<Observation> worstFirst = ObservationOrder.worstFirst();
         Map<ReviewedWorkKey, Observation> worstPerWork = new LinkedHashMap<>();
-        for (Observation observation : LatestRun.perWork(evidence)) {
-            // A requested review is a self-selected sample: its problem raises no card on its own.
-            if (observation.getOrigin() == ObservationOrigin.MANUAL
-                    || !observation.getOutcome().isDecided()
-                    || observation.getOutcome() != Outcome.NOT_MET) {
+        for (Observation observation : evidence) {
+            if (!citable.contains(observation.getId())) {
                 continue;
             }
             worstPerWork.merge(
@@ -119,6 +143,16 @@ public final class InAppFeedbackRouter {
                     (kept, next) -> worstFirst.compare(next, kept) < 0 ? next : kept);
         }
         return List.copyOf(worstPerWork.values());
+    }
+
+    private static boolean isProblem(Observation observation) {
+        return observation.getOutcome() == Outcome.NOT_MET;
+    }
+
+    private static List<Observation> withOrigin(List<Observation> evidence, ObservationOrigin origin) {
+        return evidence.stream()
+                .filter(observation -> observation.getOrigin() == origin)
+                .toList();
     }
 
     /** How many separate pieces of work carry the problem — the unit of proof at the process level. */

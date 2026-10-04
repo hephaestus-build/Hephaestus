@@ -17,6 +17,8 @@ import java.util.UUID;
 import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 /**
  * Every refusal the in-app lane can give, and the one admission. Each case differs from the admitted
@@ -177,6 +179,18 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
                 .containsExactly(otherLive);
         assertThat(route(problems(4, ObservationOrigin.MANUAL), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, null))
                 .isEqualTo(InAppRoutingDecision.NO_EVIDENCE);
+    }
+
+    /** A later run that found the work clean, or found it again, decides whether the live problem is cited. */
+    @ParameterizedTest(name = "a later {0} run that came back {1} cites the live problem: {2}")
+    @CsvSource({"MANUAL, NOT_MET, true", "MANUAL, MET, false", "BACKFILL, MET, true", "BACKFILL, NOT_MET, true"})
+    void shouldCiteTheLiveProblemUnlessARequestedReReviewFoundTheWorkClean(
+            ObservationOrigin laterOrigin, Outcome laterOutcome, boolean cited) {
+        Observation live = observation(
+                1L, UUID.randomUUID(), NOW.minus(Duration.ofDays(2)), ObservationOrigin.LIVE, Outcome.NOT_MET);
+        Observation later = observation(1L, UUID.randomUUID(), NOW, laterOrigin, laterOutcome);
+
+        assertThat(InAppFeedbackRouter.problemsIn(List.of(later, live))).isEqualTo(cited ? List.of(live) : List.of());
     }
 
     /** Two pull requests that slipped and one that slipped and recovered: exactly two rows to cite. */

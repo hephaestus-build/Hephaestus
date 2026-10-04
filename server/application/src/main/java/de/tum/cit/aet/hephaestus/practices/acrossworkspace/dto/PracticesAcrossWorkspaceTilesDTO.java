@@ -21,8 +21,7 @@ public record PracticesAcrossWorkspaceTilesDTO(
         @Nullable
         @Schema(
                 description = "Eligible developers with a standing in a practice group shown in the window, the"
-                        + " developers the tiles compare; absent while fewer than the fewest a shown count stands for"
-                        + " are other than the reader")
+                        + " developers the tiles compare; absent while too few to show")
         Integer developersWithAStandingInWindow,
 
         @NonNull

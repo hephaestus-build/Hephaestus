@@ -7,6 +7,13 @@ import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
@@ -33,6 +40,8 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceTeamRepositorySettings;
+import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceTeamRepositorySettingsRepository;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Duration;
 import java.time.Instant;
@@ -86,6 +95,18 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @Autowired
     private EntityManagerFactory entityManagerFactory;
 
+    @Autowired
+    private RepositoryRepository repositoryRepository;
+
+    @Autowired
+    private TeamRepository teamRepository;
+
+    @Autowired
+    private WorkspaceTeamRepositorySettingsRepository settingsRepository;
+
+    @Autowired
+    private PullRequestRepository pullRequestRepository;
+
     private Workspace workspace;
     private User reader;
     private PracticeGroup packagingGroup;
@@ -115,8 +136,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
             if (index < 18) {
                 standing(packaging, developer, index);
             }
-            // Testing: four at each standing, fourteen developers, the owner and the reader with none.
-            if (index >= 14) {
+            // Testing: thirteen developers, four or five at each standing. Five of them are in Packaging too, and
+            // only the owner is in neither, so the two groups add up to four more developers than the page total.
+            if (index >= 13) {
                 standing(testing, developer, index);
             }
             // Issues: three and the owner with a standing, all Going well, so no split.
@@ -161,7 +183,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .jsonPath(groupPart("testing-discipline", "STRENGTH"))
                 .isEqualTo(4)
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.noneYet")
-                .isEqualTo(16)
+                .isEqualTo(15)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.developers")
                 .isEqualTo(28)
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.shape")
@@ -513,6 +535,59 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         statistics.clear();
         tiles("ALL_TIME");
         return List.of(overview, statistics.getPrepareStatementCount());
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("a repository hidden from contributions drops exactly the developers whose only standing came from it")
+    void shouldDropExactlyTheDevelopersWhoseOnlyStandingCameFromAHiddenRepository() {
+        long hiddenWork = hiddenPullRequest().getId();
+        User onlyHidden = member("across-only-hidden");
+        User alsoVisible = member("across-also-visible");
+        for (User developer : List.of(onlyHidden, alsoVisible)) {
+            AgentJob run = persistPullRequestReview(workspace, nextNumber++, NEWEST);
+            observe(issues, run, hiddenWork, developer, MET, null, NEWEST);
+        }
+        strength(craft, alsoVisible, NEWEST);
+
+        // The twenty eight seeded, and the developer with a standing outside the hidden repository.
+        read().jsonPath("$.developersWithAStanding").isEqualTo(29);
+    }
+
+    /** A pull request in a repository the workspace hides from contributions. */
+    private PullRequest hiddenPullRequest() {
+        IdentityProvider provider = ensureGitHubProvider();
+        Repository repository = new Repository();
+        repository.setNativeId(9_001L);
+        repository.setProvider(provider);
+        repository.setName("hidden");
+        repository.setNameWithOwner("across-org/hidden");
+        repository.setHtmlUrl("https://github.com/across-org/hidden");
+        repository.setDefaultBranch("main");
+        repository.setCreatedAt(NOW);
+        repository.setUpdatedAt(NOW);
+        repository.setPushedAt(NOW);
+        repository = repositoryRepository.save(repository);
+        Team team = new Team();
+        team.setNativeId(9_001L);
+        team.setProvider(provider);
+        team.setName("hidden-team");
+        team.setSlug("hidden-team");
+        team.setPrivacy(Team.Privacy.VISIBLE);
+        WorkspaceTeamRepositorySettings settings =
+                new WorkspaceTeamRepositorySettings(workspace, teamRepository.save(team), repository);
+        settings.setHiddenFromContributions(true);
+        settingsRepository.save(settings);
+        PullRequest pullRequest = new PullRequest();
+        pullRequest.setNativeId(9_001L);
+        pullRequest.setProvider(provider);
+        pullRequest.setNumber(9_001);
+        pullRequest.setTitle("Hidden work");
+        pullRequest.setState(PullRequest.State.OPEN);
+        pullRequest.setRepository(repository);
+        pullRequest.setCreatedAt(NOW);
+        pullRequest.setUpdatedAt(NOW);
+        return pullRequestRepository.save(pullRequest);
     }
 
     @Test

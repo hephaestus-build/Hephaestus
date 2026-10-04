@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Developer;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.GroupRelease;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Row;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.PageRelease;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Split;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Standings;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceTilesDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
@@ -31,9 +33,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -68,22 +70,25 @@ public class PracticesAcrossWorkspaceService {
                 practiceStandingService.getCurrentWorkspaceStandingSnapshots(workspaceId, members.read());
         Cohort current = cohort(groups, members, standings.byDeveloper());
 
+        // The practices every reader sees, whatever their own evidence says.
+        List<List<Practice>> practices = groups.stream()
+                .map(group -> standings.eligiblePracticesByGroup().getOrDefault(group.getSlug(), List.of()))
+                .toList();
+        PageRelease release = CohortPrivacyPolicy.page(
+                current.withAStanding().stream()
+                        .map(developer -> developerOf(current, developer, groups, practices))
+                        .toList(),
+                practices.stream().map(List::size).toList());
+
         StandingSnapshot yours = current.snapshotOf(members.reader());
         List<WorkspaceGroupSplitDTO> rows = new ArrayList<>();
-        for (PracticeGroup group : groups) {
-            // The practices every reader sees, whatever their own evidence says.
-            List<Practice> practices = standings.eligiblePracticesByGroup().getOrDefault(group.getSlug(), List.of());
-            Function<Long, Row> rowOf = developer -> new Row(
-                    current.groupStandingOf(developer, group.getSlug()).asPracticeStanding(),
-                    practices.stream()
-                            .map(practice -> standingIn(current.snapshotOf(developer), practice.getSlug()))
-                            .toList());
-            GroupRelease release = CohortPrivacyPolicy.group(
-                    current.withAStanding().stream().map(rowOf).toList(), practices.size());
+        for (int groupIndex = 0; groupIndex < groups.size(); groupIndex++) {
+            PracticeGroup group = groups.get(groupIndex);
+            GroupRelease groupRelease = release.groups().get(groupIndex);
             List<WorkspacePracticeSplitDTO> practiceSplits = new ArrayList<>();
-            for (int index = 0; index < practices.size(); index++) {
-                Practice practice = practices.get(index);
-                Split split = release.practices().get(index);
+            for (int index = 0; index < practices.get(groupIndex).size(); index++) {
+                Practice practice = practices.get(groupIndex).get(index);
+                Split split = groupRelease.practices().get(index);
                 practiceSplits.add(new WorkspacePracticeSplitDTO(
                         practice.getSlug(),
                         practice.getName(),
@@ -97,24 +102,22 @@ public class PracticesAcrossWorkspaceService {
                     group.getIcon(),
                     group.getColor(),
                     CohortPrivacyPolicy.marker(
-                            release.group(),
+                            groupRelease.group(),
                             current.readerCounted(),
                             current.groupStandingOf(members.reader(), group.getSlug())),
-                    WorkspaceSplitDTO.from(release.group()),
+                    WorkspaceSplitDTO.from(groupRelease.group()),
                     practiceSplits));
         }
 
         // Open now for everyone, whatever window the tiles read, so the tile never sets a moment beside a span.
         Map<Long, Integer> openFeedback = inAppFeedbackService.countOpen(workspaceId, members.read());
         @Nullable Long reader = members.reader();
-        MiddleHalf openMiddle = CohortPrivacyPolicy.middleHalf(
-                members.eligible().stream()
-                        .map(developer -> openFeedback.getOrDefault(developer, 0))
-                        .toList(),
-                members.eligible().size() - (members.readerEligible() ? 1 : 0));
+        MiddleHalf openMiddle = CohortPrivacyPolicy.middleHalf(members.eligible().stream()
+                .map(developer -> openFeedback.getOrDefault(developer, 0))
+                .toList());
         return new PracticesAcrossWorkspaceDTO(
                 CohortPrivacyPolicy.MINIMUM_OTHERS,
-                CohortPrivacyPolicy.totalWithAStanding(current.others(), current.readerCounted()),
+                release.developersWithAStanding(),
                 current.readerCounted(),
                 WorkspaceTileDTO.of(reader == null ? 0 : openFeedback.getOrDefault(reader, 0), openMiddle),
                 rows);
@@ -134,23 +137,14 @@ public class PracticesAcrossWorkspaceService {
         StandingSnapshot yours = inWindow.snapshotOf(members.reader());
         List<StandingSnapshot> withAStanding =
                 inWindow.withAStanding().stream().map(inWindow::snapshotOf).toList();
-        int others = inWindow.others();
         return new PracticesAcrossWorkspaceTilesDTO(
                 window,
                 CohortPrivacyPolicy.MINIMUM_OTHERS_FOR_MIDDLE_HALF,
-                CohortPrivacyPolicy.totalWithAStanding(others, inWindow.readerCounted()),
+                CohortPrivacyPolicy.count(withAStanding.size()),
                 yours.practices().size(),
-                tile(yours, withAStanding, others, PracticesAcrossWorkspaceService::reviewedWork),
-                tile(
-                        yours,
-                        withAStanding,
-                        others,
-                        snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.STRENGTH)),
-                tile(
-                        yours,
-                        withAStanding,
-                        others,
-                        snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.DEVELOPING)));
+                tile(yours, withAStanding, PracticesAcrossWorkspaceService::reviewedWork),
+                tile(yours, withAStanding, snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.STRENGTH)),
+                tile(yours, withAStanding, snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.DEVELOPING)));
     }
 
     /**
@@ -165,10 +159,6 @@ public class PracticesAcrossWorkspaceService {
                 read.add(reader);
             }
             return read;
-        }
-
-        boolean readerEligible() {
-            return reader != null && eligible.contains(reader);
         }
     }
 
@@ -202,11 +192,6 @@ public class PracticesAcrossWorkspaceService {
                             .getOrDefault(developer, Map.of())
                             .getOrDefault(groupSlug, PracticeGroupStandingDTO.Standing.NOT_OBSERVED);
         }
-
-        /** The developers with a standing other than the reader. */
-        int others() {
-            return withAStanding.size() - (readerCounted ? 1 : 0);
-        }
     }
 
     private Cohort cohort(List<PracticeGroup> groups, Members members, Map<Long, StandingSnapshot> snapshots) {
@@ -228,6 +213,19 @@ public class PracticesAcrossWorkspaceService {
                 members.reader() != null && withAStanding.contains(members.reader()));
     }
 
+    private static Developer developerOf(
+            Cohort cohort, Long developer, List<PracticeGroup> groups, List<List<Practice>> practices) {
+        StandingSnapshot snapshot = cohort.snapshotOf(developer);
+        return new Developer(IntStream.range(0, groups.size())
+                .mapToObj(index -> new Standings(
+                        cohort.groupStandingOf(developer, groups.get(index).getSlug())
+                                .asPracticeStanding(),
+                        practices.get(index).stream()
+                                .map(practice -> standingIn(snapshot, practice.getSlug()))
+                                .toList()))
+                .toList());
+    }
+
     /** A developer's standing in a practice; one their snapshot does not list is one nothing reached: not observed. */
     private static PracticeStandingDTO.Standing standingIn(StandingSnapshot snapshot, String practiceSlug) {
         StandingSnapshot.PracticeStanding practice = snapshot.practices().get(practiceSlug);
@@ -237,14 +235,11 @@ public class PracticesAcrossWorkspaceService {
     }
 
     private static WorkspaceTileDTO tile(
-            StandingSnapshot yours,
-            List<StandingSnapshot> withAStanding,
-            int others,
-            ToIntFunction<StandingSnapshot> figure) {
+            StandingSnapshot yours, List<StandingSnapshot> withAStanding, ToIntFunction<StandingSnapshot> figure) {
         return WorkspaceTileDTO.of(
                 figure.applyAsInt(yours),
                 CohortPrivacyPolicy.middleHalf(
-                        withAStanding.stream().map(figure::applyAsInt).toList(), others));
+                        withAStanding.stream().map(figure::applyAsInt).toList()));
     }
 
     /** Distinct pieces of work any practice's latest run looked at, verdict or not: the work that was reviewed. */

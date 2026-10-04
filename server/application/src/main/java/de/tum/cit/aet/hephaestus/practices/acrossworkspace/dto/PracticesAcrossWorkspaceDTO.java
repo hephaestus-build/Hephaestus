@@ -16,8 +16,7 @@ public record PracticesAcrossWorkspaceDTO(
         @Nullable
         @Schema(
                 description = "Eligible developers with a current standing in a practice group shown, the"
-                        + " developers every split counts; absent while fewer than minimumOthers of them are other"
-                        + " than the reader")
+                        + " developers every split counts; absent while too few to show")
         Integer developersWithAStanding,
 
         @NonNull

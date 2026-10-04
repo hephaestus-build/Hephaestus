@@ -117,8 +117,8 @@ class GroupTrendAggregatorTest {
     void shouldCountBothBundlesWhenTheGroupHasNoPracticeToWaitOn() {
         PracticeTrend group = GroupTrendAggregator.aggregate("quality", List.of(), List.of(), properties);
 
-        assertThat(group.support().opportunitiesUntilComparable())
-                .isEqualTo(properties.getBundleSize() + properties.getMinBundleSize());
+        // A full current bundle of four, then a previous one of four.
+        assertThat(group.support().opportunitiesUntilComparable()).isEqualTo(8);
     }
 
     @Test

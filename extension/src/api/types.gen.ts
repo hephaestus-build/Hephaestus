@@ -4205,7 +4205,7 @@ export type PracticeWorkTypeDefinitionOptions = {
  */
 export type PracticesAcrossWorkspace = {
   /**
-   * Eligible developers with a current standing in a practice group shown, the developers every split counts; absent while fewer than minimumOthers of them are other than the reader
+   * Eligible developers with a current standing in a practice group shown, the developers every split counts; absent while too few to show
    */
   developersWithAStanding?: number;
   /**
@@ -4231,7 +4231,7 @@ export type PracticesAcrossWorkspace = {
  */
 export type PracticesAcrossWorkspaceTiles = {
   /**
-   * Eligible developers with a standing in a practice group shown in the window, the developers the tiles compare; absent while fewer than the fewest a shown count stands for are other than the reader
+   * Eligible developers with a standing in a practice group shown in the window, the developers the tiles compare; absent while too few to show
    */
   developersWithAStandingInWindow?: number;
   /**
@@ -7252,7 +7252,7 @@ export type WorkspaceSplitPart = {
   /**
    * The verdict the part counts
    */
-  standing: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
+  standing: 'DEVELOPING' | 'MIXED' | 'STRENGTH';
 };
 
 /**

@@ -5045,7 +5045,7 @@ export const getPracticesAcrossWorkspaceQueryKey = (options: Options<GetPractice
 /**
  * How the workspace's developers split across practice groups and practices, the reader marked
  *
- * Counts developers, never names them: a count is shown only when it holds at least 3 developers other than the reader, a group's or a practice's split shows all four parts or is withheld. The splits count every developer's current standing and take no window.
+ * Counts developers, never names them: every count shown, and every count derivable from them, holds none or at least 4 developers, whoever reads it (CohortPrivacyPolicy). The splits count every developer's current standing and take no window.
  */
 export const getPracticesAcrossWorkspaceOptions = (options: Options<GetPracticesAcrossWorkspaceData>) => queryOptions<GetPracticesAcrossWorkspaceResponse, DefaultError, GetPracticesAcrossWorkspaceResponse, ReturnType<typeof getPracticesAcrossWorkspaceQueryKey>>({
   queryFn: async ({ queryKey, signal }) => {
@@ -5065,7 +5065,7 @@ export const getPracticesAcrossWorkspaceTilesQueryKey = (options: Options<GetPra
 /**
  * The reader's figures over one window beside the workspace's middle half
  *
- * A middle half shows only when at least 6 developers other than the reader have a standing in the window; each window is checked on its own.
+ * A middle half shows only when at least 7 developers are counted in the window, whoever reads it; each window is checked on its own.
  */
 export const getPracticesAcrossWorkspaceTilesOptions = (options: Options<GetPracticesAcrossWorkspaceTilesData>) => queryOptions<GetPracticesAcrossWorkspaceTilesResponse, DefaultError, GetPracticesAcrossWorkspaceTilesResponse, ReturnType<typeof getPracticesAcrossWorkspaceTilesQueryKey>>({
   queryFn: async ({ queryKey, signal }) => {
