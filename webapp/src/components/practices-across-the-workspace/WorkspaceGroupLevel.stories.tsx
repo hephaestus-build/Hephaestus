@@ -4,7 +4,10 @@ import { expect, fn, screen, userEvent, within } from "storybook/test";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { withPageBehind } from "@/stories/decorators";
 import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
-import { PACKAGING_GROUP } from "@/stories/practices-across-the-workspace-story-data";
+import {
+	MANY_PRACTICES,
+	PACKAGING_GROUP,
+} from "@/stories/practices-across-the-workspace-story-data";
 import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
@@ -91,6 +94,37 @@ export const Default: Story = {
 		// The page's legend sits above the practices it explains.
 		await expect(level.getByRole("list", { name: "What the bars show" })).toBeVisible();
 		await expect(level.queryByText(/See practices/u)).toBeNull();
+	},
+};
+
+/**
+ * More practices than a page: the table keeps its full height and the level's body scrolls, so the
+ * last rows and the way to the rest stay in reach.
+ */
+export const ManyPractices: Story = {
+	args: {
+		state: {
+			status: "ready",
+			group: { ...PACKAGING_GROUP, practices: MANY_PRACTICES },
+			context: CONTEXT,
+		},
+	},
+	play: async () => {
+		const level = within(await settledDrawerPanel());
+		const table = level.getByRole("table", { name: "Practices of Packaging work for review" });
+		const frame = table.closest(".rounded-xl");
+		if (!(frame instanceof HTMLElement)) {
+			throw new Error("The table sits in its frame");
+		}
+		// The frame clips what overflows it, so it must be as tall as its rows.
+		await expect(frame.scrollHeight).toBeLessThanOrEqual(frame.clientHeight + 1);
+		const more = level.getByRole("button", { name: "Show more practices" });
+		more.scrollIntoView();
+		await userEvent.click(more);
+		await expect(within(table).getAllByRole("button", { name: /^Open practice /u })).toHaveLength(
+			24,
+		);
+		await expect(frame.scrollHeight).toBeLessThanOrEqual(frame.clientHeight + 1);
 	},
 };
 

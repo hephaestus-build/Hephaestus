@@ -122,7 +122,9 @@ export function PracticeTableFrame<TRow>({
 		);
 	}
 	return (
-		<div className="overflow-hidden rounded-xl border bg-background">
+		// `shrink-0`: an `overflow-hidden` flex item has no automatic minimum size, so a level's column
+		// would squash the frame and clip its last rows.
+		<div className="shrink-0 overflow-hidden rounded-xl border bg-background">
 			<Table aria-label={label} aria-busy={isLoading || undefined} className="min-w-152">
 				<TableHeader>
 					<TableRow>{head}</TableRow>
