@@ -7,7 +7,7 @@ tags: bundle, third-party, analytics, defer
 
 ## Defer Non-Critical Third-Party Libraries
 
-Analytics, logging, and error tracking don't block user interaction. Load them after hydration.
+Analytics, logging, and error tracking do not block user interaction. Load them after hydration.
 
 **Incorrect (blocks initial bundle):**
 

@@ -7,7 +7,7 @@ tags: advanced, hooks, refs, event-handlers, optimization
 
 ## Store Event Handlers in Refs
 
-Store callbacks in refs when used in effects that shouldn't re-subscribe on callback changes.
+Store callbacks in refs when used in effects that should not re-subscribe on callback changes.
 
 **Incorrect (re-subscribes on every render):**
 
@@ -37,7 +37,7 @@ function useWindowEvent(event: string, handler: () => void) {
 }
 ```
 
-**Alternative: use `useEffectEvent` if you're on latest React:**
+**Alternative: use `useEffectEvent` if you are on latest React:**
 
 ```tsx
 import { useEffectEvent } from 'react'

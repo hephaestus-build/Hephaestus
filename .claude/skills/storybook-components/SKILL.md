@@ -37,12 +37,13 @@ write a guideline that repeats one.
 The house rules are registered in `webapp/tools/oxlint/index.ts` — read it rather than trusting a
 list, since a rule can be added without this file changing. Those that reach a story file:
 
-- `hephaestus/typed-story-meta` — a `meta` naming a `component` must be `satisfies Meta<typeof X>`
-  (not annotated `: Meta<typeof X>`, which widens `typeof meta`) and its stories
-  `StoryObj<typeof meta>`, so a story that omits a required prop is a type error; a gallery meta
+- `hephaestus/typed-story-meta` — a `meta` naming a `component` must be `satisfies Meta<typeof X>`.
+  Do not annotate it `: Meta<typeof X>`, which widens `typeof meta`.
+  Its stories must be `StoryObj<typeof meta>`.
+  Thus, a story that omits a required prop is a type error. A gallery meta
   naming no component may be bare `Meta`.
 - `hephaestus/play-must-assert` — a `play` that never reaches an assertion. It reads a `getBy*` used
-  as a click target as an assertion, so it holds only the floor; whether the play checks the
+  as a click target as an assertion, so it holds only the floor. Whether the play checks the
   **outcome** is still a review question.
 - `hephaestus/no-story-a11y-override` — `parameters.a11y` or `globals.a11y` on a meta or a story.
   Either one alone takes the component out of the accessibility suite while it still reports green.
@@ -50,9 +51,9 @@ list, since a rule can be added without this file changing. Those that reach a s
   `await expect(getBy…)` is `vitest/valid-expect`, which catches it for every subject.
 - `hephaestus/no-within-canvas-element` — `within(canvasElement)` when the play function was handed
   `canvas`.
-- `hephaestus/prefer-auto-story-title` — any `title` on a meta; the sidebar mirrors the source tree.
+- `hephaestus/prefer-auto-story-title` — any `title` on a meta. The sidebar mirrors the source tree.
 - `hephaestus/no-nondeterministic-render` — `new Date()`, `Date.now()` or `Math.random()` at module
-  scope or in render; a story takes its clock from `@/stories/story-clock`.
+  scope or in render. A story takes its clock from `@/stories/story-clock`.
 - `hephaestus/svg-needs-accessible-name` — an inline `<svg>` with neither `aria-hidden` nor a name.
 
 The ones that only make sense in a story file are scoped to `**/*.stories.tsx` in the `overrides`

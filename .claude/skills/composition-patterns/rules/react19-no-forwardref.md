@@ -7,7 +7,7 @@ tags: react19, refs, context, hooks
 
 ## React 19 API Changes
 
-> **⚠️ React 19+ only.** Skip this if you're on React 18 or earlier.
+> **⚠️ React 19+ only.** Skip this if you are on React 18 or earlier.
 
 In React 19, `ref` is now a regular prop (no `forwardRef` wrapper needed), and `use()` replaces `useContext()`.
 

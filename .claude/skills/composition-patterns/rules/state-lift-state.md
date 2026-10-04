@@ -117,9 +117,9 @@ function ForwardButton() {
 ```
 
 The ForwardButton lives outside the Composer.Frame but still has access to the
-submit action because it's within the provider. Even though it's a one-off
+submit action because it is within the provider. Even though it is a one-off
 component, it can still access the composer's state and actions from outside the
 UI itself.
 
-**Key insight:** Components that need shared state don't have to be visually
-nested inside each other—they just need to be within the same provider.
+**Key insight:** Components that need shared state do not have to be visually nested inside each other.
+They only need to be within the same provider.
