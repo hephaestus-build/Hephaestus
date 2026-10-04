@@ -87,6 +87,41 @@ void test("an XcodeGen project.yml edit lists its changed package lines without 
 		assert.equal(result.metrics.manifestsChanged, 1);
 		assert.equal(result.metrics.onlyAdded, 0);
 		assert.equal(result.metrics.unpairedManifestLines, 3);
+		assert.doesNotMatch(result.directions.join("\n"), /No changed line in these manifests/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("internal XcodeGen test-target and scheme wiring offers no dependency line and says the name is no occasion", async () => {
+	const { root, script } = await stage();
+	try {
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([
+				[
+					"project.yml",
+					diffFile("project.yml", [
+						"      testTargets:",
+						"        - AppTests",
+						"  AppTests:",
+						"    type: bundle.unit-test",
+						"    dependencies:",
+						"      - target: App",
+					]),
+				],
+			]),
+			metadata,
+		);
+		assert.deepEqual(result.hints, []);
+		assert.equal(result.metrics.manifestsChanged, 1);
+		assert.equal(result.metrics.unpairedManifestLines, 0);
+		const said = result.directions.join("\n");
+		assert.match(said, /The name alone is no occasion/u);
+		assert.match(
+			said,
+			/No changed line in these manifests has the dependency shape this script reads/u,
+		);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
