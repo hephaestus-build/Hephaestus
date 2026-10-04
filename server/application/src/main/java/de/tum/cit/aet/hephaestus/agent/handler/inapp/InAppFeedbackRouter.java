@@ -49,7 +49,8 @@ public final class InAppFeedbackRouter {
         }
         // Checked before anything else about the evidence: a message about a practice whose results may
         // be filed against the wrong person must not be shown to that person, whatever else is true of it.
-        if (subjectRole != ActorRole.AUTHOR) {
+        // MERGER attribution is enforced by PracticeCatalogInjector.subjectNameable at admission.
+        if (subjectRole != ActorRole.AUTHOR && subjectRole != ActorRole.MERGER) {
             return InAppRoutingDecision.REVIEWER_ATTRIBUTED;
         }
         List<Observation> problems = problemsIn(evidence);
