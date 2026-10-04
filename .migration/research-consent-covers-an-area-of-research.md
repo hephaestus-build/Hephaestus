@@ -1,7 +1,7 @@
 #### 🔴 Check your research obligations before upgrading
 
-The research question in setup and in User settings now asks for consent to an area of research, not to one study.
-The area is how AI mentoring and practice feedback affect software engineering work and learning, including building and running benchmarks and evaluation datasets.
+The research question in setup and in User settings now asks for consent to an area of research, not to one research project.
+The area is how developers work and learn, and how AI systems can review and support that work, including building and running benchmarks and evaluation datasets for such AI systems.
 The wording version changed, so every account answers setup once more.
 An earlier "yes" does not carry over: `participatesInResearch` reports false, and research survey invitations stop, until the account answers.
 

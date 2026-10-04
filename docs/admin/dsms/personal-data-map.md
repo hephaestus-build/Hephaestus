@@ -117,7 +117,7 @@ The research can use this data of a participant who allowed it:
 - How the participant uses Hephaestus, including conversations with Heph and research survey answers.
 
 The research uses no sign-in credentials or access tokens.
-Slack message choices still apply. A participant who stops Slack message use has those messages erased, so research cannot use them.
+A participant who stops Hephaestus from using their Slack messages has those messages erased, so research cannot use them.
 
 ### Where research copies live
 

@@ -74,12 +74,12 @@ export function researchAnswers(organization: string) {
 		{
 			value: "yes",
 			title: "Yes, allow research use",
-			detail: `${organization} may use my data for this research.`,
+			detail: `I allow ${organization} to use my data for this research.`,
 		},
 		{
 			value: "no",
 			title: "No, keep my data out of research",
-			detail: `${organization} may not use my data for this research.`,
+			detail: `I do not allow ${organization} to use my data for this research.`,
 		},
 	] as const;
 }
@@ -87,17 +87,17 @@ export function researchAnswers(organization: string) {
 /**
  * The layer that is always visible. It holds what every reader needs to decide: who asks, the area of
  * research, the data, who sees it, and what withdrawal does and cannot do. The safeguards are the
- * research organization's commitments, so each is worded with the team as its subject.
+ * research organization's commitments, so each is worded with the team as its subject. `id` lets the
+ * control that records the answer name this text as its description.
  */
-/** `id` lets the control that records the answer name this text as its description. */
 export function ResearchSummary({ organization, id }: { organization: string; id: string }) {
 	return (
 		<div id={id} className="space-y-2 text-sm break-words">
 			<p>
 				The research organization, {organization}, may use your data for research if you allow it.
-				The research looks at how AI mentoring and practice feedback affect software engineering
-				work and learning. It includes building and running benchmarks and evaluation datasets that
-				measure and improve AI mentoring systems.
+				The research looks at how developers work and learn, and how AI systems can review and
+				support that work. It includes building and running benchmarks and evaluation datasets for
+				such AI systems.
 			</p>
 			<p>Your data means:</p>
 			<ul className="list-disc space-y-0.5 pl-5">
@@ -127,30 +127,30 @@ function researchDetails(organization: string): readonly Fact[] {
 			icon: DatabaseIcon,
 			term: "What data",
 			detail:
-				"Your Slack message choices still apply. Sign-in credentials and access tokens are never used.",
+				"Slack messages that you stopped Hephaestus from using are erased, so research never gets them. Sign-in credentials and access tokens are never used.",
 		},
 		{
 			icon: UsersIcon,
 			term: "Who uses it",
-			detail: `The research organization is ${organization}. It and the researchers who work for it use the data, only for research in the area described here. AI model providers act for it under a data processing agreement and see only pseudonymized data.`,
+			detail: `The research organization is ${organization}. It and the researchers who work for it use the data, only for this research. AI model providers act for it under a data processing agreement and see only pseudonymized data.`,
 		},
 		{
 			icon: ShieldCheckIcon,
 			term: "How it is protected",
 			detail:
-				"The research team replaces your name, username and contact details with a code. This is called pseudonymization. The team stores the key apart from the data, and only the team can reach it. Text can still name people, so the team screens for names and removes what it finds. The team does not look for data about your health, beliefs or other special categories of personal data, and it removes any that it finds. These safeguards follow Article 89 of the GDPR.",
+				"The code also replaces your username and contact details. This is called pseudonymization. The team stores the key apart from the data, and only the team can reach it. Text can still name people, so the team screens for names and removes what it finds. The team does not look for data about your health, beliefs or other special categories of personal data, and it removes any that it finds. These safeguards follow Article 89 of the GDPR.",
 		},
 		{
 			icon: ShareIcon,
 			term: "Datasets and benchmarks",
 			detail:
-				"A dataset or benchmark leaves the research team only if it is anonymized, so that nobody can identify you from it. If the team cannot anonymize a dataset, it keeps the dataset inside the team. Running a benchmark can mean running AI models on the data. Your AI choice in User settings applies to these runs too.",
+				"Anonymized means that nobody can identify you from a dataset. If the team cannot anonymize a dataset, it keeps the dataset inside the team. Running a benchmark can mean running AI models on the data. Your AI choice in User settings applies to these runs too.",
 		},
 		{
 			icon: UndoIcon,
 			term: "If you change your mind",
 			detail:
-				"Turn research off in User settings at any time. Anonymized data that is already in a published result or dataset cannot be traced back to you, so it cannot be removed. Research done before you withdraw stays lawful.",
+				"Turn research off in User settings at any time. Anonymized data cannot be traced back to you, so it cannot be removed from a published result. Research done before you withdraw stays lawful.",
 		},
 		{
 			icon: ScaleIcon,

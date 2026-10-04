@@ -156,8 +156,8 @@ must replace the pending status at the top of this file when the determination i
 ## 7. Research use under broad consent
 
 Participants can allow research use of their data under Art. 6(1)(a) GDPR. The consent is a broad consent to an area of research (Recital 33 GDPR).
-The area is how AI mentoring and practice feedback affect software engineering work and learning.
-It includes building and running benchmarks and evaluation datasets that measure and improve AI mentoring systems.
+The area is how developers work and learn, and how AI systems can review and support that work.
+It includes building and running benchmarks and evaluation datasets for such AI systems.
 
 The controller of the research is the research organization of the instance (`HEPHAESTUS_RESEARCH_ORGANIZATION`). For the TUM deployment, this is TUM (AET).
 

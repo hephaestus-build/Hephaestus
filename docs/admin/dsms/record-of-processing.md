@@ -59,7 +59,7 @@ Team memberships sync from GitHub teams and gitlab.lrz.de subgroups. They let me
 
 Signed-in contributors can send product feedback. They can answer or decline surveys that instance administrators author. These submissions stay in the instance database. Instance administrators can read them for product improvement. They are not reused for research. Research-purpose surveys are covered under *Legal basis* below.
 
-Research use is optional and rests on consent. A participant who says yes allows TUM (AET) and the researchers who work for it to use their data for research. The area of research is how AI mentoring and practice feedback affect software engineering work and learning. It includes building and running benchmarks and evaluation datasets that measure and improve AI mentoring systems. Only research in this area is covered.
+Research use is optional and rests on consent. A participant who says yes allows TUM (AET) and the researchers who work for it to use their data for research. The area of research is how developers work and learn, and how AI systems can review and support that work. It includes building and running benchmarks and evaluation datasets for such AI systems. Only research in this area is covered.
 
 The research uses the participant's work in connected repositories and tools, Hephaestus observations and practice feedback about that work, and the participant's responses to that feedback. It also uses how the participant uses Hephaestus, including conversations with Heph and research survey answers. Sign-in credentials and access tokens are never used.
 
@@ -162,7 +162,7 @@ For research participants only, the research uses these categories in pseudonymi
 - The participant's responses to that feedback.
 - How the participant uses Hephaestus, including conversations with Heph and research survey answers.
 
-Sign-in credentials and access tokens are never used. Slack message choices still apply. A participant who stops Slack message use has those messages erased, so they are not available to research.
+Sign-in credentials and access tokens are never used. A participant who stops Hephaestus from using their Slack messages has those messages erased, so they are not available to research.
 ```
 
 Hephaestus does not intentionally solicit or classify special-category data (Art. 9(1) GDPR) or criminal-offence data (Art. 10 GDPR). Because repository and chat fields contain free text, incidental content may include and therefore cause processing of them. The privacy statement instructs users not to enter third-party personal or sensitive data.
@@ -576,7 +576,7 @@ Administrators outside TUM cannot invoke Art. 6(1)(e) BayHIG. They invoke a basi
 
 Voluntary sign-in by non-TUM contributors to use personal features: Art. 6(1)(b) GDPR.
 
-Optional research participation: Art. 6(1)(a) GDPR. It is a broad consent to an area of research (Recital 33 GDPR). The area is how AI mentoring and practice feedback affect software engineering work and learning. It includes building and running benchmarks and evaluation datasets that measure and improve AI mentoring systems. The research organization is the controller of this research. For this deployment, it is TUM (AET).
+Optional research participation: Art. 6(1)(a) GDPR. It is a broad consent to an area of research (Recital 33 GDPR). The area is how developers work and learn, and how AI systems can review and support that work. It includes building and running benchmarks and evaluation datasets for such AI systems. The research organization is the controller of this research. For this deployment, it is TUM (AET).
 
 The consent is separate from the terms and from the public-task basis for platform operation. It is voluntary and is not a condition of service (Art. 7(4) GDPR). Refusing or withdrawing has no disadvantage. The participant gets the same access, features and feedback.
 
