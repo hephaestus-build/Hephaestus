@@ -314,7 +314,7 @@ function PracticeCatalogRoute() {
 		catalogTree = (
 			<QueryErrorAlert
 				error={groupsQuery.error ?? practicesQuery.error ?? definitionOptionsQuery.error}
-				title="Could not load practices"
+				title="We could not load practices"
 				onRetry={() => {
 					void groupsQuery.refetch();
 					void practicesQuery.refetch();
@@ -647,7 +647,7 @@ function PracticeCatalogRoute() {
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Delete “{deletingGroup?.name}”?</AlertDialogTitle>
+						<AlertDialogTitle>Delete group “{deletingGroup?.name}”?</AlertDialogTitle>
 						<AlertDialogDescription>
 							Choose whether to keep this group’s practices in the workspace or delete them with the
 							group. Deleting practices also permanently deletes their observations.
@@ -702,7 +702,7 @@ function PracticeCatalogRoute() {
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Delete &ldquo;{deletingPractice?.name}&rdquo;?</AlertDialogTitle>
+						<AlertDialogTitle>Delete practice “{deletingPractice?.name}”?</AlertDialogTitle>
 						<AlertDialogDescription>
 							This permanently deletes the practice and its observations. You cannot undo this.
 						</AlertDialogDescription>

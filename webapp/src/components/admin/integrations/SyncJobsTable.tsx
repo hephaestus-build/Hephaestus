@@ -132,7 +132,7 @@ function JobProgressPanel({ progress }: { progress: SyncJobProgress }) {
 			)}
 			{hasUnits && (
 				<>
-					<dt className="text-muted-foreground">Units in phase</dt>
+					<dt className="text-muted-foreground">Items in phase</dt>
 					<dd className="tabular-nums">
 						{unitsCompleted?.toLocaleString() ?? "–"}
 						{unitsTotal != null && ` / ${unitsTotal.toLocaleString()}`}

@@ -126,7 +126,7 @@ function expired(): WorkerError {
 /** Whether the reader may ask for a review of this work now, by the server's current answer. */
 function allowed(context: ReadyContext): void {
 	if (!context.canRequestReview) {
-		throw forbidden("Your account cannot ask for a review of this work.");
+		throw forbidden("Your account cannot request a review of this work.");
 	}
 }
 

@@ -436,7 +436,7 @@ describe("practice profile route", () => {
 			`${PAGE}?detail=${encodeURIComponent(JSON.stringify(["review:gone"]))}`,
 		);
 
-		await screen.findByText("Could not load this review", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("We could not load this review", undefined, ROUTE_RENDER_WAIT);
 		await screen.findByText(/may have been deleted or moved/u);
 		expect(reads).toBe(1);
 	});

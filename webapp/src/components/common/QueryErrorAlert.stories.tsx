@@ -137,7 +137,7 @@ export const ReflowWithLongDetail: Story = {
 		chromatic: { viewports: [320] },
 	},
 	args: {
-		title: "Could not load the instance delivery state",
+		title: "We could not load the instance delivery state",
 		error: {
 			status: 503,
 			detail:

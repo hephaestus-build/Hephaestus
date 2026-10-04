@@ -170,7 +170,7 @@ export function ObservationFilters({
 					selected={search.groupSlug ?? []}
 					onChange={(values) => onPatch({ groupSlug: nonEmpty(values) })}
 					disabled={groups.isLoading}
-					emptyLabel={groups.isError ? "Could not load groups" : "No groups available"}
+					emptyLabel={groups.isError ? "We could not load groups" : "No groups available"}
 				/>
 				<FacetMultiSelect
 					title="Practice"
@@ -178,7 +178,7 @@ export function ObservationFilters({
 					selected={search.practiceSlug ?? []}
 					onChange={(values) => onPatch({ practiceSlug: nonEmpty(values) })}
 					disabled={practices.isLoading}
-					emptyLabel={practices.isError ? "Could not load practices" : "No practices available"}
+					emptyLabel={practices.isError ? "We could not load practices" : "No practices available"}
 				/>
 
 				<FacetMultiSelect

@@ -96,7 +96,7 @@ export function AdminSurveyComposerHeader({
 				<div className="space-y-0.5">
 					<DrawerTitle>Create survey</DrawerTitle>
 					<DrawerDescription>
-						Members of the audience are invited from the app header while the survey is open.
+						While the survey is open, members in the audience see an invitation in the app header.
 					</DrawerDescription>
 				</div>
 				{children}
@@ -655,8 +655,8 @@ function QuestionCard({
 
 				{question.type === "NPS" && (
 					<FieldDescription>
-						0–10, labelled {NPS_LABELS.low} → {NPS_LABELS.high}. Members get no answer shortcuts in
-						a survey with a recommendation question.
+						0–10, labeled {NPS_LABELS.low} → {NPS_LABELS.high}. Members get no answer shortcuts in a
+						survey with a recommendation question.
 					</FieldDescription>
 				)}
 

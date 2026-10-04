@@ -174,6 +174,6 @@ export const Loading: Story = {
 export const Error: Story = {
 	args: { state: { status: "error", error: new TypeError("Failed to fetch"), onRetry: fn() } },
 	play: async () => {
-		await expectSettledVisible(await screen.findByText("Survey results could not be loaded"));
+		await expectSettledVisible(await screen.findByText("We could not load survey results"));
 	},
 };

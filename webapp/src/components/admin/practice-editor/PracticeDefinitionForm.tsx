@@ -295,11 +295,11 @@ function formErrors(
 	const summary = [
 		nameTooShort && {
 			fieldId: "practice-name",
-			message: "Give the practice a name of at least three characters.",
+			message: "Enter a name of at least 3 characters.",
 		},
 		criteriaTooShort && {
 			fieldId: "practice-criteria",
-			message: "Say what this practice checks, in at least three characters.",
+			message: "Enter at least 3 characters in What to look for.",
 		},
 		policy && {
 			fieldId: practicePolicyErrorTarget(form.automatedReviewPolicy),
@@ -310,7 +310,7 @@ function formErrors(
 		hasText(gateError) && { fieldId: "practice-gate", message: gateError },
 		slugInvalid && {
 			fieldId: "practice-slug",
-			message: "The identifier must be 3–64 lowercase letters, numbers and single hyphens.",
+			message: "Enter an identifier of 3–64 lowercase letters, numbers and single hyphens.",
 			// Lives inside the collapsed Technical settings panel, which unmounts its contents.
 			reveal: revealSlug,
 		},
@@ -321,9 +321,9 @@ function formErrors(
 		},
 	].filter((entry): entry is FormError => Boolean(entry));
 	return {
-		name: nameTooShort ? "Name must be at least 3 characters." : undefined,
+		name: nameTooShort ? "Enter a name of at least 3 characters." : undefined,
 		slug: slugInvalid ? "Use 3–64 lowercase letters, numbers and single hyphens." : undefined,
-		criteria: criteriaTooShort ? "Criteria must be at least 3 characters." : undefined,
+		criteria: criteriaTooShort ? "Enter at least 3 characters." : undefined,
 		policy,
 		reviewSettings,
 		gate: gateError,
@@ -728,16 +728,16 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 								</h2>
 								<p className="text-sm text-muted-foreground">
 									A practice is reviewed on one occasion: the moments that start a review, and what
-									that review reads. A way of working that deserves a different judgment at a
-									different moment is a second practice, not a second occasion. Examples are what is
-									in front of you when the work arrives, or what the merge never resolved.
+									that review reads. If a way of working needs a different judgment at a different
+									moment, make it a second practice, not a second occasion. For example, what is in
+									front of you when the work arrives differs from what the merge never resolved.
 								</p>
 							</div>
 
 							<FieldSet>
 								<FieldLegend variant="label">Review this kind of work</FieldLegend>
 								<FieldDescription>
-									Changing this starts the moments and the evidence again from the recommended ones.
+									Changing this resets the review moments and the evidence to the recommended ones.
 								</FieldDescription>
 								<RadioGroup
 									value={artifactKind}

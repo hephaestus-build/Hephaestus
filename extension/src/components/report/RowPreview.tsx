@@ -102,7 +102,7 @@ export function RowPreview({
 	// The row has no list to put a failed part's retry in, nor a failed refresh's; the line carries it.
 	switch (feedback?.status === "error" || stale !== undefined ? "retry" : summary.action) {
 		case "retry": {
-			action = <TextButton onClick={onRetry}>Try again</TextButton>;
+			action = <TextButton onClick={onRetry}>Retry</TextButton>;
 			break;
 		}
 		case "set-up":

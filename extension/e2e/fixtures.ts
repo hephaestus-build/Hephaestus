@@ -120,7 +120,7 @@ export async function signIn(
 	await options.getByText("Use a self-hosted instance", { exact: true }).click();
 	await options.getByLabel("Hephaestus address").fill(SERVER_URL);
 	await options.getByLabel(/Web app address/u).fill(WEB_APP_URL);
-	await options.getByRole("button", { name: "Connect" }).click();
+	await options.getByRole("button", { name: "Connect", exact: true }).click();
 	await options.getByLabel("User name").fill(username);
 	if (admin) {
 		await options.getByRole("checkbox", { name: "Instance admin" }).check();

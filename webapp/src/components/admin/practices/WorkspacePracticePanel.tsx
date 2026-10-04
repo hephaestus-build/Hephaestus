@@ -72,7 +72,7 @@ export function WorkspacePracticePanel({
 					) : (
 						<QueryErrorAlert
 							error={state.error}
-							title="Could not load this practice"
+							title="We could not load this practice"
 							onRetry={state.onRetry}
 						/>
 					)}

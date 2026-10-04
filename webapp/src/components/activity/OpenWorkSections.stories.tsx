@@ -105,7 +105,7 @@ export const MoreTeamRequestsThanListed: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText("Showing the 2 most recently updated of your teams' review requests."),
+			canvas.getByText("Showing the 2 most recently updated of your teams’ review requests."),
 		).toBeVisible();
 	},
 };

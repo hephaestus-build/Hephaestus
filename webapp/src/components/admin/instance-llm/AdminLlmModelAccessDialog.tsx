@@ -118,7 +118,7 @@ function AdminLlmModelAccessDialogContent({
 							<>
 								<QueryErrorAlert
 									error={workspacesError}
-									title="Could not load workspaces"
+									title="We could not load workspaces"
 									onRetry={onRetryWorkspaces}
 								/>
 								<p className="text-xs text-muted-foreground">

@@ -157,7 +157,7 @@ export function PracticeProfilePage({
 			<div className="mx-auto w-full max-w-xl">
 				<QueryErrorAlert
 					error={state.error}
-					title="Could not load your practices"
+					title="We could not load your practices"
 					onRetry={state.onRetry}
 				/>
 			</div>

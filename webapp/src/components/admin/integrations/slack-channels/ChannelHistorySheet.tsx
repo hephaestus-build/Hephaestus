@@ -56,7 +56,7 @@ export function ChannelHistorySheet({
 				<SheetHeader>
 					<SheetTitle>Consent history</SheetTitle>
 					<SheetDescription>
-						Every recorded consent transition for #{label}, newest first.
+						Every recorded consent change for #{label}, newest first.
 					</SheetDescription>
 				</SheetHeader>
 
@@ -87,8 +87,8 @@ export function ChannelHistorySheet({
 								</EmptyMedia>
 								<EmptyTitle>No consent changes recorded yet</EmptyTitle>
 								<EmptyDescription>
-									Each activation, pause, resume, and removal appears here as an audit entry that
-									cannot be changed.
+									Each activation, pause, resume, and removal is recorded here. Entries cannot be
+									edited.
 								</EmptyDescription>
 							</EmptyHeader>
 						</Empty>

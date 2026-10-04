@@ -19,7 +19,7 @@ const meta = {
 		onCancel: fn(),
 		privacyPolicy: (
 			<a href="/privacy" className="underline underline-offset-4 hover:text-foreground">
-				Read our privacy statement
+				Read our privacy notice
 			</a>
 		),
 	},

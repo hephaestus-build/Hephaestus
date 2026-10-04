@@ -162,8 +162,8 @@ export function PracticeDetailLevel({
 				error={error}
 				title={
 					practice
-						? `Could not load your standing for ${practice.name}`
-						: "Could not load this practice"
+						? `We could not load your standing for ${practice.name}`
+						: "We could not load this practice"
 				}
 				onRetry={onRetry}
 			/>
@@ -274,7 +274,8 @@ export function PracticeDetailLevel({
 	} else {
 		body = (
 			<p className="text-sm text-muted-foreground">
-				This practice does not exist or is not reviewed in this workspace.
+				We could not find this practice. Check the link, or ask a workspace admin whether this
+				workspace reviews it.
 			</p>
 		);
 	}

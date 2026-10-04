@@ -189,9 +189,9 @@ function GitLabWizardPage() {
 			<div className="mx-auto w-full max-w-2xl">
 				<Alert variant="destructive">
 					<OctagonXIcon aria-hidden="true" />
-					<AlertTitle>Could not load GitLab setup</AlertTitle>
+					<AlertTitle>We could not load the GitLab setup</AlertTitle>
 					<AlertDescription>
-						Hephaestus could not check which providers are available. Reload the page to try again.
+						We could not check which providers are available. Reload the page to try again.
 					</AlertDescription>
 				</Alert>
 			</div>
@@ -248,7 +248,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 				...(workspaces ?? []),
 				data,
 			]);
-			toast.success(`Workspace "${data.displayName}" created`);
+			toast.success(`Workspace “${data.displayName}” created`);
 			void navigate({
 				to: "/w/$workspaceSlug",
 				params: { workspaceSlug: data.workspaceSlug },
@@ -360,7 +360,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 				isForCurrentToken(state, listGroups.variables.body) && (
 					<Alert variant="destructive" className="mt-4">
 						<OctagonXIcon aria-hidden="true" />
-						<AlertTitle>Could not load groups</AlertTitle>
+						<AlertTitle>We could not load your groups</AlertTitle>
 						<AlertDescription>
 							{problemDetailOf(
 								listGroups.error,

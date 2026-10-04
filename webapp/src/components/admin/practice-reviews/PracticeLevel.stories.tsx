@@ -240,7 +240,7 @@ export const CountsFailed: Story = {
 	},
 	play: async ({ args, userEvent }) => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Could not load this practice’s counts")).toBeVisible();
+		await expect(panel.getByText("We could not load this practice’s counts")).toBeVisible();
 		panel.getByRole("list", { name: "Observations" });
 		await userEvent.click(panel.getByRole("button", { name: "Retry" }));
 		if (args.counts.status !== "error") {
@@ -260,7 +260,7 @@ export const ObservationsFailed: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Could not load observations")).toBeVisible();
+		await expect(panel.getByText("We could not load observations")).toBeVisible();
 		panel.getByRole("list", { name: "Observations by outcome" });
 	},
 };

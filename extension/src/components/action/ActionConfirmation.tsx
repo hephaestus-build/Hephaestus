@@ -49,7 +49,7 @@ function WorkCard({ preview }: { preview: ActionPreview }) {
 }
 
 function explanation(preview: ActionPreview): string {
-	return `Hephaestus reviews this ${workNoun(preview.work)} against the practices ${preview.workspace.displayName} follows. The workspace’s settings decide what it records and whether feedback is posted where the developer sees it.`;
+	return `Hephaestus reviews this ${workNoun(preview.work)} against the practices ${preview.workspace.displayName} follows. The workspace’s settings decide what the review records and whether feedback is posted where the developer sees it.`;
 }
 
 function outcomeText(outcome: ActionOutcome): { title: string; body: string; done: boolean } {

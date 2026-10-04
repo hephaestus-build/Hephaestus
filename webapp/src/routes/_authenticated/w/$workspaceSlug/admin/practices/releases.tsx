@@ -62,7 +62,7 @@ function PracticeReleaseInbox() {
 		...declinePracticeReleaseMutation(),
 		onSuccess: () => {
 			refresh();
-			toast.success("Update declined");
+			toast.success("Practice update declined");
 		},
 		onError: (error) => {
 			if (problemStatusOf(error) === 412) {
@@ -85,7 +85,7 @@ function PracticeReleaseInbox() {
 		content = (
 			<QueryErrorAlert
 				error={query.error}
-				title="Could not load practice updates"
+				title="We could not load practice updates"
 				onRetry={() => {
 					void query.refetch();
 				}}

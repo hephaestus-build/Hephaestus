@@ -297,7 +297,7 @@ describe("catalog adoption over practice setup", () => {
 		renderRouteAt(REVIEWING);
 		fireEvent.click(await screen.findByRole("button", { name: "Add practice" }, ROUTE_RENDER_WAIT));
 
-		await screen.findByText("Could not load the adoption preview", {}, ROUTE_RENDER_WAIT);
+		await screen.findByText("We could not load the adoption preview", {}, ROUTE_RENDER_WAIT);
 		expect(screen.queryByText("The catalog changed while you were reading")).toBeNull();
 	});
 

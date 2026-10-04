@@ -535,7 +535,7 @@ export const Loading: Story = {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByRole("heading", { level: 2 })).toHaveAccessibleName("Loading feedback");
 		panel.getByRole("button", { name: "Practice reviews" });
-		await expect(panel.queryByText("Could not load this feedback")).not.toBeInTheDocument();
+		await expect(panel.queryByText("We could not load this feedback")).not.toBeInTheDocument();
 		await expect(
 			panel.queryByRole("button", { name: "Approve for delivery" }),
 		).not.toBeInTheDocument();
@@ -552,7 +552,7 @@ export const LoadFailed: Story = {
 	},
 	play: async ({ args, userEvent }) => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Could not load this feedback")).toBeVisible();
+		await expect(panel.getByText("We could not load this feedback")).toBeVisible();
 		// With no record to name it, the level is named for what it is.
 		await expect(screen.getByRole("dialog")).toHaveAccessibleName("Feedback");
 		await userEvent.click(panel.getByRole("button", { name: "Retry" }));

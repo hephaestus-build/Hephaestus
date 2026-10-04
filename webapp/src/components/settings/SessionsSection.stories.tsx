@@ -82,7 +82,7 @@ export const ErrorState: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("alert")).toHaveTextContent("Could not load sessions");
+		await expect(canvas.getByRole("alert")).toHaveTextContent("We could not load your sessions");
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeVisible();
 	},
 };

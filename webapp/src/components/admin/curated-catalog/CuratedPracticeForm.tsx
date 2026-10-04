@@ -121,7 +121,7 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 					</Alert>
 					{onContinueWithDraft && (
 						<Button type="button" variant="outline" size="sm" onClick={onContinueWithDraft}>
-							Continue with my draft
+							Continue with your draft
 						</Button>
 					)}
 				</div>
@@ -189,8 +189,9 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 									<h2 className="text-lg font-semibold">What the author declared</h2>
 									<p className="text-sm text-muted-foreground">
 										The evidence requirements above are the author’s own claim about this practice.
-										Nobody has checked them independently. The digests record the exact rules that
-										were declared, so a later change to them is visible rather than silent.
+										Nobody has checked them independently. The codes below identify the exact rules
+										and policy that were declared, so a later change to them is visible rather than
+										silent.
 									</p>
 								</div>
 								<PracticeAutomatedReviewValidationSummary

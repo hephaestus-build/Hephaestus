@@ -45,7 +45,7 @@ export function AiChoiceSection({
 			</div>
 
 			{isError ? (
-				<QueryErrorAlert title="Could not load your AI choice" error={error} onRetry={onRetry} />
+				<QueryErrorAlert title="We could not load your AI choice" error={error} onRetry={onRetry} />
 			) : (
 				// Keyed on the saved answer: a refetch that changes it remounts the form with a clean draft.
 				<AiChoiceForm

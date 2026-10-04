@@ -53,9 +53,9 @@ function statusBadgeVariant(status: AdminAccountView["status"]) {
 
 function changeRoleLabel(isSelfAdmin: boolean, appRole: AppRole) {
 	if (isSelfAdmin) {
-		return "You cannot revoke your own admin";
+		return "You cannot revoke your own instance admin role";
 	}
-	return appRole === "APP_ADMIN" ? "Revoke admin" : "Change role";
+	return appRole === "APP_ADMIN" ? "Revoke instance admin" : "Grant instance admin";
 }
 
 export function AdminUsersTable({ totalLoaded, onLoadMore, ...rows }: AdminUsersTableProps) {
@@ -83,7 +83,8 @@ export function AdminUsersTable({ totalLoaded, onLoadMore, ...rows }: AdminUsers
 			<div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
 				<p className="text-sm text-muted-foreground" aria-live="polite">
 					Showing {users.length}
-					{hasSearch ? ` of ${totalLoaded} loaded` : ""} user{users.length === 1 ? "" : "s"}
+					{hasSearch ? ` of ${totalLoaded} loaded` : ""}{" "}
+					{(hasSearch ? totalLoaded : users.length) === 1 ? "user" : "users"}
 				</p>
 				{hasNextPage && (
 					<Button variant="outline" size="sm" onClick={onLoadMore} disabled={isFetchingNextPage}>

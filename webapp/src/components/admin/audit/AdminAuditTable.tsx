@@ -77,12 +77,15 @@ export function AdminAuditTable({
 					<EmptyMedia variant="icon">
 						<ScrollText />
 					</EmptyMedia>
-					<EmptyTitle>Could not load the audit log</EmptyTitle>
+					<EmptyTitle>We could not load the audit log</EmptyTitle>
+					<EmptyDescription>
+						Try again in a moment. If it keeps failing, reload the page.
+					</EmptyDescription>
 				</EmptyHeader>
 				{onRetry && (
 					<EmptyContent>
 						<Button variant="outline" size="sm" onClick={onRetry}>
-							Try again
+							Retry
 						</Button>
 					</EmptyContent>
 				)}

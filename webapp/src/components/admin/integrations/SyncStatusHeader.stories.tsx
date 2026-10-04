@@ -86,7 +86,7 @@ export const CredentialUnreadableWithRunningJob: Story = {
 		status: { ...baseStatus, activeJob: runningJob },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /cancel/iu })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Cancel sync" })).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: /sync now/iu })).not.toBeInTheDocument();
 		await expect(
 			canvas.queryByRole("button", { name: /more sync options/iu }),
@@ -310,7 +310,7 @@ export const ActiveJobRunning: Story = {
 	args: { status: { ...baseStatus, activeJob: runningJob } },
 	play: async ({ args, canvas }) => {
 		await expect(canvas.getByLabelText(/connection health/iu)).toHaveTextContent("Syncing");
-		const cancel = canvas.getByRole("button", { name: /^cancel$/iu });
+		const cancel = canvas.getByRole("button", { name: "Cancel sync" });
 		await expect(cancel).toBeEnabled();
 		await userEvent.click(cancel);
 		await expect(args.onCancel).toHaveBeenCalledTimes(1);

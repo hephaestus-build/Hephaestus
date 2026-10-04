@@ -185,7 +185,7 @@ describe("subjectLabel", () => {
 			subjectLabel(
 				entry({ entityType: "AGENT_BINDING", entityId: "practice-config", newValue: "{}" }),
 			),
-		).toStrictEqual({ label: "AI binding practice-config" });
+		).toStrictEqual({ label: "Model assignment practice-config" });
 	});
 });
 

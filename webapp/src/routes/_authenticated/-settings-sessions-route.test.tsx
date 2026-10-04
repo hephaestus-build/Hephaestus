@@ -112,7 +112,7 @@ describe("active sessions on the settings page", () => {
 		renderRouteAt("/settings");
 		const region = await sessionsRegion();
 		const alert = await within(region).findByRole("alert", {}, ROUTE_RENDER_WAIT);
-		expect(alert.textContent).toContain("Could not load sessions");
+		expect(alert.textContent).toContain("We could not load your sessions");
 
 		fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
 

@@ -143,7 +143,7 @@ function WorkspaceLlmConnectionFormDialogContent({
 							<FieldDescription>
 								{isEdit
 									? "Turn off to stop new requests using this connection."
-									: "Starts inactive. Test it, add a priced model, then activate both."}
+									: "Starts inactive. Test it, add a priced model, then activate the connection and the model."}
 							</FieldDescription>
 						</FieldContent>
 						<Switch

@@ -23,8 +23,8 @@ describe("problemDetailOf", () => {
 	});
 
 	it("falls back to the legacy `{ error }` shape when title/detail are absent", () => {
-		expect(problemDetailOf({ error: "Could not validate", message: "msg" })).toBe(
-			"Could not validate",
+		expect(problemDetailOf({ error: "We could not validate", message: "msg" })).toBe(
+			"We could not validate",
 		);
 	});
 
@@ -36,11 +36,11 @@ describe("problemDetailOf", () => {
 		expect(
 			problemDetailOf(
 				new TypeError("Cannot read properties of undefined (reading 'id')"),
-				"Could not save the model",
+				"We could not save the model",
 			),
-		).toBe("Could not save the model");
-		expect(problemDetailOf(new TypeError("Failed to fetch"), "Could not save the model")).toBe(
-			"Could not save the model",
+		).toBe("We could not save the model");
+		expect(problemDetailOf(new TypeError("Failed to fetch"), "We could not save the model")).toBe(
+			"We could not save the model",
 		);
 		expect(problemDetailOf({ message: "boom" })).toBe(
 			"We could not finish that. Try again. If it keeps failing, contact your workspace admin.",

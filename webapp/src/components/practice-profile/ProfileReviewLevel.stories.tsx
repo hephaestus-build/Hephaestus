@@ -303,7 +303,7 @@ export const ActivityFailed: Story = {
 	},
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("Could not load this work’s review activity")).toBeVisible();
+		await expect(screen.getByText("We could not load this work’s review activity")).toBeVisible();
 	},
 };
 
@@ -320,7 +320,7 @@ export const NotFound: Story = {
 	args: { state: { status: "error", error: { status: 404 }, onRetry: fn() } },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("Could not load this review")).toBeVisible();
+		await expect(screen.getByText("We could not load this review")).toBeVisible();
 		await expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
 	},
 };

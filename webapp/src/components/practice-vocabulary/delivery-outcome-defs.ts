@@ -62,7 +62,7 @@ export const DELIVERY_STATE_DEFS: StatusDefs<DeliveryState> = {
 		icon: CircleAlertIcon,
 		badgeVariant: "destructive",
 		description:
-			"Some approved comments reached the provider, but the remaining comments could not be delivered after bounded retries.",
+			"Some approved comments reached the provider, but the rest could not be delivered after several attempts.",
 	},
 	SUPERSEDED: {
 		label: "Replaced by newer",

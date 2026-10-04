@@ -119,8 +119,8 @@ export function PracticeAdoptionPanel({
 									<ItemContent>
 										<ItemTitle>Create a copy this workspace owns</ItemTitle>
 										<ItemDescription>
-											Edit it freely. Later catalog changes never reach it, and your edits never
-											reach the catalog.
+											Edit it freely. Later catalog changes do not edit it unless you accept them,
+											and your edits never reach the catalog.
 										</ItemDescription>
 									</ItemContent>
 								</Item>
@@ -194,7 +194,7 @@ function PracticeAdoptionPlaceholder({
 				) : (
 					<QueryErrorAlert
 						error={state.error}
-						title="Could not load the adoption preview"
+						title="We could not load the adoption preview"
 						onRetry={state.onRetry}
 					/>
 				)}

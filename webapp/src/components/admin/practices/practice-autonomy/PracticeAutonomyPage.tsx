@@ -39,7 +39,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
-import { Field, FieldDescription, FieldTitle } from "@/components/ui/field";
+import { Field, FieldTitle } from "@/components/ui/field";
 import {
 	Item,
 	ItemActions,
@@ -226,7 +226,7 @@ export function PracticeAutonomyPage({
 						</EmptyTitle>
 						<EmptyDescription>
 							{overridesOnly
-								? "Every group and practice follows the workspace default above. Switch the filter off to see them."
+								? "Every group and practice follows the workspace default above. Turn off the filter to see them."
 								: "Add practices in Practice setup, then decide how far reviews go on them."}
 						</EmptyDescription>
 					</EmptyHeader>
@@ -353,17 +353,13 @@ function WorkspaceDecisionCard({
 					<h2>Workspace default</h2>
 				</CardTitle>
 				<CardDescription>
-					One decision for the whole workspace. Every group and every practice below follows it
-					unless somebody says otherwise.
+					One decision for the whole workspace. Every group and practice below follows it, unless
+					you set that group or practice by hand.
 				</CardDescription>
 			</CardHeader>
 			<CardContent>
 				<Field>
 					<FieldTitle>How far reviews go without you</FieldTitle>
-					<FieldDescription>
-						Off stops the review. Review before sending prepares a proposal for a person to decide.
-						Send automatically delivers eligible feedback without waiting.
-					</FieldDescription>
 					<AutonomyLadder
 						label="How far reviews go without you"
 						variant="full"
@@ -573,7 +569,7 @@ function GroupGroup({
 								variant="link"
 								size="inline"
 								className="text-xs"
-								aria-label={`${allSelected ? "Deselect" : "Select"} all ${selectableSlugs.length} practices in ${group.name}`}
+								aria-label={`${allSelected ? "Deselect" : "Select"} all ${selectableSlugs.length} ${selectableSlugs.length === 1 ? "practice" : "practices"} in ${group.name}`}
 								onClick={() => onSelectMany(selectableSlugs, !allSelected)}
 							>
 								{allSelected ? "Deselect" : "Select"} all {selectableSlugs.length}

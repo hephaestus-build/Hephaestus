@@ -57,7 +57,7 @@ export function AdminSurveyEmailInvitations({ state }: { state: SurveyEmailInvit
 				{state.status === "loading" && <Skeleton className="h-24 w-full" />}
 				{state.status === "error" && (
 					<QueryErrorAlert
-						title="Could not load email invitations"
+						title="We could not load email invitations"
 						error={state.error}
 						onRetry={state.onRetry}
 					/>

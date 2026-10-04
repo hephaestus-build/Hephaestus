@@ -29,7 +29,7 @@ export const TRACE_OUTCOME_DEFS: StatusDefs<TraceOutcome> = {
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
 		description:
-			"The practice was measured on this work. Whether any feedback reached anybody is the delivery question, not this one.",
+			"The practice was measured on this work. Whether feedback was sent is a separate question.",
 	},
 	RUNNING: {
 		label: "Running",
@@ -48,7 +48,7 @@ export const TRACE_OUTCOME_DEFS: StatusDefs<TraceOutcome> = {
 		icon: CircleSlashIcon,
 		badgeVariant: "outline",
 		description:
-			"The workspace’s review settings turned this occurrence away before a review began.",
+			"The workspace’s review settings did not allow a review of this work, so none started.",
 	},
 	NOT_REACHED: {
 		label: "Not reached",
@@ -57,7 +57,7 @@ export const TRACE_OUTCOME_DEFS: StatusDefs<TraceOutcome> = {
 		description: "The practice was eligible, but the review ended before it was evaluated.",
 	},
 	NOT_ASSESSABLE: {
-		label: "Could not assess",
+		label: "We could not assess",
 		icon: CircleHelpIcon,
 		badgeVariant: "warning",
 		description:
@@ -67,7 +67,7 @@ export const TRACE_OUTCOME_DEFS: StatusDefs<TraceOutcome> = {
 		label: "Turned off",
 		icon: BellOffIcon,
 		badgeVariant: "outline",
-		description: "The practice is switched off for this workspace, so nothing was reviewed.",
+		description: "The practice is turned off for this workspace, so nothing was reviewed.",
 	},
 	NOT_OCCASIONED: {
 		label: "Not triggered",
@@ -86,7 +86,7 @@ export const TRACE_OUTCOME_DEFS: StatusDefs<TraceOutcome> = {
 		label: "Expired",
 		icon: HourglassIcon,
 		badgeVariant: "outline",
-		description: "The occasion aged out before a review got to it, and will not be picked up now.",
+		description: "This work waited too long for a review to start. It will not be picked up now.",
 	},
 	FAILED: {
 		label: "Failed",

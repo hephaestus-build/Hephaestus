@@ -707,7 +707,7 @@ describe("instance catalog routes", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		await screen.findByText("This practice changed while you were editing");
 
-		fireEvent.click(screen.getByRole("button", { name: "Continue with my draft" }));
+		fireEvent.click(screen.getByRole("button", { name: "Continue with your draft" }));
 		await waitFor(() =>
 			expect(screen.getByRole<HTMLInputElement>("textbox", { name: /Name/u }).value).toBe(
 				"My unsaved draft",

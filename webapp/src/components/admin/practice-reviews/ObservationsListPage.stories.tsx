@@ -329,7 +329,7 @@ export const LoadFailed: Story = {
 		error: { status: 500, detail: "Something went wrong." },
 	},
 	play: async ({ canvas }) => {
-		await canvas.findByText("Could not load observations");
+		await canvas.findByText("We could not load observations");
 	},
 };
 

@@ -100,7 +100,7 @@ export function GroupAdoptionPanel({
 				{state.status === "error" && (
 					<QueryErrorAlert
 						error={state.error}
-						title="Could not load the current group definition"
+						title="We could not load the current group definition"
 						onRetry={state.onRetry}
 					/>
 				)}

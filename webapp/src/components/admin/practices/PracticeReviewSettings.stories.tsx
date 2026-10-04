@@ -201,8 +201,8 @@ export const OptionLoadFailure: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Could not load repositories")).toBeVisible();
-		await expect(canvas.getByText("Could not load eligible members")).toBeVisible();
+		await expect(canvas.getByText("We could not load repositories")).toBeVisible();
+		await expect(canvas.getByText("We could not load eligible members")).toBeVisible();
 		await expect(canvas.queryByText("Not monitored")).not.toBeInTheDocument();
 	},
 };

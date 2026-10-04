@@ -54,7 +54,7 @@ export function ReviewPersonFacet({
 		(selected == null ? null : { userId: selected, label: fallbackName ?? `#${selected}` });
 	let emptyText = "No matches";
 	if (people.isError) {
-		emptyText = "Could not load people";
+		emptyText = "We could not load people";
 	} else if (options.length === 0) {
 		emptyText = "No people in this workspace";
 	}

@@ -23,8 +23,8 @@ const meta = {
 	args: {
 		feed: readyFeed,
 		skeletonRows: 3,
-		emptyTitle: "No review runs",
-		emptyDescription: "Review runs appear here once your work has been reviewed.",
+		emptyTitle: "No reviews yet",
+		emptyDescription: "Reviews appear here once your work has been reviewed.",
 	},
 } satisfies Meta<typeof ReviewRunFeed>;
 
@@ -34,7 +34,7 @@ type Story = StoryObj<typeof meta>;
 /** The runs the feed carries, newest first; nothing offers earlier ones when there are none. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("list", { name: "Review runs" })).toBeVisible();
+		await expect(canvas.getByRole("list", { name: "Reviews" })).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "View earlier reviews" })).toBeNull();
 	},
 };
@@ -60,7 +60,7 @@ export const LoadingMore: Story = {
 export const LoadMoreFailed: Story = {
 	args: { feed: { ...readyFeed, hasMore: true, loadMoreError: new Error("network") } },
 	play: async ({ canvas, userEvent }) => {
-		await expect(canvas.getByText("Could not load earlier reviews.")).toBeVisible();
+		await expect(canvas.getByText("We could not load earlier reviews.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "View earlier reviews" }));
 		await expect(onLoadMore).toHaveBeenCalledOnce();
 	},
@@ -70,7 +70,7 @@ export const LoadMoreFailed: Story = {
 export const Loading: Story = {
 	args: { feed: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Loading review runs").closest("[aria-busy]")).toHaveAttribute(
+		await expect(canvas.getByText("Loading reviews").closest("[aria-busy]")).toHaveAttribute(
 			"aria-busy",
 			"true",
 		);
@@ -85,7 +85,7 @@ export const Loading: Story = {
 export const NoRuns: Story = {
 	args: { feed: { ...readyFeed, runs: [] } },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("list", { name: "Review runs" })).toBeNull();
+		await expect(canvas.queryByRole("list", { name: "Reviews" })).toBeNull();
 		await expect(canvas.queryByRole("button", { name: "View earlier reviews" })).toBeNull();
 	},
 };
@@ -94,7 +94,7 @@ export const NoRuns: Story = {
 export const NarrowedToNothing: Story = {
 	args: {
 		feed: { ...readyFeed, runs: [] },
-		emptyDescription: "No review runs mention Scope the change to one concern.",
+		emptyDescription: "No reviews mention Scope the change to one concern.",
 		emptyAction: <button type="button">Show every review in this group</button>,
 	},
 };
@@ -110,7 +110,7 @@ export const NarrowedToNothingSoFar: Story = {
 		emptyAction: <button type="button">Show every review in this group</button>,
 	},
 	play: async ({ canvas, userEvent }) => {
-		await expect(canvas.queryByText("No review runs")).toBeNull();
+		await expect(canvas.queryByText("No reviews yet")).toBeNull();
 		await expect(canvas.getByText("The latest reviews have no observations here.")).toBeVisible();
 		await expect(
 			canvas.getByRole("button", { name: "Show every review in this group" }),
@@ -124,7 +124,7 @@ export const NarrowedToNothingSoFar: Story = {
 export const Failed: Story = {
 	args: { feed: { status: "error", error: new Error("network"), onRetry: fn() } },
 	play: async ({ args, canvas, userEvent }) => {
-		await expect(canvas.getByText("Could not load review runs")).toBeVisible();
+		await expect(canvas.getByText("We could not load reviews")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		if (args.feed.status !== "error") {
 			throw new Error("The story's feed is the failed one.");

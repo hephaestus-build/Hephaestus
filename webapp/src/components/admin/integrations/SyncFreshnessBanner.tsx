@@ -35,7 +35,7 @@ export function SyncFreshnessBanner() {
 			<Alert role="status" aria-live="polite" className="mx-auto max-w-5xl">
 				<RssIcon />
 				<AlertTitle>Live updates are unavailable</AlertTitle>
-				<AlertDescription>This section is refreshing periodically instead.</AlertDescription>
+				<AlertDescription>This section refreshes on a timer instead.</AlertDescription>
 			</Alert>
 		);
 	}

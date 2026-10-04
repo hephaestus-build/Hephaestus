@@ -88,7 +88,7 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 				)}
 				{hasText(definition.precomputeScript) && (
 					<AccordionItem value="static-analysis">
-						<AccordionTrigger>What it measures first</AccordionTrigger>
+						<AccordionTrigger>Static analysis</AccordionTrigger>
 						<AccordionContent>
 							<pre className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">
 								<code>{definition.precomputeScript}</code>

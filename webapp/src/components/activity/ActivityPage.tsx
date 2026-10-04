@@ -67,7 +67,7 @@ export function ActivityPage({
 				{header}
 				<QueryErrorAlert
 					error={account.error}
-					title="Could not load your membership in this workspace"
+					title="We could not load your membership in this workspace"
 					onRetry={account.onRetry}
 				/>
 			</PageLayout>
@@ -87,7 +87,7 @@ export function ActivityPage({
 							No connected account
 						</EmptyTitle>
 						<EmptyDescription>
-							{`Activity follows the ${getProviderTerms(providerType).displayName} account this workspace knows you by.`}
+							{`Activity shows the work you do with your ${getProviderTerms(providerType).displayName} account. Connect it to see your activity here.`}
 						</EmptyDescription>
 					</EmptyHeader>
 					{settingsLink && <EmptyContent>{settingsLink}</EmptyContent>}

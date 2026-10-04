@@ -46,8 +46,7 @@ export const REVIEW_RUNNING_DEFS: StatusDefs<ReviewRunningTone> = {
 		label: "Reviews cannot be confirmed",
 		icon: CircleHelpIcon,
 		badgeVariant: "warning",
-		description:
-			"Practice reviews are on, but whether a review model is ready could not be checked just now.",
+		description: "Practice reviews are on, but we could not check whether a review model is ready.",
 	},
 	blocked: {
 		label: "Reviews cannot start",

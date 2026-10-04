@@ -49,7 +49,7 @@ const BASE_SOURCE = {
 	REVISION_FINGERPRINT_MATCH:
 		"A recorded version matched by its saved source fingerprint. It may not show the original guidance or delivery. Choose a version for each changed field.",
 	CURRENT_DEFINITION:
-		"The current definition, because the original adopted version could not be proved. Choose a version for each changed field.",
+		"The current definition, because we could not verify the version you originally adopted. Choose a version for each changed field.",
 } satisfies Record<PracticeReleaseProposal["baseSource"], string>;
 
 function fieldText(definition: PracticeDefinition, field: Field): string {
@@ -107,7 +107,7 @@ export function PracticeReleaseReview({
 	};
 
 	return (
-		<section className="space-y-5" aria-label={`Review update for ${proposal.slug}`}>
+		<section className="space-y-5" aria-label={`Review update for ${proposal.offered.name}`}>
 			<div className="space-y-1">
 				<h2 className="text-lg font-semibold">{proposal.offered.name}</h2>
 				<p className="text-sm text-muted-foreground">
@@ -194,8 +194,7 @@ export function PracticeReleaseReview({
 				</Button>
 			</div>
 			<p className="text-xs text-muted-foreground">
-				Declining leaves this practice unchanged. A different catalog version will be proposed
-				again.
+				Declining leaves this practice unchanged. A different catalog version can be proposed later.
 			</p>
 		</section>
 	);

@@ -141,8 +141,8 @@ export function OutlineCollectionsSection({
 					</EmptyMedia>
 					<EmptyTitle>No collections mirrored yet</EmptyTitle>
 					<EmptyDescription>
-						Pick the Outline collections whose documents should reach practice reviews. Only what
-						you select is read.
+						Add the Outline collections whose documents should reach practice reviews. Hephaestus
+						reads only the collections you add.
 					</EmptyDescription>
 				</EmptyHeader>
 				<EmptyContent>

@@ -79,7 +79,7 @@ export function WorkspaceScmTokenSettings({
 						)}
 						{attentionProblem === "CREDENTIAL_REVOKED" && (
 							<Alert variant="destructive">
-								<AlertTitle>GitLab refuses this token</AlertTitle>
+								<AlertTitle>GitLab no longer accepts this token</AlertTitle>
 								<AlertDescription>
 									Replace the token below to restore sync. Existing repositories and synced work are
 									kept.

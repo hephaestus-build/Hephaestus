@@ -89,7 +89,7 @@ function ProviderSelectionPage() {
 	} else if (providers.length === 0 && !isError) {
 		providerChoice = (
 			<p className="py-12 text-center text-muted-foreground">
-				No providers are currently available. Contact your administrator.
+				No providers are available. Contact an instance admin.
 			</p>
 		);
 	} else {
@@ -133,7 +133,7 @@ function ProviderSelectionPage() {
 			{isError && (
 				<Alert variant="destructive" className="mb-4">
 					<OctagonXIcon aria-hidden="true" />
-					<AlertTitle>Could not load provider options</AlertTitle>
+					<AlertTitle>We could not load the provider options</AlertTitle>
 					<AlertDescription>Reload the page to try again.</AlertDescription>
 				</Alert>
 			)}

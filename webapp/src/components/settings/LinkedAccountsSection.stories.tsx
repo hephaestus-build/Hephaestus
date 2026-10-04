@@ -195,7 +195,7 @@ export const ErrorState: Story = {
 		providers: [],
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/could not load connected accounts/iu);
+		canvas.getByText(/we could not load your connected accounts/iu);
 		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalled();
 	},

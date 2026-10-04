@@ -45,7 +45,7 @@ const ERROR_COPY: Record<string, { title: string; description: string }> = {
 		// Slack and Outline are both link-only: they can only be attached to an existing session.
 		title: "Sign in before connecting that account",
 		description:
-			"Open Hephaestus, sign in with GitHub or GitLab, then connect Slack or Outline from Settings.",
+			"Open Hephaestus, sign in with GitHub or GitLab, then connect Slack or Outline from User settings.",
 	},
 	step_up_required: {
 		// The session is valid and the account is right; only its age is the problem, so this must not
@@ -74,8 +74,7 @@ function describe(code: string | undefined): { title: string; description: strin
 	}
 	return {
 		title: "We could not sign you in",
-		description:
-			"Something unexpected happened. Try again. If it keeps failing, contact the operator of this instance.",
+		description: "Try again. If it keeps failing, contact your instance operator.",
 	};
 }
 

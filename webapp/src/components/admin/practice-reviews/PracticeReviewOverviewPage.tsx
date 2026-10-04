@@ -66,7 +66,7 @@ export function PracticeReviewOverviewPage({
 				{overview.status === "error" ? (
 					<QueryErrorAlert
 						error={overview.error}
-						title="Could not load what the reviews did"
+						title="We could not load what the reviews did"
 						onRetry={overview.onRetry}
 					/>
 				) : (

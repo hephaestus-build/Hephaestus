@@ -117,7 +117,7 @@ export function summarizeReport({
 		}
 		case "failed":
 		case "error": {
-			return { text: "Could not load", tone: "error", action: "retry" };
+			return { text: "We could not load", tone: "error", action: "retry" };
 		}
 		case "not-configured": {
 			return { text: "Connect the extension to Hephaestus", tone: "neutral", action: "set-up" };

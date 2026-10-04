@@ -17,10 +17,9 @@ export function RouteError({ error }: ErrorComponentProps) {
 	return (
 		<div className="flex min-h-[50vh] items-center justify-center p-6">
 			<section className="max-w-md space-y-4 text-center" role="alert">
-				<h1 className="text-2xl font-semibold">This page could not load</h1>
+				<h1 className="text-2xl font-semibold">We could not load this page</h1>
 				<p className="text-muted-foreground">
-					An unexpected error occurred. Try again. If it keeps happening, contact your workspace
-					admin.
+					Try again. If it keeps failing, contact your workspace admin.
 				</p>
 				<div className="flex justify-center gap-2">
 					<Button
@@ -28,7 +27,7 @@ export function RouteError({ error }: ErrorComponentProps) {
 							void router.invalidate();
 						}}
 					>
-						Try again
+						Retry
 					</Button>
 				</div>
 			</section>

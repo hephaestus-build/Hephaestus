@@ -131,7 +131,7 @@ export function ProfileReviewLevel({
 		body = (
 			<QueryErrorAlert
 				error={state.error}
-				title="Could not load this review"
+				title="We could not load this review"
 				onRetry={state.onRetry}
 			/>
 		);
@@ -141,7 +141,7 @@ export function ProfileReviewLevel({
 		body = (
 			<QueryErrorAlert
 				error={state.activity.error}
-				title="Could not load this work’s review activity"
+				title="We could not load this work’s review activity"
 				onRetry={state.activity.onRetry}
 			/>
 		);

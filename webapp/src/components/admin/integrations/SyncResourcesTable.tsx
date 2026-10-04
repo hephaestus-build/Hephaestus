@@ -477,7 +477,7 @@ function LastSyncedCell({
 					{divergent && (
 						<TriangleAlertIcon
 							className="size-3.5 text-warning"
-							aria-label="A tracked class is further behind than this reading"
+							aria-label="Some item types last synced longer ago than this"
 						/>
 					)}
 				</HoverCardTrigger>
@@ -729,7 +729,7 @@ export function SyncResourcesTable({
 					</EmptyMedia>
 					<EmptyTitle>No {resourceNounPlural} synced yet</EmptyTitle>
 					<EmptyDescription>
-						Synced {resourceNounPlural} and their per-class counts appear here once a sync job runs.
+						Synced {resourceNounPlural} and their item counts appear here once a sync job runs.
 					</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
@@ -827,11 +827,13 @@ export function SyncResourcesTable({
 				>
 					{normalizedQuery ? (
 						<>
-							{visible.length} of {resources.length} {resourceNounPlural}
+							{visible.length} of {resources.length}{" "}
+							{resources.length === 1 ? resourceNoun : resourceNounPlural}
 						</>
 					) : (
 						<>
-							{resources.length} {resourceNounPlural} · {totalItems.toLocaleString()} items
+							{resources.length} {resources.length === 1 ? resourceNoun : resourceNounPlural} ·{" "}
+							{totalItems.toLocaleString()} {totalItems === 1 ? "item" : "items"}
 						</>
 					)}
 				</p>

@@ -293,7 +293,7 @@ export function CuratedCatalogPage({
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Exclude “{excludingPractice?.name}”?</AlertDialogTitle>
+						<AlertDialogTitle>Exclude practice “{excludingPractice?.name}”?</AlertDialogTitle>
 						<AlertDialogDescription>
 							{excludingPractice?.effectivelyOffered === false
 								? "Its group is already excluded. This keeps the practice excluded if the group is included again. Existing workspace copies will not change."
@@ -326,7 +326,7 @@ export function CuratedCatalogPage({
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Exclude “{excludingGroup?.definition.name}”?</AlertDialogTitle>
+						<AlertDialogTitle>Exclude group “{excludingGroup?.definition.name}”?</AlertDialogTitle>
 						<AlertDialogDescription>
 							{practicesExcludedWithGroup.length === 0
 								? "Workspace administrators will no longer be able to add this group. No additional practices are affected. Existing workspace copies will not change."

@@ -61,7 +61,7 @@ export const ReasonsCanOutnumberTheSkips: Story = {
 		}),
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/Skipped in 1 review,/u)).toBeVisible();
+		await expect(canvas.getByText(/Skipped in 1 review\./u)).toBeVisible();
 		await expect(canvas.getAllByRole("listitem").map((row) => row.textContent)).toEqual([
 			"Code changes: not fully captured (1 review)",
 			"Pull request details: not available (1 review)",

@@ -131,7 +131,7 @@ export function FeedbackFilters({
 					selected={search.practiceSlug ?? []}
 					onChange={(values) => onPatch({ practiceSlug: nonEmpty(values) })}
 					disabled={practices.isLoading}
-					emptyLabel={practices.isError ? "Could not load practices" : "No practices available"}
+					emptyLabel={practices.isError ? "We could not load practices" : "No practices available"}
 				/>
 				<FacetMultiSelect
 					title="Outcome"

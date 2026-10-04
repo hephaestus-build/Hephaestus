@@ -25,7 +25,12 @@ export const Neutral: Story = {
 };
 
 export const Info: Story = {
-	args: { tone: "info", icon: InfoIcon, title: "Sign-in was cancelled" },
+	args: {
+		tone: "info",
+		icon: InfoIcon,
+		title: "Sign-in was cancelled",
+		children: "Nothing changed. To try again, choose a way to sign in.",
+	},
 };
 
 export const Warning: Story = {
@@ -43,9 +48,9 @@ export const WithAction: Story = {
 		icon: CircleAlertIcon,
 		title: "Hephaestus could not be reached",
 		children: "Check your connection.",
-		action: <Button size="sm">Try again</Button>,
+		action: <Button size="sm">Retry</Button>,
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Try again" })).toBeEnabled();
+		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
 	},
 };

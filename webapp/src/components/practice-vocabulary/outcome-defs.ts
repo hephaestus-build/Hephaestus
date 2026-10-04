@@ -20,7 +20,7 @@ export const OUTCOME_DEFS: StatusDefs<Outcome> = {
 		label: "Not applicable",
 		icon: CircleDashedIcon,
 		badgeVariant: "secondary",
-		description: "The work offers no occasion for this practice.",
+		description: "Nothing in this work calls for this practice.",
 	},
 	UNDETERMINED: {
 		label: "Undetermined",

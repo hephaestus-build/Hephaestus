@@ -22,7 +22,7 @@ export function SignInButtons({ options, onSignIn, devReturnTo }: SignInButtonsP
 			<div className="space-y-3">
 				<p role="alert">We could not load the sign-in options.</p>
 				<Button variant="outline" onClick={options.onRetry}>
-					Try again
+					Retry
 				</Button>
 			</div>
 		);
@@ -45,7 +45,7 @@ export function SignInButtons({ options, onSignIn, devReturnTo }: SignInButtonsP
 	if (oauthProviders.length === 0 && !hasDevSignIn) {
 		return (
 			<p className="text-sm text-muted-foreground">
-				No sign-in options are configured. Contact this instance’s operator.
+				No sign-in options are configured. Contact your instance operator.
 			</p>
 		);
 	}

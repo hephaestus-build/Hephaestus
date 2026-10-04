@@ -58,7 +58,7 @@ export function CuratedPracticeCreateLevel({
 			<DrawerBody>
 				<QueryErrorAlert
 					error={catalogQuery.error ?? definitionOptionsQuery.error}
-					title="Could not load the practice editor"
+					title="We could not load the practice editor"
 					onRetry={() => {
 						void catalogQuery.refetch();
 						void definitionOptionsQuery.refetch();

@@ -142,18 +142,18 @@ export function OutlineCollectionRow({
 											variant="ghost"
 											size="icon-xs"
 											className="text-warning"
-											aria-label={`${collection.exportsSkippedForBudget} ${collection.exportsSkippedForBudget === 1 ? "export" : "exports"} skipped for budget for ${label}`}
+											aria-label={`${collection.exportsSkippedForBudget} ${collection.exportsSkippedForBudget === 1 ? "document" : "documents"} skipped in ${label}`}
 										>
 											<TriangleAlertIcon aria-hidden />
 										</Button>
 									}
 								/>
 								<PopoverContent align="start" className="max-w-sm">
-									<PopoverTitle>Exports skipped for budget</PopoverTitle>
+									<PopoverTitle>Some documents were skipped</PopoverTitle>
 									<PopoverDescription className="break-words">
-										The last pass skipped {collection.exportsSkippedForBudget} export
-										{collection.exportsSkippedForBudget === 1 ? "" : "s"} for the shared budget.
-										They catch up on the next reconcile.
+										The last sync skipped {collection.exportsSkippedForBudget}{" "}
+										{collection.exportsSkippedForBudget === 1 ? "document" : "documents"} because
+										the shared request budget ran out. The next sync picks up anything skipped.
 									</PopoverDescription>
 								</PopoverContent>
 							</Popover>

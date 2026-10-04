@@ -90,7 +90,7 @@ export const OneHeightInEveryState: Story = {
 			{ state: { status: "signed-out", instanceHost: "heph.example.test" } },
 			{ state: { status: "not-found", instanceHost: "heph.example.test", workLabel: "#1" } },
 			{ feedback: { status: "ready", data: NO_FEEDBACK } },
-			{ feedback: { status: "error", message: "Could not load." } },
+			{ feedback: { status: "error", message: "We could not load." } },
 			{ activity: "pending" },
 			{ stale: { message: "Hephaestus could not be reached." } },
 			{},
@@ -127,7 +127,7 @@ export const NotRefreshed: Story = {
 		await expect(canvas.getByRole("status")).toHaveTextContent(
 			/^Practice review: Not refreshed: Hephaestus could not be reached\. Last answer: · Review decision pending/u,
 		);
-		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();
 	},
 };
@@ -149,16 +149,21 @@ export const CommentsLoading: Story = { args: { feedback: { status: "loading" } 
 export const LoadFailed: Story = {
 	args: { state: { status: "failed", message: "Hephaestus could not be reached." } },
 	play: async ({ canvas, args }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();
 	},
 };
 
 export const CommentsFailed: Story = {
-	args: { feedback: { status: "error", message: "Hephaestus ran into a problem." } },
+	args: {
+		feedback: {
+			status: "error",
+			message: "Hephaestus had a problem and could not answer. Try again in a moment.",
+		},
+	},
 	play: async ({ canvas, args }) => {
 		await expect(canvas.getByRole("status")).toHaveTextContent(/Your feedback could not load/u);
-		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();
 	},
 };

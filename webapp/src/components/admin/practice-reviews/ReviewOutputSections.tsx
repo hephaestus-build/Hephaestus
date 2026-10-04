@@ -164,7 +164,7 @@ function PreviewSection<T>({
 			{state.status === "error" && (
 				<QueryErrorAlert
 					error={state.error}
-					title={`Could not load ${noun}`}
+					title={`We could not load ${noun}`}
 					onRetry={state.onRetry}
 				/>
 			)}

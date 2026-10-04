@@ -306,7 +306,7 @@ export const Loading: Story = {
 			"Loading observation",
 		);
 		panel.getByRole("button", { name: "Practice reviews" });
-		await expect(panel.queryByText("Could not load this observation")).not.toBeInTheDocument();
+		await expect(panel.queryByText("We could not load this observation")).not.toBeInTheDocument();
 		await expect(
 			panel.queryByRole("button", { name: "Mark as incorrect" }),
 		).not.toBeInTheDocument();
@@ -327,7 +327,7 @@ export const LoadFailed: Story = {
 	},
 	play: async ({ args, userEvent }) => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Could not load this observation")).toBeVisible();
+		await expect(panel.getByText("We could not load this observation")).toBeVisible();
 		// With no record to name it, the level is named for what it is.
 		await expect(screen.getByRole("dialog")).toHaveAccessibleName("Observation");
 		await expect(

@@ -100,7 +100,7 @@ describe("GitLab workspace wizard", () => {
 			await within(screen.getByRole("main")).findByRole("button", { name: "Create workspace" }),
 		);
 
-		await screen.findByText('Workspace "Hephaestus" created');
+		await screen.findByText("Workspace “Hephaestus” created");
 		await waitFor(() => {
 			expect(router.state.location.pathname).toBe("/w/hephaestus/activity");
 		});
@@ -203,7 +203,7 @@ describe("GitLab workspace wizard", () => {
 		await screen.findByText("Token valid");
 		await user.click(screen.getByRole("button", { name: "Next" }));
 
-		await screen.findByText("Could not load groups");
+		await screen.findByText("We could not load your groups");
 		screen.getByText(detail);
 		expect(screen.queryByRole("radiogroup")).toBeNull();
 

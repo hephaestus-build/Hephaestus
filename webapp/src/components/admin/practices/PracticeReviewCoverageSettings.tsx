@@ -194,10 +194,10 @@ export function PracticeReviewCoverageSettings({
 					What gets reviewed
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					Repository work is reviewed when both its repository and linked person are covered. Slack
+					Repository work is reviewed when both its repository and its linked person are covered.
+					The linked person is usually the author, and reviewer practices use the reviewer. Slack
 					conversations and Outline documents follow the people selection and their own collection
-					permissions. That person is usually the author. Reviewer practices use the reviewer. About{" "}
-					{settings.coverageSummary.recentReviewVolume} review jobs entered the queue in this
+					permissions. About {settings.coverageSummary.recentReviewVolume} reviews started in this
 					workspace during the last {settings.coverageSummary.estimateWindowDays} days.
 				</p>
 			</div>
@@ -255,7 +255,7 @@ export function PracticeReviewCoverageSettings({
 						{repositories.status === "error" ? (
 							<QueryErrorAlert
 								error={repositories.error}
-								title="Could not load repositories"
+								title="We could not load repositories"
 								onRetry={repositories.onRetry}
 							/>
 						) : null}
@@ -340,7 +340,7 @@ export function PracticeReviewCoverageSettings({
 						{people.status === "error" ? (
 							<QueryErrorAlert
 								error={people.error}
-								title="Could not load eligible members"
+								title="We could not load eligible members"
 								onRetry={people.onRetry}
 							/>
 						) : null}
@@ -500,8 +500,8 @@ function CoverageImpact({ preview }: { preview: PracticeReviewCoveragePreview })
 				<strong>{preview.proposed.coveredPeople}</strong> of {preview.proposed.eligiblePeople}
 			</p>
 			<p className="text-xs text-muted-foreground">
-				For scale, {preview.proposed.recentReviewVolume} review jobs entered this workspace’s queue
-				during the last {preview.proposed.estimateWindowDays} days.
+				For scale, {preview.proposed.recentReviewVolume} reviews started in this workspace during
+				the last {preview.proposed.estimateWindowDays} days.
 			</p>
 		</div>
 	);

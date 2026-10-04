@@ -28,7 +28,7 @@ const ERROR_COPY = new Map([
 
 const GENERIC_ERROR = {
 	title: "We could not sign you in",
-	description: "Try again. If it keeps failing, contact the operator of this instance.",
+	description: "Try again. If it keeps failing, contact your instance operator.",
 };
 
 export interface LoginPageProps extends SignInButtonsProps {

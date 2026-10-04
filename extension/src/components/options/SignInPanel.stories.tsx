@@ -33,7 +33,7 @@ export const Default: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Sign in with LRZ GitLab" }));
 		await expect(args.onSignIn).toHaveBeenCalledWith("gitlab-lrz");
 		await expect(
-			canvas.getByText(/until you close Chrome or for 7 days, whichever comes first/u),
+			canvas.getByText(/until you close Chrome or 7 days pass, whichever comes first/u),
 		).toBeVisible();
 	},
 };
@@ -68,10 +68,10 @@ export const Cancelled: Story = {
 
 export const SignInFailed: Story = {
 	args: {
-		attempt: { status: "failed", message: "Hephaestus could not complete the sign-in. Try again." },
+		attempt: { status: "failed", message: "We could not finish signing you in. Try again." },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("alert")).toHaveTextContent(/could not complete the sign-in/u);
+		await expect(canvas.getByRole("alert")).toHaveTextContent(/could not finish signing you in/u);
 		await expect(canvas.getByRole("button", { name: "Sign in with GitHub" })).toBeEnabled();
 	},
 };
@@ -91,6 +91,6 @@ export const Failed: Story = {
 		options: { status: "error", message: "Hephaestus could not be reached.", onRetry: fn() },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Try again" })).toBeEnabled();
+		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
 	},
 };

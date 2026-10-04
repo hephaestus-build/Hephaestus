@@ -17,8 +17,6 @@ function describeOrigin({ origin, kind }: CatalogOriginProps) {
 	if (!origin) {
 		return null;
 	}
-	// `kind` is the code word; these are the two words the reader sees.
-	const subject = kind === "practice" ? "practice definition" : "group details";
 	const noun = kind === "practice" ? "practice" : "group";
 
 	if (!origin.sourceOffered) {
@@ -33,7 +31,7 @@ function describeOrigin({ origin, kind }: CatalogOriginProps) {
 			explanation:
 				kind === "practice"
 					? "The catalog changed. Your copy is untouched. Review the proposed fields in Practice updates."
-					: `The catalog now has different ${subject}. Your copy is untouched. Edit it to bring anything you want across.`,
+					: "The catalog now has different group details. Your copy is untouched. Edit it to bring anything you want across.",
 		};
 	}
 	if (origin.link === "DECLINED") {
@@ -46,7 +44,7 @@ function describeOrigin({ origin, kind }: CatalogOriginProps) {
 	if (origin.link === "IN_SYNC") {
 		return {
 			label: "Same as the catalog",
-			explanation: `These ${subject} match the catalog now. A later catalog change will not edit your copy without your decision.`,
+			explanation: `${kind === "practice" ? "This practice matches" : "These group details match"} the catalog now. A later catalog change will not edit your copy without your decision.`,
 		};
 	}
 	return {
@@ -54,7 +52,7 @@ function describeOrigin({ origin, kind }: CatalogOriginProps) {
 		explanation:
 			kind === "practice"
 				? "This workspace changed the practice. A separate catalog update may also be waiting in Practice updates."
-				: `The ${subject} differ from the version copied into this workspace.`,
+				: "The group details differ from the version copied into this workspace.",
 	};
 }
 

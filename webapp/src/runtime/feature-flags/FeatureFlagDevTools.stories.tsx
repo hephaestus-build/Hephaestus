@@ -6,7 +6,7 @@ import { mockFeatureFlags } from "./testing";
 /**
  * A floating dev-only panel that displays all feature flag states at a glance.
  * Appears in the bottom-right corner and toggles open on click to reveal a
- * sorted list of flags with ON/OFF badges.
+ * sorted list of flags with on and off badges.
  *
  * In production this component renders nothing. The stories demonstrate the
  * presentational inner panel directly.

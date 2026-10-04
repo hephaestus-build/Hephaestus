@@ -74,16 +74,15 @@ export const RequestRefusedByServer: Story = {
 			outcome: {
 				kind: "request-review",
 				status: "REFUSED",
-				reasonDescription:
-					"This work was reviewed a few minutes ago; a later change gets its own review.",
+				reasonDescription: "A review of this work was already requested a short time ago.",
 			},
 		},
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("status", { name: "No review started" })).toHaveTextContent(
-			"a later change gets its own review",
+			"already requested a short time ago",
 		);
-		await expect(canvas.queryByRole("button", { name: /Try again|Request review/u })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: /Retry|Request review/u })).toBeNull();
 	},
 };
 
@@ -93,12 +92,12 @@ export const RefusedBeforeSending: Story = {
 		state: {
 			status: "refused",
 			preview: { ...REQUEST, work: READY.work },
-			message: "Your account cannot ask for a review of this work.",
+			message: "Your account cannot request a review of this work.",
 		},
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("status", { name: "Nothing was changed" })).toHaveTextContent(
-			"cannot ask for a review",
+			"cannot request a review",
 		);
 	},
 };
@@ -110,7 +109,7 @@ export const OutcomeUnknown: Story = {
 		await expect(
 			canvas.getByRole("status", { name: "No answer from Hephaestus" }),
 		).toHaveTextContent("may or may not have gone through");
-		await expect(canvas.queryByRole("button", { name: /Request review|Try again/u })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: /Request review|Retry/u })).toBeNull();
 		await expect(canvas.getByRole("button", { name: "Close" })).toBeVisible();
 	},
 };

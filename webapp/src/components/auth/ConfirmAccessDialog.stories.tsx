@@ -88,8 +88,10 @@ export const Loading: Story = {
 export const FailedToLoad: Story = {
 	args: { error: true, providers: [] },
 	play: async ({ args }) => {
-		await expect(await screen.findByRole("alert")).toHaveTextContent("Could not load sign-in");
-		await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+		await expect(await screen.findByRole("alert")).toHaveTextContent(
+			"We could not load the sign-in options",
+		);
+		await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalled();
 	},
 };

@@ -122,12 +122,14 @@ describe("source-control credential recovery", () => {
 			}),
 		);
 		renderRouteAt("/w/acme/admin/integrations/scm");
-		await screen.findByText("GitLab refuses this token", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("GitLab no longer accepts this token", undefined, ROUTE_RENDER_WAIT);
 		screen.getByText("The token expires on 5 December 2026.");
 		const user = userEvent.setup();
 		await user.type(screen.getByLabelText("New personal access token"), "replacement-token");
 		await user.click(screen.getByRole("button", { name: "Replace token" }));
-		await waitFor(() => expect(screen.queryByText("GitLab refuses this token")).toBeNull());
+		await waitFor(() =>
+			expect(screen.queryByText("GitLab no longer accepts this token")).toBeNull(),
+		);
 		expect(screen.queryByText("The token expires on 5 December 2026.")).toBeNull();
 		await screen.findByText("The token expiry is not available yet.");
 	});

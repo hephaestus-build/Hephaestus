@@ -271,7 +271,7 @@ function AdminCuratedCatalogPage() {
 		body = (
 			<QueryErrorAlert
 				error={catalogQuery.error}
-				title="Could not load the practice catalog"
+				title="We could not load the practice catalog"
 				onRetry={() => {
 					void catalogQuery.refetch();
 				}}

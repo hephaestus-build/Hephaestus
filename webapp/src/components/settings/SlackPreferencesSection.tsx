@@ -65,7 +65,7 @@ export function SlackPreferencesSection({
 		body = (
 			<QueryErrorAlert
 				error={error}
-				title="Could not load your Slack preferences"
+				title="We could not load your Slack preferences"
 				onRetry={onRetry}
 			/>
 		);

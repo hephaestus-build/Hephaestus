@@ -160,7 +160,7 @@ export function AllPracticeGroupsTable({
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Could not load your practice groups"
+				title="We could not load your practice groups"
 				onRetry={state.onRetry}
 			/>
 		);

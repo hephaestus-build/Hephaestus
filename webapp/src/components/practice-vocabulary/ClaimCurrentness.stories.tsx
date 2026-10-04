@@ -27,9 +27,7 @@ export const Stale: Story = {
 export const Unverifiable: Story = {
 	args: { currentness: "UNVERIFIABLE" },
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByText("This observation’s review basis cannot be verified"),
-		).toBeVisible();
+		await expect(canvas.getByText("We cannot verify this observation")).toBeVisible();
 	},
 };
 

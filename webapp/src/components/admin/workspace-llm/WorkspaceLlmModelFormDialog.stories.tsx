@@ -67,7 +67,7 @@ type Story = StoryObj<typeof meta>;
 
 async function fillIdentity(dialog: HTMLElement) {
 	await userEvent.type(within(dialog).getByLabelText("Display name"), "GPT-5 mini");
-	await userEvent.type(within(dialog).getByLabelText("Upstream model id"), "openai/gpt-5-mini");
+	await userEvent.type(within(dialog).getByLabelText("Upstream model ID"), "openai/gpt-5-mini");
 }
 
 export const Default: Story = {};

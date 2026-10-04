@@ -196,7 +196,7 @@ export function AdminLlmModelsSection({
 				subject={deleting}
 				onClose={() => setDeleting(null)}
 				title={(model) => `Delete “${model.displayName}”?`}
-				description="A model still bound to a workspace’s agent cannot be deleted. You cannot undo this."
+				description="A model that a workspace still has assigned cannot be deleted. You cannot undo this."
 				confirmLabel="Delete model"
 				onConfirm={onDelete}
 			/>

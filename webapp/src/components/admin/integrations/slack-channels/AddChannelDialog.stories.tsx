@@ -93,7 +93,7 @@ export const NothingChosen: Story = {
 		await userEvent.click(submit);
 
 		await expect(args.onSubmit).not.toHaveBeenCalled();
-		dialog.getByText(/choose a channel from the list/iu);
+		dialog.getByText(/select a channel from the list/iu);
 	},
 };
 

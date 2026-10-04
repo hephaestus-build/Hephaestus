@@ -30,7 +30,7 @@ export const Default: Story = {
 		// Not "error", not "destructive": nothing failed, so the surface must not claim one did.
 		await expect(canvas.queryByRole("alert")).toBeNull();
 
-		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledTimes(1);
 	},
 };

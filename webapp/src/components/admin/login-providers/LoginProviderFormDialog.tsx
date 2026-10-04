@@ -114,7 +114,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 	const validate = (): boolean => {
 		const next: { registrationId?: string; baseUrl?: string } = {};
 		if (!isEdit && !REGISTRATION_ID_PATTERN.test(registrationId.trim())) {
-			next.registrationId = "Use lowercase letters, digits and hyphens. Start with a letter.";
+			next.registrationId = "Use lowercase letters, digits, and hyphens. Start with a letter.";
 		}
 		if (needsBaseUrl && (!isEdit || baseUrl.trim())) {
 			const value = baseUrl.trim();
@@ -279,7 +279,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 					aria-describedby="lp-client-secret-description"
 				/>
 				<FieldDescription id="lp-client-secret-description">
-					Sealed at rest. It is never shown again after you save.
+					Hephaestus stores it encrypted and never shows it again after you save.
 				</FieldDescription>
 			</Field>
 

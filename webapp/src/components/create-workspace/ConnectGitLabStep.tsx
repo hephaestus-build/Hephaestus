@@ -66,7 +66,7 @@ export function ConnectGitLabStep() {
 					aria-describedby="gitlab-server-url-description"
 				/>
 				<FieldDescription id="gitlab-server-url-description">
-					The GitLab instance Hephaestus reads from, set by your administrator.
+					The GitLab instance Hephaestus reads from, set by an instance admin.
 				</FieldDescription>
 			</Field>
 
@@ -150,7 +150,7 @@ export function ConnectGitLabStep() {
 			{preflight.isError && isForCurrentToken(state, preflight.variables.body) && (
 				<Alert variant="destructive">
 					<OctagonXIcon aria-hidden="true" />
-					<AlertTitle>Could not reach GitLab</AlertTitle>
+					<AlertTitle>We could not reach GitLab</AlertTitle>
 					<AlertDescription>
 						The GitLab instance did not answer. Try again in a moment.
 					</AlertDescription>

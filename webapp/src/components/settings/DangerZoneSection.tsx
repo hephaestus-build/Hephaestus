@@ -254,7 +254,7 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 							disabled={deleteAccount.isPending}
 							className="mt-1 shrink-0"
 						>
-							{deleteAccount.isPending ? "Deleting…" : "Delete"}
+							{deleteAccount.isPending ? "Deleting…" : "Delete account"}
 						</Button>
 					}
 				/>

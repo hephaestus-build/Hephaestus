@@ -329,7 +329,8 @@ export function WorkspaceMembersTable({
 				<div className="order-2 flex-1 text-sm text-muted-foreground sm:order-1">
 					<div className="flex flex-col gap-1 sm:flex-row sm:gap-4">
 						<span>
-							Showing {table.getRowModel().rows.length} of {table.getRowCount()} members
+							Showing {table.getRowModel().rows.length} of {table.getRowCount()}{" "}
+							{table.getRowCount() === 1 ? "member" : "members"}
 						</span>
 					</div>
 				</div>

@@ -21,7 +21,7 @@ export const EMAIL_TEST_OUTCOME_DEFS: StatusDefs<EmailTestOutcome> = {
 		label: "Accepted by relay",
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
-		description: "The relay accepted the message. Look for the message id in the relay’s log.",
+		description: "The relay accepted the message. Look for the message ID in the relay’s log.",
 	},
 	EXPIRED: {
 		label: "Expired",

@@ -97,7 +97,7 @@ export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEma
 										{hasText(result.messageId) ? (
 											<>
 												{" "}
-												· message id <code className="text-xs">{result.messageId}</code>
+												· message ID <code className="text-xs">{result.messageId}</code>
 											</>
 										) : null}
 									</>

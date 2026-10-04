@@ -35,7 +35,7 @@ export function ResearchParticipationSection({
 
 			{isError ? (
 				<QueryErrorAlert
-					title="Could not load your research participation choice"
+					title="We could not load your research participation choice"
 					error={error}
 					onRetry={onRetry}
 				/>

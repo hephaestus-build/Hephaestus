@@ -62,7 +62,7 @@ export function AdminFeedbackList({ state, pendingIds, onTriage }: AdminFeedback
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Feedback could not be loaded"
+				title="We could not load feedback"
 				onRetry={state.onRetry}
 			/>
 		);

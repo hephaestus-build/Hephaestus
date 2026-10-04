@@ -94,7 +94,9 @@ export function AdminLlmConnectionsTable({
 	const modelsOn = (connection: LlmConnection) => modelCounts[connection.id] ?? 0;
 
 	if (isError) {
-		return <QueryErrorAlert error={error} title="Could not load connections" onRetry={onRetry} />;
+		return (
+			<QueryErrorAlert error={error} title="We could not load connections" onRetry={onRetry} />
+		);
 	}
 
 	if (isLoading) {

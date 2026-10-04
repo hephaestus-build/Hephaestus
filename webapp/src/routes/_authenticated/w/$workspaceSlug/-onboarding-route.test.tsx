@@ -105,7 +105,7 @@ describe("workspace member onboarding route", () => {
 				queryKey: getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } }),
 			});
 		});
-		await screen.findByText("Could not refresh your setup");
+		await screen.findByText("We could not refresh your setup");
 		screen.getByRole("heading", { name: "Your AI choice" });
 		expect(disabled("Continue")).toBe(true);
 		server.use(
@@ -119,7 +119,7 @@ describe("workspace member onboarding route", () => {
 		);
 		fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 		await screen.findByText("Connected");
-		expect(screen.queryByText("Could not refresh your setup")).toBeNull();
+		expect(screen.queryByText("We could not refresh your setup")).toBeNull();
 		expect(disabled("Continue")).toBe(false);
 	});
 
@@ -167,7 +167,7 @@ describe("workspace member onboarding route", () => {
 			}),
 		);
 		const { router } = renderRouteAtWithRouter("/w/acme/onboarding?returnTo=%2Fw%2Facme%2Fteams");
-		await screen.findByText("Could not load your setup", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("We could not load your setup", undefined, ROUTE_RENDER_WAIT);
 		fireEvent.click(screen.getByRole("button", { name: "Back to workspace" }));
 		await waitFor(
 			() => expect(router.state.location.pathname).toBe("/w/acme/teams"),
@@ -420,7 +420,7 @@ describe("workspace member onboarding route", () => {
 		fireEvent.click(screen.getByRole("radio", { name: /^No AI /u }));
 		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 		const alert = await screen.findByRole("alert", undefined, ROUTE_RENDER_WAIT);
-		expect(alert.textContent).toContain("Could not save your AI choice");
+		expect(alert.textContent).toContain("We could not save your AI choice");
 		expect(
 			queryClient.getQueryData<WorkspaceOnboarding>(
 				getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } }),

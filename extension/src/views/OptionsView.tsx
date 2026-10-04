@@ -257,9 +257,9 @@ function SignedIn({
 				description={
 					<>
 						Practice reviews appear only on the sites you allow. On those sites, the extension sends
-						the address of each pull request, merge request or issue you open to {instance.host} to
-						find its practice review. On a list, it sends only the address of the row where you
-						press the Hephaestus button. It never sends the page’s content. To stop, remove the
+						{instance.host} the address of each pull request, merge request or issue you open, to
+						find its practice review. On a list, it sends only the address of the row whose
+						Hephaestus button you select. It never sends the page’s content. To stop, remove the
 						site.
 					</>
 				}
@@ -376,7 +376,7 @@ export function OptionsView() {
 							void state.refetch();
 						}}
 					>
-						Try again
+						Retry
 					</Button>
 				}
 			>

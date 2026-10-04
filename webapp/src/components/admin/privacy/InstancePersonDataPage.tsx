@@ -362,8 +362,8 @@ function RequestCard({
 						<AlertTitle>Feedback is still posted on providers</AlertTitle>
 						<AlertDescription>
 							<p>
-								Erasure does not remove provider comments. Remove these first, as the runbook
-								section on un-delivering external feedback describes.
+								Erasure does not remove provider comments. Remove them first. The runbook section on
+								un-delivering external feedback explains how.
 							</p>
 							<ul className="mt-2 space-y-1">
 								{request.externalDeliveries.map((delivery) => (

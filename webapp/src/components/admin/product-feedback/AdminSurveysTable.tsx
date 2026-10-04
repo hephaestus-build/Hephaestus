@@ -76,7 +76,7 @@ export function AdminSurveysTable({
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Surveys could not be loaded"
+				title="We could not load surveys"
 				onRetry={state.onRetry}
 			/>
 		);

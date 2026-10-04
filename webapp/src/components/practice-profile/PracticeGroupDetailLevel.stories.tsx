@@ -308,7 +308,7 @@ export const LoadFailed: Story = {
 	args: { error: new Error("Unavailable") },
 	play: async ({ args }) => {
 		await expectSettledVisible(
-			await screen.findByText("Could not load your standing for Packaging work for review"),
+			await screen.findByText("We could not load your standing for Packaging work for review"),
 		);
 		await userEvent.click(screen.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();

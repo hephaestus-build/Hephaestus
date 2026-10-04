@@ -243,7 +243,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 								params={{ workspaceSlug }}
 								className={buttonVariants({ variant: "outline" })}
 							>
-								Integrations
+								Open integrations
 							</Link>
 						</EmptyContent>
 					</Empty>

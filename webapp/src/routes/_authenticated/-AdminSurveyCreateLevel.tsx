@@ -70,7 +70,7 @@ export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreat
 				<DrawerBody>
 					<QueryErrorAlert
 						error={workspacesQuery.error ?? consentQuery.error}
-						title="The survey composer could not be loaded"
+						title="We could not load the survey composer"
 						onRetry={() => {
 							void workspacesQuery.refetch();
 							void consentQuery.refetch();

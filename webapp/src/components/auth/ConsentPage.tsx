@@ -387,7 +387,7 @@ function ConsentBody({
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Could not load your setup"
+				title="We could not load your setup"
 				onRetry={state.onRetry}
 			/>
 		);

@@ -118,7 +118,9 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 	};
 
 	const nameError =
-		refusals > 0 && form.name.trim().length < 3 ? "Name must be at least 3 characters." : undefined;
+		refusals > 0 && form.name.trim().length < 3
+			? "Enter a name of at least 3 characters."
+			: undefined;
 	const slugError =
 		refusals > 0 && mode === "create" && !isValidSlug(form.slug)
 			? "Use 3–64 lowercase letters, numbers and single hyphens."
@@ -126,12 +128,12 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 	const errorSummary: FormError[] = [
 		form.name.trim().length < 3 && {
 			fieldId: "group-name",
-			message: "Give the group a name of at least three characters.",
+			message: "Enter a name of at least 3 characters.",
 		},
 		mode === "create" &&
 			!isValidSlug(form.slug) && {
 				fieldId: "group-slug",
-				message: "The identifier must be 3–64 lowercase letters, numbers and single hyphens.",
+				message: "Enter an identifier of 3–64 lowercase letters, numbers and single hyphens.",
 			},
 	].filter((entry): entry is FormError => Boolean(entry));
 	const valid = errorSummary.length === 0;
@@ -221,7 +223,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 							</Alert>
 							{onContinueWithDraft && (
 								<Button type="button" variant="outline" size="sm" onClick={onContinueWithDraft}>
-									Continue with my draft
+									Continue with your draft
 								</Button>
 							)}
 						</div>
@@ -231,7 +233,8 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 						{/* See `PracticeDefinitionForm`: the panel is the measure, prose keeps its own. */}
 						<div className="space-y-8">
 							<p className="max-w-2xl text-sm text-muted-foreground">
-								Fields marked <span aria-hidden>*</span> are required.
+								Fields marked <span aria-hidden>*</span>
+								<span className="sr-only">with an asterisk</span> are required.
 							</p>
 
 							<section className="space-y-4">

@@ -281,11 +281,11 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 						<DialogContent>
 							<DialogHeader>
 								<DialogTitle>
-									{surveys.query.isError ? "Could not load the survey" : "Survey unavailable"}
+									{surveys.query.isError ? "We could not load the survey" : "Survey unavailable"}
 								</DialogTitle>
 								<DialogDescription>
 									{surveys.query.isError
-										? "We could not check your invitation. Check your connection, then try again."
+										? "We could not check your invitation to this survey."
 										: "This survey is no longer offered to your account. It may have ended or already been answered or declined."}
 								</DialogDescription>
 							</DialogHeader>

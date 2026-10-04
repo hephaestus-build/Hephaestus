@@ -32,7 +32,7 @@ export const Default: Story = {
 		await expect(
 			canvas.getByRole("link", { name: /How the extension handles data/u }),
 		).toHaveAttribute("href", "https://docs.hephaestus.build/user/browser-extension-privacy");
-		await userEvent.click(canvas.getByRole("button", { name: "Continue with Hephaestus" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Connect to Hephaestus" }));
 		await expect(args.onConnectHosted).toHaveBeenCalledOnce();
 	},
 };
@@ -76,9 +76,9 @@ export const PermissionRefused: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("alert")).toHaveTextContent(/Chrome did not allow/u);
-		await expect(canvas.getByRole("button", { name: "Continue with Hephaestus" })).toBeEnabled();
+		await expect(canvas.getByRole("button", { name: "Connect to Hephaestus" })).toBeEnabled();
 		await expect(
-			canvas.getByRole("button", { name: "Continue with Hephaestus" }),
+			canvas.getByRole("button", { name: "Connect to Hephaestus" }),
 		).toHaveAccessibleDescription(/Chrome did not allow/u);
 	},
 };
@@ -110,6 +110,6 @@ export const Dark: Story = {
 	globals: { theme: "dark" },
 	play: async ({ canvas }) => {
 		await expect(document.documentElement).toHaveClass("dark");
-		await expect(canvas.getByRole("button", { name: "Continue with Hephaestus" })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Connect to Hephaestus" })).toBeVisible();
 	},
 };

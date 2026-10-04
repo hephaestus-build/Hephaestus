@@ -148,9 +148,10 @@ export function RemoveChannelAlertDialog({
 							value={reason}
 							disabled={submitting}
 							onChange={(e) => setReason(e.target.value)}
-							placeholder="Recorded in the immutable audit trail."
 						/>
-						<FieldDescription>Kept in the consent history for accountability.</FieldDescription>
+						<FieldDescription>
+							Saved in the consent history. Entries cannot be edited.
+						</FieldDescription>
 					</Field>
 				</div>
 

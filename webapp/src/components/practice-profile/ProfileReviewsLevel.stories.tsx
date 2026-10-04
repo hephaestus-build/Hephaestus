@@ -179,7 +179,7 @@ export const EarlierReviewsFailed: Story = {
 	},
 	play: async ({ args }) => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("Could not load earlier reviews.")).toBeVisible();
+		await expect(screen.getByText("We could not load earlier reviews.")).toBeVisible();
 		await userEvent.click(screen.getByRole("button", { name: "View earlier reviews" }));
 		await expect(onLoadMoreOf(args.feed)).toHaveBeenCalledOnce();
 	},
@@ -266,7 +266,7 @@ export const Failed: Story = {
 	args: { feed: { status: "error", error: new Error("offline"), onRetry: fn() } },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("Could not load reviews of your work")).toBeVisible();
+		await expect(screen.getByText("We could not load reviews of your work")).toBeVisible();
 		await expect(screen.queryByRole("table")).toBeNull();
 	},
 };

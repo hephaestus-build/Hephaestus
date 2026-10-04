@@ -23,7 +23,7 @@ import styles from "./LandingVisuals.module.css";
 const practiceGroups = [
 	{ name: "Packaging work for review", color: "sky", icon: "Package" },
 	{ name: "Writing issues a maintainer can act on", color: "violet", icon: "FileText" },
-	{ name: "Reviewing a teammate's work constructively", color: "teal", icon: "Eye" },
+	{ name: "Reviewing a teammate’s work constructively", color: "teal", icon: "Eye" },
 	{ name: "Acting on review feedback", color: "cyan", icon: "MessageSquareReply" },
 	{ name: "Testing your changes", color: "amber", icon: "TestTube" },
 	{ name: "Handling failure well", color: "rose", icon: "ShieldAlert" },

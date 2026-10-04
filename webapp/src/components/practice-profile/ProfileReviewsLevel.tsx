@@ -78,7 +78,7 @@ export function ProfileReviewsLevel({
 			body = (
 				<QueryErrorAlert
 					error={feed.error}
-					title="Could not load reviews of your work"
+					title="We could not load reviews of your work"
 					onRetry={feed.onRetry}
 				/>
 			);

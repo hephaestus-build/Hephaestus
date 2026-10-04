@@ -28,6 +28,6 @@ export const PRACTICE_TREND_DEFS: StatusDefs<TrendDirection> = {
 		label: "Not enough to compare yet",
 		icon: CircleDashedIcon,
 		badgeVariant: "outline",
-		description: "There is not yet enough reviewed work on both sides to compare.",
+		description: "There is not enough reviewed work yet to compare recent and earlier work.",
 	},
 };

@@ -118,7 +118,7 @@ export function ObservationLevel({
 					{state.status === "error" ? (
 						<QueryErrorAlert
 							error={state.error}
-							title="Could not load this observation"
+							title="We could not load this observation"
 							onRetry={state.onRetry}
 						/>
 					) : (
@@ -269,10 +269,12 @@ function InvalidationAlert({ invalidation }: { invalidation: ObservationInvalida
 			<AlertDescription>
 				<p>
 					{invalidation.invalidatedBy ?? "A workspace admin"} marked this observation as incorrect{" "}
-					<RelativeTime value={invalidation.invalidatedAt} />: “{invalidation.reason}”. It no longer
-					counts toward the developer’s standing, their practice page or the mentor. Feedback about
-					it that had not reached anyone was stopped. The developer sees it labelled with this
-					reason in their review history.
+					<RelativeTime value={invalidation.invalidatedAt} />. Reason: “{invalidation.reason}”
+				</p>
+				<p>
+					It no longer counts toward the developer’s standing, their practice page or the mentor.
+					Feedback about it that had not reached anyone was stopped. The developer sees it labelled
+					with this reason in their review history.
 				</p>
 				<p>{PROVIDER_COPY_IN_FORCE[invalidation.providerCopy]}</p>
 			</AlertDescription>

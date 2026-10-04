@@ -153,7 +153,7 @@ export function EmailPreferencesSection({
 			)}
 			{state.status === "error" && (
 				<QueryErrorAlert
-					title="Could not load your email choices"
+					title="We could not load your email choices"
 					error={state.error}
 					onRetry={state.onRetry}
 				/>

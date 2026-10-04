@@ -104,7 +104,7 @@ function ReviewStatusSection({
 					<FieldDescription>
 						{!workspace.enabled && modelUnavailable
 							? "This can be turned on once a review model is ready to run."
-							: "New work is reviewed while this is on. Switching it off stops new reviews. Any already running may finish."}
+							: "New work is reviewed while this is on. Turning it off stops new reviews. Any already running may finish."}
 					</FieldDescription>
 				</FieldContent>
 				<Switch
@@ -132,7 +132,7 @@ function ModelReadiness({
 		return (
 			<Alert variant="warning" role="status">
 				<AlertCircle />
-				<AlertTitle>Could not check the review model</AlertTitle>
+				<AlertTitle>We could not check the review model</AlertTitle>
 				<AlertDescription>
 					<Button variant="outline" size="sm" onClick={model.onRetry}>
 						Retry
@@ -200,7 +200,7 @@ function ReviewTimingSection({
 					<AlertCircle />
 					<AlertTitle>Nothing can start a review</AlertTitle>
 					<AlertDescription>
-						Practice reviews are on, but both ways to start one are switched off.
+						Practice reviews are on, but both ways to start one are turned off.
 					</AlertDescription>
 				</Alert>
 			) : null}
@@ -225,9 +225,9 @@ function ReviewTimingSection({
 				<FieldContent>
 					<FieldLabel htmlFor="trigger-manual">Start requested reviews</FieldLabel>
 					<FieldDescription>
-						The <strong>Review this now</strong> button, a backfill of past work, a recurring check,
-						and <code>/hephaestus review</code> in a GitLab merge request comment. Turning this off
-						stops every one of them.
+						Covers the <strong>Review this now</strong> button, a backfill of past work, a recurring
+						check, and <code>/hephaestus review</code> in a GitLab merge request comment. Turning
+						this off stops all of them.
 					</FieldDescription>
 				</FieldContent>
 				<Switch
@@ -313,7 +313,7 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 					Sending feedback
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					Workspace-wide control for comments and mentor feedback.
+					These settings apply to all comments and mentor feedback in the workspace.
 				</p>
 			</div>
 			{paused ? (
@@ -351,7 +351,7 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 				<FieldContent>
 					<FieldLabel htmlFor="policy-deliver-merged">Post feedback after merge</FieldLabel>
 					<FieldDescription>
-						A review that finishes after the work merged still posts its feedback.
+						When on, a review that finishes after the work merged still posts its feedback.
 					</FieldDescription>
 					<InheritedSettingHint
 						label="Post feedback after merge"

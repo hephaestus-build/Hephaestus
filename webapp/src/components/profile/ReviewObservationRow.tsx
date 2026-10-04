@@ -345,7 +345,7 @@ function ObservationResponse({
 					key={pendingResolution}
 					name="Why you dispute this"
 					label="Why do you dispute this?"
-					placeholder="One or two sentences on what is off"
+					placeholder="One or two sentences on what is wrong"
 					required
 					audience={() => DISPUTE_AUDIENCE}
 					isPending={isPending}

@@ -124,7 +124,7 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 		body = (
 			<QueryErrorAlert
 				error={state.error}
-				title="Could not load sessions"
+				title="We could not load your sessions"
 				onRetry={state.onRetry}
 			/>
 		);

@@ -19,7 +19,7 @@ const faqItems = [
 	{
 		key: "feedback-location",
 		q: "Where does feedback appear?",
-		a: "Wherever you are most likely to read it: on the work itself, on your private Practice profile, or in your next conversation with Heph. Feedback on the work waits for a workspace admin's approval by default. Admins choose which repositories are connected. You can carry on the conversation in the web app or, when Slack is connected, in a direct message.",
+		a: "Wherever you are most likely to read it: on the work itself, on your private practice profile, or in your next conversation with Heph. Feedback on the work waits for a workspace admin’s approval by default. Admins choose which repositories are connected. You can carry on the conversation in the web app or, when Slack is connected, in a direct message.",
 	},
 	{
 		key: "heph-conversation",
@@ -29,7 +29,7 @@ const faqItems = [
 	{
 		key: "project-data",
 		q: "What project data can Hephaestus use?",
-		a: "Only what workspace admins connect: specific repositories, and optionally selected Slack channels and Outline collections. Each member chooses In-house, Cloud or No AI for their work across their workspaces. That choice limits which configured models can process their work. Slack channel messages are used only with the member's permission. Check the privacy information published by your instance operator for provider terms.",
+		a: "Only what workspace admins connect: specific repositories, and optionally selected Slack channels and Outline collections. Each member chooses In-house, Cloud or No AI for their work across their workspaces. That choice limits which configured models can process their work. Slack channel messages are used only with the member’s permission. Check the privacy information published by your instance operator for provider terms.",
 	},
 	{
 		key: "ai-limitations",
@@ -39,7 +39,7 @@ const faqItems = [
 	{
 		key: "cost",
 		q: "What does it cost?",
-		a: "Hephaestus itself is free and MIT-licensed. If you run it yourself you pay your own AI provider, and your hosting costs. The instance admin sets each workspace's monthly cap for shared models. The workspace admin sets the cap for the workspace's own provider.",
+		a: "Hephaestus itself is free and MIT-licensed. If you run it yourself you pay your own AI provider, and your hosting costs. The instance admin sets each workspace’s monthly cap for shared models. The workspace admin sets the cap for the workspace’s own provider.",
 	},
 	{
 		key: "access",

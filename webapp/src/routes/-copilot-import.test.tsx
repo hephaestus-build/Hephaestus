@@ -51,7 +51,7 @@ it("keeps the main route available when the optional copilot import rejects", as
 				.getByRole("link", { name: "Create workspace" })
 				.getAttribute("href"),
 		).toBe("/workspaces/new");
-		expect(screen.queryByText("This page could not load")).toBeNull();
+		expect(screen.queryByText("We could not load this page")).toBeNull();
 	} finally {
 		// This test creates its own QueryClient. Unmount observers before cancelling requests,
 		// then release cache timers while React's environment is still available.

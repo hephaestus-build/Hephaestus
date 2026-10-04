@@ -119,7 +119,7 @@ export const SavedPatternsChanged: Story = {
 		await expect(canvas.getByRole("textbox", { name: "owner/repo" })).toHaveValue("draft/**");
 		await expect(
 			canvas.getByText(
-				"Saved patterns changed while you were editing. Your draft has not been saved.",
+				"Saved patterns changed while you were editing. Your draft is not saved. Use the saved patterns, then make your changes again.",
 			),
 		).toBeVisible();
 		await expect(

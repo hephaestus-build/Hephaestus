@@ -85,7 +85,7 @@ type Story = StoryObj<typeof meta>;
 
 async function fillIdentity(dialog: HTMLElement) {
 	await userEvent.type(within(dialog).getByLabelText("Display name"), "GPT-5");
-	await userEvent.type(within(dialog).getByLabelText("Upstream model id"), "gpt-5");
+	await userEvent.type(within(dialog).getByLabelText("Upstream model ID"), "gpt-5");
 }
 
 export const Default: Story = {};

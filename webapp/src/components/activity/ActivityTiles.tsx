@@ -48,7 +48,7 @@ export function ActivityTiles({ state, providerType }: ActivityTilesProps) {
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Could not load the summary"
+				title="We could not load the summary"
 				onRetry={state.onRetry}
 			/>
 		);

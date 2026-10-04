@@ -37,7 +37,7 @@ describe("AdminLlmModelFormDialog", () => {
 		expect(active.getAttribute("aria-checked")).toBe("false");
 		expect(screen.queryByLabelText("Slug")).toBeNull();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
-		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
+		fireEvent.change(screen.getByLabelText("Upstream model ID"), { target: { value: "gpt-5" } });
 		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
 		const saved = onSave.mock.calls[0]?.[0];
 		assert(saved);
@@ -72,7 +72,7 @@ describe("AdminLlmModelFormDialog", () => {
 				onSave={onSave}
 			/>,
 		);
-		expect(screen.getByLabelText<HTMLInputElement>("Upstream model id").disabled).toBe(true);
+		expect(screen.getByLabelText<HTMLInputElement>("Upstream model ID").disabled).toBe(true);
 		expect(screen.queryByLabelText("Initial workspace access")).toBeNull();
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onSave.mock.calls[0]?.[0].metadata).not.toHaveProperty("upstreamModelId");
@@ -94,7 +94,7 @@ describe("AdminLlmModelFormDialog", () => {
 	it("refuses an all-zero price, which the free option is for", () => {
 		const onSave = renderDialog();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
-		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
+		fireEvent.change(screen.getByLabelText("Upstream model ID"), { target: { value: "gpt-5" } });
 		fireEvent.click(screen.getByRole("radio", { name: "Price per 1M tokens" }));
 		fireEvent.change(screen.getByLabelText(/^Input \(USD\)/u), { target: { value: "0" } });
 		fireEvent.change(screen.getByLabelText(/^Output \(USD\)/u), { target: { value: "0" } });
@@ -118,7 +118,7 @@ describe("AdminLlmModelFormDialog", () => {
 	it("says why an out-of-range token count was rejected, instead of a Save that does nothing", () => {
 		const onSave = renderDialog();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
-		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
+		fireEvent.change(screen.getByLabelText("Upstream model ID"), { target: { value: "gpt-5" } });
 		fireEvent.click(screen.getByRole("button", { name: "Limits and capabilities" }));
 		const contextWindow = screen.getByLabelText(/^Context window/u);
 		const maxOutput = screen.getByLabelText(/^Max output tokens/u);
@@ -206,7 +206,7 @@ describe("AdminLlmModelFormDialog", () => {
 	it("sends the declared operator and note without claiming to verify provider terms", () => {
 		const onSave = renderDialog();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
-		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
+		fireEvent.change(screen.getByLabelText("Upstream model ID"), { target: { value: "gpt-5" } });
 		fireEvent.click(screen.getByRole("button", { name: "Add model" }));
 		expect(onSave.mock.calls[0]?.[0].metadata).toStrictEqual(
 			expect.objectContaining({ operatedBy: undefined, dataHandlingNote: undefined }),
@@ -229,7 +229,7 @@ describe("AdminLlmModelFormDialog", () => {
 	it("lets a declared model go back to undeclared", () => {
 		const onSave = renderDialog();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPT-5" } });
-		fireEvent.change(screen.getByLabelText("Upstream model id"), { target: { value: "gpt-5" } });
+		fireEvent.change(screen.getByLabelText("Upstream model ID"), { target: { value: "gpt-5" } });
 		fireEvent.click(screen.getByRole("radio", { name: "Your organization" }));
 		fireEvent.click(screen.getByRole("button", { name: "Leave undeclared" }));
 		expect(screen.queryByRole("button", { name: "Leave undeclared" })).toBeNull();

@@ -47,9 +47,9 @@ function ThreadContainer() {
 		<div className="flex h-full items-center justify-center p-6">
 			<EmptyState
 				icon={<MessageSquareWarning />}
-				title="This conversation could not be opened"
+				title="We could not open this conversation"
 				headingLevel={1}
-				description="Loading it failed, or it no longer exists for you. Try again, or start a new chat."
+				description="It may have been deleted, or loading it failed. Try again, or start a new chat."
 				action={
 					<Button
 						variant="outline"
@@ -57,7 +57,7 @@ function ThreadContainer() {
 							void thread.refetch();
 						}}
 					>
-						Try again
+						Retry
 					</Button>
 				}
 			/>

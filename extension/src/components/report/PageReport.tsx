@@ -208,7 +208,7 @@ function Explanation({ props, webAppOrigin }: { props: PageReportProps; webAppOr
 		case "loading": {
 			return <ListSkeleton />;
 		}
-		// The line offers Try again; the explanation says what failed and does not repeat the control.
+		// The line offers Retry; the explanation says what failed and does not repeat the control.
 		case "failed":
 		case "error": {
 			return (
@@ -291,7 +291,7 @@ function LineAction({
 		case "retry": {
 			return (
 				<Button variant="outline" size="sm" onClick={props.onRetry}>
-					Try again
+					Retry
 				</Button>
 			);
 		}

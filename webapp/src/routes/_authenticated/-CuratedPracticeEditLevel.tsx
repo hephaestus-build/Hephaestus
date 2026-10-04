@@ -62,7 +62,7 @@ export function CuratedPracticeEditLevel({
 			<DrawerBody>
 				<QueryErrorAlert
 					error={practiceQuery.error ?? catalogQuery.error ?? definitionOptionsQuery.error}
-					title="Could not load the practice"
+					title="We could not load the practice"
 					onRetry={() => {
 						void practiceQuery.refetch();
 						void catalogQuery.refetch();
@@ -140,7 +140,7 @@ function LoadedCuratedPracticeEditor({
 			queryClient.setQueryData(detailQueryKey, updated);
 			void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 			setBasePractice(updated);
-			toast.success("Update declined");
+			toast.success("Practice update declined");
 		},
 		onError: (error) => {
 			if (problemStatusOf(error) === 412) {
@@ -246,7 +246,7 @@ function LoadedCuratedPracticeEditor({
 		releaseReview = (
 			<QueryErrorAlert
 				error={releaseQuery.error}
-				title="Could not load the update"
+				title="We could not load the update"
 				onRetry={() => {
 					void releaseQuery.refetch();
 				}}

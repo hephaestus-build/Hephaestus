@@ -87,7 +87,7 @@ export function isPurpose(value: string): value is Purpose {
 const PURPOSES: PurposeMeta[] = [
 	{
 		purpose: "PRACTICE_REVIEW",
-		description: "Runs reviews of connected project work and conversations.",
+		description: "Checks connected project work and conversations against your practices.",
 	},
 	{
 		purpose: "MENTOR",
@@ -227,7 +227,11 @@ export function AgentBindingsPage({
 				)}
 
 				{isError && (
-					<QueryErrorAlert error={loadError} title="Could not load AI models" onRetry={onRetry} />
+					<QueryErrorAlert
+						error={loadError}
+						title="We could not load AI models"
+						onRetry={onRetry}
+					/>
 				)}
 				{!isError && isLoading && (
 					<div className="flex h-40 items-center justify-center">
@@ -240,8 +244,8 @@ export function AgentBindingsPage({
 							<div className="space-y-1">
 								<h2 className="text-lg font-semibold">Model assignments</h2>
 								<p className="text-sm text-muted-foreground">
-									A member’s AI choice is a ceiling. The loosest ready row within it serves them,
-									and never a looser one.
+									A member’s AI choice is a ceiling. Each member gets the loosest ready assignment
+									at or below it, never a looser one.
 								</p>
 							</div>
 							{PURPOSES.map((meta) => (
@@ -699,7 +703,7 @@ function BindingRow({
 
 function bindingAudience(undeclared: boolean, required: boolean, tierLabel: string): string {
 	if (!undeclared) {
-		return `For members whose answer allows ${tierLabel}.`;
+		return `For members whose AI choice allows ${tierLabel}.`;
 	}
 	if (required) {
 		return "For members who have not chosen yet, where the choice is optional. Every member here must choose, so it serves no one now.";

@@ -58,7 +58,7 @@ export function ReviewRunFeed({
 		return (
 			<QueryErrorAlert
 				error={feed.error}
-				title="Could not load review runs"
+				title="We could not load reviews"
 				onRetry={feed.onRetry}
 			/>
 		);
@@ -126,7 +126,7 @@ export function EarlierReviewsButton({
 	return (
 		<span className="flex flex-wrap items-center gap-2 text-sm">
 			{loadMoreError != null && (
-				<span className="text-muted-foreground">Could not load earlier reviews.</span>
+				<span className="text-muted-foreground">We could not load earlier reviews.</span>
 			)}
 			<Button
 				type="button"
@@ -146,7 +146,7 @@ export function EarlierReviewsButton({
 export function ReviewRunFeedSkeleton({ rows }: { rows: number }) {
 	return (
 		<div className="flex flex-col gap-2.5" aria-busy="true">
-			<span className="sr-only">Loading review runs</span>
+			<span className="sr-only">Loading reviews</span>
 			{Array.from({ length: rows }, (_, index) => (
 				<Skeleton key={index} className="h-24 w-full" />
 			))}

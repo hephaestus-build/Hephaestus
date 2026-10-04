@@ -16,8 +16,8 @@ export function UsageGuide() {
 					<h3 className="text-sm font-medium">On the work itself</h3>
 					<p className="text-xs text-muted-foreground">
 						Open a pull request, merge request or issue to see its review status and your feedback.
-						Expand it to go to a comment or see your observations. On a list, press the Hephaestus
-						mark beside a title to preview that work.
+						Expand the practice review to go to a comment or see your observations. On a list,
+						select the Hephaestus mark beside a title to preview that work.
 					</p>
 				</div>
 			</li>
@@ -26,7 +26,7 @@ export function UsageGuide() {
 					<AppWindowIcon aria-hidden className="size-4 text-mentor" />
 				</span>
 				<div className="flex min-w-0 flex-col gap-1">
-					<h3 className="text-sm font-medium">Changes are confirmed</h3>
+					<h3 className="text-sm font-medium">You confirm every change</h3>
 					<p className="text-xs text-muted-foreground">
 						Requesting a review opens a small Hephaestus window that shows exactly what will happen.
 						Nothing changes until you confirm there. You approve feedback in Hephaestus, not in the

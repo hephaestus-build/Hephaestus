@@ -152,7 +152,7 @@ function CheckSummary({ release }: { release: ReleaseStatus }) {
 
 function migrationNote(schemaMigrations: boolean | undefined): string {
 	if (schemaMigrations === true) {
-		return "Includes schema migrations: back up before upgrading and read the migration guide.";
+		return "Includes schema migrations: back up before upgrading and read the upgrade guide.";
 	}
 	if (schemaMigrations === false) {
 		return "No schema migrations in this release. Releases in between may still carry some.";
@@ -264,7 +264,7 @@ function ReleaseBody({ state }: InstanceReleaseCardProps) {
 			)}
 
 			{state.check.status === "error" && (
-				<QueryErrorAlert title="Could not check for updates" error={state.check.error} />
+				<QueryErrorAlert title="We could not check for updates" error={state.check.error} />
 			)}
 
 			<Collapsible>

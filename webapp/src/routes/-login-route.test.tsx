@@ -96,7 +96,7 @@ describe("contextual sign-in", () => {
 		renderRouteAtWithRouter("/login?error=__proto__");
 		await screen.findByText("We could not sign you in", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.getByRole("alert").textContent).toContain(
-			"Try again. If it keeps failing, contact the operator of this instance.",
+			"Try again. If it keeps failing, contact your instance operator.",
 		);
 	});
 
@@ -111,7 +111,7 @@ describe("contextual sign-in", () => {
 				]),
 			),
 		);
-		await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+		await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 		await screen.findByRole("button", { name: "Continue with GitLab" });
 	});
 });

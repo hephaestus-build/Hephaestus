@@ -212,7 +212,7 @@ export const OnePartFailed: Story = {
 		},
 	},
 	play: async ({ args, canvas, userEvent }) => {
-		await expect(canvas.getByText("Could not load failed reviews")).toBeVisible();
+		await expect(canvas.getByText("We could not load failed reviews")).toBeVisible();
 		canvas.getByRole("list", { name: "Awaiting your approval" });
 		canvas.getByRole("link", { name: "1 piece of feedback failed to deliver" });
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));

@@ -325,7 +325,7 @@ export class AuthenticatedApi {
 		);
 		const status = result.response?.status;
 		if (status === 403 || status === 404) {
-			throw forbidden("Hephaestus did not let your account ask for a review of this work.");
+			throw forbidden("Your account cannot request a review of this work.");
 		}
 		return body(result);
 	}

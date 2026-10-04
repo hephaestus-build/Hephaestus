@@ -38,6 +38,9 @@ const MESSAGE_MARKDOWN_COMPONENTS = {
 	input: MarkdownTaskCheckbox,
 };
 
+/** The library names its code-block button in title case; every other control here uses sentence case. */
+const MESSAGE_TRANSLATIONS = { copyCode: "Copy code" };
+
 /** Heph's name and mark over a reply, alive while the reply is still arriving. */
 function HephMessageHeader({ streaming = false }: { streaming?: boolean }) {
 	return (
@@ -85,7 +88,11 @@ export function MentorMessage({
 					texts.map((text, index) => (
 						<Bubble key={`${message.id}-${index}`} variant={isUser ? "default" : "ghost"}>
 							<BubbleContent>
-								<Streamdown components={MESSAGE_MARKDOWN_COMPONENTS} isAnimating={streaming}>
+								<Streamdown
+									components={MESSAGE_MARKDOWN_COMPONENTS}
+									translations={MESSAGE_TRANSLATIONS}
+									isAnimating={streaming}
+								>
 									{text}
 								</Streamdown>
 							</BubbleContent>

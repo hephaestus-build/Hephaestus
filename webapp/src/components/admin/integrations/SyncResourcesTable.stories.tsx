@@ -332,7 +332,7 @@ export const Default: Story = {
 export const WatermarkDivergence: Story = {
 	args: { resources: divergent },
 	play: async ({ canvas }) => {
-		canvas.getByLabelText(/further behind/u);
+		canvas.getByLabelText(/last synced longer ago/u);
 
 		await userEvent.hover(canvas.getByText(/ago$/u));
 		await expectSettledVisible(await screen.findByText("Pull requests"));

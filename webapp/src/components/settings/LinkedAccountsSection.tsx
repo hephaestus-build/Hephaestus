@@ -126,7 +126,7 @@ export function LinkedAccountsSection({
 			<LinkedAccountsFrame headingRef={headingRef}>
 				<QueryErrorAlert
 					error={error}
-					title="Could not load connected accounts"
+					title="We could not load your connected accounts"
 					onRetry={onRetry}
 				/>
 			</LinkedAccountsFrame>
@@ -391,7 +391,7 @@ function UnlinkControl({
 					<AlertDialogTitle>Disconnect {name}?</AlertDialogTitle>
 					<AlertDialogDescription>
 						{isLinkOnly
-							? `Hephaestus will stop attributing your ${provider} activity to this account. You can reconnect ${provider} at any time from Settings.`
+							? `Hephaestus will stop attributing your ${provider} activity to this account. You can reconnect ${provider} at any time from User settings.`
 							: `You’ll no longer be able to sign in to Hephaestus with this ${provider} account. You can reconnect it at any time by signing in with ${provider} again.`}
 					</AlertDialogDescription>
 				</AlertDialogHeader>

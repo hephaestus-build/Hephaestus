@@ -45,6 +45,7 @@ export const FormattedReply: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { name: "Decision" })).toBeVisible();
 		await expect(canvas.getByRole("checkbox", { name: "Completed task" })).toBeChecked();
+		await expect(canvas.getByRole("button", { name: "Copy code" })).toBeVisible();
 	},
 };
 

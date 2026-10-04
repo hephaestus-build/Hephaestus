@@ -187,7 +187,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 					{state.status === "error" && (
 						<QueryErrorAlert
 							error={state.error}
-							title="Could not load your setup"
+							title="We could not load your setup"
 							onRetry={state.onRetry}
 						/>
 					)}
@@ -205,7 +205,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 								<QuestionnaireDescription>
 									Hephaestus reviews your work against your team’s practices, and Heph talks it
 									through with you. Choose which AI may do that. Cloud also allows in-house models.
-									Sync and stored work do not change.
+									What Hephaestus syncs and stores does not change.
 								</QuestionnaireDescription>
 								<fieldset disabled={saving} className="min-w-0 disabled:opacity-50">
 									<AiChoiceCards
@@ -316,7 +316,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 					{ready?.refresh?.status === "error" && (
 						<QueryErrorAlert
 							error={ready.refresh.error}
-							title="Could not refresh your setup"
+							title="We could not refresh your setup"
 							onRetry={ready.refresh.onRetry}
 						/>
 					)}
@@ -324,8 +324,8 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 						<Alert ref={alertRef} tabIndex={-1} variant="destructive">
 							<AlertTitle>
 								{submission.action === "save"
-									? "Could not save your AI choice"
-									: "Could not continue to your workspace"}
+									? "We could not save your AI choice"
+									: "We could not continue to your workspace"}
 							</AlertTitle>
 							<AlertDescription>{submission.message}</AlertDescription>
 						</Alert>
@@ -412,17 +412,17 @@ function onboardingNarration({
 	afterLink: boolean;
 }): string {
 	if (status === "loading") {
-		return "Give me a moment. Hephaestus is fetching your setup.";
+		return "Give me a moment. I’m fetching your setup.";
 	}
 	if (status === "error") {
-		return "Hephaestus could not fetch your setup just now.";
+		return "I could not fetch your setup just now.";
 	}
 	if (changed) {
 		const uncovered =
 			coverage === "none" ? "That is not set up here yet. Nothing switches you elsewhere. " : "";
 		if (firstVisit) {
 			return requiredSatisfied
-				? `${uncovered}Press Continue and it holds in every workspace.`
+				? `${uncovered}Select Continue to apply your choice in every workspace.`
 				: `${uncovered}Save your AI choice now. You can connect your accounts separately.`;
 		}
 		return `${uncovered}Save to apply your new choice in every workspace. Requests already sent cannot be recalled.`;
@@ -551,8 +551,8 @@ function WorkspaceModels({
 				})}
 			</ItemGroup>
 			<p className="text-xs text-muted-foreground">
-				Your admins declare whether each model is in-house or cloud. Logos name the maker and the
-				service. They do not decide where your work goes.
+				Your admins declare whether each model is in-house or cloud. The icons show who made a model
+				and which service runs it. They do not decide where your work goes.
 			</p>
 		</section>
 	);

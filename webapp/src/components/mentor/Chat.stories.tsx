@@ -112,7 +112,7 @@ export const Failed: Story = {
 	args: { messages: CONVERSATION.slice(0, 5), turn: { kind: "error", failure: "failed" } },
 	play: async ({ args, canvas, userEvent }) => {
 		await expect(canvas.getByText("Heph could not finish that reply")).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onReload).toHaveBeenCalledOnce();
 	},
 };
@@ -121,7 +121,7 @@ export const Busy: Story = {
 	args: { ...Failed.args, turn: { kind: "error", failure: "busy" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Heph is busy", { exact: true })).toBeVisible();
-		await expect(canvas.getByRole("button", { name: "Try again" })).toBeEnabled();
+		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
 	},
 };
 
@@ -139,7 +139,7 @@ export const InterruptedReplyReopened: Story = {
 		],
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Try again" })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Retry" })).toBeVisible();
 		await expect(canvas.getByText(/stopped before it finished/u)).toBeVisible();
 	},
 };

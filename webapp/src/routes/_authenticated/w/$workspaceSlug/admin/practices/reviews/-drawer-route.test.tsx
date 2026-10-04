@@ -449,7 +449,7 @@ describe("the reviewed-work level", () => {
 		);
 		await userEvent.click(within(level).getByRole("tab", { name: "Every practice" }));
 		within(level).getByText("No practice was asked about this work");
-		expect(within(level).queryByText(/Could not load/u)).toBeNull();
+		expect(within(level).queryByText(/We could not load/u)).toBeNull();
 		expect(requestsTo(TRACE_1423)).toHaveLength(1);
 	});
 

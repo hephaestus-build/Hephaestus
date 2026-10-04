@@ -56,9 +56,9 @@ export function ConfirmAccessDialog({
 	} else if (error) {
 		body = (
 			<>
-				<p role="alert">Could not load sign-in options.</p>
+				<p role="alert">We could not load the sign-in options.</p>
 				<Button variant="outline" onClick={onRetry}>
-					Try again
+					Retry
 				</Button>
 			</>
 		);
@@ -85,7 +85,7 @@ export function ConfirmAccessDialog({
 							: `This action needs a sign-in from the last ${signInWindow(maxAgeSeconds)}. `}
 						Sign in again with an identity already connected to your account, then try the action
 						again. Your provider may sign you straight back in without asking for anything. That is
-						expected. It refreshes the time of your last sign-in and is not a second factor.
+						normal. It refreshes your last sign-in time, but it is not a second factor.
 					</DialogDescription>
 				</DialogHeader>
 				<DialogBody className="flex flex-col gap-2" aria-busy={loading}>

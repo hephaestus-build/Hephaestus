@@ -208,7 +208,7 @@ function AdminLlmConnectionFormDialogContent({
 		});
 	};
 
-	let testLabel = "Test & fetch models";
+	let testLabel = "Test and fetch models";
 	if (isProbing) {
 		testLabel = "Testing…";
 	} else if (isEdit && !fields.apiKey.trim() && !fields.clearApiKey) {
@@ -280,7 +280,7 @@ function AdminLlmConnectionFormDialogContent({
 								<AlertDescription>
 									We could not fetch the model list.{" "}
 									{probeResult.message ?? "The provider did not answer."} You can still save the
-									connection and enter a model id.
+									connection and enter a model ID.
 								</AlertDescription>
 							</Alert>
 						)}
@@ -288,7 +288,7 @@ function AdminLlmConnectionFormDialogContent({
 							<Alert variant="warning">
 								<AlertDescription>
 									We could not fetch the model list. {probeError} You can still save the connection
-									and enter a model id.
+									and enter a model ID.
 								</AlertDescription>
 							</Alert>
 						)}

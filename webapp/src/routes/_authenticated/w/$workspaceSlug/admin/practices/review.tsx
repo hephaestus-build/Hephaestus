@@ -134,7 +134,7 @@ function HowMuchSection({
 		return (
 			<QueryErrorAlert
 				error={error}
-				title="Could not load the autonomy settings"
+				title="We could not load the autonomy settings"
 				onRetry={() => {
 					void settingsQuery.refetch();
 					void rollupQuery.refetch();
@@ -275,7 +275,7 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 		reviewSettings = (
 			<QueryErrorAlert
 				error={error}
-				title="Could not load the review settings"
+				title="We could not load the review settings"
 				onRetry={() => {
 					void reviewSettingsQuery.refetch();
 					void workspaceQuery.refetch();

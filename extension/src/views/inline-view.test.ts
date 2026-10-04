@@ -170,7 +170,7 @@ it("says a list row's preview is not current when its refresh fails, and keeps t
 	expect(container.textContent).toContain("3 comments for you");
 	expect(
 		[...container.querySelectorAll("button")].map((button) => button.textContent),
-	).toStrictEqual(["Try again"]);
+	).toStrictEqual(["Retry"]);
 });
 
 it("refreshes new and repaired observations while the report stays open", async () => {

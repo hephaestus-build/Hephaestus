@@ -32,7 +32,7 @@ const RETRY_NOTICES = {
 	failed: {
 		variant: "destructive",
 		title: "Heph could not finish that reply",
-		description: "The reply stopped before it was complete. Try again.",
+		description: "Try again. If it keeps failing, contact your workspace admin.",
 	},
 } as const satisfies Record<
 	ChatFailure,
@@ -160,7 +160,7 @@ export function Chat({
 								{onReload && (
 									<Button variant="outline" size="sm" onClick={onReload} className="shrink-0">
 										<RotateCcwIcon />
-										Try again
+										Retry
 									</Button>
 								)}
 							</AlertDescription>

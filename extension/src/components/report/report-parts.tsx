@@ -24,7 +24,7 @@ export function LoadError({ message, onRetry }: { message: string; onRetry: () =
 		>
 			<p className="min-w-0 flex-1 basis-48 text-muted-foreground">{message}</p>
 			<Button variant="outline" size="sm" onClick={onRetry}>
-				Try again
+				Retry
 			</Button>
 		</div>
 	);

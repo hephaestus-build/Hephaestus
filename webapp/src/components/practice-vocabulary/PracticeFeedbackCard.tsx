@@ -494,12 +494,12 @@ export function PracticeFeedbackCard({
 						key={usefulness}
 						name="What was not helpful"
 						label="Why was this not helpful?"
-						placeholder="One or two sentences on what is off"
+						placeholder="One or two sentences on what is wrong"
 						required
 						reasons={NOT_HELPFUL_REASONS}
 						audience={(reason) =>
 							reason === "not-accurate"
-								? "Not accurate disputes this card. Workspace admins read your sentence, not the card. They can correct its observations or withdraw it."
+								? "Not accurate disputes this card. Workspace admins read your sentence, not the card. They can mark its observations incorrect or withdraw it."
 								: undefined
 						}
 						isPending={isPending}

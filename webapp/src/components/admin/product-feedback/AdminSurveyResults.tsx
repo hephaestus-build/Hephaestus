@@ -89,7 +89,7 @@ export function AdminSurveyResults({
 						<DrawerDescription>
 							{state.status === "loading"
 								? "Loading the survey and its responses."
-								: "The survey could not be loaded."}
+								: "Nothing is shown until the survey loads."}
 						</DrawerDescription>
 					</div>
 				</DetailDrawerHeader>
@@ -99,7 +99,7 @@ export function AdminSurveyResults({
 					) : (
 						<QueryErrorAlert
 							error={state.error}
-							title="Survey results could not be loaded"
+							title="We could not load survey results"
 							onRetry={state.onRetry}
 						/>
 					)}
@@ -327,7 +327,7 @@ function NpsBreakdown({ counts }: { counts: QuestionSummary["counts"] }) {
 	});
 	return (
 		<p className="text-xs text-muted-foreground">
-			{parts.join(" · ")} · scale labelled {NPS_LABELS.low} → {NPS_LABELS.high}
+			{parts.join(" · ")} · scale labeled {NPS_LABELS.low} → {NPS_LABELS.high}
 		</p>
 	);
 }

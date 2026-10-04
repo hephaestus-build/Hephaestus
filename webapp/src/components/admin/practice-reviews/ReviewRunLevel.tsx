@@ -109,7 +109,7 @@ export function ReviewRunLevel({
 					{jobState.status === "error" ? (
 						<QueryErrorAlert
 							error={jobState.error}
-							title="Could not load this review"
+							title="We could not load this review"
 							onRetry={jobState.onRetry}
 						/>
 					) : (

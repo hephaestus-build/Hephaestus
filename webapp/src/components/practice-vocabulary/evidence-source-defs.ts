@@ -105,7 +105,7 @@ const EVIDENCE_SOURCE_DEFS: Record<string, EvidenceSourceDef> = {
 		label: "Review comments",
 		icon: MessagesSquareIcon,
 		badgeVariant: "outline",
-		description: "Reviewers' remarks about the change overall.",
+		description: "Reviewers’ remarks about the change overall.",
 		locator: "object",
 	},
 	"workspace.project-inventory": {

@@ -378,7 +378,7 @@ export const Loading: Story = {
 export const RetryableServerError: Story = {
 	args: {
 		rows: [],
-		error: { status: 500, detail: "Could not roll up AI usage." },
+		error: { status: 500, detail: "We could not roll up AI usage." },
 	},
 };
 

@@ -396,7 +396,7 @@ export function SyncStatusHeader({
 								disabled={isCancelling || activeJob.cancelRequested}
 								onClick={onCancel}
 							>
-								{activeJob.cancelRequested ? "Stopping after current step…" : "Cancel"}
+								{activeJob.cancelRequested ? "Stopping after current step…" : "Cancel sync"}
 							</Button>
 						)}
 					</ButtonGroup>

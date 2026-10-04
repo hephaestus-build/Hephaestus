@@ -122,7 +122,7 @@ export function WorkspaceLlmModelsTable({
 				subject={deleting}
 				onClose={() => setDeleting(null)}
 				title={(model) => `Delete “${model.displayName}”?`}
-				description="Any agent bound to this model will stop working until you bind the model again. You cannot undo this."
+				description="Practice reviews and Heph stop using this model wherever you assigned it, until you assign another. You cannot undo this."
 				confirmLabel="Delete model"
 				onConfirm={onDelete}
 			/>

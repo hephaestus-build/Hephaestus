@@ -48,7 +48,7 @@ describe("instance users route", () => {
 		);
 
 		renderRouteAt("/admin/users");
-		const user = await chooseRowAction("Actions for Ada Lovelace", "Change role");
+		const user = await chooseRowAction("Actions for Ada Lovelace", "Grant instance admin");
 		await user.click(await screen.findByRole("button", { name: "Grant instance admin" }));
 
 		const dialog = await screen.findByRole("dialog", { name: "Confirm access" });
@@ -94,7 +94,7 @@ describe("instance users route", () => {
 		);
 
 		renderRouteAt("/admin/users");
-		const user = await chooseRowAction("Actions for Ada Lovelace", "Change role");
+		const user = await chooseRowAction("Actions for Ada Lovelace", "Grant instance admin");
 		await user.click(await screen.findByRole("button", { name: "Grant instance admin" }));
 
 		const refusal = await screen.findByRole("alert");

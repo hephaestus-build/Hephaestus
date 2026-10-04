@@ -122,7 +122,7 @@ export function SignInPanel({
 				title="Sign-in options could not be loaded"
 				action={
 					<Button variant="outline" size="sm" onClick={options.onRetry}>
-						Try again
+						Retry
 					</Button>
 				}
 			>
@@ -186,7 +186,7 @@ export function SignInPanel({
 			) : null}
 			<p className="text-xs text-muted-foreground">
 				A sign-in window from {instanceHost} opens and closes by itself. You stay signed in until
-				you close Chrome or for 7 days, whichever comes first. Your instance may end your session
+				you close Chrome or 7 days pass, whichever comes first. Your instance may end your session
 				sooner.
 			</p>
 		</div>

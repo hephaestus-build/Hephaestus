@@ -244,7 +244,7 @@ function AdminLlmPage() {
 			modelsSection = (
 				<QueryErrorAlert
 					error={modelsQuery.error}
-					title="Could not load models"
+					title="We could not load models"
 					onRetry={() => {
 						void modelsQuery.refetch();
 					}}
@@ -344,7 +344,7 @@ function AdminLlmPage() {
 			{settingsQuery.isError ? (
 				<QueryErrorAlert
 					error={settingsQuery.error}
-					title="Could not load AI policy"
+					title="We could not load AI settings"
 					onRetry={() => {
 						void settingsQuery.refetch();
 					}}

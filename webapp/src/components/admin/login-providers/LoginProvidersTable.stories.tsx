@@ -141,7 +141,7 @@ export const ErrorState: Story = {
 		error: { detail: "Upstream database unavailable." },
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/Could not load login providers/iu);
+		canvas.getByText(/We could not load login providers/iu);
 		canvas.getByText(/Upstream database unavailable/iu);
 		await userEvent.click(canvas.getByRole("button", { name: /Retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalled();

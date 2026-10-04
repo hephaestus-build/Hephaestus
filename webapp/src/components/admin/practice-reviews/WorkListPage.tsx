@@ -55,7 +55,9 @@ export function WorkListPage({
 	const reset = () => onSearchChange({ kind: undefined });
 	let results: ReactNode;
 	if (error != null) {
-		results = <QueryErrorAlert error={error} title="Could not load the work" onRetry={onRetry} />;
+		results = (
+			<QueryErrorAlert error={error} title="We could not load the work" onRetry={onRetry} />
+		);
 	} else if (isLoading) {
 		results = <ReviewResultsSkeleton label="Loading work" rows={REVIEW_PAGE_SIZE} />;
 	} else if (rows.length === 0) {

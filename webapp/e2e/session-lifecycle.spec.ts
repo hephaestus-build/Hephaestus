@@ -228,11 +228,11 @@ test("a cold identity outage shows the existing retry screen instead of signing 
 	await page.route("**/user", async (route) => route.fulfill({ status: 503 }));
 	await page.goto("/settings");
 	await expect(
-		page.getByRole("heading", { name: "This page could not load", exact: true }),
+		page.getByRole("heading", { name: "We could not load this page", exact: true }),
 	).toBeVisible();
 	await expect(page).toHaveURL(/\/settings$/u);
 	await page.unroute("**/user");
-	await page.getByRole("button", { name: "Try again", exact: true }).click();
+	await page.getByRole("button", { name: "Retry", exact: true }).click();
 	await expect(page.getByRole("heading", { name: "User settings", exact: true })).toBeVisible();
 });
 

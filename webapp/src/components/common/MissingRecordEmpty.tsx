@@ -39,14 +39,12 @@ export function MissingRecordEmpty({ title, onRetry, className }: MissingRecordE
 					<CloudOffIcon />
 				</EmptyMedia>
 				<EmptyTitle>{title}</EmptyTitle>
-				<EmptyDescription>
-					The request did not finish, and no error came back. You may be offline.
-				</EmptyDescription>
+				<EmptyDescription>The request did not finish. You may be offline.</EmptyDescription>
 			</EmptyHeader>
 			{onRetry && (
 				<EmptyContent>
 					<Button type="button" variant="outline" size="sm" onClick={onRetry}>
-						Try again
+						Retry
 					</Button>
 				</EmptyContent>
 			)}

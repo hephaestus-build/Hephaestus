@@ -218,7 +218,7 @@ describe("reviewSettingsProblem", () => {
 				aiSupported,
 				mockPullRequestWorkType,
 			)?.message,
-		).toBe("One of the chosen moments does not apply to this kind of work.");
+		).toBe("One of the chosen moments does not apply to this kind of work. Clear it to continue.");
 	});
 
 	it("refuses the hand-asked review, which the wire no longer offers as a moment", () => {
@@ -228,7 +228,7 @@ describe("reviewSettingsProblem", () => {
 				aiSupported,
 				mockPullRequestWorkType,
 			)?.message,
-		).toBe("One of the chosen moments does not apply to this kind of work.");
+		).toBe("One of the chosen moments does not apply to this kind of work. Clear it to continue.");
 	});
 
 	it("holds the review to naming evidence it cannot run without", () => {
@@ -240,7 +240,9 @@ describe("reviewSettingsProblem", () => {
 			mockPullRequestWorkType,
 		);
 
-		expect(problem?.message).toBe("This review needs at least one source it cannot run without.");
+		expect(problem?.message).toBe(
+			"Set at least one source to Required. A review cannot run without one.",
+		);
 		expect(problem?.focusId).toBe("practice-occasion-evidence");
 	});
 
@@ -266,7 +268,7 @@ describe("reviewSettingsProblem", () => {
 				mockPullRequestWorkType,
 			)?.message,
 		).toBe(
-			"One chosen source can never be captured whole, so this review cannot claim that anything is missing from it.",
+			"One chosen source cannot be captured whole, so this review cannot claim that anything is missing from it. Change that source to Context or Off.",
 		);
 	});
 

@@ -90,7 +90,7 @@ export const ExpiringGitLabToken: Story = {
 export const RefusedGitLabToken: Story = {
 	args: { providerLabel: "GitLab", attentionProblem: "CREDENTIAL_REVOKED" },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("GitLab refuses this token")).toBeVisible();
+		await expect(canvas.getByText("GitLab no longer accepts this token")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Replace token" })).toBeDisabled();
 		await userEvent.type(canvas.getByLabelText("New personal access token"), "replacement");
 		await expect(canvas.getByRole("button", { name: "Replace token" })).toBeEnabled();

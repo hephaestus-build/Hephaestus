@@ -134,11 +134,11 @@ export function PracticeReviewBackfill({
 			{isError ? (
 				<Alert variant="destructive">
 					<AlertCircle />
-					<AlertTitle>Backfills could not be loaded</AlertTitle>
+					<AlertTitle>We could not load backfills</AlertTitle>
 					<AlertDescription>
-						<p>A backfill that is already running is unaffected. Only this list failed to load.</p>
+						<p>A running backfill is not affected. Check your connection, then try again.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
-							Try again
+							Retry
 						</Button>
 					</AlertDescription>
 				</Alert>
@@ -315,11 +315,11 @@ function ConfirmationSection({
 						: `Review ${countOf(run.estimatedArtifacts, run.artifactKind)}`}
 				</Button>
 				<Button variant="outline" onClick={() => onCancel(run.id)} disabled={isUpdating}>
-					Discard
+					Discard estimate
 				</Button>
 				{nothingToDo ? (
 					<p className="text-sm text-muted-foreground">
-						Nothing was opened in that stretch. Discard this and try a longer one.
+						Nothing was opened in that stretch. Discard this estimate and try a longer one.
 					</p>
 				) : null}
 			</div>

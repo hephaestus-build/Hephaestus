@@ -49,8 +49,8 @@ function GitHubSetupPage() {
 			<Alert>
 				<AlertTitle>GitHub App not configured</AlertTitle>
 				<AlertDescription>
-					The GitHub App installation URL is not configured for this instance. Contact your
-					administrator.
+					The GitHub App installation URL is not configured for this instance. Contact an instance
+					admin.
 				</AlertDescription>
 			</Alert>
 		);

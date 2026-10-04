@@ -143,7 +143,7 @@ export function SiteAccessList({
 				title="Sites could not be loaded"
 				action={
 					<Button variant="outline" size="sm" onClick={state.onRetry}>
-						Try again
+						Retry
 					</Button>
 				}
 			>

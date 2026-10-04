@@ -188,7 +188,7 @@ describe("WorkspaceLlmProviderPanel", () => {
 		);
 		renderPanel();
 
-		await screen.findByText("Could not load your provider models");
+		await screen.findByText("We could not load your provider models");
 		expect(screen.queryByText("No models yet")).toBeNull();
 	});
 

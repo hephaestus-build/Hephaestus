@@ -244,7 +244,7 @@ export const LoadForbidden: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText("Could not load AI models")).toBeVisible();
+		await expect(await canvas.findByText("We could not load AI models")).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Retry" })).toBeNull();
 	},
 };

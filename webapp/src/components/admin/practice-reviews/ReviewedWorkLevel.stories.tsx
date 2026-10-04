@@ -215,7 +215,7 @@ export const NothingRecorded: Story = {
 		await expect(panel.getByText("No practice was asked about this work")).toBeVisible();
 		await userEvent.click(panel.getByRole("tab", { name: "What we noticed" }));
 		await expect(panel.getByText("Nothing was recorded about this work")).toBeVisible();
-		await expect(panel.queryByText(/Could not load/u)).not.toBeInTheDocument();
+		await expect(panel.queryByText(/We could not load/u)).not.toBeInTheDocument();
 		await expect(panel.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
 	},
 };
@@ -261,7 +261,9 @@ export const TraceFailed: Story = {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByRole("heading", { name: "Observations", level: 3 })).toBeVisible();
 		await userEvent.click(panel.getByRole("tab", { name: "What we noticed" }));
-		await expect(panel.getByText("Could not load what was recorded about this work")).toBeVisible();
+		await expect(
+			panel.getByText("We could not load what was recorded about this work"),
+		).toBeVisible();
 		await userEvent.click(panel.getByRole("button", { name: "Retry" }));
 		if (args.trace.status !== "error") {
 			throw new Error("The story's trace is not the failed one");
@@ -325,7 +327,7 @@ export const ObservationsFailed: Story = {
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
 		panel.getByRole("link", { name: /^Pull request #1423 · ls1intum\/Hephaestus/u });
-		await expect(panel.getByText("Could not load observations")).toBeVisible();
+		await expect(panel.getByText("We could not load observations")).toBeVisible();
 		await expect(
 			panel.queryByText("Nothing has been reviewed on this work"),
 		).not.toBeInTheDocument();

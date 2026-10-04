@@ -100,7 +100,7 @@ export const OneHeightInEveryState: Story = {
 			{ state: { status: "signed-out", instanceHost: "heph.example.test" } },
 			{ state: { status: "not-found", instanceHost: "heph.example.test", workLabel: "!1" } },
 			{ feedback: { status: "ready", data: NO_FEEDBACK } },
-			{ feedback: { status: "error", message: "Could not load." } },
+			{ feedback: { status: "error", message: "We could not load." } },
 			{ activity: "pending" },
 		];
 		return (
@@ -163,7 +163,7 @@ export const Opened: Story = {
 		await expect(within(observations).getByText("Not applicable", { exact: true })).toBeVisible();
 		await expect(within(observations).getByText("Undetermined", { exact: true })).toBeVisible();
 		await expect(
-			within(observations).getByText(/review basis for this observation cannot be verified/u),
+			within(observations).getByText(/We cannot verify what this observation was based on/u),
 		).toBeVisible();
 		// When, precisely, and at which commit; the rest is in Hephaestus.
 		await expect(canvas.getByText(/^Reviewed .+ at 4f2a9c1\.$/u)).toBeVisible();
@@ -245,13 +245,16 @@ export const FeedbackLoading: Story = {
 export const FeedbackFailed: Story = {
 	args: {
 		expanded: true,
-		feedback: { status: "error", message: "Hephaestus ran into a problem." },
+		feedback: {
+			status: "error",
+			message: "Hephaestus had a problem and could not answer. Try again in a moment.",
+		},
 	},
 	play: async ({ canvas, args }) => {
 		await expect(canvas.getByRole("button", { expanded: true })).toHaveAccessibleName(
 			/Your feedback could not load/u,
 		);
-		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();
 	},
 };
@@ -259,11 +262,14 @@ export const FeedbackFailed: Story = {
 export const ObservationsFailed: Story = {
 	args: {
 		expanded: true,
-		observations: { status: "error", message: "Your observations could not load." },
+		observations: {
+			status: "error",
+			message: "Hephaestus could not be reached. Check your connection and try again.",
+		},
 	},
 	play: async ({ canvas, args }) => {
 		const observations = canvas.getByRole("region", { name: "Your observations" });
-		await userEvent.click(within(observations).getByRole("button", { name: "Try again" }));
+		await userEvent.click(within(observations).getByRole("button", { name: "Retry" }));
 		await expect(args.onRetryObservations).toHaveBeenCalledOnce();
 		await expect(args.onRetry).not.toHaveBeenCalled();
 	},
@@ -277,9 +283,7 @@ export const ManyObservations: Story = {
 		await expect(within(observations).getAllByRole("listitem")).toHaveLength(5);
 		await userEvent.click(within(observations).getByRole("button", { name: "Show 20 more" }));
 		await expect(within(observations).getAllByRole("listitem")).toHaveLength(25);
-		await expect(
-			within(observations).getByText("The first 25 of 40, most severe first."),
-		).toBeVisible();
+		await expect(within(observations).getByText("Showing the 25 most severe of 40.")).toBeVisible();
 	},
 };
 
@@ -347,19 +351,19 @@ export const Loading: Story = { args: { state: { status: "loading" }, expanded: 
 export const LoadFailed: Story = {
 	args: { state: { status: "failed", message: "Hephaestus could not be reached." } },
 	play: async ({ canvas, args }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();
 	},
 };
 
-/** Opened, a failure explains itself once and keeps the line's one Try again. */
+/** Opened, a failure explains itself once and keeps the line's one Retry. */
 export const LoadFailedOpened: Story = {
 	args: {
 		state: { status: "failed", message: "Hephaestus could not be reached." },
 		expanded: true,
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByRole("button", { name: "Try again" })).toHaveLength(1);
+		await expect(canvas.getAllByRole("button", { name: "Retry" })).toHaveLength(1);
 		await expect(canvas.getByRole("alert")).toHaveTextContent("Hephaestus could not be reached.");
 	},
 };

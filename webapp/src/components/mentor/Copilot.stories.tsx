@@ -103,7 +103,7 @@ export const Busy: Story = {
 		const panel = await screen.findByRole("dialog", { name: /Heph/u });
 		await expectSettledVisible(panel);
 		await expect(screen.getByText("Heph is busy", { exact: true })).toBeVisible();
-		await expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+		await expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();
 
 		const conversation = screen.getByRole("region", { name: "Conversation with Heph" });
 		conversation.scrollTop = 0;

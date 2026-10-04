@@ -127,7 +127,7 @@ export function AddCollectionDialog({
 				<DialogHeader>
 					<DialogTitle>Add collections to mirror</DialogTitle>
 					<DialogDescription>
-						Pick the Outline collections whose documents Hephaestus should mirror. Only the
+						Select the Outline collections whose documents Hephaestus should mirror. Only the
 						collections you select here are read.
 					</DialogDescription>
 				</DialogHeader>

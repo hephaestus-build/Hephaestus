@@ -327,7 +327,7 @@ export const NotObserved: Story = {
 export const Loading: Story = {
 	args: { isLoading: true, practice: undefined },
 	play: async () => {
-		await screen.findByText("Loading review runs");
+		await screen.findByText("Loading reviews");
 		await expect(screen.queryByRole("tab")).toBeNull();
 	},
 };
@@ -336,7 +336,7 @@ export const LoadFailed: Story = {
 	args: { error: new Error("Unavailable") },
 	play: async () => {
 		await expectSettledVisible(
-			await screen.findByText(`Could not load your standing for ${focusedChanges.name}`),
+			await screen.findByText(`We could not load your standing for ${focusedChanges.name}`),
 		);
 	},
 };

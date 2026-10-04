@@ -48,7 +48,7 @@ export function CuratedGroupEditLevel({
 			<DrawerBody>
 				<QueryErrorAlert
 					error={groupQuery.error}
-					title="Could not load the group"
+					title="We could not load the group"
 					onRetry={() => {
 						void groupQuery.refetch();
 					}}

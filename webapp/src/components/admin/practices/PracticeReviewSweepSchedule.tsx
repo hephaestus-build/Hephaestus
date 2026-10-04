@@ -165,11 +165,11 @@ export function PracticeReviewSweepSchedule({
 			{isError ? (
 				<Alert variant="destructive">
 					<AlertCircle />
-					<AlertTitle>Recurring checks could not be loaded</AlertTitle>
+					<AlertTitle>We could not load recurring checks</AlertTitle>
 					<AlertDescription>
-						<p>Scheduled checks are still running. Only this list failed to load.</p>
+						<p>Scheduled checks keep running. Check your connection, then try again.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
-							Try again
+							Retry
 						</Button>
 					</AlertDescription>
 				</Alert>

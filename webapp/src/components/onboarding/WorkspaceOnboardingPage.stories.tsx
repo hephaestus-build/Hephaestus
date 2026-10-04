@@ -203,7 +203,9 @@ export const AnswerAndContinue: Story = {
 		await expect(models).toHaveTextContent("GPT-5");
 		await expect(models).toHaveTextContent("OpenAI");
 		await expect(within(models).getByText("Cloud")).toBeVisible();
-		await expect(canvas.getByText("Press Continue and it holds in every workspace.")).toBeVisible();
+		await expect(
+			canvas.getByText("Select Continue to apply your choice in every workspace."),
+		).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("CLOUD");
@@ -424,7 +426,7 @@ export const OptionUncovered: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"That is not set up here yet. Nothing switches you elsewhere. Press Continue and it holds in every workspace.",
+				"That is not set up here yet. Nothing switches you elsewhere. Select Continue to apply your choice in every workspace.",
 			),
 		).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
@@ -651,7 +653,7 @@ export const SaveFailed: Story = {
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 		const alert = canvas.getByRole("alert");
-		await expect(alert).toHaveTextContent("Could not save your AI choice");
+		await expect(alert).toHaveTextContent("We could not save your AI choice");
 		await expect(alert).toHaveTextContent("Your choice could not be saved.");
 		await waitFor(async () => expect(alert).toHaveFocus());
 		await expect(canvas.getByRole("radio", { name: CLOUD })).toBeChecked();
@@ -672,7 +674,7 @@ export const SkipFailed: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Skip for now" }));
 		await expect(canvas.getByRole("alert")).toHaveTextContent(
-			"Could not continue to your workspace",
+			"We could not continue to your workspace",
 		);
 	},
 };
@@ -686,7 +688,7 @@ export const RefreshFailed: Story = {
 		},
 	},
 	play: async ({ canvas, userEvent, args }) => {
-		await expect(canvas.getByText("Could not refresh your setup")).toBeVisible();
+		await expect(canvas.getByText("We could not refresh your setup")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		const { refresh } = readyArgs(args);
 		if (refresh?.status !== "error") {
@@ -700,9 +702,7 @@ export const Loading: Story = {
 	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1, name: "Your AI choice" })).toBeVisible();
-		await expect(
-			canvas.getByText("Give me a moment. Hephaestus is fetching your setup."),
-		).toBeVisible();
+		await expect(canvas.getByText("Give me a moment. I’m fetching your setup.")).toBeVisible();
 	},
 };
 
@@ -711,7 +711,7 @@ export const LoadFailed: Story = {
 		state: { status: "error", error: new Error("Unavailable"), onRetry: fn(), onLeave: fn() },
 	},
 	play: async ({ canvas, userEvent, args }) => {
-		await expect(canvas.getByText("Hephaestus could not fetch your setup just now.")).toBeVisible();
+		await expect(canvas.getByText("I could not fetch your setup just now.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		if (args.state.status !== "error") {
 			throw new Error("Expected the retryable error state");

@@ -14,7 +14,7 @@ export const REVIEW_RUN_STATE_DEFS: StatusDefs<ReviewRunState> = {
 		label: "Running",
 		icon: LoaderIcon,
 		badgeVariant: "secondary",
-		description: "The review is being run now. What it records appears as it finishes.",
+		description: "The review is running. What it records appears as it finishes.",
 	},
 	COMPLETED: {
 		label: "Completed",

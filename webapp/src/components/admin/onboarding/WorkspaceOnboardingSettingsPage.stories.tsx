@@ -172,7 +172,7 @@ export const Empty: Story = {
 		await expect(canvas.getByText("No integrations to require")).toBeVisible();
 		// "Members connect these…" would point at cards that are not on screen.
 		await expect(canvas.queryByText(/Members connect these/u)).toBeNull();
-		await expect(canvas.getByRole("link", { name: "Integrations" })).toHaveAttribute(
+		await expect(canvas.getByRole("link", { name: "Open integrations" })).toHaveAttribute(
 			"href",
 			"/w/engineering/admin/integrations",
 		);

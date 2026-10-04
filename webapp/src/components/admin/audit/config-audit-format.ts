@@ -11,7 +11,7 @@ type ActorKind = NonNullable<ConfigAuditEntryView["actorKind"]>;
  * longer exist under these names must still read as the thing they describe. */
 const RENAMED_ENTITY_TYPE_LABELS = {
 	AGENT_CONFIG: "Agent config",
-	AI_CONFIG_BINDING: "AI binding",
+	AI_CONFIG_BINDING: "Model assignment",
 	PRACTICE_ACTIVE: "Practice review participation",
 	WORKSPACE_LLM_BUDGET: "Shared-model AI budget",
 	WORKSPACE_BYO_LLM_BUDGET: "Own-provider AI cap",
@@ -19,7 +19,7 @@ const RENAMED_ENTITY_TYPE_LABELS = {
 
 export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
 	PRACTICE_REVIEW_SETTINGS: "Review settings",
-	AGENT_BINDING: "AI binding",
+	AGENT_BINDING: "Model assignment",
 	WORKSPACE_ROLE: "Workspace role",
 	WORKSPACE_FEATURES: "Feature flags",
 	WORKSPACE_STATUS: "Workspace status",

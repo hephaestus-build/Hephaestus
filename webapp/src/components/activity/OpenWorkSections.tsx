@@ -75,7 +75,7 @@ export function OpenWorkSections({
 			<Section level={level} size="lg" title={title}>
 				<QueryErrorAlert
 					error={state.error}
-					title="Could not load open work"
+					title="We could not load open work"
 					onRetry={state.onRetry}
 				/>
 			</Section>
@@ -114,7 +114,7 @@ export function OpenWorkSections({
 						<Truncation
 							lists={[
 								{ list: ready.openWork.reviewRequests, of: `${whose} review requests` },
-								{ list: ready.openWork.teamReviewRequests, of: `${whose} teams' review requests` },
+								{ list: ready.openWork.teamReviewRequests, of: `${whose} teams’ review requests` },
 								{
 									list: ready.openWork.pullRequests,
 									of: `${whose} open ${artifactKindNoun(ARTIFACT_KIND.pullRequest, 2, providerType)}`,

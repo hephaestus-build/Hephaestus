@@ -85,7 +85,7 @@ export interface ComposedOverview {
 	 * two rows. Empty when the run raised nothing to act on, and then the block is not drawn.
 	 */
 	needsAttention: AttentionPracticeRow[];
-	/** The paragraph on what moved since the latest run; empty when there was no run to compare. */
+	/** The paragraph on what moved in the latest review; empty when there was no run to compare. */
 	changed: FeedbackTextSegment[];
 	/** What the paragraph only counted, by kind; empty when it named everything. */
 	rest: RestParagraph[];
@@ -653,7 +653,7 @@ function composeChange(
 	const rest = changes.filter(isRestKind);
 	if (rest.length === 0) {
 		return {
-			changed: hadRun ? sentence("Nothing moved since the latest run.") : [],
+			changed: hadRun ? sentence("Nothing moved in the latest review.") : [],
 			named: [],
 			restCount: 0,
 		};
@@ -667,7 +667,7 @@ function composeChange(
 		sentences.push(
 			named.length > 0
 				? sentence(`${counted(counts.practices, counts.groups, "more ")} changed as well.`)
-				: sentence(`${counted(counts.practices, counts.groups)} changed since the latest run.`),
+				: sentence(`${counted(counts.practices, counts.groups)} changed in the latest review.`),
 		);
 	}
 	return { changed: paragraph(sentences), named, restCount: hidden.length };

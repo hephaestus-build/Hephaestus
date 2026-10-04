@@ -55,7 +55,7 @@ export function ReviewRunsPage({
 		: "Reviews appear when an enabled practice is triggered or a contributor requests one.";
 	let results: ReactNode;
 	if (error != null) {
-		results = <QueryErrorAlert error={error} title="Could not load reviews" onRetry={onRetry} />;
+		results = <QueryErrorAlert error={error} title="We could not load reviews" onRetry={onRetry} />;
 	} else if (isLoading) {
 		results = <ReviewResultsSkeleton label="Loading reviews" rows={REVIEW_PAGE_SIZE} />;
 	} else if (rows.length === 0) {

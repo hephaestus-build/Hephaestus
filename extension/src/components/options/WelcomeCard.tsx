@@ -75,7 +75,7 @@ export function WelcomeCard({
 						onClick={onConnectHosted}
 					>
 						{pending === "hosted" ? <Spinner /> : null}
-						{pending === "hosted" ? "Connecting…" : "Continue with Hephaestus"}
+						{pending === "hosted" ? "Connecting…" : "Connect to Hephaestus"}
 					</Button>
 					<span className="text-sm text-muted-foreground">{hostedHost}</span>
 				</div>
@@ -93,7 +93,7 @@ export function WelcomeCard({
 				<p>
 					On the sites you allow, the extension sends the address of each pull request, merge
 					request or issue to your Hephaestus. It does this when you open the page, to find its
-					practice review. It sends the address of a list row only when you press its Hephaestus
+					practice review. It sends the address of a list row only when you select its Hephaestus
 					button. It never sends the page’s content.{" "}
 					<ExternalLink href={privacyUrl} allowedOrigin={docsOrigin}>
 						How the extension handles data
