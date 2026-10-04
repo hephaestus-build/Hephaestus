@@ -61,7 +61,7 @@ export const PAGE_PURPOSE =
 /**
  * The line under the tiles on when the three tiles read over the range compare: a middle half shows
  * from twice K other developers, so neither quarter outside it can be one developer's value. Open
- * feedback reads every developer the page counts, reviewed or not, so its own note names its group.
+ * feedback reads every developer the page counts, reviewed or not, so the line names its group too.
  */
 export function tilesHint(
 	minimumOthers: number,
@@ -73,7 +73,7 @@ export function tilesHint(
 		developersWithAStanding === undefined
 			? "the developers with a standing here"
 			: `${developerCount(developersWithAStanding)} with a standing ${windowPhrase(window)}`;
-	return `Except for open feedback, the typical range is the middle half of ${of}. Your marker shows you. These tiles compare you when at least ${2 * minimumOthers} other developers have a standing in this range. Until then, they show only your own value.`;
+	return `Except for open feedback, the typical range is the middle half of ${of}. Your marker shows you. These tiles compare you when at least ${2 * minimumOthers} other developers have a standing in this range. Until then, they show only your own value. Open feedback counts what is open now, for all developers that this page counts.`;
 }
 
 /**

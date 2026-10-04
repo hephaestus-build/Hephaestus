@@ -1,13 +1,9 @@
-import { InfoIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { cn } from "cn";
 import type { WorkspaceTile as WorkspaceTileFigure } from "@/api/types.gen";
-import { FOCUS_RING, HIT_AREA_24 } from "@/components/common/focus";
 import { StatTile } from "@/components/common/StatTile";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface WorkspaceTileProps {
 	title: string;
@@ -16,8 +12,6 @@ export interface WorkspaceTileProps {
 	figure: WorkspaceTileFigure;
 	/** What the value counts: "so far", "of your 18 practices". */
 	qualifier: string;
-	/** Where the value comes from, behind an info icon beside the title so every tile keeps one height. */
-	note?: string;
 	/** Said in place of the band and pin when the whole middle half is at nought. */
 	noneSentence?: string;
 }
@@ -33,7 +27,6 @@ export function WorkspaceTile({
 	icon,
 	figure,
 	qualifier,
-	note,
 	noneSentence,
 }: WorkspaceTileProps) {
 	const { yours, middleLow, middleHigh } = figure;
@@ -42,27 +35,7 @@ export function WorkspaceTile({
 			? { low: middleLow, high: middleHigh }
 			: undefined;
 	return (
-		<StatTile
-			icon={icon}
-			title={
-				<>
-					{title}
-					{note !== undefined && (
-						<Tooltip>
-							<TooltipTrigger
-								render={<button type="button" aria-label={`About ${title}: ${note}`} />}
-								className={cn(HIT_AREA_24, FOCUS_RING, "inline-flex cursor-help items-center")}
-							>
-								<InfoIcon className="size-3.5 text-muted-foreground" aria-hidden />
-							</TooltipTrigger>
-							<TooltipContent className="max-w-xs">{note}</TooltipContent>
-						</Tooltip>
-					)}
-				</>
-			}
-			value={yours}
-			qualifier={qualifier}
-		>
+		<StatTile icon={icon} title={title} value={yours} qualifier={qualifier}>
 			<div className="mt-auto flex flex-col gap-1.5">
 				{middle !== undefined && middle.high === 0 && noneSentence !== undefined ? (
 					<p className="text-sm text-muted-foreground">{noneSentence}</p>

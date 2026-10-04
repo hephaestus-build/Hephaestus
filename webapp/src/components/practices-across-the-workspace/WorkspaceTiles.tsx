@@ -53,7 +53,6 @@ export function WorkspaceTiles({ overview }: WorkspaceTilesProps) {
 						}
 						figure={overview.reviewedWork}
 						qualifier={windowPhrase(overview.window)}
-						note="Each pull or merge request, issue, conversation, or document that a practice review looked at in this range. Each counts once, however often it was reviewed."
 					/>
 				</li>
 				<li className="flex">
@@ -70,7 +69,6 @@ export function WorkspaceTiles({ overview }: WorkspaceTilesProps) {
 						}
 						figure={overview.practicesGoingWell}
 						qualifier={of}
-						note="Practices with the standing Going well. Each standing comes from your latest four pieces of reviewed work on that practice."
 					/>
 				</li>
 				<li className="flex">
@@ -87,7 +85,6 @@ export function WorkspaceTiles({ overview }: WorkspaceTilesProps) {
 						}
 						figure={overview.practicesNeedingAttention}
 						qualifier={of}
-						note="Practices with the standing Needs attention. Each standing comes from your latest four pieces of reviewed work on that practice."
 					/>
 				</li>
 				<li className="flex">
@@ -99,7 +96,6 @@ export function WorkspaceTiles({ overview }: WorkspaceTilesProps) {
 						figure={overview.openFeedback}
 						noneSentence="Most developers here have no open feedback."
 						qualifier={`${open === 1 ? "piece" : "pieces"} open now`}
-						note="Feedback that your Practice profile shows as open now. The range does not change it. Its typical range is the middle half of all developers that this page counts, reviewed or not."
 					/>
 				</li>
 			</ul>

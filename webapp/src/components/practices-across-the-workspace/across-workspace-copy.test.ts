@@ -65,7 +65,7 @@ describe("a split held back", () => {
 describe("the hints", () => {
 	it("names who the band is of once, with the count and window the response gives", () => {
 		expect(tilesHint(3, "DAYS_90", 41)).toBe(
-			"Except for open feedback, the typical range is the middle half of 41 developers with a standing in the last 90 days. Your marker shows you. These tiles compare you when at least 6 other developers have a standing in this range. Until then, they show only your own value.",
+			"Except for open feedback, the typical range is the middle half of 41 developers with a standing in the last 90 days. Your marker shows you. These tiles compare you when at least 6 other developers have a standing in this range. Until then, they show only your own value. Open feedback counts what is open now, for all developers that this page counts.",
 		);
 	});
 

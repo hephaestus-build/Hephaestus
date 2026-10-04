@@ -30,14 +30,8 @@ export const Default: Story = {
 				name: "You: 3. Typical range here: 1 to 4.",
 			}),
 		).toBeVisible();
-		// Where a figure comes from sits behind an info icon, so every tile keeps one height.
-		await expect(
-			canvas.getByRole("button", {
-				name: "About Open feedback: Feedback that your Practice profile shows as open now. The range does not change it. Its typical range is the middle half of all developers that this page counts, reviewed or not.",
-			}),
-		).toBeVisible();
-		// Every tile explains itself the same way, so all four keep one height.
-		await expect(canvas.getAllByRole("button", { name: /^About /u })).toHaveLength(4);
+		// No tile carries an info icon; the line under the tiles explains them all.
+		await expect(canvas.queryAllByRole("button", { name: /^About /u })).toHaveLength(0);
 	},
 };
 

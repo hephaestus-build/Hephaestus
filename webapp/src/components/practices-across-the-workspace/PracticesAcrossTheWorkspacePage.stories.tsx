@@ -50,7 +50,7 @@ export const Default: Story = {
 		// The two rules, each where it applies, with the numbers the response carries.
 		await expect(
 			canvas.getByText(
-				"Except for open feedback, the typical range is the middle half of 28 developers with a standing in the last 30 days. Your marker shows you. These tiles compare you when at least 6 other developers have a standing in this range. Until then, they show only your own value.",
+				"Except for open feedback, the typical range is the middle half of 28 developers with a standing in the last 30 days. Your marker shows you. These tiles compare you when at least 6 other developers have a standing in this range. Until then, they show only your own value. Open feedback counts what is open now, for all developers that this page counts.",
 			),
 		).toBeVisible();
 		await expect(

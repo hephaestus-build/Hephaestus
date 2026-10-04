@@ -91,7 +91,7 @@ export const Default: Story = {
 		await expect(table.getAllByText("Held back so no one can be singled out.")).toHaveLength(2);
 		// Why a practice is held back more often than its group, once, over its practices.
 		await expect(
-			level.getByText(/setting it beside the group's bar singles no one out/u),
+			level.getByText(/The bar must also single no one out beside the group's bar\./u),
 		).toBeVisible();
 		// The page's legend sits above the practices it explains.
 		await expect(level.getByRole("list", { name: "What the bars show" })).toBeVisible();
