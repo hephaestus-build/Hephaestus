@@ -8,139 +8,147 @@
 
 ## Context
 
-A developer who reads their own Practice profile cannot tell whether a practice group that needs their
-attention is hard for everyone in the workspace or within reach of most. Research on social comparison
-in learning dashboards supports showing that, but only under conditions: the practice group, not the
-reader, is the subject; the reference group is named; reaching a standing is said to be within reach;
-a sentence keeps those already doing well from drifting to the middle; and the comparison is optional,
-never the first thing seen.
+A developer who reads their own Practice profile cannot tell if a practice group is hard for the whole workspace.
+Research on dashboards for learners supports a comparison only under conditions [1–3].
+The subject is the practice group, not the reader.
+The reference group has a name.
+The comparison is optional and is never the first thing that the reader sees.
+A dashboard that compares learners can also cause competition [1].
 
-ADR 0047 closes the Practice profile to every reader but the developer and says a cohort view is a new
-audience decided in its own ADR. ADR 0045 rules out scores, ranks and leaderboards. This ADR records
-that audience.
+ADR 0047 closes the Practice profile to every reader but the developer.
+It also says that a cohort view is a new audience that needs its own ADR.
+ADR 0045 rules out scores, ranks, and leaderboards.
+This ADR records that audience.
 
 ## Decision drivers
 
-- No developer is named, ranked or placed in an order of people.
-- Nothing another reader sees can be traced back to one developer.
-- The comparison is never the first thing seen. The reader opens it.
+- No developer is named, ranked, or put in an order of people.
+- Nothing that a reader sees identifies one developer.
+- The comparison is never the first thing that the reader sees. The reader opens it.
 - The page never contradicts the reader's own Practice profile.
-- One class decides what may be shown.
+- One class decides what the page can show.
 
 ## Considered options
 
-Where the comparison lives:
+Where the comparison is:
 
-1. **A layer in the Practice profile's tables.** Rejected: it makes the comparison part of the
-   developer's own record, the attribute of a person ADR 0047 protects, and the first thing seen.
-2. **A tab on the Practice profile.** Rejected for the same reason, with worse discoverability.
-3. **Its own page, reached from the sidebar, linking to the reader's own group and practices in the
-   Practice profile.** Chosen.
+1. **A layer in the tables of the Practice profile.** Rejected. It puts the comparison in the record of the developer, which ADR 0047 protects.
+2. **A tab on the Practice profile.** Rejected for the same reason.
+3. **A separate page in the sidebar, with links to the Practice profile.** Chosen.
 
 What the page shows of the reader:
 
-1. **The reader's standing badge and trend on each group, bars read over the chosen window, and the
-   reader's own group and practice opened over the page.** Rejected: the bars and the profile read
-   different spans, so the marker and the profile could disagree, and the page becomes a second profile.
-2. **Only the You marker and the reader's own tile values, with links to the Practice profile.** Chosen.
+1. **A standing badge and a trend on each group, with bars for the selected window.** Rejected. The bars and the profile then read different spans and can disagree.
+2. **Only the You marker and the values of the reader on the tiles.** Chosen.
 
-How small a shown count may be:
+How small a shown count can be:
 
-1. **K = 5, and a split that cannot show all three standings collapses to *has a standing* against
-   *none yet*.** Rejected: a part needs six developers, so a workspace of thirty to forty rarely shows
-   a full split for a practice. The collapsed bar is also hard to read: its merged part names no standing.
-2. **K = 3, and a split shows all four parts or only its total.** Chosen. Each part stands for three
-   others rather than five, so one piece of outside knowledge narrows a part down sooner. Every count
-   shown, and every count a reader can subtract, still holds at least K.
+1. **K = 5, with a merged bar when a split cannot show all parts.** Rejected. A practice split then needs 6 developers in each part. Workspaces of 30 to 40 developers seldom have that. The merged bar also shows no standing.
+2. **K = 10, the default of the ONS and the NCHS [4, 6].** Rejected. Almost every split in a workspace of 30 to 40 developers is then held back.
+3. **K = 3, with all four parts or only the total.** Chosen. The section *Why K = 3* gives the reasons.
 
 How the reader controls the comparison:
 
-1. **A switch that turns the comparison off, remembered in the browser.** Rejected: opening the page is
-   already the reader's choice, and the switch adds a state to every surface of the page.
-2. **Ask for the reader's estimate before each split is shown.** Not taken. Whether reflecting first
-   helps is left for a user test.
+1. **A switch that hides the comparison.** Rejected. To open the page is already the choice of the reader. The switch also adds a state to each part of the page.
+2. **A question about the estimate of the reader before each split.** Rejected for now. A user test must show that it helps.
 
 ## Decision
 
-**Practices across the workspace** is a page of its own and a view of the workspace, not the reader's
-profile. It counts developers in each practice group and practice and never names one.
-`CohortPrivacyPolicy` is the only place that decides what it may show.
+**Practices across the workspace** is a separate page that shows the workspace, not the reader.
+It counts developers in each practice group and practice and never names one.
+Only `CohortPrivacyPolicy` decides what the page can show.
 
 ### What the page counts
 
-- A *developer with a standing* is an eligible member with a standing in at least one practice group
-  that the page shows. Observations that did not apply or stayed undetermined give no standing. Hidden
-  members are left out, as they are of every workspace total.
-- Every bar counts each developer by their current standing: the standing their Practice profile shows
-  now, read by the same service over the same look-back. The bars take no window. So the **You** marker
-  is always on the part that the reader's profile names.
-- The reviewed work, going well and needing attention tiles take a window: the last 30 days, the last
-  90 days, or all time. The page opens on the last 30 days. Each window is checked on its own. The open
-  feedback tile counts what each eligible developer's Practice profile shows open now, and takes no window.
-- A group lists the practices that review is admitted for, in catalog order, the same for every reader.
-  A practice switched off is not listed.
+- A *developer with a standing* has a standing in one or more practice groups on the page.
+- Hidden members are not counted, as in every workspace total.
+- Each bar counts each developer at the current standing that their Practice profile shows. The bars have no window.
+- Three tiles use a window of 30 days, 90 days, or all time. The open feedback tile counts open feedback now.
+- A group lists the practices that review is admitted for, in catalog order. This list is the same for every reader.
 
-### What the page may show
+### What the page can show
 
-K, the fewest developers other than the reader that a shown count may stand for, is 3.
+K is the smallest number of other developers that a shown count can stand for. K is 3.
 
-- A split shows Needs attention, Mixed feedback, Going well and *none yet* only when each of the four
-  holds at least K + 1 developers, counted over every developer with a standing. So whoever reads it,
-  each part stands for at least K others, and every reader sees the same shape. Otherwise the whole
-  split is held back, never one part: the page states the total, and a missing part would be the total
-  less the rest. A part with no developer is too small too.
-- A split held back still shows its total while the total holds at least K + 1 developers. The total of
-  every split is every developer with a standing, so it says nothing the page total does not. Below that,
-  the split shows nothing.
-- The total of developers with a standing shows only while it holds K others. The bars' total and the
-  tiles' total in each window are checked on their own.
-- A group's developers with a standing are everyone with a standing in any of its practices. So a reader
-  can subtract a practice's split from its group's, or add up the practices' splits. Each cell a reader
-  can work out this way must hold none or at least K developers. A practice whose developers with a
-  standing fall short of its group's by 1 to K − 1 is held back. Every practice of a group is held back
-  when the practices shown add up to 1 to K − 1 more developers with a standing than the group has.
-- A tile shows the reader's own value and the middle half of the developers it counts: the 25th to the
-  75th percentile, interpolated and rounded. It shows the middle half only from 2K others, so neither
-  outer quarter can be one developer's value. It never shows a minimum, a maximum, an average, or a count
-  at one value.
+- A split shows its four parts only when each part holds K + 1 developers or more, the reader included.
+- Thus, each part stands for K or more other developers, and every reader sees the same split.
+- If one part is too small, the page holds back all parts. The total is shown, so one missing part is the total less the rest.
+- A split that is held back still shows its total while the total holds K + 1 developers or more.
+- The total of developers with a standing shows only when it holds K or more other developers.
+- A reader can subtract a practice split from its group split. Each difference must be 0 or K or more.
+- If a difference is between 1 and K − 1, the page holds back the practice split.
+- The practice splits can add up to more developers than the group split. If the excess is 1 to K − 1, all practice splits are held back.
+- A tile shows the value of the reader and the middle half of the other developers. The middle half needs 2K other developers.
 
 ### What the page shows of the reader
 
-- The **You** marker on their part of a bar and their own value on each tile. A group shows no standing
-  badge, trend or window of the reader.
-- The group panel links to the same group in the Practice profile, and each practice row links to the
-  same practice there. Both links say **Open in your Practice profile**.
-- Workspace admins read nothing new. Instance administrators read the page through **View as user**, as
-  they read every other practice page.
+- The **You** marker on the part of the reader, and the values of the reader on the tiles. A group shows no badge or trend.
+- A group and each practice link to the same item in the Practice profile with **Open in your Practice profile**.
+- Workspace admins read nothing new. Instance administrators can read the page through **View as user**.
+
+### Why K = 3
+
+Published practice puts the smallest count between 3 and 30 [4].
+The ONS, the NCHS, and the ABS use 10 [4–6].
+The US Department of Education calls 3 the absolute minimum [7].
+K = 3 is at that minimum.
+These conditions make it acceptable here:
+
+- The workspace is closed. Its members already see the pull requests, issues, and reviews of each other on the provider.
+- The page counts standings in practices. It shows no health, income, or other sensitive attribute.
+- A workspace has 30 to 40 developers. With K = 10, the page shows almost nothing.
+
+The page accepts a risk.
+A reader who knows the standings of two developers in a part of four can find the standing of the third.
+
+### The middle half
+
+The ABS asks for about 20 contributors for each quartile [6].
+The page shows the middle half from 6 other developers, which is much less.
+These rules limit the risk:
+
+- Only the 25th and the 75th percentile leave the server. They are interpolated linearly and rounded.
+- The page never shows a minimum, a maximum, an average, or a count at one value.
+- Each quarter outside the middle half spans more than one developer.
+
+A quartile can be equal to the value of one developer [4].
+The page never says whose value it is.
 
 ## Consequences
 
-- ADR 0047 stands: the Practice profile still has one reader, and this page shows other developers only
-  inside a count.
-- A practice is held back more often than its group.
-- In a real workspace, most bars stay held back until enough developers are reviewed for parts of four.
-  The local practices demo seeds synthetic members that show every state.
-- **Each read is guarded on its own. Two reads are not guarded against each other.** This falls short of
-  the second driver.
-  - *Windows.* The bars take no window, so no two windows of a split exist to subtract. The tiles' middle
-    halves still change with the window: a developer reviewed only between day 31 and day 90 is in the
-    90-day tiles and not in the 30-day tiles. Two windows read together can narrow one developer down.
-  - *Time.* The figures are live. A reader who loads the page before and after a colleague's review,
-    which the team can see on the provider, can read the colleague's new part off the change, or a new
-    tile value off a moved quartile.
-  - Mitigations not taken, since each changes the page: one window for the tiles, figures frozen at the
-    start of a day or week, and counts rounded to multiples of K.
-- Not decided here:
-  - **Which source use the counts read under.** The scan authorizes other developers' observations under
-    `PRACTICE_FEEDBACK_DELIVERY`, the purpose that delivers feedback to the developer it is about. Each
-    observation leaves only inside a count. Whether an aggregate shown to another developer needs a purpose
-    and source use of its own is for the maintainer and the controller to decide in
-    `docs/admin/dsms/artifact-source-governance.md`.
-  - **Zero counts.** A part with no other developer counts as too small, which holds back more splits
-    than strictly necessary.
+- ADR 0047 stays valid. The Practice profile has one reader, and this page shows other developers only in a count.
+- The page holds back a practice more frequently than its group.
+- In a real workspace, most bars stay held back until many developers have a review.
+- The local practices demo shows each state with synthetic members.
+
+## Known limitation
+
+The page guards each read. It does not guard two reads against each other [8].
+
+- **Windows.** The bars have no window. The middle half of a tile changes with the window. Two windows together can isolate one developer.
+- **Time.** The figures are live. A reader can compare the page before and after the review of a colleague.
+
+Three changes can decrease this risk: one window for the tiles, figures that change once each day, and counts rounded to K.
+Each change makes the page less useful, so the page does not use them now.
+
+## Open decisions
+
+- **Source use.** The page reads observations of other developers under `PRACTICE_FEEDBACK_DELIVERY`. The maintainer and the controller decide if a count needs its own purpose (`docs/admin/dsms/artifact-source-governance.md`).
+- **Zero counts.** A part with no other developer is too small. Thus, the page holds back more splits than necessary.
 
 ## Revisit trigger
 
-A workspace that asks for its instructors to see the same counts, a request to compare against a
-chosen peer group, or a user test that shows that the page lowers self-efficacy for readers at Needs
-attention.
+A workspace that asks to show the same counts to its instructors.
+A request to compare with a selected peer group.
+A user test that shows that the page lowers self-efficacy for readers at Needs attention.
+
+## Sources
+
+1. Jivet et al. 2017, *Awareness is not enough*: <https://link.springer.com/chapter/10.1007/978-3-319-66610-5_7>
+2. Jivet et al. 2018, *License to evaluate*: <https://doi.org/10.1145/3170358.3170421>
+3. Teasley 2017, *Student facing dashboards: one size fits all?*: <https://link.springer.com/article/10.1007/s10758-017-9314-3>
+4. UK Data Service, *Handbook on Statistical Disclosure Control for Outputs* v2.0: <https://ukdataservice.ac.uk/app/uploads/sdc-handbook-v2.0.pdf>
+5. NCHS, *Data Presentation Standards for Proportions*: <https://www.cdc.gov/nchs/data/series/sr_02/sr02_175.pdf>
+6. ABS DataLab, *Safe Outputs*: <https://www.abs.gov.au/system/files/documents/bec1cc42a3e20dd01d9748b621f8b8b7/DataLab%20Safe%20Researcher%20Virtual%20Training_Pt3_Safe%20Outputs_JAN%202024.pdf>
+7. US Department of Education PTAC, *Frequently Asked Questions: Disclosure Avoidance*: <https://studentprivacy.ed.gov/sites/default/files/resource_document/file/FAQs_disclosure_avoidance_0.pdf>
+8. ONS, *Policy on protecting confidentiality in tables of birth and death statistics*: <https://www.ons.gov.uk/methodology/methodologytopicsandstatisticalconcepts/disclosurecontrol/policyonprotectingconfidentialityintablesofbirthanddeathstatistics>

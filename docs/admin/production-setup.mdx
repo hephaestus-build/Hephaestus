@@ -86,6 +86,7 @@ They do **not** forward these settings:
 - **`HEPHAESTUS_AUTH_ISSUER`:** `application-server` fixes it at `https://${APP_HOSTNAME}`.
 - **`SPRINGDOC_API_DOCS_ENABLED` and `SPRINGDOC_SWAGGER_UI_ENABLED`:** Compose does not forward them.
 - **The two OAuth redirect variables:** no Compose file passes them through, so defaults still apply.
+- **`HEPHAESTUS_DEV_SEED_ENABLED`:** a flag for local development only. It adds endpoints that write practice revisions and feedback. Never set it in production.
 
 Values for these settings only in `docker/.env` have no effect.
 To change the issuer, change `APP_HOSTNAME`.

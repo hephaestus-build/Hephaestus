@@ -134,7 +134,6 @@ To wipe the local database (e.g. after a bad migration or sync), run `vp run dev
 ### Seeding the practices demo
 
 The practices demo fills one workspace with data for Practices across the workspace and the Practice profile.
-Use it to examine each state of these pages on your machine.
 
 1. Set `HEPHAESTUS_DEV_SEED_ENABLED=true` in `server/.env`.
 2. Start the server with `vp run dev`.
@@ -142,43 +141,8 @@ Use it to examine each state of these pages on your machine.
 4. Sign in as the reader and open the Practice profile of the workspace.
 
 To remove the demo, run `vp run dev:practices-across-the-workspace:remove`.
-The server must run for both commands.
-
-#### What the demo contains
-
-The seed adds 40 synthetic members to the workspace.
-Their logins are `synthetic-developer-01` to `synthetic-developer-40`.
-Each member gets completed reviews of pull requests and issues that the workspace already synced.
-The reviews go back about 75 days, so the 30-day window shows less than all time.
-
-Each practice group splits the members into Needs attention, Mixed feedback, Going well, and no standing.
-Most groups show their split.
-Testing discipline and issue traceability are held back, because one part has fewer than four developers.
-In a group with several practices, some members skip one practice, so the practices split differently from their group.
-
-The reader is an existing member, by default `ValentinGruener`.
-The reader gets a history of 13 reviews of pull requests and issues in the same repositories.
-Each review records observations that are met or not met, with evidence from the diff, the description, or the issue.
-The reader's profile shows these items:
-
-- A group for each standing: Needs attention, Mixed feedback, Going well, and Not observed.
-- A practice that improves and a practice that declines over the reader's pull requests.
-- What changed since the review before the latest one, and what is holding up well.
-- A list of the reviews, each with the observations that it recorded.
-
-The reader also gets nine pieces of in-app feedback, one for each practice that had a recurring problem:
-
-- Two pieces of feedback are new and unread.
-- One piece of feedback was read and is still open.
-- One piece of feedback was read, and the reader disagreed with it. It stays open.
-- The work resolved three pieces of feedback, with three clean pieces of work in a row.
-- The reader marked one piece of feedback as addressed before the work resolved it.
-- The reader marked one piece of feedback as not applicable.
-
-#### Options
-
-Flags follow the task name, for example `vp run dev:practices-across-the-workspace:seed --reader you`.
-A flag has priority over its environment variable.
+Both commands need the running server.
+You can run the seed again at any time, because it first removes its earlier rows.
 
 | Flag                        | Environment                    | Default                              |
 | --------------------------- | ------------------------------ | ------------------------------------ |
@@ -187,38 +151,31 @@ A flag has priority over its environment variable.
 | `--issue-repository`        | `SEED_ISSUE_REPOSITORY`        | `HephaestusTest/MaxTestRepo`         |
 | `--reader`                  | `SEED_READER_LOGIN`            | `ValentinGruener`                    |
 
-The reader's reviews name pull requests 1, 2, 4, 16, 17, and 19 to 23, and issues 13 and 14.
-The seed stops before it writes if the workspace did not sync them.
-The synthetic members need at least 7 synced pull requests and 4 synced issues in these repositories.
+Flags follow the task name, for example `vp run dev:practices-across-the-workspace:seed --reader you`.
+A flag has priority over its environment variable.
 
-#### Removal and repeated runs
+#### What the demo contains
 
-The seed marks what it writes: review, observation, and feedback IDs start with `5eed0000-ac05-4000`, and member logins start with `synthetic-developer-`.
-The seed removes its earlier rows before it writes, so you can run it again at any time.
-Removal also deletes the answers that you gave to the demo feedback in the browser.
-It does not change the reader's real reviews, observations, or feedback.
-It refuses to run while a review in the workspace is running or queued.
+`scripts/lib/practices-demo.ts` holds the demo data. `scripts/practices-demo.test.ts` checks its standings, held-back groups, and feedback states.
 
-The organization sync runs when the server starts and every night.
-It removes the synthetic members, because the GitHub organization does not list them.
-After a server restart, run the seed again.
+- 40 synthetic members, `synthetic-developer-01` to `synthetic-developer-40`, with reviews over about 75 days.
+- Two groups, testing discipline and issue traceability, held back. All other groups show their split.
+- For the reader, an existing member: each standing, a practice that improves, and a practice that declines.
+- For the reader: feedback in each state, from new and unread to marked as not applicable.
 
-#### How the seed writes
+The seed reviews work that the workspace already synced.
+The two repositories need pull requests 1, 2, 4, 16, 17, and 19 to 23, and issues 13 and 14.
+They also need at least 7 pull requests and 4 issues for the synthetic members.
+If work is missing, the seed stops before it writes.
 
-The seed writes reviews and observations directly into the database with the `POSTGRES_*` values in `server/.env`.
-It refuses a `POSTGRES_HOST` that is not a loopback address.
-Before it writes, it signs in to the running server through dev sign-in and finds that account in the database.
-Thus, it never writes to a database that no dev server reads.
+#### Limits and safety
 
-Two dev endpoints do the work that only the server can do.
-They exist only when `HEPHAESTUS_DEV_SEED_ENABLED` is `true`:
-
-- The seed asks the server for the practice revision that a review would pin. An observation counts only under the current review rule fingerprint.
-  Removal rewinds only the revisions that the server appended for the seed.
-- The seed sends the reader's feedback to the server, which writes it as a review writes it.
-
-All reviews are complete, and the only feedback is in-app feedback.
-Thus, no worker picks up the demo, and nothing goes to a provider.
+- The organization sync removes the synthetic members when the server starts and every night. Run the seed again after a restart.
+- Removal deletes only rows that the seed wrote, and the answers that you gave to the demo feedback. It refuses to run while a review is queued or running.
+- The seed writes reviews and observations directly with the `POSTGRES_*` values in `server/.env`. It refuses a `POSTGRES_HOST` that is not a loopback address.
+- Before it writes, the seed signs in to the server through dev sign-in and finds that account in the database. Thus, it never writes to a database that no dev server reads.
+- The server pins the practice revisions and writes the reader's feedback through two dev endpoints. Removal rewinds only the revisions that the server appended for the seed.
+- All reviews are complete, and the only feedback is in-app feedback. Thus, no worker picks up the demo, and nothing goes to a provider.
 
 ### Port overrides
 
