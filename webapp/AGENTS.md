@@ -429,7 +429,8 @@ They reach a surface only through the registries.
 This includes their badges and icons, and the rings, meters, and pressed responses drawn from them.
 Never use them as colored prose.
 
-A card has a wash in exactly two states: new, in the accent, and resolved, in `success`.
+A card has a wash in exactly two states: new, in the accent, and resolved by the work, in `success`.
+A card that the reader marked as addressed or not applicable closes on the neutral ground.
 `success` is the only status color that paints a surface.
 
 ## Testing

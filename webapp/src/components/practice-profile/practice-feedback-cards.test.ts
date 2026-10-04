@@ -94,7 +94,6 @@ describe("toFeedbackCard", () => {
 		const card = toFeedbackCard({ ...feedback, ...RESOLVED_BY_WORK }, [group]);
 		expect(card).toMatchObject({
 			state: "resolved",
-			resolvedBy: "WORK",
 			timestamp: new Date("2026-09-05T08:00:00Z"),
 		});
 		expect(card.condition).toStrictEqual([
@@ -108,7 +107,7 @@ describe("toFeedbackCard", () => {
 		]);
 	});
 
-	it("reads a read card as open and one the reader closed as resolved, in the words of their answer", () => {
+	it("reads a read card as open and one the reader closed as marked, in the words of their answer", () => {
 		expect(toFeedbackCard({ ...feedback, readAt: new Date("2026-08-21") }, [group]).state).toBe(
 			"open",
 		);
@@ -118,21 +117,24 @@ describe("toFeedbackCard", () => {
 			[group],
 		);
 		// The meter stays where the work left it: marking it addressed fills nothing in.
+		// Marked, never resolved: only the work resolves a card, and the next work confirms the answer.
 		expect(addressed).toMatchObject({
-			state: "resolved",
-			resolvedBy: "DEVELOPER",
+			state: "marked",
 			cleanWork: [{ ref: pullRequest(8), date: new Date("2026-08-25") }],
 			timestamp: closedAt,
 		});
 		expect(addressed.condition).toStrictEqual([
-			{ type: "text", text: "Marked as addressed on 9 September" },
+			{ type: "text", text: "Marked as addressed on 9 September. Your next work confirms it." },
 		]);
 		const notApplicable = toFeedbackCard(
 			{ ...feedback, ...answered("NOT_APPLICABLE"), closedAt, closedBy: "DEVELOPER" },
 			[group],
 		);
 		expect(notApplicable.condition).toStrictEqual([
-			{ type: "text", text: "Marked as not applicable on 9 September" },
+			{
+				type: "text",
+				text: "Marked as not applicable on 9 September. Your next work confirms it.",
+			},
 		]);
 	});
 

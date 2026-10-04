@@ -87,6 +87,33 @@ export function withComment(
 }
 
 /**
+ * The response Send writes in the dispute's band: a dispute with the sentence it has to carry, in
+ * place of any answer before it, keeping the rating. The server leaves the card open.
+ */
+export function withDispute(
+	current: FeedbackResponseRequest | undefined,
+	comment: string,
+): FeedbackResponseRequest {
+	return { usefulness: current?.usefulness, resolution: "DISPUTED", comment: comment.trim() };
+}
+
+/**
+ * The response a press on a standing dispute writes: the dispute taken back with the sentence that
+ * carried it, the rating kept.
+ */
+export function withoutDispute(
+	current: FeedbackResponseRequest | undefined,
+): FeedbackResponseRequest {
+	return { usefulness: current?.usefulness, resolution: undefined, comment: undefined };
+}
+
+/** Which band is open under a card's footer: the rating's comment or the dispute's sentence. */
+interface OpenBand {
+	feedbackId: string;
+	kind: "comment" | "dispute";
+}
+
+/**
  * Nothing in flight and nothing to wait for. A query held back by `enabled` reports `isPending`
  * for as long as it is held, which a page reads as a skeleton that never resolves; with the
  * reading disabled the feedback is settled and empty instead.
@@ -103,14 +130,15 @@ const SETTLED_EMPTY: LoadState = { status: "ready" };
  *
  * Every press writes the complete response, keeping what the reader said before: "Helpful" and
  * "Not helpful" replace the usefulness, Send adds the comment, "Addressed" and "Not applicable"
- * replace the resolution, and pressing the chosen one again withdraws it.
+ * replace the resolution, and pressing the chosen one again withdraws it. "Disagree" opens the band
+ * that asks why, and its Send writes the dispute; pressed on a standing dispute, it takes it back.
  */
 export function useInAppFeedback({
 	workspaceSlug,
 	groups,
 	enabled = true,
 }: InAppFeedbackRequest): InAppFeedback {
-	const [openComment, setOpenComment] = useState<string>();
+	const [openBand, setOpenBand] = useState<OpenBand>();
 	const feedbackQuery = useQuery({
 		...getInAppFeedbackOptions({ path: { workspaceSlug } }),
 		enabled,
@@ -127,26 +155,45 @@ export function useInAppFeedback({
 	const rate = (feedbackId: string, usefulness: FeedbackUsefulness) => {
 		const next = nextRating(responseOf(feedbackId), usefulness);
 		write(feedbackId, next);
-		setOpenComment(next.usefulness === undefined ? undefined : feedbackId);
+		setOpenBand(next.usefulness === undefined ? undefined : { feedbackId, kind: "comment" });
 	};
 	const resolve = (feedbackId: string, answer: ResolvingAnswer) => {
 		write(feedbackId, nextResolution(responseOf(feedbackId), answer));
 	};
 	const send = (feedbackId: string, comment: FeedbackComment) => {
 		write(feedbackId, withComment(responseOf(feedbackId), comment));
-		setOpenComment(undefined);
+		setOpenBand(undefined);
 	};
+	const disagree = (feedbackId: string) => {
+		const current = responseOf(feedbackId);
+		if (current?.resolution === "DISPUTED") {
+			write(feedbackId, withoutDispute(current));
+			setOpenBand(undefined);
+			return;
+		}
+		const open = openBand?.feedbackId === feedbackId && openBand.kind === "dispute";
+		setOpenBand(open ? undefined : { feedbackId, kind: "dispute" });
+	};
+	const sendDispute = (feedbackId: string, comment: string) => {
+		write(feedbackId, withDispute(responseOf(feedbackId), comment));
+		setOpenBand(undefined);
+	};
+	const bandOpen = (feedbackId: string, kind: OpenBand["kind"]) =>
+		openBand?.feedbackId === feedbackId && openBand.kind === kind;
 
 	return {
 		cards: feedback.map((item) => toFeedbackCard(item, groups)),
 		ratingProps: (feedbackId) => ({
 			usefulness: responseOf(feedbackId)?.usefulness,
 			resolution: responseOf(feedbackId)?.resolution,
-			commentOpen: openComment === feedbackId,
+			commentOpen: bandOpen(feedbackId, "comment"),
+			disputeOpen: bandOpen(feedbackId, "dispute"),
 			isPending: pendingResponses.has(feedbackId),
 			onRate: (usefulness) => rate(feedbackId, usefulness),
 			onSendComment: (comment) => send(feedbackId, comment),
-			onSkipComment: () => setOpenComment(undefined),
+			onSkipComment: () => setOpenBand(undefined),
+			onDisagree: () => disagree(feedbackId),
+			onSendDispute: (comment) => sendDispute(feedbackId, comment),
 			onResolve: (answer) => resolve(feedbackId, answer),
 		}),
 		state: enabled ? queryLoadState(feedbackQuery) : SETTLED_EMPTY,

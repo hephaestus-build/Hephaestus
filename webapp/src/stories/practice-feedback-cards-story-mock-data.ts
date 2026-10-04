@@ -203,7 +203,6 @@ const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		],
 		cleanNeeded: 3,
 		state: "resolved",
-		resolvedBy: "WORK",
 		timestamp: inStoryYear("09-09T14:10"),
 	},
 	{
@@ -237,7 +236,6 @@ const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		],
 		cleanNeeded: 3,
 		state: "resolved",
-		resolvedBy: "WORK",
 		timestamp: inStoryYear("09-02T11:40"),
 	},
 	{
@@ -267,10 +265,9 @@ const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		],
 		nextStep:
 			"When something blocks you for more than an hour, post it in the channel the work lives in, with what you have tried and what you need.",
-		condition: [text("Marked as addressed on 27 August")],
+		condition: [text("Marked as addressed on 27 August. Your next work confirms it.")],
 		cleanNeeded: 3,
-		state: "resolved",
-		resolvedBy: "DEVELOPER",
+		state: "marked",
 		timestamp: inStoryYear("08-27T16:05"),
 	},
 ];

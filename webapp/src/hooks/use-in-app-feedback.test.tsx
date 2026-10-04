@@ -282,4 +282,42 @@ describe("useInAppFeedback", () => {
 			},
 		});
 	});
+
+	it("opens the dispute's band on Disagree and writes the dispute with its sentence on Send", async () => {
+		const { result, written } = renderFeedback({ usefulness: "HELPFUL" });
+		await waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+		act(() => {
+			result.current.ratingProps(feedbackId).onDisagree?.();
+		});
+		expect(result.current.ratingProps(feedbackId).disputeOpen).toBe(true);
+		expect(written).toHaveLength(0);
+
+		act(() => {
+			result.current.ratingProps(feedbackId).onSendDispute?.("  #17 already split it  ");
+		});
+
+		await waitFor(() => expect(written).toHaveLength(1));
+		expect(written[0]).toStrictEqual({
+			method: "PUT",
+			body: { usefulness: "HELPFUL", resolution: "DISPUTED", comment: "#17 already split it" },
+		});
+		expect(result.current.ratingProps(feedbackId).disputeOpen).toBe(false);
+	});
+
+	it("takes a standing dispute back on Disagree, keeping the rating", async () => {
+		const { result, written } = renderFeedback({
+			usefulness: "UNHELPFUL",
+			resolution: "DISPUTED",
+			comment: "The rename was its own PR",
+		});
+		await waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+		act(() => {
+			result.current.ratingProps(feedbackId).onDisagree?.();
+		});
+
+		await waitFor(() => expect(written).toHaveLength(1));
+		expect(written[0]).toStrictEqual({ method: "PUT", body: { usefulness: "UNHELPFUL" } });
+	});
 });

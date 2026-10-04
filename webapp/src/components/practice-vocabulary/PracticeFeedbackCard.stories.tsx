@@ -31,6 +31,8 @@ const meta = {
 		onRate: fn(),
 		onSendComment: fn(),
 		onSkipComment: fn(),
+		onDisagree: fn(),
+		onSendDispute: fn(),
 		onResolve: fn(),
 		onLearnMore: fn(),
 		onOpenPractice: fn(),
@@ -202,7 +204,6 @@ export const Resolved: Story = {
 		card: {
 			...card,
 			state: "resolved",
-			resolvedBy: "WORK",
 			cleanWork: threeClean,
 			condition: [
 				text("Resolved by the work on 9 September · "),
@@ -216,9 +217,13 @@ export const Resolved: Story = {
 		},
 		usefulness: "HELPFUL",
 	},
-	play: async ({ canvas }) => {
+	play: async ({ args, canvas }) => {
 		await expect(canvas.getByText("Resolved")).toBeVisible();
 		await expect(canvas.queryByText("Open")).toBeNull();
+		// The success wash is the work's alone.
+		await expect(canvas.getByRole("article", { name: args.card.headline })).toHaveClass(
+			"from-success/5",
+		);
 		await expect(canvas.getByText("3 of 3 clean")).toBeVisible();
 		await expect(canvas.getByText("Resolved 9 September")).toBeVisible();
 		// Each reference carries its own "(opens in a new tab)", so the words are matched around
@@ -236,25 +241,33 @@ export const Resolved: Story = {
 };
 
 /**
- * The reader marked it addressed: the card resolves on the day they did, the meter stays where the
- * work left it, and the answer stays pressed under it, so a second press takes it back and reopens
- * the card.
+ * The reader marked it addressed: a claim, not a resolution, so the card closes on neutral ground
+ * with no success wash and no green badge, and says the next work confirms it. The meter keeps
+ * counting the clean work, and the answer stays pressed under it, so a second press takes it back
+ * and reopens the card.
  */
 export const MarkedAsAddressed: Story = {
 	args: {
 		card: {
 			...card,
-			state: "resolved",
-			resolvedBy: "DEVELOPER",
+			state: "marked",
 			cleanWork: twoClean,
-			condition: [text("Marked as addressed on 9 September")],
+			condition: [text("Marked as addressed on 9 September. Your next work confirms it.")],
 			timestamp: inStoryYear("09-09T16:05"),
 		},
 		resolution: "ADDRESSED",
 	},
 	play: async ({ args, canvas }) => {
-		await expect(canvas.getByText("Resolved 9 September")).toBeVisible();
-		await expect(canvas.getByText("Marked as addressed on 9 September")).toBeVisible();
+		await expect(canvas.getByText("Marked by you")).toBeVisible();
+		await expect(canvas.queryByText("Resolved")).toBeNull();
+		await expect(canvas.getByText("Marked 9 September")).toBeVisible();
+		await expect(
+			canvas.getByText("Marked as addressed on 9 September. Your next work confirms it."),
+		).toBeVisible();
+		const article = canvas.getByRole("article", { name: args.card.headline });
+		await expect(article).not.toHaveClass("from-success/5");
+		// The next-step band stays on the neutral ground an open card's band has.
+		await expect(canvas.getByText("Next step").closest(".grid")).toHaveClass("bg-sidebar");
 		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
 		const response = within(canvas.getByRole("group", { name: "Your response" }));
 		const addressed = response.getByRole("button", { name: "Addressed" });
@@ -265,6 +278,64 @@ export const MarkedAsAddressed: Story = {
 		);
 		await userEvent.click(addressed);
 		await expect(args.onResolve).toHaveBeenCalledWith("ADDRESSED");
+	},
+};
+
+/**
+ * The reader marked it not applicable: the same neutral closed card as an addressed one, with its
+ * own answer pressed.
+ */
+export const MarkedAsNotApplicable: Story = {
+	args: {
+		card: {
+			...card,
+			state: "marked",
+			cleanWork: [],
+			condition: [text("Marked as not applicable on 9 September. Your next work confirms it.")],
+			timestamp: inStoryYear("09-09T16:05"),
+		},
+		resolution: "NOT_APPLICABLE",
+	},
+	play: async ({ args, canvas }) => {
+		await expect(canvas.getByText("Marked by you")).toBeVisible();
+		await expect(canvas.getByRole("article", { name: args.card.headline })).not.toHaveClass(
+			"from-success/5",
+		);
+		await expect(
+			within(canvas.getByRole("group", { name: "Your response" })).getByRole("button", {
+				name: "Not applicable",
+			}),
+		).toHaveAttribute("aria-pressed", "true");
+	},
+};
+
+/**
+ * "Disagree" sits beside "Not helpful": the reader says the card is wrong. Its band asks for the
+ * sentence a dispute has to carry, which workspace admins read.
+ */
+export const DisagreeOpen: Story = {
+	args: { card: { ...card, state: "open" }, disputeOpen: true },
+	play: async ({ args, canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Disagree" }));
+		await expect(args.onDisagree).toHaveBeenCalledOnce();
+		const field = canvas.getByRole("textbox", { name: "What is wrong in this feedback?" });
+		await expect(field).toBeRequired();
+		await expect(field).toHaveAccessibleDescription(/Workspace admins read your sentence/u);
+		await userEvent.type(field, "#17 split the refactor out already.");
+		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
+		await expect(args.onSendDispute).toHaveBeenCalledWith("#17 split the refactor out already.");
+	},
+};
+
+/** A dispute stands: Disagree stays pressed, and the card stays open until an admin answers it. */
+export const Disputed: Story = {
+	args: { card: { ...card, state: "open" }, resolution: "DISPUTED" },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Disagree" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		await expect(canvas.getByText("Open")).toBeVisible();
 	},
 };
 

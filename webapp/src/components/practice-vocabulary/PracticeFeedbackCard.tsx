@@ -4,7 +4,7 @@ import { type ComponentType, type Ref, useId, useState } from "react";
 import { useSpinDelay } from "spin-delay";
 
 import { cn } from "cn";
-import type { InAppEvidence, InAppFeedback, ReviewedWorkRef } from "@/api/types.gen";
+import type { InAppEvidence, ReviewedWorkRef } from "@/api/types.gen";
 import { FOCUS_RING } from "@/components/common/focus";
 import { InlineLink } from "@/components/common/InlineLink";
 import { ResponseButton, toneOf } from "@/components/common/ResponseButton";
@@ -51,12 +51,14 @@ export type FeedbackComment = ResponseComment<NotHelpfulReason>;
 
 /**
  * An answer that resolves the feedback, the card's own way to close it beside the work coming back
- * clean. A dispute is the third resolution, but it leaves the feedback open and is written by "Not
- * accurate" under a rating, so the card offers no button for it.
+ * clean. A dispute is the third answer, but it leaves the feedback open, so it has its own Disagree
+ * button beside the ratings rather than one among these.
  */
 export type ResolvingAnswer = Exclude<FeedbackResolution, "DISPUTED">;
 
 const RESOLVING_ANSWERS: ResolvingAnswer[] = ["ADDRESSED", "NOT_APPLICABLE"];
+
+const DisagreeIcon = FEEDBACK_RESOLUTION_DEFS.DISPUTED.icon;
 
 /**
  * One piece of reviewed work in the card's strip — the evidence behind the feedback — with what
@@ -129,12 +131,6 @@ export interface PracticeFeedbackCardEntry {
 	/** The line under the next step: what ticks it, or what did. */
 	condition: FeedbackTextSegment[];
 	state: FeedbackState;
-	/**
-	 * Which way a resolved card resolved: the work's clean run, or the reader's own answer. Only the
-	 * reader's answer is theirs to take back, so only then does a resolved card keep its response
-	 * buttons.
-	 */
-	resolvedBy?: Exclude<NonNullable<InAppFeedback["closedBy"]>, "PRACTICE_CHANGED">;
 	/** When the feedback was created or, once `state` is resolved or closed, when that happened. */
 	timestamp: Date;
 }
@@ -153,6 +149,11 @@ export interface FeedbackRatingProps {
 	 */
 	commentOpen?: boolean;
 	/**
+	 * Whether the band that asks why the reader disagrees is open; a press on Disagree opens it,
+	 * Send and Skip close it.
+	 */
+	disputeOpen?: boolean;
+	/**
 	 * A response is being written: the button just pressed, if it is still the chosen one, says it is
 	 * saving, and every other response control waits for it.
 	 */
@@ -164,7 +165,16 @@ export interface FeedbackRatingProps {
 	 */
 	onRate?: (usefulness: FeedbackUsefulness) => void;
 	onSendComment?: (comment: FeedbackComment) => void;
+	/** Skip in either band: the comment's or the dispute's. */
 	onSkipComment?: () => void;
+	/**
+	 * A press on Disagree, the reader's dispute of the card, the pressed one included: the caller
+	 * decides that a press opens the band that asks why, and that a press on a standing dispute
+	 * takes it back. Without it the card has no Disagree button.
+	 */
+	onDisagree?: () => void;
+	/** Send in the dispute's band, with the sentence a dispute has to carry. */
+	onSendDispute?: (comment: string) => void;
 	/**
 	 * A press on Addressed or Not applicable, the chosen one included: the caller decides that a
 	 * second press takes the answer back. Without it the card has none of these buttons, and neither
@@ -194,10 +204,14 @@ export interface PracticeFeedbackCardProps extends FeedbackRatingProps {
  * "Resolved 9 September" — because the minute of a resolution is the review's, not the reader's.
  */
 function formatTimestamp(date: Date, state: FeedbackState, today: Date): string {
+	const def = FEEDBACK_STATE_DEFS[state];
 	return isOpenFeedback(state)
 		? `Created ${formatDayTime(date, today)}`
-		: `${FEEDBACK_STATE_DEFS[state].label} ${formatDay(date)}`;
+		: `${def.stamp ?? def.label} ${formatDay(date)}`;
 }
+
+/** The dispute's button: the reader says the card is wrong, beside saying it did not help. */
+const DISAGREE = "Disagree";
 
 /**
  * One piece of practice feedback in three bands: what was seen, the next step with the two ways it
@@ -218,16 +232,18 @@ export function PracticeFeedbackCard({
 		nextStep,
 		condition,
 		state,
-		resolvedBy,
 		timestamp,
 	},
 	usefulness,
 	resolution,
 	commentOpen = false,
+	disputeOpen = false,
 	isPending = false,
 	onRate,
 	onSendComment,
 	onSkipComment,
+	onDisagree,
+	onSendDispute,
 	onResolve,
 	onLearnMore,
 	onOpenPractice,
@@ -239,7 +255,9 @@ export function PracticeFeedbackCard({
 	const responseId = useId();
 	// Which control the reader pressed last, so a write in flight says so on the control that asked
 	// for it: not on a pressed button in the other row, and not on Send when a rating is saving.
-	const [lastPressed, setLastPressed] = useState<"rating" | "answer" | "comment">("rating");
+	const [lastPressed, setLastPressed] = useState<
+		"rating" | "answer" | "comment" | "dispute" | "disagree"
+	>("rating");
 	const shownTimestamp = formatTimestamp(timestamp, state, new Date(useNow()));
 	// The write is optimistic, so a quick one says nothing: the controls wait at once, and the
 	// pressed button says "Saving…" only once the write outlasts a second. `ssr` off, since its
@@ -251,10 +269,20 @@ export function PracticeFeedbackCard({
 			setLastPressed("comment");
 			onSendComment(comment);
 		});
+	const sendDispute =
+		onSendDispute &&
+		(({ comment }: ResponseComment) => {
+			setLastPressed("dispute");
+			onSendDispute(comment);
+		});
+	// Only the work resolves a card, so only its resolution wears the success wash; the reader's own
+	// answer closes the card on neutral ground until the work confirms it.
 	const resolved = state === "resolved";
 	// No work can tick a closed card, so it draws no count towards the threshold.
 	const closed = state === "closed";
-	const answerable = isOpenFeedback(state) || resolvedBy === "DEVELOPER";
+	// Only the reader's own answer is theirs to take back, so only then does a closed card keep its
+	// response buttons.
+	const answerable = isOpenFeedback(state) || state === "marked";
 	const BandIcon = FEEDBACK_STATE_DEFS[isOpenFeedback(state) ? "open" : state].icon;
 	const GroupIcon = group?.icon ?? PackageIcon;
 	const groupPill = hasText(group?.color) ? pillClasses(group.color) : undefined;
@@ -479,6 +507,17 @@ export function PracticeFeedbackCard({
 								</ResponseButton>
 							);
 						})}
+					{onDisagree && (
+						<DisagreeButton
+							disputed={resolution === "DISPUTED"}
+							isPending={isPending}
+							saving={showSaving && lastPressed === "disagree"}
+							onClick={() => {
+								setLastPressed("disagree");
+								onDisagree();
+							}}
+						/>
+					)}
 				</div>
 				{onLearnMore && (
 					<Button variant="outline" onClick={onLearnMore}>
@@ -488,7 +527,23 @@ export function PracticeFeedbackCard({
 				)}
 			</div>
 
-			{commentOpen && usefulness === "HELPFUL" && (
+			{disputeOpen && (
+				<ResponseCommentBand
+					key="dispute"
+					name="Why you disagree"
+					label="What is wrong in this feedback?"
+					placeholder="One or two sentences on what is wrong"
+					required
+					audience={() =>
+						"Workspace admins read your sentence, not the card, and can correct its observations or withdraw it. The card stays open until then."
+					}
+					isPending={isPending}
+					sending={showSaving && lastPressed === "dispute"}
+					onSend={sendDispute}
+					onSkip={onSkipComment}
+				/>
+			)}
+			{!disputeOpen && commentOpen && usefulness === "HELPFUL" && (
 				<ResponseCommentBand
 					key={usefulness}
 					name="What was helpful"
@@ -500,7 +555,8 @@ export function PracticeFeedbackCard({
 					onSkip={onSkipComment}
 				/>
 			)}
-			{commentOpen &&
+			{!disputeOpen &&
+				commentOpen &&
 				usefulness === "UNHELPFUL" && (
 					// A reason and a sentence: the sentence is what the dispute has to carry.
 					<ResponseCommentBand
@@ -568,6 +624,34 @@ export function PracticeFeedbackCardSkeleton() {
 				<Skeleton className="h-9 w-60" />
 			</div>
 		</div>
+	);
+}
+
+/**
+ * The reader's dispute beside the ratings: pressed while a dispute stands, and saying it is saving
+ * only while the press it answers is in flight.
+ */
+function DisagreeButton({
+	disputed,
+	isPending,
+	saving,
+	onClick,
+}: {
+	disputed: boolean;
+	isPending: boolean;
+	saving: boolean;
+	onClick: () => void;
+}) {
+	return (
+		<ResponseButton
+			tone={toneOf(FEEDBACK_RESOLUTION_DEFS.DISPUTED.badgeVariant)}
+			pressed={disputed}
+			disabled={isPending}
+			onClick={onClick}
+		>
+			{saving ? <Spinner /> : <DisagreeIcon aria-hidden />}
+			{saving ? "Saving…" : DISAGREE}
+		</ResponseButton>
 	);
 }
 

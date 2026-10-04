@@ -2,7 +2,13 @@ import { useState } from "react";
 
 import type { FeedbackResponseRequest } from "@/api/types.gen";
 import type { FeedbackRatingProps } from "@/components/practice-vocabulary/PracticeFeedbackCard";
-import { nextRating, nextResolution, withComment } from "@/hooks/use-in-app-feedback";
+import {
+	nextRating,
+	nextResolution,
+	withComment,
+	withDispute,
+	withoutDispute,
+} from "@/hooks/use-in-app-feedback";
 
 /**
  * What the reader said about one piece of feedback, and whether the comment band is still open
@@ -11,6 +17,7 @@ import { nextRating, nextResolution, withComment } from "@/hooks/use-in-app-feed
 interface FeedbackRating {
 	response: FeedbackResponseRequest;
 	commentOpen: boolean;
+	disputeOpen?: boolean;
 }
 
 /**
@@ -18,7 +25,8 @@ interface FeedbackRating {
  * `useInAppFeedback` fulfils on the wire, without a network, and on the hook's own `nextRating`,
  * `withComment` and `nextResolution` rules — a press on a rating opens the comment band; pressing the
  * chosen rating again withdraws it and closes the band; Send and Skip close the band and keep the
- * rating; Addressed and Not applicable replace the answer, and a second press takes it back. The
+ * rating; Addressed and Not applicable replace the answer, and a second press takes it back;
+ * Disagree opens the dispute's band, whose Send writes the dispute, and takes a standing one back. The
  * card's state is the fixture's, since closing it is the server's to decide.
  */
 export function useFeedbackRatings() {
@@ -33,6 +41,7 @@ export function useFeedbackRatings() {
 		usefulness: ratings[feedbackId]?.response.usefulness,
 		resolution: ratings[feedbackId]?.response.resolution,
 		commentOpen: ratings[feedbackId]?.commentOpen ?? false,
+		disputeOpen: ratings[feedbackId]?.disputeOpen ?? false,
 		onRate: (usefulness) =>
 			update(feedbackId, (current) => {
 				const response = nextRating(current?.response, usefulness);
@@ -45,7 +54,25 @@ export function useFeedbackRatings() {
 					current && { response: withComment(current.response, comment), commentOpen: false },
 			),
 		onSkipComment: () =>
-			update(feedbackId, (current) => current && { ...current, commentOpen: false }),
+			update(
+				feedbackId,
+				(current) => current && { ...current, commentOpen: false, disputeOpen: false },
+			),
+		onDisagree: () =>
+			update(feedbackId, (current) =>
+				current?.response.resolution === "DISPUTED"
+					? { response: withoutDispute(current.response), commentOpen: false }
+					: {
+							response: current?.response ?? {},
+							commentOpen: false,
+							disputeOpen: current?.disputeOpen !== true,
+						},
+			),
+		onSendDispute: (comment) =>
+			update(feedbackId, (current) => ({
+				response: withDispute(current?.response, comment),
+				commentOpen: false,
+			})),
 		onResolve: (answer) =>
 			update(feedbackId, (current) => ({
 				response: nextResolution(current?.response, answer),
