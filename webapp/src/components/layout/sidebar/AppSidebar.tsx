@@ -38,8 +38,8 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	isAdmin: boolean;
 	isOwner?: boolean;
 	isAppAdmin: boolean;
-	/** A member of the active workspace, or viewing one; a public reader or an elevated instance admin is not. */
-	isMember: boolean;
+	/** Lists Heph in the main navigation of the active workspace; the container decides from membership and setup. */
+	showMentor: boolean;
 	readOnly?: boolean;
 	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
 	/** Feedback awaiting approval in the active workspace, for an admin; undefined while unknown. */
@@ -59,7 +59,7 @@ export function AppSidebar({
 	isAdmin,
 	isOwner = false,
 	isAppAdmin,
-	isMember,
+	showMentor,
 	readOnly = false,
 	integrationKinds,
 	awaitingApproval,
@@ -143,7 +143,7 @@ export function AppSidebar({
 					workspaceSlug={activeWorkspace.workspaceSlug}
 					practicesEnabled={activeWorkspace.practicesEnabled}
 				/>
-				{isMember && <NavMentor workspaceSlug={activeWorkspace.workspaceSlug} />}
+				{showMentor && <NavMentor workspaceSlug={activeWorkspace.workspaceSlug} />}
 				{isAdmin && (
 					<NavAdmin
 						isOwner={isOwner}

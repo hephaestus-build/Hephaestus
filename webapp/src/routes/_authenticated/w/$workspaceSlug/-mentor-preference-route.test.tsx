@@ -233,15 +233,63 @@ it("keeps Heph out of the navigation for a reader who is not a member", async ()
 	expect(screen.queryByRole("link", { name: /AI mentor/u })).toBeNull();
 });
 
-it("offers Heph in the navigation to every member of the workspace", async () => {
+it("offers Heph in the navigation where a Heph model is ready, whatever the member chose", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
 		http.get("*/workspaces/acme/members/me", () =>
 			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
 		),
-		http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(workspaceOnboarding())),
+		http.get("*/workspaces/acme/onboarding/me", () =>
+			HttpResponse.json({
+				...workspaceOnboarding(),
+				aiChoice: "NO_AI",
+				aiOptions: [
+					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: false, models: [] },
+				],
+			}),
+		),
 	);
 	renderRouteAtWithRouter("/w/acme/teams");
 	await screen.findByRole("link", { name: /AI mentor/u }, ROUTE_RENDER_WAIT);
+});
+
+it("keeps Heph out of the navigation of a workspace where only practice reviews have a model", async () => {
+	const ready: WorkspaceOnboarding = {
+		...workspaceOnboarding(),
+		aiOptions: [{ choice: "CLOUD", mentorReady: true, practiceReviewsReady: true, models: [] }],
+	};
+	server.use(
+		http.get("*/workspaces", () =>
+			HttpResponse.json([workspaceListItem("acme"), workspaceListItem("other", { id: 2 })]),
+		),
+		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/workspaces/:workspaceSlug/members/me", () =>
+			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
+		),
+		http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(ready)),
+		http.get("*/workspaces/other/onboarding/me", () =>
+			HttpResponse.json({
+				...ready,
+				aiOptions: [
+					{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true, models: [] },
+				],
+			}),
+		),
+	);
+	const { router, queryClient } = renderRouteAtWithRouter("/w/acme/teams");
+	await screen.findByRole("link", { name: /AI mentor/u }, ROUTE_RENDER_WAIT);
+
+	await act(async () => {
+		await router.navigate({ to: "/w/$workspaceSlug/teams", params: { workspaceSlug: "other" } });
+	});
+	await waitFor(
+		() =>
+			expect(
+				queryClient.getQueryState(getMemberOnboardingQueryKey({ path: { workspaceSlug: "other" } }))
+					?.status,
+			).toBe("success"),
+		ROUTE_RENDER_WAIT,
+	);
+	expect(screen.queryByRole("link", { name: /AI mentor/u })).toBeNull();
 });

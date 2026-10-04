@@ -12,6 +12,11 @@ export type MentorNotice =
 	| { reason: "choice-required" }
 	| { reason: "unavailable"; choice: MemberAiChoice };
 
+/** Whether the workspace has a Heph model ready under any AI choice, whatever this member chose. */
+export function isMentorSetUp(preference: WorkspaceOnboarding): boolean {
+	return preference.aiOptions.some((option) => option.mentorReady);
+}
+
 /**
  * Why Heph will not answer this member, if it will not. The server twin is `MentorRefusal`.
  * `aiChoice == null && !aiChoiceRequired` is `undefined` on purpose: members who haven't chosen
@@ -22,7 +27,7 @@ export function mentorPreferenceReason(preference: WorkspaceOnboarding): MentorN
 	if (preference.aiChoice === "NO_AI") {
 		return { reason: "no-ai" };
 	}
-	if (!preference.aiOptions.some((option) => option.mentorReady)) {
+	if (!isMentorSetUp(preference)) {
 		return { reason: "not-set-up" };
 	}
 	if (preference.aiChoice == null) {

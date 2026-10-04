@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import {
 	getLlmUsageReportOptions,
+	getMemberOnboardingOptions,
 	getMemberOnboardingSettingsOptions,
 	getWorkspaceOptions,
 	listAgentsOptions,
@@ -106,7 +107,12 @@ function ModelsContainer() {
 	];
 
 	const agentsKey = listAgentsQueryKey({ path: { workspaceSlug } });
-	const invalidateBindings = async () => queryClient.invalidateQueries({ queryKey: agentsKey });
+	// Readiness per AI choice lives on the member setup, which decides whether Heph is in the navigation.
+	const invalidateBindings = async () =>
+		Promise.all([
+			queryClient.invalidateQueries({ queryKey: agentsKey }),
+			queryClient.invalidateQueries(getMemberOnboardingOptions({ path: { workspaceSlug } })),
+		]);
 
 	const cacheSavedBinding = (saved: AgentBinding) =>
 		queryClient.setQueryData<AgentBinding[]>(agentsKey, (current) => {
