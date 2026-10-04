@@ -602,7 +602,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 		observations: [
 			{
 				id: "bbbbbbbb-2222-2222-2222-222222222222",
-				summary: "Invoice numbering leaks the ledger's table name into the public API",
+				summary: "Invoice numbering leaks the ledger’s table name into the public API",
 				evidenceRationale:
 					"The response field is called ledgerSeqNo, which is the column the number is stored in. Callers outside billing have to learn the storage layout to read an invoice, and the day the ledger is replaced the field is either wrong or frozen.",
 				practiceSlug: "product-language",

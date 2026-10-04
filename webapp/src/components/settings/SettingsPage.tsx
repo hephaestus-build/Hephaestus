@@ -92,7 +92,7 @@ export function SettingsPage({
 							</p>
 							{onRetrySettings && (
 								<Button variant="outline" size="sm" onClick={onRetrySettings}>
-									Retry
+									Try again
 								</Button>
 							)}
 						</section>

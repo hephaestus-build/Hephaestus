@@ -151,7 +151,9 @@ function LoadedCuratedGroupEditor({
 				invalidateCatalog();
 				return;
 			}
-			toast.error("Could not apply the default", { description: problemDetailOf(error) });
+			toast.error("Could not apply the Hephaestus version", {
+				description: problemDetailOf(error),
+			});
 		},
 	});
 	const keepCurrentDefinition = useMutation({

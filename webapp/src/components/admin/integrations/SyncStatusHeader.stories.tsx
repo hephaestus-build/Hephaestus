@@ -276,7 +276,7 @@ export const RateLimitNotReported: Story = {
 export const ScheduledBackfill: Story = {
 	args: { status: { ...baseStatus, backfill: { state: "IN_PROGRESS", percent: 40 } } },
 	play: async ({ canvas }) => {
-		canvas.getByText("In Progress");
+		canvas.getByText("In progress");
 		await expect(canvas.queryByText(/IN_PROGRESS/u)).not.toBeInTheDocument();
 	},
 };

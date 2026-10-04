@@ -48,7 +48,7 @@ export function SilentModeStatusCard({
 					Workspace delivery is blocked
 					{settings.silentModeChangedByAccountId == null
 						? ""
-						: ` — engaged by account #${settings.silentModeChangedByAccountId}`}
+						: `, engaged by account #${settings.silentModeChangedByAccountId}`}
 					{settings.silentModeChangedAt ? (
 						<>
 							{" "}

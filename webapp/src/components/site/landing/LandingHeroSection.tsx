@@ -192,7 +192,7 @@ export function HeroScene() {
 					<LandingHephFigure
 						className={styles.heroHeph}
 						lead="Start with #412, not the pull request."
-						body="Write the acceptance criteria down and the scope stops moving. The review gets short."
+						body="Write the acceptance criteria down and the scope stops moving. The review gets shorter."
 					/>
 				</LandingCluster>
 			</LandingSceneList>
@@ -231,7 +231,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						id="landing-hero-heading"
 						className="relative z-10 mt-5 max-w-3xl text-4xl font-bold tracking-display text-balance sm:text-5xl md:text-6xl"
 					>
-						Learn from the work you are{" "}
+						Learn from the work you’re{" "}
 						<span className="relative inline-block whitespace-nowrap">
 							already doing
 							<span
@@ -297,10 +297,10 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 				<figure className={cn(styles.heroFigure, "relative w-full")}>
 					<HeroScene />
 					<figcaption className="sr-only">
-						One change through a project. The issue #412 has no acceptance criteria, so the pull
-						request grew to 34 files and picked up an unrelated rename. A reviewer asks a good
-						question that never gets answered before the merge. Hephaestus points back to the issue
-						as the place to start.
+						One change through a project. Issue #412 has no acceptance criteria, so the pull request
+						grew to 34 files and picked up an unrelated rename. A reviewer asks a good question that
+						never gets answered before the merge. Hephaestus points back to the issue as the place
+						to start.
 					</figcaption>
 				</figure>
 			</motion.div>

@@ -271,7 +271,10 @@ async function openConfirmation(intentId: string): Promise<void> {
 		});
 		tabId = created?.tabs?.[0]?.id;
 		if (tabId === undefined || !(await bindConfirmation(actions, intentId, tabId))) {
-			throw new WorkerError("stale", "The confirmation window could not be opened. Try again.");
+			throw new WorkerError(
+				"stale",
+				"The extension could not open the confirmation window. Try again.",
+			);
 		}
 		await browser.tabs.update(tabId, { url: `${page}#${intentId}` });
 	} catch (error) {
@@ -281,7 +284,10 @@ async function openConfirmation(intentId: string): Promise<void> {
 		}
 		throw error instanceof WorkerError
 			? error
-			: new WorkerError("stale", "The confirmation window could not be opened. Try again.");
+			: new WorkerError(
+					"stale",
+					"The extension could not open the confirmation window. Try again.",
+				);
 	}
 }
 
@@ -306,7 +312,7 @@ async function tabWork(tabId: number): Promise<string | undefined> {
 
 function requireTab(tabId: number | undefined): number {
 	if (tabId === undefined) {
-		throw new WorkerError("invalid", "No tab to look at.");
+		throw new WorkerError("invalid", "The extension could not find the tab for this request.");
 	}
 	return tabId;
 }
@@ -359,7 +365,10 @@ async function replaceInstance(next: InstanceConfig | undefined, request: number
 	try {
 		await withConfiguration(async () => {
 			if (request !== configurationRequest) {
-				throw new WorkerError("stale", "The instance selection changed. Try again.");
+				throw new WorkerError(
+					"stale",
+					"The instance changed while you were connecting. Try again.",
+				);
 			}
 			const previous = await readInstance();
 			detached = await session.detach();

@@ -280,8 +280,8 @@ export function PracticeMentoringSupportEditor({
 					<div>
 						<p className="font-medium">What this evidence cannot support</p>
 						<p className="text-sm text-muted-foreground">
-							State which claims this kind of work cannot support, however a review was occasioned
-							and even when every requirement passes.
+							List the claims this kind of work can never support, whatever starts the review and
+							even when every requirement passes.
 						</p>
 					</div>
 					{value.knownLimitations.map((limitation, index) => {

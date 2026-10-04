@@ -153,7 +153,7 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 								onUseHephaestusVersion?.();
 							}}
 						>
-							{isResetPending ? `${resetLabel}…` : resetLabel}
+							{isResetPending ? "Restoring default…" : resetLabel}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

@@ -17,9 +17,10 @@ export function RouteError({ error }: ErrorComponentProps) {
 	return (
 		<div className="flex min-h-[50vh] items-center justify-center p-6">
 			<section className="max-w-md space-y-4 text-center" role="alert">
-				<h1 className="text-2xl font-semibold">Something went wrong</h1>
+				<h1 className="text-2xl font-semibold">This page could not load</h1>
 				<p className="text-muted-foreground">
-					An unexpected error stopped this page from loading. Try again. This usually helps.
+					An unexpected error occurred. Try again. If it keeps happening, contact your workspace
+					admin.
 				</p>
 				<div className="flex justify-center gap-2">
 					<Button

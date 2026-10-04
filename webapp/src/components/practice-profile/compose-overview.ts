@@ -695,10 +695,8 @@ function composeRest(changes: ChangeEvent[], named: ChangeEvent[]): RestParagrap
 			const counts = countByLevel(hidden);
 			const plural = hidden.length > 1;
 			sentences.push(
-				sentence(
-					`${counted(counts.practices, counts.groups, "further ")} ${overflow(plural)}; `,
-					`the "${ALL_PRACTICE_GROUPS}" table lists ${plural ? "them" : "it"}.`,
-				),
+				sentence(`${counted(counts.practices, counts.groups, "further ")} ${overflow(plural)}.`),
+				sentence(`the "${ALL_PRACTICE_GROUPS}" table lists ${plural ? "them" : "it"}.`),
 			);
 		}
 		return [{ title, segments: paragraph(sentences) }];

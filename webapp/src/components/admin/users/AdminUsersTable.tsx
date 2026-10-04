@@ -123,7 +123,9 @@ function UserRows({
 		return (
 			<TableRow>
 				<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
-					<p className="text-sm text-destructive">Failed to load users. Please try again later.</p>
+					<p className="text-sm text-destructive">
+						We could not load users. Reload the page to try again.
+					</p>
 				</TableCell>
 			</TableRow>
 		);
@@ -134,7 +136,7 @@ function UserRows({
 				<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
 					{hasSearch && (hasNextPage || isFetchingNextPage) ? (
 						// Search filters loaded rows client-side, and the page is still loading more —
-						// do not claim "no users" before every page is in (avoids a false negative).
+						// don't claim "no users" before every page is in (avoids a false negative).
 						<div className="flex flex-col items-center justify-center gap-2">
 							<Spinner aria-hidden />
 							<p className="text-sm text-muted-foreground">Searching all users…</p>
@@ -144,7 +146,7 @@ function UserRows({
 							<Users className="size-8 text-muted-foreground" aria-hidden />
 							<p className="text-sm font-medium">No users found</p>
 							<p className="text-xs text-muted-foreground">
-								{hasSearch ? "Try adjusting your search." : "No accounts exist yet."}
+								{hasSearch ? "Try a different search." : "No accounts exist yet."}
 							</p>
 						</div>
 					)}
@@ -154,7 +156,7 @@ function UserRows({
 	}
 	return users.map((user) => {
 		const isSelf = user.id != null && user.id === currentUserId;
-		// You cannot revoke your own admin — it would lock you out of /admin with no
+		// You can't revoke your own admin — it would lock you out of /admin with no
 		// in-app recovery (the server rejects it too; this just hides the footgun).
 		const isSelfAdmin = isSelf && user.appRole === "APP_ADMIN";
 		const name = user.displayName ?? "—";
@@ -195,7 +197,7 @@ function UserRows({
 								<DropdownMenuSeparator />
 								<DropdownMenuItem variant="destructive" onClick={() => onForceSignOut(user)}>
 									<LogOut className="size-4" />
-									Force sign-out
+									Force sign out
 								</DropdownMenuItem>
 							</DropdownMenuGroup>
 						</DropdownMenuContent>

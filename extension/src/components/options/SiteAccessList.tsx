@@ -103,7 +103,7 @@ function SiteRow({
 			{activity?.status === "denied" ? (
 				<p className="flex items-start gap-1.5 text-xs text-muted-foreground" role="status">
 					<CircleSlashIcon aria-hidden className="mt-px size-3.5 shrink-0" />
-					Chrome did not allow access, so nothing changed. Choose Allow again to see the prompt.
+					Chrome did not allow access, so nothing changed. Select Allow again to see the prompt.
 				</p>
 			) : null}
 			{activity?.status === "error" ? (

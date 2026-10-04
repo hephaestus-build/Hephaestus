@@ -328,7 +328,7 @@ describe("Outline integration — remove with confirm", () => {
 		await screen.findByText("Engineering");
 
 		fireEvent.click(screen.getByRole("button", { name: /actions for engineering/iu }));
-		fireEvent.click(await screen.findByRole("menuitem", { name: /remove & erase/iu }));
+		fireEvent.click(await screen.findByRole("menuitem", { name: /remove and erase/iu }));
 
 		const dialog = await screen.findByRole("alertdialog");
 		// Nothing is deleted until the confirm — and the copy must state the mirror erase.
@@ -337,7 +337,7 @@ describe("Outline integration — remove with confirm", () => {
 			/permanently erases all 12 mirrored documents\s+from Hephaestus/iu,
 		);
 
-		fireEvent.click(within(dialog).getByRole("button", { name: /remove & erase/iu }));
+		fireEvent.click(within(dialog).getByRole("button", { name: /remove and erase/iu }));
 
 		await waitFor(() => expect(deletedId).toBe("col-eng"));
 		await screen.findByText(/no collections mirrored yet/iu);
@@ -439,7 +439,7 @@ describe("Outline integration — with live push down, polling keeps a running s
 	});
 
 	// With the SSE stream down, polling is the freshness channel and must be fast: the 5s poll clears
-	// a running job that has since settled. Polling does not halt at settle — it drops to the 60s idle
+	// a running job that has since settled. Polling doesn't halt at settle — it drops to the 60s idle
 	// cadence — so this asserts the running state clears, not that refetching stops. Fake timers keep
 	// it deterministic and off the wall clock.
 	it("clears a settled job on the fast 5s poll while the live stream is down", async () => {

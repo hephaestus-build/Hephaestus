@@ -122,7 +122,7 @@ function HowMuchSection({
 	const autonomyMutations = usePracticeAutonomyMutations(workspaceSlug);
 	const updateSettings = usePracticeReviewSettingsMutation(workspaceSlug, {
 		success: "Review settings updated",
-		error: "Failed to update review settings",
+		error: "Could not update review settings",
 	});
 
 	if (settingsQuery.isPending || rollupQuery.isPending || practicesQuery.isPending) {
@@ -209,11 +209,11 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 
 	const updatePracticeReviewSettings = usePracticeReviewSettingsMutation(workspaceSlug, {
 		success: "Review settings updated",
-		error: "Failed to update review settings",
+		error: "Could not update review settings",
 	});
 	const updateFeatures = useUpdateWorkspaceFeatures(workspaceSlug, {
 		success: "Practice review settings updated",
-		error: "Failed to update practice review settings",
+		error: "Could not update practice review settings",
 	});
 	const schedules = useSweepScheduleMutations(workspaceSlug);
 
@@ -335,11 +335,11 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 			{environment.deployment.environment === "preview" && (
 				<Alert>
 					<InfoIcon aria-hidden />
-					<AlertTitle>This preview starts in silence mode</AlertTitle>
+					<AlertTitle>Reviews start paused in this preview</AlertTitle>
 					<AlertDescription>
-						Staging data is available, but cloned model bindings, triggers, and recurring checks
+						Staging data is available, but cloned model bindings, triggers and recurring checks
 						start paused. To test a review in this preview only, select and enable the practice
-						review model below, then enable the manual or automatic trigger you need.
+						review model below. Then enable the manual or automatic trigger you need.
 					</AlertDescription>
 				</Alert>
 			)}

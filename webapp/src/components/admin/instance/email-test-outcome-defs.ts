@@ -21,13 +21,13 @@ export const EMAIL_TEST_OUTCOME_DEFS: StatusDefs<EmailTestOutcome> = {
 		label: "Accepted by relay",
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
-		description: "The relay accepted the message. Look for the message id in the relay's log.",
+		description: "The relay accepted the message. Look for the message id in the relay’s log.",
 	},
 	EXPIRED: {
 		label: "Expired",
 		icon: ClockIcon,
 		badgeVariant: "secondary",
-		description: "The notification is no longer timely and was not sent.",
+		description: "The notification is too old to be useful, so it was not sent.",
 	},
 	NOT_CONFIGURED: {
 		label: "Not configured",
@@ -50,10 +50,10 @@ export const EMAIL_TEST_OUTCOME_DEFS: StatusDefs<EmailTestOutcome> = {
 			"Your account has no provider-verified email address. Enter a recipient to test with.",
 	},
 	INVALID_ADDRESS: {
-		label: "Invalid address",
+		label: "Address not valid",
 		icon: MailQuestionIcon,
 		badgeVariant: "destructive",
-		description: "The recipient is not a single valid mailbox.",
+		description: "The recipient must be one valid email address. Check it and try again.",
 	},
 	REJECTED: {
 		label: "Rejected by relay",
@@ -73,7 +73,7 @@ export const EMAIL_TEST_OUTCOME_DEFS: StatusDefs<EmailTestOutcome> = {
 		icon: GaugeIcon,
 		badgeVariant: "warning",
 		description:
-			"Sending is paused: the email attempt limit was reached or capacity could not be checked. Try later.",
+			"Sending is paused. The email attempt limit was reached, or capacity could not be checked. Try again later.",
 	},
 	UNAVAILABLE: {
 		label: "Relay unavailable",

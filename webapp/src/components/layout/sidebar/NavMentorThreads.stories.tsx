@@ -83,6 +83,6 @@ export const Loading: Story = {
 export const ErrorState: Story = {
 	args: {
 		threads: [],
-		error: "Failed to load threads",
+		error: "We could not load your conversations. Reload the page to try again.",
 	},
 };

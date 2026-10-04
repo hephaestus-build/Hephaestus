@@ -33,7 +33,7 @@ function SlackIntegrationPage() {
 			<PageHeader
 				icon={<SlackIcon className="size-6" />}
 				title="Slack"
-				description="Connection, monitored channels and sync activity for this workspace's Slack app."
+				description="Connection, monitored channels and sync activity for this workspace’s Slack app."
 			/>
 
 			{slack.isLoading && <Skeleton className="h-48 w-full" />}

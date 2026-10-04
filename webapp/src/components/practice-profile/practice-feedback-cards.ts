@@ -21,7 +21,7 @@ export function newestFirst<T extends { timestamp: Date }>(cards: T[]): T[] {
 /** The line under an open card's next step, with the wire's own count. */
 const cleanCondition = (needed: number): FeedbackTextSegment[] => [
 	text(
-		`Ticks itself once ${count(needed, "piece", "pieces")} of work in a row ${needed === 1 ? "comes" : "come"} back clean`,
+		`Resolves on its own once ${count(needed, "piece", "pieces")} of work in a row ${needed === 1 ? "comes" : "come"} back clean`,
 	),
 ];
 
@@ -72,7 +72,7 @@ function closureOf(feedback: InAppFeedback):
 			return {
 				at,
 				state: "closed",
-				condition: [text(`Closed on ${day} · the practice's review rules changed`)],
+				condition: [text(`Closed on ${day} · the practice’s review rules changed`)],
 			};
 		}
 	}

@@ -42,6 +42,6 @@ export const SURVEY_PURPOSE_DEFS: StatusDefs<Survey["purpose"]> = {
 		icon: FlaskConical,
 		badgeVariant: "default",
 		description:
-			"Offered only to members who take part in the research program, and labeled as research. The answers are that study's data, not product feedback.",
+			"Offered only to members who take part in the research program, and labeled as research. The answers are that study’s data, not product feedback.",
 	},
 };

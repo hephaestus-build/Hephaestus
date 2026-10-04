@@ -121,7 +121,10 @@ function loadable<T>(query: {
 	// says so and offers a retry, and a refused detail takes its private content off screen. A
 	// refresh still in flight keeps what it has.
 	if (query.isError) {
-		return { status: "error", message: query.error?.message ?? "Could not load." };
+		return {
+			status: "error",
+			message: query.error?.message ?? "The extension could not load this practice review.",
+		};
 	}
 	if (query.data !== undefined) {
 		return { status: "ready", data: query.data };

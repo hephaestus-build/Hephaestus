@@ -222,7 +222,7 @@ export const AskingForAReview: Story = {
 	args: { requesting: openProfileReviewRun.reviewedWork },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByRole("button", { name: "Asking…" })).toBeDisabled();
+		await expect(screen.getByRole("button", { name: "Requesting review…" })).toBeDisabled();
 	},
 };
 
@@ -303,7 +303,7 @@ export const ActivityFailed: Story = {
 	},
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("Could not load this work's review activity")).toBeVisible();
+		await expect(screen.getByText("Could not load this work’s review activity")).toBeVisible();
 	},
 };
 

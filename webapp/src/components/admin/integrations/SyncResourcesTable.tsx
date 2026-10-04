@@ -497,8 +497,8 @@ function LastSyncedCell({
 					)}
 					{untracked.length > 0 && (
 						<p className="text-xs text-muted-foreground">
-							No separate watermark is kept for {andList.format(untracked)} — they are written by
-							the same sync pass.
+							No separate watermark is kept for {andList.format(untracked)}. The same sync pass
+							writes them.
 						</p>
 					)}
 				</HoverCardContent>
@@ -607,7 +607,7 @@ function TotalsFooter({
 	const canWarn = columns.length > 1;
 
 	// Solid `bg-muted` (not `bg-card`): keeps the shadcn footer's distinct muted tint so the totals read
-	// as a summary rather than one more data row, while staying opaque enough that scrolling rows do not
+	// as a summary rather than one more data row, while staying opaque enough that scrolling rows don't
 	// bleed through the sticky footer (the `bg-muted/50` default would). `border-t-2` sets it apart.
 	return (
 		<TableFooter sticky>
@@ -630,7 +630,7 @@ function TotalsFooter({
 										<span className="tabular-nums">0</span>
 									</TooltipTrigger>
 									<TooltipContent>
-										No {column.label.toLowerCase()} mirrored in any {resourceNoun} — the{" "}
+										No {column.label.toLowerCase()} are mirrored in any {resourceNoun}. The{" "}
 										{column.label.toLowerCase()} pipeline may not be running.
 									</TooltipContent>
 								</Tooltip>
@@ -813,7 +813,7 @@ export function SyncResourcesTable({
 						aria-label={`Filter ${resourceNounPlural} by status`}
 					>
 						<ToggleGroupItem value="all">All</ToggleGroupItem>
-						<ToggleGroupItem value="attention">Attention ({attentionCount})</ToggleGroupItem>
+						<ToggleGroupItem value="attention">Needs attention ({attentionCount})</ToggleGroupItem>
 						<ToggleGroupItem value="fresh">Fresh ({freshCount})</ToggleGroupItem>
 					</ToggleGroup>
 				)}
@@ -858,7 +858,7 @@ export function SyncResourcesTable({
 									<>No {resourceNounPlural} match the current filter.</>
 								)}{" "}
 								<Button variant="ghost" size="sm" onClick={clearFilters}>
-									Clear filter
+									Clear filters
 								</Button>
 							</TableCell>
 						</TableRow>

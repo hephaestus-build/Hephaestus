@@ -40,7 +40,7 @@ export function AiChoiceSection({
 					Your AI choice
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					One answer for every workspace you are in on this Hephaestus instance.
+					One answer covers every workspace you’re in on this Hephaestus instance.
 				</p>
 			</div>
 
@@ -110,7 +110,7 @@ function AiChoiceForm({
 					{isSaving ? "Saving…" : "Save"}
 				</Button>
 				<p id={hintId} className="text-sm text-muted-foreground">
-					Applies in all your workspaces. Change it any time.
+					You can change your answer at any time.
 				</p>
 			</footer>
 		</Questionnaire>

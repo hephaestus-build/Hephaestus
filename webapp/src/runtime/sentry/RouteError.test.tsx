@@ -44,7 +44,7 @@ it("reports a thrown route error once and renders recovery controls", async () =
 	);
 
 	const alert = await screen.findByRole("alert");
-	expect(alert.textContent).toContain("Something went wrong");
+	expect(alert.textContent).toContain("This page could not load");
 	expect(captureException).toHaveBeenCalledExactlyOnceWith(error);
 
 	await userEvent.click(screen.getByRole("button", { name: "Try again" }));

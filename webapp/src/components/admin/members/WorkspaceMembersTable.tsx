@@ -106,8 +106,8 @@ export function WorkspaceMembersTable({
 										}
 										aria-label={
 											row.original.hidden
-												? `Show ${row.original.user.name}`
-												: `Hide ${row.original.user.name}`
+												? `Show ${row.original.user.name} in workspace activity`
+												: `Hide ${row.original.user.name} from workspace activity`
 										}
 									>
 										{row.original.hidden ? (
@@ -200,7 +200,7 @@ export function WorkspaceMembersTable({
 				<TableCell colSpan={table.getVisibleLeafColumns().length} className="h-32 text-center">
 					<div className="flex flex-col items-center justify-center space-y-2">
 						<Spinner />
-						<p className="text-sm text-muted-foreground">Loading users...</p>
+						<p className="text-sm text-muted-foreground">Loading members…</p>
 					</div>
 				</TableCell>
 			</TableRow>
@@ -221,11 +221,11 @@ export function WorkspaceMembersTable({
 				<TableCell colSpan={table.getVisibleLeafColumns().length} className="h-32 text-center">
 					<div className="flex flex-col items-center justify-center space-y-2">
 						<Users className="h-8 w-8 text-muted-foreground" />
-						<p className="text-sm font-medium">No users found</p>
+						<p className="text-sm font-medium">No members found</p>
 						<p className="text-xs text-muted-foreground">
 							{view.q || view.team !== "all"
-								? "Try adjusting your search or filter criteria"
-								: "No users have been added to the workspace yet"}
+								? "Try a different search or team."
+								: "This workspace has no members yet."}
 						</p>
 					</div>
 				</TableCell>
@@ -242,7 +242,7 @@ export function WorkspaceMembersTable({
 							<Search />
 						</InputGroupAddon>
 						<InputGroupInput
-							placeholder="Search by name or username..."
+							placeholder="Search by name or username…"
 							value={view.q}
 							onChange={(event) => onViewChange({ q: event.target.value, page: 0 })}
 							className="w-full sm:w-[300px]"
@@ -329,7 +329,7 @@ export function WorkspaceMembersTable({
 				<div className="order-2 flex-1 text-sm text-muted-foreground sm:order-1">
 					<div className="flex flex-col gap-1 sm:flex-row sm:gap-4">
 						<span>
-							Showing {table.getRowModel().rows.length} of {table.getRowCount()} users
+							Showing {table.getRowModel().rows.length} of {table.getRowCount()} members
 						</span>
 					</div>
 				</div>

@@ -75,7 +75,7 @@ export interface FeedbackLevelProps {
 	/** Where this feedback sits among all awaiting approval; absent when it awaits none. */
 	queue?: ApprovalQueue;
 	/**
-	 * Withdraws (`true`) or restores (`false`) a card on the developer's practice page, with the
+	 * Withdraws (`true`) or restores (`false`) a card on the developer’s practice page, with the
 	 * admin's reason. Settles when the server has answered; the form keeps the reason until it
 	 * succeeded.
 	 */
@@ -87,7 +87,7 @@ export interface FeedbackLevelProps {
  * One piece of feedback: who it is for, what it says, what became of it and what it was based on.
  * Feedback awaiting approval is the same level with the decision as its footer and the package
  * expanded, so approving it happens where it is read, and the level turns into the record the moment
- * the decision lands. A card on the developer's practice page has withdrawing it, or restoring it, as
+ * the decision lands. A card on the developer’s practice page has withdrawing it, or restoring it, as
  * its footer instead.
  */
 export function FeedbackLevel({
@@ -251,14 +251,14 @@ function WithdrawalPopover({
 							trigger: "Restore feedback",
 							title: "Restore this feedback",
 							description:
-								"It returns to the developer's practice page if its observations can still be shown there. Nothing is sent again.",
+								"It returns to the developer’s practice page if its observations can still be shown there. Nothing is sent again.",
 							placeholder: "Why the feedback was right after all…",
 						}
 					: {
 							trigger: "Withdraw feedback",
 							title: "Withdraw this feedback",
 							description:
-								"It comes off the developer's practice page and out of the feedback given to later reviews and Heph. The observations behind it are unchanged. A developer who already saw it sees that it was withdrawn, not your reason.",
+								"It comes off the developer’s practice page and out of the feedback given to later reviews and Heph. The observations behind it are unchanged. A developer who already saw it sees that it was withdrawn, not your reason.",
 							placeholder: "What the feedback got wrong…",
 						}
 			}

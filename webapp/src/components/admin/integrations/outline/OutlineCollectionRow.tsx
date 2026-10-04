@@ -98,7 +98,7 @@ export function OutlineCollectionRow({
 					{collection.syncStatus === "PENDING" ? (
 						<Badge variant="secondary">
 							{/* The visible "Syncing…" text carries the meaning; hide the spinner from AT so the
-							row does not double-announce a generic "Loading" live region per collection. */}
+							row doesn't double-announce a generic "Loading" live region per collection. */}
 							<Spinner className="size-3" role="presentation" aria-hidden />
 							Syncing…
 						</Badge>
@@ -151,9 +151,9 @@ export function OutlineCollectionRow({
 								<PopoverContent align="start" className="max-w-sm">
 									<PopoverTitle>Exports skipped for budget</PopoverTitle>
 									<PopoverDescription className="break-words">
-										{collection.exportsSkippedForBudget} export
-										{collection.exportsSkippedForBudget === 1 ? "" : "s"} skipped for the shared
-										budget in the last pass — they catch up on the next reconcile.
+										The last pass skipped {collection.exportsSkippedForBudget} export
+										{collection.exportsSkippedForBudget === 1 ? "" : "s"} for the shared budget.
+										They catch up on the next reconcile.
 									</PopoverDescription>
 								</PopoverContent>
 							</Popover>
@@ -185,7 +185,7 @@ export function OutlineCollectionRow({
 						<DropdownMenuSeparator />
 						<DropdownMenuItem variant="destructive" onClick={() => onRemove(collection)}>
 							<Trash2Icon className="size-4" />
-							Remove &amp; erase…
+							Remove and erase…
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>

@@ -200,7 +200,7 @@ function ReviewTimingSection({
 					<AlertCircle />
 					<AlertTitle>Nothing can start a review</AlertTitle>
 					<AlertDescription>
-						Practice reviews are on, but both ways in are switched off.
+						Practice reviews are on, but both ways to start one are switched off.
 					</AlertDescription>
 				</Alert>
 			) : null}
@@ -313,7 +313,7 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 					Sending feedback
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					Workspace-wide control for comments and mentor messages.
+					Workspace-wide control for comments and mentor feedback.
 				</p>
 			</div>
 			{paused ? (
@@ -321,7 +321,7 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 					<AlertCircle />
 					<AlertTitle>Sending is paused</AlertTitle>
 					<AlertDescription>
-						Reviews and in-app feedback continue, but no comments or mentor messages leave
+						Reviews and in-app feedback continue, but no comments or mentor feedback leave
 						Hephaestus. Automatic feedback is not queued for later delivery. Pending approvals
 						remain in the review queue, and a workspace owner or admin can decide them after
 						resuming.
@@ -335,7 +335,7 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 						<StatusBadge def={WORKSPACE_DELIVERY_STATUS_DEFS[settings.deliveryStatus]} />
 					</div>
 					<FieldDescription>
-						Pause all comments and mentor messages without stopping reviews or changing coverage.
+						Pause all comments and mentor feedback without stopping reviews or changing coverage.
 					</FieldDescription>
 				</FieldContent>
 				<Switch

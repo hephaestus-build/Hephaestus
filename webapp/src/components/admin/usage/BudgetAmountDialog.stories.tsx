@@ -23,7 +23,7 @@ const meta = {
 	args: {
 		open: true,
 		title: "Set monthly cap",
-		description: "At the cap, that work pauses until the month resets. $0 pauses now.",
+		description: "At the cap, that work pauses until the month resets. Enter $0 to pause now.",
 		fieldLabel: "Monthly cap (USD)",
 		currentValueUsd: 25,
 		isPending: false,
@@ -73,7 +73,7 @@ export const WithLiveCurrencyHint: Story = {
 	args: { currentValueUsd: 50, fx: EUR, isCurrentMonth: true },
 	play: async ({ args }) => {
 		const dialog = await capDialog();
-		await expectSettledVisible(await dialog.findByText(/at today's rate\./u));
+		await expectSettledVisible(await dialog.findByText(/at today’s rate\./u));
 		dialog.getByLabelText("about 44 euros");
 
 		const input = dialog.getByLabelText(/monthly cap/iu);
@@ -83,7 +83,7 @@ export const WithLiveCurrencyHint: Story = {
 
 		// An empty field has nothing to estimate, so the hint leaves rather than reading "≈ €0".
 		await userEvent.clear(input);
-		await expect(dialog.queryByText(/at today's rate/u)).toBeNull();
+		await expect(dialog.queryByText(/at today’s rate/u)).toBeNull();
 		await expect(args.onSubmit).not.toHaveBeenCalled();
 	},
 };
@@ -95,7 +95,7 @@ export const OnAClosedMonthTheHintIsWithdrawn: Story = {
 export const WithoutCurrencyHint: Story = {
 	play: async () => {
 		const dialog = await capDialog();
-		await expect(dialog.queryByText(/at today's rate/u)).toBeNull();
+		await expect(dialog.queryByText(/at today’s rate/u)).toBeNull();
 	},
 };
 

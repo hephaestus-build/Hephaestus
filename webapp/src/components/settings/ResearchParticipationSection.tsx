@@ -46,8 +46,8 @@ export function ResearchParticipationSection({
 							Participate in academic research
 						</FieldLabel>
 						<FieldDescription>
-							When enabled, {organization} may use your Hephaestus usage and practice feedback
-							interactions for the academic research described in the{" "}
+							When this is on, {organization} may use your Hephaestus usage and your interactions
+							with practice feedback for the academic research described in the{" "}
 							<a
 								href="/privacy"
 								target="_blank"
@@ -55,9 +55,9 @@ export function ResearchParticipationSection({
 								className="underline underline-offset-4"
 							>
 								privacy notice (opens in a new tab)
-							</a>{" "}
-							and may invite you to occasional surveys. Turning it off records your withdrawal,
-							dated and kept with the version of the notice you were shown.
+							</a>
+							. {organization} may also invite you to occasional surveys. Turning this off records
+							your withdrawal, with the date and the version of the notice you were shown.
 						</FieldDescription>
 					</FieldContent>
 					<Switch

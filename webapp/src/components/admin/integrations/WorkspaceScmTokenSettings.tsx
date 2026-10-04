@@ -39,15 +39,15 @@ export function WorkspaceScmTokenSettings({
 }: WorkspaceScmTokenSettingsProps) {
 	const id = useId();
 	const expiresAt = asDate(tokenExpiresAt);
-	let expiryDescription = "Token expiry is not available yet";
+	let expiryDescription = "The token expiry is not available yet.";
 	if (tokenExpiryCheckedAt && tokenExpiresAt == null) {
-		expiryDescription = "Token has no expiry";
+		expiryDescription = "The token has no expiry.";
 	}
 	if (expiresAt) {
-		expiryDescription = `Token expires on ${formatCalendarDate(expiresAt)}`;
+		expiryDescription = `The token expires on ${formatCalendarDate(expiresAt)}.`;
 	}
 	if (tokenMetadataError != null) {
-		expiryDescription = "Token expiry could not be loaded.";
+		expiryDescription = "We could not load the token expiry.";
 	}
 
 	const [token, setToken] = useState("");
@@ -88,9 +88,9 @@ export function WorkspaceScmTokenSettings({
 						)}
 						{attentionProblem === "CREDENTIAL_EXPIRING" && (
 							<Alert>
-								<AlertTitle>The GitLab token needs attention</AlertTitle>
+								<AlertTitle>The GitLab token is about to expire</AlertTitle>
 								<AlertDescription>
-									The token could not be rotated. Replace it below to keep sync available.
+									Hephaestus could not rotate it. Replace it below to keep sync working.
 								</AlertDescription>
 							</Alert>
 						)}
@@ -116,18 +116,18 @@ export function WorkspaceScmTokenSettings({
 							aria-describedby={`${id}-description${error == null ? "" : ` ${id}-error`}`}
 						/>
 						<FieldDescription id={`${id}-description`}>
-							Use a token with access to the same repositories and the permissions required by your
-							integration. The current token is never displayed.
+							Use a token that can reach the same repositories and has the permissions that your
+							integration needs. Hephaestus never shows the current token.
 						</FieldDescription>
 						{error != null && (
 							<FieldError id={`${id}-error`}>
-								{problemDetailOf(error, "Could not replace the token. Try again.")}
+								{problemDetailOf(error, "We could not replace the token. Try again.")}
 							</FieldError>
 						)}
 					</Field>
 					<Button type="submit" disabled={!token.trim() || isSaving}>
 						{isSaving && <Spinner />}
-						{isSaving ? "Saving token…" : "Replace token"}
+						{isSaving ? "Replacing token…" : "Replace token"}
 					</Button>
 				</form>
 			</CardContent>

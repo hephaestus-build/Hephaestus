@@ -19,7 +19,7 @@ const meta = {
 		onCancel: fn(),
 		privacyPolicy: (
 			<a href="/privacy" className="underline underline-offset-4 hover:text-foreground">
-				Read our Privacy Policy
+				Read our privacy statement
 			</a>
 		),
 	},
@@ -32,8 +32,8 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByRole("region", { name: /your privacy/iu });
-		canvas.getByRole("button", { name: "Decline" });
-		canvas.getByRole("button", { name: "Allow" });
+		canvas.getByRole("button", { name: "Decline error reports" });
+		canvas.getByRole("button", { name: "Allow error reports" });
 		await expect(canvas.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
 	},
 };
@@ -43,7 +43,7 @@ export const Editing: Story = {
 	args: { editing: true },
 	play: async ({ canvas }) => {
 		canvas.getByRole("button", { name: "Cancel" });
-		canvas.getByRole("button", { name: "Decline" });
-		canvas.getByRole("button", { name: "Allow" });
+		canvas.getByRole("button", { name: "Decline error reports" });
+		canvas.getByRole("button", { name: "Allow error reports" });
 	},
 };

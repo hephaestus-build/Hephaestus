@@ -98,8 +98,8 @@ export function SilentModeCard({
 				</CardTitle>
 				<CardDescription>
 					The instance-wide emergency brake. While engaged, Hephaestus posts no practice feedback on
-					pull requests, merge requests or issues, and sends no Slack messages — for any workspace.
-					Workspace settings are untouched and apply again the moment silent mode is released.
+					pull requests, merge requests or issues, and sends no Slack messages in any workspace.
+					Workspace settings stay as they are and apply again the moment silent mode is released.
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-2">
@@ -162,7 +162,7 @@ export function SilentModeCard({
 							id="silent-mode-reason"
 							value={reason}
 							onChange={(event) => setReason(event.target.value)}
-							placeholder="e.g. Investigating incident #42 — bad feedback going out"
+							placeholder="e.g. Investigating incident #42, bad feedback going out"
 							maxLength={500}
 							rows={3}
 						/>
@@ -201,8 +201,8 @@ export function SilentModeCard({
 					{releaseDisabled ? (
 						<Alert variant="destructive">
 							<AlertDescription>
-								The current settings could not be verified. Keep silent mode on and retry after
-								reloading.
+								The current settings could not be verified. Keep silent mode on, reload the page,
+								and try again.
 							</AlertDescription>
 						</Alert>
 					) : null}

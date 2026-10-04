@@ -87,7 +87,7 @@ export const Configured: Story = {
 		chromatic: { viewports: [320, 1440] },
 	},
 	play: async ({ canvas }) => {
-		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Review changes" }));
+		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save coverage" }));
 		await expect(canvas.getByRole("switch", { name: "Send feedback" })).toBeChecked();
 		await expectNoPageOverflow();
 	},
@@ -228,13 +228,13 @@ export const CumulativeWideningDraft: Story = {
 		await userEvent.click(canvas.getByRole("radio", { name: "All eligible linked members" }));
 		await expect(args.coverage.preview).not.toHaveBeenCalled();
 		await expect(canvas.getByText("You have unsaved coverage changes.")).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Save coverage" }));
 		const dialog = within(await screen.findByRole("alertdialog"));
 		await expect(dialog.getByText(/Monitored repositories covered:/u)).toHaveTextContent(
 			"Monitored repositories covered: 1 → 3 of 3",
 		);
 		await expectNoPageOverflow();
-		await userEvent.click(dialog.getByRole("button", { name: "Apply wider coverage" }));
+		await userEvent.click(dialog.getByRole("button", { name: "Widen coverage" }));
 		await expect(args.policy.onUpdate).toHaveBeenCalledWith(
 			{
 				reviewScope: {
@@ -269,7 +269,7 @@ export const NarrowingAppliesAfterOnePreview: Story = {
 		).toBeVisible();
 		await expect(canvas.getByText(/An empty people selection covers nobody/u)).toBeVisible();
 		await expect(args.coverage.preview).not.toHaveBeenCalled();
-		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Save coverage" }));
 		await expect(args.coverage.preview).toHaveBeenCalledTimes(1);
 		await expect(args.policy.onUpdate).toHaveBeenCalledTimes(1);
 	},
@@ -285,7 +285,7 @@ export const CoveragePreviewPending: Story = {
 	},
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("radio", { name: "All monitored repositories" }));
-		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Save coverage" }));
 		await expect(canvas.getByRole("status")).toHaveTextContent("Checking impact…");
 		await expect(canvas.getByRole("button", { name: "Checking impact…" })).toBeDisabled();
 	},
@@ -303,9 +303,9 @@ export const CoveragePreviewUnavailable: Story = {
 	},
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("radio", { name: "All monitored repositories" }));
-		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Save coverage" }));
 		await expect(canvas.getByRole("alert")).toHaveTextContent(/^Could not estimate the impact\./u);
-		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Save coverage" }));
 		await expect(args.coverage.preview).toHaveBeenCalledTimes(2);
 	},
 };
@@ -328,7 +328,7 @@ export const CoverageSavePending: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("radio", { name: "Selected repositories" }));
 		await userEvent.click(canvas.getByRole("radio", { name: "Selected people" }));
-		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Save coverage" }));
 		await expect(args.policy.onUpdate).toHaveBeenCalledTimes(1);
 		await expect(canvas.getByText("Saving coverage…")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Saving…" })).toBeDisabled();
@@ -355,7 +355,7 @@ export const CoverageSaveRollsBack: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("radio", { name: "Selected repositories" }));
 		await userEvent.click(canvas.getByRole("radio", { name: "Selected people" }));
-		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Save coverage" }));
 		await expect(args.policy.onUpdate).toHaveBeenCalledTimes(1);
 		await expect(canvas.getByRole("alert")).toHaveTextContent(/^Could not save the coverage\./u);
 		await expect(canvas.getByRole("radio", { name: "Selected repositories" })).toBeChecked();

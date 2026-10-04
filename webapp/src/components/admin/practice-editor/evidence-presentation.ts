@@ -61,7 +61,7 @@ export interface EvidenceSourceFamilyDef {
 export const EVIDENCE_SOURCE_FAMILY: Record<EvidenceSourceFamily, EvidenceSourceFamilyDef> = {
 	work: { label: "The work itself", icon: FileSearchIcon },
 	around: { label: "Around the work", icon: NetworkIcon },
-	history: { label: "This person's history", icon: HistoryIcon },
+	history: { label: "This person’s history", icon: HistoryIcon },
 	other: { label: "Other sources", icon: CircleDashedIcon },
 };
 
@@ -168,10 +168,10 @@ export function readinessReasonLabel(reasonCode: PracticeEvidenceReason): string
 }
 
 const READINESS_REASON_LABELS: Record<PracticeEvidenceReason, string> = {
-	SOURCE_NOT_AVAILABLE: "was not available",
-	SOURCE_INCOMPLETE: "was not fully captured",
-	SOURCE_EMPTY: "was empty",
-	NO_AUTOMATED_REVIEW: "this practice is not set up for automated review",
-	DECLARED_EVIDENCE_INSUFFICIENT: "this practice declares its evidence insufficient",
-	SUBJECT_NOT_IN_THE_WORK: "the work did not contain this practice's subject",
+	SOURCE_NOT_AVAILABLE: "not available",
+	SOURCE_INCOMPLETE: "not fully captured",
+	SOURCE_EMPTY: "empty",
+	NO_AUTOMATED_REVIEW: "This practice is not set up for automated review",
+	DECLARED_EVIDENCE_INSUFFICIENT: "This practice declares its evidence insufficient",
+	SUBJECT_NOT_IN_THE_WORK: "The work did not contain this practice’s subject",
 };

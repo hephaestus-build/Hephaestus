@@ -25,7 +25,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(
-			canvas.getByRole("heading", { name: "Practice reviews, in context." }),
+			canvas.getByRole("heading", { name: "Practice reviews, in context" }),
 		).toBeVisible();
 		await expect(canvas.getByText("hephaestus.build")).toBeVisible();
 		await expect(canvas.getByLabelText("Hephaestus address")).not.toBeVisible();
@@ -71,7 +71,7 @@ export const PermissionRefused: Story = {
 			status: "error",
 			target: "hosted",
 			message:
-				"Chrome did not allow the extension to reach hephaestus.build, so nothing changed. Try again to see Chrome's prompt.",
+				"Chrome did not allow the extension to reach hephaestus.build, so nothing changed. Try again to see Chrome’s prompt.",
 		},
 	},
 	play: async ({ canvas }) => {
@@ -90,7 +90,7 @@ export const SelfHostedFailed: Story = {
 			status: "error",
 			target: "custom",
 			message:
-				"No Hephaestus instance answered at that address. Check it and that access was granted.",
+				"No Hephaestus instance answered at that address. Check the address, and check that Chrome allowed access.",
 		},
 	},
 	play: async ({ canvas }) => {

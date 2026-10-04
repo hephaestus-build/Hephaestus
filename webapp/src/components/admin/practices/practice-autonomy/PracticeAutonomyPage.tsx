@@ -163,8 +163,8 @@ export function PracticeAutonomyPage({
 						<AlertDialogTitle>Start sending automatically?</AlertDialogTitle>
 						<AlertDialogDescription>
 							Set {automaticPromotionLabel(automaticPromotion)} to Send automatically. Eligible new
-							feedback affected by this setting can proceed without approval, subject to delivery
-							policy. Feedback already awaiting approval will remain unchanged.
+							feedback can then go out without approval, as long as delivery policy allows it.
+							Feedback already awaiting approval does not change.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -458,7 +458,7 @@ function BulkActionBar({
 						<DropdownMenuTrigger
 							render={
 								<Button size="sm" variant="outline" disabled={bulk !== null || count === 0}>
-									Change the selected
+									Change selected practices
 								</Button>
 							}
 						/>

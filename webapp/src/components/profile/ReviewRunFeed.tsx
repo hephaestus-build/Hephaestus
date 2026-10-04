@@ -72,7 +72,9 @@ export function ReviewRunFeed({
 	if (shown.length === 0 && feed.hasMore) {
 		return (
 			<div className="flex flex-col items-start gap-2">
-				<p className="text-sm text-muted-foreground">Nothing here in the latest reviews.</p>
+				<p className="text-sm text-muted-foreground">
+					The latest reviews have no observations here.
+				</p>
 				<div className="flex flex-wrap items-center gap-3">
 					{emptyAction}
 					<EarlierReviewsButton {...feed} />

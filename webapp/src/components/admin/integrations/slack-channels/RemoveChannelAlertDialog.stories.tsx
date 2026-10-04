@@ -43,7 +43,7 @@ export const TypeToConfirm: Story = {
 		const dialog = within(await screen.findByRole("alertdialog"));
 		dialog.getByText(/all messages collected/iu);
 
-		const confirm = dialog.getByRole("button", { name: /remove & erase/iu });
+		const confirm = dialog.getByRole("button", { name: /remove and erase/iu });
 		await userEvent.click(confirm);
 
 		await expect(args.onConfirm).not.toHaveBeenCalled();
@@ -66,7 +66,7 @@ export const ConfirmMismatch: Story = {
 		const dialog = within(await screen.findByRole("alertdialog"));
 		const input = dialog.getByLabelText(/to confirm/iu);
 		await userEvent.type(input, "C0-WRONG");
-		await userEvent.click(dialog.getByRole("button", { name: /remove & erase/iu }));
+		await userEvent.click(dialog.getByRole("button", { name: /remove and erase/iu }));
 
 		await expect(input).toHaveAttribute("aria-invalid", "true");
 		dialog.getByText(/that does not match/iu);

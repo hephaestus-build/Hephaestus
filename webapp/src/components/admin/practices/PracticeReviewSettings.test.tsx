@@ -93,11 +93,11 @@ describe("PracticeReviewSettings", () => {
 		expect(preview).not.toHaveBeenCalled();
 		expect(onUpdate).not.toHaveBeenCalled();
 
-		fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
+		fireEvent.click(screen.getByRole("button", { name: "Save coverage" }));
 		await screen.findByRole("alertdialog");
 		expect(preview).toHaveBeenCalledOnce();
 		await act(async () => {
-			fireEvent.click(screen.getByRole("button", { name: "Apply wider coverage" }));
+			fireEvent.click(screen.getByRole("button", { name: "Widen coverage" }));
 		});
 		expect(onUpdate).toHaveBeenCalledWith(
 			{
@@ -128,7 +128,7 @@ describe("PracticeReviewSettings", () => {
 		fireEvent.click(screen.getByRole("radio", { name: "Selected people" }));
 		screen.getByText(/An empty repository selection covers no repository work/u);
 		screen.getByText(/An empty people selection covers nobody/u);
-		fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
+		fireEvent.click(screen.getByRole("button", { name: "Save coverage" }));
 
 		await act(async () => {
 			await Promise.resolve();
@@ -216,7 +216,7 @@ describe("PracticeReviewSettings", () => {
 
 		await screen.findByText("Coverage changed elsewhere");
 		fireEvent.click(screen.getByRole("radio", { name: "Selected people" }));
-		expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review changes" }).disabled).toBe(
+		expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save coverage" }).disabled).toBe(
 			true,
 		);
 		expect(onUpdate).not.toHaveBeenCalled();
@@ -263,7 +263,7 @@ describe("PracticeReviewSettings", () => {
 		await renderWithRouter(<RollbackHarness />, "/w/acme/admin/practices");
 		fireEvent.click(screen.getByRole("radio", { name: "Selected repositories" }));
 		fireEvent.click(screen.getByRole("radio", { name: "Selected people" }));
-		fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
+		fireEvent.click(screen.getByRole("button", { name: "Save coverage" }));
 
 		const alert = await screen.findByRole("alert");
 		expect(alert.textContent).toMatch(/^Could not save the coverage\./u);
@@ -326,7 +326,7 @@ describe("PracticeReviewSettings", () => {
 
 		await renderWithRouter(<RebaseHarness />, "/w/acme/admin/practices");
 		fireEvent.click(screen.getByRole("radio", { name: "Selected repositories" }));
-		fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
+		fireEvent.click(screen.getByRole("button", { name: "Save coverage" }));
 		await screen.findByText("Coverage is up to date.");
 
 		fireEvent.click(screen.getByRole("button", { name: "Receive newer coverage" }));

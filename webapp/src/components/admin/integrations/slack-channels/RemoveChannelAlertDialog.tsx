@@ -84,7 +84,7 @@ export function RemoveChannelAlertDialog({
 		setSubmitting(false);
 	}
 
-	let actionLabel = "Remove & erase";
+	let actionLabel = "Remove and erase";
 	if (submitting) {
 		actionLabel = "Removing…";
 	} else if (nothingCollected) {
@@ -101,13 +101,13 @@ export function RemoveChannelAlertDialog({
 					<AlertDialogDescription>
 						{nothingCollected ? (
 							<>
-								This stops the setup for this channel. Nothing has been collected from it yet — no
-								announcement was ever posted. This cannot be undone.
+								This stops the setup for this channel. Nothing has been collected from it yet,
+								because no announcement was ever posted. You cannot undo this.
 							</>
 						) : (
 							<>
 								This permanently deletes <strong>all messages collected</strong> from this channel
-								and every practice observation derived from them. This cannot be undone.
+								and every practice observation derived from them. You cannot undo this.
 							</>
 						)}
 					</AlertDialogDescription>

@@ -40,7 +40,7 @@ export const RetryFailedResultProcessing: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Retry result processing" }));
 		const dialog = within(await screen.findByRole("alertdialog"));
 		dialog.getByText(
-			"Process the review results again. This may retry failed publication. Approval requirements still apply.",
+			"Process the review results again. Delivery that failed is tried again. Feedback that needs approval still waits for it.",
 		);
 		await userEvent.click(dialog.getByRole("button", { name: "Retry result processing" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();

@@ -111,7 +111,7 @@ export const NarrowedToNothingSoFar: Story = {
 	},
 	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.queryByText("No review runs")).toBeNull();
-		await expect(canvas.getByText("Nothing here in the latest reviews.")).toBeVisible();
+		await expect(canvas.getByText("The latest reviews have no observations here.")).toBeVisible();
 		await expect(
 			canvas.getByRole("button", { name: "Show every review in this group" }),
 		).toBeVisible();

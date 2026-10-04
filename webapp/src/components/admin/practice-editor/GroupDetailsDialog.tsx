@@ -82,7 +82,7 @@ function GroupDetailsForm({
 		}
 	};
 
-	let submitLabel = editing ? "Save" : "Create";
+	let submitLabel = editing ? "Save group" : "Create group";
 	if (pending) {
 		submitLabel = editing ? "Saving…" : "Creating…";
 	}

@@ -451,7 +451,7 @@ export function SortableCatalogTree<
 				announcements,
 				screenReaderInstructions: {
 					draggable:
-						"Press space to pick up an item. Use the arrow keys to move it, then press space to drop or escape to cancel. You can also use the item's actions menu to move it without dragging.",
+						"Press space to pick up an item. Use the arrow keys to move it, then press space to drop or escape to cancel. You can also use the item’s actions menu to move it without dragging.",
 				},
 			}}
 			onDragStart={handleDragStart}

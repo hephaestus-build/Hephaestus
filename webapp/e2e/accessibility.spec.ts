@@ -313,7 +313,7 @@ base.describe("keyboard", () => {
 
 			const menu = page.getByRole("menu");
 			await expect(menu.getByRole("menuitem", { name: "Settings" })).toBeVisible();
-			await expect(menu).toContainText("Sign Out");
+			await expect(menu).toContainText("Sign out");
 			expect(await axeViolations(page, { overlay: true })).toEqual([]);
 
 			await page.keyboard.press("Escape");
@@ -345,7 +345,7 @@ base.describe("keyboard", () => {
 		"collapsed to icons, the sidebar still names each link and its tooltip can be dismissed",
 		async ({ page }) => {
 			await open(page, "/w/e2e/admin/members");
-			await page.getByRole("banner").getByRole("button", { name: "Toggle Sidebar" }).click();
+			await page.getByRole("banner").getByRole("button", { name: "Toggle sidebar" }).click();
 			// The header slides under the pointer as the sidebar narrows and would open its tooltip.
 			await page.mouse.move(640, 600);
 			await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0);

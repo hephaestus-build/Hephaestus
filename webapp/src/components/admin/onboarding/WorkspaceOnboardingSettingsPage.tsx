@@ -69,7 +69,7 @@ export function WorkspaceOnboardingSettingsPage({
 			<PageHeader
 				icon={<HandshakeIcon />}
 				title="Member onboarding"
-				description="Set up developers after they join this workspace. Membership is granted elsewhere."
+				description="Choose how members set up after they join this workspace. This page does not grant membership."
 			/>
 			{state.status === "loading" && (
 				<div
@@ -85,7 +85,7 @@ export function WorkspaceOnboardingSettingsPage({
 			)}
 			{state.status === "error" && (
 				<QueryErrorAlert
-					title="Could not load onboarding settings"
+					title="We could not load onboarding settings"
 					error={state.error}
 					onRetry={state.onRetry}
 				/>
@@ -310,7 +310,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 			)}
 			{submission.status === "error" && edits?.refused && (
 				<Alert variant="destructive">
-					<AlertTitle>Could not save onboarding settings</AlertTitle>
+					<AlertTitle>We could not save onboarding settings</AlertTitle>
 					<AlertDescription>{submission.message}</AlertDescription>
 				</Alert>
 			)}

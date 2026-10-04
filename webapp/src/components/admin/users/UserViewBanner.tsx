@@ -18,7 +18,7 @@ export function UserViewBanner({ name, workspace, hasAccount, onExit }: UserView
 		<Alert role="region" aria-labelledby={titleId} className="sticky top-0 z-20">
 			<EyeIcon aria-hidden />
 			<AlertTitle id={titleId} className="min-w-0 break-words">
-				Viewing {name} in {workspace} — read-only
+				Viewing {name} in {workspace} (read-only)
 			</AlertTitle>
 			<AlertDescription className="min-w-0 break-words">
 				You remain signed in as yourself. This access is audited. Account setup and personal choices

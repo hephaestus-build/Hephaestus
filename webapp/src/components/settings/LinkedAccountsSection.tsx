@@ -257,8 +257,8 @@ export function LinkedAccountsSection({
 				<div className="space-y-2 pt-2">
 					<h3 className="text-sm font-medium">Connect another account</h3>
 					<p className="text-xs text-muted-foreground">
-						Connecting a provider sends you to its sign-in page. Hephaestus then links the identity
-						that you sign in with to this account.
+						Connecting a provider sends you to its sign-in page. After you sign in there, Hephaestus
+						adds that identity to this account.
 					</p>
 					<div className="flex flex-wrap gap-2 pt-1">
 						{signInProviders.map((provider) => {
@@ -289,7 +289,7 @@ export function LinkedAccountsSection({
 
 			{linkableProviders.length === 0 && identities.length > 0 && (
 				<p className="pt-2 text-xs text-muted-foreground">
-					You have connected all available providers.
+					You’ve connected all available providers.
 				</p>
 			)}
 		</LinkedAccountsFrame>
@@ -315,12 +315,11 @@ function LinkedAccountsFrame({
 					id="linked-accounts-heading"
 					className="rounded-sm text-xl font-semibold outline-none focus:ring-2 focus:ring-ring"
 				>
-					Connected Accounts
+					Connected accounts
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					The identity providers you can sign in to Hephaestus with, plus content tools you connect
-					so your work is attributed to you. Connect another provider, or disconnect ones you no
-					longer use.
+					The identity providers you sign in with, and the content tools you connect so your work is
+					attributed to you. Connect another provider, or disconnect one you no longer use.
 				</p>
 			</div>
 
@@ -357,7 +356,7 @@ function UnlinkControl({
 				id={`lockout-hint-${identityId}`}
 				className="max-w-3xs shrink-0 text-xs text-muted-foreground"
 			>
-				Your only sign-in method. Delete your account in the Danger Zone to remove it.
+				This is your only sign-in method. To remove it, delete your account in Danger zone.
 			</p>
 		);
 	}
@@ -392,8 +391,8 @@ function UnlinkControl({
 					<AlertDialogTitle>Disconnect {name}?</AlertDialogTitle>
 					<AlertDialogDescription>
 						{isLinkOnly
-							? `Hephaestus will stop attributing your ${provider} activity to this account. You can reconnect ${provider} anytime from Settings.`
-							: `You will no longer be able to sign in to Hephaestus with this ${provider} account. You can reconnect it anytime by signing in with ${provider} again.`}
+							? `Hephaestus will stop attributing your ${provider} activity to this account. You can reconnect ${provider} at any time from Settings.`
+							: `You’ll no longer be able to sign in to Hephaestus with this ${provider} account. You can reconnect it at any time by signing in with ${provider} again.`}
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>

@@ -47,5 +47,5 @@ export const NothingToRetry: Story = {
 /** The longest title a detail page passes, at the width where it has the least room. */
 export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
-	args: { title: "This work's review activity has not loaded" },
+	args: { title: "This work’s review activity has not loaded" },
 };

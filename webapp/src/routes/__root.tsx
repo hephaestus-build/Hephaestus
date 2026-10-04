@@ -281,11 +281,11 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 						<DialogContent>
 							<DialogHeader>
 								<DialogTitle>
-									{surveys.query.isError ? "Could not load survey" : "Survey unavailable"}
+									{surveys.query.isError ? "Could not load the survey" : "Survey unavailable"}
 								</DialogTitle>
 								<DialogDescription>
 									{surveys.query.isError
-										? "Your invitation could not be checked. Try again when the connection is available."
+										? "We could not check your invitation. Check your connection, then try again."
 										: "This survey is no longer offered to your account. It may have ended or already been answered or declined."}
 								</DialogDescription>
 							</DialogHeader>
@@ -539,7 +539,9 @@ function AppSidebarContainer() {
 			mentorThreads={sidebarContext === "mentor" ? mentorThreads : undefined}
 			mentorThreadsLoading={sidebarContext === "mentor" ? mentorThreadsLoading : undefined}
 			mentorThreadsError={
-				sidebarContext === "mentor" && mentorThreadsError ? "Failed to load threads" : undefined
+				sidebarContext === "mentor" && mentorThreadsError
+					? "We could not load your conversations. Reload the page to try again."
+					: undefined
 			}
 		/>
 	);

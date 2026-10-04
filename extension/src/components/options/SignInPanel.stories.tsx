@@ -32,7 +32,9 @@ export const Default: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Sign in with LRZ GitLab" }));
 		await expect(args.onSignIn).toHaveBeenCalledWith("gitlab-lrz");
-		await expect(canvas.getByText(/until you close Chrome, or at most 7 days/u)).toBeVisible();
+		await expect(
+			canvas.getByText(/until you close Chrome or for 7 days, whichever comes first/u),
+		).toBeVisible();
 	},
 };
 

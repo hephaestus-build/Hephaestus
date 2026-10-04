@@ -69,8 +69,8 @@ export function LandingFeaturesSection() {
 					</h2>
 					<p className="mt-4 text-lg leading-relaxed text-pretty text-muted-foreground">
 						A mentor watches how someone works, not just what they shipped. Hephaestus reads the
-						code, the conversation around it, and the plan behind it — and authors and reviewers
-						both get feedback.
+						code, the conversation around it, and the plan behind it. Authors and reviewers both get
+						feedback.
 					</p>
 
 					<h3 className="mt-8 text-sm font-semibold">

@@ -17,7 +17,7 @@ export const DASHBOARD_VISIBILITY_DEFS: StatusDefs<DashboardVisibility> = {
 		label: "On dashboards",
 		icon: Eye,
 		badgeVariant: "outline",
-		description: "This group's practices appear on the dashboards developers read.",
+		description: "This group’s practices appear on the dashboards developers read.",
 	},
 	HIDDEN: {
 		label: "Off dashboards",

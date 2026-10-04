@@ -199,7 +199,7 @@ export function fxCapHint(
 	}
 	return {
 		conversion,
-		tail: " at today's rate.",
+		tail: " at today’s rate.",
 	};
 }
 

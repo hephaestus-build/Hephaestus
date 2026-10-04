@@ -27,7 +27,7 @@ export function TraceRefusalAlert({
 			<AlertDescription>
 				{/* Verbatim, and the fix link is keyed on the coded reason rather than the prose:
 				    the prose is the server's to change. */}
-				<span>{refusal.reasonDescription ?? "No review was started."}</span>
+				<span>{refusal.reasonDescription ?? "No reason was given."}</span>
 				{refusal.reason && (
 					<RefusalFixLink
 						workspaceSlug={workspaceSlug}

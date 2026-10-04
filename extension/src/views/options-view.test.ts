@@ -287,7 +287,7 @@ it("disconnects only after the reader confirms changing the instance", async () 
 
 	await click(button("Change instance…"));
 	expect(requests("clear-instance")).toStrictEqual([]);
-	await click(button("Keep it"));
+	await click(button("Stay connected"));
 	expect(requests("clear-instance")).toStrictEqual([]);
 
 	await click(button("Change instance…"));

@@ -64,7 +64,7 @@ export const Default: Story = {
 export const RequiredQuestionBlocksNext: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
-		await expect(canvas.getByRole("alert")).toHaveTextContent("Pick a number to continue.");
+		await expect(canvas.getByRole("alert")).toHaveTextContent("Select a number to continue.");
 		await expect(canvas.getByRole("progressbar")).toHaveTextContent("Question 1 of 4");
 		// A required question is the unmarked one; the optional ones say so in their own heading.
 		await expect(canvas.getByRole("group", { name: /How useful/u })).not.toHaveAccessibleName(
@@ -381,7 +381,7 @@ export const SendJumpsBackToAnUnansweredRequiredQuestion: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Send answers" }));
 		await expect(args.onSubmit).not.toHaveBeenCalled();
 		await expect(canvas.getByRole("progressbar")).toHaveTextContent("Question 1 of 4");
-		await expect(canvas.getByRole("alert")).toHaveTextContent("Pick a number to continue.");
+		await expect(canvas.getByRole("alert")).toHaveTextContent("Select a number to continue.");
 		await expect(args.onDraftChange).toHaveBeenLastCalledWith(
 			expect.objectContaining({ item: "useful" }),
 		);

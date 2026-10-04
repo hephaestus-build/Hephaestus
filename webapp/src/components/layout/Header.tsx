@@ -202,7 +202,7 @@ export default function Header({
 									)}
 									<DropdownMenuItem onClick={onLogout}>
 										<LogOut />
-										<span>Sign Out</span>
+										<span>Sign out</span>
 									</DropdownMenuItem>
 								</DropdownMenuContent>
 							</DropdownMenu>

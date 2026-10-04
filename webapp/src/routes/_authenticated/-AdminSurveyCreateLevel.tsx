@@ -40,7 +40,7 @@ export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreat
 			);
 			void queryClient.invalidateQueries({ queryKey: adminListProductSurveysQueryKey() });
 			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
-			toast.success("Survey published.");
+			toast.success("Survey published");
 			onPublished(survey.id);
 		},
 		onError: (error) =>

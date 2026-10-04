@@ -62,7 +62,7 @@ const PROBLEMS: readonly ProblemDef[] = [
 	{
 		key: "unprocessedResults",
 		phrase: (count) =>
-			`${count} ${count === 1 ? "review's" : "reviews'"} results could not be processed or delivered`,
+			`${count} ${count === 1 ? "review’s" : "reviews’"} results could not be processed or delivered`,
 		what: "reviews whose results could not be processed or delivered",
 	},
 	{
@@ -164,7 +164,7 @@ function Approvals({
 						className="text-sm"
 						render={<ReviewListLink workspaceSlug={workspaceSlug} destination={list} />}
 					>
-						See all {state.total}
+						See all {state.total} awaiting approval
 					</InlineLink>
 				) : undefined
 			}

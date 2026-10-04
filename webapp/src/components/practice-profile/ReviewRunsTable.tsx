@@ -84,7 +84,7 @@ function slippedLead(run: ProfileReviewRun): string {
 }
 
 /**
- * "5 practices met, 9 did not apply; 16 practices reached", every number a count of practices. A
+ * "5 practices met, 9 did not apply · 16 practices reached", every number a count of practices. A
  * nought is dropped: this is a sentence about somebody's own work, and what slipped is already
  * named above it. The reach is its own clause, never a total of the outcomes: it counts every
  * practice the review measured, the outcomes only those it decided something about for the reader.
@@ -110,7 +110,7 @@ function reachedPhrase(run: ProfileReviewRun): string {
 		.join(", ");
 	const reach =
 		reached === undefined ? "" : `${count(reached, "practice", "practices", digits)} reached`;
-	return [decided, reach].filter((clause) => clause !== "").join("; ");
+	return [decided, reach].filter((clause) => clause !== "").join(" · ");
 }
 
 /** The frame and its head; the caller draws the bodies, one per day. */
@@ -163,16 +163,14 @@ export function ReviewRunsTable({
 					<TableRow variant="static">
 						<TableCell colSpan={COLUMNS} className="p-4 whitespace-normal">
 							{filtered ? (
-								<p className="text-sm text-muted-foreground">
-									No review here matches your filters.
-								</p>
+								<p className="text-sm text-muted-foreground">No reviews match your filters.</p>
 							) : (
 								<Empty>
 									<EmptyHeader>
 										<EmptyMedia variant="icon">
 											<PulseIcon />
 										</EmptyMedia>
-										<EmptyTitle>No review of your work yet.</EmptyTitle>
+										<EmptyTitle>No reviews of your work yet</EmptyTitle>
 										<EmptyDescription>
 											A review appears here once it records something about your work: a pull or
 											merge request, an issue, a conversation or a document.
@@ -292,10 +290,10 @@ function ReviewRunRow({
 						className={ROW_ACTION_PRESSED}
 						disabled={isRequesting}
 						onClick={() => onReviewNow(work)}
-						aria-label={`${isRequesting ? "Asking…" : "Review this now"}: ${work.label}`}
+						aria-label={`${isRequesting ? "Requesting review…" : "Review this now"}: ${work.label}`}
 					>
 						<PlayIcon aria-hidden data-icon="inline-start" />
-						{isRequesting ? "Asking…" : "Review this now"}
+						{isRequesting ? "Requesting review…" : "Review this now"}
 					</Button>
 				)}
 			</TableCell>

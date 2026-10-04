@@ -127,8 +127,7 @@ function ReadinessBody({ state }: InstanceConfigurationReadinessCardProps) {
 						</EmptyMedia>
 						<EmptyTitle>No configuration checks reported</EmptyTitle>
 						<EmptyDescription>
-							This server returned no checks, which it should never do. Reload the page to ask
-							again.
+							The server returned no checks, which is unexpected. Reload the page to ask again.
 						</EmptyDescription>
 					</EmptyHeader>
 				</Empty>

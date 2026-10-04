@@ -66,8 +66,7 @@ export function ActivateChannelDialog({
 						mentoring is on.
 					</li>
 					<li>
-						<strong>Begin reading new messages</strong> from now on (never past history —
-						forward-only).
+						<strong>Begin reading new messages</strong> from now on. It never reads past history.
 					</li>
 					<li>
 						Let any member <strong>opt out</strong> individually from the app’s Home tab.

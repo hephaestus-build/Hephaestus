@@ -40,7 +40,7 @@ export interface PracticeProfilePageHeaderProps {
  * feedback ends. Everything below the fold is the record this sentence introduces.
  */
 const INTRO =
-	"Hephaestus reviews your work against the practices your workspace cares about. What it observes lands here, and a piece of feedback resolves once your work comes back clean.";
+	"Hephaestus reviews your work against the practices your workspace cares about. What it observes appears here. A piece of feedback resolves once your work comes back clean.";
 
 export function PracticeProfilePageHeader({
 	latestRun,

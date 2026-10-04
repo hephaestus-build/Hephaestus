@@ -99,10 +99,10 @@ export function WorkItemRow({ work, providerType, login, reviewNow }: WorkItemRo
 							size="xs"
 							disabled={reviewNow.asking}
 							onClick={reviewNow.onReviewNow}
-							aria-label={`${reviewNow.asking ? "Asking…" : "Review this now"}: ${workReference(providerType, work)}`}
+							aria-label={`${reviewNow.asking ? "Requesting review…" : "Review this now"}: ${workReference(providerType, work)}`}
 						>
 							<PlayIcon aria-hidden data-icon="inline-start" />
-							{reviewNow.asking ? "Asking…" : "Review this now"}
+							{reviewNow.asking ? "Requesting review…" : "Review this now"}
 						</Button>
 					)}
 				</ItemActions>

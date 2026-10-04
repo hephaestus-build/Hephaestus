@@ -16,6 +16,6 @@ export const FEEDBACK_USEFULNESS_DEFS: StatusDefs<FeedbackUsefulness> = {
 		label: "Not helpful",
 		icon: ThumbsDownIcon,
 		badgeVariant: "destructive",
-		description: "This was not worth the read.",
+		description: "This did not tell you anything you could act on.",
 	},
 };

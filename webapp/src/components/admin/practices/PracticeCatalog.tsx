@@ -518,7 +518,7 @@ function PracticeActions({
 						/>
 					}
 				>
-					Change on Review
+					Change in review settings
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuGroup>

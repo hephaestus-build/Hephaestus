@@ -9,7 +9,7 @@ import { WorkspaceLlmUsagePage, type WorkspaceLlmUsagePageProps } from "./Worksp
 
 const pricedReport = withOwnProvider(usageReport("2026-07"));
 
-/** Two Mentor turns without a price: enough to make the no-price warnings and the pause banners speak. */
+/** Two Heph turns without a price: enough to make the no-price warnings and the pause banners speak. */
 const baseReport: WorkspaceLlmUsageReport = {
 	...pricedReport,
 	unpricedEventCount: 2,
@@ -96,7 +96,7 @@ describe("WorkspaceLlmUsagePage", () => {
 
 		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
 		within(byJobType).getByRole("columnheader", { name: "Avg per run" });
-		const mentorTurns = within(byJobType).getByRole("row", { name: /^Mentor turn/u });
+		const mentorTurns = within(byJobType).getByRole("row", { name: /^Heph turn/u });
 		within(mentorTurns).getByText("$0.06");
 		within(mentorTurns).getByText("shared models");
 		within(mentorTurns).getByText("$0.03");
@@ -127,7 +127,7 @@ describe("WorkspaceLlmUsagePage", () => {
 				"an exhausted shared budget",
 				{ instancePaused: true, instanceBudgetVerdict: "EXHAUSTED", instanceTotalCostUsd: 25 },
 				"Shared-model budget reached",
-				"Paused until August 1 (UTC), or until your host raises the budget. Practice reviews and Mentor can keep running on your own models.",
+				"Paused until August 1 (UTC), or until your host raises the budget. Practice reviews and Heph can keep running on your own models.",
 				"/w/acme/admin/models",
 			],
 			[
@@ -187,13 +187,13 @@ describe("WorkspaceLlmUsagePage", () => {
 				"warns at 80% with the date the pace reaches the cap",
 				{ ownProviderTotalCostUsd: 8.4 },
 				new Date("2026-07-10T12:00:00.000Z"),
-				"You have used 84% of your provider cap$8.40 of $10. At this pace, the cap is reached around July 12.",
+				"You’ve used 84% of your provider cap$8.40 of $10. At this pace, the cap is reached around July 12.",
 			],
 			[
 				"keeps the warning but withholds a projection the month is too young to support",
 				{ ownProviderTotalCostUsd: 8.4 },
 				new Date("2026-07-02T12:00:00.000Z"),
-				"You have used 84% of your provider cap$8.40 of $10.",
+				"You’ve used 84% of your provider cap$8.40 of $10.",
 			],
 			["stays quiet below the threshold", {}, new Date("2026-07-10T12:00:00.000Z"), null],
 			[

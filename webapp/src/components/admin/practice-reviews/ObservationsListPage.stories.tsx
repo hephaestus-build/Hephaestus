@@ -183,7 +183,7 @@ export const FilterToOneSeverity: Story = {
 		await canvas.findByText("12 observations.");
 		await pickFacet(canvas, userEvent, "Severity", /Major/u);
 		await canvas.findByText("2 observations match your filters.");
-		await expect(canvas.queryByText(/leaks the ledger's table name/u)).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/leaks the ledger’s table name/u)).not.toBeInTheDocument();
 	},
 };
 

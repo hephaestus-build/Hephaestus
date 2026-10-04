@@ -166,7 +166,7 @@ export const ValidationErrors: Story = {
 	play: async () => {
 		await settledDrawerPanel();
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
-		await expect(screen.getByText("Name must be at least 3 characters")).toBeVisible();
+		await expect(screen.getByText("Name must be at least 3 characters.")).toBeVisible();
 		await expect(screen.queryByText("Select at least one trigger event")).not.toBeInTheDocument();
 		await expect(screen.getByRole("textbox", { name: /Name/u })).toHaveAttribute(
 			"aria-invalid",

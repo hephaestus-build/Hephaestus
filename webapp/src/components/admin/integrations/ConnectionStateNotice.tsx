@@ -73,7 +73,7 @@ export interface ConnectionStateNoticeProps {
  * connection is in: it is the one condition that leaves a connection ACTIVE while everything that
  * needs its token fails, so it must be said wherever the state would be.
  *
- * Renders nothing for an ACTIVE connection whose credential reads, or for a connection that does not
+ * Renders nothing for an ACTIVE connection whose credential reads, or for a connection that doesn't
  * exist — neither has anything to explain.
  */
 export function ConnectionStateNotice({
@@ -94,7 +94,7 @@ export function ConnectionStateNotice({
 					<KeyRoundIcon />
 					<AlertTitle>The stored token cannot be read</AlertTitle>
 					<AlertDescription>
-						{`${displayName}'s stored token cannot be read with the current keys of this server. This usually happens after a key change, or after a restore of the database under another key. Nothing that needs the token can run. ${credentialRecovery}, or restore the key that encrypted the token if the key was changed by mistake.`}
+						{`The current keys of this server cannot decrypt the stored ${displayName} token. This usually happens after a key change, or after a restore of the database under another key. Nothing that needs the token can run. ${credentialRecovery}, or restore the key that encrypted the token if the key was changed by mistake.`}
 					</AlertDescription>
 				</Alert>
 			)}

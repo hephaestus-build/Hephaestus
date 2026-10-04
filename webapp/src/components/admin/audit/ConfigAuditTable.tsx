@@ -187,7 +187,7 @@ export function ConfigAuditTable({
 											type="button"
 											variant="ghost"
 											size="sm"
-											aria-label={`View details: ${actionLabel(entry.action)} ${subject.label}`}
+											aria-label={`Details for ${subject.label}, ${actionLabel(entry.action).toLowerCase()}`}
 											onClick={() => {
 												setDetail(entry);
 												setDetailOpen(true);

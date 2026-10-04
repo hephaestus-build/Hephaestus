@@ -23,7 +23,7 @@ type Autonomy = NonNullable<
 >;
 
 export const DELIVERY_CHECK_LABELS = {
-	INSTANCE_SILENT_MODE: "Instance Silent Mode",
+	INSTANCE_SILENT_MODE: "Instance silent mode",
 	WORKSPACE_ENABLED: "Workspace enabled",
 	ROLLOUT_REVISION: "Current rollout revision",
 	WORKSPACE_DELIVERY: "Workspace delivery",

@@ -169,7 +169,7 @@ it("shows a streamed capacity refusal as Heph is busy and lets the developer ret
 		await screen.findByRole("button", { name: "Try again" }, ROUTE_RENDER_WAIT),
 	);
 	await screen.findByText("Heph is busy", { exact: true });
-	screen.getByText("Please try again in a moment.");
+	screen.getByText("Try again in a moment.");
 	await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 	await screen.findByText("The worker is available again.");
 	expect(attempts).toBe(2);

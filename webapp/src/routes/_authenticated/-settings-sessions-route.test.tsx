@@ -10,7 +10,7 @@ import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 vi.setConfig({ testTimeout: 30_000 });
 
 async function sessionsRegion(): Promise<HTMLElement> {
-	return screen.findByRole("region", { name: "Active Sessions" }, ROUTE_RENDER_WAIT);
+	return screen.findByRole("region", { name: "Active sessions" }, ROUTE_RENDER_WAIT);
 }
 
 describe("active sessions on the settings page", () => {
@@ -42,7 +42,7 @@ describe("active sessions on the settings page", () => {
 			ROUTE_RENDER_WAIT,
 		);
 
-		fireEvent.click(within(row).getByRole("button", { name: "Revoke this session" }));
+		fireEvent.click(within(row).getByRole("button", { name: "Sign out Firefox 126 on Ubuntu" }));
 
 		await waitFor(() =>
 			expect(within(region).queryByRole("listitem", { name: "Firefox 126 on Ubuntu" })).toBeNull(),
@@ -67,10 +67,10 @@ describe("active sessions on the settings page", () => {
 				{ name: "Firefox 126 on Ubuntu" },
 				ROUTE_RENDER_WAIT,
 			),
-		).getByRole<HTMLButtonElement>("button", { name: "Revoke this session" });
+		).getByRole<HTMLButtonElement>("button", { name: "Sign out Firefox 126 on Ubuntu" });
 		const other = within(
 			within(region).getByRole("listitem", { name: "Mobile Safari on iOS 18" }),
-		).getByRole<HTMLButtonElement>("button", { name: "Revoke this session" });
+		).getByRole<HTMLButtonElement>("button", { name: "Sign out Mobile Safari on iOS 18" });
 
 		fireEvent.click(clicked);
 
@@ -99,7 +99,7 @@ describe("active sessions on the settings page", () => {
 				ROUTE_RENDER_WAIT,
 			),
 		);
-		fireEvent.click(await screen.findByRole("button", { name: "Sign out others" }));
+		fireEvent.click(await screen.findByRole("button", { name: "Sign out other sessions" }));
 
 		await waitFor(() => expect(within(region).getAllByRole("listitem")).toHaveLength(1));
 		expect(signedOutOthers).toBe(true);

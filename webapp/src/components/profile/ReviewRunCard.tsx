@@ -102,7 +102,9 @@ export function ReviewRunCard({
 							className="h-8"
 							onClick={() => setShowAllObservations((current) => !current)}
 						>
-							{showAllObservations ? "Show less" : `Show more (${hiddenCount})`}
+							{showAllObservations
+								? "Show less"
+								: `Show ${hiddenCount} more ${hiddenCount === 1 ? "observation" : "observations"}`}
 							{showAllObservations ? (
 								<ChevronUpIcon data-icon="inline-end" />
 							) : (

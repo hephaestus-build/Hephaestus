@@ -117,8 +117,8 @@ export function ReviewPersonFacet({
 				</ComboboxList>
 				{capped && (
 					<p className="border-t px-2 py-1.5 text-xs text-muted-foreground">
-						Showing the first {MEMBER_PAGE_SIZE} members. Search looks only at these — to filter by
-						someone further down the list, open their work and follow the link from a row.
+						Showing the first {MEMBER_PAGE_SIZE} members. Search covers only these. To filter by
+						anyone else, open their work and follow the link from a row.
 					</p>
 				)}
 				{selectedOption && (

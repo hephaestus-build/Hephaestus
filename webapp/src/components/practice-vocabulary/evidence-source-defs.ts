@@ -126,7 +126,7 @@ const EVIDENCE_SOURCE_DEFS: Record<string, EvidenceSourceDef> = {
 		label: "Earlier observations",
 		icon: HistoryIcon,
 		badgeVariant: "outline",
-		description: "What past reviews of this developer's work already recorded.",
+		description: "What past reviews of this developer’s work already recorded.",
 		locator: "object",
 	},
 	"hephaestus.feedback-history": {

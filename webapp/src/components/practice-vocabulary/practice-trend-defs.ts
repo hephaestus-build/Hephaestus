@@ -22,7 +22,7 @@ export const PRACTICE_TREND_DEFS: StatusDefs<TrendDirection> = {
 		label: "Direction unclear",
 		icon: CircleHelpIcon,
 		badgeVariant: "secondary",
-		description: "The two stretches were compared and did not separate far enough to call.",
+		description: "Recent and earlier work were compared, and the difference is too small to call.",
 	},
 	INSUFFICIENT_EVIDENCE: {
 		label: "Not enough to compare yet",

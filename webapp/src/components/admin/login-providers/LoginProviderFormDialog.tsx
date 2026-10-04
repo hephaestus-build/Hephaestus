@@ -41,7 +41,7 @@ function scopesPlaceholder(type: ProviderType): string {
 	if (type === "OUTLINE") {
 		return "read";
 	}
-	return "Defaulted by provider type if blank";
+	return "Leave blank to use the default for the provider type";
 }
 
 function toProviderType(value: string | null | undefined): ProviderType {
@@ -119,9 +119,9 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 		if (needsBaseUrl && (!isEdit || baseUrl.trim())) {
 			const value = baseUrl.trim();
 			if (!isEdit && !value) {
-				next.baseUrl = "An instance base URL is required.";
+				next.baseUrl = "Enter the instance base URL.";
 			} else if (value && !value.startsWith("https://")) {
-				next.baseUrl = "Must be an HTTPS URL.";
+				next.baseUrl = "Enter an HTTPS URL.";
 			}
 		}
 		setErrors(next);
@@ -180,8 +180,8 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 					autoComplete="off"
 				/>
 				<FieldDescription id="lp-registration-id-description">
-					Stable id used in the OAuth callback path. Lowercase letters, digits, hyphens. Immutable
-					once created.
+					The stable ID in the OAuth callback path. Use lowercase letters, digits, and hyphens. You
+					cannot change it after you create the provider.
 				</FieldDescription>
 				{hasText(errors.registrationId) && <FieldError>{errors.registrationId}</FieldError>}
 			</Field>
@@ -216,7 +216,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 				{isOutline && (
 					<FieldDescription>
 						Outline is <strong>link-only</strong>: users connect it from Settings so their documents
-						are attributed to them — nobody signs in to Hephaestus with it. Create an OAuth app in
+						are attributed to them. Nobody signs in to Hephaestus with it. Create an OAuth app in
 						Outline under <strong>Settings → Applications</strong> and register this redirect URI:{" "}
 						<code className="break-all">{redirectUri}</code>
 					</FieldDescription>
@@ -260,7 +260,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 					id="lp-client-id"
 					value={clientId}
 					onChange={(e) => setClientId(e.target.value)}
-					placeholder={isEdit ? "Leave blank to keep current" : ""}
+					placeholder={isEdit ? "Leave blank to keep the current value" : ""}
 					required={!isEdit}
 					autoComplete="off"
 				/>
@@ -273,7 +273,7 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 					type="password"
 					value={clientSecret}
 					onChange={(e) => setClientSecret(e.target.value)}
-					placeholder={isEdit ? "Leave blank to keep current" : ""}
+					placeholder={isEdit ? "Leave blank to keep the current value" : ""}
 					required={!isEdit}
 					autoComplete="off"
 					aria-describedby="lp-client-secret-description"

@@ -107,7 +107,7 @@ export const Connected: Story = {
 		tokenStatus: healthyToken,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline connected — acme wiki/iu);
+		canvas.getByText(/outline connected · acme wiki/iu);
 		canvas.getByText(/outline accepts this token/iu);
 		canvas.getByText(/hephaestus mirror/iu);
 		canvas.getByText(/…9f2c/u);
@@ -156,7 +156,7 @@ export const TokenRejected: Story = {
 		tokenStatus: { accepted: false },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline no longer accepts this token — reconnect with a new one/iu);
+		canvas.getByText(/outline no longer accepts this token/iu);
 		await expect(canvas.queryByText(/expires in/iu)).not.toBeInTheDocument();
 	},
 };
@@ -190,8 +190,8 @@ export const ConnectedDisconnectDialog: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: /disconnect outline/iu }));
 		// AlertDialog renders in a portal — query the whole document.
 		const dialog = await screen.findByRole("alertdialog", { name: /disconnect outline\?/iu });
-		within(dialog).getByText(/every mirrored document.*is\s+erased/iu);
-		within(dialog).getByRole("button", { name: /^disconnect$/iu });
+		within(dialog).getByText(/erases every mirrored document/iu);
+		within(dialog).getByRole("button", { name: /^disconnect outline$/iu });
 	},
 };
 
@@ -208,13 +208,13 @@ export const ConnectedButSuspended: Story = {
 		tokenStatus: healthyToken,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline suspended — acme wiki/iu);
+		canvas.getByText(/outline suspended · acme wiki/iu);
 		// The token panel still reports the stored key even while syncing is paused.
 		canvas.getByText(/outline accepts this token/iu);
 	},
 };
 
-/** Setup has not finished — the identity line states PENDING plainly, since it resolves on its own. */
+/** Setup hasn't finished — the identity line states PENDING plainly, since it resolves on its own. */
 export const ConnectedButPending: Story = {
 	args: {
 		connected: true,
@@ -223,7 +223,7 @@ export const ConnectedButPending: Story = {
 		tokenStatus: healthyToken,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline finishing setup — acme wiki/iu);
+		canvas.getByText(/outline finishing setup · acme wiki/iu);
 	},
 };
 
@@ -236,6 +236,6 @@ export const ConnectedActiveState: Story = {
 		tokenStatus: healthyToken,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline connected — acme wiki/iu);
+		canvas.getByText(/outline connected · acme wiki/iu);
 	},
 };

@@ -101,7 +101,7 @@ export function OpenWorkSections({
 						{COUNTED.every((group) => ready.groups[group].length === 0) && (
 							<p className="flex items-center gap-2 text-sm text-muted-foreground">
 								<NothingIcon size={16} className={cn("shrink-0", ACTIVITY_TONES.success.text)} />
-								{self ? "Nothing needs you" : "Nothing needs them"}
+								{self ? "Nothing needs you" : "Nothing needs their attention"}
 							</p>
 						)}
 						<WaitingOnOthers

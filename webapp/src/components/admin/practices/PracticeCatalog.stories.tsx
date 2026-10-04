@@ -714,7 +714,7 @@ export const AutonomyIsReadOnlyHere: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "More actions for Set here" }));
 		const menu = within(await screen.findByRole("menu"));
-		await expect(menu.getByRole("menuitem", { name: "Change on Review" })).toHaveAttribute(
+		await expect(menu.getByRole("menuitem", { name: "Change in review settings" })).toHaveAttribute(
 			"href",
 			"/w/demo/admin/practices/review",
 		);

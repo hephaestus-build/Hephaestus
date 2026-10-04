@@ -297,7 +297,7 @@ describe("composeOverview", () => {
 		expect(movedUp).toBe(
 			"Practice 0, Practice 3 and Practice 6 moved to Going well after !421 and !425. " +
 				"Group 2 moved to Going well after !421 and !425. " +
-				'Five further practices moved the same way; the "All practice groups" table lists them.',
+				'Five further practices moved the same way. The "All practice groups" table lists them.',
 		);
 		const trends = plain(composed.rest[3]?.segments);
 		expect(trends).toBe(
@@ -318,7 +318,7 @@ describe("composeOverview", () => {
 		);
 		const fresh = composed.rest.find((paragraph) => paragraph.title === "New feedback");
 		expect(plain(fresh?.segments)).toMatch(
-			/One further practice has new feedback; the "All practice groups" table lists it\.$/u,
+			/One further practice has new feedback. The "All practice groups" table lists it\.$/u,
 		);
 		expect(plain(fresh?.segments)).not.toMatch(/moved/u);
 	});
@@ -336,7 +336,7 @@ describe("composeOverview", () => {
 		);
 		const trends = composed.rest.find((paragraph) => paragraph.title === "Trends turned");
 		expect(plain(trends?.segments)).toMatch(
-			/Two further practices saw their trends turn; the "All practice groups" table lists them\.$/u,
+			/Two further practices saw their trends turn. The "All practice groups" table lists them\.$/u,
 		);
 		expect(plain(trends?.segments)).not.toMatch(/moved/u);
 	});
@@ -991,14 +991,14 @@ describe("the unfolded rest", () => {
 	it("counts the first sightings it did not name in their own words", () => {
 		const composed = composeOverview(overview({ changes: firstSeen(12) }));
 		expect(plain(composed.rest[0]?.segments)).toContain(
-			'Eight further practices were seen for the first time; the "All practice groups" table lists them.',
+			'Eight further practices were seen for the first time. The "All practice groups" table lists them.',
 		);
 	});
 
 	it("agrees with a single first sighting it did not name", () => {
 		const composed = composeOverview(overview({ changes: firstSeen(5) }));
 		expect(plain(composed.rest[0]?.segments)).toContain(
-			'One further practice was seen for the first time; the "All practice groups" table lists it.',
+			'One further practice was seen for the first time. The "All practice groups" table lists it.',
 		);
 	});
 
@@ -1047,7 +1047,7 @@ describe("the unfolded rest", () => {
 		const composed = composeOverview(overview({ changes: movedUp(6) }));
 		expect(plain(composed.rest[0]?.segments)).toBe(
 			"Up 0, Up 1, Up 2 and Up 3 moved to Going well after #19. " +
-				'Two further practices moved the same way; the "All practice groups" table lists them.',
+				'Two further practices moved the same way. The "All practice groups" table lists them.',
 		);
 	});
 });

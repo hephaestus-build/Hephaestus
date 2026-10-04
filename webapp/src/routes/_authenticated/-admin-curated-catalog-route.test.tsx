@@ -339,14 +339,14 @@ describe("instance catalog routes", () => {
 		fireEvent.click(
 			await screen.findByRole(
 				"switch",
-				{ name: "Offer Packaging work to workspaces" },
+				{ name: "Include Packaging work for workspaces" },
 				ROUTE_RENDER_WAIT,
 			),
 		);
 		const confirmation = screen.getByRole("alertdialog");
-		within(confirmation).getByText(/also stops offering 1 currently offered practice/u);
+		within(confirmation).getByText(/also excludes 1 included practice/u);
 		within(confirmation).getByText("Say what changed and why");
-		fireEvent.click(within(confirmation).getByRole("button", { name: "Stop offering" }));
+		fireEvent.click(within(confirmation).getByRole("button", { name: "Exclude group" }));
 
 		await waitFor(() => expect(ifMatch).toBe('"structure-1"'));
 	});
@@ -382,16 +382,16 @@ describe("instance catalog routes", () => {
 		fireEvent.click(
 			await screen.findByRole(
 				"switch",
-				{ name: "Offer Packaging work to workspaces" },
+				{ name: "Include Packaging work for workspaces" },
 				ROUTE_RENDER_WAIT,
 			),
 		);
-		fireEvent.click(screen.getByRole("button", { name: "Stop offering" }));
+		fireEvent.click(screen.getByRole("button", { name: "Exclude group" }));
 
 		await waitFor(() =>
 			expect(
 				screen
-					.getByRole("switch", { name: "Offer Delivery to workspaces" })
+					.getByRole("switch", { name: "Include Delivery for workspaces" })
 					.getAttribute("aria-disabled"),
 			).toBe("true"),
 		);
@@ -406,7 +406,7 @@ describe("instance catalog routes", () => {
 		);
 	});
 
-	it("sends the entry's tag when it stops offering a practice", async () => {
+	it("sends the entry's tag when it excludes a practice", async () => {
 		mockCatalog();
 		let ifMatch: string | null = null;
 		let body: unknown;
@@ -426,11 +426,11 @@ describe("instance catalog routes", () => {
 		fireEvent.click(
 			await screen.findByRole(
 				"switch",
-				{ name: "Offer Say what changed and why to workspaces" },
+				{ name: "Include Say what changed and why for workspaces" },
 				ROUTE_RENDER_WAIT,
 			),
 		);
-		fireEvent.click(screen.getByRole("button", { name: "Stop offering" }));
+		fireEvent.click(screen.getByRole("button", { name: "Exclude practice" }));
 
 		await waitFor(() => expect(ifMatch).toBe('"tag-1"'));
 		expect(body).toStrictEqual({ status: "RETIRED" });
@@ -471,11 +471,11 @@ describe("instance catalog routes", () => {
 		fireEvent.click(
 			await screen.findByRole(
 				"switch",
-				{ name: "Offer Say what changed and why to workspaces" },
+				{ name: "Include Say what changed and why for workspaces" },
 				ROUTE_RENDER_WAIT,
 			),
 		);
-		fireEvent.click(screen.getByRole("button", { name: "Stop offering" }));
+		fireEvent.click(screen.getByRole("button", { name: "Exclude practice" }));
 		await waitFor(() => expect(latestTag).toBe("tag-2"));
 
 		fireEvent.click(await screen.findByRole("link", { name: practiceDefinition.name }));
@@ -540,7 +540,7 @@ describe("instance catalog routes", () => {
 			{ name: "Use a version for Review criteria" },
 			ROUTE_RENDER_WAIT,
 		);
-		fireEvent.click(within(radioGroup).getByRole("radio", { name: "Offered" }));
+		fireEvent.click(within(radioGroup).getByRole("radio", { name: "Proposed" }));
 		fireEvent.click(screen.getByRole("button", { name: "Accept selected fields" }));
 
 		await waitFor(() => expect(ifMatch).toBe('"release-tag"'));
@@ -585,7 +585,7 @@ describe("instance catalog routes", () => {
 			{ name: "Use a version for Review criteria" },
 			ROUTE_RENDER_WAIT,
 		);
-		fireEvent.click(within(radioGroup).getByRole("radio", { name: "Offered" }));
+		fireEvent.click(within(radioGroup).getByRole("radio", { name: "Proposed" }));
 		fireEvent.click(screen.getByRole("button", { name: "Accept selected fields" }));
 
 		await screen.findByText("Customized on this instance", undefined, ROUTE_RENDER_WAIT);

@@ -54,7 +54,7 @@ export const Default: Story = {
 export const Empty: Story = {
 	args: { messages: [], votes: [] },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("How can I help you today?")).toBeVisible();
+		await expect(canvas.getByText("What would you like to talk through?")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Send message" })).toBeDisabled();
 	},
 };
@@ -111,7 +111,7 @@ export const ReadOnly: Story = {
 export const Failed: Story = {
 	args: { messages: CONVERSATION.slice(0, 5), turn: { kind: "error", failure: "failed" } },
 	play: async ({ args, canvas, userEvent }) => {
-		await expect(canvas.getByText("Something went wrong")).toBeVisible();
+		await expect(canvas.getByText("Heph could not finish that reply")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
 		await expect(args.onReload).toHaveBeenCalledOnce();
 	},
@@ -140,7 +140,7 @@ export const InterruptedReplyReopened: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Try again" })).toBeVisible();
-		await expect(canvas.getByText(/interrupted before it finished/u)).toBeVisible();
+		await expect(canvas.getByText(/stopped before it finished/u)).toBeVisible();
 	},
 };
 

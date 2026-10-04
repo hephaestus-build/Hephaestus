@@ -142,7 +142,7 @@ export const WithWorkspaceColumn: Story = {
 
 export const RowDetail: Story = {
 	play: async ({ canvas }) => {
-		const [firstDetails] = canvas.getAllByRole("button", { name: /View details/iu });
+		const [firstDetails] = canvas.getAllByRole("button", { name: /^Details for/iu });
 		if (!firstDetails) {
 			throw new Error("The table rendered no rows to open");
 		}
@@ -201,7 +201,7 @@ export const MemberChangeIsNotBadged: Story = {
 export const ElevatedRowDetail: Story = {
 	args: { entries: [elevatedUpdate] },
 	play: async ({ canvas }) => {
-		const [details] = canvas.getAllByRole("button", { name: /View details/iu });
+		const [details] = canvas.getAllByRole("button", { name: /^Details for/iu });
 		if (!details) {
 			throw new Error("The table rendered no rows to open");
 		}

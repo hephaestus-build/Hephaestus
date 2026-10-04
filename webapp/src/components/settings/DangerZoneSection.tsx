@@ -32,7 +32,7 @@ const DELETE_CONFIRM_PHRASE = "delete my account";
 // Export states that mean the server is still working — keep polling while in these.
 const EXPORT_IN_PROGRESS = new Set(["PENDING", "PROCESSING"]);
 
-// Give up polling after this long so a wedged export does not poll indefinitely.
+// Give up polling after this long so a wedged export doesn't poll indefinitely.
 const MAX_EXPORT_WAIT_MS = 3 * 60 * 1000;
 
 interface DangerZoneSectionProps {
@@ -48,7 +48,7 @@ export function DangerZoneSection({ onAccountDeleted }: DangerZoneSectionProps) 
 		<section className="space-y-6" aria-labelledby="danger-zone-heading">
 			<div className="space-y-1">
 				<h2 id="danger-zone-heading" className="text-xl font-semibold">
-					Danger Zone
+					Danger zone
 				</h2>
 				<p className="text-sm text-muted-foreground">
 					Export your data or permanently delete your account.
@@ -78,11 +78,11 @@ function DataExportRow() {
 				// oxlint-disable-next-line no-restricted-properties -- Read once on an event, and necessarily the same clock TanStack Query stamps `dataUpdatedAt` with: the stall check below subtracts one from the other.
 				setRequestedAt(Date.now());
 			} else {
-				toast.error("Export request did not return an identifier.");
+				toast.error("We could not start your data export. Try again.");
 			}
 		},
 		onError: () => {
-			toast.error("Failed to request data export. Please try again later.");
+			toast.error("We could not request your data export. Try again later.");
 		},
 	});
 
@@ -140,7 +140,7 @@ function DataExportRow() {
 			anchor.remove();
 			URL.revokeObjectURL(url);
 		} catch {
-			toast.error("Failed to download export. Please try again later.");
+			toast.error("We could not download your export. Try again later.");
 		}
 		setIsDownloading(false);
 	};
@@ -149,19 +149,19 @@ function DataExportRow() {
 	if (requestExport.isPending) {
 		statusText = "Requesting export…";
 	} else if (isPreparing) {
-		statusText = "Preparing your export… this can take a moment.";
+		statusText = "Preparing your export… This can take a moment.";
 	} else if (isReady) {
 		statusText = "Your export is ready to download.";
 	} else if (isStalled) {
-		statusText = "This is taking longer than expected. Please try again.";
+		statusText = "This is taking longer than expected. Try again.";
 	} else if (isFailed) {
-		statusText = "The export could not be prepared. Please try again.";
+		statusText = "We could not prepare your export. Try again.";
 	}
 
 	return (
 		<div className="flex items-start justify-between gap-6 py-2">
 			<div className="flex-1 space-y-1">
-				<h3 className="text-base font-medium">Export my data</h3>
+				<h3 className="text-base font-medium">Export your data</h3>
 				<p className="text-sm leading-relaxed text-muted-foreground">
 					Download a copy of your personal data (GDPR Art. 20) as a JSON file.
 				</p>
@@ -186,7 +186,7 @@ function DataExportRow() {
 				) : (
 					<Button variant="outline" onClick={() => requestExport.mutate({})} disabled={isPreparing}>
 						{isPreparing ? <Spinner className="mr-1.5" /> : null}
-						{isFailed ? "Retry export" : "Request export"}
+						{isFailed ? "Request export again" : "Request export"}
 					</Button>
 				)}
 			</div>
@@ -216,7 +216,7 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 			await onAccountDeleted();
 		},
 		onError: () => {
-			toast.error("Failed to delete account. Please try again later.");
+			toast.error("We could not delete your account. Try again later.");
 		},
 	});
 
@@ -235,9 +235,9 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 			<div className="flex-1 space-y-1">
 				<h3 className="text-base font-medium">Delete account</h3>
 				<p className="text-sm leading-relaxed text-muted-foreground">
-					Permanently delete your account and erase your personal data (GDPR Art. 17). You will be
-					signed out on all devices immediately, and the account is scheduled for permanent deletion
-					after a ~48-hour cooldown. It cannot be recovered from here.
+					Permanently delete your account and erase your personal data (GDPR Art. 17). Hephaestus
+					signs you out on all devices at once, then deletes the account after a cooldown of about
+					48 hours. You cannot recover it from here.
 				</p>
 			</div>
 			<AlertDialog
@@ -262,9 +262,9 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 					<AlertDialogHeader>
 						<AlertDialogTitle>Delete your account?</AlertDialogTitle>
 						<AlertDialogDescription>
-							This signs you out on all devices immediately and disables your account, then
-							permanently deletes it and your data after a ~48-hour cooldown. It cannot be undone
-							from here. To confirm, type{" "}
+							This signs you out on all devices and disables your account. After about 48 hours,
+							Hephaestus permanently deletes the account and your data. You cannot undo this from
+							here. To confirm, enter{" "}
 							<span className="font-medium text-foreground">{DELETE_CONFIRM_PHRASE}</span> below.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
@@ -279,7 +279,7 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 							aria-describedby="delete-confirm-help"
 						/>
 						<p id="delete-confirm-help" className="text-xs text-muted-foreground">
-							Type the phrase exactly to enable deletion.
+							Enter the phrase exactly to enable deletion.
 						</p>
 					</div>
 					<AlertDialogFooter>

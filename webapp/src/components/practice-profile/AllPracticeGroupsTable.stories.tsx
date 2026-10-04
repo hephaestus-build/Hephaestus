@@ -179,7 +179,7 @@ export const ReadOnly: Story = {
 export const Empty: Story = {
 	args: { groups: [], standings: {}, practicesByGroup: {} },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No practices set up yet.")).toBeVisible();
+		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
 		await expect(
 			canvas.getByText(
 				"Practice groups appear here once an admin sets up the practices this workspace reviews.",

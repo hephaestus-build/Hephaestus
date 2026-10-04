@@ -66,7 +66,7 @@ function renderPanel(ownProviderAllowed = true) {
 async function confirmDelete(name: string) {
 	fireEvent.click(await screen.findByRole("button", { name: `Delete ${name}` }));
 	const dialog = await screen.findByRole("alertdialog");
-	fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+	fireEvent.click(within(dialog).getByRole("button", { name: "Delete model" }));
 }
 
 describe("WorkspaceLlmProviderPanel", () => {

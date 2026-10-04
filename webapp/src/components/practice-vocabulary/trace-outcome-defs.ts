@@ -48,7 +48,7 @@ export const TRACE_OUTCOME_DEFS: StatusDefs<TraceOutcome> = {
 		icon: CircleSlashIcon,
 		badgeVariant: "outline",
 		description:
-			"The workspace's review settings turned this occurrence away before a review began.",
+			"The workspace’s review settings turned this occurrence away before a review began.",
 	},
 	NOT_REACHED: {
 		label: "Not reached",

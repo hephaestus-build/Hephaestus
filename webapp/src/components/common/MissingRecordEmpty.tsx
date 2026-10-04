@@ -40,7 +40,7 @@ export function MissingRecordEmpty({ title, onRetry, className }: MissingRecordE
 				</EmptyMedia>
 				<EmptyTitle>{title}</EmptyTitle>
 				<EmptyDescription>
-					Nothing reported a failure — the request never came back. You may be offline.
+					The request did not finish, and no error came back. You may be offline.
 				</EmptyDescription>
 			</EmptyHeader>
 			{onRetry && (

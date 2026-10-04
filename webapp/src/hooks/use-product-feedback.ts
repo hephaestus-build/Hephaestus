@@ -43,7 +43,7 @@ function submissionError(error: unknown, subject: "survey" | "feedback"): string
 		return `Could not send. ${DRAFT_KEPT} Check your connection and try again.`;
 	}
 	if (status === 429) {
-		return `Please wait a minute before sending more feedback. ${DRAFT_KEPT}`;
+		return `Wait a minute before sending more feedback. ${DRAFT_KEPT}`;
 	}
 	if (status === 401) {
 		return "Your session has expired. Sign in again before sending.";
@@ -62,8 +62,8 @@ type SurveyIdentity = Pick<SurveyInvitation, "id" | "purpose" | "researchOrganiz
 
 function surveyAcknowledgement(survey: SurveyIdentity): string {
 	return isResearch(survey)
-		? `Thank you — your answers were recorded for ${studyOf(survey)}.`
-		: `Thank you — your answers are on their way to ${READERS}.`;
+		? `Thanks. Your answers were recorded for ${studyOf(survey)}.`
+		: `Thanks. Your answers are on their way to ${READERS}.`;
 }
 
 export function useProductSurveys(workspaceSlug: string | undefined) {
@@ -114,12 +114,10 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		retry: false,
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
-			toast.success("Decline undone. The survey is back in the header's feedback menu.");
+			toast.success("Decline undone. The survey is back in the header’s feedback menu.");
 		},
 		onError: () =>
-			toast.error(
-				"Could not undo the decline. The survey may no longer be available. Please try again.",
-			),
+			toast.error("Could not undo the decline. The survey may no longer be available. Try again."),
 	});
 	const decline = useMutation({
 		...declineProductSurveyMutation(),
@@ -182,9 +180,9 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 }
 
 const FEEDBACK_SENT: Record<FeedbackRequest["kind"], string> = {
-	IDEA: `Thanks — your idea is on its way to ${READERS}.`,
-	BUG: `Thanks — your bug report is on its way to ${READERS}.`,
-	FEEDBACK: `Thanks — your feedback is on its way to ${READERS}.`,
+	IDEA: `Thanks. Your idea is on its way to ${READERS}.`,
+	BUG: `Thanks. Your bug report is on its way to ${READERS}.`,
+	FEEDBACK: `Thanks. Your feedback is on its way to ${READERS}.`,
 };
 
 export function useSubmitProductFeedback(workspaceSlug: string | undefined) {

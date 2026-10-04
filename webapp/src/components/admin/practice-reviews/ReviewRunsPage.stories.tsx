@@ -237,8 +237,8 @@ export const FilterByRequestedDate: Story = {
 		// The failed review was requested outside the window, so failed alone intersects to nothing.
 		await pickStatus(canvas, userEvent, /Failed/u);
 		await pickStatus(canvas, userEvent, /Completed/u);
-		await canvas.findByText("No reviews found");
-		canvas.getByText("No review matches these filters. Other reviews may exist outside them.");
+		await canvas.findByText("No reviews match these filters");
+		canvas.getByText("Change or clear the filters to see more.");
 
 		// One button clears the range and the status together.
 		await userEvent.click(canvas.getByRole("button", { name: "Clear all filters" }));
@@ -301,7 +301,7 @@ export const NoReviewsYet: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	render: (args) => <ReviewRunsPage {...args} />,
 	play: async ({ canvas }) => {
-		await canvas.findByText("No reviews found");
+		await canvas.findByText("No reviews yet");
 		// Nothing is filtered, so the empty state must not offer an action that would change nothing.
 		await expect(
 			canvas.queryByRole("button", { name: "Clear all filters" }),

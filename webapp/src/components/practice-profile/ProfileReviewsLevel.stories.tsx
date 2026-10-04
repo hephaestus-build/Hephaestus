@@ -79,10 +79,10 @@ export const Default: Story = {
 		await expect(screen.getByLabelText("Timeframe")).toHaveTextContent("All time");
 		await expect(screen.getByText("2nd review")).toBeVisible();
 		await expect(
-			screen.getByText("one practice met, one undetermined; three practices reached"),
+			screen.getByText("one practice met, one undetermined · three practices reached"),
 		).toBeVisible();
 		await expect(
-			screen.getByText("one practice met, five did not apply; nine practices reached"),
+			screen.getByText("one practice met, five did not apply · nine practices reached"),
 		).toBeVisible();
 		// A stopped review wrote no reach, so the line says only what it decided.
 		await expect(screen.getByText("one practice met")).toBeVisible();
@@ -190,7 +190,7 @@ export const AskingForAReview: Story = {
 	args: { requesting: openProfileReviewRun.reviewedWork },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getAllByText("Asking…")).toHaveLength(2);
+		await expect(screen.getAllByText("Requesting review…")).toHaveLength(2);
 		await expect(screen.getAllByText("Review this now")).toHaveLength(1);
 	},
 };
@@ -237,7 +237,7 @@ export const Empty: Story = {
 	args: { feed: feedOf([]) },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("No review of your work yet.")).toBeVisible();
+		await expect(screen.getByText("No reviews of your work yet")).toBeVisible();
 	},
 };
 
@@ -246,8 +246,8 @@ export const FilteredEmpty: Story = {
 	args: { feed: feedOf([]), kind: "docs.document" },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("No review here matches your filters.")).toBeVisible();
-		await expect(screen.queryByText("No review of your work yet.")).toBeNull();
+		await expect(screen.getByText("No reviews match your filters.")).toBeVisible();
+		await expect(screen.queryByText("No reviews of your work yet")).toBeNull();
 	},
 };
 

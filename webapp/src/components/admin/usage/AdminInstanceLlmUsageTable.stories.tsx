@@ -13,7 +13,8 @@ async function expandedPanelFor(
 	displayName: string,
 ): Promise<HTMLElement> {
 	const toggle = await canvas.findByRole("button", {
-		name: new RegExp(`hide usage details for ${displayName}`, "iu"),
+		name: new RegExp(`^details for ${displayName}`, "iu"),
+		expanded: true,
 	});
 	const panelId = toggle.getAttribute("aria-controls");
 	const panel = panelId == null ? null : document.getElementById(panelId);
@@ -342,7 +343,7 @@ export const PastMonth: Story = {
 	args: { isCurrentMonth: false },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("button", { name: /^Set budget for/u })).toBeNull();
-		await expect(canvas.getAllByRole("button", { name: /^View usage details for/u })).toHaveLength(
+		await expect(canvas.getAllByRole("button", { name: /^Details for/u })).toHaveLength(
 			rows.length,
 		);
 	},

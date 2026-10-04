@@ -93,7 +93,7 @@ export const Research: Story = {
 			"href",
 			"/settings",
 		);
-		await expect(dialog.getByText(/answers already sent stay with the study/u)).toBeVisible();
+		await expect(dialog.getByText(/Answers already sent stay with the study/u)).toBeVisible();
 		await expect(dialog.getByRole("group", { name: /\(optional\)/u })).toBeVisible();
 	},
 };
@@ -102,8 +102,10 @@ export const Research: Story = {
 export const ProductFraming: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expectSettledVisible(dialog.getByText(/Read by your instance administrators/u));
-		await expect(dialog.getByText(/Not research/u)).toBeVisible();
+		await expectSettledVisible(
+			dialog.getByText(/Your answers go to your instance administrators/u),
+		);
+		await expect(dialog.getByText(/This survey is not research/u)).toBeVisible();
 		await expect(dialog.queryByText("Research")).toBeNull();
 	},
 };

@@ -42,8 +42,8 @@ const STEP_META: Record<WizardStep, { title: string; description: string }> = {
 		title: "Connect to GitLab",
 		description: "Enter an access token for the GitLab instance you will monitor.",
 	},
-	2: { title: "Select a Group", description: "Choose the GitLab group to monitor." },
-	3: { title: "Configure Workspace", description: "Set a name and URL slug for your workspace." },
+	2: { title: "Select a group", description: "Choose the GitLab group to monitor." },
+	3: { title: "Configure workspace", description: "Set a name and URL slug for your workspace." },
 };
 
 interface GitLabProvider {
@@ -81,10 +81,10 @@ function NoGitLabProviderNotice({
 			<div className="space-y-4">
 				<h1 className="text-2xl font-semibold tracking-tight">GitLab sign-in is not configured</h1>
 				<p className="text-muted-foreground">
-					GitLab workspaces are created on {serverUrl}, which has no GitLab login provider, so a
-					GitLab account there cannot be linked yet.
+					GitLab workspaces are created on {serverUrl}. That instance has no GitLab login provider,
+					so you cannot connect a GitLab account there yet.
 					{isAppAdmin
-						? " Add one to enable GitLab sign-in."
+						? " Add one to turn on GitLab sign-in."
 						: " Ask an instance admin to add one (Instance admin → Login providers)."}
 				</p>
 				{isAppAdmin && (
@@ -116,10 +116,11 @@ function GitLabLinkPrompt({
 			<BackToProviders />
 			<div className="space-y-4">
 				<div className="space-y-1.5">
-					<h1 className="text-2xl font-semibold tracking-tight">Link your GitLab account</h1>
+					<h1 className="text-2xl font-semibold tracking-tight">Connect your GitLab account</h1>
 					<p className="text-muted-foreground">
-						To create a GitLab workspace, link your GitLab account on {serverUrl} first. Hephaestus
-						sends you to GitLab to sign in. It then attaches that identity to your current account.
+						To create a GitLab workspace, connect your GitLab account on {serverUrl} first.
+						Hephaestus sends you to GitLab to sign in, then adds that identity to your current
+						account.
 					</p>
 				</div>
 				<div className="flex flex-col items-start gap-2">
@@ -128,7 +129,7 @@ function GitLabLinkPrompt({
 							key={provider.registrationId}
 							onClick={() => linkAccount(provider.registrationId)}
 						>
-							{multiple ? `Link ${provider.displayName}` : "Link GitLab account"}
+							{multiple ? `Connect ${provider.displayName}` : "Connect GitLab account"}
 						</Button>
 					))}
 				</div>
@@ -188,9 +189,9 @@ function GitLabWizardPage() {
 			<div className="mx-auto w-full max-w-2xl">
 				<Alert variant="destructive">
 					<OctagonXIcon aria-hidden="true" />
-					<AlertTitle>Unable to load</AlertTitle>
+					<AlertTitle>Could not load GitLab setup</AlertTitle>
 					<AlertDescription>
-						Could not check feature availability. Please refresh the page.
+						Hephaestus could not check which providers are available. Reload the page to try again.
 					</AlertDescription>
 				</Alert>
 			</div>
@@ -254,7 +255,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 			});
 		},
 		onError: (error) => {
-			toast.error(problemDetailOf(error, "Failed to create workspace. Please try again."));
+			toast.error(problemDetailOf(error, "We could not create the workspace. Try again."));
 		},
 		onSettled: () => {
 			void queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() });
@@ -295,7 +296,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 	};
 
 	const handleBack = () => {
-		// Reset stale mutation state so old errors do not persist after back-navigation
+		// Reset stale mutation state so old errors don't persist after back-navigation
 		if (state.step === 2) {
 			listGroups.reset();
 		}
@@ -359,7 +360,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 				isForCurrentToken(state, listGroups.variables.body) && (
 					<Alert variant="destructive" className="mt-4">
 						<OctagonXIcon aria-hidden="true" />
-						<AlertTitle>Failed to load groups</AlertTitle>
+						<AlertTitle>Could not load groups</AlertTitle>
 						<AlertDescription>
 							{problemDetailOf(
 								listGroups.error,
@@ -396,7 +397,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 				{state.step === 3 && (
 					<Button onClick={handleSubmit} disabled={!canSubmit || isCreating}>
 						{isCreating && <Spinner className="mr-2" />}
-						Create Workspace
+						Create workspace
 					</Button>
 				)}
 			</div>

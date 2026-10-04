@@ -266,7 +266,7 @@ describe("reviewSettingsProblem", () => {
 				mockPullRequestWorkType,
 			)?.message,
 		).toBe(
-			"One source can never be captured whole, so nothing this review says about what is absent from it can rest on it.",
+			"One chosen source can never be captured whole, so this review cannot claim that anything is missing from it.",
 		);
 	});
 

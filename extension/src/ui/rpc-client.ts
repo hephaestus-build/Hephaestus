@@ -41,10 +41,13 @@ export async function ask<K extends RpcRequest["type"]>(
 	// `sendMessage` is typed `any`: the worker's reply is the RpcResult it built for this command.
 	const result: RpcResult<RpcResponses[K]> | undefined = await browser.runtime.sendMessage(request);
 	if (result === undefined) {
-		throw new RpcClientError({ code: "network", message: "The extension did not answer." });
+		throw new RpcClientError({
+			code: "network",
+			message: "The extension did not answer. Reload the page and try again.",
+		});
 	}
 	if (result.generation < latestGeneration) {
-		throw new RpcClientError({ code: "stale", message: "Out of date." });
+		throw new RpcClientError({ code: "stale", message: "That answer was out of date. Try again." });
 	}
 	learnGeneration(result.generation);
 	if (!result.ok) {

@@ -40,7 +40,7 @@ export const Valid: Story = {
 	args: { value: "https://acme.slack.com/archives/C0974LJBPBK" },
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.queryByText(/paste a slack channel url, mention, or/iu),
+			canvas.queryByText(/paste a slack channel link, mention, or id/iu),
 		).not.toBeInTheDocument();
 	},
 };
@@ -49,7 +49,7 @@ export const Valid: Story = {
 export const Invalid: Story = {
 	args: { value: "not-a-channel", invalid: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/paste a slack channel url, mention, or/iu);
+		canvas.getByText(/paste a slack channel link, mention, or id/iu);
 		await expect(canvas.getByLabelText(/paste a channel link or id/iu)).toHaveAttribute(
 			"aria-invalid",
 			"true",

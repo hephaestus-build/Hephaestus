@@ -94,14 +94,14 @@ export const Empty: Story = {
 export const EmptySearch: Story = {
 	args: { users: [], hasSearch: true, totalLoaded: 3 },
 	play: async ({ canvas }) => {
-		canvas.getByText(/adjusting your search/iu);
+		canvas.getByText(/try a different search/iu);
 	},
 };
 
 export const ErrorState: Story = {
 	args: { users: [], isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/failed to load users/iu);
+		canvas.getByText(/could not load users/iu);
 	},
 };
 

@@ -37,24 +37,24 @@ const choices = [
 		key: "surveySummaries",
 		label: "Survey summaries",
 		description:
-			"Email aggregate participation summaries when a survey ends. Individual answers are never included.",
+			"Get an email with the participation summary when a survey ends. It never includes individual answers.",
 	},
 	{
 		key: "workspaceAlerts",
 		label: "Workspace connection alerts",
 		description:
-			"Email alerts about revoked Slack access, suspended GitHub access, and recovery for workspaces you currently administer.",
+			"Get an email when Slack access is revoked or GitHub access is suspended in a workspace you administer, and when access recovers.",
 	},
 	{
 		key: "productSurveys",
 		label: "Product survey invitations",
-		description: "Email invitations to help improve Hephaestus through product surveys.",
+		description: "Get email invitations to product surveys that help improve Hephaestus.",
 	},
 	{
 		key: "researchSurveys",
 		label: "Research survey invitations",
 		description:
-			"Receive academic research survey invitations by email when you also consent to research participation. Turning this off stops email invitations, not your research participation.",
+			"Get academic research survey invitations by email if you also take part in the research. Turning this off stops the emails. It does not end your research participation.",
 	},
 	{
 		key: "productFeedback",
@@ -164,16 +164,15 @@ export function EmailPreferencesSection({
 						!isAppAdmin &&
 						(state.preferences.productFeedback || state.preferences.surveySummaries) && (
 							<p className="text-sm text-muted-foreground">
-								You can turn off your previous administrator subscriptions here. They do not send
-								while you lack instance-admin access.
+								You can turn off your previous administrator subscriptions here. They are not sent
+								unless you have instance-admin access.
 							</p>
 						)}
 					{!optOutOnly && !state.preferences.emailAvailable && (
 						<p className="text-sm text-muted-foreground">
-							No verified email address is available for your account. A linked sign-in provider
-							must supply a verified address before you can turn on another email kind. You can
-							still turn off existing subscriptions. Changing these choices does not add or verify
-							an address.
+							Your account has no verified email address. A linked sign-in provider must supply one
+							before you can turn on more emails. You can still turn off existing subscriptions.
+							Changing these choices does not add or verify an address.
 						</p>
 					)}
 					<FieldGroup>

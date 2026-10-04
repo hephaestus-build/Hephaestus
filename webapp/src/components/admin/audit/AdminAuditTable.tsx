@@ -198,7 +198,7 @@ export function AdminAuditTable({
 											type="button"
 											variant="ghost"
 											size="sm"
-											aria-label={`View details: ${eventLabel(e.eventType)}${hasText(account) ? ` — ${account}` : ""}`}
+											aria-label={`Details for ${eventLabel(e.eventType)}${hasText(account) ? `, ${account}` : ""}`}
 											onClick={() => {
 												setDetail(e);
 												setDetailOpen(true);

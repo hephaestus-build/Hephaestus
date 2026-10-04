@@ -136,6 +136,7 @@ export function HephaestusVersionPanel(props: HephaestusVersionPanelProps) {
 	const updateAvailable = status.state === "UPDATE_WAITING";
 	const viewLabel = updateAvailable ? "Review Hephaestus update" : "View Hephaestus default";
 	const useLabel = updateAvailable ? "Apply Hephaestus update" : "Restore Hephaestus default";
+	const usePendingLabel = updateAvailable ? "Applying update…" : "Restoring default…";
 	const keepLabel =
 		status.state === "NO_LONGER_SHIPPED" ? "Keep saved version as custom" : "Keep saved version";
 
@@ -224,7 +225,7 @@ export function HephaestusVersionPanel(props: HephaestusVersionPanelProps) {
 									onClick={onUseHephaestusVersion}
 								>
 									{isResetPending && <Spinner className="mr-1.5 size-3.5" />}
-									{isResetPending ? `${useLabel}…` : useLabel}
+									{isResetPending ? usePendingLabel : useLabel}
 								</Button>
 							)}
 							{canKeep && (
@@ -236,7 +237,7 @@ export function HephaestusVersionPanel(props: HephaestusVersionPanelProps) {
 									onClick={onKeepCurrentDefinition}
 								>
 									{isKeepPending && <Spinner className="mr-1.5 size-3.5" />}
-									{isKeepPending ? `${keepLabel}…` : keepLabel}
+									{isKeepPending ? "Keeping saved version…" : keepLabel}
 								</Button>
 							)}
 						</div>

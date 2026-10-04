@@ -371,7 +371,7 @@ export const BulkSet: Story = {
 		);
 		await expect(canvas.getByText("2 practices selected")).toBeVisible();
 
-		await userEvent.click(canvas.getByRole("button", { name: "Change the selected" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Change selected practices" }));
 		const menu = within(await screen.findByRole("menu"));
 		await userEvent.click(await menu.findByRole("menuitem", { name: "Review before sending" }));
 		await expect(args.onBulkSetAutonomy).toHaveBeenCalledWith(
@@ -390,7 +390,7 @@ export const BulkAutomaticRequiresConfirmation: Story = {
 		await userEvent.click(
 			canvas.getByRole("button", { name: /Select all 2 practices in Pull request hygiene/u }),
 		);
-		await userEvent.click(canvas.getByRole("button", { name: "Change the selected" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Change selected practices" }));
 		await userEvent.click(
 			within(await screen.findByRole("menu")).getByRole("menuitem", {
 				name: "Send automatically",
@@ -419,7 +419,7 @@ export const BulkClearToInherited: Story = {
 			canvas.getByRole("checkbox", { name: "Select Links the issue it closes" }),
 		);
 		await expect(canvas.getByText("1 practice selected")).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: "Change the selected" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Change selected practices" }));
 		const menu = within(await screen.findByRole("menu"));
 		await userEvent.click(await menu.findByRole("menuitem", { name: "Use the inherited setting" }));
 		await expect(args.onBulkSetAutonomy).toHaveBeenCalledWith(
@@ -433,7 +433,7 @@ export const BulkInFlight: Story = {
 	args: { pending: { ...idle, bulk: { done: 7, total: 24 } } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Changing 7 of 24…")).toBeVisible();
-		await expect(canvas.getByRole("button", { name: "Change the selected" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Change selected practices" })).toBeDisabled();
 	},
 };
 

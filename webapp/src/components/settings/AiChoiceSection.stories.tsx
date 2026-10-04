@@ -46,9 +46,7 @@ export const Unanswered: Story = {
 		}
 		const save = canvas.getByRole("button", { name: "Save" });
 		await expectGenuinelyDisabled(save);
-		await expect(save).toHaveAccessibleDescription(
-			"Applies in all your workspaces. Change it any time.",
-		);
+		await expect(save).toHaveAccessibleDescription("You can change your answer at any time.");
 	},
 };
 

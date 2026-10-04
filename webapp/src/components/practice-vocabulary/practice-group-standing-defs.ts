@@ -36,7 +36,7 @@ export const PRACTICE_GROUP_STANDING_DEFS: Record<
 		label: "Needs attention",
 		icon: CircleAlertIcon,
 		badgeVariant: "destructive",
-		description: "Recent reviews here were mostly problems.",
+		description: "Recent reviews here mostly found problems.",
 		predicate: { one: "needs attention", many: "need attention" },
 	},
 	MIXED: {

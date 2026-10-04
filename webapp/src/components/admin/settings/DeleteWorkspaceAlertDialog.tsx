@@ -60,7 +60,7 @@ export function DeleteWorkspaceAlertDialog({
 					<AlertDialogTitle ref={titleRef} tabIndex={-1}>
 						Permanently delete <span className="font-mono break-all">{workspaceSlug}</span>?
 					</AlertDialogTitle>
-					<AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+					<AlertDialogDescription>You cannot undo this.</AlertDialogDescription>
 					<div className="space-y-3 text-left text-sm text-muted-foreground">
 						<p>Deleting the workspace permanently erases:</p>
 						<ul className="list-disc space-y-1 pl-5">
@@ -70,7 +70,7 @@ export function DeleteWorkspaceAlertDialog({
 							<li>practice feedback and mentor conversations</li>
 							<li>locally stored integration and AI-provider credentials</li>
 						</ul>
-						<p>These survive:</p>
+						<p>These stay:</p>
 						<ul className="list-disc space-y-1 pl-5">
 							<li>
 								messages and comments Hephaestus posted to external providers, including GitHub,
@@ -81,7 +81,7 @@ export function DeleteWorkspaceAlertDialog({
 							<li>security, audit, and accounting records for prior activity</li>
 							<li>
 								the name <span className="font-mono break-all">{workspaceSlug}</span>, which stays
-								reserved and which no new workspace can ever use
+								reserved so that no new workspace can ever use it
 							</li>
 						</ul>
 						<p>

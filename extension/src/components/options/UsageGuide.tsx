@@ -16,8 +16,8 @@ export function UsageGuide() {
 					<h3 className="text-sm font-medium">On the work itself</h3>
 					<p className="text-xs text-muted-foreground">
 						Open a pull request, merge request or issue to see its review status and your feedback.
-						Expand it to jump to comments or explore supporting observations. On a list, press the
-						Hephaestus mark beside a title to preview that work.
+						Expand it to go to a comment or see your observations. On a list, press the Hephaestus
+						mark beside a title to preview that work.
 					</p>
 				</div>
 			</li>
@@ -28,8 +28,9 @@ export function UsageGuide() {
 				<div className="flex min-w-0 flex-col gap-1">
 					<h3 className="text-sm font-medium">Changes are confirmed</h3>
 					<p className="text-xs text-muted-foreground">
-						Asking for a review opens a small Hephaestus window that shows exactly what will happen.
-						Nothing changes until you confirm there. Approving feedback stays in Hephaestus.
+						Requesting a review opens a small Hephaestus window that shows exactly what will happen.
+						Nothing changes until you confirm there. You approve feedback in Hephaestus, not in the
+						extension.
 					</p>
 				</div>
 			</li>

@@ -60,8 +60,8 @@ export function WorkspaceSlackConnectionSettings(props: WorkspaceSlackConnection
 					Slack integration
 				</IntegrationCardHeading>
 				<CardDescription>
-					Install Hephaestus in Slack for conversations with Heph in Slack direct messages, App Home
-					privacy controls, and optional monitored channels. Channel messages are not stored until
+					Install Hephaestus in Slack to talk with Heph in direct messages, manage privacy controls
+					in App Home, and monitor channels you choose. Hephaestus stores no channel messages until
 					an admin activates a channel.
 				</CardDescription>
 			</CardHeader>
@@ -123,7 +123,7 @@ function SlackConnected({
 						<ItemDescription className={credentialUnreadable ? "line-clamp-none" : undefined}>
 							{credentialUnreadable
 								? "Hephaestus cannot post with this token. Reconnect Slack to replace it, or restore the original server key."
-								: "Hephaestus is installed and can post as the app."}
+								: "Hephaestus is installed and can post in Slack."}
 						</ItemDescription>
 					</ItemContent>
 					<ItemActions>
@@ -170,11 +170,11 @@ function SlackConnected({
 					<AlertDialogHeader>
 						<AlertDialogTitle>Disconnect Slack?</AlertDialogTitle>
 						<AlertDialogDescription>
-							The Slack connection for this workspace is removed, and every ingested Slack message,
-							thread, and per-channel consent record for this workspace is erased. Messages already
-							sent in Slack remain there. To use Slack with this workspace again, re-authorize
-							through OAuth and re-activate channels. To replace only the stored token, use
-							Reconnect Slack instead: it keeps the channels and their data.
+							This removes the Slack connection for this workspace. It also erases every stored
+							Slack message, thread, and per-channel consent record for this workspace. Messages
+							already sent in Slack stay there. To use Slack with this workspace again, authorize
+							through OAuth and activate the channels again. To replace only the stored token, use
+							Reconnect Slack instead. It keeps the channels and their data.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -186,7 +186,7 @@ function SlackConnected({
 								void confirmDisconnect();
 							}}
 						>
-							{isDisconnecting ? "Disconnecting…" : "Disconnect"}
+							{isDisconnecting ? "Disconnecting…" : "Disconnect Slack"}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

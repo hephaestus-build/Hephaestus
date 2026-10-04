@@ -27,12 +27,12 @@ const RETRY_NOTICES = {
 	busy: {
 		variant: "warning",
 		title: "Heph is busy",
-		description: "Please try again in a moment.",
+		description: "Try again in a moment.",
 	},
 	failed: {
 		variant: "destructive",
-		title: "Something went wrong",
-		description: "An error occurred while generating the response. Please try again.",
+		title: "Heph could not finish that reply",
+		description: "The reply stopped before it was complete. Try again.",
 	},
 } as const satisfies Record<
 	ChatFailure,
@@ -175,7 +175,7 @@ export function Chat({
 						/>
 					)}
 					<p className="text-center text-xs text-balance text-muted-foreground">
-						Heph can make mistakes. Consider verifying important information.
+						Heph can make mistakes. Check anything important before you rely on it.
 					</p>
 				</div>
 			</div>

@@ -63,7 +63,7 @@ export function PracticeEvidenceOutcomeSummary({
 									<CircleAlertIcon className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden />
 									<span>
 										{hasText(blocker.sourceKind)
-											? `${evidenceSourceLabel(blocker.sourceKind, sources)} — ${readinessReasonLabel(blocker.reasonCode)}`
+											? `${evidenceSourceLabel(blocker.sourceKind, sources)}: ${readinessReasonLabel(blocker.reasonCode)}`
 											: readinessReasonLabel(blocker.reasonCode)}{" "}
 										({reviews(blocker.reviewsAffected)})
 									</span>

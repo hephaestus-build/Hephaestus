@@ -174,7 +174,7 @@ export const NoFeedbackComposed: Story = {
 	args: { observation: ready(observationDetail("cccccccc-2222-2222-2222-222222222222")) },
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Nothing was said to anybody about this")).toBeVisible();
+		await expect(panel.getByText("No feedback came from this observation")).toBeVisible();
 	},
 };
 

@@ -37,7 +37,7 @@ export const Default: Story = {
 		const dialog = await screen.findByRole("alertdialog", { name: "Disconnect Slack?" });
 		await expectSettledVisible(dialog);
 		await expect(onDisconnect).not.toHaveBeenCalled();
-		await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+		await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect Slack" }));
 		await expect(onDisconnect).toHaveBeenCalledOnce();
 		await expectDismissed("alertdialog");
 	},
@@ -50,7 +50,7 @@ export const DisconnectRejected: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Disconnect Slack…" }));
 		const dialog = await screen.findByRole("alertdialog", { name: "Disconnect Slack?" });
 		await expectSettledVisible(dialog);
-		await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect" }));
+		await userEvent.click(within(dialog).getByRole("button", { name: "Disconnect Slack" }));
 		await expect(onRejectedDisconnect).toHaveBeenCalledOnce();
 		await expect(screen.getByRole("alertdialog", { name: "Disconnect Slack?" })).toBeVisible();
 	},

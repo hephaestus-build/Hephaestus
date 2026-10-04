@@ -188,7 +188,7 @@ export function AllPracticeGroupsTable({
 			)}
 			empty={{
 				icon: <ClipboardCheckIcon />,
-				title: "No practices set up yet.",
+				title: "No practices set up yet",
 				description:
 					"Practice groups appear here once an admin sets up the practices this workspace reviews.",
 			}}

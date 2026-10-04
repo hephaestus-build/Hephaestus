@@ -78,7 +78,9 @@ export function useFeedbackController(
 			);
 		},
 		onError: (error) => {
-			toast.error("Could not decide on this feedback", { description: problemDetailOf(error) });
+			toast.error("Could not save your decision on this feedback", {
+				description: problemDetailOf(error),
+			});
 		},
 	});
 

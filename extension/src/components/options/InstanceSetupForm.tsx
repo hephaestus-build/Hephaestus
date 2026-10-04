@@ -66,7 +66,7 @@ export function InstanceSetupForm({
 					className={INPUT_CLASSES}
 				/>
 				<p id={originHintId} className="text-xs text-muted-foreground">
-					The address your organization runs Hephaestus at. It must use HTTPS.
+					The address where your organization runs Hephaestus. It must use HTTPS.
 				</p>
 			</div>
 			{developmentBuild ? (

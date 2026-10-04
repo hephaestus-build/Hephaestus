@@ -54,7 +54,7 @@ describe("the page a comment on the work links to", () => {
 			await screen.findByRole("button", { name: "Disputed" }, ROUTE_RENDER_WAIT),
 		);
 		await userEvent.type(
-			screen.getByRole("textbox", { name: "What was missed?" }),
+			screen.getByRole("textbox", { name: "Why do you dispute this?" }),
 			"The loader never ran on this path.",
 		);
 		await userEvent.click(screen.getByRole("button", { name: "Send" }));

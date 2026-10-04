@@ -127,7 +127,7 @@ export function PracticeReviewSettingsEditor({
 					<HandIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
 					<span>
 						Anyone can also ask for this review by hand, with “Review this now” on the work itself.
-						It reads the same evidence and runs whatever state the work is in .
+						It reads the same evidence and runs whatever state the work is in.
 					</span>
 				</p>
 			)}

@@ -58,7 +58,7 @@ export function ConnectGitLabStep() {
 	return (
 		<div className="flex flex-col gap-4">
 			<Field>
-				<FieldLabel htmlFor="gitlab-server-url">GitLab Instance</FieldLabel>
+				<FieldLabel htmlFor="gitlab-server-url">GitLab instance</FieldLabel>
 				<Input
 					id="gitlab-server-url"
 					value={state.serverUrl}
@@ -71,7 +71,7 @@ export function ConnectGitLabStep() {
 			</Field>
 
 			<Field data-invalid={hasText(tokenError) ? "true" : undefined}>
-				<FieldLabel htmlFor="gitlab-pat">Access Token</FieldLabel>
+				<FieldLabel htmlFor="gitlab-pat">Access token</FieldLabel>
 				<InputGroup>
 					<InputGroupInput
 						id="gitlab-pat"
@@ -109,10 +109,10 @@ export function ConnectGitLabStep() {
 						target="_blank"
 						rel="noopener noreferrer"
 					>
-						Group Access Token
+						group access token
 					</a>{" "}
-					with <strong>Owner</strong> role and <code className="text-xs">api</code> scope. Owner
-					role is required for webhook registration. Enable token rotation for long-lived setups.
+					with the <strong>Owner</strong> role and the <code className="text-xs">api</code> scope.
+					Webhook registration needs the Owner role. Turn on token rotation for long-lived setups.
 				</FieldDescription>
 				{hasText(tokenError) && <FieldError id="gitlab-pat-error">{tokenError}</FieldError>}
 			</Field>
@@ -123,7 +123,7 @@ export function ConnectGitLabStep() {
 				disabled={!state.personalAccessToken.trim() || preflight.isPending}
 			>
 				{preflight.isPending && <Spinner className="mr-2" />}
-				Validate Token
+				Validate token
 			</Button>
 
 			{state.preflightResult?.valid === true && (
@@ -139,10 +139,10 @@ export function ConnectGitLabStep() {
 			{state.preflightResult && !state.preflightResult.valid && (
 				<Alert variant="destructive">
 					<OctagonXIcon aria-hidden="true" />
-					<AlertTitle>Validation failed</AlertTitle>
+					<AlertTitle>Token validation failed</AlertTitle>
 					<AlertDescription>
 						{firstNonBlank(state.preflightResult.error) ??
-							"The token could not be validated. Check your token and try again."}
+							"We could not validate that token. Check it, then try again."}
 					</AlertDescription>
 				</Alert>
 			)}
@@ -150,9 +150,9 @@ export function ConnectGitLabStep() {
 			{preflight.isError && isForCurrentToken(state, preflight.variables.body) && (
 				<Alert variant="destructive">
 					<OctagonXIcon aria-hidden="true" />
-					<AlertTitle>Connection error</AlertTitle>
+					<AlertTitle>Could not reach GitLab</AlertTitle>
 					<AlertDescription>
-						Could not reach the GitLab instance. Try again in a moment.
+						The GitLab instance did not answer. Try again in a moment.
 					</AlertDescription>
 				</Alert>
 			)}

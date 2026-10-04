@@ -14,7 +14,7 @@ export type MentorNotice =
 
 /**
  * Why Heph will not answer this member, if it will not. The server twin is `MentorRefusal`.
- * `aiChoice == null && !aiChoiceRequired` is `undefined` on purpose: members who have not chosen
+ * `aiChoice == null && !aiChoiceRequired` is `undefined` on purpose: members who haven't chosen
  * are served by the undeclared slot. `not-set-up` comes before the choice: no choice the member
  * could make would bring Heph.
  */

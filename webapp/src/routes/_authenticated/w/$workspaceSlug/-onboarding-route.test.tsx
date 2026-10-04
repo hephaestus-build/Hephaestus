@@ -83,7 +83,7 @@ describe("workspace member onboarding route", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Save AI choice" }));
 		await waitFor(() => expect(choices).toStrictEqual([{ choice: "NO_AI" }]));
 		await screen.findByText(
-			"Your AI choice is set and holds in all your workspaces. Connect Slack and you are in.",
+			"Your AI choice is set and holds in all your workspaces. Connect Slack and you’re in.",
 		);
 		expect(router.state.location.pathname).toBe("/w/acme/onboarding");
 		expect(checked(/^No AI /u)).toBe(true);
@@ -280,7 +280,7 @@ describe("workspace member onboarding route", () => {
 		renderRouteAtWithRouter("/w/acme/onboarding");
 		await screen.findByRole("radio", { name: /^In-house /u }, ROUTE_RENDER_WAIT);
 		fireEvent.click(screen.getByRole("radio", { name: CLOUD }));
-		fireEvent.click(screen.getByRole("button", { name: "Save AI choice and connect Slack" }));
+		fireEvent.click(screen.getByRole("button", { name: "Save and connect Slack" }));
 		await waitFor(() => expect(link).toHaveBeenCalledOnce());
 		expect(order).toStrictEqual(['ai-choice {"choice":"CLOUD"}', "linkAccount"]);
 		link.mockRestore();
@@ -297,7 +297,7 @@ describe("workspace member onboarding route", () => {
 		renderRouteAtWithRouter("/w/acme/onboarding");
 		await screen.findByRole("radio", { name: /^In-house /u }, ROUTE_RENDER_WAIT);
 		fireEvent.click(screen.getByRole("radio", { name: CLOUD }));
-		fireEvent.click(screen.getByRole("button", { name: "Save AI choice and connect Slack" }));
+		fireEvent.click(screen.getByRole("button", { name: "Save and connect Slack" }));
 		await screen.findByText("Your choice could not be saved.");
 		expect(link).not.toHaveBeenCalled();
 		link.mockRestore();

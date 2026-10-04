@@ -67,7 +67,7 @@ export function UserViewUsersTable({ state, page, onPageChange, onView }: UserVi
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Could not load workspace users"
+				title="We could not load workspace users"
 				onRetry={state.onRetry}
 			/>
 		);

@@ -82,7 +82,7 @@ const REQUEST_STATE_TITLES = {
 } satisfies Record<PersonDataRequest["state"], string>;
 
 function providerLabel(provider: PersonDataProvider): string {
-	return `${provider.type} — ${provider.serverUrl}`;
+	return `${provider.type} · ${provider.serverUrl}`;
 }
 
 function isWebAddress(locator: string): boolean {
@@ -273,7 +273,7 @@ export function InstancePersonDataPage({
 			{state.status === "error" && (
 				<QueryErrorAlert
 					error={state.error}
-					title="Could not complete the request"
+					title="We could not complete the request"
 					onRetry={state.onRetry}
 				/>
 			)}

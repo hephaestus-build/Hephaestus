@@ -223,8 +223,8 @@ function AdminLlmConnectionFormDialogContent({
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit connection" : "Add connection"}</DialogTitle>
 					<DialogDescription>
-						Connect an endpoint that implements an OpenAI API. Models are added and priced after the
-						connection is saved.
+						Connect an endpoint that implements an OpenAI API. Add and price models after you save
+						the connection.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -278,16 +278,17 @@ function AdminLlmConnectionFormDialogContent({
 						{probeResult && !probeResult.reachable && (
 							<Alert variant="warning">
 								<AlertDescription>
-									Discovery unsupported. {probeResult.message ?? "The provider did not answer."} You
-									can still save the connection and enter a model id.
+									Could not fetch the model list.{" "}
+									{probeResult.message ?? "The provider did not answer."} You can still save the
+									connection and enter a model id.
 								</AlertDescription>
 							</Alert>
 						)}
 						{hasText(probeError) && (
 							<Alert variant="warning">
 								<AlertDescription>
-									Discovery unsupported. {probeError} You can still save the connection and enter a
-									model id.
+									Could not fetch the model list. {probeError} You can still save the connection and
+									enter a model id.
 								</AlertDescription>
 							</Alert>
 						)}

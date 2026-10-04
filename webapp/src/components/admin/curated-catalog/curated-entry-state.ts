@@ -38,7 +38,7 @@ export function curatedEntryCopy(
 					label: "Hephaestus update available",
 					tone: "info",
 					detail:
-						"Applying this update would change the group's name, description, icon, or color. Your saved version stays in place until you decide.",
+						"Applying this update would change the group’s name, description, icon, or color. Your saved version stays in place until you decide.",
 				};
 			}
 			return {

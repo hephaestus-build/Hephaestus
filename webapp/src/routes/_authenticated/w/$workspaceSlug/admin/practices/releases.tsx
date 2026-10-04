@@ -62,7 +62,7 @@ function PracticeReleaseInbox() {
 		...declinePracticeReleaseMutation(),
 		onSuccess: () => {
 			refresh();
-			toast.success("This update was declined");
+			toast.success("Update declined");
 		},
 		onError: (error) => {
 			if (problemStatusOf(error) === 412) {
@@ -100,7 +100,8 @@ function PracticeReleaseInbox() {
 					</EmptyMedia>
 					<EmptyTitle>No updates to review</EmptyTitle>
 					<EmptyDescription>
-						Accepted and declined versions do not appear here again unless the catalog changes.
+						Catalog changes to your practices appear here. Accepted and declined versions do not
+						return unless the catalog changes again.
 					</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
@@ -118,7 +119,9 @@ function PracticeReleaseInbox() {
 							onClick={() => setSelectedSlug(proposal.slug)}
 						>
 							<span className="block font-medium">{proposal.offered.name}</span>
-							<span className="text-muted-foreground">{proposal.fields.length} changed fields</span>
+							<span className="text-muted-foreground">
+								{proposal.fields.length} changed {proposal.fields.length === 1 ? "field" : "fields"}
+							</span>
 						</button>
 					))}
 				</nav>

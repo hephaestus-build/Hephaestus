@@ -245,9 +245,11 @@ export const FeedbackEmpty: Story = {
 	// A practice no feedback was ever written about, so the tab has nothing to list.
 	args: { tab: "feedback", practice: unwrittenAbout },
 	play: async () => {
-		await expectSettledVisible(await screen.findByText("No feedback yet."));
+		await expectSettledVisible(await screen.findByText("No feedback yet"));
 		await expect(
-			screen.getByText("Feedback appears once the same shortcoming keeps showing up on your work."),
+			screen.getByText(
+				"Feedback appears here once a review sees the same pattern in your work more than once.",
+			),
 		).toBeVisible();
 		await expect(screen.getByRole("heading", { level: 2, name: "Feedback" })).toBeVisible();
 		await expect(screen.queryByText("Current feedback")).not.toBeInTheDocument();
@@ -264,7 +266,7 @@ export const AboutTab: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("Where you stand"));
 		const standingLine = screen.getByText(
-			"Recent reviews here were mostly problems. Based on your latest six pieces of reviewed work.",
+			"Recent reviews here mostly found problems. Based on your latest six pieces of reviewed work.",
 		);
 		const trendLine = screen.getByText(
 			"Recent reviewed work carried more strengths than the stretch before it. Compared your latest six pieces of reviewed work with the five before them. Evidence spans 12 days.",

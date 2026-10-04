@@ -98,8 +98,7 @@ export function MentorMessage({
 							<AlertCircleIcon />
 						</MarkerIcon>
 						<MarkerContent>
-							This reply was interrupted before it finished, so it is incomplete. Ask again for a
-							full answer.
+							This reply stopped before it finished. Ask again for a complete answer.
 						</MarkerContent>
 					</Marker>
 				)}

@@ -174,7 +174,7 @@ describe("useWorkspaceSwitcher", () => {
 		await waitFor(() => expect(router.state.location.href).toBe("/w/beta"));
 		expect(toast.info).toHaveBeenCalledExactlyOnceWith("Switched to Beta workspace", {
 			description:
-				"This page is specific to the previous workspace, so Hephaestus opened the new workspace's home page.",
+				"The page you were on belongs to the previous workspace, so we opened the home page of this one.",
 		});
 	});
 

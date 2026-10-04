@@ -254,12 +254,13 @@ function PracticeCatalogRoute() {
 			stackControls.close(0);
 			await invalidateCatalogQueries();
 			const changes = [
-				result.added.length > 0 && `${result.added.length} added`,
+				result.added.length > 0 &&
+					`${result.added.length} ${result.added.length === 1 ? "practice" : "practices"} added`,
 				result.moved.length > 0 && `${result.moved.length} moved`,
 			].filter(Boolean);
 			toast.success("Group updated", { description: changes.join(", ") });
 		},
-		onError: () => toast.error("Could not add the group. Nothing was changed."),
+		onError: () => toast.error("Could not add the group. Nothing was changed. Try again."),
 	});
 	const adoptCatalogPractice = useMutation({
 		...adoptPracticeMutation(),
@@ -296,11 +297,13 @@ function PracticeCatalogRoute() {
 				if (refreshed.isSuccess) {
 					setStaleLevelKey(detailStackKey(entry));
 				} else {
-					toast.error("The adoption preview changed but could not be refreshed");
+					toast.error(
+						"The catalog changed and the preview could not reload. Reopen the practice to try again.",
+					);
 				}
 				return;
 			}
-			toast.error("Could not add the practice");
+			toast.error("Could not add the practice. Try again.");
 		}
 	};
 
@@ -421,16 +424,15 @@ function PracticeCatalogRoute() {
 				}
 				description={
 					<>
-						Organize this workspace’s practices and add suggestions from the instance catalog. The
-						autonomy — whether each practice is reviewed, and how far its reviews go on their own —
-						is set on{" "}
+						Organize this workspace’s practices and add suggestions from the instance catalog.
+						Whether each practice is reviewed, and how far its reviews go on their own, is set in{" "}
 						<Link
 							to="/w/$workspaceSlug/admin/practices/review"
 							params={{ workspaceSlug }}
 							search={{}}
 							className="font-medium underline underline-offset-4 hover:text-foreground"
 						>
-							Review
+							Review settings
 						</Link>
 						.
 					</>
@@ -475,7 +477,9 @@ function PracticeCatalogRoute() {
 								if (refreshed.isSuccess) {
 									setStaleLevelKey(detailStackKey(entry));
 								} else {
-									toast.error("The group plan changed but could not be refreshed");
+									toast.error(
+										"The catalog changed and the group plan could not reload. Reopen the group to try again.",
+									);
 								}
 							}
 						};
@@ -700,7 +704,7 @@ function PracticeCatalogRoute() {
 					<AlertDialogHeader>
 						<AlertDialogTitle>Delete &ldquo;{deletingPractice?.name}&rdquo;?</AlertDialogTitle>
 						<AlertDialogDescription>
-							This permanently deletes the practice and its observations. This cannot be undone.
+							This permanently deletes the practice and its observations. You cannot undo this.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

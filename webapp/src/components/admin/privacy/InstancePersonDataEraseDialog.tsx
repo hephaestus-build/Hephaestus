@@ -70,12 +70,12 @@ export function InstancePersonDataEraseDialog({
 			<AlertDialogContent>
 				<AlertDialogHeader>
 					<AlertDialogTitle>
-						{resume ? "Resume erasure?" : "Permanently erase this person's data?"}
+						{resume ? "Resume erasure?" : "Permanently erase this person’s data?"}
 					</AlertDialogTitle>
 					<AlertDialogDescription>
 						{resume
 							? "Stores that were already erased stay erased. The job continues with the remaining stores."
-							: `This erases or anonymises ${rowCount} rows in ${storeCount} stores and blocks further processing of these identities. It cannot be undone.`}
+							: `This erases or anonymises ${rowCount} rows in ${storeCount} stores and blocks further processing of these identities. You cannot undo this.`}
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<form onSubmit={confirm} className="grid gap-4">
@@ -90,7 +90,9 @@ export function InstancePersonDataEraseDialog({
 							/>
 							<FieldContent>
 								<FieldLabel htmlFor={`${id}-external`}>
-									I removed the {externalDeliveryCount} feedback copies still posted on providers
+									I removed the {externalDeliveryCount}{" "}
+									{externalDeliveryCount === 1 ? "piece" : "pieces"} of feedback still posted on
+									providers
 								</FieldLabel>
 								{externalMissing && (
 									<FieldError id={`${id}-external-error`}>

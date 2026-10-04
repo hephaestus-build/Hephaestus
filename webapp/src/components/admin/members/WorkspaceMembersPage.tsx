@@ -52,7 +52,7 @@ export function WorkspaceMembersPage({
 					renderPageLink={renderPageLink}
 				/>
 			) : (
-				<QueryErrorAlert error={error} title="Could not load members" onRetry={onRetry} />
+				<QueryErrorAlert error={error} title="We could not load members" onRetry={onRetry} />
 			)}
 		</PageLayout>
 	);

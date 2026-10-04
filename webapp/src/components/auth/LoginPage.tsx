@@ -14,21 +14,21 @@ const ERROR_COPY = new Map([
 		"access_denied",
 		{
 			title: "Sign-in was cancelled",
-			description: "No problem — you can try again whenever you are ready.",
+			description: "You can try again whenever you’re ready.",
 		},
 	],
 	[
 		"idp_unavailable",
 		{
 			title: "That provider is not responding",
-			description: "We could not reach it just now. Give it a moment and try again.",
+			description: "We could not reach it just now. Wait a moment, then try again.",
 		},
 	],
 ]);
 
 const GENERIC_ERROR = {
-	title: "Something went wrong",
-	description: "We could not sign you in. Please try again.",
+	title: "We could not sign you in",
+	description: "Try again. If it keeps failing, contact the operator of this instance.",
 };
 
 export interface LoginPageProps extends SignInButtonsProps {

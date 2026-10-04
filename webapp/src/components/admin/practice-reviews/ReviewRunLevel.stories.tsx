@@ -201,7 +201,7 @@ export const DeclinedForInsufficientEvidence: Story = {
 			expect(await panel.findAllByText("Nothing was assessed")).toHaveLength(2),
 		);
 		await expect(panel.queryByText("No observations were recorded")).toBeNull();
-		await expect(panel.queryByText("No feedback")).toBeNull();
+		await expect(panel.queryByText("No feedback was composed")).toBeNull();
 	},
 };
 

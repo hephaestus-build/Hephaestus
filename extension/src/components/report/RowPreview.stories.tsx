@@ -212,7 +212,7 @@ export const FollowedInTwoWorkspaces: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("status")).toHaveTextContent(/Open it to choose one/u);
+		await expect(canvas.getByRole("status")).toHaveTextContent(/open it to choose one/u);
 		await expect(canvas.queryByRole("radio")).toBeNull();
 	},
 };

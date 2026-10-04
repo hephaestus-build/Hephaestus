@@ -33,14 +33,14 @@ function describeOrigin({ origin, kind }: CatalogOriginProps) {
 			explanation:
 				kind === "practice"
 					? "The catalog changed. Your copy is untouched. Review the proposed fields in Practice updates."
-					: `The catalog now has different ${subject}. Your copy is untouched — bring anything you want across by editing it.`,
+					: `The catalog now has different ${subject}. Your copy is untouched. Edit it to bring anything you want across.`,
 		};
 	}
 	if (origin.link === "DECLINED") {
 		return {
 			label: "Update declined",
 			explanation:
-				"You declined this catalog version. Your copy is unchanged. A different version can be offered later.",
+				"You declined this catalog version. Your copy is unchanged. A different version can be proposed later.",
 		};
 	}
 	if (origin.link === "IN_SYNC") {

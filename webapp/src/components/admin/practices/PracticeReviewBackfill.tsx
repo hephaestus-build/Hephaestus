@@ -136,7 +136,7 @@ export function PracticeReviewBackfill({
 					<AlertCircle />
 					<AlertTitle>Backfills could not be loaded</AlertTitle>
 					<AlertDescription>
-						<p>Any backfill already running is unaffected. This is only about showing it here.</p>
+						<p>A backfill that is already running is unaffected. Only this list failed to load.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
 							Try again
 						</Button>
@@ -396,7 +396,7 @@ function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoad
 						<History />
 					</EmptyMedia>
 					<EmptyTitle>No backfills yet</EmptyTitle>
-					<EmptyDescription>Past work has never been reviewed in this workspace.</EmptyDescription>
+					<EmptyDescription>Finished and stopped backfills appear here.</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
 		);
@@ -438,9 +438,7 @@ function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoad
 				<h2 id="backfill-history-heading" className="text-lg font-semibold">
 					Past backfills
 				</h2>
-				<p className="text-sm text-muted-foreground">
-					What has already been reviewed, and by whose decision.
-				</p>
+				<p className="text-sm text-muted-foreground">What earlier backfills reviewed.</p>
 			</div>
 			{history}
 		</section>

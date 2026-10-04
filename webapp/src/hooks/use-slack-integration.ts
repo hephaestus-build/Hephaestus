@@ -98,7 +98,7 @@ export function useSlackIntegration(workspaceSlug: string) {
 			invalidateSlackChannels();
 		},
 		onError: (e) => {
-			toast.error("Failed to add channel", { description: problemDetailOf(e) });
+			toast.error("Could not add the channel", { description: problemDetailOf(e) });
 		},
 	});
 
@@ -119,9 +119,9 @@ export function useSlackIntegration(workspaceSlug: string) {
 		},
 		onError: (e, variables) => {
 			if (variables.body.consentState === "REVOKED") {
-				toast.error("Failed to remove channel", { description: problemDetailOf(e) });
+				toast.error("Could not remove the channel", { description: problemDetailOf(e) });
 			} else {
-				toast.error("Failed to update channel", { description: problemDetailOf(e) });
+				toast.error("Could not update the channel", { description: problemDetailOf(e) });
 			}
 		},
 	});
@@ -137,7 +137,7 @@ export function useSlackIntegration(workspaceSlug: string) {
 			throw new Error(`Unexpected non-redirect Slack initiation: ${initiation.type}`);
 		},
 		onError: (e) => {
-			toast.error("Could not start Slack OAuth", { description: problemDetailOf(e) });
+			toast.error("Could not connect Slack", { description: problemDetailOf(e) });
 		},
 	});
 
@@ -150,7 +150,7 @@ export function useSlackIntegration(workspaceSlug: string) {
 			invalidateSlackChannels();
 		},
 		onError: (e) => {
-			toast.error("Failed to disconnect Slack", { description: problemDetailOf(e) });
+			toast.error("Could not disconnect Slack", { description: problemDetailOf(e) });
 		},
 	});
 	const slackConnectionId = workspaceData?.slackConnectionId;

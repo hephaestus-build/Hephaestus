@@ -188,9 +188,9 @@ export function ObservationLevel({
 								<EmptyMedia variant="icon">
 									<MessageSquareTextIcon />
 								</EmptyMedia>
-								<EmptyTitle>Nothing was said to anybody about this</EmptyTitle>
+								<EmptyTitle>No feedback came from this observation</EmptyTitle>
 								<EmptyDescription>
-									The observation was recorded and no feedback was composed from it.
+									It was recorded, and no feedback was composed from it.
 								</EmptyDescription>
 							</EmptyHeader>
 						</Empty>
@@ -270,8 +270,8 @@ function InvalidationAlert({ invalidation }: { invalidation: ObservationInvalida
 				<p>
 					{invalidation.invalidatedBy ?? "A workspace admin"} marked this observation as incorrect{" "}
 					<RelativeTime value={invalidation.invalidatedAt} />: “{invalidation.reason}”. It no longer
-					counts toward the developer’s standing, their practice page or the mentor, and feedback
-					about it that had not reached anyone was stopped. The developer sees it labelled with this
+					counts toward the developer’s standing, their practice page or the mentor. Feedback about
+					it that had not reached anyone was stopped. The developer sees it labelled with this
 					reason in their review history.
 				</p>
 				<p>{PROVIDER_COPY_IN_FORCE[invalidation.providerCopy]}</p>

@@ -140,7 +140,7 @@ function LoadedCuratedPracticeEditor({
 			queryClient.setQueryData(detailQueryKey, updated);
 			void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 			setBasePractice(updated);
-			toast.success("This update was declined");
+			toast.success("Update declined");
 		},
 		onError: (error) => {
 			if (problemStatusOf(error) === 412) {
@@ -190,7 +190,9 @@ function LoadedCuratedPracticeEditor({
 				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 				return;
 			}
-			toast.error("Could not apply the default", { description: problemDetailOf(error) });
+			toast.error("Could not apply the Hephaestus version", {
+				description: problemDetailOf(error),
+			});
 		},
 	});
 	const keepCurrentDefinition = useMutation({
@@ -230,7 +232,7 @@ function LoadedCuratedPracticeEditor({
 			setBasePractice(latest);
 			setConflict(false);
 		} catch (error) {
-			toast.error("Could not refresh the latest version", { description: problemDetailOf(error) });
+			toast.error("Could not load the current version", { description: problemDetailOf(error) });
 		}
 	};
 	let releaseReview: ReactNode;

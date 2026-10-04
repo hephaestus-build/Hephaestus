@@ -63,7 +63,7 @@ const meta = {
 		),
 		empty: {
 			icon: <ClipboardCheckIcon />,
-			title: "No practices here yet.",
+			title: "No practices here yet",
 			description: "Practices appear here once an admin adds them to this group.",
 		},
 		loadingRow,

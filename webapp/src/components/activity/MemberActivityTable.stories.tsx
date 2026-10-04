@@ -66,9 +66,9 @@ export const LargeWorkspace: Story = {
 export const NoResults: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.type(canvas.getByRole("searchbox", { name: "Search members" }), "nobody");
-		await expect(canvas.getByText("No results found")).toBeVisible();
+		await expect(canvas.getByText("No members match your search")).toBeVisible();
 		await expect(canvas.getByText("0 of 5 members")).toBeVisible();
-		await expect(canvas.getByText("Edit your search and try again.")).toBeVisible();
+		await expect(canvas.getByText("Try a different name.")).toBeVisible();
 	},
 };
 

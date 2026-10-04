@@ -22,7 +22,7 @@ export const BINDING_READINESS_DEFS: StatusDefs<BindingReadiness> = {
 		icon: CircleAlertIcon,
 		badgeVariant: "destructive",
 		description:
-			"This model cannot run: it or its connection is off, or it is no longer declared as this row's tier.",
+			"This model cannot run: it or its connection is off, or it is no longer declared as this row’s tier.",
 	},
 };
 

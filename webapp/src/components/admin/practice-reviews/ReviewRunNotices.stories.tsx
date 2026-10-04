@@ -36,7 +36,9 @@ export const OutputMayBeIncomplete: Story = {
 	args: { job: failed, outputMayBeIncomplete: true },
 	play: async ({ canvas }) => {
 		canvas.getByText("Review output may be incomplete");
-		canvas.getByText("The review ended before it completed.");
+		canvas.getByText(
+			"The review ended early. The observations and feedback below may be only part of what it would have found.",
+		);
 	},
 };
 

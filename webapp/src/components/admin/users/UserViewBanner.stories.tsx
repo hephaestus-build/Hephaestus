@@ -17,7 +17,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
 		await expect(
-			canvas.getByRole("region", { name: "Viewing Sam in Engineering — read-only" }),
+			canvas.getByRole("region", { name: "Viewing Sam in Engineering (read-only)" }),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Exit user view" }));
 		await expect(args.onExit).toHaveBeenCalledOnce();

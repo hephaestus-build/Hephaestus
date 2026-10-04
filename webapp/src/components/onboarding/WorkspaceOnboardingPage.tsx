@@ -262,7 +262,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 												const team = hasText(link.teamName) ? ` for ${link.teamName}` : "";
 												const rowDescription =
 													!link.available && !link.linked
-														? `Unavailable right now${team}. It does not hold you up.`
+														? `Unavailable right now${team}. You can continue without it.`
 														: `${link.required ? "Required" : "Optional"}${team}`;
 												const descriptionId = `${id}-link-${link.connectionId}`;
 												return (
@@ -290,7 +290,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 																		!link.available || !hasText(link.registrationId) || saving
 																	}
 																	aria-describedby={descriptionId}
-																	aria-label={`${changed ? "Save AI choice and connect" : "Connect"} ${link.displayName}`}
+																	aria-label={`${changed ? "Save and connect" : "Connect"} ${link.displayName}`}
 																	onClick={() => {
 																		if (hasText(link.registrationId)) {
 																			state.onLink(link.registrationId, draft);
@@ -438,16 +438,16 @@ function onboardingNarration({
 	}
 	if (firstVisit && answered) {
 		return requiredSatisfied
-			? "Your AI choice is set and holds in all your workspaces. You can get to work."
-			: `Your AI choice is set and holds in all your workspaces. Connect ${openRequiredNames} and you are in.`;
+			? "Your AI choice is set and holds in all your workspaces. Let’s get to work."
+			: `Your AI choice is set and holds in all your workspaces. Connect ${openRequiredNames} and you’re in.`;
 	}
 	if (firstVisit) {
 		return requiredSatisfied
-			? "That is everything. You can get to work."
-			: `Noted. Connect ${openRequiredNames} and you are in.`;
+			? "That’s everything. Let’s get to work."
+			: `Noted. Connect ${openRequiredNames} and you’re in.`;
 	}
 	if (afterLink) {
-		return "Your accounts are connected. Head back to your workspace whenever you are ready.";
+		return "Your accounts are connected. Head back to your workspace whenever you’re ready.";
 	}
 	return `You chose ${memberAiChoiceTitle(choice)}. Change it whenever you like.`;
 }
@@ -484,7 +484,7 @@ function memberSetupState(
 				? `Save your AI choice now. Connect ${openRequiredNames} to finish setup.`
 				: `Connect ${openRequiredNames} to finish setup.`;
 		} else if (!firstVisit && !changed) {
-			hint = "Applies in all your workspaces. Change it any time.";
+			hint = "You can change your answer at any time.";
 		}
 	}
 

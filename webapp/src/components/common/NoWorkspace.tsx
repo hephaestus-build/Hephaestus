@@ -25,7 +25,7 @@ export function NoWorkspace({ headingLevel = 1 }: { headingLevel?: 1 | 2 }) {
 			</EmptyHeader>
 			<Link to="/workspaces/new" className={buttonVariants()}>
 				<PlusIcon className="mr-2 size-4" />
-				Create Workspace
+				Create workspace
 			</Link>
 		</Empty>
 	);

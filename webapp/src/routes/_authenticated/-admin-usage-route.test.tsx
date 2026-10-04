@@ -107,7 +107,7 @@ describe("instance AI usage route", () => {
 		mockUsageRoutes({ budgetUsd: 50 });
 		await renderUsageRoute();
 
-		fireEvent.click(screen.getByRole("button", { name: /View usage details for Acme/u }));
+		fireEvent.click(screen.getByRole("button", { name: /^Details for Acme/u }));
 		await screen.findByText("Acme has used 86% of its shared-model budget");
 
 		fireEvent.click(screen.getByRole("button", { name: /Set budget for Acme/u }));

@@ -71,8 +71,8 @@ export function ReviewRunActions({
 						<AlertDialogHeader>
 							<AlertDialogTitle>Retry result processing?</AlertDialogTitle>
 							<AlertDialogDescription>
-								Process the review results again. This may retry failed publication. Approval
-								requirements still apply.
+								Process the review results again. Delivery that failed is tried again. Feedback that
+								needs approval still waits for it.
 							</AlertDialogDescription>
 						</AlertDialogHeader>
 						<AlertDialogFooter>

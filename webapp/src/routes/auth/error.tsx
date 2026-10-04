@@ -21,40 +21,38 @@ const ERROR_COPY: Record<string, { title: string; description: string }> = {
 	oauth_failure: {
 		title: "Sign-in did not complete",
 		description:
-			"We could not finish signing you in with that provider. Please try again from the sign-in page.",
+			"We could not finish signing you in with that provider. Try again from the sign-in page.",
 	},
 	token_exchange: {
 		title: "Sign-in could not be verified",
-		description:
-			"There was a problem confirming your identity with the provider. Please try signing in again.",
+		description: "We could not confirm your identity with the provider. Try signing in again.",
 	},
 	idp_unavailable: {
 		title: "Provider unavailable",
-		description:
-			"The identity provider could not be reached right now. Please try again in a few moments.",
+		description: "We could not reach the identity provider. Wait a moment, then try again.",
 	},
 	already_linked: {
-		title: "Account already linked",
+		title: "Account already connected",
 		description:
-			"That provider identity is already linked to another account. Sign in with the original account instead.",
+			"That provider identity is already connected to another account. Sign in with the original account instead.",
 	},
 	identity_already_linked: {
-		title: "Account already linked",
+		title: "Account already connected",
 		description:
-			"That provider identity is already linked to another account. Sign in with the original account instead.",
+			"That provider identity is already connected to another account. Sign in with the original account instead.",
 	},
 	link_requires_auth: {
 		// Slack and Outline are both link-only: they can only be attached to an existing session.
-		title: "Sign in before linking that account",
+		title: "Sign in before connecting that account",
 		description:
 			"Open Hephaestus, sign in with GitHub or GitLab, then connect Slack or Outline from Settings.",
 	},
 	step_up_required: {
 		// The session is valid and the account is right; only its age is the problem, so this must not
 		// read as a rejected identity.
-		title: "Confirm access before linking that account",
+		title: "Confirm access before connecting that account",
 		description:
-			"Linking an identity needs a recent sign-in. Confirm access with an identity already linked to your account, then link it again.",
+			"Connecting an identity needs a recent sign-in. Confirm access with an identity already connected to your account, then connect it again.",
 	},
 	client_not_registered: {
 		// Reached inside the browser extension's sign-in window: the instance does not list that
@@ -75,8 +73,9 @@ function describe(code: string | undefined): { title: string; description: strin
 		return ERROR_COPY[code];
 	}
 	return {
-		title: "Something went wrong",
-		description: "We hit an unexpected problem signing you in. Please try again.",
+		title: "We could not sign you in",
+		description:
+			"Something unexpected happened. Try again. If it keeps failing, contact the operator of this instance.",
 	};
 }
 

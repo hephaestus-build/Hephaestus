@@ -35,7 +35,7 @@ export function ModelAccessScopeChoice({
 					<FieldContent>
 						<FieldTitle>All workspaces</FieldTitle>
 						<FieldDescription>
-							Every current and future workspace can select the model.
+							Every current and future workspace can use the model.
 						</FieldDescription>
 					</FieldContent>
 					<RadioGroupItem id={`${idPrefix}-all`} value="ALL" />
@@ -45,9 +45,7 @@ export function ModelAccessScopeChoice({
 				<Field orientation="horizontal">
 					<FieldContent>
 						<FieldTitle>Selected workspaces</FieldTitle>
-						<FieldDescription>
-							Only explicitly selected workspaces can select the model.
-						</FieldDescription>
+						<FieldDescription>Only the workspaces you select can use the model.</FieldDescription>
 					</FieldContent>
 					<RadioGroupItem id={`${idPrefix}-selected`} value="SELECTED" />
 				</Field>

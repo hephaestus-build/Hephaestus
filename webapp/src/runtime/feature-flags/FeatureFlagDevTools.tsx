@@ -11,7 +11,7 @@ interface FeatureFlagDevToolsPanelProps {
 
 function FlagList({ flags, isLoading }: FeatureFlagDevToolsPanelProps) {
 	if (isLoading) {
-		return <div className="px-2 py-3 text-center text-xs text-muted-foreground">Loading...</div>;
+		return <div className="px-2 py-3 text-center text-xs text-muted-foreground">Loading…</div>;
 	}
 	if (flags === undefined) {
 		return (

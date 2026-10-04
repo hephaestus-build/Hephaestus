@@ -262,7 +262,7 @@ export const SaveFailed: Story = {
 		await userEvent.click(canvas.getByRole("switch", { name: SWITCH }));
 		await userEvent.click(canvas.getByRole("button", { name: "Save onboarding settings" }));
 		const alert = canvas.getByRole("alert");
-		await expect(alert).toHaveTextContent("Could not save onboarding settings");
+		await expect(alert).toHaveTextContent("We could not save onboarding settings");
 		await expect(alert).toHaveTextContent("Onboarding settings changed. Reload before saving.");
 		// The draft survives the failure, so the reader can retry without redoing it.
 		await expect(canvas.getByRole("switch", { name: SWITCH })).toBeChecked();

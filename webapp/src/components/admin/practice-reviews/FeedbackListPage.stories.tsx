@@ -188,7 +188,7 @@ export const WhyWithheldFacetOpen: Story = {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Why withheld" }));
 		const listbox = await screen.findByRole("listbox");
 		await within(listbox).findByRole("option", { name: /The work moved on/u });
-		within(listbox).getByRole("option", { name: /The developer's choice/u });
+		within(listbox).getByRole("option", { name: /The developer’s choice/u });
 	},
 };
 

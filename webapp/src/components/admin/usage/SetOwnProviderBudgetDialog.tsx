@@ -32,7 +32,7 @@ export function SetOwnProviderBudgetDialog({
 		<BudgetAmountDialog
 			open={open}
 			title="Set your provider cap"
-			description="What this workspace can spend on its own provider each month. At the cap, work on your provider pauses until the month resets. $0 pauses now."
+			description="The most this workspace can spend on its own provider each month. At the cap, work on your provider pauses until the month resets. Enter $0 to pause now."
 			fieldLabel="Monthly cap (USD)"
 			currentValueUsd={currentCapUsd ?? null}
 			fx={fx}

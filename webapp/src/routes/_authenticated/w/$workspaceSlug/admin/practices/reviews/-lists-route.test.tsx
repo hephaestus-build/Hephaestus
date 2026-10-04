@@ -189,7 +189,7 @@ describe("practice review list routes", () => {
 		const { reviewUrls } = recordRequests();
 
 		renderRouteAtWithRouter('/w/acme/admin/practices/reviews/runs?resultProcessing=["FAILED"]');
-		await screen.findByText("No reviews found", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("No reviews match these filters", undefined, ROUTE_RENDER_WAIT);
 
 		expect(values(reviewUrls.at(-1), "resultProcessing")).toStrictEqual(["FAILED"]);
 	});

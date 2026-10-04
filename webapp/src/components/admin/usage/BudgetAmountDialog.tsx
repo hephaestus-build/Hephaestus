@@ -81,7 +81,7 @@ function BudgetAmountDialogContent({
 	const fxHintId = useId();
 	const errorId = useId();
 	const [value, setValue] = useState(currentValueUsd == null ? "" : String(currentValueUsd));
-	// Withheld until the first submit so the field is not red before anything was attempted.
+	// Withheld until the first submit so the field isn't red before anything was attempted.
 	const [showError, setShowError] = useState(false);
 	// The server error stays until the amount is edited, so it reads as "this value was rejected".
 	const [dismissedServerError, setDismissedServerError] = useState<string | null>(null);
@@ -94,7 +94,7 @@ function BudgetAmountDialogContent({
 	const canRemove = currentValueUsd != null;
 	// Names the remove button only when it is on screen; a subject with no cap yet has none.
 	const emptyError = canRemove ? `Enter an amount, or use ${removeLabel}.` : "Enter an amount.";
-	let localError = "Use at most two decimal places.";
+	let localError = "Enter an amount with at most two decimal places.";
 	if (isEmpty) {
 		localError = emptyError;
 	} else if (!Number.isFinite(parsed) || parsed < 0) {

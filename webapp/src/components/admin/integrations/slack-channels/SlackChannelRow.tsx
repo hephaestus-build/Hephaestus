@@ -132,7 +132,7 @@ export function SlackChannelRow({
 								<DropdownMenuSeparator />
 								<DropdownMenuItem variant="destructive" onClick={() => onRemove(channel)}>
 									<Trash2Icon className="size-4" />
-									Remove &amp; erase…
+									Remove and erase…
 								</DropdownMenuItem>
 							</>
 						)}

@@ -154,8 +154,8 @@ export function MemberActivityTable({ state, providerType }: MemberActivityTable
 							<TableCell colSpan={ACTIVITY_CATEGORIES.length + 1} className="p-4 whitespace-normal">
 								<Empty>
 									<EmptyHeader>
-										<EmptyTitle>No results found</EmptyTitle>
-										<EmptyDescription>Edit your search and try again.</EmptyDescription>
+										<EmptyTitle>No members match your search</EmptyTitle>
+										<EmptyDescription>Try a different name.</EmptyDescription>
 									</EmptyHeader>
 								</Empty>
 							</TableCell>

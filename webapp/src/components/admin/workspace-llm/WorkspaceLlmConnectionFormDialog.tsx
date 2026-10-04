@@ -158,8 +158,8 @@ function WorkspaceLlmConnectionFormDialogContent({
 							<AlertTriangle aria-hidden />
 							<AlertTitle>All workspace models will stop immediately</AlertTitle>
 							<AlertDescription>
-								Practice reviews and the mentor cannot run until you reactivate this provider or
-								pick another model.
+								Practice reviews and Heph cannot run until you reactivate this provider or pick
+								another model.
 							</AlertDescription>
 						</Alert>
 					)}

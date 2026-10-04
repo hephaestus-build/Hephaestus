@@ -78,7 +78,7 @@ export const AllEnabled: Story = {
 };
 
 /**
- * Loading state — shows "Loading..." text when the panel is open.
+ * Loading state — shows "Loading…" text when the panel is open.
  */
 export const Loading: Story = {
 	args: {

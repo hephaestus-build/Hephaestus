@@ -296,7 +296,7 @@ export function CuratedCatalogPage({
 						<AlertDialogTitle>Exclude “{excludingPractice?.name}”?</AlertDialogTitle>
 						<AlertDialogDescription>
 							{excludingPractice?.effectivelyOffered === false
-								? "Its group is already not offered. This keeps the practice unavailable if the group is offered again. Existing workspace copies will not change."
+								? "Its group is already excluded. This keeps the practice excluded if the group is included again. Existing workspace copies will not change."
 								: "Workspace administrators will no longer be able to add this practice. Existing workspace copies will not change. You can include it again later."}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
@@ -310,7 +310,7 @@ export function CuratedCatalogPage({
 								setExcludingPractice(null);
 							}}
 						>
-							Stop offering
+							Exclude practice
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -330,7 +330,7 @@ export function CuratedCatalogPage({
 						<AlertDialogDescription>
 							{practicesExcludedWithGroup.length === 0
 								? "Workspace administrators will no longer be able to add this group. No additional practices are affected. Existing workspace copies will not change."
-								: `Workspace administrators will no longer be able to add this group. This also stops offering ${practicesExcludedWithGroup.length} currently offered ${
+								: `Workspace administrators will no longer be able to add this group. This also excludes ${practicesExcludedWithGroup.length} included ${
 										practicesExcludedWithGroup.length === 1 ? "practice" : "practices"
 									}. Existing workspace copies will not change.`}
 						</AlertDialogDescription>
@@ -355,7 +355,7 @@ export function CuratedCatalogPage({
 								setExcludingGroup(null);
 							}}
 						>
-							Stop offering
+							Exclude group
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -405,13 +405,10 @@ function CatalogFilters({
 					}
 				}}
 			>
-				<SelectTrigger
-					className="w-full lg:hidden"
-					aria-label="Filter by availability to workspaces"
-				>
+				<SelectTrigger className="w-full lg:hidden" aria-label="Filter by inclusion in workspaces">
 					<SelectValue />
 				</SelectTrigger>
-				<SelectContent aria-label="Filter by inclusion in new workspaces">
+				<SelectContent aria-label="Filter by inclusion in workspaces">
 					{STATUS_FILTERS.map((filter) => (
 						<SelectItem key={filter.value} value={filter.value}>
 							{filter.label}
@@ -434,7 +431,7 @@ function CatalogFilters({
 				}
 				variant="outline"
 				size="sm"
-				aria-label="Filter by availability to workspaces"
+				aria-label="Filter by inclusion in workspaces"
 				className="hidden lg:flex"
 			>
 				{STATUS_FILTERS.map((filter) => (

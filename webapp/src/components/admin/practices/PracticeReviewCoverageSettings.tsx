@@ -183,7 +183,7 @@ export function PracticeReviewCoverageSettings({
 			</>
 		);
 	} else {
-		reviewButtonContent = "Review changes";
+		reviewButtonContent = "Save coverage";
 	}
 
 	return (
@@ -206,8 +206,8 @@ export function PracticeReviewCoverageSettings({
 					<AlertCircle />
 					<AlertTitle>Coverage changed elsewhere</AlertTitle>
 					<AlertDescription>
-						Coverage changed after you started. Discard your draft and review the latest settings
-						before trying again.
+						Your draft no longer matches the saved settings. Discard it to load the latest settings,
+						then make your changes again.
 						<Button
 							variant="outline"
 							size="sm"
@@ -436,7 +436,7 @@ export function PracticeReviewCoverageSettings({
 								}
 							}}
 						>
-							Apply wider coverage
+							Widen coverage
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

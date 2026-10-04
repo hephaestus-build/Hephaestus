@@ -95,7 +95,7 @@ export const Interrupted: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/This reply was interrupted before it finished/u)).toBeVisible();
+		await expect(canvas.getByText(/This reply stopped before it finished/u)).toBeVisible();
 	},
 };
 

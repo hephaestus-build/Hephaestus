@@ -131,7 +131,7 @@ function Ready({
 		<>
 			{stale === undefined ? null : (
 				<p role="status" className={cn(INDENT, "border-t border-border py-2 text-xs text-warning")}>
-					Not refreshed: {stale.message} Showing what Hephaestus said at{" "}
+					Not refreshed: {stale.message} The report shows what Hephaestus said at{" "}
 					<time dateTime={context.fetchedAt}>{formatTime(context.fetchedAt)}</time>.
 				</p>
 			)}
@@ -239,12 +239,13 @@ function Explanation({ props, webAppOrigin }: { props: PageReportProps; webAppOr
 			break;
 		}
 		case "not-found": {
-			text = `${state.workLabel} is not work any of your workspaces follows, or not work you can see. Hephaestus does not say which.`;
+			text = `Either none of your workspaces follows ${state.workLabel}, or you cannot see it. Hephaestus does not say which.`;
 			next = app;
 			break;
 		}
 		case "unsupported-page": {
-			text = "Practice reviews appear on a single pull request, merge request or issue.";
+			text =
+				"Practice reviews appear on the page of a single pull request, merge request or issue. Open one to see its practice review.";
 			break;
 		}
 		case "choose-workspace": {

@@ -18,7 +18,7 @@ const runningBackfill: SyncJob = { ...runningJob, id: 2, type: "BACKFILL" };
 
 /**
  * The manual-sync trigger, and the only trigger on its card. Disabled while a job is already running
- * or a trigger is in flight, so a double-click cannot enqueue a second run. It owns a visually-hidden
+ * or a trigger is in flight, so a double-click can't enqueue a second run. It owns a visually-hidden
  * `aria-live` region because a plain button-label swap is not reliably announced — the region stays
  * empty until a run begins.
  *

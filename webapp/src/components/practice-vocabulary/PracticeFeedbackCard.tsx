@@ -493,13 +493,13 @@ export function PracticeFeedbackCard({
 					<ResponseCommentBand
 						key={usefulness}
 						name="What was not helpful"
-						label="What was missed?"
+						label="Why was this not helpful?"
 						placeholder="One or two sentences on what is off"
 						required
 						reasons={NOT_HELPFUL_REASONS}
 						audience={(reason) =>
 							reason === "not-accurate"
-								? "Not accurate disputes this card: workspace admins read your sentence, not the card, and can correct its observations or withdraw it."
+								? "Not accurate disputes this card. Workspace admins read your sentence, not the card. They can correct its observations or withdraw it."
 								: undefined
 						}
 						isPending={isPending}

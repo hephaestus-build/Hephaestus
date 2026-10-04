@@ -137,6 +137,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 	const valid = errorSummary.length === 0;
 	const updateAvailable = mode === "edit" && initialData.status.state === "UPDATE_WAITING";
 	const resetLabel = updateAvailable ? "Apply Hephaestus update" : "Restore Hephaestus default";
+	const resetPendingLabel = updateAvailable ? "Applying update…" : "Restoring default…";
 	const submitLabel = SUBMIT_LABELS[mode][isPending ? "pending" : "idle"];
 
 	const submit = (event: React.SubmitEvent<HTMLFormElement>) => {
@@ -179,7 +180,7 @@ export function CuratedGroupForm(props: CuratedGroupFormProps) {
 								onUseHephaestusVersion?.();
 							}}
 						>
-							{isResetPending ? `${resetLabel}…` : resetLabel}
+							{isResetPending ? resetPendingLabel : resetLabel}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

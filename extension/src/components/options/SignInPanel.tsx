@@ -140,7 +140,7 @@ export function SignInPanel({
 			>
 				{instanceHost} has not registered this extension, so it cannot sign you in. Ask its operator
 				to add the extension id <code className="font-mono break-all">{available.extensionId}</code>{" "}
-				to the instance&apos;s browser extension ids.
+				to the instance’s browser extension ids.
 			</Notice>
 		);
 	}
@@ -148,7 +148,9 @@ export function SignInPanel({
 	return (
 		<div className="flex flex-col gap-4">
 			{available.options.length === 0 && !available.devSignIn ? (
-				<p className="text-sm text-muted-foreground">{instanceHost} offers no way to sign in.</p>
+				<p className="text-sm text-muted-foreground">
+					{instanceHost} offers no way to sign in. Ask its operator to set one up.
+				</p>
 			) : null}
 			{available.options.length === 0 ? null : (
 				<div className="flex w-full max-w-sm flex-col gap-2">
@@ -173,7 +175,7 @@ export function SignInPanel({
 			{attempt.status === "cancelled" ? (
 				<p className="flex items-start gap-2 text-sm text-muted-foreground" role="status">
 					<InfoIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
-					Sign-in was cancelled and nothing changed. Choose a way to sign in to try again.
+					Sign-in was cancelled and nothing changed. To try again, choose a way to sign in.
 				</p>
 			) : null}
 			{attempt.status === "failed" ? (
@@ -184,7 +186,8 @@ export function SignInPanel({
 			) : null}
 			<p className="text-xs text-muted-foreground">
 				A sign-in window from {instanceHost} opens and closes by itself. You stay signed in until
-				you close Chrome, or at most 7 days. Your instance may end it sooner.
+				you close Chrome or for 7 days, whichever comes first. Your instance may end your session
+				sooner.
 			</p>
 		</div>
 	);

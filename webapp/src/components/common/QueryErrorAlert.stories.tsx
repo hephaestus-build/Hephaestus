@@ -33,14 +33,14 @@ export const ServiceUnavailable: Story = {
 	},
 	play: async ({ args, canvas }) => {
 		canvas.getByText(/github api is unavailable/iu);
-		canvas.getByText(/on our side/iu);
+		canvas.getByText(/The server had a problem/u);
 		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalledTimes(1);
 	},
 };
 
 /**
- * 403 — the reader is not allowed. Retrying re-asks a question already answered, so the button is
+ * 403 — the reader isn't allowed. Retrying re-asks a question already answered, so the button is
  * withheld even though the caller passed `onRetry`, and the copy points at the actual way out.
  */
 export const Forbidden: Story = {
@@ -54,7 +54,7 @@ export const Forbidden: Story = {
 	},
 };
 
-/** 404 — deleted in another tab, most likely. A reload helps; a retry does not. */
+/** 404 — deleted in another tab, most likely. A reload helps; a retry doesn't. */
 export const NotFound: Story = {
 	args: {
 		error: { status: 404, detail: "This connection no longer exists." },
@@ -155,7 +155,7 @@ export const NoServerDetail: Story = {
 		error: { status: 500 },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/^Something went wrong on our side/u);
+		canvas.getByText(/^The server had a problem/u);
 	},
 };
 

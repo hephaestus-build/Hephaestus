@@ -75,7 +75,7 @@ export const Default: Story = {
 			screen.getByText(/5 promoters \(9–10\) · 5 passives \(7–8\) · 4 detractors \(0–6\)/u),
 		).toBeVisible();
 		// A free-text question has no distribution to draw.
-		await expect(screen.getByText("9 answers — read them in the responses below.")).toBeVisible();
+		await expect(screen.getByText("9 answers. Read them in the responses below.")).toBeVisible();
 		// Every response reads as a sentence, whoever sent it and whatever they decided.
 		await expect(screen.getByText("Deleted account")).toBeVisible();
 		await expect(screen.getByText("Declined", { selector: "p" })).toBeVisible();

@@ -56,14 +56,18 @@ describe("integration connection outcome", () => {
 		const { router } = renderRouteAtWithRouter(failureRedirect());
 
 		await screen.findByText(CONFLICT, undefined, ROUTE_RENDER_WAIT);
-		screen.getByText("Slack connection failed");
+		screen.getByText("We could not connect Slack");
 		expect(router.state.location.pathname).toBe("/w/intro-course/admin/integrations/slack");
 	});
 
 	it("shows the server's sentence rather than its reason code on the outcome page", async () => {
 		renderRouteAtWithRouter(failureRedirect());
 
-		await screen.findByRole("heading", { name: "Connection failed" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole(
+			"heading",
+			{ name: "We could not connect the integration" },
+			ROUTE_RENDER_WAIT,
+		);
 		expect(screen.getAllByText(CONFLICT).length).toBeGreaterThan(0);
 		expect(screen.queryByText("connected_elsewhere")).toBeNull();
 	});

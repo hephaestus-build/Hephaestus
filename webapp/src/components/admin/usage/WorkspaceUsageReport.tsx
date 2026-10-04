@@ -7,7 +7,14 @@ import { BudgetExhaustedAlert } from "@/components/admin/workspace-llm/BudgetExh
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import {
+	Empty,
+	EmptyContent,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "@/components/ui/empty";
 import { formatCapUsd, formatCostUsd } from "@/lib/money";
 
 import { BudgetPaceAlert } from "./BudgetPaceAlert";
@@ -209,6 +216,9 @@ export function WorkspaceUsageReport({
 							<CircleDollarSign />
 						</EmptyMedia>
 						<EmptyTitle>No AI usage in {formatMonthLabel(month)}</EmptyTitle>
+						<EmptyDescription>
+							Spend appears here after practice reviews or Heph use a model.
+						</EmptyDescription>
 					</EmptyHeader>
 					<EmptyContent>
 						<Link

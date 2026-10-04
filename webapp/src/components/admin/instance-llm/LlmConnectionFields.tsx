@@ -213,7 +213,7 @@ export function LlmConnectionFields({
 								Use the Responses API
 							</FieldLabel>
 							<FieldDescription>
-								Clear it only for an endpoint that serves Chat Completions alone.
+								Clear this box only if the endpoint serves Chat Completions alone.
 							</FieldDescription>
 						</FieldContent>
 					</Field>
@@ -329,7 +329,7 @@ export function LlmConnectionFields({
 						autoComplete="off"
 					/>
 					<FieldDescription>
-						{hasApiKey ? "Leave blank to keep the current key." : "Stored encrypted."}
+						{hasApiKey ? "Leave blank to keep the current key." : "The key is stored encrypted."}
 					</FieldDescription>
 				</Field>
 

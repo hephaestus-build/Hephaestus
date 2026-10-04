@@ -205,7 +205,7 @@ export function ReviewedWorkLevel({
 										<EmptyDescription>
 											{trace.status === "none"
 												? "No observations or feedback are recorded against it, and nothing else was recorded about it either."
-												: "No observations or feedback are recorded against it. Every practice and what was noticed about the work say why."}
+												: "No observations or feedback are recorded against it. Open the “Every practice” or “What we noticed” tab to see why."}
 										</EmptyDescription>
 									</EmptyHeader>
 								</Empty>
@@ -267,7 +267,7 @@ export function ReviewedWorkLevel({
 				<DrawerFooter>
 					<Button type="button" disabled={requesting} onClick={onReviewNow}>
 						<PlayIcon aria-hidden data-icon="inline-start" />
-						{requesting ? "Asking…" : "Review this now"}
+						{requesting ? "Requesting review…" : "Review this now"}
 					</Button>
 				</DrawerFooter>
 			)}

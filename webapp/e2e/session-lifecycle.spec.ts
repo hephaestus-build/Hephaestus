@@ -193,7 +193,7 @@ test("signing out in another tab cannot be undone by a delayed renewal response"
 	await held.processed;
 	try {
 		await other.getByRole("button", { name: "Account", exact: true }).click();
-		await other.getByRole("menuitem", { name: "Sign Out", exact: true }).click();
+		await other.getByRole("menuitem", { name: "Sign out", exact: true }).click();
 	} finally {
 		held.release();
 	}
@@ -209,12 +209,14 @@ test("failed sign-out reports the failure and allows a successful retry", async 
 	await page.goto("/settings");
 	await page.route("**/auth/logout", async (route) => route.fulfill({ status: 503 }), { times: 1 });
 	await page.getByRole("button", { name: "Account", exact: true }).click();
-	await page.getByRole("menuitem", { name: "Sign Out", exact: true }).click();
-	await expect(page.getByText("Could not confirm sign-out. Please try again.")).toBeVisible();
+	await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
+	await expect(
+		page.getByText("We could not confirm that you signed out. Try again."),
+	).toBeVisible();
 	await expect(page).toHaveURL(/\/settings$/u);
 	expect(await statusOf(context.request.get(`${serverUrl}/user`))).toBe(200);
 	await page.getByRole("button", { name: "Account", exact: true }).click();
-	await page.getByRole("menuitem", { name: "Sign Out", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
 	await expect(page).toHaveURL((url) => url.pathname === "/");
 	expect(await statusOf(context.request.get(`${serverUrl}/user`))).toBe(401);
 });
@@ -226,7 +228,7 @@ test("a cold identity outage shows the existing retry screen instead of signing 
 	await page.route("**/user", async (route) => route.fulfill({ status: 503 }));
 	await page.goto("/settings");
 	await expect(
-		page.getByRole("heading", { name: "Something went wrong", exact: true }),
+		page.getByRole("heading", { name: "This page could not load", exact: true }),
 	).toBeVisible();
 	await expect(page).toHaveURL(/\/settings$/u);
 	await page.unroute("**/user");

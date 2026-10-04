@@ -23,7 +23,7 @@ export const Default: Story = {
 			"href",
 			"https://hephaestus.build",
 		);
-		await userEvent.click(canvas.getByRole("button", { name: "I have accepted it" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Check again" }));
 		await expect(args.onCheckAgain).toHaveBeenCalledOnce();
 	},
 };

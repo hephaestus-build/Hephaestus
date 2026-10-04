@@ -290,7 +290,7 @@ function formErrors(
 	const preferredSlug = form.deliveryBehavior.redundantToSlug?.trim();
 	const deliveryError =
 		hasText(preferredSlug) && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(preferredSlug)
-			? "Use lowercase letters, numbers, and single hyphens."
+			? "Use lowercase letters, numbers and single hyphens."
 			: undefined;
 	const summary = [
 		nameTooShort && {
@@ -310,7 +310,7 @@ function formErrors(
 		hasText(gateError) && { fieldId: "practice-gate", message: gateError },
 		slugInvalid && {
 			fieldId: "practice-slug",
-			message: "The identifier must be lowercase letters, numbers and hyphens.",
+			message: "The identifier must be 3–64 lowercase letters, numbers and single hyphens.",
 			// Lives inside the collapsed Technical settings panel, which unmounts its contents.
 			reveal: revealSlug,
 		},
@@ -321,9 +321,9 @@ function formErrors(
 		},
 	].filter((entry): entry is FormError => Boolean(entry));
 	return {
-		name: nameTooShort ? "Name must be at least 3 characters" : undefined,
-		slug: slugInvalid ? "Use 3–64 lowercase letters, numbers, and single hyphens." : undefined,
-		criteria: criteriaTooShort ? "Criteria must be at least 3 characters" : undefined,
+		name: nameTooShort ? "Name must be at least 3 characters." : undefined,
+		slug: slugInvalid ? "Use 3–64 lowercase letters, numbers and single hyphens." : undefined,
+		criteria: criteriaTooShort ? "Criteria must be at least 3 characters." : undefined,
 		policy,
 		reviewSettings,
 		gate: gateError,
@@ -572,7 +572,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 					<div className="space-y-10">
 						<p className="max-w-2xl text-sm text-muted-foreground">
 							Define one observable way of working. The same definition should make sense to a
-							developer, peer, human mentor, and an automated reviewer.
+							developer, a peer, a human mentor, and an automated reviewer.
 						</p>
 
 						<section className="space-y-4">
@@ -630,7 +630,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 										</SelectContent>
 									</Select>
 									<FieldDescription id="practice-group-description">
-										Put this practice in a group.
+										Optional. A group collects related practices.
 									</FieldDescription>
 								</Field>
 							</FieldGroup>
@@ -950,12 +950,12 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									</Field>
 									<Field>
 										<FieldLabel htmlFor={`${deliveryId}-redundant`}>
-											Preferred practice slug
+											Preferred practice identifier
 										</FieldLabel>
 										<Input
 											id={`${deliveryId}-redundant`}
 											pattern="[a-z0-9]+(-[a-z0-9]+)*"
-											title="Use lowercase letters, numbers, and single hyphens."
+											title="Use lowercase letters, numbers and single hyphens."
 											aria-invalid={hasText(shownErrors.delivery)}
 											aria-describedby={
 												hasText(shownErrors.delivery) ? `${deliveryId}-redundant-error` : undefined
@@ -997,7 +997,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 												setForm((previous) => ({ ...previous, precomputeScript: value }))
 											}
 											language="typescript"
-											ariaLabel="Precompute script"
+											ariaLabel="Static analysis script"
 											className="h-[400px]"
 											readOnly={formDisabled}
 										/>

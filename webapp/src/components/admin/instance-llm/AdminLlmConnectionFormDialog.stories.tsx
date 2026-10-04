@@ -62,7 +62,7 @@ export const DiscoveryUnsupported: Story = {
 	play: async () => {
 		await userEvent.type(await screen.findByLabelText("Base URL"), "https://example.com");
 		await userEvent.click(screen.getByRole("button", { name: /test & fetch models/iu }));
-		await expectSettledVisible(await screen.findByText(/discovery unsupported/iu));
+		await expectSettledVisible(await screen.findByText(/could not fetch the model list/iu));
 		await expect(screen.getByRole("button", { name: /save inactive connection/iu })).toBeEnabled();
 	},
 };

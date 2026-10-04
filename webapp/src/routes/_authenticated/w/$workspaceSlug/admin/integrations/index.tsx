@@ -66,7 +66,7 @@ function IntegrationsOverview() {
 			<PageHeader
 				icon={<PlugZap />}
 				title="Integrations"
-				description="Monitor connections, sync activity, and available integration controls."
+				description="Check the health and sync activity of each connection, and start a sync."
 			/>
 
 			{catalog}
@@ -106,7 +106,7 @@ function IntegrationOverviewCardContainer({
 			toast.success(`${entry.displayName} sync started`);
 		},
 		onError: (e) => {
-			toast.error(`Failed to start sync for ${entry.displayName}`, {
+			toast.error(`We could not start the ${entry.displayName} sync`, {
 				description: problemDetailOf(e),
 			});
 		},

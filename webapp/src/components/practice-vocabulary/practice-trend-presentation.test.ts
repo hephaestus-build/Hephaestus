@@ -48,7 +48,7 @@ describe("practice trend copy", () => {
 
 		expect(sentence).not.toContain("Compared");
 		expect(sentence).toBe(
-			"Based on seven pieces of reviewed work. One more with something to judge is needed before a direction can be shown. Evidence spans 12 days.",
+			"Based on seven pieces of reviewed work. A direction needs one more piece of reviewed work with something to judge. Evidence spans 12 days.",
 		);
 	});
 
@@ -126,7 +126,7 @@ describe("practice trend copy", () => {
 				"group",
 			),
 		).toBe(
-			"Based on 10 pieces of reviewed work. Two more with something to judge are needed before a direction can be shown. Evidence spans 12 days.",
+			"Based on 10 pieces of reviewed work. A direction needs two more pieces of reviewed work with something to judge. Evidence spans 12 days.",
 		);
 	});
 });

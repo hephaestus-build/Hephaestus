@@ -74,7 +74,7 @@ export const Loading: Story = {
 export const EmptyWithSearch: Story = {
 	args: { workspaces: [], hasSearch: true },
 	play: async ({ canvas }) => {
-		canvas.getByText("No matching workspaces.");
+		canvas.getByText("No workspace matches your search.");
 	},
 };
 

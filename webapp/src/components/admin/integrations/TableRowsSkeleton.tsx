@@ -5,8 +5,8 @@ import { hasText } from "@/lib/text";
 export interface TableRowsSkeletonProps {
 	/**
 	 * One entry per column, in order — a Tailwind width class for a column that holds content, or
-	 * `null` for one that does not (a trailing action slot has nothing to promise). Length must match
-	 * the header's column count, or the placeholder columns will not line up with the real ones.
+	 * `null` for one that doesn't (a trailing action slot has nothing to promise). Length must match
+	 * the header's column count, or the placeholder columns won't line up with the real ones.
 	 */
 	columns: (string | null)[];
 	rows?: number;

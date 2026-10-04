@@ -34,7 +34,7 @@ export const Default: Story = {
 		await expect(
 			canvas.getByRole("heading", { level: 1, name: "Your feedback on this work" }),
 		).toBeVisible();
-		await expect(canvas.getByText(/Workspace admins read a dispute's explanation/u)).toBeVisible();
+		await expect(canvas.getByText(/Workspace admins read a dispute’s explanation/u)).toBeVisible();
 		await expect(canvas.getByRole("list", { name: "Review runs" })).toBeVisible();
 	},
 };

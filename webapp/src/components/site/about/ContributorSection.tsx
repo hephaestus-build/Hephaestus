@@ -32,7 +32,7 @@ export function ContributorSection({ contributors, isLoading, isError }: Contrib
 					<AlertCircle className="mx-auto mb-4 h-8 w-8 text-destructive" />
 					<h4 className="mb-2 text-lg font-medium">Contributor data unavailable</h4>
 					<p className="text-muted-foreground">
-						We are having trouble reaching our contributor information. Please check back soon.
+						We could not load the contributor list. Try again later.
 					</p>
 				</div>
 			)}

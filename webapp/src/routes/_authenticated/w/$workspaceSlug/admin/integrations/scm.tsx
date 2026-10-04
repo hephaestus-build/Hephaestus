@@ -42,7 +42,7 @@ function ScmIntegrationPage() {
 			<PageHeader
 				icon={<ProviderIcon className="size-6" />}
 				title={label}
-				description={`Connection health, repositories and sync activity for this workspace's ${label} connection.`}
+				description={`Connection health, repositories and sync activity for this workspace’s ${label} connection.`}
 			/>
 
 			{hasConnection && (

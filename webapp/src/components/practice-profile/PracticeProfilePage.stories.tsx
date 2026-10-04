@@ -189,9 +189,11 @@ export const ColdStart: Story = {
 		feedbackCards: [],
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No open feedback yet.")).toBeVisible();
+		await expect(canvas.getByText("No open feedback yet")).toBeVisible();
 		await expect(
-			canvas.getByText("Feedback appears once the same shortcoming keeps showing up on your work."),
+			canvas.getByText(
+				"Feedback appears here once a review sees the same pattern in your work more than once.",
+			),
 		).toBeVisible();
 		await expect(canvas.queryByRole("article")).toBeNull();
 		await expect(canvas.queryByText("Latest review")).toBeNull();
@@ -208,10 +210,10 @@ export const NothingResolvedYet: Story = {
 		feedbackTab: "resolved",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No resolved or closed feedback yet.")).toBeVisible();
+		await expect(canvas.getByText("No resolved or closed feedback yet")).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"A card moves here once the work resolves it, you mark it as addressed, or its practice's review rules change.",
+				"A card moves here once the work resolves it, you mark it as addressed, or its practice’s review rules change.",
 			),
 		).toBeVisible();
 	},

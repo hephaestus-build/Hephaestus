@@ -19,7 +19,7 @@ const FEATURES_DATA: FeatureData[] = [
 		title: "Talk it through",
 		description: "Ask why, push back, or work out the next step",
 		content:
-			"In chat Hephaestus goes by Heph. It draws on recent project activity, the feedback a developer has received, and any Slack messages or Outline documents their admins connected. Available in the web app and, when connected, in Slack.",
+			"In chat Hephaestus goes by Heph. It draws on recent project activity, the feedback a developer has received, and any Slack messages or Outline documents their admins connected. You can chat in the web app or, when Slack is connected, in Slack.",
 	},
 ];
 

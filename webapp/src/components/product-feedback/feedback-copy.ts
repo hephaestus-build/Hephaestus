@@ -31,7 +31,7 @@ export const FEEDBACK_KIND_COPY: Record<FeedbackKind, KindCopy> = {
 	},
 	FEEDBACK: {
 		title: "Feedback",
-		detail: "What works, what gets in your way.",
+		detail: "What works and what gets in your way.",
 		heading: "Send feedback",
 		label: "Your feedback",
 		placeholder: "What works well for you, and what does not?",

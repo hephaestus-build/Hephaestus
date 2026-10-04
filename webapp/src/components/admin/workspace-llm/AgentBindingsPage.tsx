@@ -87,7 +87,7 @@ export function isPurpose(value: string): value is Purpose {
 const PURPOSES: PurposeMeta[] = [
 	{
 		purpose: "PRACTICE_REVIEW",
-		description: "Reviews connected project work and conversations.",
+		description: "Runs reviews of connected project work and conversations.",
 	},
 	{
 		purpose: "MENTOR",
@@ -240,8 +240,8 @@ export function AgentBindingsPage({
 							<div className="space-y-1">
 								<h2 className="text-lg font-semibold">Model assignments</h2>
 								<p className="text-sm text-muted-foreground">
-									A member’s AI choice is a ceiling. The loosest ready row within it serves them.
-									Nothing moves them to a looser one.
+									A member’s AI choice is a ceiling. The loosest ready row within it serves them,
+									and never a looser one.
 								</p>
 							</div>
 							{PURPOSES.map((meta) => (
@@ -409,7 +409,7 @@ function BindingPreview({
 	return (
 		<div className="space-y-2">
 			<h3 className="text-sm font-medium">Who gets which model</h3>
-			<p className="text-sm text-muted-foreground">By the answer a member gave.</p>
+			<p className="text-sm text-muted-foreground">Based on each member’s AI choice.</p>
 			<FactList facts={facts} />
 		</div>
 	);
@@ -702,7 +702,7 @@ function bindingAudience(undeclared: boolean, required: boolean, tierLabel: stri
 		return `For members whose answer allows ${tierLabel}.`;
 	}
 	if (required) {
-		return "Serves only members who have not chosen yet, where the choice is optional. Every member here must choose, so it serves no one now.";
+		return "For members who have not chosen yet, where the choice is optional. Every member here must choose, so it serves no one now.";
 	}
-	return "Serves only members who have not chosen yet, where the choice is optional. Never serves a member who chose.";
+	return "For members who have not chosen yet, where the choice is optional. It never serves a member who chose.";
 }

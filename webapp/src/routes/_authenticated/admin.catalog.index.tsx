@@ -120,7 +120,7 @@ function AdminCuratedCatalogPage() {
 			invalidateCatalog();
 			toast.success(
 				successMessage ??
-					(offered ? "Practice offered to workspaces" : "Practice is no longer offered"),
+					(offered ? "Practice included for workspaces" : "Practice excluded from workspaces"),
 			);
 		},
 		onError: (error: unknown) => {
@@ -138,7 +138,7 @@ function AdminCuratedCatalogPage() {
 		onSuccess: (catalog: CuratedCatalog) => {
 			queryClient.setQueryData(adminGetCuratedCatalogQueryKey(), catalog);
 			queryClient.removeQueries({ queryKey: detailKey("group", slug), exact: true });
-			toast.success(offered ? "Group included for workspaces" : "Group is no longer included");
+			toast.success(offered ? "Group included for workspaces" : "Group excluded from workspaces");
 		},
 		onError: (error: unknown) => {
 			queryClient.removeQueries({ queryKey: detailKey("group", slug), exact: true });
@@ -361,7 +361,7 @@ function AdminCuratedCatalogPage() {
 			<PageHeader
 				icon={<LibraryBig />}
 				title="Practice catalog"
-				description="Choose which groups and practices workspace administrators can add. CuratedCatalog changes never rewrite existing workspace practices."
+				description="Choose which groups and practices workspace administrators can add. Changes here never rewrite existing workspace practices."
 				actions={
 					<div className="flex flex-wrap gap-2">
 						{writePending ? (

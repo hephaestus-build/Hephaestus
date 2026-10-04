@@ -63,7 +63,7 @@ function classifyError(status: number | undefined): ErrorClass {
 	if (status === 429) {
 		return {
 			icon: <InfoIcon />,
-			guidance: "Too many requests for now. Wait a moment, then try again.",
+			guidance: "Too many requests. Wait a moment, then try again.",
 			variant: "warning",
 			retryable: true,
 		};
@@ -71,7 +71,7 @@ function classifyError(status: number | undefined): ErrorClass {
 	if (status >= 500) {
 		return {
 			icon: <AlertCircleIcon />,
-			guidance: "Something went wrong on our side. Try again. This usually helps.",
+			guidance: "The server had a problem. Try again in a moment.",
 			variant: "destructive",
 			retryable: true,
 		};

@@ -371,7 +371,7 @@ export const DisputeWaitsForItsSentence: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Disputed" }));
 		await expect(args.onRespond).not.toHaveBeenCalled();
-		const field = canvas.getByRole("textbox", { name: "What was missed?" });
+		const field = canvas.getByRole("textbox", { name: "Why do you dispute this?" });
 		await expect(field).toBeRequired();
 		// The one answer written for somebody else says so before it is sent.
 		await expect(field).toHaveAccessibleDescription(/Workspace admins read this/u);

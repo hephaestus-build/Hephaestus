@@ -23,8 +23,8 @@ export function PracticeFeedbackSection({
 					Practice feedback
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					Your workspace can deliver AI-generated practice feedback on work you author and send
-					related Slack reminders. You can turn these messages off below.
+					Your workspace can deliver AI-generated practice feedback on work you author, and send
+					related Slack reminders. You can turn both off below.
 				</p>
 			</div>
 

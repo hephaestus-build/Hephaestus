@@ -298,7 +298,7 @@ export const Asking: Story = {
 	args: { requesting: true },
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByRole("button", { name: "Asking…" })).toBeDisabled();
+		await expect(panel.getByRole("button", { name: "Requesting review…" })).toBeDisabled();
 	},
 };
 

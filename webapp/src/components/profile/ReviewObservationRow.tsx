@@ -344,7 +344,7 @@ function ObservationResponse({
 				<ResponseCommentBand
 					key={pendingResolution}
 					name="Why you dispute this"
-					label="What was missed?"
+					label="Why do you dispute this?"
 					placeholder="One or two sentences on what is off"
 					required
 					audience={() => DISPUTE_AUDIENCE}

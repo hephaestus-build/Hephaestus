@@ -167,7 +167,7 @@ export function PracticeReviewSweepSchedule({
 					<AlertCircle />
 					<AlertTitle>Recurring checks could not be loaded</AlertTitle>
 					<AlertDescription>
-						<p>Whatever is scheduled is still running. This is only about showing it here.</p>
+						<p>Scheduled checks are still running. Only this list failed to load.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
 							Try again
 						</Button>

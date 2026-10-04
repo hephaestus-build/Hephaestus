@@ -141,8 +141,8 @@ export function summarizeReport({
 			return {
 				// A list row cannot choose; the work's own page can.
 				text: readOnly
-					? `Followed in ${state.candidates.length} workspaces. Open it to choose one`
-					: `Followed in ${state.candidates.length} workspaces. Choose one`,
+					? `Followed in ${state.candidates.length} workspaces · open it to choose one`
+					: `Followed in ${state.candidates.length} workspaces · choose one`,
 				tone: "neutral",
 			};
 		}

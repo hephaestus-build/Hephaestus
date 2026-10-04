@@ -109,7 +109,7 @@ const IN_CHAT_OVERRIDES = {
 		label: "Prepared for conversation",
 		icon: MessageSquareDashedIcon,
 		badgeVariant: "secondary",
-		description: "Waiting for the developer's next chat with the mentor, which is what sends it.",
+		description: "Waiting for the developer’s next chat with the mentor, which is what sends it.",
 	},
 	RAISED: {
 		label: "Delivered in conversation",
@@ -121,7 +121,8 @@ const IN_CHAT_OVERRIDES = {
 		label: "Withheld, never raised",
 		icon: HourglassIcon,
 		badgeVariant: "warning",
-		description: "It sat in the conversation queue until it aged out, and was never said.",
+		description:
+			"It stayed prepared for conversation until it expired. The mentor never raised it.",
 	},
 } as const satisfies Record<string, StatusDef>;
 
@@ -136,7 +137,7 @@ const IN_APP_OVERRIDES = {
 		icon: UserRoundIcon,
 		badgeVariant: "secondary",
 		description:
-			"Waiting on the developer's own practice pages. The feedback is delivered when the developer opens it.",
+			"Waiting on the developer’s own practice pages. The feedback is delivered when the developer opens it.",
 	},
 } as const satisfies Record<string, StatusDef>;
 

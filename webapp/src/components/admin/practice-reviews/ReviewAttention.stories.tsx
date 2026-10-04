@@ -79,7 +79,9 @@ export const Default: Story = {
 		const approvals = within(canvas.getByRole("list", { name: "Awaiting your approval" }));
 		await expect(approvals.getAllByRole("listitem")).toHaveLength(3);
 		// The list the heading counts, oldest first, as the queue is worked through.
-		const all = new URL(canvas.getByRole<HTMLAnchorElement>("link", { name: "See all 12" }).href);
+		const all = new URL(
+			canvas.getByRole<HTMLAnchorElement>("link", { name: "See all 12 awaiting approval" }).href,
+		);
 		await expect(all.pathname).toBe("/w/demo/admin/practices/reviews/feedback");
 		await expect(all.searchParams.get("deliveryState")).toBe('["AWAITING_APPROVAL"]');
 		await expect(all.searchParams.get("order")).toBe("OLDEST");
@@ -107,7 +109,7 @@ export const Default: Story = {
 		await expect(failedReviews.searchParams.get("from")).toBe(reviewOverviewScope.from);
 		const unprocessed = new URL(
 			canvas.getByRole<HTMLAnchorElement>("link", {
-				name: "1 review's results could not be processed or delivered",
+				name: "1 review’s results could not be processed or delivered",
 			}).href,
 		);
 		await expect(unprocessed.searchParams.get("resultProcessing")).toBe('["FAILED"]');

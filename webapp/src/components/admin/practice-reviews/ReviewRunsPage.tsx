@@ -51,7 +51,7 @@ export function ReviewRunsPage({
 	// The toolbar's Reset and the empty state's button are one action, not two copies of it.
 	const reset = () => onSearchChange(clearedRunFilters());
 	const emptyDescription = hasFilter
-		? "No review matches these filters. Other reviews may exist outside them."
+		? "Change or clear the filters to see more."
 		: "Reviews appear when an enabled practice is triggered or a contributor requests one.";
 	let results: ReactNode;
 	if (error != null) {
@@ -65,7 +65,7 @@ export function ReviewRunsPage({
 					<EmptyMedia variant="icon">
 						<WorkflowIcon />
 					</EmptyMedia>
-					<EmptyTitle>No reviews found</EmptyTitle>
+					<EmptyTitle>{hasFilter ? "No reviews match these filters" : "No reviews yet"}</EmptyTitle>
 					<EmptyDescription>{emptyDescription}</EmptyDescription>
 				</EmptyHeader>
 				{hasFilter && (

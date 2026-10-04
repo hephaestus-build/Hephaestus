@@ -153,7 +153,7 @@ export const AboutTab: Story = {
 		const stand = screen.getByRole("region", { name: "Where you stand" });
 		await expect(
 			within(stand).getByText(
-				"Recent reviews here were mostly problems. Of five practices, two need attention, one shows mixed feedback and two are going well.",
+				"Recent reviews here mostly found problems. Of five practices, two need attention, one shows mixed feedback and two are going well.",
 			),
 		).toBeVisible();
 		await expect(within(stand).getByText("Needs attention")).toBeVisible();
@@ -254,7 +254,7 @@ export const NoPractices: Story = {
 		...groupOverview(otherGroup.slug),
 	},
 	play: async () => {
-		await expectSettledVisible(await screen.findByText("No practices here yet."));
+		await expectSettledVisible(await screen.findByText("No practices here yet"));
 		await expect(screen.getByRole("tab", { name: "Practices 0" })).toBeVisible();
 		await expect(screen.queryByText("What is holding up well")).toBeNull();
 		await expect(screen.queryByText("Next step")).toBeNull();

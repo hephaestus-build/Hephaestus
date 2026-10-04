@@ -80,7 +80,7 @@ export const WithoutASentence: Story = {
 	args: { refusal: { status: "REFUSED" } },
 	play: async ({ canvas }) => {
 		const alert = within(canvas.getByRole("alert"));
-		await expect(alert.getByText("No review was started.")).toBeVisible();
+		await expect(alert.getByText("No reason was given.")).toBeVisible();
 		await expect(alert.queryByRole("link")).not.toBeInTheDocument();
 	},
 };

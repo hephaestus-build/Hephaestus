@@ -205,8 +205,8 @@ export function PracticeDetailLevel({
 							// Every row here reviews the same practice, so the newest is the one the reader
 							// came for; the rest are its history and wait for a press.
 							initiallyOpen="newest"
-							emptyTitle="No observations yet."
-							emptyDescription="No review has reached this practice yet."
+							emptyTitle="No observations yet"
+							emptyDescription="An observation appears here after a review checks this practice against your work."
 						/>
 					</Section>
 				</TabsContent>

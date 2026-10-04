@@ -24,7 +24,7 @@ import { RemoveCollectionAlertDialog } from "./RemoveCollectionAlertDialog";
 
 export type { OutlineMirrorState } from "./OutlineCollectionRow";
 
-/** Shared by the loading and loaded states so the header does not materialise on resolve. */
+/** Shared by the loading and loaded states so the header doesn't materialise on resolve. */
 function CollectionsTableHeader() {
 	return (
 		<TableHeader>

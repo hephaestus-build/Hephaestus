@@ -121,14 +121,14 @@ export function PracticeReleaseReview({
 			</Alert>
 			<Table bordered className="min-w-220 table-fixed">
 				<caption className="sr-only">
-					Changed fields in the adopted, current, and offered versions
+					Changed fields in the adopted, current, and proposed versions
 				</caption>
 				<TableHeader>
 					<TableRow variant="static">
 						<TableHead className="w-38">Field</TableHead>
 						<TableHead>Base</TableHead>
 						<TableHead>Current</TableHead>
-						<TableHead>Offered</TableHead>
+						<TableHead>Proposed</TableHead>
 						<TableHead className="w-42">Use</TableHead>
 					</TableRow>
 				</TableHeader>
@@ -173,7 +173,7 @@ export function PracticeReleaseReview({
 											<RadioGroupItem id={`${id}-${field}-current`} value="CURRENT" /> Current
 										</label>
 										<label className="flex items-center gap-2" htmlFor={`${id}-${field}-offered`}>
-											<RadioGroupItem id={`${id}-${field}-offered`} value="OFFERED" /> Offered
+											<RadioGroupItem id={`${id}-${field}-offered`} value="OFFERED" /> Proposed
 										</label>
 									</RadioGroup>
 								) : (
@@ -194,7 +194,8 @@ export function PracticeReleaseReview({
 				</Button>
 			</div>
 			<p className="text-xs text-muted-foreground">
-				Declining leaves this practice unchanged. A different catalog version will be offered again.
+				Declining leaves this practice unchanged. A different catalog version will be proposed
+				again.
 			</p>
 		</section>
 	);

@@ -248,7 +248,7 @@ function QuestionResults({ headingId, number, question, summary }: QuestionResul
 			</div>
 			{question.type === "TEXT" ? (
 				<p className="text-sm text-muted-foreground">
-					{answered} {answered === 1 ? "answer" : "answers"} — read them in the responses below.
+					{answered} {answered === 1 ? "answer" : "answers"}. Read them in the responses below.
 				</p>
 			) : (
 				<>

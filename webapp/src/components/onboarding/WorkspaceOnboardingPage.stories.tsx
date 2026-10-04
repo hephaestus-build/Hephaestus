@@ -343,14 +343,14 @@ export const RequiredLinkOpen: Story = {
 		await expect(submit).toHaveAccessibleDescription("Connect Slack to finish setup.");
 		await expect(
 			canvas.getByText(
-				"Your AI choice is set and holds in all your workspaces. Connect Slack and you are in.",
+				"Your AI choice is set and holds in all your workspaces. Connect Slack and you’re in.",
 			),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
-		await expect(
-			canvas.getByRole("button", { name: "Save AI choice and connect Slack" }),
-		).toHaveTextContent("Save and connect");
-		await userEvent.click(canvas.getByRole("button", { name: "Save AI choice and connect Slack" }));
+		await expect(canvas.getByRole("button", { name: "Save and connect Slack" })).toHaveTextContent(
+			"Save and connect",
+		);
+		await userEvent.click(canvas.getByRole("button", { name: "Save and connect Slack" }));
 		await expect(readyArgs(args).onLink).toHaveBeenCalledWith("slack", "CLOUD");
 	},
 };
@@ -364,11 +364,11 @@ export const RequiredLinkBroken: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
-		await expect(canvas.getByText(/does not hold you up/u)).toBeVisible();
+		await expect(canvas.getByText(/You can continue without it/u)).toBeVisible();
 		const connect = canvas.getByRole("button", { name: "Connect Slack" });
 		await expectGenuinelyDisabled(connect);
 		await expect(connect).toHaveAccessibleDescription(
-			"Unavailable right now for Engineering team. It does not hold you up.",
+			"Unavailable right now for Engineering team. You can continue without it.",
 		);
 	},
 };
@@ -513,9 +513,7 @@ export const ReturnVisit: Story = {
 		).toBeVisible();
 		const save = canvas.getByRole("button", { name: "Save" });
 		await expectGenuinelyDisabled(save);
-		await expect(save).toHaveAccessibleDescription(
-			"Applies in all your workspaces. Change it any time.",
-		);
+		await expect(save).toHaveAccessibleDescription("You can change your answer at any time.");
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
 		await expect(
 			canvas.getByText(
@@ -543,9 +541,7 @@ export const ReturnVisitRequiredLinkOpen: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		const save = canvas.getByRole("button", { name: "Save" });
 		await expectGenuinelyDisabled(save);
-		await expect(save).toHaveAccessibleDescription(
-			"Applies in all your workspaces. Change it any time.",
-		);
+		await expect(save).toHaveAccessibleDescription("You can change your answer at any time.");
 		await expect(canvas.getByRole("button", { name: "Connect Slack" })).toBeEnabled();
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await expect(
@@ -593,7 +589,7 @@ export const OAuthReturnDone: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByText(
-				"Your accounts are connected. Head back to your workspace whenever you are ready.",
+				"Your accounts are connected. Head back to your workspace whenever you’re ready.",
 			),
 		).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Back to workspace" })).toBeEnabled();
@@ -612,7 +608,7 @@ export const AnsweredElsewhere: Story = {
 		await expect(canvas.getByRole("radio", { name: CLOUD })).toBeChecked();
 		await expect(
 			canvas.getByText(
-				"Your AI choice is set and holds in all your workspaces. Connect Slack and you are in.",
+				"Your AI choice is set and holds in all your workspaces. Connect Slack and you’re in.",
 			),
 		).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Connect Slack" })).toBeEnabled();

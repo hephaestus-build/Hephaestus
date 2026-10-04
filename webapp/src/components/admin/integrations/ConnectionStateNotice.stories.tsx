@@ -21,7 +21,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Setup is still finishing. Nothing is owed, so this states the fact and does not shout. */
+/** Setup is still finishing. Nothing is owed, so this states the fact and doesn't shout. */
 export const Pending: Story = {
 	args: { connectionState: "PENDING" },
 	play: async ({ canvas }) => {

@@ -59,7 +59,7 @@ describe("AdminLlmModelsSection", () => {
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: "Delete GPT-5" }));
-		fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+		fireEvent.click(screen.getByRole("button", { name: "Delete model" }));
 		expect(onDelete).toHaveBeenCalledExactlyOnceWith(model);
 
 		rerender(<AdminLlmModelsSection {...props} models={[]} mutatingIds={new Set([model.id])} />);
