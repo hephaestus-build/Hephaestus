@@ -69,6 +69,7 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
     private final PullRequestSignalResubmitter submitter;
     private final WorkspaceResolver workspaceResolver;
     private final PracticeReviewProperties reviewProperties;
+    private final AgentJobRepository jobs;
     private final TransactionTemplate transactions;
 
     public PullRequestPushCoalescer(
@@ -78,6 +79,7 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
             PullRequestSignalResubmitter submitter,
             WorkspaceResolver workspaceResolver,
             PracticeReviewProperties reviewProperties,
+            AgentJobRepository jobs,
             TransactionTemplate transactions) {
         this.signals = signals;
         this.pullRequests = pullRequests;
@@ -85,6 +87,7 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
         this.submitter = submitter;
         this.workspaceResolver = workspaceResolver;
         this.reviewProperties = reviewProperties;
+        this.jobs = jobs;
         this.transactions = transactions;
     }
 
@@ -215,6 +218,23 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
                 .anyMatch(key ->
                         settling.stream().noneMatch(signal -> signal.key().equals(key)) && signals.isDeferred(key))) {
             // The work as it stands is queued outside this group; its own deadline decides.
+            return;
+        }
+        Instant deadline = now.minus(MAX_WAIT);
+        if (!mergedRepair
+                && pr.getHeadRefOid() != null
+                && settling.stream()
+                        .allMatch(signal -> signal.getStateChangedAt().isAfter(deadline))
+                && jobs.existsActivePullRequestReviewOf(
+                        workspaceId,
+                        pullRequestId,
+                        pr.getHeadRefOid(),
+                        pr.getTitle(),
+                        pr.getBody(),
+                        SIGNALS.stream().map(SignalName::value).toList())) {
+            // Another occasion's review of the work as it stands may answer this group's practices; the gate can
+            // tell only from what it records, so the group waits for it to finish, but no longer than MAX_WAIT from
+            // its first member: a review held back for budget may not finish in time.
             return;
         }
         SignalKey current = currentKeys.stream()

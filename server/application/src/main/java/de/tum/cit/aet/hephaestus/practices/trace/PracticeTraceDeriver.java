@@ -106,6 +106,20 @@ final class PracticeTraceDeriver {
                 continue;
             }
             PracticeCoverageOutcome coverage = review.coverageByPracticeSlug().get(practice.slug());
+            @Nullable UUID answeredBy = review.answeredByPracticeSlug().get(practice.slug());
+            // The answer is the earlier review's, so it names that review; the occasion and the counts stay
+            // this run's, which observed nothing of its own for the practice.
+            if (readiness.ready() && coverage != PracticeCoverageOutcome.EVALUATED && answeredBy != null) {
+                return entry(
+                        practice,
+                        PracticeTraceOutcome.REVIEWED,
+                        "An earlier review checked this practice on the same code, so this review did not assess it "
+                                + "again.",
+                        occurrence,
+                        review.decidedAt(),
+                        answeredBy,
+                        output);
+            }
             if (readiness.ready() && coverage != PracticeCoverageOutcome.EVALUATED) {
                 return entry(
                         practice,

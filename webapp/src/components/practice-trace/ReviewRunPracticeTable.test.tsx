@@ -1,13 +1,13 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ObservationDetail } from "@/api/types.gen";
+import type { ObservationDetail, PracticeTraceEntry, TracedSignal } from "@/api/types.gen";
 import { detailObservation } from "@/stories/practice-detail-story-mock-data";
 import { groups } from "@/stories/practice-profile-story-mock-data";
 import { daysBefore } from "@/stories/story-clock";
 
 import { artifactTrace } from "./fixtures";
-import { ReviewRunPracticeTable } from "./ReviewRunPracticeTable";
+import { ReviewRunPracticeTable, runPractices } from "./ReviewRunPracticeTable";
 
 const valid: ObservationDetail = {
 	...detailObservation,
@@ -31,6 +31,48 @@ function table(observations: ObservationDetail[]) {
 		/>
 	);
 }
+
+describe("the practices one review decided", () => {
+	const ready = "11111111-1111-1111-1111-111111111111";
+	const push = "44444444-4444-4444-4444-444444444444";
+	const base = artifactTrace.practices[0];
+	if (base === undefined) {
+		throw new Error("The trace fixture lists no practice.");
+	}
+	const { reviewId: _reviewId, ...unattributed } = base;
+	const signals: TracedSignal[] = [
+		...artifactTrace.signals,
+		{
+			id: "sig-push",
+			signal: "scm.pull_request.synchronized",
+			displayName: "New commits pushed",
+			revision: "c0ffee12",
+			occurredAt: daysBefore(1),
+			discoveredVia: "EVENT",
+			state: "TRIGGERED",
+			reviewId: push,
+		},
+	];
+	const entries: PracticeTraceEntry[] = [
+		{ ...base, practiceSlug: "asked", reviewId: push, occasionedById: "sig-push" },
+		// Reused from the Ready review: the answer names that review, the occurrence is this one's.
+		{ ...base, practiceSlug: "reused", reviewId: ready, occasionedById: "sig-push" },
+		{
+			...unattributed,
+			practiceSlug: "turned-off",
+			outcome: "TURNED_OFF",
+			occasionedById: "sig-push",
+		},
+		{ ...base, practiceSlug: "earlier", reviewId: ready, occasionedById: "sig-ready" },
+	];
+
+	it("keeps a practice the review left to an earlier answer, and nothing it did not decide", () => {
+		expect(runPractices(entries, signals, push).map((entry) => entry.practiceSlug)).toStrictEqual([
+			"asked",
+			"reused",
+		]);
+	});
+});
 
 describe("review history corrections", () => {
 	it.each([

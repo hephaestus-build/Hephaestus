@@ -323,6 +323,53 @@ A group with a push is reviewed under `synchronized`, otherwise under `edited`.
 Every other member becomes `SUPPRESSED / COALESCED`.
 A group overtaken by a merge or a close is left to that occasion.
 
+Another occasion can review the same work first, typically Ready after a push made while the work was a draft.
+That review can already answer some of the group's practices.
+While it is queued or running, submitted at the current head, title and description, the group waits for it.
+The group's review is then submitted as usual.
+Its preparation leaves out each practice that the earlier review already answered on the same code.
+`AnsweredPractices` decides this from the single capture of the preparation, before the practice catalogue is staged.
+
+A practice is left out only when all of the following hold:
+
+- Every declared evidence requirement is the change or the repository tree, and the practice is about the author.
+  Description, metadata, comments, linked work and documents have no retained identity that proves them unchanged.
+  A practice that reads any of them is asked.
+  A criterion that reads any other staged context file must therefore declare its source.
+  `EvidencePolicyRedundancyTest` holds the bundled catalogue to this rule.
+- The latest run of the claim, read through `LatestRun.perClaim`, is not superseded or invalidated.
+  Its evidence is authorized for automated review.
+  It was measured under the revision that this review pins.
+- That run completed.
+  Its retained manifest records each required source as available, as this capture does.
+  Both record the same immutable identity, content, completeness and limitations.
+  The change identity is `base:head`, and the tree identity is `commit:tree`.
+  Its generated-path policy and source contract also match.
+  These states survive the admission cleanup that retires artifact inventories.
+
+Rechecked practices are never left out.
+Only `synchronized` and `edited` reviews of the author are trimmed.
+A left-out practice stays ready in the readiness report, because its evidence was sufficient.
+It is absent from the staged practice index, so the model is not asked about it.
+Its earlier claim stays current, as with a recheck that records nothing.
+The evidence snapshot records it under `answeredPractices`, with the revision and the completed review that answered it.
+
+The review detail lists each left-out practice with a link to that review.
+Thus, ready, asked and answered practices stay distinguishable.
+
+When every ready practice is answered, preparation ends with `ReviewCoalescedException`.
+The run then completes with the outcome `COALESCED` without starting a sandbox.
+The executor records the captured evidence and readiness.
+It writes the outcome and its `answeredPractices` through the fenced terminal write that an evidence refusal uses, then releases the prepared evidence.
+`COALESCED` is not `INSUFFICIENT_EVIDENCE` and not a cancellation.
+The evidence was sufficient, no model ran, and the run records no observations of its own.
+
+The practice trace attributes each answered practice to the earlier review, as `REVIEWED` with that review's id.
+Across every review, this follows the standing observation.
+On the named review, it follows the recorded answer.
+The named review's own observation and delivery counts stay zero.
+This is historical attribution, not a claim that the earlier observation is still eligible today.
+
 Either review also rechecks practices whose current claim about the author on that work is `NOT_MET`, whatever occasion they are bound to.
 It uses each claim's latest live or requested run that is neither superseded nor invalidated.
 The run is measured against the practice's current revision, with evidence authorized for automated review.
