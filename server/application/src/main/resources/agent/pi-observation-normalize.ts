@@ -201,6 +201,25 @@ function citedLine(value: unknown): number {
 	return written?.groups?.line === undefined ? Number.NaN : Number(written.groups.line);
 }
 
+/** A checkout file named by its workspace path, as `ls` shows it, is the file at its path inside the checkout. */
+function insideCheckout(
+	path: string,
+	sourceKind: string,
+	artifactPath: string,
+	noteRead: (read: string) => void,
+): string {
+	const checkout =
+		sourceKind === "scm.repository.tree"
+			? /^(?<root>repos\/[^/]+\/)\.git\/HEAD$/u.exec(artifactPath)?.groups?.root
+			: undefined;
+	if (checkout === undefined || !path.startsWith(checkout)) {
+		return path;
+	}
+	const read = path.slice(checkout.length);
+	noteRead(read);
+	return read;
+}
+
 /**
  * What the manifest already knows is filled in, not asked for: the artifact a staged record is its own
  * path, and the source an artifact was staged by. Each fill is noted.
@@ -254,14 +273,17 @@ export function normalizeEvidence(
 		// A citation that is not an object reads as one with every field missing, which is what the
 		// required-field checks below already reject by name.
 		const fields: Record<string, unknown> = isRecord(citation) ? citation : {};
-		const path = typeof fields.path === "string" ? fields.path : "";
+		const given = typeof fields.path === "string" ? fields.path : "";
 		const { artifactPath, sourceKind } = completedFromManifest(
 			fields,
-			path,
+			given,
 			which,
 			sourceOf,
 			notes,
 		);
+		const path = insideCheckout(given, sourceKind, artifactPath, (read) => {
+			notes.push(`${which}path ${given} read as ${read}, its path inside the checkout`);
+		});
 		const declaredSide = fields.side == null ? null : trimmedText(fields.side).toUpperCase();
 		const revision = fields.revision == null ? null : trimmedText(fields.revision);
 		// Whether a revision applies is settled once the source is (the caller drops it elsewhere); its
@@ -810,7 +832,7 @@ function resolveQuoteText(
 		return { mismatch: lines };
 	}
 	if (citation.path === DIFF_VIEW) {
-		return placedInDiff(lines, quote);
+		return placedInDiff(lines, citation, quote);
 	}
 	const citedLines = lines.get(diffKey(citation.path, citation.side));
 	if (citedLines === undefined || citedLines.size === 0) {
@@ -824,14 +846,10 @@ function resolveQuoteText(
 		: {
 				mismatch: `the quote is ${quoteLines.length} line(s) and the citation covers ${citedLineCount}`,
 			};
-	// The coordinate may be the line of diff.patch itself, as a numbered view prints it: when that line
-	// of the view is a line of the cited file and side and holds the text, it is the one meant.
-	const viewed = viewLines.get(lines)?.get(citation.startLine);
-	if (!("text" in atCited) && viewed?.key === diffKey(citation.path, citation.side)) {
-		const count = quoteLines?.length ?? citedLineCount;
-		const atView = diffLinesMatch(citedLines, viewed.line, count, quoteLines);
-		if ("text" in atView) {
-			return { quote: atView.text, startLine: viewed.line, endLine: viewed.line + count - 1 };
+	if (!("text" in atCited)) {
+		const atView = readAtViewLines(lines, citedLines, citation, quoteLines);
+		if (atView !== null) {
+			return atView;
 		}
 	}
 	if ("text" in atCited) {
@@ -1048,19 +1066,95 @@ function annotatedDiff(content: string): Map<string, Map<number, string>> | stri
 }
 
 /**
+ * The coordinates may be lines of diff.patch itself, as a numbered view prints them. With a quote, the view's
+ * line names the cited file's line that must hold it. With coordinates alone, the range is a stretch of the view,
+ * the file's header and hunks included, and the cited file's lines among its lines, from the first to the last,
+ * are what it cites: the view's lines are not the file's, since headers and the other side's lines interleave.
+ * Null when the view names no line of the cited file there, or the lines do not hold what was cited.
+ */
+function readAtViewLines(
+	lines: ReadonlyMap<string, ReadonlyMap<number, string>>,
+	citedLines: ReadonlyMap<number, string>,
+	citation: NormalizedCitation,
+	quoteLines: readonly string[] | null,
+): ResolvedQuote | null {
+	const view = viewLines.get(lines);
+	const key = diffKey(citation.path, citation.side);
+	if (quoteLines !== null) {
+		const viewed = view?.get(citation.startLine);
+		if (viewed?.key !== key) {
+			return null;
+		}
+		const atView = diffLinesMatch(citedLines, viewed.line, quoteLines.length, quoteLines);
+		return "text" in atView
+			? { quote: atView.text, startLine: viewed.line, endLine: viewed.line + quoteLines.length - 1 }
+			: null;
+	}
+	const inRange: number[] = [];
+	for (let at = citation.startLine; at <= citation.endLine; at += 1) {
+		const viewed = view?.get(at);
+		if (viewed?.key === key) {
+			inRange.push(viewed.line);
+		}
+	}
+	const [first] = inRange;
+	const last = inRange.at(-1);
+	if (first === undefined || last === undefined) {
+		return null;
+	}
+	const atView = diffLinesMatch(citedLines, first, last - first + 1, null);
+	return "text" in atView && atView.text.length <= COORDINATE_QUOTE_MAX_CHARS
+		? { quote: atView.text, startLine: first, endLine: last }
+		: null;
+}
+
+/**
+ * A range of the diff view by coordinates alone, when the view's lines in it are lines of one changed file:
+ * what it cites is that file's lines, its NEW side when the range shows both. A range across files names no
+ * one file.
+ */
+function viewRangeOfOneFile(
+	lines: ReadonlyMap<string, ReadonlyMap<number, string>>,
+	citation: NormalizedCitation,
+): ResolvedQuote | null {
+	const view = viewLines.get(lines);
+	const keys = new Set<string>();
+	for (let at = citation.startLine; at <= citation.endLine; at += 1) {
+		const viewed = view?.get(at);
+		if (viewed !== undefined) {
+			keys.add(viewed.key);
+		}
+	}
+	const paths = new Set([...keys].map((key) => key.slice(key.indexOf(" ") + 1)));
+	const [path] = paths;
+	if (paths.size !== 1 || path === undefined) {
+		return null;
+	}
+	const side = keys.has(diffKey(path, "NEW")) ? "NEW" : "OLD";
+	const fileLines = lines.get(diffKey(path, side));
+	if (fileLines === undefined) {
+		return null;
+	}
+	const asFile = { ...citation, path, side } as const;
+	const read = readAtViewLines(lines, fileLines, asFile, null);
+	return read === null ? null : { ...read, path: asFile.path, side: asFile.side };
+}
+
+/**
  * A citation that names the diff view is a citation of a changed file: when its quote occurs once in
  * the change, the file, side and [L<n>] it occurs at are what it cites. Otherwise the session is told
  * what a citation of the change names.
  */
 function placedInDiff(
 	lines: ReadonlyMap<string, ReadonlyMap<number, string>>,
+	citation: NormalizedCitation,
 	quote: string,
 ): ResolvedQuote | { mismatch: string } {
 	const how =
 		`${DIFF_VIEW} is the view of the change, not a file in it: cite the changed file's path (the ` +
 		"`+++ b/<path>` above its hunk) and the [L<n>] that prefixes the line";
 	if (quote === "") {
-		return { mismatch: `${how}, with the quoted text` };
+		return viewRangeOfOneFile(lines, citation) ?? { mismatch: `${how}, with the quoted text` };
 	}
 	const quoteLines = quote.split(/\r\n|\r|\n/u);
 	const found = [...lines].flatMap(([key, fileLines]) =>

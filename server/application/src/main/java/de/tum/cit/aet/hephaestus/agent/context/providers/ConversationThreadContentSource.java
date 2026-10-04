@@ -94,8 +94,12 @@ public class ConversationThreadContentSource implements EvidenceSource, ReviewCo
         long workspaceId = job.getWorkspace().getId();
         String channelId = requireText(metadata, "slack_channel_id");
         String threadTs = requireText(metadata, "slack_thread_ts");
+        long aboutUserId = metadata.path("about_user_id").asLong(0);
+        if (aboutUserId <= 0) {
+            throw new JobPreparationException("Job metadata names no reviewed participant: jobId=" + job.getId());
+        }
 
-        ObjectNode payload = projection.buildThreadPayload(workspaceId, channelId, threadTs);
+        ObjectNode payload = projection.buildThreadPayload(workspaceId, channelId, threadTs, aboutUserId);
         try {
             files.put(OUTPUT_KEY, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(payload));
         } catch (Exception e) {

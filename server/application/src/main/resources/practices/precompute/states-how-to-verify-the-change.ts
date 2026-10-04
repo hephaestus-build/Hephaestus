@@ -162,15 +162,18 @@ export default async function statesHowToVerifyTheChange(
 			`${unchanged.length} file(s) change no line — moves, renames or binary files: ${unchanged.slice(0, 5).join(", ")}${unchanged.length > 5 ? ", …" : ""}.`,
 		);
 	}
+	// A bare testing section reads as "nothing anywhere" unless the direction says what it settles.
+	const elsewhere =
+		" That settles nothing either way: the entry, action and expected result can be in other sections, an adopted issue, a preview, the documented setup or the author's discussion.";
 	if (testing === null) {
-		directions.push("The description has no testing heading.");
+		directions.push(`The description has no testing heading.${elsewhere}`);
 	} else if (testing.content.length === 0) {
 		directions.push(
-			`The description's testing heading ("${testing.heading}") has no content beneath it once template comments are removed.`,
+			`The description's testing heading ("${testing.heading}") has no content beneath it once template comments are removed.${elsewhere}`,
 		);
 	} else if (PLACEHOLDER_TESTING_TEXT.test(testing.content)) {
 		directions.push(
-			`The description's testing section ("${testing.heading}") holds only "${testing.content}".`,
+			`The description's testing section ("${testing.heading}") holds only "${testing.content}".${elsewhere}`,
 		);
 	} else {
 		directions.push(

@@ -107,6 +107,7 @@ export function buildBrief(root: string, paths: BriefPaths, limits = DEFAULT_BRI
 	const blocks: { text: string; omission: string }[] = [];
 	const withheld: string[] = [];
 	const absent: string[] = [];
+	const empty: string[] = [];
 	let used = 0;
 	for (const candidate of candidates(root, paths, limits)) {
 		if (!existsSync(candidate.absolute)) {
@@ -117,7 +118,7 @@ export function buildBrief(root: string, paths: BriefPaths, limits = DEFAULT_BRI
 		}
 		const { size } = statSync(candidate.absolute);
 		if (size === 0) {
-			absent.push(`\`${candidate.label}\` (empty)`);
+			empty.push(`\`${candidate.label}\``);
 			continue;
 		}
 		const omission = `- \`${candidate.label}\` (${Math.ceil(size / 1024)} KB)`;
@@ -160,8 +161,14 @@ export function buildBrief(root: string, paths: BriefPaths, limits = DEFAULT_BRI
 				`### Too large to show here — read with \`read\`, or \`bash\` for a slice\n${withheld.join("\n")}`,
 			);
 		}
+		if (empty.length > 0) {
+			parts.push(`### Captured and empty\n${empty.join(", ")}`);
+		}
+		// A missing record is unknown, not empty: the model reads one as "nothing there" unless told.
 		if (absent.length > 0) {
-			parts.push(`### Not captured — do not look for these\n${absent.join(", ")}`);
+			parts.push(
+				`### Not captured — do not look for these\nNothing is known about what they would hold. Never read one as empty: a fact that depends on one is a collection gap.\n${absent.join(", ")}`,
+			);
 		}
 		return parts.join("\n\n");
 	};

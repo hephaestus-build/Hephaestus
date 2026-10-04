@@ -283,6 +283,15 @@ This applies to GitLab, whose sync links a child to its parent but never totals 
 
 All three are absent when there is neither a provider count nor a child.
 
+## Conversation records
+
+**`conversation_thread.json`** (a conversation review) contains `channel`, `threadTs`, `messageCount`, `truncated` and `messages`, oldest first.
+Each message has `ts`, `author` (the Slack user ID), `text` and `underReview`.
+When present, it also has `authorLogin`, `authorName` and `edited`.
+A thread is reviewed once for each participant.
+`underReview` is `true` on the turns of the one participant that this review is about.
+The other turns are context, not the reviewed work.
+
 ## History records
 
 **`inputs/history/observations.json`** — every authorized prior verdict about the reviewed developer, newest first, with no age window or per-practice cap.

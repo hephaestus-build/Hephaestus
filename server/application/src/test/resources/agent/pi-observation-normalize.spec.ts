@@ -521,6 +521,47 @@ void test("a citation of the diff view itself is placed at the changed line its 
 	);
 });
 
+void test("a range copied from a numbered view of diff.patch is read through both of its ends", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	// View lines 5-8 hold NEW [L10]-[L12] with an OLD line among them: the view's count is not the file's.
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n" +
+		"@@ -10,2 +10,3 @@\n[L10]  keep();\n[L11] -old();\n[L11] +insecure();\n[L12] +audit();\n";
+	const expected = { quote: "keep();\ninsecure();\naudit();", startLine: 10, endLine: 12 };
+	assert.deepEqual(
+		resolveQuote({ ...citation, startLine: 5, endLine: 8, quote: "" }, diff),
+		expected,
+	);
+	// A range that starts on the file's own header, as a read of the view file by file prints it.
+	assert.deepEqual(
+		resolveQuote({ ...citation, startLine: 1, endLine: 8, quote: "" }, diff),
+		expected,
+	);
+	// A range of diff.patch itself that holds one file's lines is read as that file's lines.
+	assert.deepEqual(
+		resolveQuote(
+			{ ...citation, path: "work/change/diff.patch", startLine: 1, endLine: 8, quote: "" },
+			diff,
+		),
+		{ ...expected, path: "src/Auth.java", side: "NEW" },
+	);
+});
+
+void test("a range of diff.patch itself across two files names no one file", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n" +
+		"@@ -10,0 +10,1 @@\n[L10] + insecure();\n" +
+		"diff --git a/src/Log.java b/src/Log.java\n--- a/src/Log.java\n+++ b/src/Log.java\n@@ -3,0 +3 @@\n[L3] + log();\n";
+	assert.match(
+		describeCitationMismatch(
+			{ ...citation, path: "work/change/diff.patch", startLine: 1, endLine: 10, quote: "" },
+			diff,
+		) ?? "",
+		/work\/change\/diff\.patch is the view of the change, not a file in it/u,
+	);
+});
+
 void test("a coordinate copied from a numbered view of diff.patch is read as the line it names", () => {
 	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
 	// The text occurs twice in the file; the session cites line 7 of diff.patch, as sed -n prints it.
@@ -695,6 +736,34 @@ void test("a citation rejects invented artifact text", () => {
 		false,
 	);
 	assert.equal(citationMatchesArtifact(cite("a rationale the author never wrote"), content), false);
+});
+
+void test("a checkout file named by its workspace path is read at its path inside the checkout, with a note", () => {
+	const notes: string[] = [];
+	const evidence = normalizeEvidence(
+		{
+			citations: [
+				{
+					sourceKind: "scm.repository.tree",
+					artifactPath: "repos/reviewed/.git/HEAD",
+					path: "repos/reviewed/README.md",
+					startLine: 3,
+					quote: "Run make.",
+				},
+			],
+		},
+		"NOT_MET",
+		{ notes },
+	);
+	assert.equal(evidence.citations[0]?.path, "README.md");
+	assert.ok(
+		notes.some((note) =>
+			note.includes(
+				"path repos/reviewed/README.md read as README.md, its path inside the checkout",
+			),
+		),
+		notes.join("\n"),
+	);
 });
 
 void test("historical citations preserve a full revision for trusted admission", () => {
