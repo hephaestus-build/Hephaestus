@@ -232,7 +232,7 @@ export function LandingHephFigure({ className, lead, body }: LandingHephFigurePr
 				<HephIcon pad={2} animated />
 			</span>
 			<div className={cn(styles.speechBubble, "text-left text-sm")}>
-				<p className="sr-only">Hephaestus says:</p>
+				<p className="sr-only">Heph says:</p>
 				<p className="leading-snug font-bold tracking-tight">{lead}</p>
 				<p className="mt-1 text-xs leading-relaxed text-muted-foreground">{body}</p>
 			</div>

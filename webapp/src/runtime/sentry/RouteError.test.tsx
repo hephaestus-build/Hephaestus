@@ -44,10 +44,10 @@ it("reports a thrown route error once and renders recovery controls", async () =
 	);
 
 	const alert = await screen.findByRole("alert");
-	expect(alert.textContent).toContain("Something went wrong");
+	expect(alert.textContent).toContain("We could not load this page");
 	expect(captureException).toHaveBeenCalledExactlyOnceWith(error);
 
-	await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+	await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 	await vi.waitFor(() => expect(captureException).toHaveBeenCalledTimes(2));
 	expect(onCaughtError).toHaveBeenCalledTimes(2);
 	expect(routeWarning).toHaveBeenCalledTimes(2);

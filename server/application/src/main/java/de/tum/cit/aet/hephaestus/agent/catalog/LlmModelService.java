@@ -146,7 +146,7 @@ public class LlmModelService {
                 priceRepository.findByModelIdAndEffectiveToIsNull(model.getId()).orElse(null);
         if (!model.getConnection().isEnabled() || price == null || price.getPricingMode() == PricingMode.UNPRICED) {
             throw new IllegalArgumentException(
-                    "Activate the connection and configure a price before activating the model.");
+                    "Activate the connection and set a price before you activate the model.");
         }
     }
 
@@ -205,7 +205,7 @@ public class LlmModelService {
                 .orElseThrow(() -> new EntityNotFoundException("LlmModel", modelId));
         validatePriceRequest(request);
         if (model.isEnabled() && request.pricingMode() == PricingMode.UNPRICED) {
-            throw new IllegalArgumentException("Disable the model before changing its price to UNPRICED.");
+            throw new IllegalArgumentException("Disable the model before you change its price to UNPRICED.");
         }
 
         Instant now = Instant.now();
@@ -304,7 +304,7 @@ public class LlmModelService {
         Set<Long> unknown = new LinkedHashSet<>(workspaceIds);
         unknown.removeAll(found);
         if (!unknown.isEmpty()) {
-            throw new IllegalArgumentException("Cannot share with unknown workspace(s): "
+            throw new IllegalArgumentException("Cannot share with unknown workspaces: "
                     + unknown.stream().map(String::valueOf).collect(Collectors.joining(", ")));
         }
     }

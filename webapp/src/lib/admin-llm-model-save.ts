@@ -30,7 +30,7 @@ export class AdminLlmModelSaveError extends Error {
 	readonly modelId?: number;
 
 	constructor(error: unknown, modelId?: number) {
-		super(error instanceof Error ? error.message : "Could not save the model", { cause: error });
+		super(error instanceof Error ? error.message : "We could not save the model", { cause: error });
 		this.name = "AdminLlmModelSaveError";
 		this.modelId = modelId;
 	}

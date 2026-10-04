@@ -797,7 +797,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(emitter.recordedTypes())
                 .containsSubsequence("text-delta", "error")
                 .doesNotContain("finish");
-        assertThat(String.join("\n", emitter.rawData)).contains("couldn't be saved");
+        assertThat(String.join("\n", emitter.rawData)).contains("Heph could not save the reply");
         verify(persistence, never()).recordDelivery(any(), any());
         verify(persistence, saveThrows ? times(1) : never()).interrupt(any(), any(), any());
         assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
@@ -896,8 +896,8 @@ class MentorChatServiceTest extends BaseUnitTest {
         runTurnSync();
 
         String wire = String.join("", emitter.rawData);
-        assertThat(wire).contains("couldn't start the mentor runtime", "[DONE]");
-        assertThat(wire.indexOf("couldn't start the mentor runtime")).isLessThan(wire.indexOf("[DONE]"));
+        assertThat(wire).contains("Heph could not start", "[DONE]");
+        assertThat(wire.indexOf("Heph could not start")).isLessThan(wire.indexOf("[DONE]"));
         assertThat(emitter.recordedTypes()).doesNotContain("finish");
     }
 
@@ -948,7 +948,7 @@ class MentorChatServiceTest extends BaseUnitTest {
             assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
         } else {
             assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
-            assertThat(errorTexts).containsExactly("Heph couldn't finish this reply. Please try again.");
+            assertThat(errorTexts).containsExactly("Heph could not finish this reply. Try again.");
             verify(persistence).interrupt(any(), any(), any());
             verify(persistence, never()).complete(any(), any(), any());
             verify(persistence, never()).recordDelivery(any(), any());
@@ -1477,7 +1477,7 @@ class MentorChatServiceTest extends BaseUnitTest {
 
         assertThat(emitter.recordedTypes()).contains("error");
         assertThat(String.join("\n", emitter.rawData))
-                .contains("This workspace's monthly AI budget is reached")
+                .contains("This workspace has reached its monthly AI budget")
                 .doesNotContain("has no price");
         verify(persistence, never()).persistInFlight(any(), any(), any(), any(), any());
         try {
@@ -1501,8 +1501,8 @@ class MentorChatServiceTest extends BaseUnitTest {
 
         assertThat(emitter.recordedTypes()).contains("error");
         assertThat(String.join("\n", emitter.rawData))
-                .contains("Some usage has no price, so it can't be checked against the budget")
-                .doesNotContain("is reached");
+                .contains("Some usage has no price, so the server cannot check it against the budget")
+                .doesNotContain("has reached its monthly");
         verify(persistence, never()).persistInFlight(any(), any(), any(), any(), any());
         try {
             verify(interactiveSandboxService, never()).attach(any());
@@ -1538,7 +1538,7 @@ class MentorChatServiceTest extends BaseUnitTest {
 
         assertThat(emitter.recordedTypes()).contains("error");
         assertThat(String.join("\n", emitter.rawData))
-                .contains("This workspace's monthly AI cap is reached")
+                .contains("This workspace has reached its monthly AI cap")
                 .contains("a workspace admin raises the cap");
         verify(persistence, never()).persistInFlight(any(), any(), any(), any(), any());
         assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
@@ -1596,8 +1596,8 @@ class MentorChatServiceTest extends BaseUnitTest {
         verify(interactiveSandboxService, times(2)).attach(any());
         assertThat(emitter.recordedTypes()).contains("error");
         assertThat(String.join("\n", emitter.rawData))
-                .contains("I couldn't start the mentor runtime. Please try again in a moment.")
-                .doesNotContain("Mentor turn failed unexpectedly");
+                .contains("Heph could not start. Try again in a moment.")
+                .doesNotContain("Heph could not finish this reply");
         verify(persistence).interrupt(any(), any(), any(Throwable.class));
         assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
     }

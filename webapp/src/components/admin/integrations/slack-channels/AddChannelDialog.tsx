@@ -86,7 +86,7 @@ export function AddChannelDialog({
 		if (!resolved) {
 			setSubmitError(
 				hasCandidates
-					? "Choose a channel from the list, or paste a channel link or ID."
+					? "Select a channel from the list, or paste a channel link or ID."
 					: "Paste a Slack channel link or ID to add it.",
 			);
 			return;
@@ -110,7 +110,7 @@ export function AddChannelDialog({
 				<DialogHeader>
 					<DialogTitle>Add a channel to monitor</DialogTitle>
 					<DialogDescription>
-						Choose a Slack channel. Hephaestus stores the stable channel ID. Nothing is read until
+						Select a Slack channel. Hephaestus stores the stable channel ID. Nothing is read until
 						you activate monitoring and the channel announcement is posted.
 					</DialogDescription>
 				</DialogHeader>
@@ -163,6 +163,9 @@ export function AddChannelDialog({
 								value={channelReference}
 								disabled={submitting}
 								invalid={referenceInvalid}
+								description={
+									hasCandidates ? "For a channel that is not in the list yet." : undefined
+								}
 								onChange={(value) => {
 									setChannelReference(value);
 									setSelectedCandidate(null);

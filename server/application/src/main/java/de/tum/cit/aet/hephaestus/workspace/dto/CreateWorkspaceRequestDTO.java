@@ -25,7 +25,7 @@ public record CreateWorkspaceRequestDTO(
         @Pattern(
                 regexp = "^[a-z0-9][a-z0-9-]{2,50}$",
                 message =
-                        "Slug must be 3-51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens")
+                        "Slug must be 3 to 51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens")
         @Schema(description = "URL-friendly identifier for the workspace", example = "my-workspace")
         @Nullable
         String workspaceSlug,
@@ -86,7 +86,7 @@ public record CreateWorkspaceRequestDTO(
         return personalAccessToken != null && !personalAccessToken.isBlank();
     }
 
-    @AssertTrue(message = "kind must be GITHUB or GITLAB; SLACK flows through OAuth")
+    @AssertTrue(message = "kind must be GITHUB or GITLAB. Use OAuth to create a SLACK workspace.")
     @Schema(hidden = true)
     private boolean isKindSupported() {
         return kind == IntegrationKind.GITHUB || kind == IntegrationKind.GITLAB;

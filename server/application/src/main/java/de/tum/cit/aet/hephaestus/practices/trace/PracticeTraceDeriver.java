@@ -81,7 +81,7 @@ final class PracticeTraceDeriver {
             return entry(
                     practice,
                     PracticeTraceOutcome.REVIEWED,
-                    "Reviewed on this work.",
+                    "The review checked this practice on this work.",
                     occasion,
                     output.latestObservedAt(),
                     output.latestReviewId(),
@@ -106,12 +106,26 @@ final class PracticeTraceDeriver {
                 continue;
             }
             PracticeCoverageOutcome coverage = review.coverageByPracticeSlug().get(practice.slug());
+            @Nullable UUID answeredBy = review.answeredByPracticeSlug().get(practice.slug());
+            // The answer is the earlier review's, so it names that review; the occasion and the counts stay
+            // this run's, which observed nothing of its own for the practice.
+            if (readiness.ready() && coverage != PracticeCoverageOutcome.EVALUATED && answeredBy != null) {
+                return entry(
+                        practice,
+                        PracticeTraceOutcome.REVIEWED,
+                        "An earlier review checked this practice on the same code, so this review did not assess it "
+                                + "again.",
+                        occurrence,
+                        review.decidedAt(),
+                        answeredBy,
+                        output);
+            }
             if (readiness.ready() && coverage != PracticeCoverageOutcome.EVALUATED) {
                 return entry(
                         practice,
                         PracticeTraceOutcome.NOT_REACHED,
                         coverage == PracticeCoverageOutcome.NOT_REACHED
-                                ? "The review ended before reaching this practice."
+                                ? "The review ended before it reached this practice."
                                 : "The review did not record whether it reached this practice.",
                         occurrence,
                         review.decidedAt(),
@@ -122,7 +136,7 @@ final class PracticeTraceDeriver {
                 return entry(
                         practice,
                         PracticeTraceOutcome.REVIEWED,
-                        "Reviewed on this work; nothing to report.",
+                        "The review checked this practice on this work and found nothing to report.",
                         occurrence,
                         review.decidedAt(),
                         occurrence.reviewId(),
@@ -169,7 +183,7 @@ final class PracticeTraceDeriver {
             return entry(
                     practice,
                     PracticeTraceOutcome.TURNED_OFF,
-                    "This workspace turned the practice off, so it is not reviewed here.",
+                    "This workspace turned the practice off, so no review covers it here.",
                     latest,
                     null,
                     null,
@@ -217,7 +231,7 @@ final class PracticeTraceDeriver {
                     entry(
                             practice,
                             PracticeTraceOutcome.FAILED,
-                            "The review carrying this practice did not finish.",
+                            "The review that included this practice did not finish.",
                             occurrence,
                             review.decidedAt(),
                             occurrence.reviewId(),
@@ -230,7 +244,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.PENDING,
-                        reasonCopy(occurrence.stateReason(), "Recorded and waiting to be tried again."),
+                        reasonCopy(occurrence.stateReason(), "Hephaestus recorded this work and will try again."),
                         occurrence,
                         null,
                         null,
@@ -239,7 +253,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.SKIPPED,
-                        reasonCopy(occurrence.stateReason(), "Recorded and deliberately not reviewed."),
+                        reasonCopy(occurrence.stateReason(), "Hephaestus recorded this work, and no review covers it."),
                         occurrence,
                         null,
                         null,
@@ -248,7 +262,9 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.LAPSED,
-                        reasonCopy(occurrence.stateReason(), "Expired unreviewed after waiting too long."),
+                        reasonCopy(
+                                occurrence.stateReason(),
+                                "This work waited too long for a review and expired unreviewed."),
                         occurrence,
                         null,
                         null,
@@ -258,7 +274,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.PENDING,
-                        "Recorded; no decision has been taken on it yet.",
+                        "Hephaestus recorded this work and has not decided on it yet.",
                         occurrence,
                         null,
                         null,

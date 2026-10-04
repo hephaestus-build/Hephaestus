@@ -43,13 +43,14 @@ export function WorkspaceDangerZoneSettings({ workspaceSlug }: WorkspaceDangerZo
 			void navigate({ to: "/", replace: true });
 			void queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() });
 		},
-		onError: (e) => toast.error("Failed to delete workspace", { description: problemDetailOf(e) }),
+		onError: (e) =>
+			toast.error("We could not delete the workspace", { description: problemDetailOf(e) }),
 	});
 
 	return (
 		<section aria-labelledby="workspace-danger-zone-heading">
 			<h2 id="workspace-danger-zone-heading" className="mb-4 text-lg font-semibold">
-				Danger Zone
+				Danger zone
 			</h2>
 			<Card variant="destructive">
 				<CardContent>
@@ -57,8 +58,8 @@ export function WorkspaceDangerZoneSettings({ workspaceSlug }: WorkspaceDangerZo
 						<div className="flex-1 space-y-2">
 							<h3 className="text-base font-medium">Delete this workspace</h3>
 							<p className="text-sm leading-relaxed text-muted-foreground">
-								Permanently deletes workspace content, settings, memberships, and locally stored
-								credentials. Audit and accounting records remain. This cannot be undone.
+								This permanently deletes workspace content, settings, memberships, and locally
+								stored credentials. Audit and accounting records remain. You cannot undo this.
 							</p>
 							<p className="text-sm leading-relaxed text-muted-foreground">
 								Hephaestus has no workspace-level export. The{" "}
@@ -74,7 +75,7 @@ export function WorkspaceDangerZoneSettings({ workspaceSlug }: WorkspaceDangerZo
 							)}
 							{roleUnavailable && (
 								<p className="text-sm text-destructive" role="alert">
-									We couldn’t verify that you’re the workspace owner.
+									We could not verify that you are the workspace owner.
 								</p>
 							)}
 							{!isRolePending && !roleUnavailable && !isOwner && (

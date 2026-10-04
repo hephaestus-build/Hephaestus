@@ -61,7 +61,7 @@ public class PracticeSignalOptions {
                 .findFirst();
     }
 
-    /** The signal a person's explicit "review this now" raises for this kind, if the kind admits one. */
+    /** The signal a person's explicit "Request review" raises for this kind, if the kind admits one. */
     public Optional<SignalName> manualRequestSignalFor(ArtifactKind kind) {
         return manualRequestOptionFor(kind).map(SignalOption::signal);
     }

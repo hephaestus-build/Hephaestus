@@ -86,7 +86,7 @@ export const CredentialUnreadableWithRunningJob: Story = {
 		status: { ...baseStatus, activeJob: runningJob },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /cancel/iu })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Cancel sync" })).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: /sync now/iu })).not.toBeInTheDocument();
 		await expect(
 			canvas.queryByRole("button", { name: /more sync options/iu }),
@@ -242,7 +242,7 @@ export const RateLimitThrottled: Story = {
 	},
 	play: async ({ canvas }) => {
 		const reading = canvas.getByText(/throttled/iu);
-		await expect(reading).toHaveTextContent(/retry in/iu);
+		await expect(reading).toHaveTextContent(/try again in/iu);
 		await expect(canvas.queryByText(/^\/\s*[\d,]+$/u)).not.toBeInTheDocument();
 	},
 };
@@ -276,7 +276,7 @@ export const RateLimitNotReported: Story = {
 export const ScheduledBackfill: Story = {
 	args: { status: { ...baseStatus, backfill: { state: "IN_PROGRESS", percent: 40 } } },
 	play: async ({ canvas }) => {
-		canvas.getByText("In Progress");
+		canvas.getByText("In progress");
 		await expect(canvas.queryByText(/IN_PROGRESS/u)).not.toBeInTheDocument();
 	},
 };
@@ -310,7 +310,7 @@ export const ActiveJobRunning: Story = {
 	args: { status: { ...baseStatus, activeJob: runningJob } },
 	play: async ({ args, canvas }) => {
 		await expect(canvas.getByLabelText(/connection health/iu)).toHaveTextContent("Syncing");
-		const cancel = canvas.getByRole("button", { name: /^cancel$/iu });
+		const cancel = canvas.getByRole("button", { name: "Cancel sync" });
 		await expect(cancel).toBeEnabled();
 		await userEvent.click(cancel);
 		await expect(args.onCancel).toHaveBeenCalledTimes(1);
@@ -389,7 +389,7 @@ export const LoadError: Story = {
 		error: { failedQuery: "connection", cause: new Error("503 Service Unavailable") },
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/couldn't load the github connection/iu);
+		canvas.getByText(/could not load the github connection/iu);
 		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalledTimes(1);
 	},
@@ -401,6 +401,6 @@ export const StatusLoadError: Story = {
 		error: { failedQuery: "status", cause: new Error("503 Service Unavailable") },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/couldn't load github sync status/iu);
+		canvas.getByText(/could not load github sync status/iu);
 	},
 };

@@ -86,6 +86,6 @@ describe("copyRichText", () => {
 
 		await copyRichText(Promise.reject(new Error("offline")), () => "Copied");
 
-		expect(failure).toHaveBeenCalledWith("Couldn't copy that to the clipboard.");
+		expect(failure).toHaveBeenCalledWith("We could not copy that to the clipboard. Try again.");
 	});
 });

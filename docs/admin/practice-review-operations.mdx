@@ -6,122 +6,142 @@ description: Deployment variables, queue health, retention, and fixed limits for
 
 # Practice review operations
 
-Use this reference to configure the runtime and monitor a deployed instance. Workspace administrators
+Use this reference to configure the runtime and monitor a deployed instance. Workspace admins
 should start with [Practice Review](./practice-review.mdx).
 
 ## Deployment configuration
 
-Server configuration metadata defines property names, types, and defaults; the reference Compose files
-define which environment variables reach the application.
+Server configuration metadata defines property names, types, and defaults.
+The reference Compose files determine which environment variables reach the application.
+Agent execution alone does not enable repository collection.
+Each workspace enables practice review and selects its own coverage.
 
-A working deployment must:
+1. Enable the agent runtime on both the submitting server and claiming worker.
+2. Enable `GIT_CHECKOUT_ENABLED` for repository access.
+3. Give every server and worker container its own storage under `HEPHAESTUS_FABRIC_ROOT` for repository mirrors and attempt inputs.
+4. Set campaign, request-rate, retry, and retention limits appropriate to the deployment's budget and governance policy.
 
-- enable the agent runtime on both the submitting server and claiming worker;
-- enable `GIT_CHECKOUT_ENABLED` for repository access and give every server and worker container its
-  own storage under `HEPHAESTUS_FABRIC_ROOT` for repository mirrors and attempt inputs; enabling agent
-  execution alone does not enable repository collection;
-- set campaign, request-rate, retry, and retention limits appropriate to its budget and governance policy.
+A review processes one practice group at a time.
+Work, not time, bounds each group.
+`PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` (default 12) and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` (default 16000) set each practice's budget.
+A group of five practices can make 60 model calls and write 80,000 output tokens.
+A group never gets less than three practices' worth.
 
-Each workspace enables practice review and chooses its own coverage.
+The defaults cap excessive work at several times a group's normal use.
+A review spends what its practices need, and no more.
+Each group has its own budget, independent of previous groups' spend.
+Near the budget limit, the model receives a request to record its current results.
+The group ends after the call that spends the budget.
+Composition gets at most one full group's worth.
 
-A review works through its practices a group at a time, and each group is bounded by work, not by
-time. `PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` (default 12) and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS`
-(default 16000) set what one practice may spend: a group of five practices may make 60 model calls and
-write 80,000 output tokens, and a group never gets less than three practices' worth. The defaults are
-a cap for a group that runs away, several times what a group normally uses, so a review spends what
-its practices need and no more. Each group gets its own budget, whatever the groups before it spent.
-Near the end of its budget the model is asked to record what it has; the group ends after the call
-that spends the budget. Composition gets at most one full group's worth. Raise the output tokens for a
-model that reasons at length.
+1. For a model that reasons at length, raise the output tokens.
 
-The timeout of the workspace's practice-review model binding is the whole-run safety ceiling. It
-can stop a productive review too, leaving later practices `NOT_REACHED`; independent group budgets
-do not reserve time for every group. A review that shows no sign of life for five minutes — no streamed
-token, no tool progress — has that group stopped; two such stalls in a row end the review with what
-it has recorded.
+The workspace's practice-review model binding timeout is the whole-run safety ceiling.
+It can stop a productive review and leave later practices `NOT_REACHED`.
+Independent group budgets do not reserve time for every group.
+If a group has no streamed token or tool progress for five minutes, it stops.
+Two consecutive stalls end the review with its recorded results.
 
-`PRACTICE_REVIEW_SAMPLING_TEMPERATURE` sets the sampling temperature for practice-review
-model calls, not mentor calls. If unset, the provider default applies. Use a value supported by the
-selected model and confirm that your deployment forwards the setting. A low temperature does not
-guarantee repeatable judgments; evaluate changes against representative cases.
+`PRACTICE_REVIEW_SAMPLING_TEMPERATURE` sets the sampling temperature for practice-review model calls, not mentor calls.
+If unset, the provider default applies.
+A low temperature does not guarantee repeatable judgments.
+Do not set `0` for an open model whose vendor advises against greedy decoding.
+Such a model can repeat the same tool call until the review stops that practice group.
+Use the model's recommended sampling or the provider default.
 
-See the
-[server configuration](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/application.yml)
-and [reference Compose files](https://github.com/hephaestus-build/Hephaestus/tree/main/docker) before changing an
-environment variable. Unknown or unforwarded variables do not configure the application.
+Before you change an environment variable:
 
-Repository mirrors and attempt folders are disposable container-local storage, not a shared evidence
-store. Each container keeps bare mirrors under its own `HEPHAESTUS_FABRIC_ROOT` (`/data/git-repos` by
-default; the shipped Compose files mount the `git-repos` volume into the server and `worker-git-repos`
-into the worker) and clones a missing mirror again on the next sync or review. Git runs in-process
-through JGit, so no `git` binary and no second image are involved: commit ingestion runs on the server
-role against the server's mirrors, review preparation on the worker role against the worker's, and a
-server whose worker role is enabled uses its one root for both. Attempt folders live under the same
-root. Sandbox inputs and results travel through the authenticated worker gateway.
-PostgreSQL retains admitted observations and their citation verification results; delivery does not
-require the worker's source files. The storage and cleanup contract is defined in
-[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion).
+1. Read the [server configuration](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/application.yml).
+2. Read the [reference Compose files](https://github.com/hephaestus-build/Hephaestus/tree/main/docker).
+3. Use a value that the selected model supports.
+4. Confirm that the deployment forwards the setting.
+5. Evaluate changes against representative cases.
 
-Source authorization is not a deployment toggle. The shipped artifact-source contract fixes which governed
-sources each purpose may use; integrations only determine which authorized sources are available. See
-[Artifact-source governance](./dsms/artifact-source-governance.md).
+Unknown variables or variables that the deployment does not forward cannot configure the application.
+Repository mirrors and attempt folders are disposable container-local storage, not a shared evidence store.
+Each container keeps bare mirrors under its own `HEPHAESTUS_FABRIC_ROOT`, which defaults to `/data/git-repos`.
+The shipped Compose files mount `git-repos` into the server and `worker-git-repos` into the worker.
+A missing mirror is cloned again on the next sync or review.
+
+Git runs in-process through JGit, with no `git` binary or second image.
+Commit ingestion uses the server role and its mirrors.
+Review preparation uses the worker role and its mirrors.
+A server with its worker role enabled uses one root for both.
+Attempt folders use the same root.
+Sandbox inputs and results pass through the authenticated worker gateway.
+
+PostgreSQL retains admitted observations and their citation verification results.
+Delivery does not require the worker's source files.
+[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion) defines the storage and cleanup contract.
+
+Source authorization is not a deployment switch.
+The shipped artifact-source contract fixes which governed sources each purpose can use.
+Integrations only determine which authorized sources are available.
+See [Artifact-source governance](./dsms/artifact-source-governance.md).
 
 ## Running instance
 
-For workspace model readiness, coverage, autonomy, spend and review activity, see
-[Practice review](./practice-review.mdx).
+For workspace model readiness, coverage, autonomy, spend, and review activity, see [Practice review](./practice-review.mdx).
 
 ### Queue health
 
-The job queue exposes its own signals — alert off these rather than reading application logs.
+The job queue exposes its own signals.
+Use them for alerts instead of application logs.
 
-- **`agent.queue.oldest_age_seconds`** — age of the oldest eligible queued job, `0` when empty.
-  Alert on sustained growth: queue depth alone does not distinguish a transient burst from persistent backlog.
+- **`agent.queue.oldest_age_seconds`** — age of the oldest eligible queued job. It is `0` when empty.
+  Sustained growth needs an alert.
+  Queue depth alone does not distinguish a temporary burst from a persistent backlog.
 - **`agent.queue.depth`** — queued jobs eligible to run now.
-- **`agent.queue.held`** — jobs parked on an exhausted budget.
-- **`agent.queue.running`** — jobs running fleet-wide.
-- **`agent.queue.health.sampler.failures`** — failed samples; the gauges keep their last-good value rather
-  than reporting a false empty queue.
-- **`agent.job.claim.latency`** — time between a job becoming eligible and being claimed.
+- **`agent.queue.held`** — jobs held on an exhausted budget.
+- **`agent.queue.running`** — jobs active across the fleet.
+- **`agent.queue.health.sampler.failures`** — failed samples.
+  Gauges keep their last-good value instead of a false empty-queue report.
+- **`agent.job.claim.latency`** — time from a job's eligibility to its claim.
 - **`agent.job.execution.duration`** — tagged by `jobType` and outcome `status`.
-- **`agent.job.delivery.recovered`** — deliveries stuck by an executor crash and successfully re-attempted.
-- **`agent.job.retention.stripped`** / **`agent.job.retention.deleted`** — rows pruned by the retention
-  sweep.
-- **`llm.budget.exhausted`** / **`llm.budget.blocked`** — a cap crossed, and work refused at a cap.
-- **`practice.review.occasions`** — live issue-update recording attempts, tagged by `signal` and
-  `outcome` (`deferred` or `duplicate`). Opening and closing are not included.
-- **`practice.review.refused`** — refused reviews, tagged by `phase` (`submission` or `execution`) and
-  `reason`. Submission reason `coalesced` counts displaced issue-update snapshots, not review failures.
-  These counters measure attempts, including rolled-back transactions; inspect the occasion trace for
-  committed outcomes.
-- **`practice.feedback.dispatch`** — durable-dispatch outcomes, tagged by bounded `destination` and
-  `state`. Alert on sustained `UNCERTAIN` or `FAILED` outcomes. `UNCERTAIN` means delivery is not yet
-  confirmed; `FAILED` is terminal after the retry limit or an unrecoverable dispatch record.
+- **`agent.job.delivery.recovered`** — deliveries stopped by an executor crash and successfully retried.
+- **`agent.job.retention.stripped`** / **`agent.job.retention.deleted`** — rows pruned by the retention sweep.
+- **`llm.budget.exhausted`** / **`llm.budget.blocked`** — a crossed cap and work refused at a cap.
+- **`practice.review.occasions`** — live issue-update recording attempts, tagged by `signal` and `outcome` (`deferred` or `duplicate`).
+  These exclude issue opening and closing.
+- **`practice.review.refused`** — refused reviews, tagged by `phase` (`submission` or `execution`) and `reason`.
+  Submission reason `coalesced` counts displaced issue-update snapshots, not review failures.
+  These counters measure attempts, including rolled-back transactions.
+  The occasion trace shows committed outcomes.
+- **`practice.feedback.dispatch`** — durable-dispatch outcomes, tagged by bounded `destination` and `state`.
+  Sustained `UNCERTAIN` or `FAILED` outcomes need an alert.
+  `UNCERTAIN` means delivery is not yet confirmed.
+  `FAILED` is terminal after the retry limit or an unrecoverable dispatch record.
 
-Query `/actuator/health/readiness` on the [management listener](./observability.mdx#scrape-metrics)
-for aggregate readiness, or `/readyz` on the application port. An authorized response includes the
-**`practiceReview`** component. An enabled review worker reports `OUT_OF_SERVICE` with
-`GIT_CHECKOUT_DISABLED` when repository checkout is disabled, or `SOURCE_AUTHORIZATION_EXPIRED` when an
-automated-review source authorization has expired. Missing model bindings are workspace-specific and remain
-visible on the work under **Practices → Practice reviews → Work** and in the refusal counter; they do not
-remove the worker from service.
+1. Query `/actuator/health/readiness` on the [management listener](./observability.mdx#scrape-metrics), or `/readyz` on the application port, for aggregate readiness.
 
-Gauges are sampled periodically; timers and counters are recorded when the corresponding event occurs.
-Metric names in the instrumented code are the source of truth for dashboards and alerts.
+An authorized response includes the **`practiceReview`** component.
+An enabled review worker reports `OUT_OF_SERVICE` with `GIT_CHECKOUT_DISABLED` when repository checkout is disabled.
+It reports `SOURCE_AUTHORIZATION_EXPIRED` when an automated-review source authorization has expired.
+
+Missing model bindings are workspace-specific.
+They stay visible under **Practices → Practice reviews → Work** and in the refusal counter.
+They do not remove the worker from service.
+Gauges have periodic samples.
+Timers and counters record their corresponding events.
+Metric names in the instrumented code are authoritative for dashboards and alerts.
 
 ### Issue-update queue
 
-Live issue updates become eligible 30 seconds after the last newly queued snapshot, or when the oldest
-reaches five minutes. The server checks every five seconds, handling at most 100 issues per sweep.
+Live issue updates become eligible 30 seconds after the last newly queued snapshot, or when the oldest reaches five minutes.
+The server checks every five seconds and processes at most 100 issues per sweep.
 Opening and closing are separate occasions and do not wait in this queue.
 
-Returning to an already-pending snapshot does not reset eligibility. Queue load, contention and failures
-can delay submission beyond eligibility. Job-queue gauges exclude these pre-submission occasions.
+A return to an already-pending snapshot does not reset eligibility.
+Queue load, contention, and failures can delay submission beyond eligibility.
+Job-queue gauges exclude these pre-submission occasions.
 
 ### Log correlation
 
-The application emits one JSON object per log line, so worker logs filter by the correlation keys
-under `mdc` with the tools already in the shipped Compose stack. From the directory you deploy from:
+The application emits one JSON object per log line.
+Worker logs use correlation keys under `mdc`.
+The shipped Compose stack already has the necessary filter tools.
+
+1. From your deployment directory, filter the logs:
 
 ```bash
 # All log lines for one agent job
@@ -133,104 +153,135 @@ docker compose logs --no-log-prefix application-worker \
   | jq -cR 'fromjson? | select(.mdc."workspace.id" == "<workspace-id>" and .level == "ERROR")'
 ```
 
-A deployment that ships logs to its own collector can key dashboards and alerts on the same `mdc`
-fields; label names there are deployment-specific.
+A deployment with its own log collector can use the same `mdc` fields for dashboards and alerts.
+The collector's label names are deployment-specific.
 
-**Retention.** Terminal job payloads are stripped before their rows are deleted, so row retention shorter
-than payload retention is incoherent — the application refuses to start rather than accept it. Treat the
-fabric root as sensitive storage. Delivery-policy evaluations and dispatch intents follow their owning
-review ledger. Disconnect, person erasure, and workspace purge remove their matching copies. Once a sent
-or withheld dispatch has been projected into that ledger, its duplicate summary and inline-comment payload
-is erased while the destination key and provider references remain as the idempotency record. A failed
-dispatch keeps its package because an administrator can still retry it. Selected coverage targets follow
-their workspace membership or monitored repository.
+**Retention.** The application strips terminal job payloads before it deletes their rows.
+A row retention shorter than payload retention is inconsistent, and the application refuses startup.
 
-**Dispatch recovery.** One dispatch owns the exact summary and inline comments in a review. Each summary
-comment carries a stable marker, and each inline comment a recurrence key. Before creating the summary, the
-dispatch searches the reviewed work's comments for its marker:
+1. Treat the fabric root as sensitive storage.
 
-- **Found** — the comment is recorded and never created again.
-- **Search inconclusive** — the dispatch stays `UNCERTAIN` and retries later.
-- **Search complete, nothing found** — the dispatch creates the summary only if no earlier attempt closed its
-  write fence.
+Delivery-policy evaluations and dispatch intents follow their review ledger.
+Disconnect, person erasure, and workspace purge remove the matching copies.
+A sent or withheld dispatch projects into that ledger.
+Then its duplicate summary and inline-comment payload is erased.
+The destination key and provider references remain as the idempotency record.
 
-A summary with no inline comments whose visible text matches, word for word, the summary whose posting was
-recorded last on the same work for the same person is withheld as `REPEATS_DELIVERED_NOTE` instead of being
-created. Nothing is compared, and the new summary is created, while that earlier summary carries a correction or
-awaits the restore of its original text.
-The check compares against the delivered ledger only, after delivery policy allows the write, so two reviews
-of the same work whose summaries are both still being dispatched can each post one.
+A failed dispatch keeps its package because a workspace admin can still retry it.
+Selected coverage targets follow their workspace membership or monitored repository.
 
-The write fence closes after delivery policy allows the write and before the provider adapter runs its own
-preparation: its rate-limit check, resolving the pull request, merge request or issue, and then the create
-request. If the adapter fails before it sends the create request, the attempt reopens its own fence while it
-still holds its lease. The dispatch becomes `SENT` only after the whole package converges.
+**Dispatch recovery.** One dispatch owns the exact summary and inline comments in a review.
+Each summary comment has a stable marker.
+Each inline comment has a recurrence key.
+Before summary creation, the dispatch searches the reviewed work's comments for its marker:
 
-A sustained `UNCERTAIN` dispatch means one of two different things:
+- **Found** — it records the comment and never creates it again.
+- **Search inconclusive** — it stays `UNCERTAIN` and retries later.
+- **Search complete, nothing found** — it creates the summary only if no earlier attempt closed its write fence.
 
-- **Fence open: no create request has been sent.** The last attempt could not complete the marker search, or
-  failed before sending: provider connectivity or credentials, a critical rate limit, or reviewed work the
-  provider no longer resolves. The dispatch retries with backoff and is marked `FAILED` once its retry budget
-  is spent. A review whose target cannot be named at all fails the same way.
-- **Fence closed: a create request was sent, or may have been, and its outcome is unknown.** Hephaestus never
-  sends that create again. Every later attempt searches for the marker; a found comment completes the
-  dispatch, and a search that finds nothing leaves it `UNCERTAIN` with no retry budget, so it never reaches
-  `FAILED` and nothing is re-sent automatically.
+A summary can have no inline comments and exactly match the last recorded summary delivered on the same work for the same person.
+In this case, the dispatch withholds it as `REPEATS_DELIVERED_NOTE` instead of creating it.
+If the earlier summary has a correction or awaits restoration of its original text, no comparison occurs.
+The new summary is then created.
 
-A marker that cannot be found now does not prove the feedback was never delivered: the provider may show the
-comment later. Reconcile a fenced dispatch deliberately, against that provider's own record of the reviewed
-work and its comments. Sending it again requires an operator-approved recovery procedure; Hephaestus has no
-action that does so. Do not edit a dispatch row to force a resend: the state, write fence, retry count and
-lease together are what prevent a duplicate comment.
+The check uses only the delivered ledger, after delivery policy permits the write.
+Two reviews with summaries still in dispatch can each post one on the same work.
+The write fence closes after delivery policy permits the write and before provider-adapter preparation.
+That preparation checks the rate limit and resolves the pull request, merge request, or issue before the create request.
+
+If the adapter fails before the create request, the attempt reopens its own fence while it still holds its lease.
+The dispatch becomes `SENT` only after the whole package converges.
+A sustained `UNCERTAIN` dispatch has two different explanations:
+
+- **Fence open: no create request has been sent.**
+  The last attempt could not complete the marker search or failed before delivery.
+  Causes include provider connectivity, credentials, a critical rate limit, or work the provider no longer resolves.
+  The dispatch retries with backoff.
+  It becomes `FAILED` after its retry budget is spent.
+  A review whose target cannot be named at all fails the same way.
+- **Fence closed: a create request was sent, or may have been, and its outcome is unknown.**
+  Hephaestus never sends that create again.
+  Each later attempt searches for the marker.
+  A found comment completes the dispatch.
+  A search that finds nothing leaves it `UNCERTAIN` with no retry budget.
+  Thus, it never reaches `FAILED`, and nothing is automatically resent.
+
+An absent marker now does not prove that feedback was never delivered.
+The provider can show the comment later.
+A resend requires an operator-approved recovery procedure.
+Hephaestus has no action for it.
+
+**CAUTION:** Do not edit a dispatch row to force a resend.
+The state, write fence, retry count, and lease jointly prevent a duplicate comment.
+
+1. Deliberately reconcile a fenced dispatch against the provider's own record of the reviewed work and its comments.
 
 ## Limits you should know about
 
-Configuration metadata describes deployment settings; the artifact-source catalog defines capture semantics.
+Configuration metadata describes deployment settings.
+The artifact-source catalog defines capture semantics.
 These behaviors matter independently of configured capacity:
 
-- **Background task cadences are fixed in code.** Their thresholds may be configurable even when their
-  polling schedules are not.
-- **Feedback preparation recovery has a bounded window.** The sweeper selects recent completed pull
-  request and issue reviews with missing preparation marks. Older unfinished preparation is not
-  automatically recovered. A successful empty result is complete; recovery does not rerun the model.
-- **Retryable occurrences eventually lapse.** A workspace left misconfigured can accumulate retries and
-  then go quiet when their deadline passes.
-- **Nothing is ever deleted from the occurrence ledger**, in any state, including retired rows. It is the
-  record of what was *not* done, and it only grows. Size it accordingly on a busy instance.
-- **Repository capture includes every regular and executable file at the reviewed commit**, including
-  binary content and large files, plus sanitized Git history reachable from the reviewed commit and
-  the mirrored branches and tags. Native bash, Git, ripgrep, and file-discovery tools are available.
-  File count and content size do not truncate the tree. Symbolic links are materialized as regular
-  files containing the link target, without following it. Submodules are not hydrated; their
-  presence, like an excluded unsafe path, is reported as a partial capture, and a snapshot entry that
-  is not a regular file or directory fails the capture. Git LFS pointers are captured as committed,
-  not replaced by downloads. Provision storage for the mirror, captured content, and per-job staging;
-  model-facing output limits do not bound capture storage. The captured worktree and Git metadata are
-  read-only, with no repository credentials or upstream configuration. Reviews use an isolated
-  internal Docker network; the authenticated worker gateway must be reachable on that network.
-- **Repository preparation is bounded per snapshot and per walk.** Server and worker roles use
-  JGit for capture. This work needs no sandbox admission and does not count against
-  `SANDBOX_MAX_CONCURRENT`; `GIT_MAX_CONCURRENT_INGESTIONS` (default 2) caps how many captured
-  commits a container writes to PostgreSQL at once. A repository whose checkout plus mirrored history
-  exceeds `GIT_MAX_SNAPSHOT_BYTES` (8 GiB by default) is refused whole, measured before the snapshot is
-  written; raise it for larger monorepos. Refusal fails the operation; it never selects a smaller
-  tree. The mirror itself is not measured, so size the fabric root for the repositories you monitor.
-  A commit-history walk reads commits in pages of 256 and pauses after 32 pages that needed
-  capture — pages whose commits were all captured before do not count — and the next sync cycle
-  resumes from the commits already captured.
-- **Linked Outline documents are retrieval-limited, and the mentor and review paths do not agree.** A
-  review resolves documents *linked from* the work first and only tops up a small number by search; the
-  mentor searches the whole corpus and truncates each document. Neither path can report that it found
-  everything, and neither is a substitute for the other when you are diagnosing missing context.
+- **Background task cadences are fixed in code.**
+  Their thresholds can be configurable even if their poll schedules are not.
+- **Feedback preparation recovery has a bounded window.**
+  The sweeper selects recent completed pull request and issue reviews with missing preparation marks.
+  It does not automatically recover older unfinished preparation.
+  A successful empty result is complete.
+  Recovery does not rerun the model.
+- **Retryable occurrences eventually lapse.**
+  A misconfigured workspace can accumulate retries and then become quiet when their deadline passes.
+- **Nothing is ever deleted from the occurrence ledger**, in any state, including retired rows.
+  It records what was *not* done and only grows.
+  A busy instance needs storage sized for that growth.
+- **Repository capture includes every regular and executable file at the reviewed commit**.
+  This includes binary content and large files.
+  It includes sanitized Git history reachable from that commit, mirrored branches, and tags.
+  Native bash, Git, ripgrep, and file-discovery tools are available.
+  File count and content size do not truncate the tree.
+  Symbolic links become regular files with the link target, without traversal of the link.
+  Submodules are not hydrated.
+  Their presence and excluded unsafe paths cause a partial-capture report.
+  A snapshot entry that is not a regular file or directory fails capture.
+  Capture keeps committed Git LFS pointers instead of downloads.
+  Model-facing output limits do not bound capture storage.
+  The captured worktree and Git metadata are read-only, with no repository credentials or upstream configuration.
+  Reviews use an isolated internal Docker network.
+  The authenticated worker gateway must be reachable on it.
+- **Repository preparation is bounded per snapshot and per walk.**
+  Server and worker roles use JGit for capture.
+  This needs no sandbox admission and does not count against `SANDBOX_MAX_CONCURRENT`.
+  `GIT_MAX_CONCURRENT_INGESTIONS` (default 2) caps captured commits that a container writes to PostgreSQL simultaneously.
+  A checkout plus mirrored history over `GIT_MAX_SNAPSHOT_BYTES` (default 8 GiB) causes refusal of the whole repository.
+  Measurement occurs before the snapshot is written.
+  Refusal fails the operation and never selects a smaller tree.
+  The mirror itself has no measurement against this limit.
+  A commit-history walk reads pages of 256 commits.
+  It pauses after 32 pages that needed capture.
+  Pages whose commits were all previously captured do not count.
+  The next sync cycle resumes from captured commits.
+- **Linked Outline documents are retrieval-limited, and the mentor and review paths do not agree.**
+  A review first resolves documents *linked from* the work, then adds a small number by search.
+  The mentor searches the whole corpus and truncates each document.
+  Neither path can report that it found everything.
+  Neither substitutes for the other in diagnosis of missing context.
 - **Work that has been deleted at the provider yields a review with no evidence, not an empty one.**
-  Once a reconciliation pass finds work missing upstream, evidence capture reports its sources as
-  unavailable and the review stops without recording anything about that work. If the work reappears,
-  the next ordinary sync clears the mark and a later review reads it again.
-- **No screen edits what the model is told.** What Hephaestus observes is shaped by each practice's
-  criteria; the wording it then chooses is shaped by a prompt that ships with the release. Changing the
-  latter is a code change.
+  After reconciliation finds work missing upstream, evidence capture reports its sources as unavailable.
+  The review stops without an observation about that work.
+  If the work reappears, the next ordinary sync clears the mark.
+  A later review reads the work again.
+- **No screen edits what the model is told.**
+  Each practice's criteria shape what Hephaestus observes.
+  A prompt that ships with the release shapes its text.
+  A prompt change is a code change.
+
+1. Provision storage for the mirror, captured content, and per-job staging.
+2. For larger monorepos, raise `GIT_MAX_SNAPSHOT_BYTES`.
+3. Size the fabric root for the repositories you monitor.
 
 ## Rollback
 
-Back up before upgrading, and return to a previous release only by restoring a compatible backup —
-[Install § Rollback](./install.mdx#rollback).
+1. Back up before an upgrade.
+2. Return to a previous release only through restoration of a compatible backup.
+
+See [Install § Rollback](./install.mdx#rollback).

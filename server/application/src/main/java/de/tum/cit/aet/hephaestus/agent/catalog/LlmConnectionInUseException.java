@@ -11,6 +11,6 @@ public class LlmConnectionInUseException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     public LlmConnectionInUseException(Long connectionId) {
-        super("Cannot delete LLM connection " + connectionId + ": one or more models still reference it.");
+        super("You cannot delete LLM connection " + connectionId + " because one or more models still use it.");
     }
 }

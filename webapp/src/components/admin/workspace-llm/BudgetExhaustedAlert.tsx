@@ -24,21 +24,21 @@ const PAUSE_COPY: Record<
 				`Paused until ${resetDay} (UTC), or until you raise or remove the cap.`,
 		},
 		NO_PRICE: {
-			title: "Your provider cap can't be enforced",
+			title: "Your provider cap cannot be enforced",
 			body: ({ subject }) =>
-				`${subject} no price, so the cap can't be checked and your provider is paused. Add a price to resume, or remove the cap.`,
+				`${subject} no price, so the cap cannot be checked and your provider is paused. Add a price to resume, or remove the cap.`,
 		},
 	},
 	shared: {
 		CAP_REACHED: {
 			title: "Shared-model budget reached",
 			body: ({ resetDay }) =>
-				`Paused until ${resetDay} (UTC), or until your host raises the budget. Practice reviews and Mentor can keep running on your own models.`,
+				`Paused until ${resetDay} (UTC), or until an instance admin raises the budget. Practice reviews and Heph can keep running on your own models.`,
 		},
 		NO_PRICE: {
-			title: "Shared-model spend can't be verified",
+			title: "Shared-model spend cannot be verified",
 			body: ({ subject }) =>
-				`${subject} no price, so the budget can't be checked and shared models are paused. Only your host can price them.`,
+				`${subject} no price, so the budget cannot be checked and shared models are paused. Only an instance admin can price them.`,
 		},
 	},
 };

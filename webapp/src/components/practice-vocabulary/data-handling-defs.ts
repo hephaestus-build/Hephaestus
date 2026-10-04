@@ -27,13 +27,13 @@ export const DATA_HANDLING_DEFS: Record<DataHandlingTier, DataHandlingDef> = {
 		label: "In-house",
 		icon: HouseIcon,
 		badgeVariant: "secondary",
-		description: "Runs on systems your organisation operates.",
+		description: "Runs on systems your organization operates.",
 		facts: [
-			{ icon: Building2Icon, term: "Operated by", detail: "Your organisation." },
+			{ icon: Building2Icon, term: "Operated by", detail: "Your organization." },
 			{
 				icon: LockIcon,
 				term: "Where it goes",
-				detail: "Processed on systems your organisation operates.",
+				detail: "Processed on systems your organization operates.",
 			},
 		],
 	},
@@ -41,12 +41,12 @@ export const DATA_HANDLING_DEFS: Record<DataHandlingTier, DataHandlingDef> = {
 		label: "Cloud",
 		icon: CloudIcon,
 		badgeVariant: "secondary",
-		description: "A provider configured by your organisation handles AI requests.",
+		description: "A provider configured by your organization handles AI requests.",
 		facts: [
 			{
 				icon: HandshakeIcon,
 				term: "Operated by",
-				detail: "A provider configured by your organisation.",
+				detail: "A provider configured by your organization.",
 			},
 			{
 				icon: EyeIcon,
@@ -84,16 +84,16 @@ export function tierIsWithin(tier: DataHandlingTier, ceiling: DataHandlingTier):
 
 export const OPERATED_BY_DEFS: StatusDefs<OperatedBy> = {
 	OWN_ORGANISATION: {
-		label: "Your organisation",
+		label: "Your organization",
 		icon: Building2Icon,
 		badgeVariant: "secondary",
-		description: "Systems your organisation runs.",
+		description: "Systems your organization runs.",
 	},
 	PROVIDER: {
 		label: "A provider",
 		icon: HandshakeIcon,
 		badgeVariant: "secondary",
-		description: "A provider configured by your organisation.",
+		description: "A provider configured by your organization.",
 	},
 };
 
@@ -116,12 +116,12 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		label: "In-house",
 		icon: HouseIcon,
 		badgeVariant: "secondary",
-		description: "Models your organisation runs",
+		description: "Models your organization runs",
 		facts: {
 			"AI help": { tone: "pro", text: "Feedback and Heph" },
 			Models: { tone: "caveat", text: "Usually smaller models" },
 			Speed: { tone: "caveat", text: "Limited capacity, can be slower" },
-			"Sent to": { tone: "pro", text: "Only your organisation" },
+			"Sent to": { tone: "pro", text: "Only your organization" },
 		},
 		ceiling: "IN_HOUSE",
 	},

@@ -23,14 +23,14 @@ export function ReviewedWorkFeedbackPage({ feed, observations }: ReviewedWorkFee
 			<PageHeader
 				icon={<MessageSquareTextIcon />}
 				title="Your feedback on this work"
-				description="Mark an observation addressed or not applicable, or dispute it and say why. Workspace admins read a dispute's explanation; while it stands, a later review of this work does not raise the same point again."
+				description="Mark an observation addressed or not applicable, or dispute it and say why. Workspace admins read a dispute’s explanation. While it stands, a later review of this work does not raise the same point again."
 			/>
 			<ReviewRunFeed
 				feed={feed}
 				observations={observations}
 				skeletonRows={2}
 				emptyTitle="Nothing here is about your work"
-				emptyDescription="Reviews of this work recorded no observations about you. The feedback you followed was written for somebody else."
+				emptyDescription="Reviews of this work recorded no observations about you. The comment that brought you here was written for somebody else."
 			/>
 		</div>
 	);

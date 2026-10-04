@@ -49,8 +49,8 @@ function GitHubSetupPage() {
 			<Alert>
 				<AlertTitle>GitHub App not configured</AlertTitle>
 				<AlertDescription>
-					The GitHub App installation URL has not been configured for this deployment. Contact your
-					administrator.
+					The GitHub App installation URL is not configured for this instance. Contact an instance
+					admin.
 				</AlertDescription>
 			</Alert>
 		);
@@ -71,7 +71,7 @@ function GitHubSetupPage() {
 				<div>
 					<h1 className="text-2xl font-semibold tracking-tight">Connect GitHub</h1>
 					<p className="text-muted-foreground">
-						GitHub workspaces are created automatically via the Hephaestus GitHub App.
+						GitHub workspaces are created automatically through the Hephaestus GitHub App.
 					</p>
 				</div>
 			</div>

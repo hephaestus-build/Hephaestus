@@ -10,7 +10,7 @@ import { addMonths } from "./usage-utils";
 import { WorkspaceUsageReport } from "./WorkspaceUsageReport";
 
 const FX_DISCLOSURE = /reference rate published on/u;
-const ESTIMATE_LABEL = /^approximately /u;
+const ESTIMATE_LABEL = /^about /u;
 
 const LAST_MONTH = addMonths(STORY_MONTH, -1);
 
@@ -74,7 +74,7 @@ export const NoSharedBudget: Story = {
 		report: { ...capped, instanceMonthlyBudgetUsd: undefined },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("No shared-model budget set by your host");
+		canvas.getByText("No shared-model budget set by an instance admin");
 		await expect(
 			canvas.queryByRole("progressbar", { name: "Shared-model budget used" }),
 		).toBeNull();
@@ -111,7 +111,7 @@ export const ProviderCapUnenforceable: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("Your provider cap can't be enforced");
+		canvas.getByText("Your provider cap cannot be enforced");
 	},
 };
 
@@ -125,7 +125,7 @@ export const SharedBudgetUnverifiable: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("Shared-model spend can't be verified");
+		canvas.getByText("Shared-model spend cannot be verified");
 	},
 };
 
@@ -169,7 +169,7 @@ export const CallsWithNoPriceSet: Story = {
 		report: { ...capped, unpricedEventCount: 42 },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("42 runs aren't counted in these totals");
+		canvas.getByText("42 runs are not counted in these totals");
 	},
 };
 
@@ -178,7 +178,7 @@ export const SingleCallWithNoPriceSet: Story = {
 		report: { ...capped, unpricedEventCount: 1 },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("1 run isn't counted in these totals");
+		canvas.getByText("1 run is not counted in these totals");
 	},
 };
 

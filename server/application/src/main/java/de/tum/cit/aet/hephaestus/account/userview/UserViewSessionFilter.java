@@ -94,16 +94,17 @@ public class UserViewSessionFilter extends OncePerRequestFilter {
 
         try {
             if (workspaceSlug == null || userHeader == null || reason == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Incomplete user view context");
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "The request does not include the full user view context.");
             }
             String path = request.getRequestURI();
             Map<String, String> pathVariables = readPathVariables(PathContainer.parsePath(path));
             if (pathVariables == null) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This page is not available in user view");
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This page is not available in user view.");
             }
             String pathSlug = pathVariables.get("workspaceSlug");
             if (pathSlug != null && !pathSlug.equals(workspaceSlug)) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace not found in user view");
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "The workspace was not found in user view.");
             }
             long accountId = SecurityUtils.getCurrentAccountId()
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
@@ -113,12 +114,14 @@ public class UserViewSessionFilter extends OncePerRequestFilter {
                 userId = Long.parseLong(userHeader);
                 if (userId <= 0) throw new NumberFormatException();
             } catch (NumberFormatException invalidId) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid viewed user id", invalidId);
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "The viewed user ID is not valid.", invalidId);
             }
             Workspace workspace = workspaces
                     .findByWorkspaceSlug(workspaceSlug)
                     .filter(candidate -> candidate.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace not found"));
+                    .orElseThrow(
+                            () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The workspace was not found."));
             var user = users.requireUser(workspace.getId(), userId);
             String query = request.getQueryString();
             access.record(
@@ -153,10 +156,10 @@ public class UserViewSessionFilter extends OncePerRequestFilter {
         if (error instanceof ErrorResponse responseError) {
             problem = responseError.getBody();
         } else if (error instanceof EntityNotFoundException) {
-            problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Viewed user not found");
+            problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "The viewed user was not found.");
         } else {
             log.error("User view validation failed", error);
-            problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, "User view is unavailable");
+            problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, "User view is not available.");
         }
         response.setStatus(problem.getStatus());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);

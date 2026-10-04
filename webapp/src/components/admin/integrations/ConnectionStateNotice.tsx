@@ -25,7 +25,7 @@ const STATE_COPY: Partial<Record<ConnectionState, StateCopy>> = {
 	PENDING: {
 		icon: <CircleDashedIcon />,
 		title: "Finishing setup",
-		describe: (name) => `${name} isn't live yet. Sync controls unlock once setup completes.`,
+		describe: (name) => `${name} is not live yet. Sync controls unlock once setup completes.`,
 		// Benign and self-resolving — no action is owed, so this must not shout.
 		variant: "default",
 	},
@@ -79,7 +79,7 @@ export interface ConnectionStateNoticeProps {
 export function ConnectionStateNotice({
 	connectionState,
 	credentialsUnreadableSince,
-	credentialRecovery = "The connection's page says how to replace it",
+	credentialRecovery = "The connection’s page says how to replace it",
 	displayName,
 	className,
 }: ConnectionStateNoticeProps) {
@@ -92,9 +92,9 @@ export function ConnectionStateNotice({
 			{credentialsUnreadableSince && (
 				<Alert variant="warning">
 					<KeyRoundIcon />
-					<AlertTitle>The stored token can’t be read</AlertTitle>
+					<AlertTitle>The stored token cannot be read</AlertTitle>
 					<AlertDescription>
-						{`${displayName}'s stored token can't be read with this server's current keys — usually after a key change, or a database restored under another key — so nothing that needs it can run. ${credentialRecovery}, or restore the key it was written with if that was changed by mistake.`}
+						{`This server’s current keys cannot decrypt the stored ${displayName} token. That usually happens after a key change or after you restore the database under another key. Nothing that needs the token can run. ${credentialRecovery}, or restore the key that encrypted the token if the key was changed by mistake.`}
 					</AlertDescription>
 				</Alert>
 			)}

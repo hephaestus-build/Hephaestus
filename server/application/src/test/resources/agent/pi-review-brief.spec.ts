@@ -98,12 +98,13 @@ void test("a file over its bound is named with its size instead of shown, and an
 			totalChars: 10_000,
 		});
 		assert.match(brief, /### `context\/metadata\.json`/u);
-		// An empty record file is not shown; it is named as empty, with the record files the capture
-		// did not write at all, so the review does not go looking for them.
+		// An empty record is not shown but named as captured and empty. One the capture did not write is named
+		// apart, as unknown, so the review neither looks for it nor reads it as empty.
 		assert.doesNotMatch(brief, /### `context\/comments\.json`/u);
+		assert.match(brief, /### Captured and empty\n`context\/comments\.json`\n/u);
 		assert.match(
 			brief,
-			/### Not captured — do not look for these\n`context\/description\.md`, `context\/comments\.json` \(empty\), `context\/review_threads\.json`, `context\/general_comments\.json`, `context\/linked_work_items\.json`/u,
+			/### Not captured — do not look for these\nNothing is known about what they would hold\. Never read one as empty: a fact that depends on one is a collection gap\.\n`context\/description\.md`, `context\/review_threads\.json`, `context\/general_comments\.json`, `context\/linked_work_items\.json`/u,
 		);
 		assert.match(brief, /Too large to show here[\s\S]*- `work\/change\/diff\.patch` \(60 KB\)/u);
 		assert.doesNotMatch(brief, /```diff/u);

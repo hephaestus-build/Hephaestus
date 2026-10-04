@@ -55,7 +55,9 @@ class SurveyEmailInvitationService implements SurveyEmailInvitations {
         Survey survey = surveys.findForUpdate(surveyId)
                 .orElseThrow(() -> new EntityNotFoundException("Survey", surveyId.toString()));
         if (!delivery.configured()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Email delivery is not configured");
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Email delivery is not configured. Ask your instance operator to set it up.");
         }
         var eligible = eligibleAccountIds(survey);
         var requested = new HashSet<>(invitations.requestedAccountIds(surveyId));

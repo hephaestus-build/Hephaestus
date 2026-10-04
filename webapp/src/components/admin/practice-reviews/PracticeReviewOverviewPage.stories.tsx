@@ -144,7 +144,7 @@ export const ReviewsCannotStart: Story = {
 		banner: <ReviewRunningBanner running={{ enabled: true, model: { status: "ready" } }} />,
 	},
 	play: async ({ canvas }) => {
-		const banner = canvas.getByText("Reviews can't start");
+		const banner = canvas.getByText("Reviews cannot start");
 		await expect(precedes(banner, canvas.getByRole("heading", { name: "Needs you" }))).toBe(true);
 	},
 };
@@ -170,12 +170,12 @@ export const OverviewFailed: Story = {
 	args: {
 		overview: {
 			status: "error",
-			error: { status: 500, detail: "Something went wrong." },
+			error: { status: 500 },
 			onRetry: fn(),
 		},
 	},
 	play: async ({ args, canvas, userEvent }) => {
-		canvas.getByText("Couldn't load what the reviews did");
+		canvas.getByText("We could not load what the reviews did");
 		await expect(canvas.queryByRole("heading", { name: "Practices" })).not.toBeInTheDocument();
 		canvas.getByRole("list", { name: "Awaiting your approval" });
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));

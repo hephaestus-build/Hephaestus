@@ -5,128 +5,164 @@ description: The variable reference for every optional integration bundle, and t
 ---
 
 :::info Which page owns what
-**[Install (Self-Hosted)](./install) owns standing up an instance** — requirements, the base `.env`,
-the GitHub OAuth app, the first admin, first boot, upgrades, and the install troubleshooting table.
+
+**[Install (Self-Hosted)](./install) owns installation:** requirements, the base `.env`, the GitHub OAuth app, the first admin, and first boot.
+It also owns upgrades and install troubleshooting.
 It is the only supported install path.
 
-**This page owns two things and nothing else:** the **per-integration variable reference** (GitLab,
-Slack, Outline, practice review, sync) and the **reference TUM deployment** — the multi-file compose
-stack in `docker/compose.{proxy,core,app}.yaml`, which self-hosters do not use.
+**This page owns two subjects:**
 
-Anything documented on both pages was documented wrong. Where a fact belongs to the install, this
-page links rather than restates it.
+- The **per-integration variable reference** for GitLab, Slack, Outline, practice review, and sync.
+- The **reference TUM deployment**, with the multi-file compose stack in `docker/compose.{proxy,core,app}.yaml`.
+
+Self-hosters do not use that stack.
+Facts belong on one page, not both.
+This page links to installation facts rather than repeating them.
+
 :::
 
-This page assumes familiarity with Docker Compose. The TUM sections additionally assume access to
-the protected secrets managed by TUM.
+This page assumes knowledge of Docker Compose.
+The TUM sections also assume access to TUM's protected secrets.
 
 ## Platform overview
 
-The reference stack (not the self-host one — that stack is [listed on the install page](./install))
-consists of:
+The reference stack differs from the self-host stack [listed on the install page](./install).
+It contains:
 
-- **Application server** (Spring Boot API, sync, review admission, and Heph conversations)
-- **Application worker** (practice-review and Heph sandboxes, LLM proxy; the only container with Docker access)
-- **Webhook server** (same Spring Boot artifact, `webhook` profile → NATS JetStream)
-- **React webapp** (served via nginx)
-- **PostgreSQL 18** is the only supported major version; the release Compose stack ships it
-  with `pg_partman` (see [ADR 0038](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md)).
-  Vanilla PostgreSQL is not a drop-in for the bundled stack.
-- **Hephaestus-native auth** (Spring Security `oauth2Login` federating to GitHub + optional GitLab — gitlab.com or self-hosted — issuing cookie-session JWTs — [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md))
+- **Application server:** Spring Boot API, sync, review admission, and Heph conversations.
+- **Application worker:** practice-review and Heph sandboxes, with the LLM proxy.
+  Only this container has Docker access.
+- **Webhook server:** the same Spring Boot artifact, with `webhook` profile → NATS JetStream.
+- **React webapp:** nginx serves it.
+- **PostgreSQL 18:** the only supported major version.
+  The release Compose stack includes `pg_partman`.
+  See [ADR 0038](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md).
+  Vanilla PostgreSQL is not a drop-in replacement for the bundled stack.
+- **Hephaestus-native auth:** Spring Security `oauth2Login` federates to GitHub and optional GitLab, either gitlab.com or self-hosted.
+  It issues cookie-session JWTs.
+  See [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md).
 
 ## Base environment variables
 
-The required base values — `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`,
-`HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`,
-`HEPHAESTUS_AUTH_STATE_COOKIE_KEY`, `WEBHOOK_SECRET`, `WEBHOOK_ROUTING_SECRET`, `POSTGRES_PASSWORD`, one login provider, and
-`HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` — are documented once in the
-[Install guide](./install#2-configure-env), along with their lifecycle constraints. The self-host
-installer generates its internal secrets; operators of the reference deployment must provision
-equivalent values through its protected secret-management system. Rotate integration credential keys
-with the [credential-key rotation procedure](./credential-key-rotation).
+The [Install guide](./install#2-configure-env) owns these required base values and their lifecycle constraints:
+
+- `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`.
+- `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`.
+- `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`.
+- `WEBHOOK_SECRET` and `WEBHOOK_ROUTING_SECRET`.
+- `POSTGRES_PASSWORD`.
+- One login provider.
+- `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS`.
+
+The self-host installer generates its internal secrets.
+Reference deployment operators must supply equivalent values through its protected secret-management system.
+Rotate integration credential keys with the [credential-key rotation procedure](./credential-key-rotation).
 
 These deployment settings complement the install table. `LEGAL_PROFILE` and
 `HEPHAESTUS_RESEARCH_ORGANIZATION` also ship in the self-host `.env.example`:
 
-| Variable | Purpose |
-| --- | --- |
-| `LEGAL_PROFILE` | Selects a bundled imprint/privacy profile. Use `tumaet` only for the canonical AET deployment; self-hosters leave empty and mount `/legal-overrides/`. See [Legal Pages](./legal-pages). |
-| `HEPHAESTUS_RESEARCH_ORGANIZATION` | Names the organisation running an optional academic-research study. Set it and first-login setup asks each account whether to take part, showing this name; leave it empty — the default — and the question is never asked. See [Legal Pages](./legal-pages#the-optional-research-question). |
-| `HEPHAESTUS_INTEGRATION_OAUTH_SUCCESS_REDIRECT` / `HEPHAESTUS_INTEGRATION_OAUTH_FAILURE_REDIRECT` | Post-callback landing URLs for integration OAuth. Success defaults to `/integrations?status=success`, failure to the success base + `?status=error`. Set absolute URLs when the SPA host differs from the API host. |
-| `springdoc.api-docs.enabled` / `springdoc.swagger-ui.enabled` | Publish the OpenAPI description at `/v3/api-docs` and the interactive Swagger UI. Both default to `false`. |
+| Variable                                                                                          | Purpose                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LEGAL_PROFILE`                                                                                   | Selects a bundled imprint/privacy profile. Use `tumaet` only for the canonical AET deployment. Self-hosters leave it empty. They mount `/legal-overrides/`. See [Legal Pages](./legal-pages).                                                                                     |
+| `HEPHAESTUS_RESEARCH_ORGANIZATION`                                                                | Names the organization that runs optional research on this deployment. With a value, first-login setup asks each account **Allow research use of your data?** and shows this name. Empty by default. With no value, it never asks. A change to the value asks every account again. Read the operator obligations in [Legal Pages](./legal-pages#the-optional-research-question) first. |
+| `HEPHAESTUS_INTEGRATION_OAUTH_SUCCESS_REDIRECT` / `HEPHAESTUS_INTEGRATION_OAUTH_FAILURE_REDIRECT` | Post-callback landing URLs for integration OAuth. Success defaults to `/integrations?status=success`, failure to the success base + `?status=error`. Set absolute URLs when the SPA host differs from the API host.                                                               |
+| `springdoc.api-docs.enabled` / `springdoc.swagger-ui.enabled`                                     | Publish the OpenAPI description at `/v3/api-docs` and the interactive Swagger UI. Both default to `false`.                                                                                                                                                                        |
 
-:::danger The API description is unauthenticated wherever it is enabled
-`springdoc.api-docs.enabled` does not put the description behind a login — it decides whether the
-endpoint exists. Whenever springdoc registers, `/v3/api-docs/**` and `/swagger-ui/**` answer any
-request, so switching it on publishes the instance's complete route list, admin routes included, to
-anyone who asks. Leave both off in production; generate the spec at build time instead.
+:::caution CAUTION: The enabled API description needs no authentication
+
+`springdoc.api-docs.enabled` controls whether the endpoint exists, not whether it requires login.
+Whenever springdoc registers, `/v3/api-docs/**` and `/swagger-ui/**` answer any request.
+Activation publishes the instance's complete route list, including admin routes, to anyone.
+Leave both off in production.
+Generate the spec at build time instead.
+
 :::
 
-:::caution Not everything the container reads is settable from `docker/.env`
-`LEGAL_PROFILE` is forwarded by the shipped Compose files, so setting it in `docker/.env` works.
-These are **not**, and a value in `docker/.env` for them is silently ignored:
+:::caution CAUTION: `docker/.env` does not forward every setting
 
-- **`HEPHAESTUS_AUTH_ISSUER`** — the `application-server` service hardcodes it to `https://${APP_HOSTNAME}`.
-  Change `APP_HOSTNAME` to change the issuer.
-- **`SPRINGDOC_API_DOCS_ENABLED` and `SPRINGDOC_SWAGGER_UI_ENABLED`** — Compose does not forward them. Leave the endpoints disabled; an explicit service environment override is needed to enable them.
-- **The two OAuth redirect variables** — no Compose file passes them through, so the defaults stay in force.
+The shipped Compose files forward `LEGAL_PROFILE`, so its `docker/.env` value works.
+They do **not** forward these settings:
 
-To override any of them, add them to the `application-server` service's own `environment:` block.
+- **`HEPHAESTUS_AUTH_ISSUER`:** `application-server` fixes it at `https://${APP_HOSTNAME}`.
+- **`SPRINGDOC_API_DOCS_ENABLED` and `SPRINGDOC_SWAGGER_UI_ENABLED`:** Compose does not forward them.
+- **The two OAuth redirect variables:** no Compose file passes them through, so defaults still apply.
+
+Values for these settings only in `docker/.env` have no effect.
+To change the issuer, change `APP_HOSTNAME`.
+To override any of these settings, add it to the `application-server` service's own `environment:` block.
+Leave the API description endpoints disabled unless you supply an explicit service environment override.
+
 :::
 
-:::warning `GH_`, not `GITHUB_`
-In `docker/.env` the GitHub OAuth keys are `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET`: GitHub
-Actions reserves the `GITHUB_` prefix, so Compose maps them to the server's
-`GITHUB_OAUTH_CLIENT_ID` / `_SECRET`. Setting `GITHUB_OAUTH_CLIENT_ID` directly in `docker/.env` has
-no effect, and the provider is skipped with no sign-in button to show for it.
+:::caution CAUTION: `GH_`, not `GITHUB_`
+
+The GitHub OAuth keys in `docker/.env` are `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET`.
+GitHub Actions reserves the `GITHUB_` prefix.
+Compose maps the keys to `GITHUB_OAUTH_CLIENT_ID` / `_SECRET` on the server.
+A `GITHUB_OAUTH_CLIENT_ID` value directly in `docker/.env` has no effect.
+The provider is skipped, with no sign-in button.
+
 :::
 
 ### Slack app configuration
 
-After creating the app, upload
-[`slack-app-icon-512.png`](/img/brand/slack-app-icon-512.png) as its app icon. Slack applies
-its own corner treatment, so do not round the asset before uploading it.
+After you create the app, upload [`slack-app-icon-512.png`](/img/brand/slack-app-icon-512.png) as its icon.
+Slack applies its own corner treatment.
+Do not round the asset before upload.
 
-| Variable | Purpose |
-| --- | --- |
-| `HEPHAESTUS_INTEGRATION_SLACK_ENABLED` | Enables the Slack OAuth admin surface (per-workspace connect). Off by default. |
+| Variable                                              | Purpose                                                                                                                                                                                         |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HEPHAESTUS_INTEGRATION_SLACK_ENABLED`                | Enables the Slack OAuth admin surface (per-workspace connect). Off by default.                                                                                                                  |
 | `SLACK_OAUTH_CLIENT_ID` / `SLACK_OAUTH_CLIENT_SECRET` | Seed the Slack account-linking provider. If unset, they fall back to the workspace-install OAuth credentials below. Compose forwards the integration credentials, not these separate overrides. |
-| `SLACK_OAUTH_DISPLAY_NAME` | Account-linking button label; defaults to `Slack`. An explicit application-server environment override is needed to change it in Compose. |
-| `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID` | Slack app client ID used by the OAuth flow |
-| `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET` | Slack app client secret used by the OAuth flow |
-| `HEPHAESTUS_INTEGRATION_SLACK_REDIRECT_URI` | Required whenever Slack is enabled. Use the public application-server callback URL, including any proxy path prefix — e.g. `https://<host>/api/oauth/callback/slack`. |
-| `HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET` | Required when Slack is enabled: verifies Slack Events API and interactivity POSTs on the webhook server |
+| `SLACK_OAUTH_DISPLAY_NAME`                            | Account-linking button label, default `Slack`. A Compose change requires an explicit application-server environment override.                                                                   |
+| `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID`              | Slack app client ID used by the OAuth flow                                                                                                                                                      |
+| `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET`          | Slack app client secret used by the OAuth flow                                                                                                                                                  |
+| `HEPHAESTUS_INTEGRATION_SLACK_REDIRECT_URI`           | Required whenever Slack is enabled. Use the public application-server callback URL, including any proxy path prefix — e.g. `https://<host>/api/oauth/callback/slack`.                           |
+| `HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET`         | Required when Slack is enabled: verifies Slack Events API and interactivity POSTs on the webhook server                                                                                         |
 
-Per-workspace bot tokens are issued via OAuth and encrypted at rest in the `connection` table; there
-is no global bot token.
+OAuth issues per-workspace bot tokens.
+The `connection` table stores them encrypted at rest.
+There is no global bot token.
 
-When Slack is enabled, configure one Slack app. Use the public application-server base URL including any proxy path
-prefix for OAuth URLs. In the production compose stack that base is `https://<host>/api`.
+When Slack is enabled, configure one Slack app.
+OAuth URLs use the public application-server base URL, including any proxy path prefix.
+In the production compose stack, that base is `https://<host>/api`.
 
-- **OAuth redirect URLs** (include any API path prefix your proxy uses):
-  - `<api-public-base-url>/oauth/callback/slack` for workspace app installation.
-  - `<api-public-base-url>/login/oauth2/code/slack` for member account linking.
-- **Events request URL:** `https://<host>/webhooks/slack`
-- **Interactivity request URL:** `https://<host>/webhooks/slack/interactivity`
-- **App Home:** enabled. Slack opens the Home tab when someone clicks the app; that is expected. Hephaestus uses
-  Home for account linking and privacy controls, while actual mentoring happens in the Messages tab / DM.
+1. Add `<api-public-base-url>/oauth/callback/slack` to **OAuth redirect URLs** for workspace app installation.
+2. Add `<api-public-base-url>/login/oauth2/code/slack` for member account linking.
+3. Set **Events request URL** to `https://<host>/webhooks/slack`.
+4. Set **Interactivity request URL** to `https://<host>/webhooks/slack/interactivity`.
+5. Enable **App Home**.
 
-If you run the webhook receiver on a separate public host, route only `/webhooks/slack` and
-`/webhooks/slack/interactivity` to the webhook role. The OAuth and account-linking paths
-(`/oauth/callback/slack`, `/auth/login`, `/oauth2/authorization/*`, `/login/oauth2/code/slack`, with the same
-public prefix if you use one) must reach the application-server role.
+Slack opens Home when someone selects the app.
+Hephaestus uses Home for account linking and privacy controls.
+Mentor conversations use the Messages tab / DM.
+
+If the webhook receiver has a separate public host, route only these paths to the webhook role:
+
+- `/webhooks/slack`.
+- `/webhooks/slack/interactivity`.
+
+Route OAuth and account-linking paths to the application-server role:
+
+- `/oauth/callback/slack`.
+- `/auth/login`.
+- `/oauth2/authorization/*`.
+- `/login/oauth2/code/slack`.
+
+Include the same public prefix where applicable.
 
 The bot token scope set stays minimal — every scope maps to a feature the code exercises:
 
-| Scope | Feature |
-| --- | --- |
-| `chat:write` | Mentor DM replies and monitored-channel announcements |
-| `assistant:write` | The DM "Thinking…" streaming status and suggested prompts on the Agent messaging surface |
-| `im:history` | Receiving the DM `message` events that drive a mentor turn |
-| `channels:history` / `groups:history` | Reading messages in workspace-admin-consented monitored channels (public / private) |
-| `channels:read` / `groups:read` | Channel directory listing for the admin channel picker and periodic channel-metadata refresh |
-| `channels:join` | Letting an admin add a public channel to monitoring directly from the picker |
-| `users:read` | Resolving a Slack user to a workspace member for mentor identity |
+| Scope                                 | Feature                                                                                      |
+| ------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `chat:write`                          | Mentor DM replies and monitored-channel announcements                                        |
+| `assistant:write`                     | The DM "Thinking…" streaming status and suggested prompts on the Agent messaging surface     |
+| `im:history`                          | Receiving the DM `message` events that drive a mentor turn                                   |
+| `channels:history` / `groups:history` | Reading messages in workspace-admin-consented monitored channels (public / private)          |
+| `channels:read` / `groups:read`       | Channel directory listing for the admin channel picker and periodic channel-metadata refresh |
+| `channels:join`                       | Letting an admin add a public channel to monitoring directly from the picker                 |
+| `users:read`                          | Resolving a Slack user to a workspace member for mentor identity                             |
 
 The user token scope set is only for Sign in with Slack account linking:
 
@@ -136,392 +172,582 @@ profile
 email
 ```
 
-Also create an enabled Hephaestus login provider with registration id `slack`, type `SLACK`,
-base URL `https://slack.com`, and scopes `openid profile email`. Workspace app installation
-alone gives Hephaestus a bot token; personalized mentor DMs also need the member to link
-their Slack identity to their Hephaestus account.
+Workspace app installation gives Hephaestus a bot token.
+Personalized mentor DMs also require the member's Slack account connected to their Hephaestus account.
 
-Do not add unused broad scopes such as `chat:write.public`, `commands`, `team:read`,
-`app_mentions:read`, `im:write`, `mpim:read`, or `users:read.email` unless code is added that
-actually uses them.
+1. Create an enabled Hephaestus login provider with registration id `slack` and type `SLACK`.
+2. Set its base URL to `https://slack.com`.
+3. Set its scopes to `openid profile email`.
 
-Use [`slack-app-manifest-template.yml`](./slack-app-manifest-template.yml) as the dashboard baseline —
-it is the single source of truth for scopes, event subscriptions, and request URLs. Its
-`settings.event_subscriptions` list covers the DM/channel `message` events that drive mentor turns and
-channel ingestion, the channel-lifecycle events that keep the monitored-channel allow-list in sync, and
-the app-lifecycle events.
+Do not add unused broad scopes unless new code uses them.
+These include `chat:write.public`, `commands`, `team:read`, `app_mentions:read`, `im:write`, `mpim:read`, and `users:read.email`.
 
-The nightly Slack history-reconciliation sweep replays `conversations.history` for already-consented
-channels through this same bot token, so it needs no scopes beyond the set above.
+Use [`slack-app-manifest-template.yml`](./slack-app-manifest-template.yml) as the dashboard baseline.
+It owns scopes, event subscriptions, and request URLs.
+Its `settings.event_subscriptions` covers these event groups:
+
+- DM and channel `message` events for mentor turns and channel ingestion.
+- Channel-lifecycle events that update the monitored-channel allow-list.
+- App-lifecycle events.
+
+The nightly Slack history-reconciliation sweep replays `conversations.history` for already-consented channels through this bot token.
+It needs no additional scopes.
 
 ### Outline integration
 
-Outline is a documentation content source: a workspace admin connects one Outline instance from
-**Administration → Integrations → Outline** with the wiki's base URL and an API key, then registers the collections to
-mirror. The key is encrypted at rest in the `connection` table.
+Outline supplies documentation content.
+A workspace admin connects one Outline instance under **Administration → Integrations → Outline**.
+They supply the wiki base URL and API key, then register collections to mirror.
+The `connection` table encrypts the key at rest.
 
-There is no default Outline operator. Before enabling the integration, record the exact origin's legal role,
-hosting region, transfer basis, retention terms, and AVV status in the
-[processor checklist](./dsms/processor-checklist.md). A workspace administrator cannot approve a new operator by
-entering its URL.
+There is no default Outline operator.
+Before you enable the integration, record these facts for the exact origin in the [processor checklist](./dsms/processor-checklist.md):
 
-| Variable | Purpose |
-| --- | --- |
-| `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` | Enables the Outline beans (connect, sync, webhook, content projection). Every Outline bean is gated on it and defaults to **off**, so an unset flag means the integration is entirely absent — no admin surface, no sync, no webhook verification. |
-| `HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS` | Comma-separated, publicly routable HTTPS origins approved by the instance operator, for example `https://wiki.example.com`. Values must contain no path, query, fragment, credentials, or private/site-local address; any invalid entry fails startup. Empty by default. The server, worker, and webhook roles must receive the same value and be restarted after it changes. Removing an origin then blocks connections, API sync, webhook collection, evidence projection, and identity linking for it. The existing mirror remains until the workspace disconnects the integration. |
-| `OUTLINE_OAUTH_BASE_URL` | Outline instance the account-linking flow federates to, e.g. `https://wiki.example.com`. **Required whenever `OUTLINE_OAUTH_CLIENT_ID` is set** — Outline is self-hosted, so there is no default origin. Blank or invalid, the provider seed is skipped and the reason is logged at `ERROR` naming the offending variable (the app still boots; the linking button is simply never there). |
-| `OUTLINE_OAUTH_CLIENT_ID` | Outline OAuth app client ID (redirect `https://<host>/api/login/oauth2/code/outline`) |
-| `OUTLINE_OAUTH_CLIENT_SECRET` | Outline OAuth app client secret |
-| `OUTLINE_OAUTH_DISPLAY_NAME` | Label shown on the account-linking button (defaults to `Outline`) |
+- Legal role.
+- Hosting region.
+- Transfer basis.
+- Retention terms.
+- AVV status.
 
-`HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` must be set on **all three** roles, and the compose files pass
-it to each with the same value:
+A workspace admin cannot approve a new operator by entering its URL.
 
-- **application-server** — connect/admin API, collection registration, the reconcile scheduler, and the
-  webhook-subscription registrar.
-- **application-worker** — the agent context is assembled on the worker, and the Outline content source
-  carries no runtime-role gate. Without the flag there, reviews requiring wiki evidence decline and mentor
-  turns omit wiki context.
-- **webhook-server** — without the flag no Outline signature verifier is registered, so the receiver
-  answers `501` to every delivery on `POST /webhooks/outline`. Outline counts those as failures and
-  **auto-disables the subscription after 25 of them**.
+| Variable                                         | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED`         | Enables Outline beans for connect, sync, webhook, and content projection. Every bean requires it. Defaults to **off**. Without it, there is no admin surface, sync, or webhook verification.                                                                                                                                                                                                                                                                                                                                          |
+| `HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS` | Comma-separated publicly routable HTTPS origins approved by the instance operator, such as `https://wiki.example.com`. Empty by default. No paths, queries, fragments, credentials, or private/site-local addresses are permitted. An invalid entry fails startup. All server, worker, and webhook roles need the same value. After a change, restart all roles. An origin removal blocks its connections, API sync, webhook collection, evidence projection, and identity linking. Its mirror remains until workspace disconnection. |
+| `OUTLINE_OAUTH_BASE_URL`                         | Outline instance for account linking, such as `https://wiki.example.com`. **Required whenever `OUTLINE_OAUTH_CLIENT_ID` is set**. Self-hosted Outline has no default origin. If blank or invalid, the provider seed is skipped. The reason appears at `ERROR` with the variable name. The app still boots, but has no linking button.                                                                                                                                                                                                 |
+| `OUTLINE_OAUTH_CLIENT_ID`                        | Outline OAuth app client ID (redirect `https://<host>/api/login/oauth2/code/outline`)                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `OUTLINE_OAUTH_CLIENT_SECRET`                    | Outline OAuth app client secret                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `OUTLINE_OAUTH_DISPLAY_NAME`                     | Label shown on the account-linking button (defaults to `Outline`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
-There is **no Outline signing-secret environment variable**. Unlike Slack's one global signing secret,
-Outline's webhook secret is minted per subscription when Hephaestus registers it and stored encrypted on
-the connection row; the receiver reads it back through JPA. The subscription is registered automatically
-when a workspace connection is activated — its delivery URL is `https://<host>/webhooks/outline`, derived
-from `WEBHOOK_EXTERNAL_URL` (defaulting to the application host).
+Set `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` on **all three** roles.
+The compose files pass the same value to each:
 
-The `OUTLINE_OAUTH_*` block is independent of the workspace connection: it seeds a **link-only** login
-provider (registration id `outline`) that lets a member attach their Outline identity to their
-Hephaestus account so documents can be attributed to them. There is no "sign in with Outline" — the
-provider never appears on the login picker. A blank `OUTLINE_OAUTH_CLIENT_ID` leaves it unseeded, and
-the provider can also be added later under **Instance admin → Login providers**.
+- **application-server:** connect/admin API, collection registration, reconcile scheduler, and webhook-subscription registrar.
+- **application-worker:** assembles agent context.
+  The Outline content source has no runtime-role gate.
+  Without the flag, reviews that require wiki evidence decline, and mentor turns omit wiki context.
+- **webhook-server:** without the flag, no Outline signature verifier registers.
+  Every delivery to `POST /webhooks/outline` returns `501`.
+  Outline counts these as failures and **auto-disables the subscription after 25 failures**.
+
+There is **no Outline signing-secret environment variable**.
+Slack has one global signing secret.
+Outline instead creates a secret per subscription when Hephaestus registers it.
+The connection row stores it encrypted.
+The receiver reads it through JPA.
+
+A workspace connection's activation automatically registers the subscription.
+Its delivery URL is `https://<host>/webhooks/outline`.
+It comes from `WEBHOOK_EXTERNAL_URL`, which defaults to the application host.
+
+`OUTLINE_OAUTH_*` is independent of the workspace connection.
+It seeds a **link-only** login provider with registration id `outline`.
+Members use it to link their Outline identity to their Hephaestus account for document attribution.
+There is no "sign in with Outline".
+The provider never appears on the login picker.
+
+A blank `OUTLINE_OAUTH_CLIENT_ID` leaves it unseeded.
+You can add the provider later under **Instance admin → Login providers**.
 
 **Registering the OAuth app in Outline** (Settings → Applications, admin-only):
 
-- **Redirect URI:** `https://<host>/api/login/oauth2/code/outline` — Outline matches redirect URIs by
-  exact string, so it must include the API path prefix your proxy uses and carry no trailing slash.
-  Between 1 and 10 URIs are allowed; all must be HTTPS except loopback.
-- **Scope:** `read`. Outline is plain OAuth2, not OIDC — never request `openid`. `read` is what
-  `POST /api/auth.info` (the identity probe) needs.
-- **PKCE:** S256, sent automatically. Nothing to configure.
-- Access tokens live one hour; refresh tokens live 30 days and rotate on use with reuse detection.
+1. Set **Redirect URI** to `https://<host>/api/login/oauth2/code/outline`.
+   Outline matches exact strings.
+   Include your proxy's API path prefix, without a trailing slash.
+   It allows 1–10 URIs, all HTTPS except loopback.
+2. Set **Scope** to `read`.
+   Outline uses plain OAuth2, not OIDC.
+   Never request `openid`.
+   `POST /api/auth.info`, the identity probe, needs `read`.
 
-**API keys do not self-rotate.** Outline's `apiKeys.create` and `apiKeys.delete` accept only an
-interactive session, never a bearer token, so Hephaestus cannot roll its own key. The connection's
-admin card surfaces the key's expiry (via `apiKeys.list`, when the key may see itself) ahead of the
-lapse; renewing means creating a new key in Outline and re-entering it in
-**Administration → Integrations → Outline**.
-A lapsed key reports `accepted=false` and the mirror stops refreshing until it is replaced.
+PKCE S256 is sent automatically, with no configuration necessary.
+Access tokens last one hour.
+Refresh tokens last 30 days and rotate on use with reuse detection.
+
+**API keys do not self-rotate.**
+Outline's `apiKeys.create` and `apiKeys.delete` require an interactive session, never a bearer token.
+Hephaestus cannot rotate its own key.
+The connection admin card shows expiry before it happens, using `apiKeys.list` when the key can see itself.
+To renew it:
+
+1. Create a new key in Outline.
+2. Enter it under **Administration → Integrations → Outline**.
+
+An expired key reports `accepted=false`.
+The mirror stops refreshing until replacement.
 
 ### GitHub integration
 
-Hephaestus can connect to GitHub using either a **Personal Access Token (PAT)** or a **GitHub App**. The full setup — mode comparison, required GitHub App permissions, the webhook event list, and manual webhook creation (GitHub has **no** auto-registration, unlike GitLab) — lives in [GitHub Integration](./github-integration).
+Hephaestus connects to GitHub with a **Personal Access Token (PAT)** or **GitHub App**.
+[GitHub Integration](./github-integration) owns the mode comparison, required App permissions, webhook events, and manual webhook creation.
+Unlike GitLab, GitHub has **no** auto-registration.
 
-Environment variables for GitHub App mode: `GH_APP_ID`, `GH_APP_PRIVATE_KEY` (or `GH_APP_PRIVATE_KEY_LOCATION`), `GH_APP_INSTALLATION_URL`, `GH_APP_CLIENT_ID`, `GH_APP_CLIENT_SECRET`. If not provided (`GH_APP_ID=0`, the default), workspaces use PATs configured through the UI.
+GitHub App mode uses these environment variables:
+
+- `GH_APP_ID`.
+- `GH_APP_PRIVATE_KEY` or `GH_APP_PRIVATE_KEY_LOCATION`.
+- `GH_APP_INSTALLATION_URL`.
+- `GH_APP_CLIENT_ID`.
+- `GH_APP_CLIENT_SECRET`.
+
+Without them (`GH_APP_ID=0`, the default), workspaces use PATs configured through the UI.
 
 ### GitLab rollout bundle
 
-GitLab login, GitLab workspaces, webhook auto-registration, and practice review are not independent toggles. Treat the following as a rollout bundle and enable them together when rolling out GitLab practice review:
+GitLab login, workspaces, webhook auto-registration, and practice review are not independent switches.
+For a GitLab practice-review rollout, enable this bundle together:
 
-| Variable | Purpose |
-| --- | --- |
-| `GITLAB_OAUTH_CLIENT_ID` | GitLab OAuth application client ID (callback `https://<host>/api/login/oauth2/code/gitlab`) |
-| `GITLAB_OAUTH_CLIENT_SECRET` | GitLab OAuth application client secret |
-| `GITLAB_OAUTH_BASE_URL` | GitLab instance the login button federates to. Defaults to `https://gitlab.com`; set to your self-hosted instance (e.g. `https://gitlab.lrz.de`) |
-| `GITLAB_OAUTH_DISPLAY_NAME` | Login-button label (defaults to `GitLab`; e.g. `gitlab.lrz.de`) |
-| `GITLAB_DEFAULT_SERVER_URL` | The one GitLab instance workspaces are created on, synced from and checked out from (not login). Falls back to `GITLAB_OAUTH_BASE_URL`. Give the application server and every worker the same value |
-| `GITLAB_ENABLED` | Enables GitLab on the application server and every worker; the webhook receiver does not read it. A worker without it cannot check out a merge request: each GitLab review it claims fails preparation with `SCM Git preparation is unavailable` and stops before it can record an observation |
-| `GITLAB_WORKSPACE_CREATION` | Enables GitLab workspace creation in the UI and API |
-| `WEBHOOK_SECRET` | Instance-wide secret for GitHub webhook verification and operator-created GitLab hooks on the shared `POST /webhooks/gitlab` endpoint (`X-Gitlab-Token`). Group hooks Hephaestus registers use the connection endpoint and a signed route credential instead; see `WEBHOOK_ROUTING_SECRET` below. A hook you give a signing token yourself (GitLab 19.0 and later) is verified by its signature alone, so this value must then be that `whsec_…` signing token |
-| `WEBHOOK_ROUTING_SECRET` | Signs the token of each GitLab group hook Hephaestus registers, so a hook can only ever deliver for the one GitLab connection it was registered for. At least 32 characters, different from `WEBHOOK_SECRET` and from every encryption key; give the application server and the webhook receiver the same value. Required for every production deployment, including GitHub-only instances; Compose and readiness reject a missing value |
-| `WEBHOOK_ROUTING_PREVIOUS_SECRET` | Only while rotating `WEBHOOK_ROUTING_SECRET`: the value it had before. Hooks signed with it keep delivering until the next registration replaces them with hooks signed with the new value; then remove it |
-| `WEBHOOK_EXTERNAL_URL` | Public webhook base URL registered on GitLab. The reference Compose files deliberately leave it unset so auto-registration derives it from the application host URL; add it to the `application-server` service's `environment:` block if you need to override that. |
+| Variable                          | Purpose                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_OAUTH_CLIENT_ID`          | GitLab OAuth application client ID (callback `https://<host>/api/login/oauth2/code/gitlab`)                                                                                                                                                                                                                                                                                                                           |
+| `GITLAB_OAUTH_CLIENT_SECRET`      | GitLab OAuth application client secret                                                                                                                                                                                                                                                                                                                                                                                |
+| `GITLAB_OAUTH_BASE_URL`           | GitLab instance for login. Defaults to `https://gitlab.com`. For self-hosted GitLab, set the instance URL, such as `https://gitlab.lrz.de`.                                                                                                                                                                                                                                                                           |
+| `GITLAB_OAUTH_DISPLAY_NAME`       | Login-button label, default `GitLab`. Example: `gitlab.lrz.de`.                                                                                                                                                                                                                                                                                                                                                       |
+| `GITLAB_DEFAULT_SERVER_URL`       | The one GitLab instance for workspace creation, sync, and checkout, not login. Falls back to `GITLAB_OAUTH_BASE_URL`. Give the application server and every worker the same value.                                                                                                                                                                                                                                    |
+| `GITLAB_ENABLED`                  | Enables GitLab on the application server and every worker. The webhook receiver does not read it. Without it, a worker cannot check out merge requests. Each claimed GitLab review fails preparation with `SCM Git preparation is unavailable`. It stops before any observation.                                                                                                                                      |
+| `GITLAB_WORKSPACE_CREATION`       | Enables GitLab workspace creation in the UI and API                                                                                                                                                                                                                                                                                                                                                                   |
+| `WEBHOOK_SECRET`                  | Instance-wide secret for GitHub webhook verification and operator-created GitLab hooks on shared `POST /webhooks/gitlab` (`X-Gitlab-Token`). Hephaestus group hooks instead use the connection endpoint and signed route credential. See `WEBHOOK_ROUTING_SECRET`. For manually supplied signing tokens on GitLab 19.0 and later, only the signature verifies the hook. This value must then be that `whsec_…` token. |
+| `WEBHOOK_ROUTING_SECRET`          | Signs each Hephaestus-registered GitLab group hook token. Each hook can deliver only for its registered GitLab connection. Requires at least 32 characters. Must differ from `WEBHOOK_SECRET` and every encryption key. Give the application server and webhook receiver the same value. Required for every production deployment, including GitHub-only instances. Compose and readiness reject absent values.       |
+| `WEBHOOK_ROUTING_PREVIOUS_SECRET` | Previous value, used only during `WEBHOOK_ROUTING_SECRET` rotation. Its signed hooks keep delivering until registration replaces them with new-value hooks. After replacement, remove it.                                                                                                                                                                                                                             |
+| `WEBHOOK_EXTERNAL_URL`            | Public GitLab webhook base URL. Reference Compose leaves it unset so auto-registration derives it from the application host URL. For an override, add it to the `application-server` service's `environment:` block.                                                                                                                                                                                                  |
 
-The login provider is instance-agnostic: gitlab.com works out of the box, and any self-hosted GitLab works by pointing `GITLAB_OAUTH_BASE_URL` at it. Create the GitLab OAuth application on that instance with these settings:
+The login provider supports gitlab.com by default.
+For self-hosted GitLab, set `GITLAB_OAUTH_BASE_URL` to that instance.
 
-- Redirect URI: `https://<hostname>/api/login/oauth2/code/gitlab` · Scope: `read_user`
-- Confidential client: enabled
+1. Create the GitLab OAuth application on that instance.
+2. Set its Redirect URI to `https://<hostname>/api/login/oauth2/code/gitlab`.
+3. Set Scope to `read_user`.
+4. Enable Confidential client.
 
-This env-seeds **one** default GitLab login provider (registration id `gitlab`). Additional GitLab instances are added at runtime by an instance admin under **Instance admin → Login providers** — no redeploy.
+The environment seeds **one** default login provider, with registration id `gitlab`.
+An instance admin can add other GitLab instances at runtime under **Instance admin → Login providers**, without redeployment.
 
-GitLab workspaces are created only on `GITLAB_DEFAULT_SERVER_URL`. Hephaestus reads every GitLab project, member and event from that one instance, so it refuses any other server before an access token is validated, used to list groups, or stored. A login provider for another GitLab instance lets people sign in and link that account, but cannot host a workspace. The workspace owner is the creator's GitLab account on the default instance, so creating one needs a GitLab login provider for that instance and a creator who has linked it.
+GitLab workspaces exist only on `GITLAB_DEFAULT_SERVER_URL`.
+Hephaestus reads every GitLab project, member, and event from that instance.
+It refuses any other server before token validation, group listing, or token storage.
+A login provider for another instance permits sign-in and identity linking, not workspace hosting.
 
-The auto-registered group webhook subscribes to merge request, issue, note, push, tag push, pipeline,
-milestone, member, subgroup and project events. A hook registered by an earlier release does not gain
-a subscription on upgrade: for a workspace connected before pipeline events were read, enable
-**Pipeline events** on the hook under the group's **Settings → Webhooks**, or delete the hook and let
-Hephaestus register it again on the next sync. Until then the head pipeline's state reaches
-Hephaestus only through the scheduled sync.
+The workspace owner is the creator's GitLab account on the default instance.
+Workspace creation requires a login provider for that instance and a creator linked to it.
 
-GitLab before 18.6 sends merge request events without each reviewer's review state. On those
-versions, where a reviewer's review stands — approved, changes requested, or asked to review again —
-reaches Hephaestus on the scheduled sync (`MONITORING_SYNC_CRON`), not when GitLab reports the event.
+The auto-registered group webhook subscribes to these events:
 
-GitLab tokens are inspected daily at **03:00 UTC** on the `server` runtime role, independently of
-repository sync and webhook registration. A token within `hephaestus.webhook.token-rotation.threshold-days`
-(default 7 days) is self-rotated with the configured validity (default 90 days). The token needs the
-GitLab `api` or `self_rotate` scope and an instance version that supports self-rotation. The old token
-is revoked immediately; do not share a token that Hephaestus rotates with other applications.
-Rotation is serialized with token replacement and is never automatically retried after an uncertain
-response. Replace the token if the provider rotated it but its response was lost.
+- Merge request, issue, and note.
+- Push, tag push, and pipeline.
+- Milestone and member.
+- Subgroup and project.
 
-If rotation fails or is not permitted, workspace owners and administrators who opted into
-**Workspace alerts** receive one email for the recorded problem. A token refused by GitLab records a
-separate credential problem and sends one alert. Rotation or replacement clears the problem and
-sends the recovery email. Repeated checks do not send duplicate alerts for the same problem revision.
-The GitLab connection page shows the observed expiry date, **no expiry**, or an unknown expiry until
-inspection succeeds; it never shows the token. Replace a refused or expiring token there.
+An upgrade does not add subscriptions to an older release's hook.
+For a workspace connected before pipeline events had a consumer:
 
-GitHub App installation tokens renew automatically and need no expiry action. **GitHub personal
-access token expiry is not tracked** in 1.0; administrators must track and replace those tokens.
-Slack revocation alerts and Outline expiry information are unchanged.
+1. Enable **Pipeline events** under the group's **Settings → Webhooks**.
+   Alternatively, delete the hook.
+   Hephaestus then registers it again on the next sync.
+
+Until then, only scheduled sync supplies the head pipeline's state.
+Before GitLab 18.6, merge request events omit each reviewer's review state.
+On those versions, only scheduled sync (`MONITORING_SYNC_CRON`) supplies approvals, change requests, or renewed review requests.
+
+The `server` runtime role inspects GitLab tokens daily at **03:00 UTC**.
+This is independent of repository sync and webhook registration.
+A token within `hephaestus.webhook.token-rotation.threshold-days` of expiry (default 7 days) self-rotates with configured validity (default 90 days).
+It needs GitLab `api` or `self_rotate` scope and an instance version with self-rotation support.
+The server serializes rotation with token replacement.
+
+:::caution CAUTION: Do not share a token that Hephaestus rotates
+
+Rotation immediately revokes the old token.
+Do not share that token with other applications.
+Hephaestus never automatically retries an uncertain rotation response.
+If the provider rotated the token but its response was lost, replace the token.
+
+:::
+
+If rotation fails or is not permitted, workspace admins subscribed to **Workspace connection alerts** receive one email for the recorded problem.
+A refused token records a separate credential problem and sends one alert.
+Rotation or replacement clears the problem and sends a recovery email.
+Repeated checks do not repeat alerts for the same problem revision.
+
+The connection page shows the observed expiry date, **no expiry**, or unknown expiry until inspection succeeds.
+It never shows the token.
+Replace refused or expiring tokens there.
+GitHub App installation tokens renew automatically without expiry action.
+**GitHub personal access token expiry is not tracked** in 1.0.
+Workspace admins must track and replace them.
+
+Slack revocation alerts and Outline expiry information stay unchanged.
 
 ### Practice review
 
-Practice review has its own page: **[Practice Review](./practice-review)** covers the deployment
-variables, the per-workspace setup in screen order, what each door costs, campaigns versus recurring
-sweeps, the agent queue-health metrics and retention, and the checklist for a workspace that went quiet.
+**[Practice Review](./practice-review)** owns these subjects:
 
-Two facts belong here because they are deployment topology rather than feature configuration. The Docker
-sandbox is activated by the **worker runtime role** (`hephaestus.runtime.worker.enabled`), not by
-`AGENT_ENABLED`: only `application-worker` runs sandboxes and holds the Docker socket, for queued
-reviews and Heph sessions alike, and `application-server` turns the worker role off and reaches them
-through connected workers. And `NATS_ENABLED` gates webhook-driven sync consumption and must stay on for that; it is
-not part of the practice-review bundle.
+- Deployment variables and workspace setup in screen order.
+- Each step's cost.
+- Campaigns versus recurring sweeps.
+- Agent queue-health metrics and retention.
+- Checks for a quiet workspace.
 
-Heph starts a developer's sandbox when they open Heph in the webapp or open the Hephaestus app in Slack,
-so their first message rarely waits for one, and keeps it warm for `hephaestus.mentor.idle-ttl-seconds`
-(default `900`) after its last frame; the Traefik sticky cookie's `maxAge` in `docker/compose.app.yaml`
-follows that value. Size the application server for `hephaestus.mentor.max-sessions-total` idle runners
-of about 165 MB each. [Runtime Roles](./runtime-roles#interactive-mentor-turns) has the details and when a
-prepare does nothing.
+Two deployment-topology facts belong here.
+The **worker runtime role** (`hephaestus.runtime.worker.enabled`), not `AGENT_ENABLED`, activates the Docker sandbox.
+Only `application-worker` runs sandboxes and holds the Docker socket, for both queued reviews and Heph sessions.
+`application-server` disables its worker role and uses connected workers.
+`NATS_ENABLED` controls webhook-driven sync consumption.
+It must remain on for that consumption, but is not part of the practice-review bundle.
+
+Heph prepares a developer's sandbox when they open Heph in the webapp or the Hephaestus app in Slack.
+Their first message therefore rarely waits for a sandbox.
+It stays warm for `hephaestus.mentor.idle-ttl-seconds` (default `900`) after its last frame.
+The Traefik sticky cookie's `maxAge` in `docker/compose.app.yaml` follows that value.
+Size the application server for `hephaestus.mentor.max-sessions-total` idle runners, about 165 MB each.
+[Runtime Roles](./runtime-roles#interactive-mentor-turns) explains the details and when preparation does nothing.
 
 ### Rollout tiers
 
 Use the same variables differently across environments:
 
-| Environment | Intended scope |
-| --- | --- |
-| Preview | Limited by default. Keep GitLab login, GitLab workspaces, sandbox, git checkout, and agent job execution disabled unless preview is explicitly being used as rollout validation. |
-| Staging | Uses the production compose files, but should still be a controlled rollout. Start by enabling GitLab login and GitLab workspace creation first. Only enable `AGENT_ENABLED` and `GIT_CHECKOUT_ENABLED` when staging is intentionally validating practice review execution. |
-| Production | Full rollout only after staging has validated the exact same bundle. |
+| Environment | Intended scope                                                                                                                                                                                             |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Preview     | Limited by default. Keep GitLab login, GitLab workspaces, sandbox, git checkout, and agent job execution disabled unless explicitly validating rollout.                                                    |
+| Staging     | Uses production compose files with a controlled rollout. Enable GitLab login first, then workspace creation. Enable `AGENT_ENABLED` and `GIT_CHECKOUT_ENABLED` only to validate practice review execution. |
+| Production  | Full rollout only after staging validates the identical bundle.                                                                                                                                            |
 
-Staging and production both use the production compose files. The difference should come from the `.env` values, not from a different compose topology.
+Staging and production both use production compose files.
+Their differences should be `.env` values, not compose topology.
 
 ### Instance-wide LLM settings
 
-Every sandbox, a Heph session's or a queued practice review's, uses the LLM proxy on the worker that runs it. That proxy is the only path a sandbox has to a provider key, which is never injected directly. There is no separate intelligence service to configure.
+Every sandbox uses the LLM proxy on its worker, whether for Heph or queued practice reviews.
+That proxy is its only path to a provider key.
+Keys are never injected directly.
+There is no separate intelligence service to configure.
 
-**No provider, model, price, or credential is ever set through the environment.** All of that is
-runtime catalog data entered in the admin UI, and it is documented in full — field by field, with
-what the connection test does and a worked pricing example — on
-[Connect an AI Provider](./ai-providers).
+**Environment variables never set a provider, model, price, or credential.**
+Those are runtime catalog data entered in the admin UI.
+[Connect an AI Provider](./ai-providers) explains each field, the connection test, and a price calculation example.
 
-Three instance-wide LLM knobs *are* env vars, because they are deploy-time facts rather than catalog data. All three are optional and every one of them defaults to off or to the standard value:
+Three optional instance-wide LLM variables hold deployment facts rather than catalog data.
+Each defaults to off or its standard value:
 
-| Variable | Default | What it does |
-| --- | --- | --- |
-| `HEPHAESTUS_LLM_DISPLAY_CURRENCY` | *(empty)* | Currency to show spend in **alongside** USD. Empty turns the second currency off entirely. `EUR` is the only supported value, and anything else — including a perfectly well-formed code such as `GBP` — fails startup naming what is accepted, so a currency this instance cannot convert to can never hide as a missing feature. |
-| `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` | `false` | Whether `http://localhost` provider base URLs may be saved and dialled. **Never set this in production** — it is an SSRF hole that lets a workspace admin aim a "provider" at host-local services. The private/link-local/CGNAT check is unconditional and this flag does not relax it. |
-| `HEPHAESTUS_LLM_FX_DAILY_URL` | ECB daily reference feed | Override only on an air-gapped instance mirroring the ECB file internally. |
+| Variable                               | Default                  | What it does                                                                                                                                                                                                                                                                  |
+| -------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HEPHAESTUS_LLM_DISPLAY_CURRENCY`      | *(empty)*                | Shows converted spend **alongside** USD. Empty disables the second currency. Only `EUR` is supported. Other values, even valid codes such as `GBP`, fail startup with an explanation of accepted values. An unsupported currency cannot silently appear as a missing feature. |
+| `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` | `false`                  | Permits saved and connected `http://localhost` provider base URLs. **Never set in production.** It exposes host-local services to workspace-admin "provider" requests through SSRF. Private, link-local, and CGNAT checks remain unconditional.                               |
+| `HEPHAESTUS_LLM_FX_DAILY_URL`          | ECB daily reference feed | Override only on an air-gapped instance with an internal mirror of the ECB file.                                                                                                                                                                                              |
 
-Heph turns run on connected workers, for web chat and Slack DMs. The application server keeps
-admission, budget checks, thread persistence and context; with its worker role disabled it creates
-no Docker client. Configure the worker hub URL and registration token before serving conversations.
-There is no local fallback: without spare mentor capacity, Heph reports “Heph is busy” and the user
-can retry. [Runtime roles](./runtime-roles.mdx#interactive-mentor-turns) owns session placement, drain
-and runtime-readiness details.
+Heph turns run on connected workers for both web chat and Slack DMs.
+The application server keeps admission, budget checks, thread persistence, and context.
+With its worker role disabled, it creates no Docker client.
+Before you serve conversations, configure the worker hub URL and registration token.
+There is no local fallback.
+Without spare mentor capacity, Heph reports “Heph is busy” and the user can retry.
 
-The proxy resolves the upstream base URL, auth header, and key per model from whichever connection it is bound to, so nothing needs to be pinned at the process level. On a split-pod deployment the worker pod resolves providers from the same catalog as the app pod — no LLM credential passthrough between pods. Warm mentor sandboxes are reused only while their complete non-secret runtime identity still matches; changing the bound model/route, image, prompt/runtime files, or limits replaces the sandbox before the next prompt. Per-turn context is refreshed inside a compatible warm sandbox rather than forcing a restart.
+[Runtime roles](./runtime-roles.mdx#interactive-mentor-turns) owns session placement, drain, and runtime readiness.
+The proxy resolves each model's upstream base URL, auth header, and key from its bound connection.
+No process-level configuration needs to fix those values.
+In split-pod deployments, worker and app pods use the same provider catalog.
+No LLM credentials pass between pods.
+
+A warm mentor sandbox is reused only while its complete non-secret runtime identity matches.
+Changes to model or route, image, prompt/runtime files, or limits replace it before the next prompt.
+Per-turn context refreshes inside a compatible warm sandbox without a restart.
 
 #### Workspace budgets and alerting
 
-There are two monthly LLM budgets, and **they are never added together**:
+Two monthly LLM budgets exist.
+**They are never added together**:
 
-- **The instance budget** caps a workspace's spend on **shared** models — your money, on connections you registered. An instance admin sets it under **Instance admin → AI usage → Set budget** (per-workspace, per calendar month, UTC).
-- **The workspace's own budget** caps that workspace's spend on **its own connected provider** — their money, billed to their provider account. A workspace admin sets it on their own **AI usage** page.
+- **The instance budget** caps a workspace's **shared** model spend on your registered connections, billed to you.
+  An instance admin sets it under **Instance admin → AI usage → Set budget**.
+  It applies per workspace and UTC calendar month.
+- **The workspace's own budget** caps its spend on **its own connected provider**, billed to its provider account.
+  A workspace admin sets it on their **AI usage** page.
 
-For either cap: **Remove cap** clears it (uncapped is the default); setting it to exactly `0` pauses that purse immediately, which is the supported way to hard-stop spending mid-month.
+Both are uncapped by default.
+For either cap, **Remove cap** clears it.
+An exact `0` cap pauses that purse immediately.
+This is the supported way to stop spend mid-month.
 
-**Each cap pauses only the work it funds.** Exhausting the instance budget stops shared-model work and leaves the workspace's own-provider work running; exhausting the workspace's own budget does the reverse. This is deliberate — an instance budget that also paused work you are not billed for would be stopping spending you cannot see the price of. If you need to stop *all* AI work in a workspace, change the workspace's status or its feature switches; a budget is not that instrument.
+**Each cap pauses only work it funds.**
+An exhausted instance budget stops shared-model work, not own-provider work.
+An exhausted workspace budget does the reverse.
+The instance must not stop spend it does not pay for or know the price of.
+To stop *all* AI work, change the workspace status or feature switches, not its budget.
 
-Once a month's confirmed spend reaches a cap, that purse's budget verdict flips to **EXHAUSTED**. New agent jobs funded from it are refused at submission, queued jobs are checked again immediately before claim, and mentor turns are refused before starting a sandbox. Work resumes automatically at the next UTC calendar month, or within about a minute of the cap being raised or cleared. A workspace admin sees the pause explained on their workspace's **AI usage** page and, so it isn't only visible on that one screen, on the **AI models** page too.
+Once confirmed monthly spend reaches the cap, that purse's verdict becomes **EXHAUSTED**.
+New funded agent jobs are refused at submission.
+Queued jobs have another check immediately before claim.
+Mentor turns are refused before a sandbox starts.
+Work resumes automatically next UTC calendar month, or about a minute after a cap increase or removal.
+The pause appears on both workspace **AI usage** and **AI models** pages.
 
-**The two surfaces fail differently, and you should staff for the difference.** Practice reviews go silent — a queued job is refused before it runs and nothing is posted, so no end user sees an error. The **mentor does not go silent**: a user who sends a message into an exhausted purse gets a reply in the chat saying the monthly cap is reached and naming who can lift it (a workspace admin for the workspace's own-provider cap, an instance admin for the shared budget). That is deliberate — silently dropping a turn someone is waiting on reads as a broken product — but it does mean **users will see and report a cap being hit**, so expect the support contact rather than only a dashboard change.
+**Practice reviews and the mentor fail differently.**
+A queued practice review is refused before execution and posts nothing.
+The end user sees no error.
+The **mentor does not go silent**.
+A chat turn using an exhausted purse gets a reply that states the monthly cap and who can increase it.
+The workspace admin controls the own-provider cap, and the instance admin controls the shared budget.
 
-Some started attempts may not return trustworthy usage counters, and migrated legacy attempts may not have an admission price snapshot. Such events are recorded but carry no price, and are **excluded from the monthly totals** — so the reported total is a floor, not the confirmed spend. The UI does not fold them into the number; it shows the confirmed total alongside a separate count of unpriced calls, and the purse's verdict reads **UNVERIFIABLE** instead of **WITHIN** (**EXHAUSTED** still takes priority). A non-zero unpriced count is your signal that real spend may be higher than displayed. New models cannot be enabled until an administrator declares either a price or **No metered API cost**; the latter counts as confirmed $0 spend, not unpriced.
+A silently lost turn would appear broken.
+Users therefore see and may report an exhausted cap.
+Plan for support contact, not only a dashboard change.
 
-There is deliberately **no setting** for what an UNVERIFIABLE month does, because the answer follows
-from the cap itself. An **uncapped** purse is never paused by unpriced usage — with no cap to enforce,
-there is nothing the missing price could breach. A **capped** purse whose month is UNVERIFIABLE is
-paused exactly like an exhausted one, because a cap you cannot verify is not a cap. It clears when the
-usage is reconciled or the next UTC month begins.
+Some started attempts may return no trustworthy usage counters.
+Migrated legacy attempts may lack an admission price snapshot.
+These events are recorded without a price and **excluded from monthly totals**.
+The reported total is then a lower bound, not confirmed spend.
+The UI shows the confirmed total and a separate unpriced-call count.
 
-Rather than a policy knob, the guard is structural: a model cannot be enabled at all until someone
-declares its price or marks it **No metered API cost**, so a correctly administered instance does not
-reach an UNVERIFIABLE month in the first place.
+The purse reads **UNVERIFIABLE** instead of **WITHIN**.
+**EXHAUSTED** still takes priority.
+A non-zero unpriced count indicates real spend may exceed the display.
+New models require a price or **No metered API cost** before activation.
+The latter counts as confirmed $0 spend, not unpriced.
 
-**Alerting hook:** there is no built-in push notification when a workspace crosses its cap — use the private endpoint and example rules in [Scrape metrics](./observability.mdx#scrape-metrics) to alert on the Micrometer counters the budget service emits: `llm.budget.exhausted` (incremented once per usage event whose confirmed contribution pushes a workspace's month-to-date spend across the **instance** cap — the purse you fund, so the one you are alerted on) and `llm.budget.blocked` (tagged `surface` by admission point, including `agent_job` and `mentor`; the agent-job tag also carries `cap`, naming which purse refused the work). Each EXHAUSTED transition also logs a WARN, visible in Sentry if configured.
+There is **no setting** for UNVERIFIABLE-month behavior.
+An **uncapped** purse never pauses for unpriced usage because it has no cap to breach.
+A **capped** UNVERIFIABLE purse pauses exactly like an exhausted one because its cap cannot be verified.
+The pause clears after usage reconciliation or at the next UTC month.
+The model activation requirement prevents a correctly administered instance from reaching this state.
 
-Reasoning tokens are retained as telemetry when the compatible endpoint reports them. They are not
-priced separately: OpenAI-compatible usage includes reasoning tokens in billable output tokens, so a
-second reasoning rate would double-count the same work.
+**Alerting hook:** there is no built-in push notification for a crossed workspace cap.
+Use the private endpoint and example rules in [Scrape metrics](./observability.mdx#scrape-metrics) for these Micrometer counters:
+
+- `llm.budget.exhausted`: increments once per usage event whose confirmed contribution crosses the workspace's monthly **instance** cap.
+  This is your funded purse and the one that alerts you.
+- `llm.budget.blocked`: tagged by admission-point `surface`, including `agent_job` and `mentor`.
+  The agent-job tag also has `cap`, which names the purse that refused work.
+
+Each EXHAUSTED transition logs a WARN, visible in Sentry if configured.
+Compatible endpoint reasoning tokens remain in telemetry when reported.
+They have no separate price.
+OpenAI-compatible usage includes them in billable output tokens.
+A second reasoning rate would count the same work twice.
 
 ### Email
 
-Hephaestus sends email through one SMTP relay for the whole instance. Account-security and deletion
-confirmations are essential mail; administrator updates, connection alerts and survey invitations are
-separate, opt-in subscriptions in each person's settings. Email is off until
-a relay host is set. There is no per-workspace mail configuration and no connection to authorise: the
-transport is Spring Boot's `spring.mail.*`, so every variable is the property path in upper case.
+Hephaestus uses one SMTP relay for the whole instance.
+Account-security and deletion confirmations are essential mail.
+New product feedback emails, connection alerts, and survey invitations are separate opt-in subscriptions in personal settings.
+Email stays off until a relay host is set.
+There is no per-workspace mail configuration or connection authorization.
+Spring Boot's `spring.mail.*` is the transport, so each variable is the uppercase property path.
 
-**Running without email is supported.** Leave `SPRING_MAIL_HOST` and `HEPHAESTUS_EMAIL_FROM`
-blank. No SMTP service is required for startup, sign-in, account management, product feedback or
-in-app surveys. Account-security and deletion emails are withheld; the underlying operations still
-complete. Do not promise users an email confirmation as their only record of an action.
+**Running without email is supported.**
+For no-email operation:
 
-Personal settings hide email choices when sending is unconfigured and the account has no active
-subscriptions. If email was previously enabled, only retained subscriptions remain visible so people
-can turn them off; new opt-ins are hidden. Users see no SMTP setup warning.
-**Instance settings → Email** remains available to administrators for setup and verification. Survey
-administration preserves results and request history but replaces the send action with a setup link;
-a direct invitation request returns `503` without creating email request records.
+1. Leave `SPRING_MAIL_HOST` blank.
+2. Leave `HEPHAESTUS_EMAIL_FROM` blank.
 
-Removing SMTP configuration does not erase preferences. Delivery attempts made while unconfigured
-complete as `NOT_CONFIGURED` rather than waiting for reactivation. Existing subscriptions remain in effect
-for future events if sending is configured again. A temporary relay outage and Silent Mode do **not**
-hide controls: configuration, transport health and deliberate withholding are different states.
+Startup, sign-in, account management, product feedback, and in-app surveys require no SMTP service.
+Account-security and deletion emails are withheld, but their operations complete.
+Do not promise email confirmation as the only action record.
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `SPRING_MAIL_PROTOCOL` | `smtp` | Transport protocol: `smtp` (STARTTLS or implicit SSL) or `smtps` (implicit TLS). |
-| `SPRING_MAIL_HOST` | *(unset — email off)* | Relay hostname. Setting it turns email on. |
-| `SPRING_MAIL_PORT` | `587` | Relay port. `587` is submission with STARTTLS; use `465` with `SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE=true` for implicit TLS. |
-| `SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD` | *(unset)* | Relay credentials. Leave both unset for an unauthenticated internal relay and set `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=false`. |
-| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` | `true` | Authenticate with the credentials above. |
-| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` / `_REQUIRED` | `true` / `true` | Upgrade the connection with STARTTLS and refuse a relay that cannot. Disable both only with implicit TLS, or for an unauthenticated relay inside a trusted private network (`SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=false` and no credentials). |
-| `HEPHAESTUS_EMAIL_FROM` | *(unset)* | Sender address, required once the host is set. The relay must be allowed to send for its domain (SPF/DKIM), or receivers reject or junk the mail. |
-| `HEPHAESTUS_EMAIL_FROM_NAME` | `Hephaestus` | Display name next to the sender address. |
-| `HEPHAESTUS_EMAIL_REPLY_TO` | *(unset)* | Where a human reply lands. Unset means replies go to the sender address. |
-| `HEPHAESTUS_EMAIL_RATE_LIMIT_DAILY_CAPACITY` | `250` | Shared SMTP attempt budget per 24-hour refill interval. |
-| `HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY` | `200` | Optional-mail attempt budget; must be smaller than the total to reserve capacity for essential mail. |
+Personal settings hide email choices if transport is unconfigured and the account has no active subscriptions.
+After previous activation, only retained subscriptions remain visible so people can disable them.
+New opt-ins stay hidden.
+Users see no SMTP setup warning.
+Instance admins retain **Instance settings → Email** for setup and verification.
+Survey administration keeps results and request history but replaces the send action with a setup link.
 
-TLS verifies the relay certificate and hostname. For implicit TLS on port `465`, enable SSL and
-disable both STARTTLS settings; leave certificate verification enabled. Authenticated SMTP without
-implicit TLS or required STARTTLS is rejected at startup to prevent credential exposure.
-Alternatively, select `SPRING_MAIL_PROTOCOL=smtps` with port `465`. Both protocols verify the relay's
-hostname and apply the timeouts below. Protocol-specific overrides use
-`mail.smtp.*` or `mail.smtps.*` respectively; keep authentication and certificate verification enabled
-for authenticated relays.
+A direct invitation request returns `503` without email request records.
+Removal of SMTP configuration does not erase preferences.
+Attempts without configuration complete as `NOT_CONFIGURED` rather than waiting for reactivation.
+Existing subscriptions apply to future events after reconfiguration.
+Temporary relay outages and silent mode do **not** hide controls.
+Configuration, transport health, and deliberate withholding are separate states.
 
-Connection, read and write timeouts default to 5 s / 10 s / 10 s; a relay that stops answering
-cannot leave a socket operation waiting indefinitely. Only the `application-server` container reads these
-variables — the worker and webhook roles never send.
+| Variable                                                         | Default               | Purpose                                                                                                                                                                                                                                            |
+| ---------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SPRING_MAIL_PROTOCOL`                                           | `smtp`                | Transport protocol: `smtp` (STARTTLS or implicit SSL) or `smtps` (implicit TLS).                                                                                                                                                                   |
+| `SPRING_MAIL_HOST`                                               | *(unset — email off)* | Relay hostname. Setting it turns email on.                                                                                                                                                                                                         |
+| `SPRING_MAIL_PORT`                                               | `587`                 | Relay port. `587` uses submission with STARTTLS. For implicit TLS, use `465` with `SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE=true`.                                                                                                              |
+| `SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD`                  | *(unset)*             | Relay credentials. For an unauthenticated internal relay, leave both unset. Set `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=false`.                                                                                                                     |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH`                          | `true`                | Authenticate with the credentials above.                                                                                                                                                                                                           |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` / `_REQUIRED` | `true` / `true`       | Upgrades with STARTTLS. Refuses relays that cannot upgrade. Disable both only for implicit TLS or an unauthenticated relay inside a trusted private network. The latter requires `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=false` and no credentials. |
+| `HEPHAESTUS_EMAIL_FROM`                                          | *(unset)*             | Sender address, required once the host is set. The relay must be allowed to send for its domain (SPF/DKIM), or receivers reject or junk the mail.                                                                                                  |
+| `HEPHAESTUS_EMAIL_FROM_NAME`                                     | `Hephaestus`          | Display name next to the sender address.                                                                                                                                                                                                           |
+| `HEPHAESTUS_EMAIL_REPLY_TO`                                      | *(unset)*             | Where a human reply lands. Unset means replies go to the sender address.                                                                                                                                                                           |
+| `HEPHAESTUS_EMAIL_RATE_LIMIT_DAILY_CAPACITY`                     | `250`                 | Shared SMTP attempt budget per 24-hour refill interval.                                                                                                                                                                                            |
+| `HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY`            | `200`                 | Optional-mail attempt budget. Must be below the total to reserve essential-mail capacity.                                                                                                                                                          |
 
-A university or corporate relay typically wants port `587`, STARTTLS and a service account, and
-caps the recipients per day; the defaults above fit that shape. Ask the relay operator which sender
-domains it signs, and set `HEPHAESTUS_EMAIL_FROM` inside one of them.
+TLS verifies the relay certificate and hostname.
+Authenticated SMTP without implicit TLS or required STARTTLS fails startup to prevent credential exposure.
+For implicit TLS on port `465`:
 
-**Verify it.** Open **Instance settings → Email** and select **Send test email**. The response names
-the outcome: `SENT` with the message id to look for in the relay's log, `SILENT_MODE` while the
-[emergency brake](./production-operations-runbook) is engaged — a fresh instance starts that way —
-`NOT_CONFIGURED`, `INVALID_ADDRESS`, `REJECTED` for a refused mailbox, or `UNAVAILABLE` when the
-relay could not be reached or refused the credentials. `RATE_LIMITED` means the shared attempt budget
-is exhausted or its store is unavailable. The
-[configuration readiness](./configuration-readiness#email) fact `notification.email` reports the
-same setting pair, and `/actuator/health` gains a `mail` indicator that opens a connection to the
-relay on each check. SMTP does not belong to the readiness or liveness group, and connection
-validation at startup is not required: a relay outage must not take the application offline.
+1. Enable SSL.
+2. Disable both STARTTLS settings.
+3. Leave certificate verification enabled.
 
-**Delivery.** A notification is written to the `event_publication` table in the same transaction as
-the change that caused it and sent right after the commit. If the relay was unreachable, the row
-stays `FAILED` and a job retries it every five minutes in batches of 50. An account-deletion
-confirmation expires at its purge deadline: its next attempt completes without sending, records
-`EXPIRED`, and deletes the registry row. Expiration is handled by the listener, not a batch filter. Silent Mode, a missing or unverified address and a mailbox the relay refuses
-are final: the row completes and the outcome is counted on the `notification.email.delivery` metric
-by `kind` and `outcome`. Logs carry the message id, never the address. Delivery is at-least-once:
-a crash after SMTP acceptance but before registry completion can produce a duplicate. `SENT` means
-the relay accepted the email, not that it reached the inbox. Opt-out and eligibility checks apply to
-subsequent attempts; an SMTP attempt already in progress cannot be recalled.
+Alternatively, select `SPRING_MAIL_PROTOCOL=smtps` with port `465`.
+Both protocols verify the relay hostname and use the timeouts below.
+Protocol-specific overrides use `mail.smtp.*` or `mail.smtps.*` respectively.
+For authenticated relays, keep authentication and certificate verification enabled.
 
-**Capacity.** Limits use the existing PostgreSQL-backed Bucket4j store and are shared across server
-replicas; keep `hephaestus.auth.rate-limit.postgres-backed=true` in production. An SMTP attempt consumes
-capacity even if the relay later rejects it or disconnects: refunding an ambiguous failure could exceed
-the relay's limit. Withheld mail consumes none. Durable notifications wait for capacity on a later
-retry; a synchronous test reports the outcome and does not queue itself. The 24-hour interval starts
-with the bucket's first use, not midnight or the relay's billing day. Match these limits conservatively
-to your relay's policy and allow for other applications using the same account. Restart after changing
-limits; existing buckets retain their configuration until they expire.
+Connection, read, and write timeouts default to 5 s, 10 s, and 10 s respectively.
+A relay that stops answering cannot leave a socket operation waiting indefinitely.
+Only `application-server` reads these variables.
+Workers and webhook roles never send email.
 
-**Optional-mail delivery.** Set the public application host and webapp URLs to their externally
-reachable **HTTPS** addresses. Optional emails include a visible unsubscribe confirmation link and
-an RFC 8058 one-click POST endpoint. A GET never changes a subscription. Configure the relay's DKIM
-signer to include **both `List-Unsubscribe` and `List-Unsubscribe-Post`** in its signed headers; adding
-headers in Hephaestus alone does not satisfy the standard. The local HTTP Mailpit loop intentionally
-does not advertise the HTTPS-only one-click header. Keep SPF, DKIM and DMARC aligned with the sender;
-follow [Google's sender requirements](https://support.google.com/a/answer/81126?hl=en) and
-[RFC 8058](https://www.rfc-editor.org/rfc/rfc8058).
+A university or corporate relay usually requires port `587`, STARTTLS, and a service account, with a daily recipient cap.
+The defaults fit that model.
+
+1. Ask the relay operator which sender domains it signs.
+2. Set `HEPHAESTUS_EMAIL_FROM` within one of those domains.
+
+**Verify it.**
+
+1. Open **Instance settings → Email**.
+2. Select **Send test email**.
+3. Check the outcome in the response.
+
+The outcomes are:
+
+- `SENT`: includes the message id to find in the relay log.
+- `SILENT_MODE`: [silent mode](./production-operations-runbook) is on, as on a fresh instance.
+- `NOT_CONFIGURED`.
+- `INVALID_ADDRESS`.
+- `REJECTED`: refused mailbox.
+- `UNAVAILABLE`: unreachable relay or refused credentials.
+- `RATE_LIMITED`: shared attempt budget exhausted or its store unavailable.
+
+The [configuration readiness](./configuration-readiness#email) fact `notification.email` reports the same setting pair.
+`/actuator/health` gains a `mail` indicator that connects to the relay on each check.
+SMTP is in neither the readiness nor liveness group.
+Startup does not require connection validation.
+A relay outage must not take the application offline.
+
+**Delivery.**
+The transaction that changes state also writes a notification to `event_publication`.
+Delivery follows immediately after commit.
+If the relay is unreachable, the row remains `FAILED`.
+A job retries every five minutes, in batches of 50.
+An account-deletion confirmation expires at its purge deadline.
+
+Its next attempt completes without delivery, records `EXPIRED`, and deletes the registry row.
+The listener handles expiration, not a batch filter.
+Silent mode, absent or unverified addresses, and refused mailboxes are final outcomes.
+The row completes, and `notification.email.delivery` counts the outcome by `kind` and `outcome`.
+Logs contain the message id, never the address.
+Delivery is at-least-once.
+
+A crash after SMTP acceptance but before registry completion can produce duplicates.
+`SENT` means relay acceptance, not inbox arrival.
+Opt-out and eligibility checks apply to later attempts.
+An SMTP attempt already in progress cannot be recalled.
+
+**Capacity.**
+The existing PostgreSQL-backed Bucket4j store shares limits across server replicas.
+Keep `hephaestus.auth.rate-limit.postgres-backed=true` in production.
+An SMTP attempt uses capacity even if the relay rejects it or disconnects.
+A refund after an uncertain failure could exceed the relay limit.
+Withheld mail uses no capacity.
+
+Durable notifications wait for capacity on a later retry.
+A synchronous test reports the outcome and does not queue itself.
+The 24-hour interval starts at first bucket use, not midnight or the relay's billing day.
+Match limits conservatively to relay policy, with allowance for other applications on the account.
+After limit changes, restart.
+Existing buckets keep their configuration until expiry.
+
+**Optional-mail delivery.**
+Optional emails contain a visible unsubscribe confirmation link and an RFC 8058 one-click POST endpoint.
+A GET never changes subscriptions.
+The local HTTP Mailpit loop deliberately omits the HTTPS-only one-click header.
+
+1. Set public application host and webapp URLs to externally reachable **HTTPS** addresses.
+2. Configure relay DKIM signatures to include **both `List-Unsubscribe` and `List-Unsubscribe-Post`** headers.
+3. Keep SPF, DKIM, and DMARC aligned with the sender.
+4. Follow [Google's sender requirements](https://support.google.com/a/answer/81126?hl=en) and [RFC 8058](https://www.rfc-editor.org/rfc/rfc8058).
+
+Headers added in Hephaestus alone do not satisfy the standard.
 
 **TUM/LRZ example — confirm the actual account before a campaign.**
-[LRZ's mail-server policy](https://doku.lrz.de/richtlinien-fuer-die-lrz-mailserver-4427198.html)
-limits a login to 250 recipient addresses per 24 hours, with 500 or 1,000 available on request.
-[TUM's shared-mailbox FAQ](https://www.it.tum.de/it/faq/e-mail/exchange/ich-moechte-aus-der-shared-mailbox-ein-massenmailing-versenden-wieviele-e-mails-koennen-standardmaessig-pro-tag-versendet-werden/)
-states 250 mails per day, raisable to 1,000 through [IT Support](mailto:it-support@tum.de), and says
-shared mailboxes are not intended for mass mailing. These are published defaults, not confirmation
-of your service account's allowance. Ask support which account is charged, whether other applications
-share it, how its window resets, and how quota rejection is signalled. A shared From address alone
-does not establish a separate quota.
+[LRZ's mail-server policy](https://doku.lrz.de/richtlinien-fuer-die-lrz-mailserver-4427198.html) limits a login to 250 recipient addresses per 24 hours.
+Limits of 500 or 1,000 are available on request.
+[TUM's shared-mailbox FAQ](https://www.it.tum.de/it/faq/e-mail/exchange/ich-moechte-aus-der-shared-mailbox-ein-massenmailing-versenden-wieviele-e-mails-koennen-standardmaessig-pro-tag-versendet-werden/) states 250 mails per day.
+[IT Support](mailto:it-support@tum.de) can raise it to 1,000.
+The FAQ says shared mailboxes are not for mass mail.
 
-Keep headroom for other senders and retries. For example, a shared 250/day account might allocate
-200 total and 150 optional attempts to this instance. This is an operating budget, not a guarantee
-against a rolling-window relay quota: the application's interval refill can permit bursts across a
-boundary. For a larger research campaign, obtain an approved higher limit or a suitable relay rather
-than raising the application budget alone. Five reports to two subscribed admins need ten attempts;
-a daily digest is unnecessary at that volume. Survey invitations and reminders require separate
-capacity planning.
+These published defaults do not confirm your service account's allowance.
+Ask support:
 
-**Privacy.** The relay operator becomes a recipient of personal data (an address and the fact that
-its owner has an account). Before setting the host, complete the review in the
-[processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).
+1. Which account incurs the quota charge?
+2. Do other applications share it?
+3. How does its window reset?
+4. How does it indicate quota rejection?
+
+A shared From address alone does not establish a separate quota.
+Allow capacity for other senders and retries.
+For example, this instance might have 200 total and 150 optional attempts from a shared 250/day account.
+This operating budget does not guarantee compliance with a rolling-window relay quota.
+Application interval refills can permit bursts across a boundary.
+
+For a larger research campaign, obtain an approved higher limit or suitable relay.
+Do not increase only the application budget.
+Five reports to two subscribed admins need ten attempts.
+A daily digest is unnecessary at that volume.
+Survey invitations and reminders need separate capacity planning.
+
+**Privacy.**
+The relay operator receives personal data: an address and the fact that its owner has an account.
+Before you set the host, complete the review in the [processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).
 
 ### Data sync and backfill
 
-The sync scheduler fetches recent GitHub activity (issues, PRs, reviews) for monitored repositories. Backfill optionally syncs historical data in batches to avoid rate limit exhaustion.
+The sync scheduler fetches recent GitHub issues, PRs, and reviews for monitored repositories.
+Optional backfill syncs historical data in batches to avoid rate-limit exhaustion.
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `MONITORING_RUN_ON_STARTUP` | `true` | Run initial sync when application starts |
-| `MONITORING_TIMEFRAME` | `7` | Days of recent activity to sync each cycle |
-| `MONITORING_SYNC_CRON` | `0 0 * * * *` | Cron schedule for sync (hourly by default) |
-| `MONITORING_SYNC_COOLDOWN_IN_MINUTES` | `60` | Minimum gap between syncs per repository |
-| `MONITORING_BACKFILL_ENABLED` | `true` | Enable historical data backfill |
-| `MONITORING_BACKFILL_BATCH_SIZE` | `50` | Issues/PRs per backfill batch |
-| `MONITORING_BACKFILL_RATE_LIMIT_THRESHOLD` | `500` | Skip backfill if rate limit below this |
-| `MONITORING_BACKFILL_INTERVAL_SECONDS` | `60` | Interval between backfill batches |
+| Variable                                   | Default       | Purpose                                    |
+| ------------------------------------------ | ------------- | ------------------------------------------ |
+| `MONITORING_RUN_ON_STARTUP`                | `true`        | Run initial sync when application starts   |
+| `MONITORING_TIMEFRAME`                     | `7`           | Days of recent activity to sync each cycle |
+| `MONITORING_SYNC_CRON`                     | `0 0 * * * *` | Cron schedule for sync (hourly by default) |
+| `MONITORING_SYNC_COOLDOWN_IN_MINUTES`      | `60`          | Minimum gap between syncs per repository   |
+| `MONITORING_BACKFILL_ENABLED`              | `true`        | Enable historical data backfill            |
+| `MONITORING_BACKFILL_BATCH_SIZE`           | `50`          | Issues/PRs per backfill batch              |
+| `MONITORING_BACKFILL_RATE_LIMIT_THRESHOLD` | `500`         | Skip backfill if rate limit below this     |
+| `MONITORING_BACKFILL_INTERVAL_SECONDS`     | `60`          | Interval between backfill batches          |
 
-**Backfill behavior:** After recent sync completes, backfill works backwards from the highest issue number, syncing in small batches. It pauses when rate limits drop below the threshold and resumes on the next cycle. Progress is checkpointed per repository.
+**Backfill behavior:** after recent sync completes, backfill works backward from the highest issue number in small batches.
+It pauses below the rate-limit threshold and resumes on the next cycle.
+It records progress per repository.
 
-**Disconnecting erases the active mirror.** Disconnecting a workspace's GitHub, GitLab, Slack, or Outline connection — and purging a workspace — hard-deletes its active PostgreSQL mirror. Materialized diagnostic output, worker-input copies, and broker messages expire under their documented bounded retention windows. The operation is irreversible, and reconnecting performs a fresh initial sync. If the erase fails, the connection stays connected and the disconnect can be retried. If the provider cannot be reached, the mirror is still erased and the connection disconnected, and the app installation, token, or webhook Hephaestus created there may need removing at the provider. A connection whose integration is disabled on the instance cannot be disconnected until the integration is enabled again, because nothing else can erase its mirror. See the erasure triggers in the [record of processing](./dsms/record-of-processing.md).
+:::caution CAUTION: A disconnect erases the active mirror
+
+A workspace connection disconnect or workspace purge permanently deletes its active PostgreSQL mirror.
+This applies to GitHub, GitLab, Slack, and Outline.
+The operation is irreversible.
+A reconnect performs a fresh initial sync.
+
+:::
+
+Materialized diagnostic output, worker-input copies, and broker messages expire within their documented bounded retention windows.
+If erasure fails, the connection stays connected, and you can retry the disconnect.
+If the provider is unreachable, the mirror still erases and the connection disconnects.
+You may then need to remove an app installation, token, or webhook Hephaestus created at the provider.
+
+A connection with its integration disabled instance-wide cannot disconnect until the integration is enabled again.
+Nothing else can erase its mirror.
+See erasure triggers in the [record of processing](./dsms/record-of-processing.md).
 
 ## Deployment steps (reference stack)
 
-The base install is the same one the [Install guide](./install) walks through — the same secrets, the
-same GitHub OAuth app and callback, the same before-first-boot admin allowlist, the same legal-pages
-obligation. Only what is different about the multi-file stack is listed here.
+The [Install guide](./install) owns the same base installation, secrets, GitHub OAuth app and callback, before-first-boot admin allowlist, and legal-pages obligation.
+Only multi-file stack differences appear here.
+Each file is a separate Compose project and needs its own `-p` and `up`.
+Each resolves images from the verified release lock.
+`docker/.env` defines no `HEPHAESTUS_IMAGE_*` variable.
+A project without the lock refuses startup.
 
-1. **Provision infrastructure:** Ensure PostgreSQL, NATS, and storage volumes are ready. (The
-   self-host stack brings its own; this one does not.)
-2. **Configure the environment:** Copy `docker/.env.example` to `docker/.env` and fill it in per
-   [Install § 2](./install#2-configure-env) plus the three reference-only variables above.
-3. **Bootstrap secrets:** Load those variables into your secret manager or the `.env` files consumed
-   by Docker/Kubernetes.
-4. **Deploy services:** Each file is its own Compose project, so each needs its own `-p` and its own
-   `up`, and every one of them resolves its images from the verified release lock — `docker/.env`
-   defines no `HEPHAESTUS_IMAGE_*` variable, so a project started without the lock refuses to start.
-   Prepare it as [Install § 1](./install#1-get-the-files) does, writing it beside the reference
-   stack, then start the projects in this order, waiting for each to report healthy:
+1. Make sure PostgreSQL, NATS, and storage volumes are ready.
+   The self-host stack supplies its own.
+   This stack does not.
+2. Copy `docker/.env.example` to `docker/.env`.
+3. Fill it in per [Install § 2](./install#2-configure-env), with the three reference-only variables above.
+4. Load the variables into your secret manager or Docker/Kubernetes `.env` files.
+5. Prepare the lock beside the reference stack as in [Install § 1](./install#1-get-the-files).
+6. Start projects in this order, with a healthy result required before the next starts:
 
    ```bash
    VERSION=<the release you are deploying>   # without the leading "v"
@@ -534,35 +760,45 @@ obligation. Only what is different about the multi-file stack is listed here.
    dc -p hephaestus-proxy -f compose.proxy.yaml up -d --wait
    ```
 
-   `depends_on` does not cross a project boundary, so the order between projects is yours to keep.
-   The broker comes up first, so a redeploy never drops the JetStream connection of an application
-   server that is already running. The application stack owns PostgreSQL and runs the Liquibase
-   migrations during its own startup — watch `application-server`'s logs to confirm they complete.
-   The core stack's webhook runtime reads what those migrations wrote, and the proxy goes last so it
-   never routes to a stack that is still starting. Kubernetes manifests need the same ordering.
-5. **Verify:**
-   - The bootstrap admin can sign in and reach instance-admin navigation, and can reach workspace
-     admin endpoints for workspaces they are a member of (auto-elevated to workspace ADMIN there).
-   - A test webhook from GitHub or GitLab reaches the ingest pipeline.
-   - Before testing GitLab practice review, confirm `GITLAB_ENABLED`, `GITLAB_WORKSPACE_CREATION`,
-     `AGENT_ENABLED`, `GIT_CHECKOUT_ENABLED` and `NATS_ENABLED` are all present in the deployed
-     environment — this is the bundle a preview environment most often lacks.
-   - `/imprint` and `/privacy` do not show the red "not configured" banner. See
-     [Legal Pages](./legal-pages).
+`depends_on` cannot cross project boundaries.
+You must maintain the order.
+The broker starts first to preserve existing application-server JetStream connections during redeployment.
+The application stack owns PostgreSQL and runs Liquibase migrations at startup.
+The core stack's webhook runtime reads migration results.
+The proxy starts last, never routing to a stack that is still starting.
+
+Kubernetes manifests need the same order.
+
+1. Watch `application-server` logs to confirm migration completion.
+2. Verify the bootstrap admin can sign in.
+3. Verify access to instance-admin navigation.
+4. Verify workspace admin endpoints for workspaces where the bootstrap admin has membership.
+   Membership automatically elevates them to workspace ADMIN there.
+5. Verify a test GitHub or GitLab webhook reaches the ingest pipeline.
+6. Before GitLab practice-review tests, confirm `GITLAB_ENABLED`, `GITLAB_WORKSPACE_CREATION`, `AGENT_ENABLED`, `GIT_CHECKOUT_ENABLED`, and `NATS_ENABLED` in the deployed environment.
+   Preview environments most often lack this bundle.
+7. Verify `/imprint` and `/privacy` have no red "not configured" banner.
+   See [Legal Pages](./legal-pages).
 
 ## Global admin privileges
 
-Instance admins can access any active workspace with ADMIN privileges, even without workspace
-membership. Elevation does not grant OWNER privileges; owner-only operations require an explicit
-OWNER membership. See [Instance administration](/contributor/instance-admin#who-is-an-instance-admin)
-for the authority and [elevated-access audit policy](/contributor/instance-admin#elevated-workspace-access).
+Instance admins have ADMIN access to any active workspace, even without membership.
+Elevation does not grant OWNER privileges.
+Owner-only operations require explicit OWNER membership.
+[Instance administration](/contributor/instance-admin#who-is-an-instance-admin) owns the authority.
+See the [elevated-access audit policy](/contributor/instance-admin#elevated-workspace-access).
 
 ## Operational tips
 
-- Monitor services with the central Prometheus/Loki stack; ensure trace IDs appear in logs.
-- Schedule regular backups for PostgreSQL (it holds auth state — accounts, identity links, sessions — in addition to application data).
-- A preview deployment only represents the GitLab practice-review rollout if it is wired with the same GitLab IdP, sandbox, git-checkout, and agent-job-queue settings. Verify a rollout on staging, not on a preview.
+1. Monitor services with the central Prometheus/Loki stack.
+2. Verify trace IDs in logs.
+3. Schedule regular PostgreSQL backups.
+   It holds auth state (accounts, identity links, sessions) and application data.
+4. Verify rollouts on staging, not preview.
+
+A preview represents a GitLab practice-review rollout only with identical GitLab IdP, sandbox, git-checkout, and agent-job-queue settings.
 
 ## Support
 
-Contact the Hephaestus core team if you need to rotate secrets or migrate infrastructure. Document any deviations from this checklist in the deployment runbook.
+If you need secret rotation or infrastructure migration, contact the Hephaestus core team.
+Document differences from this checklist in the deployment runbook.

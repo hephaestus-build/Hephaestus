@@ -42,7 +42,7 @@ function OutlineIntegrationPage() {
 			{outline.connectionsError && (
 				<QueryErrorAlert
 					error={outline.connectionsError}
-					title="We couldn't load the Outline connection"
+					title="We could not load the Outline connection"
 					onRetry={outline.retryConnections}
 				/>
 			)}
@@ -52,7 +52,7 @@ function OutlineIntegrationPage() {
 					{outline.tokenStatusError && (
 						<QueryErrorAlert
 							error={outline.tokenStatusError}
-							title="We couldn't verify the Outline token"
+							title="We could not verify the Outline token"
 							onRetry={outline.retryTokenStatus}
 						/>
 					)}

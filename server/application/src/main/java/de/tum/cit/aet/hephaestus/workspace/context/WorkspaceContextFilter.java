@@ -317,7 +317,7 @@ public class WorkspaceContextFilter implements Filter {
                     history.getRedirectExpiresAt());
             ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.GONE);
             problem.setTitle("Workspace slug expired");
-            problem.setDetail("Redirect for this workspace slug has expired");
+            problem.setDetail("The redirect for this workspace slug has expired.");
             problem.setProperty("oldSlug", oldSlug);
             problem.setProperty("expiredAt", history.getRedirectExpiresAt());
             response.setStatus(HttpStatus.GONE.value());
@@ -374,7 +374,8 @@ public class WorkspaceContextFilter implements Filter {
     private void sendWorkspaceNotFoundError(HttpServletResponse response, String slug) throws IOException {
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
         problem.setTitle("Resource not found");
-        problem.setDetail("Workspace not found: " + slug);
+        problem.setDetail(
+                "We could not find the workspace “" + slug + "”. Check the address, or choose another workspace.");
         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(problem));
@@ -383,12 +384,12 @@ public class WorkspaceContextFilter implements Filter {
     private void sendWorkspaceSlugValidationError(HttpServletResponse response, String slug) throws IOException {
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
         problem.setTitle("Validation failed");
-        problem.setDetail("Invalid workspace slug: " + slug);
+        problem.setDetail("The workspace slug is not valid: " + slug);
         problem.setProperty(
                 "errors",
                 Map.of(
                         "workspaceSlug",
-                        "Slug must be 3-51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens"));
+                        "Slug must be 3 to 51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens"));
         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(problem));
@@ -397,7 +398,7 @@ public class WorkspaceContextFilter implements Filter {
     private void sendWorkspaceMembershipForbiddenError(HttpServletResponse response, String slug) throws IOException {
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
         problem.setTitle("Membership required");
-        problem.setDetail("You must be a member of workspace " + slug + " to access this resource.");
+        problem.setDetail("To access this resource, you must be a member of workspace " + slug + ".");
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(problem));
@@ -406,7 +407,7 @@ public class WorkspaceContextFilter implements Filter {
     private void sendWorkspaceUnauthorizedError(HttpServletResponse response, String slug) throws IOException {
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.UNAUTHORIZED);
         problem.setTitle("Authentication required");
-        problem.setDetail("You must sign in to access workspace " + slug + ".");
+        problem.setDetail("To access workspace " + slug + ", you must sign in.");
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(problem));

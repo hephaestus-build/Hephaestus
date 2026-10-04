@@ -78,7 +78,7 @@ public class ReviewContextController {
                     @Size(max = 2048)
                     String url) {
         if (!workspaceContext.hasMembership()) {
-            throw new AccessForbiddenException("Workspace membership is required to look up reviewed work");
+            throw new AccessForbiddenException("You must be a member of the workspace to look up reviewed work.");
         }
         return ResponseEntity.ok(reviewContextService.resolve(workspaceContext.id(), url));
     }

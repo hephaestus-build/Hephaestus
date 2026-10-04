@@ -78,8 +78,8 @@ export const SkipsAnOptionalQuestionAndSends: Story = {
 };
 
 /**
- * A research survey names the organisation whose study the answers join, says the answers are
- * not product feedback, and points to where the member can leave the study.
+ * A research survey names the organisation whose research the answers join, says the answers are
+ * not product feedback, and points to where the member can withdraw.
  */
 export const Research: Story = {
 	args: { survey: researchInvitation },
@@ -87,13 +87,13 @@ export const Research: Story = {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(dialog.getByText("Research"));
 		await expect(
-			dialog.getByText(/study run by Technical University of Munich, which you agreed to join/u),
+			dialog.getByText(/research run by Technical University of Munich, which you allowed/u),
 		).toBeVisible();
 		await expect(dialog.getByRole("link", { name: "User settings" })).toHaveAttribute(
 			"href",
 			"/settings",
 		);
-		await expect(dialog.getByText(/answers already sent stay with the study/u)).toBeVisible();
+		await expect(dialog.getByText(/Answers already sent stay with the research/u)).toBeVisible();
 		await expect(dialog.getByRole("group", { name: /\(optional\)/u })).toBeVisible();
 	},
 };
@@ -102,8 +102,8 @@ export const Research: Story = {
 export const ProductFraming: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expectSettledVisible(dialog.getByText(/Read by your instance administrators/u));
-		await expect(dialog.getByText(/Not research/u)).toBeVisible();
+		await expectSettledVisible(dialog.getByText(/Your answers go to your instance admins/u));
+		await expect(dialog.getByText(/This survey is not research/u)).toBeVisible();
 		await expect(dialog.queryByText("Research")).toBeNull();
 	},
 };
@@ -130,7 +130,7 @@ export const Sending: Story = {
 export const Error: Story = {
 	args: {
 		draft: { answers: { useful: "4" }, item: "improve" },
-		error: "Couldn't send. Your draft is still here.",
+		error: "We could not send that. Your draft is still here.",
 	},
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));

@@ -170,7 +170,7 @@ export const StartedRevealsAbsoluteTime: Story = {
 export const ErrorHover: Story = {
 	args: { jobs: allStatuses },
 	play: async ({ canvas }) => {
-		await userEvent.hover(canvas.getByRole("button", { name: /error for job 10/iu }));
+		await userEvent.hover(canvas.getByRole("button", { name: "Show error for job 10" }));
 		await expectSettledVisible(await screen.findByText(/rate limit exceeded after 3 retries/iu));
 	},
 };
@@ -183,7 +183,7 @@ export const ExpandProgressDetail: Story = {
 				...runningJob,
 				progress: {
 					phase: "pullRequests",
-					currentStep: "Backfilling ls1intum/Artemis — issues #4812 → #3200",
+					currentStep: "Backfilling ls1intum/Artemis: issues #4812 → #3200",
 					currentRepository: "ls1intum/Artemis",
 					unitsCompleted: 1612,
 					unitsTotal: 4812,

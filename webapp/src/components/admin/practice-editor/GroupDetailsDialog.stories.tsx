@@ -33,7 +33,7 @@ export const Creating: Story = {
 	play: async ({ args }) => {
 		await expectSettledVisible(await screen.findByRole("heading", { name: "Create group" }));
 		await userEvent.type(screen.getByLabelText("Name"), "Documentation");
-		await userEvent.click(screen.getByRole("button", { name: "Create" }));
+		await userEvent.click(screen.getByRole("button", { name: "Create group" }));
 		await expect(args.onSubmit).toHaveBeenCalledWith({
 			name: "Documentation",
 			icon: null,
@@ -60,7 +60,7 @@ export const FromTheCatalog: Story = {
 	},
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("Catalog changed, yours did not"));
-		await expect(screen.getByText(/bring anything you want across by editing it/u)).toBeVisible();
+		await expect(screen.getByText(/Edit it to bring anything you want across/u)).toBeVisible();
 	},
 };
 
@@ -72,7 +72,7 @@ export const Renaming: Story = {
 		await expect(screen.getByRole("heading", { name: "Edit group" })).toBeVisible();
 		await userEvent.clear(field);
 		await userEvent.type(field, "Review-ready work");
-		await userEvent.click(screen.getByRole("button", { name: "Save" }));
+		await userEvent.click(screen.getByRole("button", { name: "Save group" }));
 		await expect(args.onSubmit).toHaveBeenCalledWith({
 			name: "Review-ready work",
 			icon: reviewReadyGroup.icon ?? null,
@@ -85,7 +85,7 @@ export const UnchangedDetailsJustClose: Story = {
 	args: { group: reviewReadyGroup },
 	play: async ({ args }) => {
 		await expectSettledVisible(await screen.findByLabelText("Name"));
-		await userEvent.click(screen.getByRole("button", { name: "Save" }));
+		await userEvent.click(screen.getByRole("button", { name: "Save group" }));
 		await expect(args.onSubmit).not.toHaveBeenCalled();
 		await expect(args.onOpenChange).toHaveBeenCalledWith(false);
 	},
@@ -94,7 +94,7 @@ export const UnchangedDetailsJustClose: Story = {
 export const EmptyNameCannotBeSubmitted: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByLabelText("Name"));
-		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Create" }));
+		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Create group" }));
 	},
 };
 
@@ -124,7 +124,7 @@ export const ChoosingAnIcon: Story = {
 		await waitFor(async () =>
 			expect(screen.queryByRole("textbox", { name: "Search icons" })).not.toBeInTheDocument(),
 		);
-		await userEvent.click(screen.getByRole("button", { name: "Create" }));
+		await userEvent.click(screen.getByRole("button", { name: "Create group" }));
 		await expect(args.onSubmit).toHaveBeenCalledWith(
 			expect.objectContaining({ name: "Documentation", icon: "ShieldAlert" }),
 		);

@@ -144,9 +144,9 @@ export function CuratedCatalogTree({
 			renderEntryPreview={(practice) => <PracticeDragPreview practice={practice} />}
 			getEmptyLabel={(groupSlug, total) => {
 				if (total > 0) {
-					return "No matching practices.";
+					return "No matching practices";
 				}
-				return groupSlug === null ? "Nothing unassigned." : "No practices here.";
+				return groupSlug === null ? "Nothing unassigned" : "No practices in this group";
 			}}
 		/>
 	);
@@ -191,7 +191,7 @@ function GroupActions({
 				onCheckedChange={(offered) => (offered ? onStatusChange(group, true) : onExclude(group))}
 				disabled={disabled}
 				aria-busy={pending}
-				aria-label={`Offer ${group.definition.name} to workspaces`}
+				aria-label={`Include ${group.definition.name} for workspaces`}
 			/>
 			<DropdownMenu>
 				<DropdownMenuTrigger
@@ -224,11 +224,11 @@ function GroupActions({
 					<DropdownMenuSeparator />
 					{group.status.offered ? (
 						<DropdownMenuItem variant="destructive" onClick={() => onExclude(group)}>
-							Stop offering
+							Exclude from workspaces
 						</DropdownMenuItem>
 					) : (
 						<DropdownMenuItem onClick={() => onStatusChange(group, true)}>
-							Offer to workspaces
+							Include for workspaces
 						</DropdownMenuItem>
 					)}
 				</DropdownMenuContent>
@@ -291,7 +291,7 @@ function PracticeActions({
 		: undefined;
 	const parentUnavailable = Boolean(practice.missingGroupSlug) || group?.status.offered === false;
 	let includeLabel = "Include for workspaces";
-	let switchLabel = `Offer ${practice.name} to workspaces`;
+	let switchLabel = `Include ${practice.name} for workspaces`;
 	if (hasText(practice.missingGroupSlug)) {
 		includeLabel = "Move to Unassigned or an included group first";
 		switchLabel = `${practice.name} cannot be included until it is moved out of the missing group`;
@@ -299,7 +299,7 @@ function PracticeActions({
 		includeLabel = "Include when its group is included";
 		switchLabel = practice.status.offered
 			? `${practice.name} is excluded because its group is excluded`
-			: `${practice.name} is not offered to workspaces`;
+			: `${practice.name} is excluded from workspaces`;
 	}
 	const persistedPractice = hasText(practice.missingGroupSlug)
 		? { ...practice, groupSlug: practice.missingGroupSlug }
@@ -383,7 +383,7 @@ function PracticeActions({
 					<DropdownMenuSeparator />
 					{practice.status.offered ? (
 						<DropdownMenuItem variant="destructive" onClick={() => onExclude(persistedPractice)}>
-							Stop offering
+							Exclude from workspaces
 						</DropdownMenuItem>
 					) : (
 						<DropdownMenuItem

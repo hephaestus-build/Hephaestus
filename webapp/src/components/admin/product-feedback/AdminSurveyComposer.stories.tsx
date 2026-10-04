@@ -117,7 +117,7 @@ export const ManyQuestions: Story = {
 		}
 		await expect(screen.getAllByRole("group", { name: /^Question \d+$/u })).toHaveLength(6);
 		await expect(
-			screen.getByText("This survey has 6 questions; response rates drop sharply beyond 5."),
+			screen.getByText("This survey has 6 questions. Response rates drop sharply beyond 5."),
 		).toBeVisible();
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Move question 1 up" }));
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Move question 6 down" }));
@@ -226,7 +226,7 @@ export const WithResearchProgramme: Story = {
 		const dialog = within(await screen.findByRole("dialog", { name: "Acting on feedback" }));
 		await expectSettledVisible(dialog.getByText("Research"));
 		await expect(
-			dialog.getByText(/study run by Technical University of Munich, which you agreed to join/u),
+			dialog.getByText(/research run by Technical University of Munich, which you allowed/u),
 		).toBeVisible();
 		await expect(dialog.getByRole("link", { name: "User settings" })).toBeVisible();
 	},

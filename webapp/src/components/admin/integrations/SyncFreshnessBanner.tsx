@@ -21,10 +21,10 @@ export function SyncFreshnessBanner() {
 		return (
 			<Alert variant="warning" role="status" aria-live="polite" className="mx-auto max-w-5xl">
 				<WifiOffIcon />
-				<AlertTitle>You’re offline — everything below is a snapshot</AlertTitle>
+				<AlertTitle>You’re offline</AlertTitle>
 				<AlertDescription>
-					Sync status stopped updating when the connection dropped. It will catch up on its own once
-					you’re back.
+					Everything below is a snapshot. Sync status stopped updating when the connection dropped.
+					It will catch up once you’re back online.
 				</AlertDescription>
 			</Alert>
 		);
@@ -35,7 +35,7 @@ export function SyncFreshnessBanner() {
 			<Alert role="status" aria-live="polite" className="mx-auto max-w-5xl">
 				<RssIcon />
 				<AlertTitle>Live updates are unavailable</AlertTitle>
-				<AlertDescription>This section is refreshing periodically instead.</AlertDescription>
+				<AlertDescription>This section refreshes on a timer instead.</AlertDescription>
 			</Alert>
 		);
 	}

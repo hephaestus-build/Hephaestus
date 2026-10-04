@@ -208,7 +208,7 @@ function AdminLlmConnectionFormDialogContent({
 		});
 	};
 
-	let testLabel = "Test & fetch models";
+	let testLabel = "Test and fetch models";
 	if (isProbing) {
 		testLabel = "Testing…";
 	} else if (isEdit && !fields.apiKey.trim() && !fields.clearApiKey) {
@@ -223,8 +223,7 @@ function AdminLlmConnectionFormDialogContent({
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit connection" : "Add connection"}</DialogTitle>
 					<DialogDescription>
-						Connect an endpoint that implements an OpenAI API. Models are added and priced after the
-						connection is saved.
+						Connect an endpoint that implements an OpenAI API. Add and price its models next.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -278,16 +277,17 @@ function AdminLlmConnectionFormDialogContent({
 						{probeResult && !probeResult.reachable && (
 							<Alert variant="warning">
 								<AlertDescription>
-									Discovery unsupported. {probeResult.message ?? "The provider didn't answer."} You
-									can still save the connection and enter a model id.
+									We could not fetch the model list.{" "}
+									{probeResult.message ?? "The provider did not answer."} You can still save the
+									connection and enter a model ID.
 								</AlertDescription>
 							</Alert>
 						)}
 						{hasText(probeError) && (
 							<Alert variant="warning">
 								<AlertDescription>
-									Discovery unsupported. {probeError} You can still save the connection and enter a
-									model id.
+									We could not fetch the model list. {probeError} You can still save the connection
+									and enter a model ID.
 								</AlertDescription>
 							</Alert>
 						)}
@@ -299,7 +299,7 @@ function AdminLlmConnectionFormDialogContent({
 						Cancel
 					</Button>
 					<Button type="submit" disabled={isSubmitting}>
-						{isEdit ? "Save changes" : "Save inactive connection"}
+						{isEdit ? "Save changes" : "Add connection"}
 					</Button>
 				</DialogFooter>
 			</DialogForm>

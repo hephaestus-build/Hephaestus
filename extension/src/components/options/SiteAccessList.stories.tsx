@@ -85,7 +85,7 @@ export const Loading: Story = { args: { state: { status: "loading" } } };
 export const Failed: Story = {
 	args: { state: { status: "error", message: "Sign in to Hephaestus again.", onRetry: fn() } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("heading", { name: "Sites could not be loaded" })).toBeVisible();
+		await expect(canvas.getByRole("heading", { name: "We could not load sites" })).toBeVisible();
 	},
 };
 

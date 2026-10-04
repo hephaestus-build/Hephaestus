@@ -22,12 +22,12 @@ export const PRACTICE_TREND_DEFS: StatusDefs<TrendDirection> = {
 		label: "Direction unclear",
 		icon: CircleHelpIcon,
 		badgeVariant: "secondary",
-		description: "The two stretches were compared and did not separate far enough to call.",
+		description: "Recent and earlier work were compared, and the difference is too small to call.",
 	},
 	INSUFFICIENT_EVIDENCE: {
 		label: "Not enough to compare yet",
 		icon: CircleDashedIcon,
 		badgeVariant: "outline",
-		description: "There is not yet enough reviewed work on both sides to compare.",
+		description: "There is not enough reviewed work yet to compare recent and earlier work.",
 	},
 };

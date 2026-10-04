@@ -151,7 +151,7 @@ export const TheCatalogueCouldNotBeLoaded: Story = {
 	},
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Group" }));
-		await screen.findByText("Could not load groups");
+		await screen.findByText("We could not load groups");
 	},
 };
 

@@ -84,7 +84,7 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
         assertThatThrownBy(() -> strategy()
                         .initiate(request(Map.of("server_url", "https://outline.example.com", "token", "tok-123"))))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("not approved");
+                .hasMessageContaining("is not approved");
 
         verifyNoInteractions(outlineApiClient);
     }

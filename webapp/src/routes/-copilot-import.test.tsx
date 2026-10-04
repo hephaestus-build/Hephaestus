@@ -43,15 +43,15 @@ it("keeps the main route available when the optional copilot import rejects", as
 		expect(caught).toMatchObject({ cause: importFailure });
 		await waitFor(() => {
 			expect(screen.getByRole("main").textContent).toContain(
-				"You're not a member of any workspace yet.",
+				"You are not a member of any workspace yet.",
 			);
 		}, ROUTE_RENDER_WAIT);
 		expect(
 			within(screen.getByRole("main"))
-				.getByRole("link", { name: "Create Workspace" })
+				.getByRole("link", { name: "Create workspace" })
 				.getAttribute("href"),
 		).toBe("/workspaces/new");
-		expect(screen.queryByText("Something went wrong")).toBeNull();
+		expect(screen.queryByText("We could not load this page")).toBeNull();
 	} finally {
 		// This test creates its own QueryClient. Unmount observers before cancelling requests,
 		// then release cache timers while React's environment is still available.

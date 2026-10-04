@@ -39,7 +39,7 @@ export function TraceSignalTimeline({
 					<EmptyHeader>
 						<EmptyTitle>Nothing was recorded about this work</EmptyTitle>
 						<EmptyDescription>
-							Without an occurrence to react to, no practice was ever asked a question about it.
+							No practice reviewed it, because nothing happened on it that a practice watches for.
 						</EmptyDescription>
 					</EmptyHeader>
 				</Empty>

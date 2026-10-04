@@ -110,9 +110,9 @@ describe("usage breakdown totals", () => {
 		const table = screen.getByRole("table", { name: "AI spend by run type" });
 		within(table).getByRole("columnheader", { name: "Cache reads" });
 		within(table).getByRole("columnheader", { name: "Cache writes" });
-		const cells = within(within(table).getByRole("row", { name: /PR review/u })).getAllByRole(
-			"cell",
-		);
+		const cells = within(
+			within(table).getByRole("row", { name: /Pull request review/u }),
+		).getAllByRole("cell");
 		expect(cells[6]?.textContent).toBe("600");
 		expect(cells[7]?.textContent).toBe("50");
 	});

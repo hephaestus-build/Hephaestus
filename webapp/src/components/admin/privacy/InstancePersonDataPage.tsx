@@ -82,7 +82,7 @@ const REQUEST_STATE_TITLES = {
 } satisfies Record<PersonDataRequest["state"], string>;
 
 function providerLabel(provider: PersonDataProvider): string {
-	return `${provider.type} — ${provider.serverUrl}`;
+	return `${provider.type} · ${provider.serverUrl}`;
 }
 
 function isWebAddress(locator: string): boolean {
@@ -273,7 +273,7 @@ export function InstancePersonDataPage({
 			{state.status === "error" && (
 				<QueryErrorAlert
 					error={state.error}
-					title="Could not complete the request"
+					title="We could not complete the request"
 					onRetry={state.onRetry}
 				/>
 			)}
@@ -308,10 +308,11 @@ function RequestCard({
 			<CardHeader>
 				<CardTitle>{REQUEST_STATE_TITLES[request.state]}</CardTitle>
 				<CardDescription>
-					{rowCount} rows in {heldStores.length} of {stores.length} stores.{" "}
+					{rowCount} {rowCount === 1 ? "row" : "rows"} in {heldStores.length} of {stores.length}{" "}
+					{stores.length === 1 ? "store" : "stores"}.{" "}
 					{request.state === "PREVIEW" && (
 						<>
-							Export and erasure use exactly these rows; if the data changes, preview again. This
+							Export and erasure use exactly these rows. If the data changes, preview again. This
 							preview expires <RelativeTime value={request.expiresAt} />.
 						</>
 					)}
@@ -319,7 +320,7 @@ function RequestCard({
 					{request.state === "FAILED" &&
 						`Stores already erased stay erased. Resume to finish the rest (failure code ${request.failureCode ?? "unknown"}).`}
 					{request.state === "COMPLETE" &&
-						"The audit record keeps store counts and the acting administrator, not erased content or identities. Provider records that still exist upstream can be mirrored again, but Hephaestus does not process them."}
+						"The audit record keeps store counts and the acting admin, not erased content or identities. Provider records that still exist upstream can be mirrored again, but Hephaestus does not process them."}
 					{request.state === "EXPIRED" && "Preview again to export or erase."}
 				</CardDescription>
 			</CardHeader>
@@ -361,8 +362,8 @@ function RequestCard({
 						<AlertTitle>Feedback is still posted on providers</AlertTitle>
 						<AlertDescription>
 							<p>
-								Erasure does not remove provider comments. Remove these first, as the runbook
-								section on un-delivering external feedback describes.
+								Erasure does not remove provider comments. Remove them first. The runbook section on
+								un-delivering external feedback explains how.
 							</p>
 							<ul className="mt-2 space-y-1">
 								{request.externalDeliveries.map((delivery) => (
@@ -409,7 +410,8 @@ function RequestCard({
 					<Collapsible>
 						<CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
 							<ChevronDownIcon aria-hidden />
-							{emptyStores.length} stores hold no rows
+							{emptyStores.length === 1 ? "1 store holds" : `${emptyStores.length} stores hold`} no
+							rows
 						</CollapsibleTrigger>
 						<CollapsibleContent>
 							<ul className="mt-2 columns-1 text-sm text-muted-foreground sm:columns-2 lg:columns-3">

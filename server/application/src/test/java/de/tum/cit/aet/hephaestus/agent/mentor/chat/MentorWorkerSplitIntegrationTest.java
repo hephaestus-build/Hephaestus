@@ -250,7 +250,7 @@ class MentorWorkerSplitIntegrationTest extends AbstractWorkspaceIntegrationTest 
             var terminal = response.get(15, TimeUnit.SECONDS);
             assertThat(terminal.statusCode()).isEqualTo(200);
             assertThat(terminal.body())
-                    .contains("lost in transit")
+                    .contains("was lost before it reached you")
                     .contains("\"type\":\"error\"")
                     .doesNotContain("\"type\":\"finish\"");
             await().atMost(Duration.ofSeconds(10))

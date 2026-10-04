@@ -5,12 +5,8 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 import { expectGenuinelyDisabled } from "@/test/controls";
 
-import {
-	ConsentPage,
-	type ConsentPageProps,
-	type ConsentSubmission,
-	WORDING_VERSION,
-} from "./ConsentPage";
+import { WORDING_VERSION } from "./consent-wording";
+import { ConsentPage, type ConsentPageProps, type ConsentSubmission } from "./ConsentPage";
 
 const notice = {
 	completed: false,
@@ -72,13 +68,15 @@ function AfterSubmit({ outcome, ...args }: ConsentPageProps & { outcome: Consent
 
 export const Default: Story = {
 	play: async () => {
-		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Continue" }));
-		await expect(screen.getByRole("radio", { name: /Yes, take part/u })).not.toBeChecked();
-		await expect(screen.getByRole("radio", { name: /don't take part/u })).not.toBeChecked();
-		await expect(screen.getByText(/Two things first/u)).toBeVisible();
+		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Save and continue" }));
+		await expect(screen.getByRole("radio", { name: /Yes, allow research use/u })).not.toBeChecked();
+		await expect(
+			screen.getByRole("radio", { name: /keep my data out of research/u }),
+		).not.toBeChecked();
+		await expect(screen.getByText(/Two things first: accept the terms/u)).toBeVisible();
 		// Facts are grouped: the sentence sits under its term, indented past the chip.
 		const term = screen.getByText("What it reads");
-		const detail = screen.getByText(/The work in the tools your project connects/u);
+		const detail = screen.getByText(/Your work in the tools your project connects/u);
 		await expect(detail.getBoundingClientRect().top).toBeGreaterThan(
 			term.getBoundingClientRect().bottom - 1,
 		);
@@ -88,10 +86,27 @@ export const Default: Story = {
 	},
 };
 
+/**
+ * The first layer already names the controller, the area of research, the data and what withdrawal
+ * cannot undo. “What this means” opens the longer layer.
+ */
+export const WhatThisMeansOpen: Story = {
+	play: async () => {
+		const summary = await screen.findByText(/may use your data for research/u);
+		await expect(summary).toHaveTextContent(notice.researchOrganization);
+		await expect(summary).toHaveTextContent(/benchmarks and evaluation datasets/u);
+		const trigger = screen.getByRole("button", { name: "What this means" });
+		await expect(trigger).toHaveAttribute("aria-expanded", "false");
+		await userEvent.click(trigger);
+		await expect(trigger).toHaveAttribute("aria-expanded", "true");
+		await expect(screen.getByText("Datasets and benchmarks")).toBeVisible();
+	},
+};
+
 export const TermsAcceptedOnly: Story = {
 	play: async () => {
 		await acceptTerms();
-		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Continue" }));
+		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Save and continue" }));
 		await expect(screen.getByText("Answer the research question to continue.")).toBeVisible();
 	},
 };
@@ -99,10 +114,12 @@ export const TermsAcceptedOnly: Story = {
 export const BothAnswered: Story = {
 	play: async () => {
 		await acceptTerms();
-		await answer(/Yes, take part/u);
-		await expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
-		await expect(screen.getByText("You can change your answer later in settings.")).toBeVisible();
-		await expect(screen.getByText("That's everything. Let's get to work.")).toBeVisible();
+		await answer(/Yes, allow research use/u);
+		await expect(screen.getByRole("button", { name: "Save and continue" })).toBeEnabled();
+		await expect(
+			screen.getByText("You can change your research answer later in User settings."),
+		).toBeVisible();
+		await expect(screen.getByText("That is everything. You can get to work.")).toBeVisible();
 	},
 };
 
@@ -115,20 +132,20 @@ export const NoticeChangedUnderneath: Story = {
 	play: async () => {
 		await expect(await screen.findByRole("button", { name: "Reload" })).toBeVisible();
 		await expect(screen.queryByRole("checkbox")).toBeNull();
-		await expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+		await expect(screen.queryByRole("button", { name: "Save and continue" })).toBeNull();
 	},
 };
 
-/** No study on this deployment, so the question is not asked and the terms alone complete setup. */
+/** No research on this deployment, so the question is not asked and the terms alone complete setup. */
 export const NoResearchProgramme: Story = {
 	args: {
 		state: { ...ready, notice: { ...notice, researchOrganization: undefined } },
 	},
 	play: async () => {
-		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Continue" }));
+		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Save and continue" }));
 		await expect(screen.queryByRole("radiogroup")).toBeNull();
 		await acceptTerms();
-		await expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+		await expect(screen.getByRole("button", { name: "Save and continue" })).toBeEnabled();
 	},
 };
 
@@ -136,8 +153,8 @@ export const Submitting: Story = {
 	render: (args) => <AfterSubmit {...args} outcome={{ status: "saving" }} />,
 	play: async () => {
 		await acceptTerms();
-		await answer(/Yes, take part/u);
-		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+		await answer(/Yes, allow research use/u);
+		await userEvent.click(screen.getByRole("button", { name: "Save and continue" }));
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Saving…" }));
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Sign out" }));
 	},
@@ -147,10 +164,10 @@ export const SubmitFailed: Story = {
 	render: (args) => <AfterSubmit {...args} outcome={{ status: "error" }} />,
 	play: async () => {
 		await acceptTerms();
-		await answer(/don't take part/u);
-		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
-		await expect(screen.getByRole("alert")).toHaveTextContent(/weren’t saved/iu);
-		await expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+		await answer(/keep my data out of research/u);
+		await userEvent.click(screen.getByRole("button", { name: "Save and continue" }));
+		await expect(screen.getByRole("alert")).toHaveTextContent(/were not saved/iu);
+		await expect(screen.getByRole("button", { name: "Save and continue" })).toBeEnabled();
 	},
 };
 
@@ -168,7 +185,7 @@ export const Narrow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async () => {
 		await acceptTerms();
-		await answer(/Yes, take part/u);
+		await answer(/Yes, allow research use/u);
 		await expectNoPageOverflow();
 	},
 };
@@ -177,7 +194,7 @@ export const Dark: Story = {
 	globals: { theme: "dark" },
 	play: async () => {
 		await acceptTerms();
-		await answer(/Yes, take part/u);
-		await expect(screen.getByRole("radio", { name: /Yes, take part/u })).toBeChecked();
+		await answer(/Yes, allow research use/u);
+		await expect(screen.getByRole("radio", { name: /Yes, allow research use/u })).toBeChecked();
 	},
 };

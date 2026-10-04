@@ -134,11 +134,11 @@ export function PracticeReviewBackfill({
 			{isError ? (
 				<Alert variant="destructive">
 					<AlertCircle />
-					<AlertTitle>Backfills couldn’t be loaded</AlertTitle>
+					<AlertTitle>We could not load backfills</AlertTitle>
 					<AlertDescription>
-						<p>Any backfill already running is unaffected. This is only about showing it here.</p>
+						<p>A running backfill is not affected. Check your connection, then try again.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
-							Try again
+							Retry
 						</Button>
 					</AlertDescription>
 				</Alert>
@@ -295,10 +295,10 @@ function ConfirmationSection({
 				<AlertTitle>What a backfill does and does not do</AlertTitle>
 				<AlertDescription>
 					Each {noun} is reviewed once, as it stands now. There is no record of how it looked while
-					it was being worked on. Nothing is posted on the work itself and nobody is notified:
-					commenting on {plural} that are already finished would notify everyone involved about work
+					it was being worked on. Nothing is posted on the work itself and nobody is notified.
+					Commenting on {plural} that are already finished would notify everyone involved about work
 					nobody can act on. The observations it records are kept separate from your live trends,
-					because older work has been polished since and comparing the two would invent an
+					because older work has been polished since. A comparison of the two would invent an
 					improvement nobody made.
 				</AlertDescription>
 			</Alert>
@@ -315,11 +315,11 @@ function ConfirmationSection({
 						: `Review ${countOf(run.estimatedArtifacts, run.artifactKind)}`}
 				</Button>
 				<Button variant="outline" onClick={() => onCancel(run.id)} disabled={isUpdating}>
-					Discard
+					Discard estimate
 				</Button>
 				{nothingToDo ? (
 					<p className="text-sm text-muted-foreground">
-						Nothing was opened in that stretch. Discard this and try a longer one.
+						Nothing was opened in that stretch. Discard this estimate and try a longer one.
 					</p>
 				) : null}
 			</div>
@@ -396,7 +396,7 @@ function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoad
 						<History />
 					</EmptyMedia>
 					<EmptyTitle>No backfills yet</EmptyTitle>
-					<EmptyDescription>Past work has never been reviewed in this workspace.</EmptyDescription>
+					<EmptyDescription>Finished and stopped backfills appear here.</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
 		);
@@ -414,7 +414,7 @@ function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoad
 							<ItemDescription>
 								{run.status === "CANCELLED"
 									? `Stopped after reviewing ${countOf(run.submittedCount, run.artifactKind)}.`
-									: `Reviewed ${countOf(run.submittedCount, run.artifactKind)}; ${run.passedCount} needed no new observation.${
+									: `Reviewed ${countOf(run.submittedCount, run.artifactKind)}. ${run.passedCount} needed no new observation.${
 											run.failedCount > 0
 												? ` ${run.failedCount} could not be read, so were not reviewed.`
 												: ""
@@ -438,9 +438,7 @@ function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoad
 				<h2 id="backfill-history-heading" className="text-lg font-semibold">
 					Past backfills
 				</h2>
-				<p className="text-sm text-muted-foreground">
-					What has already been reviewed, and by whose decision.
-				</p>
+				<p className="text-sm text-muted-foreground">What earlier backfills reviewed.</p>
 			</div>
 			{history}
 		</section>

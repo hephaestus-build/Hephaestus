@@ -196,12 +196,12 @@ it("offers hosted Hephaestus first and connects to it after Chrome grants that o
 	);
 	platform.request.mockResolvedValue(true);
 	await render();
-	await until(() => expect(container.textContent).toContain("Continue with Hephaestus"));
+	await until(() => expect(container.textContent).toContain("Connect to Hephaestus"));
 	expect(container.textContent).toContain("hephaestus.build");
 	// The address form is there for a self-hosted instance, but folded away.
 	expect(container.querySelector("details")?.open).toBe(false);
 
-	await click(button("Continue with Hephaestus"));
+	await click(button("Connect to Hephaestus"));
 
 	expect(platform.request).toHaveBeenCalledWith({ origins: ["https://hephaestus.build/*"] });
 	await until(() =>
@@ -215,9 +215,9 @@ it("changes nothing when Chrome does not grant access to the hosted address", as
 	answer(() => SIGNED_OUT);
 	platform.request.mockResolvedValue(false);
 	await render();
-	await until(() => expect(container.textContent).toContain("Continue with Hephaestus"));
+	await until(() => expect(container.textContent).toContain("Connect to Hephaestus"));
 
-	await click(button("Continue with Hephaestus"));
+	await click(button("Connect to Hephaestus"));
 
 	await until(() =>
 		expect(container.querySelector('[role="alert"]')?.textContent).toContain(
@@ -225,7 +225,7 @@ it("changes nothing when Chrome does not grant access to the hosted address", as
 		),
 	);
 	expect(requests("configure-instance")).toStrictEqual([]);
-	expect(button("Continue with Hephaestus").disabled).toBe(false);
+	expect(button("Connect to Hephaestus").disabled).toBe(false);
 });
 
 it("connects to a self-hosted address typed into the disclosure instead", async () => {
@@ -237,7 +237,7 @@ it("connects to a self-hosted address typed into the disclosure instead", async 
 		required(container.querySelector("details"), "the self-hosted disclosure").open = true;
 	});
 	await fill("Hephaestus address", "heph.example.test");
-	await click(button("Connect"));
+	await click(button("Connect instance"));
 
 	expect(platform.request).toHaveBeenCalledWith({ origins: ["https://heph.example.test/*"] });
 	await until(() =>
@@ -253,7 +253,7 @@ it("says a closed sign-in window changed nothing, instead of reporting an error"
 			"get-state": () => ({ ...SIGNED_OUT, instance: HOSTED }),
 			"list-sign-in-options": () => SIGN_IN_OPTIONS,
 			"sign-in": () =>
-				Object.assign(new Error("Sign-in was cancelled before it finished."), {
+				Object.assign(new Error("Sign-in was canceled before it finished."), {
 					code: "cancelled",
 				}),
 		}),
@@ -265,7 +265,7 @@ it("says a closed sign-in window changed nothing, instead of reporting an error"
 
 	await until(() =>
 		expect(container.querySelector('[role="status"]')?.textContent).toContain(
-			"Sign-in was cancelled and nothing changed",
+			"Sign-in was canceled and nothing changed",
 		),
 	);
 	expect(container.querySelector('[role="alert"]')).toBeNull();
@@ -287,7 +287,7 @@ it("disconnects only after the reader confirms changing the instance", async () 
 
 	await click(button("Change instance…"));
 	expect(requests("clear-instance")).toStrictEqual([]);
-	await click(button("Keep it"));
+	await click(button("Stay connected"));
 	expect(requests("clear-instance")).toStrictEqual([]);
 
 	await click(button("Change instance…"));
@@ -351,7 +351,7 @@ it("renders the published instance when a state event resets the options query d
 		}),
 	);
 	await render();
-	await until(() => expect(container.textContent).toContain("Continue with Hephaestus"));
+	await until(() => expect(container.textContent).toContain("Connect to Hephaestus"));
 	const listener = platform.addListener.mock.calls[0]?.[0];
 	expect(listener).toBeDefined();
 	await act(async () => {
@@ -360,7 +360,7 @@ it("renders the published instance when a state event resets the options query d
 			{ id: "test-extension", url: "chrome-extension://test-extension/background.js" },
 		);
 	});
-	expect(container.textContent).not.toContain("Continue with Hephaestus");
+	expect(container.textContent).not.toContain("Connect to Hephaestus");
 	await act(async () => {
 		state.resolve(published);
 	});

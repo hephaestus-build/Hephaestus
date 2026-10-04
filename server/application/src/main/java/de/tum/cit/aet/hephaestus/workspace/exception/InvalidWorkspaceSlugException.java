@@ -5,6 +5,6 @@ public class InvalidWorkspaceSlugException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     public InvalidWorkspaceSlugException(String slug) {
-        super("Invalid workspace slug: " + slug);
+        super("The workspace slug is not valid: " + slug);
     }
 }

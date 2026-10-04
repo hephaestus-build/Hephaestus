@@ -37,12 +37,12 @@ const HOLD_REASON_COPY: Record<string, HoldReasonCopy | undefined> = {
 	BUDGET: {
 		label: "Over the AI budget",
 		detail:
-			"The monthly AI cap is spent, so this run is parked rather than failed. It resumes on its own once the cap is raised or the month rolls over. AI usage names which purse is capped and who can lift it.",
+			"The monthly AI budget is used up, so this review is waiting, not failed. It continues on its own when the budget is raised or the next month starts. AI usage shows which budget is used up and who can raise it.",
 	},
 };
 
 const UNKNOWN_HOLD_DETAIL =
-	"This run is parked rather than failed. It resumes on its own once the hold lifts.";
+	"This review is waiting, not failed. It continues on its own when the hold ends.";
 
 export function holdReasonCopy(reason: string): HoldReasonCopy {
 	const known = HOLD_REASON_COPY[reason];

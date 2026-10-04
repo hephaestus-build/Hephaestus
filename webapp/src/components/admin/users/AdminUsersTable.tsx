@@ -53,9 +53,9 @@ function statusBadgeVariant(status: AdminAccountView["status"]) {
 
 function changeRoleLabel(isSelfAdmin: boolean, appRole: AppRole) {
 	if (isSelfAdmin) {
-		return "Can't revoke your own admin";
+		return "You cannot revoke your own instance admin role";
 	}
-	return appRole === "APP_ADMIN" ? "Revoke admin" : "Change role";
+	return appRole === "APP_ADMIN" ? "Revoke instance admin" : "Grant instance admin";
 }
 
 export function AdminUsersTable({ totalLoaded, onLoadMore, ...rows }: AdminUsersTableProps) {
@@ -83,7 +83,8 @@ export function AdminUsersTable({ totalLoaded, onLoadMore, ...rows }: AdminUsers
 			<div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
 				<p className="text-sm text-muted-foreground" aria-live="polite">
 					Showing {users.length}
-					{hasSearch ? ` of ${totalLoaded} loaded` : ""} user{users.length === 1 ? "" : "s"}
+					{hasSearch ? ` of ${totalLoaded} loaded` : ""}{" "}
+					{(hasSearch ? totalLoaded : users.length) === 1 ? "user" : "users"}
 				</p>
 				{hasNextPage && (
 					<Button variant="outline" size="sm" onClick={onLoadMore} disabled={isFetchingNextPage}>
@@ -123,7 +124,9 @@ function UserRows({
 		return (
 			<TableRow>
 				<TableCell colSpan={COLUMN_COUNT} className="h-32 text-center">
-					<p className="text-sm text-destructive">Failed to load users. Please try again later.</p>
+					<p className="text-sm text-destructive">
+						We could not load users. Reload the page to try again.
+					</p>
 				</TableCell>
 			</TableRow>
 		);
@@ -142,10 +145,10 @@ function UserRows({
 					) : (
 						<div className="flex flex-col items-center justify-center gap-2">
 							<Users className="size-8 text-muted-foreground" aria-hidden />
-							<p className="text-sm font-medium">No users found</p>
-							<p className="text-xs text-muted-foreground">
-								{hasSearch ? "Try adjusting your search." : "No accounts exist yet."}
-							</p>
+							<p className="text-sm font-medium">{hasSearch ? "No users found" : "No users yet"}</p>
+							{hasSearch ? (
+								<p className="text-xs text-muted-foreground">Try a different search.</p>
+							) : null}
 						</div>
 					)}
 				</TableCell>
@@ -195,7 +198,7 @@ function UserRows({
 								<DropdownMenuSeparator />
 								<DropdownMenuItem variant="destructive" onClick={() => onForceSignOut(user)}>
 									<LogOut className="size-4" />
-									Force sign-out
+									Force sign out
 								</DropdownMenuItem>
 							</DropdownMenuGroup>
 						</DropdownMenuContent>

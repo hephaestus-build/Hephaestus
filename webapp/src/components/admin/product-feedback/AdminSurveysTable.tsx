@@ -60,7 +60,7 @@ export function surveyAudience(
 ): string {
 	const workspace = survey.workspace?.displayName ?? "All workspaces";
 	return isResearch(survey)
-		? `${workspace} · participants in the study by ${survey.researchOrganization}`
+		? `${workspace} · participants in research run by ${survey.researchOrganization}`
 		: workspace;
 }
 
@@ -76,7 +76,7 @@ export function AdminSurveysTable({
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Surveys couldn't be loaded"
+				title="We could not load surveys"
 				onRetry={state.onRetry}
 			/>
 		);

@@ -234,7 +234,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
 
     private void writeServiceUnavailable(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.SERVICE_UNAVAILABLE, "Rate limiting is temporarily unavailable.");
+                HttpStatus.SERVICE_UNAVAILABLE, "We could not check the request rate. Try again in a moment.");
         problem.setTitle("Service Unavailable");
         problem.setInstance(URI.create(request.getRequestURI()));
         response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());

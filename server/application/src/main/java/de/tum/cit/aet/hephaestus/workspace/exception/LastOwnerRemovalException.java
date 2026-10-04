@@ -9,7 +9,7 @@ public class LastOwnerRemovalException extends RuntimeException {
 
     public LastOwnerRemovalException(String workspaceSlug) {
         super(String.format(
-                "Cannot remove the last OWNER role from workspace '%s'. " + "Assign another user as OWNER first.",
+                "You cannot remove the last OWNER role from workspace '%s'. " + "Assign another user as OWNER first.",
                 workspaceSlug));
     }
 }

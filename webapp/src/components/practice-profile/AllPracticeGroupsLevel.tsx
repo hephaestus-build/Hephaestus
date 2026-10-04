@@ -28,8 +28,8 @@ export function AllPracticeGroupsLevel({ nested, path, ...table }: AllPracticeGr
 				current={ALL_PRACTICE_GROUPS}
 				description={
 					<p className="max-w-2xl">
-						Every practice this workspace reviews, in its group. What needs you is named; the rest
-						is counted. Open a group for the work behind it.
+						Every practice this workspace reviews, in its group. Practices that need attention are
+						named, and the rest are counted. Open a group to see the work behind it.
 					</p>
 				}
 			/>

@@ -29,8 +29,8 @@ export function EmailUnsubscribePage({ state }: { state: EmailUnsubscribeState }
 					</CardTitle>
 					<CardDescription aria-live="polite" aria-atomic="true">
 						{complete
-							? "If this link was active, its optional email subscription is now off. Other optional subscriptions and essential account emails are unchanged."
-							: "Confirm to stop the optional email subscription associated with this link. This does not change other optional subscriptions or essential account emails."}
+							? "If this link was active, its optional email subscription is now off. Your other optional subscriptions and essential account emails stay as they are."
+							: "Confirm to stop the optional emails that this link is for. Your other optional subscriptions and essential account emails stay as they are."}
 					</CardDescription>
 				</CardHeader>
 				{state.status === "invalid" && (
@@ -41,7 +41,7 @@ export function EmailUnsubscribePage({ state }: { state: EmailUnsubscribeState }
 				{state.status === "error" && !showSpinner && (
 					<CardContent>
 						<p role="alert" className="text-sm text-destructive">
-							We couldn&apos;t confirm the result. You can safely try again.
+							We could not confirm the result. You can safely try again.
 						</p>
 					</CardContent>
 				)}

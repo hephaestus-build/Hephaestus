@@ -39,7 +39,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
-import { Field, FieldDescription, FieldTitle } from "@/components/ui/field";
+import { Field, FieldTitle } from "@/components/ui/field";
 import {
 	Item,
 	ItemActions,
@@ -163,8 +163,8 @@ export function PracticeAutonomyPage({
 						<AlertDialogTitle>Start sending automatically?</AlertDialogTitle>
 						<AlertDialogDescription>
 							Set {automaticPromotionLabel(automaticPromotion)} to Send automatically. Eligible new
-							feedback affected by this setting can proceed without approval, subject to delivery
-							policy. Feedback already awaiting approval will remain unchanged.
+							feedback can then go out without approval, as long as delivery policy allows it.
+							Feedback already awaiting approval does not change.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -226,7 +226,7 @@ export function PracticeAutonomyPage({
 						</EmptyTitle>
 						<EmptyDescription>
 							{overridesOnly
-								? "Every group and practice follows the workspace default above. Switch the filter off to see them."
+								? "Every group and practice follows the workspace default above. Turn off the filter to see them."
 								: "Add practices in Practice setup, then decide how far reviews go on them."}
 						</EmptyDescription>
 					</EmptyHeader>
@@ -353,17 +353,13 @@ function WorkspaceDecisionCard({
 					<h2>Workspace default</h2>
 				</CardTitle>
 				<CardDescription>
-					One decision for the whole workspace. Every group and every practice below follows it
-					unless somebody says otherwise.
+					One decision for the whole workspace. Every group and practice below follows it, unless
+					you set that group or practice by hand.
 				</CardDescription>
 			</CardHeader>
 			<CardContent>
 				<Field>
 					<FieldTitle>How far reviews go without you</FieldTitle>
-					<FieldDescription>
-						Off stops the review. Review before sending prepares a proposal for a person to decide.
-						Send automatically delivers eligible feedback without waiting.
-					</FieldDescription>
 					<AutonomyLadder
 						label="How far reviews go without you"
 						variant="full"
@@ -458,7 +454,7 @@ function BulkActionBar({
 						<DropdownMenuTrigger
 							render={
 								<Button size="sm" variant="outline" disabled={bulk !== null || count === 0}>
-									Change the selected
+									Change selected practices
 								</Button>
 							}
 						/>
@@ -563,8 +559,8 @@ function GroupGroup({
 				{group.practices.length === 0 ? (
 					<p className="py-2 text-sm text-muted-foreground">
 						{group.totalPractices === 0
-							? "No practices here."
-							: "No practices here were set by hand."}
+							? "No practices in this group"
+							: "No practices in this group were set by hand"}
 					</p>
 				) : (
 					<>
@@ -573,7 +569,7 @@ function GroupGroup({
 								variant="link"
 								size="inline"
 								className="text-xs"
-								aria-label={`${allSelected ? "Deselect" : "Select"} all ${selectableSlugs.length} practices in ${group.name}`}
+								aria-label={`${allSelected ? "Deselect" : "Select"} all ${selectableSlugs.length} ${selectableSlugs.length === 1 ? "practice" : "practices"} in ${group.name}`}
 								onClick={() => onSelectMany(selectableSlugs, !allSelected)}
 							>
 								{allSelected ? "Deselect" : "Select"} all {selectableSlugs.length}
@@ -682,7 +678,7 @@ function PracticeAutonomyRow({
 					/>
 				) : (
 					<p className="text-xs text-muted-foreground">
-						This practice can’t be reviewed automatically, so it stays off.
+						This practice cannot be reviewed automatically, so it stays off.
 					</p>
 				)}
 			</ItemActions>

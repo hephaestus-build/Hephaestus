@@ -49,7 +49,7 @@ function ConsentForm({ editing, reopened }: { editing: boolean; reopened: boolea
 			onCancel={cancel}
 			privacyPolicy={
 				<Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">
-					Read our Privacy Policy
+					Read our privacy notice
 				</Link>
 			}
 		/>

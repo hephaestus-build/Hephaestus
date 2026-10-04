@@ -71,7 +71,7 @@ function targetKeyOf(variables: unknown): string | undefined {
 function slotRefusalOf(error: unknown): string {
 	const declaredTier = isRecord(error) ? error.declaredTier : undefined;
 	return isDataHandlingTier(declaredTier)
-		? `This model is declared as ${DATA_HANDLING_DEFS[declaredTier].label}. Assign it to that row.`
+		? `This model is declared as ${DATA_HANDLING_DEFS[declaredTier].label}. Assign it under ${DATA_HANDLING_DEFS[declaredTier].label}.`
 		: problemDetailOf(error);
 }
 
@@ -147,7 +147,7 @@ function ModelsContainer() {
 			cacheSavedBinding(saved);
 			bumpSaveRevision(target);
 			void invalidateBindings();
-			toast.success(`${PURPOSE_TITLES[target.purpose]} saved`);
+			toast.success(`Assignment saved for ${PURPOSE_TITLES[target.purpose]}`);
 		},
 		onError: (error, { target }) => {
 			// The slot refusal is about the row's own picker, so it stays on the row.
@@ -155,7 +155,7 @@ function ModelsContainer() {
 				setSaveError(target, slotRefusalOf(error));
 				return;
 			}
-			toast.error(`Couldn't save ${PURPOSE_TITLES[target.purpose].toLowerCase()}`, {
+			toast.error(`We could not save the assignment for ${PURPOSE_TITLES[target.purpose]}`, {
 				description: problemDetailOf(error),
 			});
 		},
@@ -174,10 +174,10 @@ function ModelsContainer() {
 			dropCachedBinding(target);
 			bumpSaveRevision(target);
 			void invalidateBindings();
-			toast.success(`${PURPOSE_TITLES[target.purpose]} turned off`);
+			toast.success(`Assignment cleared for ${PURPOSE_TITLES[target.purpose]}`);
 		},
 		onError: (error, { target }) => {
-			toast.error(`Couldn't turn off ${PURPOSE_TITLES[target.purpose].toLowerCase()}`, {
+			toast.error(`We could not clear the assignment for ${PURPOSE_TITLES[target.purpose]}`, {
 				description: problemDetailOf(error),
 			});
 		},

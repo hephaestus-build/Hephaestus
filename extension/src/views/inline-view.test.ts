@@ -106,7 +106,7 @@ it("says a failed feedback refresh failed, rather than keep old comments under a
 	});
 	await vi.waitFor(() => expect(container.textContent).toContain("Hephaestus ran into a problem."));
 	// The context refreshed fine; the feedback did not, and none of the old comments remain.
-	expect(container.textContent).toContain("Your feedback could not load");
+	expect(container.textContent).toContain("We could not load your comments");
 	expect(container.textContent).not.toContain("Descriptive merge request");
 	expect(container.querySelector("[role=alert]")).not.toBeNull();
 });
@@ -159,7 +159,7 @@ it("says a list row's preview is not current when its refresh fails, and keeps t
 	await vi.waitFor(() => expect(container.textContent).toContain("3 comments for you"));
 	answers.set("get-context", () => ({
 		ok: false,
-		error: { code: "network", message: "Hephaestus could not be reached." },
+		error: { code: "network", message: "We could not reach Hephaestus." },
 		generation: 3,
 	}));
 	await act(async () => {
@@ -170,7 +170,7 @@ it("says a list row's preview is not current when its refresh fails, and keeps t
 	expect(container.textContent).toContain("3 comments for you");
 	expect(
 		[...container.querySelectorAll("button")].map((button) => button.textContent),
-	).toStrictEqual(["Try again"]);
+	).toStrictEqual(["Retry"]);
 });
 
 it("refreshes new and repaired observations while the report stays open", async () => {

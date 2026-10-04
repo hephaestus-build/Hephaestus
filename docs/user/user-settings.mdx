@@ -4,141 +4,211 @@ title: User settings
 description: Manage your AI choice, connected accounts, notifications, sessions, and account data.
 ---
 
-Open **User settings** at the bottom of the sidebar. These settings belong to your account;
-workspace administration is separate.
+Use User settings to change your AI choice, connect accounts, control notifications, or sign out another device.
+These settings apply to your account, not to one workspace.
+
+1. Select **User settings** at the bottom of the sidebar.
+2. Open the section for the task you want to complete.
 
 ## Your AI choice
 
-A workspace can ask you to set up on your first visit, after your membership is already in place. The
-setup page is one page in two parts: which AI may handle your work, and the Slack or Outline accounts
-your workspace asks you to connect. It does not approve or create membership.
+Your AI choice sets which models may handle your work and your Heph requests across this instance.
+It does not select a specific model or grant workspace membership.
+A new workspace can still ask you to connect accounts that it requires.
+**Cloud** allows In-house models too.
+**In-house** does not allow Cloud models.
+Hephaestus never changes your answer to allow more AI processing.
 
-You answer the AI question once, and your answer applies in all your workspaces on this Hephaestus
-deployment. Joining another workspace never asks it again; that workspace's setup page appears only if
-it requires an account you have not connected. Your answer is a boundary, not a pick from a list of
-models: anything stricter than your answer also counts, and nothing ever switches you to anything
-looser.
+Choose the answer that fits your work:
 
-The cards compare the three answers on the same four rows:
+| Answer | What it allows |
+| --- | --- |
+| **In-house** | Only models declared as operated by your organization |
+| **Cloud** | In-house models and models declared as operated by a provider |
+| **No AI** | No new practice reviews about you, Heph requests, or feedback delivery |
 
-| | **In-house** | **Cloud** | **No AI** |
-| --- | --- | --- | --- |
-| **AI help** | Feedback and Heph | Feedback and Heph | No new feedback or Heph replies |
-| **Models** | Only models your organisation runs, usually smaller ones | In-house models plus cloud models, usually the strongest on offer | None |
-| **Speed** | Limited by your organisation's capacity, so replies can be slower | More capacity, usually faster | Not applicable |
-| **Sent to** | Only systems your organisation runs | Also a cloud provider your organisation configured; its agreement sets retention and access | Nowhere; sync and stored work continue |
+**No AI** does not stop source sync or remove stored work.
+The cards also show model and speed information, but these are not guarantees.
 
-Each workspace sets up its own models within these answers. When nothing in the workspace you are
-looking at is set up within an answer, its card says so: that answer is *not set up here yet*,
-nothing runs for you for that purpose in this workspace, and Hephaestus never switches you to
-another answer. Wait for a workspace owner to add a model, or change your answer.
-"Set up" describes the configuration, not current service health or a guarantee of speed. In-house
-models depend on your organisation's capacity and storage rules, and allowing the cloud does not
-guarantee better models or faster replies. A model mark names its maker, not who runs it. For
-example, an OpenAI model served by Azure is not automatically in-house because its endpoint is
-private. The Logos mark names the Logos service, not who runs it; an organisation can run Logos
-itself or use a provider-operated Logos deployment. Ask a workspace owner who operates the
-deployment and what terms apply to your work.
+If no model meets an answer in the current workspace, its card says *not set up here yet*.
+Nothing runs for you for that purpose in that workspace.
 
-In a workspace, each answer's card shows the model a new request reaches first, with its maker's
-logo and the service that receives its requests. If more models are ready, the card shows the count,
-and the list below the cards names every model for your selected answer with its declared handling.
-In user settings, the cards show no model or service: your answer applies to every workspace, and
-each workspace can use a different service.
+You can keep that answer while a workspace owner adds a model.
+You do not need to allow Cloud processing to complete setup.
 
-On your first visit, nothing is preselected. Choose an answer and select **Continue**; on a return
-visit the button reads **Save**. You can choose any answer, including one no workspace has set up yet.
-A workspace adding, removing or re-declaring models never asks you again: your answer stays in force
-and is checked on every request.
+“Set up” describes configuration, not service health.
+Model size, speed, retention, and access depend on the service your organization uses.
+A model’s logo names its maker, not its operator.
+For example, a private endpoint does not automatically make an OpenAI model served by Azure in-house.
 
-To change your answer at any time, open **Your AI choice** in the sidebar of any workspace, which also
-shows that workspace's account links and whether anything there runs within your answer, or open
-**Your AI choice** in **User settings**. Existing feedback and earlier conversations with Heph remain
-readable. With **No AI**, there are no new practice reviews about you, new requests to Heph, or new
-feedback delivery. Requests already sent cannot be recalled. You cannot send, edit, or retry a
-conversation message. Your choice does not remove your work from shared repositories or change other
-members' choices. Research participation is a separate setting.
+1. Ask a workspace owner who operates the deployment and what terms apply to your work.
+
+In a workspace, each answer’s card shows the first model for a new request, its maker’s logo, and the service that receives requests.
+If more models are ready, the card shows their count.
+Below the cards, a list names each model for your selected answer with its declared data use.
+The cards in User settings show no model or service.
+
+To change your answer in User settings:
+
+1. Open **User settings**.
+2. Select **In-house**, **Cloud**, or **No AI**.
+3. Select **Save AI choice**.
+
+For workspace setup instead, open **Your AI choice** in the sidebar.
+Its first-visit buttons depend on which accounts it requires.
+[Connect the accounts your workspace uses](#connect-the-accounts-your-workspace-uses) explains **Save AI choice** and **Save and connect**.
+
+No answer starts selected on your first visit.
+You can choose any answer, including one that no workspace has set up yet.
+Hephaestus checks your saved answer on each request, even if workspace models change.
+
+Existing feedback and earlier Heph conversations stay readable.
+With **No AI**, no new practice reviews about you, Heph requests, or feedback delivery start.
+Hephaestus cannot recall requests already sent.
+You cannot send, edit, or retry a conversation message.
+
+Your choice does not remove work from shared repositories or change other members’ choices.
+Research participation is separate.
 
 ### Connect the accounts your workspace uses
 
-A required link must match the Slack team or Outline instance configured for this workspace. A link
-to a different team or instance does not satisfy it. Connecting an account identifies you on that
-service; it does not enable AI.
+A required account must match the Slack team or Outline instance configured for this workspace.
+An account on a different team or instance does not count.
+Connecting an account identifies you on that service but does not turn on AI.
 
-**Continue** finishes setup once you have chosen an answer and connected the required accounts. Your
-answer is saved when you select **Continue**, **Save AI choice**, or **Save and connect** for an account.
-When required accounts are still open, **Save AI choice** saves your answer without finishing setup.
-This includes **No AI**: you never need to connect an account to opt out. **Skip for now** leaves
-without saving a new answer; an already saved answer stays in effect, and the page waits for you under
-**Your AI choice** until a workspace owner changes the setup. On a return visit, **Save**
-records a new answer whether or not the required accounts are connected, and **Back to workspace**
-leaves without saving. If a required account is unavailable right
-now, it does not hold you up; ask a workspace owner to repair it or remove the requirement. Optional
-accounts never block completion. After finishing or skipping, you return to the workspace page you
-originally opened, including its filters and selected section.
+**Save AI choice** and **Save and connect** both save your answer.
+On your first visit, **Save AI choice** also finishes setup once you have answered and connected every required account.
+If required accounts are still unconnected, it saves your answer without finishing setup.
+This holds for **No AI** too, because you never need to connect an account to opt out.
 
-The sign-in notice and the research question are separate from workspace setup. Linking an account
-or choosing an answer does not change research participation.
+**Skip for now** leaves without saving a new answer.
+An existing answer stays in effect.
+The page stays under **Your AI choice** until a workspace owner changes the setup.
+On return visits, **Save AI choice** records a new answer even if required accounts are unconnected.
+**Back to workspace** leaves without saving.
 
-## Connected Accounts
+An account that is unavailable right now does not block setup.
+Optional accounts never block completion.
+After you finish or skip, you return to the workspace page you came from, with its filters and selected section.
 
-Link the sign-in and project accounts you use. Linking requires a recent sign-in. A linked account
-helps Hephaestus identify your work on that service. It does not grant a workspace membership or
-allow AI processing. You cannot unlink your last sign-in account.
+1. If a required account is unavailable, ask a workspace owner to repair it or remove the requirement.
+
+The sign-in notice and the research question are separate from workspace setup.
+Connected accounts and AI choices do not change research participation.
+
+## Connected accounts
+
+Connecting an account needs a recent sign-in.
+It helps Hephaestus identify your work on that service.
+It grants neither workspace membership nor AI permission.
+You cannot disconnect your last sign-in account.
+
+1. Under **Connected accounts**, select **Connect** next to the service you want to use.
+2. Complete that service’s sign-in process.
+
+For example, connect the Slack account from the workspace where you want to send Heph direct messages.
+To stop using an account, select **Disconnect** next to it.
 
 ## Slack
 
-For each connected Slack workspace, **Use my new channel messages** controls whether new messages
-you write in monitored channels can be used as context for your conversations with Heph. Turning
-it off opens a confirmation dialog. **Turn off & delete** stops new collection and permanently
-deletes your already collected channel-message data in that workspace. It does not remove your
-messages from Slack.
-Read [Your data in Hephaestus](./privacy#your-choices-and-right-to-object) before you use this control.
+For each connected Slack workspace, **Use your new channel messages** controls whether Hephaestus uses your new messages in monitored channels.
+This context supports your Heph conversations.
+
+**CAUTION:** **Stop using and delete** permanently deletes your collected channel-message data in that workspace.
+To keep that collected data, do not confirm deletion.
+It does not remove your messages from Slack.
+
+1. Read [Your data in Hephaestus](./privacy#your-choices-and-right-to-object) before you use this control.
+2. To stop collection, turn off **Use your new channel messages**.
+3. In the confirmation dialog, select **Stop using and delete**.
+
+This stops new collection and deletes the channel-message data already collected.
+
+1. To allow new collection again, turn on **Use your new channel messages**.
+
+This does not restore deleted data.
 
 ## Practice feedback
 
-**Comments and Slack reminders** controls new feedback comments on work you author and reminders
-about feedback prepared for a conversation with Heph. Turning it off does not stop reviews or
-remove existing feedback. Your Practice profile remains available.
-A Slack reminder is a direct message, at most once in 24 hours, when your workspace has connected
-Slack and your Slack account is linked. The reminder does not contain the feedback text.
+**Comments and Slack reminders** controls new feedback comments on work you author.
+It also controls reminders about feedback prepared for your conversations with Heph.
+Turning it off does not stop reviews or remove existing feedback.
+Your Practice profile stays available.
+
+1. To stop new comments and reminders, turn off **Comments and Slack reminders**.
+2. To allow them again, turn it on.
+
+A Slack reminder is a direct message, sent at most once in 24 hours.
+It needs a connected Slack workspace and a connected Slack account.
+It contains no feedback text.
 
 ## Email notifications
 
-Choose which optional emails you receive. Available choices depend on your role and the instance's
-email setup. Survey invitations and research participation are separate choices.
-Your contact address comes from a linked sign-in provider that supplied a verified email address;
-you cannot type a different address here. See [Feedback and surveys](./product-feedback#email-invitations).
+Optional email choices depend on your role and your instance’s email setup.
+Survey invitations and research participation are separate choices.
+Your contact address comes from a connected sign-in provider that supplied a verified email address.
+You cannot enter a different address here.
+[Feedback and surveys](./product-feedback#email-invitations) gives more information.
 
-## Academic research participation
+1. Choose which optional emails to receive.
 
-When the instance runs an academic study, this section lets you change your participation.
-Choosing AI or linking an account does not change this answer. See
-[Your data in Hephaestus](./privacy#signing-in-and-choosing-research-participation).
+## Research participation
+
+If your instance names a research organization, this section lets you change your research answer.
+Turn **Allow research use of my data** on or off.
+AI choices and connected accounts do not change this answer.
+[Your data in Hephaestus](./privacy#signing-in-and-choosing-research-participation) explains the research decision.
+It also explains [what happens when you withdraw](./privacy#research-participation).
 
 ## Privacy
 
-Choose whether to allow optional browser analytics and error monitoring. Essential sign-in storage
-remains necessary. See [Your data in Hephaestus](./privacy) for the data notice and retention policy.
+Essential sign-in storage stays on, because Hephaestus needs it.
+[Your data in Hephaestus](./privacy) gives the data notice and retention policy.
 
-## Active Sessions
+1. Select **Change cookie choices**.
+2. Choose whether to allow optional browser error reports.
 
-This section lists your signed-in browsers and devices, including Chrome extension sessions.
-Each row shows available sign-in, expiry, and network details. **This device** marks the current session.
-Choose **Revoke** to sign another session out.
+This section appears only if your instance offers optional error reports.
 
-To sign out everywhere else, choose **Sign out N other sessions**, then confirm with
-**Sign out others**. Your current session stays signed in. The other sessions must sign in again.
-Use the account menu to sign out of the current session.
+## Active sessions
 
-## Danger Zone
+This section lists the browsers and devices where you are signed in, including Chrome extension sessions.
+Each row shows the available sign-in, expiry, and network details.
+**This device** marks your current session.
 
-Under **Export my data**, select **Request export**. Wait until the export is ready, then download
-it as a JSON file. If preparation fails, select **Retry export**. Keep the downloaded file private.
-An export contains your personal data; it is not an instance backup.
+1. To sign out another session, select **Sign out** on its row.
 
-**Delete account** signs you out on all devices and disables your account after confirmation.
-Permanent deletion follows after a cooldown of about 48 hours. Enter the confirmation phrase shown
-in the dialog; you cannot undo this request from here.
-Do not use this action to leave one workspace or to sign out a device. Read
-[Your data in Hephaestus](./privacy) for erasure details and requests from people who have never signed in.
+To sign out all other sessions:
+
+1. Select **Sign out N other sessions**, where N is the number of other sessions.
+2. In the dialog, select **Sign out other sessions**.
+
+Your current session stays signed in.
+Other sessions must sign in again.
+
+1. To sign out the current session, use the account menu.
+
+## Danger zone
+
+To export your account data:
+
+1. Under **Export your data**, select **Request export**.
+2. If the export fails, select **Request export again**.
+3. Wait until the export is ready.
+4. Select **Download** to save the JSON file.
+5. Keep the downloaded file private.
+
+The download expires 48 hours after preparation.
+The export contains your account data, not all records about your work.
+[Your data in Hephaestus](./privacy#get-a-copy-of-your-data) explains how to request additional records.
+
+**CAUTION:** **Delete account** disables your account and leads to permanent deletion after a cooldown of about 48 hours.
+You cannot undo the request here.
+Do not use it to leave one workspace or sign out a device.
+
+1. Read [Your data in Hephaestus](./privacy) for erasure details and for requests from people who have never signed in.
+2. Select **Delete account**.
+3. In the dialog, enter the confirmation phrase it shows.
+4. Select **Delete account** again.
+
+Confirming signs you out on all devices and disables your account.

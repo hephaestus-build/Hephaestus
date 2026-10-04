@@ -74,7 +74,7 @@ export const NothingInRange: Story = {
 	args: { runs: [run({ estimatedArtifacts: 0, estimatedCostUsd: 0 })] },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: /nothing to review/iu })).toBeDisabled();
-		canvas.getByText(/discard this and try a longer one/iu);
+		canvas.getByText(/discard this estimate and try a longer one/iu);
 	},
 };
 
@@ -166,7 +166,7 @@ export const Loading: Story = {
 export const LoadFailed: Story = {
 	args: { isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/backfills couldn’t be loaded/iu);
-		canvas.getByText(/already running is unaffected/iu);
+		canvas.getByText(/could not load backfills/iu);
+		canvas.getByText(/running backfill is not affected/iu);
 	},
 };

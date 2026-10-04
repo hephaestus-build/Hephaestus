@@ -21,8 +21,9 @@ metadata:
 
 Follow the [writing standard](../../../docs/contributor/simplified-technical-english.md) for all prose.
 
-Diagnose every failing check in one pass, then push once. Fixing 2 of 5 failures burns a push cycle
-and a full CI run.
+Diagnose every failing check in one pass.
+Then push once.
+If you fix only 2 of 5 failures, you waste a push cycle and a full CI run.
 
 ## 1. Wait for the run to finish
 
@@ -60,15 +61,17 @@ Read every failure before changing anything.
 
 ## 3. Fix in dependency order
 
-Formatting, then lint, then types, then behaviour — an earlier fix routinely erases a later failure.
-Each leg's annotation names its own command; this table is only what the annotation cannot tell you.
+Fix formatting first, then lint, then types, then behavior.
+An earlier fix often removes a later failure.
+Each leg's annotation names its own command.
+This table adds only what the annotation cannot tell you.
 
 | Failure | What it actually means |
 |---|---|
 | `routeTree.gen.ts is stale` | A Vite build writes it. `vp run build:webapp`, then commit the file. |
-| `Brand assets are stale` | `Webapp: Stories` runs `export:assets` after `test:storybook`, so the job goes red after a clean pass line. Run `vp run --filter webapp export:assets` and commit `webapp/brand`, `webapp/public`, `docs/images/readme`, `docs/static/img` and `docker/compose.proxy.yaml`. |
-| `App Server: Generated artifacts` | OpenAPI out of sync → `vp run generate:api`; schema drift → `vp run db:draft-changelog`; ERD outdated → `vp run db:generate-erd-docs`. |
-| `Changelog immutability guard` (Security → `Dependencies, secrets, and policy`) | A changelog that reached `main` was edited, renamed or deleted, or a `master.xml` `<include>` was not appended at the end. Fix forward with a new changeset; never edit the released file. |
+| `Brand assets are stale` | `Webapp: Stories` runs `export:assets` after `test:storybook`. Thus, the job fails after a clean pass line. Run `vp run --filter webapp export:assets`. Commit `webapp/brand`, `webapp/public`, `docs/images/readme`, `docs/static/img`, and `docker/compose.proxy.yaml`. |
+| `App Server: Generated artifacts` | OpenAPI out of sync → `vp run generate:api`. Schema drift → `vp run db:draft-changelog`. ERD outdated → `vp run db:generate-erd-docs`. |
+| `Changelog immutability guard` (Security → `Dependencies, secrets, and policy`) | A changelog that reached `main` was edited, renamed or deleted, or a `master.xml` `<include>` was not appended at the end. Fix forward with a new changeset. Never edit the released file. |
 | `Verify changesets` | The PR touches shipped code with no `.changeset/*.md`. `/land-pr` step 7 has the rules. |
 | `Tooling and Docs` red on a docs-only PR | Expected: `docs/**` is in the tooling path filter, where `docs:lint` and `gate:diagrams` run. |
 
@@ -79,11 +82,13 @@ vp run format
 vp run check
 ```
 
-`check` runs the `quality` group in `vite.config.ts`. CI additionally runs tests, builds, images
-and the Docker-backed artifact gates; green `check` with red CI means one of those.
+`check` runs the `quality` group in `vite.config.ts`. CI also runs tests, builds, images
+and the Docker-backed artifact gates.
+If `check` passes but CI fails, one of those checks failed.
 
 Server tiers: `vp run test:server:unit`, `vp run test:server:architecture`,
-`vp run test:server:integration`; `server/AGENTS.md` § Build traps and § Test tiers have the rest.
+`vp run test:server:integration`.
+`server/AGENTS.md` § Build traps and § Test tiers have the rest.
 
 ## 5. Commit and push once
 

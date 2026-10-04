@@ -14,9 +14,9 @@ public record SourceKind(String value) implements Comparable<SourceKind> {
         Objects.requireNonNull(value, "value");
         if (!FORMAT.matcher(value).matches()) {
             // The author may have typed it, so it says what an id looks like rather than only that this is not one.
-            throw new IllegalArgumentException(
-                    value + " is not an evidence source id. An id is lower-case words joined by dots, such as "
-                            + "scm.pull-request.diff.");
+            throw new IllegalArgumentException(value
+                    + " is not an evidence source id. An id has lowercase words with dots between them, for example "
+                    + "scm.pull-request.diff.");
         }
     }
 

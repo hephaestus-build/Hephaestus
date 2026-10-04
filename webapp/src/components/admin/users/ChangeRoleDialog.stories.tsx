@@ -34,7 +34,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Granting Instance admin — destructive-styled "Grant admin" action; confirming reports the next role. */
+/** Granting Instance admin — destructive-styled "Grant instance admin" action; confirming reports the next role. */
 export const GrantAdmin: Story = {
 	args: { user: regularUser, icon: ShieldCheck },
 	play: async ({ args }) => {
@@ -43,7 +43,7 @@ export const GrantAdmin: Story = {
 		await expect(screen.getByRole("alertdialog")).toHaveTextContent(
 			/gets the Instance admin role/u,
 		);
-		await userEvent.click(screen.getByRole("button", { name: "Grant admin" }));
+		await userEvent.click(screen.getByRole("button", { name: "Grant instance admin" }));
 		await expect(args.onConfirm).toHaveBeenCalledWith(regularUser, "APP_ADMIN");
 	},
 };
@@ -53,7 +53,7 @@ export const RevokeAdmin: Story = {
 	args: { user: adminUser, icon: ShieldOff },
 	play: async ({ args }) => {
 		await screen.findByRole("alertdialog");
-		await userEvent.click(screen.getByRole("button", { name: "Revoke admin" }));
+		await userEvent.click(screen.getByRole("button", { name: "Revoke instance admin" }));
 		await expect(args.onConfirm).toHaveBeenCalledWith(adminUser, "USER");
 	},
 };
@@ -63,6 +63,6 @@ export const Pending: Story = {
 	args: { user: regularUser, icon: ShieldCheck, isPending: true },
 	play: async () => {
 		await screen.findByRole("alertdialog");
-		await expect(screen.getByRole("button", { name: /grant admin/iu })).toBeDisabled();
+		await expect(screen.getByRole("button", { name: /grant instance admin/iu })).toBeDisabled();
 	},
 };

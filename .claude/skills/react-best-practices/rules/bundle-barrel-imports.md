@@ -11,7 +11,7 @@ Import directly from source files instead of barrel files to avoid loading thous
 
 Popular icon and component libraries can have **up to 10,000 re-exports** in their entry file. For many React packages, **it takes 200-800ms just to import them**, affecting both development speed and production cold starts.
 
-**Why tree-shaking doesn't help:** When a library is marked as external (not bundled), the bundler can't optimize it. If you bundle it to enable tree-shaking, builds become substantially slower analyzing the entire module graph.
+**Why tree-shaking does not help:** When a library is marked as external (not bundled), the bundler cannot optimize it. If you bundle it to enable tree-shaking, builds become substantially slower analyzing the entire module graph.
 
 **Incorrect (imports entire library):**
 

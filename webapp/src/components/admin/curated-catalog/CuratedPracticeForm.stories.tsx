@@ -179,7 +179,7 @@ export const HephaestusUpdateAvailable: Story = {
 		},
 		groups,
 		isPending: false,
-		releaseReview: <p>Compare the adopted, saved, and offered fields.</p>,
+		releaseReview: <p>Compare the adopted, saved, and proposed fields.</p>,
 		onUseHephaestusVersion: fn(),
 		onKeepCurrentDefinition: fn(),
 		onSubmit: fn(),
@@ -187,7 +187,9 @@ export const HephaestusUpdateAvailable: Story = {
 	play: async () => {
 		const popup = await settledDrawerPanel();
 		await expectPanelContentInset(popup);
-		await expect(screen.getByText("Compare the adopted, saved, and offered fields.")).toBeVisible();
+		await expect(
+			screen.getByText("Compare the adopted, saved, and proposed fields."),
+		).toBeVisible();
 		await expect(
 			screen.queryByRole("button", { name: "Keep saved version" }),
 		).not.toBeInTheDocument();
@@ -205,7 +207,9 @@ export const ValidationErrors: Story = {
 	play: async () => {
 		await settledDrawerPanel();
 		await userEvent.click(screen.getByRole("button", { name: "Create practice" }));
-		await expect(screen.getByText("Name must be at least 3 characters")).toBeVisible();
+		await expect(screen.getByRole("textbox", { name: /Name/u })).toHaveAccessibleDescription(
+			"Enter a name of at least 3 characters.",
+		);
 		await expect(screen.queryByText("Select at least one trigger event")).not.toBeInTheDocument();
 		await expect(screen.getByRole("textbox", { name: /Name/u })).toHaveAttribute(
 			"aria-describedby",

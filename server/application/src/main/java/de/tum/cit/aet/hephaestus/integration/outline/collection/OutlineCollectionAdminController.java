@@ -101,7 +101,7 @@ public class OutlineCollectionAdminController {
     @ApiResponse(
             responseCode = "503",
             description =
-                    "Outline is rate-limiting requests; the Retry-After header carries the seconds to wait before retrying",
+                    "Outline limited the request rate. The Retry-After header carries the seconds to wait before retrying.",
             content = @Content(schema = @Schema(hidden = true)))
     public ResponseEntity<List<OutlineCollectionCandidateDTO>> listOutlineCollectionCandidates(
             WorkspaceContext workspace) {

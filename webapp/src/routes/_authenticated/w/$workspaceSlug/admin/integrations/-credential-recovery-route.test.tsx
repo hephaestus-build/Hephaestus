@@ -100,7 +100,7 @@ describe("source-control credential recovery", () => {
 
 			await screen.findByRole("button", { name: "Sync now" }, ROUTE_RENDER_WAIT);
 			expect(requests).toStrictEqual([{ personalAccessToken: "replacement-token" }]);
-			expect(screen.queryByText("The stored token can’t be read")).toBeNull();
+			expect(screen.queryByText("The stored token cannot be read")).toBeNull();
 			await waitFor(() => expect(input).toHaveProperty("value", ""));
 		},
 	);
@@ -122,14 +122,16 @@ describe("source-control credential recovery", () => {
 			}),
 		);
 		renderRouteAt("/w/acme/admin/integrations/scm");
-		await screen.findByText("GitLab refuses this token", undefined, ROUTE_RENDER_WAIT);
-		screen.getByText("Token expires on 5 December 2026");
+		await screen.findByText("GitLab no longer accepts this token", undefined, ROUTE_RENDER_WAIT);
+		screen.getByText("The token expires on 5 December 2026.");
 		const user = userEvent.setup();
 		await user.type(screen.getByLabelText("New personal access token"), "replacement-token");
 		await user.click(screen.getByRole("button", { name: "Replace token" }));
-		await waitFor(() => expect(screen.queryByText("GitLab refuses this token")).toBeNull());
-		expect(screen.queryByText("Token expires on 5 December 2026")).toBeNull();
-		await screen.findByText("Token expiry is not available yet");
+		await waitFor(() =>
+			expect(screen.queryByText("GitLab no longer accepts this token")).toBeNull(),
+		);
+		expect(screen.queryByText("The token expires on 5 December 2026.")).toBeNull();
+		await screen.findByText("The token expiry is not available yet.");
 	});
 
 	it("keeps the draft and the unreadable state when replacement fails", async () => {
@@ -158,7 +160,7 @@ describe("source-control credential recovery", () => {
 
 		await screen.findByText("This connection changed. Reload before replacing its token.");
 		expect(input).toHaveProperty("value", "replacement-token");
-		screen.getByText("The stored token can’t be read");
+		screen.getByText("The stored token cannot be read");
 		expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
 	});
 
@@ -183,7 +185,7 @@ describe("source-control credential recovery", () => {
 		const user = userEvent.setup();
 		await user.type(input, "acme-private-token");
 		await user.click(screen.getByRole("button", { name: "Replace token" }));
-		await screen.findByRole("button", { name: "Saving token…" });
+		await screen.findByRole("button", { name: "Replacing token…" });
 		try {
 			await act(async () =>
 				router.navigate({
@@ -255,7 +257,7 @@ describe("Slack credential recovery", () => {
 
 		await screen.findByText("Token unreadable", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.queryByText("Connected")).toBeNull();
-		expect(screen.queryByText(/can post as the app/u)).toBeNull();
+		expect(screen.queryByText(/can post in Slack/u)).toBeNull();
 		screen.getByText(/reconnect slack to replace it/iu);
 		expect(
 			screen.getByRole<HTMLButtonElement>("button", { name: /disconnect slack/iu }).disabled,
@@ -344,7 +346,7 @@ describe("Slack credential recovery", () => {
 
 		await screen.findByText("Connected", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.queryByText("Token unreadable")).toBeNull();
-		screen.getByText(/can post as the app/iu);
+		screen.getByText(/can post in Slack/iu);
 	});
 });
 

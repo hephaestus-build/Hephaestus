@@ -58,7 +58,11 @@ export function WorkspaceLlmUsagePage({
 			/>
 
 			{view.status === "error" && (
-				<QueryErrorAlert error={view.error} title="Couldn't load AI usage" onRetry={view.onRetry} />
+				<QueryErrorAlert
+					error={view.error}
+					title="We could not load AI usage"
+					onRetry={view.onRetry}
+				/>
 			)}
 			{view.status === "loading" && <UsageSkeleton />}
 			{view.status === "ready" && (

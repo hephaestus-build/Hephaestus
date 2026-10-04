@@ -81,7 +81,7 @@ public class AgentBindingService {
             // PracticePiAdapter enforces an internal network regardless of stored configuration.
             if (request.allowInternet() && purpose == AgentPurpose.PRACTICE_REVIEW) {
                 throw new IllegalArgumentException(
-                        "Practice reviews run on an internal network; internet access can only be enabled for Heph.");
+                        "Practice reviews run on an internal network. Only Heph can have internet access.");
             }
             binding.setAllowInternet(request.allowInternet());
         }
@@ -119,7 +119,7 @@ public class AgentBindingService {
             @Nullable Long workspaceModelId) {
         if ((instanceModelId == null) == (workspaceModelId == null)) {
             throw new IllegalArgumentException(
-                    "A binding must reference exactly one model — a shared model or your own provider's model.");
+                    "A binding must reference exactly one model. Use a shared model or a model from your own provider.");
         }
         if (instanceModelId != null) {
             LlmModel model = llmModelRepository
@@ -148,7 +148,7 @@ public class AgentBindingService {
             }
         }
         if (!llmModelResolver.isAvailable(binding)) {
-            throw new IllegalArgumentException("This model isn't available to this workspace.");
+            throw new IllegalArgumentException("This model is not available to this workspace.");
         }
     }
 

@@ -138,10 +138,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 		afterLink,
 	});
 
-	let saveLabel = firstVisit ? "Continue" : "Save";
-	if (firstVisit && !requiredSatisfied && changed) {
-		saveLabel = "Save AI choice";
-	}
+	let saveLabel = "Save AI choice";
 	if (savingAction === "save") {
 		saveLabel = "Saving…";
 	}
@@ -187,7 +184,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 					{state.status === "error" && (
 						<QueryErrorAlert
 							error={state.error}
-							title="Couldn't load your setup"
+							title="We could not load your setup"
 							onRetry={state.onRetry}
 						/>
 					)}
@@ -205,7 +202,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 								<QuestionnaireDescription>
 									Hephaestus reviews your work against your team’s practices, and Heph talks it
 									through with you. Choose which AI may do that. Cloud also allows in-house models.
-									Sync and stored work do not change.
+									What Hephaestus syncs and stores does not change.
 								</QuestionnaireDescription>
 								<fieldset disabled={saving} className="min-w-0 disabled:opacity-50">
 									<AiChoiceCards
@@ -262,7 +259,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 												const team = hasText(link.teamName) ? ` for ${link.teamName}` : "";
 												const rowDescription =
 													!link.available && !link.linked
-														? `Unavailable right now${team}. It doesn't hold you up.`
+														? `Unavailable right now${team}. You can continue without it.`
 														: `${link.required ? "Required" : "Optional"}${team}`;
 												const descriptionId = `${id}-link-${link.connectionId}`;
 												return (
@@ -290,7 +287,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 																		!link.available || !hasText(link.registrationId) || saving
 																	}
 																	aria-describedby={descriptionId}
-																	aria-label={`${changed ? "Save AI choice and connect" : "Connect"} ${link.displayName}`}
+																	aria-label={`${changed ? "Save and connect" : "Connect"} ${link.displayName}`}
 																	onClick={() => {
 																		if (hasText(link.registrationId)) {
 																			state.onLink(link.registrationId, draft);
@@ -316,7 +313,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 					{ready?.refresh?.status === "error" && (
 						<QueryErrorAlert
 							error={ready.refresh.error}
-							title="Couldn't refresh your setup"
+							title="We could not refresh your setup"
 							onRetry={ready.refresh.onRetry}
 						/>
 					)}
@@ -324,8 +321,8 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 						<Alert ref={alertRef} tabIndex={-1} variant="destructive">
 							<AlertTitle>
 								{submission.action === "save"
-									? "Couldn't save your AI choice"
-									: "Couldn't continue to your workspace"}
+									? "We could not save your AI choice"
+									: "We could not continue to your workspace"}
 							</AlertTitle>
 							<AlertDescription>{submission.message}</AlertDescription>
 						</Alert>
@@ -412,17 +409,17 @@ function onboardingNarration({
 	afterLink: boolean;
 }): string {
 	if (status === "loading") {
-		return "Give me a moment. Hephaestus is fetching your setup.";
+		return "Give me a moment. I’m fetching your setup.";
 	}
 	if (status === "error") {
-		return "Hephaestus couldn't fetch your setup just now.";
+		return "I could not fetch your setup just now.";
 	}
 	if (changed) {
 		const uncovered =
-			coverage === "none" ? "That isn't set up here yet. Nothing switches you elsewhere. " : "";
+			coverage === "none" ? "That is not set up here yet. Nothing switches you elsewhere. " : "";
 		if (firstVisit) {
 			return requiredSatisfied
-				? `${uncovered}Press Continue and it holds in every workspace.`
+				? `${uncovered}Select Save AI choice to apply your choice in every workspace.`
 				: `${uncovered}Save your AI choice now. You can connect your accounts separately.`;
 		}
 		return `${uncovered}Save to apply your new choice in every workspace. Requests already sent cannot be recalled.`;
@@ -431,23 +428,23 @@ function onboardingNarration({
 		return "Compare the three below. Any answer is fine, including none.";
 	}
 	if (coverage === "none") {
-		return "Your choice isn't set up here yet. Nothing switches you anywhere else.";
+		return "Your choice is not set up here yet. Nothing switches you anywhere else.";
 	}
 	if (coverage === "partial") {
-		return "Part of your choice isn't set up here yet. Nothing switches you anywhere else.";
+		return "Part of your choice is not set up here yet. Nothing switches you anywhere else.";
 	}
 	if (firstVisit && answered) {
 		return requiredSatisfied
-			? "Your AI choice is set and holds in all your workspaces. Let's get to work."
-			: `Your AI choice is set and holds in all your workspaces. Connect ${openRequiredNames} and you're in.`;
+			? "Your AI choice is set and holds in all your workspaces. Let’s get to work."
+			: `Your AI choice is set and holds in all your workspaces. Connect ${openRequiredNames} and you’re in.`;
 	}
 	if (firstVisit) {
 		return requiredSatisfied
-			? "That's everything. Let's get to work."
-			: `Noted. Connect ${openRequiredNames} and you're in.`;
+			? "That’s everything. Let’s get to work."
+			: `Noted. Connect ${openRequiredNames} and you’re in.`;
 	}
 	if (afterLink) {
-		return "Your accounts are connected. Head back to your workspace whenever you're ready.";
+		return "Your accounts are connected. Head back to your workspace whenever you’re ready.";
 	}
 	return `You chose ${memberAiChoiceTitle(choice)}. Change it whenever you like.`;
 }
@@ -484,7 +481,7 @@ function memberSetupState(
 				? `Save your AI choice now. Connect ${openRequiredNames} to finish setup.`
 				: `Connect ${openRequiredNames} to finish setup.`;
 		} else if (!firstVisit && !changed) {
-			hint = "Applies in all your workspaces. Change it any time.";
+			hint = "Applies in all your workspaces. You can change your answer at any time.";
 		}
 	}
 
@@ -526,7 +523,7 @@ function WorkspaceModels({
 					const detail = [
 						model.brand ? AI_MODEL_BRAND_META[model.brand].label : undefined,
 						model.connectionPlatform
-							? `via ${AI_CONNECTION_PLATFORM_META[model.connectionPlatform].label}`
+							? `through ${AI_CONNECTION_PLATFORM_META[model.connectionPlatform].label}`
 							: undefined,
 					].filter((part) => part !== undefined);
 					return (
@@ -551,8 +548,8 @@ function WorkspaceModels({
 				})}
 			</ItemGroup>
 			<p className="text-xs text-muted-foreground">
-				Your admins declare whether each model is in-house or cloud. Logos name the maker and the
-				service; they do not decide where your work goes.
+				Your admins declare whether each model is in-house or cloud. The icons show who made a model
+				and which service runs it. They do not decide where your work goes.
 			</p>
 		</section>
 	);

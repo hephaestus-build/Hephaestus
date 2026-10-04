@@ -172,7 +172,7 @@ function CatalogTreeHarness({
 				</DropdownMenu>
 			)}
 			getEmptyLabel={(_groupSlug, total) =>
-				total > 0 ? "No practice here matches the search." : "Nothing filed here yet."
+				total > 0 ? "No matching practices." : "Nothing filed here yet."
 			}
 		/>
 	);
@@ -235,7 +235,7 @@ const dragTo = async (handle: HTMLElement, clientY: number) => {
 	send("pointermove", clientY);
 	await waitFor(async () => expect(announcement()).toMatch(/^Moving/u));
 	send("pointerup", clientY);
-	await waitFor(async () => expect(announcement()).toMatch(/^(?:Moved|Move cancelled)/u));
+	await waitFor(async () => expect(announcement()).toMatch(/^(?:Moved|Move canceled)/u));
 };
 
 export const Default: Story = {};
@@ -383,7 +383,7 @@ export const FilteringHidesRowsWithoutShrinkingTheCounts: Story = {
 
 		// Unassigned is a bucket rather than a group, and counts the same way.
 		await expect(canvas.getByText("Unassigned").parentElement).toHaveTextContent("1");
-		await expect(canvas.getByText("No practice here matches the search.")).toBeVisible();
+		await expect(canvas.getByText("No matching practices.")).toBeVisible();
 	},
 };
 

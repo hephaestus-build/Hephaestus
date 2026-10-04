@@ -8,7 +8,7 @@ tags: composition, children, render-props
 ## Prefer Children Over Render Props
 
 Use `children` for composition instead of `renderX` props. Children are more
-readable, compose naturally, and don't require understanding callback
+readable, compose naturally, and do not require understanding callback
 signatures.
 
 **Incorrect (render props):**

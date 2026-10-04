@@ -41,7 +41,8 @@ class GitLabMrResolver {
                 .block(GRAPHQL_TIMEOUT);
 
         if (response == null) {
-            throw new FeedbackDeliveryException("Null response resolving MR info: " + projectPath + "!" + mrIid);
+            throw new FeedbackDeliveryException(
+                    "The lookup of the MR info returned no response: " + projectPath + "!" + mrIid);
         }
 
         String globalId = Objects.requireNonNull(response)
@@ -49,7 +50,7 @@ class GitLabMrResolver {
                 .getValue();
         if (globalId == null) {
             List<?> errors = Objects.requireNonNull(response).getErrors();
-            throw new FeedbackDeliveryException("MR not found via GraphQL: " + projectPath
+            throw new FeedbackDeliveryException("MR not found through GraphQL: " + projectPath
                     + "!"
                     + mrIid
                     + (errors.isEmpty() ? "" : ", errors=" + errors));
@@ -88,7 +89,7 @@ class GitLabMrResolver {
             iid = Integer.parseInt(subjectExternalId.substring(bangIdx + 1));
         } catch (NumberFormatException e) {
             throw new FeedbackDeliveryException(
-                    "Invalid GitLab MR subjectExternalId — iid must be integer: " + subjectExternalId, e);
+                    "Invalid GitLab MR subjectExternalId. The iid must be an integer: " + subjectExternalId, e);
         }
         return new MrCoordinates(projectPath, iid);
     }
@@ -108,12 +109,13 @@ class GitLabMrResolver {
                 .block(GRAPHQL_TIMEOUT);
 
         if (response == null) {
-            throw new FeedbackDeliveryException("Null response resolving issue gid: " + projectPath + "#" + issueIid);
+            throw new FeedbackDeliveryException(
+                    "The lookup of the issue gid returned no response: " + projectPath + "#" + issueIid);
         }
         String gid = Objects.requireNonNull(response).field("project.issue.id").getValue();
         if (gid == null) {
             List<?> errors = Objects.requireNonNull(response).getErrors();
-            throw new FeedbackDeliveryException("Issue not found via GraphQL: " + projectPath
+            throw new FeedbackDeliveryException("Issue not found through GraphQL: " + projectPath
                     + "#"
                     + issueIid
                     + (errors.isEmpty() ? "" : ", errors=" + errors));
@@ -137,7 +139,7 @@ class GitLabMrResolver {
                     Integer.parseInt(subjectExternalId.substring(hashIdx + 1)));
         } catch (NumberFormatException e) {
             throw new FeedbackDeliveryException(
-                    "Invalid GitLab issue subjectExternalId — iid must be integer: " + subjectExternalId, e);
+                    "Invalid GitLab issue subjectExternalId. The iid must be an integer: " + subjectExternalId, e);
         }
     }
 

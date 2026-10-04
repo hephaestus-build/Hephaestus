@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { getNotificationPreferencesQueryKey } from "@/api/@tanstack/react-query.gen";
+import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
@@ -27,7 +28,7 @@ describe("account email choices", () => {
 			http.get("*/user/consent", () =>
 				HttpResponse.json({
 					completed: true,
-					noticeVersion: "2026-09-11",
+					noticeVersion: WORDING_VERSION,
 					participateInResearch: false,
 					researchOrganization: "AET",
 				}),
@@ -41,7 +42,7 @@ describe("account email choices", () => {
 			http.get("*/user/consent", () =>
 				HttpResponse.json({
 					completed: true,
-					noticeVersion: "2026-09-11",
+					noticeVersion: WORDING_VERSION,
 					participateInResearch: false,
 				}),
 			),

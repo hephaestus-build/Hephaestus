@@ -32,7 +32,7 @@ export default async function keepsViewsFreeOfNetworkingAndPersistence(
 	const directions: string[] = [...sampleNote(scan)];
 	if (scan.matched > 0) {
 		directions.push(
-			`${scan.matched} I/O call(s) added inside or possibly inside a view type — read each hint's enclosing type; a line placed in a store or model is not the view's I/O.`,
+			`${scan.matched} candidate I/O calls were added inside or possibly inside view types. Read each hint's enclosing type. A line in a store or model is not the view's I/O. SwiftUI @AppStorage and @SceneStorage, Core Data @FetchRequest, and the supported SwiftData view-side APIs are not direct I/O.`,
 		);
 	}
 	if (scan.filesWithoutCheckout > 0) {

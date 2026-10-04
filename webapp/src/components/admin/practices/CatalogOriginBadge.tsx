@@ -17,8 +17,6 @@ function describeOrigin({ origin, kind }: CatalogOriginProps) {
 	if (!origin) {
 		return null;
 	}
-	// `kind` is the code word; these are the two words the reader sees.
-	const subject = kind === "practice" ? "practice definition" : "group details";
 	const noun = kind === "practice" ? "practice" : "group";
 
 	if (!origin.sourceOffered) {
@@ -32,29 +30,29 @@ function describeOrigin({ origin, kind }: CatalogOriginProps) {
 			label: "Catalog changed, yours did not",
 			explanation:
 				kind === "practice"
-					? "The catalogue changed. Your copy is untouched. Review the proposed fields in Practice updates."
-					: `The catalog now has different ${subject}. Your copy is untouched — bring anything you want across by editing it.`,
+					? "The catalog changed. Your copy is untouched. Review the proposed fields in Practice updates."
+					: "The catalog now has different group details. Your copy is untouched. Edit it to bring anything you want across.",
 		};
 	}
 	if (origin.link === "DECLINED") {
 		return {
 			label: "Update declined",
 			explanation:
-				"You declined this catalogue version. Your copy is unchanged. A different version can be offered later.",
+				"You declined this catalog version. Your copy is unchanged. A different version can be proposed later.",
 		};
 	}
 	if (origin.link === "IN_SYNC") {
 		return {
 			label: "Same as the catalog",
-			explanation: `These ${subject} match the catalog now. A later catalog change will not edit your copy without your decision.`,
+			explanation: `${kind === "practice" ? "This practice matches" : "These group details match"} the catalog now. A later catalog change will not edit your copy without your decision.`,
 		};
 	}
 	return {
 		label: "Edited here",
 		explanation:
 			kind === "practice"
-				? "This workspace changed the practice. A separate catalogue update may also be waiting in Practice updates."
-				: `The ${subject} differ from the version copied into this workspace.`,
+				? "This workspace changed the practice. A separate catalog update may also be waiting in Practice updates."
+				: "The group details differ from the version copied into this workspace.",
 	};
 }
 

@@ -123,7 +123,8 @@ public class SyncEventHub {
                             MAX_EMITTERS_PER_WORKSPACE);
                 }
                 subscriptionsRejected.increment();
-                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many live sync streams");
+                throw new ResponseStatusException(
+                        HttpStatus.TOO_MANY_REQUESTS, "Too many live sync streams. Close one and try again.");
             }
             subscribers.add(subscriber);
         }

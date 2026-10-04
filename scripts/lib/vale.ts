@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,7 +9,14 @@ import { stringify } from "yaml";
 
 import { asArray, asRecord, asString, parseJson } from "./json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
-import { approvedWords, productTerms, steRoot, substitutions, contractions } from "./ste-words.ts";
+import {
+	approvedWords,
+	contractions,
+	negativeContractions,
+	productTerms,
+	steRoot,
+	substitutions,
+} from "./ste-words.ts";
 
 const root = fileURLToPath(steRoot);
 const toolchain = asRecord(
@@ -51,45 +58,94 @@ export function executableFromArchive(bytes: Uint8Array, windows: boolean): Uint
 	});
 }
 
-export async function prepareVale(): Promise<{ binary: string; dispose: () => Promise<void> }> {
-	const asset = assetFor(process.platform, process.arch);
-	const cache = path.join(root, ".cache", "ste");
-	await mkdir(cache, { recursive: true });
-	const archive = path.join(cache, `${asset.sha256}-${asset.name}`);
-	let bytes = await readFile(archive).catch(() => undefined);
-	if (bytes === undefined) {
-		const response = await fetch(`${asString(toolchain.url, "release URL")}${asset.name}`, {
-			signal: AbortSignal.timeout(120_000),
-		});
-		if (!response.ok) {
-			throw new Error(`Vale download returned ${response.status}. Retry the pinned release URL.`);
-		}
-		bytes = Buffer.from(await response.arrayBuffer());
+export async function installValeBinary(options: {
+	cache: string;
+	version: string;
+	asset: ReturnType<typeof assetFor>;
+	url: string;
+	windows: boolean;
+}): Promise<string> {
+	const { cache, version, asset, url, windows } = options;
+	const directory = path.join(cache, `vale-${version}-${asset.sha256}`);
+	const name = windows ? "vale.exe" : "vale";
+	const binary = path.join(directory, name);
+	const archive = path.join(directory, asset.name);
+	const verifyInstallation = async () => {
+		const bytes = await readFile(archive);
 		verifyArchive(bytes, asset.sha256);
-		const temporary = await mkdtemp(path.join(cache, "download-"));
-		try {
-			const file = path.join(temporary, asset.name);
-			await writeFile(file, bytes);
-			await rename(file, archive);
-		} finally {
-			await rm(temporary, { recursive: true, force: true });
+		const expected = executableFromArchive(bytes, windows);
+		const executable = await readFile(binary);
+		if (!executable.equals(expected)) {
+			throw new Error(
+				"Vale executable differs from the pinned archive. Remove its cache directory.",
+			);
+		}
+	};
+
+	try {
+		await verifyInstallation();
+		return binary;
+	} catch (error) {
+		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+			throw error;
 		}
 	}
+
+	const response = await fetch(`${url}${asset.name}`, {
+		signal: AbortSignal.timeout(120_000),
+	});
+	if (!response.ok) {
+		throw new Error(`Vale download returned ${response.status}. Retry the pinned release URL.`);
+	}
+	const bytes = new Uint8Array(await response.arrayBuffer());
 	verifyArchive(bytes, asset.sha256);
-	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-vale-"));
+	const executable = executableFromArchive(bytes, windows);
+	await mkdir(cache, { recursive: true });
+	const temporary = await mkdtemp(path.join(cache, "install-"));
+	try {
+		await writeFile(path.join(temporary, asset.name), bytes);
+		await writeFile(path.join(temporary, name), executable, { mode: 0o700 });
+		// A nonempty directory cannot be replaced. No staging executable is run.
+		try {
+			await rename(temporary, directory);
+		} catch (error) {
+			try {
+				await verifyInstallation();
+			} catch {
+				throw error;
+			}
+		}
+	} finally {
+		await rm(temporary, { recursive: true, force: true });
+	}
+	return binary;
+}
+
+export interface Vale {
+	binary: string;
+	config: string;
+	dispose: () => Promise<void>;
+}
+
+export async function prepareVale(): Promise<Vale> {
+	const binary = await installValeBinary({
+		cache: path.join(root, ".cache", "ste"),
+		version: asString(toolchain.version, "Vale version"),
+		asset: assetFor(process.platform, process.arch),
+		url: asString(toolchain.url, "release URL"),
+		windows: process.platform === "win32",
+	});
+	const version = execFileSync(binary, ["--version"], { encoding: "utf8" }).trim();
+	if (version !== `vale version ${asString(toolchain.version, "Vale version")}`) {
+		throw new Error(`Unexpected Vale version: ${version}. Use the pinned archive.`);
+	}
+	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-vale-config-"));
 	const dispose = async () => {
 		await rm(directory, { recursive: true, force: true });
 	};
 	try {
-		const binary = path.join(directory, process.platform === "win32" ? "vale.exe" : "vale");
-		await writeFile(binary, executableFromArchive(bytes, process.platform === "win32"));
-		await chmod(binary, 0o700);
-		const version = execFileSync(binary, ["--version"], { encoding: "utf8" }).trim();
-		if (version !== `vale version ${asString(toolchain.version, "Vale version")}`) {
-			throw new Error(`Unexpected Vale version: ${version}. Use the pinned archive.`);
-		}
 		await generateWordStyles(directory);
-		return { binary, dispose };
+		return { binary, config: path.join(directory, "vale.ini"), dispose };
 	} catch (error) {
 		await dispose();
 		throw error;
@@ -137,6 +193,16 @@ async function generateWordStyles(directory: string): Promise<void> {
 		}),
 	);
 	await writeFile(
+		path.join(styles, "STE", "NegativeContractions.yml"),
+		stringify({
+			extends: "substitution",
+			level: "error",
+			ignorecase: true,
+			message: 'Write "%s" instead of "%s". Spell out a negative contraction.',
+			swap: Object.fromEntries(negativeContractions.map(({ from, to }) => [from, to])),
+		}),
+	);
+	await writeFile(
 		path.join(styles, "STE", "Words.yml"),
 		stringify({
 			extends: "substitution",
@@ -156,7 +222,7 @@ export interface ValeAlert {
 }
 
 export function valeAlerts(
-	binary: string,
+	vale: Pick<Vale, "binary" | "config">,
 	files: string[],
 	level = "suggestion",
 ): Map<string, ValeAlert[]> {
@@ -167,14 +233,8 @@ export function valeAlerts(
 		}
 	}
 	const result = spawnSync(
-		binary,
-		[
-			"--config",
-			path.join(path.dirname(binary), "vale.ini"),
-			"--output=JSON",
-			`--minAlertLevel=${level}`,
-			...files,
-		],
+		vale.binary,
+		["--config", vale.config, "--output=JSON", `--minAlertLevel=${level}`, ...files],
 		{
 			cwd: root,
 			encoding: "utf8",

@@ -194,7 +194,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
         assertThat(res.getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         assertThat(res.getHeader(HttpHeaders.RETRY_AFTER)).isNotNull();
         assertThat(Long.parseLong(res.getHeader(HttpHeaders.RETRY_AFTER))).isGreaterThanOrEqualTo(1);
-        assertThat(res.getContentAsString()).contains("Too Many Requests").contains("retryAfterSeconds");
+        assertThat(res.getContentAsString()).contains("Too many requests").contains("retryAfterSeconds");
         assertThat(store).containsOnlyKeys("oauth-authz:ip:203.0.113.7");
         // the 429 path increments the rate-limit metric, tagged by the bucket namespace
         assertThat(blockedCount("oauth-authz")).isEqualTo(1d);

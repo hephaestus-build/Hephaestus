@@ -34,7 +34,7 @@ public class SlackChannelControllerAdvice {
         problem.setDetail(Optional.ofNullable(exception.getMessage())
                 .map(LoggingUtils::sanitizeForLog)
                 .filter(s -> !s.isBlank())
-                .orElse("The requested consent transition is not allowed from the channel's current state."));
+                .orElse("The channel state does not allow the requested consent transition."));
         return problem;
     }
 
@@ -53,7 +53,7 @@ public class SlackChannelControllerAdvice {
             case "is_archived" -> "Unarchive the Slack channel or choose another channel.";
             case "missing_scope" -> "Reinstall the Slack app with the required scopes, then try again.";
             case "no_active_slack_connection" -> "Reconnect Slack for this workspace, then try again.";
-            default -> "Slack rejected the channel operation. Try again after checking the channel and app access.";
+            default -> "Slack rejected the channel operation. Check the channel and the app access, then try again.";
         };
     }
 }

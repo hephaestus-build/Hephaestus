@@ -76,7 +76,7 @@ function AdminUsageContainer() {
 		},
 		onError: (saveError) => {
 			if (!isCapDialogOnScreenRef.current) {
-				toast.error("Couldn't save the cap", { description: problemDetailOf(saveError) });
+				toast.error("We could not save the cap", { description: problemDetailOf(saveError) });
 			}
 		},
 	});
@@ -105,7 +105,7 @@ function AdminUsageContainer() {
 				serverError={
 					updateOwnProviderCap.error == null
 						? null
-						: problemDetailOf(updateOwnProviderCap.error, "Couldn't save the cap")
+						: problemDetailOf(updateOwnProviderCap.error, "We could not save the cap")
 				}
 				onOpenChange={(open) => {
 					if (!open) {

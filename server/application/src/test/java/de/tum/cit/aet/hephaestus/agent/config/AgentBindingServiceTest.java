@@ -174,7 +174,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
         assertThatThrownBy(() ->
                         service.upsertBinding(context(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.CLOUD, request))
                 .isInstanceOf(AgentBindingSlotMismatchException.class)
-                .hasMessage("This model is declared as a different tier; assign it to that row.")
+                .hasMessage("This model is declared as a different tier. Assign it to that row.")
                 .extracting("declaredTier")
                 .isEqualTo(DataHandlingTier.IN_HOUSE);
         verify(llmModelResolver, never()).isAvailable(any(WorkspaceAgentBinding.class));
@@ -196,8 +196,8 @@ class AgentBindingServiceTest extends BaseUnitTest {
         assertThatThrownBy(
                         () -> service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.IN_HOUSE, request))
                 .isInstanceOf(AgentBindingSlotMismatchException.class)
-                .hasMessage("This model's data handling isn't declared yet. "
-                        + "Declare it first, or assign it to Members who haven't chosen.")
+                .hasMessage("This model’s data handling is not declared yet. "
+                        + "Declare it first, or assign it to Members who have not chosen.")
                 .extracting("declaredTier")
                 .isNull();
         verify(bindingRepository, never()).save(any());

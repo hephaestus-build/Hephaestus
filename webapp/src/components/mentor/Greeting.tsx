@@ -7,8 +7,8 @@ export function Greeting() {
 			<div className="mb-4 flex items-center gap-4">
 				<HephIcon className="text-muted-foreground" size={80} />
 				<div className="flex flex-col text-2xl">
-					<p className="font-semibold">Hello there!</p>
-					<p className="text-muted-foreground">How can I help you today?</p>
+					<p className="font-semibold">Hi, I’m Heph</p>
+					<p className="text-muted-foreground">What would you like to talk through?</p>
 				</div>
 			</div>
 		</div>

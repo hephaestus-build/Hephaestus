@@ -73,6 +73,30 @@ class CatalogFalseLapseLineTest extends BaseUnitTest {
             merges-only-after-approval | a bot's request for changes does not stand | its request for changes does not stand against another person's approval
             merges-only-after-approval | a bot's decision still makes the occasion | a decision marked `bot` is still a review decision for this gate
             merges-only-after-approval | automation comes from the marker, not the login | Whether an account is automated is the captured `bot` marker, never the login's shape
+            ships-a-preview-with-each-new-view | a host's preview covers what it renders | shown through a previewed host's body is covered by that preview
+            ships-a-preview-with-each-new-view | an effect owner needs no preview scaffolding | it needs no new initializer, injection or architecture just so a preview can construct it
+            ships-a-preview-with-each-new-view | a wrapper's own chrome still needs a preview | is its own presentation, and a preview must show it
+            ships-a-preview-with-each-new-view | a host's coverage is traced, not assumed | Never assume a host renders a view you did not trace
+            ships-a-preview-with-each-new-view | a live fetch is no sample data | a live fetch inside a preview is not sample data
+            changes-dependencies-deliberately | a manifest's name is no occasion | The changed lines decide, not the file's name.
+            changes-dependencies-deliberately | internal target wiring is no dependency | declares no external dependency and is NOT_APPLICABLE, even inside a dependency manifest
+            changes-dependencies-deliberately | a lockfile refresh is still an occasion | A resolution change on its own, such as a lockfile refresh, is an occasion.
+            issue-points-to-relevant-context | the source location does not decide relevance | A link outside the wiki counts on the same terms as a wiki link.
+            records-significant-decisions-with-rationale | an ADR in the same change records why | An ADR or design document can record the rationale in the same change. Read its prose.
+            records-significant-decisions-with-rationale | dependency edits have one owner | Dependency edits belong only to `changes-dependencies-deliberately`.
+            records-significant-decisions-with-rationale | independent architecture stays in scope | A separate architectural decision in the same change remains in scope here.
+            changes-dependencies-deliberately | a package name supplies no reason | A package name or an edit label is not a reason
+            handles-errors-instead-of-swallowing-them | a fixed valid URL drops no runtime failure | A valid fixed URL has no runtime-dependent parse failure
+            handles-errors-instead-of-swallowing-them | runtime input and transport can fail | Do not extend this exception to a URL from runtime input, or to a network request that uses the URL.
+            handles-errors-instead-of-swallowing-them | recorded failures are not swallowed twice | A later check on an empty value does not swallow a failure already recorded by its handler.
+            keeps-views-free-of-networking-and-persistence | framework view storage belongs in views | Core Data's `@FetchRequest`, and SwiftUI's `@AppStorage` and `@SceneStorage`
+            declares-permissions-truthfully-at-point-of-use | the root view can present the feature | A root view can be that feature.
+            uses-structured-concurrency-safely | error handling has its own practice | Swallowed errors in async code belong to `handles-errors-instead-of-swallowing-them`
+            uses-adaptive-colors-for-every-appearance | an image scrim is content | a shadow or a translucent scrim over an image
+            leaves-the-code-clean-with-intent-revealing-comments | print diagnostics have one owner | Do not report the same print here as residue.
+            logs-through-the-platform-logger | credential exposure has one owner | Do not report the same credential-bearing diagnostic here
+            avoids-insecure-defaults-and-over-broad-permissions | usage descriptions have one owner | A missing or placeholder usage description in `Info.plist` belongs to `declares-permissions-truthfully-at-point-of-use`
+            handles-errors-instead-of-swallowing-them | print choice is not an error swallow | A printed failure with diagnostic context is recorded, not swallowed.
             """)
     void theCriteriaDrawTheLineWhereACarefulReviewerWould(String slug, String pattern, String sentence) {
         assertThat(CRITERIA.get(slug)).as(pattern).contains(sentence);

@@ -88,8 +88,8 @@ export function AdminSurveyResults({
 						<DrawerTitle>Survey results</DrawerTitle>
 						<DrawerDescription>
 							{state.status === "loading"
-								? "Loading the survey and its responses."
-								: "The survey could not be loaded."}
+								? "Loading the survey and its responses…"
+								: "Nothing is shown until the survey loads."}
 						</DrawerDescription>
 					</div>
 				</DetailDrawerHeader>
@@ -99,7 +99,7 @@ export function AdminSurveyResults({
 					) : (
 						<QueryErrorAlert
 							error={state.error}
-							title="Survey results couldn't be loaded"
+							title="We could not load survey results"
 							onRetry={state.onRetry}
 						/>
 					)}
@@ -173,8 +173,8 @@ export function AdminSurveyResults({
 						<FlaskConical />
 						<AlertTitle>Research data, not product feedback</AlertTitle>
 						<AlertDescription>
-							These answers belong to the study run by {survey.researchOrganization}, given under
-							the consent members recorded for it. Handle them by that study’s protocol.
+							These answers belong to the research run by {survey.researchOrganization}, given under
+							the consent members recorded for it. Handle them as research data.
 						</AlertDescription>
 					</Alert>
 				)}
@@ -203,7 +203,7 @@ export function AdminSurveyResults({
 						Responses
 					</h3>
 					{responses.length === 0 ? (
-						<p className="text-sm text-muted-foreground">No responses yet.</p>
+						<p className="text-sm text-muted-foreground">No responses yet</p>
 					) : (
 						<ul className="flex flex-col gap-3">
 							{responses.map((response) => (
@@ -248,7 +248,7 @@ function QuestionResults({ headingId, number, question, summary }: QuestionResul
 			</div>
 			{question.type === "TEXT" ? (
 				<p className="text-sm text-muted-foreground">
-					{answered} {answered === 1 ? "answer" : "answers"} — read them in the responses below.
+					{answered} {answered === 1 ? "answer" : "answers"}. Read them in the responses below.
 				</p>
 			) : (
 				<>
@@ -327,7 +327,7 @@ function NpsBreakdown({ counts }: { counts: QuestionSummary["counts"] }) {
 	});
 	return (
 		<p className="text-xs text-muted-foreground">
-			{parts.join(" · ")} · scale labelled {NPS_LABELS.low} → {NPS_LABELS.high}
+			{parts.join(" · ")} · scale labeled {NPS_LABELS.low} → {NPS_LABELS.high}
 		</p>
 	);
 }

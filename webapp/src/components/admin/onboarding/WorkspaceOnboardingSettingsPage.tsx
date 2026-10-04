@@ -69,7 +69,7 @@ export function WorkspaceOnboardingSettingsPage({
 			<PageHeader
 				icon={<HandshakeIcon />}
 				title="Member onboarding"
-				description="Set up developers after they join this workspace. Membership is granted elsewhere."
+				description="Choose how members set up after they join this workspace. This page does not grant membership."
 			/>
 			{state.status === "loading" && (
 				<div
@@ -85,7 +85,7 @@ export function WorkspaceOnboardingSettingsPage({
 			)}
 			{state.status === "error" && (
 				<QueryErrorAlert
-					title="Couldn't load onboarding settings"
+					title="We could not load onboarding settings"
 					error={state.error}
 					onRetry={state.onRetry}
 				/>
@@ -211,8 +211,8 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 						<InfoIcon aria-hidden="true" />
 						<AlertTitle>Members still have to choose</AlertTitle>
 						<AlertDescription>
-							Members who haven’t chosen get no practice reviews and no Heph. Turn the setup page on
-							so they can choose.
+							Members who have not chosen get no practice reviews and no Heph. Turn the setup page
+							on so they can choose.
 						</AlertDescription>
 					</Alert>
 				)}
@@ -234,7 +234,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 							<EmptyTitle>No integrations to require</EmptyTitle>
 							<EmptyDescription>
 								Connect Slack or Outline under Integrations. If an integration is active but still
-								unavailable here, ask your instance admin to enable account linking for it.
+								unavailable here, ask your instance admin to allow connecting accounts for it.
 							</EmptyDescription>
 						</EmptyHeader>
 						<EmptyContent>
@@ -243,7 +243,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 								params={{ workspaceSlug }}
 								className={buttonVariants({ variant: "outline" })}
 							>
-								Integrations
+								Open integrations
 							</Link>
 						</EmptyContent>
 					</Empty>
@@ -310,7 +310,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 			)}
 			{submission.status === "error" && edits?.refused && (
 				<Alert variant="destructive">
-					<AlertTitle>Couldn’t save onboarding settings</AlertTitle>
+					<AlertTitle>We could not save onboarding settings</AlertTitle>
 					<AlertDescription>{submission.message}</AlertDescription>
 				</Alert>
 			)}

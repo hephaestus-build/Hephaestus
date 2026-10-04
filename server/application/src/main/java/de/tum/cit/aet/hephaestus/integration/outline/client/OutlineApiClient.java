@@ -306,7 +306,7 @@ public class OutlineApiClient implements OutlineTokenClient, OutlineContentClien
             throw new OutlineApiException("Outline " + call
                     + " returned no data for collection "
                     + collectionId
-                    + " — refusing to treat a malformed page as the end of the listing");
+                    + ". Hephaestus does not treat a malformed page as the end of the list.");
         }
         return pageData;
     }
@@ -320,7 +320,7 @@ public class OutlineApiClient implements OutlineTokenClient, OutlineContentClien
                 + collectionId
                 + " after "
                 + collected
-                + " documents — refusing to sync a truncated listing");
+                + " documents. Hephaestus does not sync a truncated list.");
     }
 
     /**
@@ -490,7 +490,8 @@ public class OutlineApiClient implements OutlineTokenClient, OutlineContentClien
         String trimmed = serverUrl.trim();
         String normalized = trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
         if (!originPolicy.allows(normalized)) {
-            throw new OutlineApiException("Outline origin is not approved by the instance operator");
+            throw new OutlineApiException(
+                    "This Outline address is not approved on this instance. Ask your instance operator to approve it.");
         }
         return normalized;
     }

@@ -123,7 +123,7 @@ export const NameUnavailable: Story = {
 	play: async () => {
 		// Words, colour and icon all come from one registry entry, so the alert and the chip agree.
 		await expectSettledVisible(await screen.findByRole("alert"));
-		await expect(screen.getAllByText("Name unavailable")).toHaveLength(2);
+		await expect(screen.getAllByText("Name in use")).toHaveLength(2);
 		await expect(screen.queryByRole("button", { name: "Add practice" })).not.toBeInTheDocument();
 	},
 };

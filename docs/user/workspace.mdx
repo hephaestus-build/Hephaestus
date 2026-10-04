@@ -4,98 +4,173 @@ title: Workspace basics
 description: Understand how workspaces separate repositories, members, practices, integrations, and settings.
 ---
 
-A workspace contains the repositories, members, teams, practice catalog, integrations, and settings for one group. A Hephaestus deployment can host more than one workspace, and a person can belong to several.
+Use this guide to switch workspaces or fix missing workspace content.
+A workspace holds one team’s repositories, members, practices, integrations, and settings.
+You can belong to several workspaces on one instance.
+The tasks below for creating a workspace and connecting repositories need admin permissions.
 
-Use the workspace switcher at the top of the sidebar to move between the workspaces you can access.
+1. Use the workspace switcher at the top of the sidebar to select an accessible workspace.
 
-Hephaestus keeps you on the same kind of page when it applies to both workspaces. From a page for a specific person, conversation, practice, or other workspace item, switching opens the workspace home page instead: your Practice profile, or Activity where the workspace does not review practices. A page option that names something in the workspace you are leaving, such as a team filter, is cleared. Most other page options reset too; the Activity pages keep their time range. If you open a link to a workspace that is no longer available to you, Hephaestus opens the home page of another workspace you can access, or tells you that you are not in a workspace yet. Signing in opens the first workspace you can access.
+When you switch, Hephaestus keeps you on the same kind of page if the new workspace has it.
+If you were on a page for a specific person, conversation, practice, or other workspace item, the switch opens the new workspace’s home instead.
+The home is your Practice profile, or Activity if the workspace does not review practices.
+Options that name resources in the previous workspace, such as team filters, clear.
+Most other options reset too, but Activity pages keep their time range.
+
+If a link points to a workspace you can no longer access, Hephaestus opens the home page of another workspace you can access.
+If there is none, the page says **No workspace** and that you are not a member of any workspace yet.
+Signing in opens the first workspace you can access.
 
 ## Create a workspace
 
-Who can create workspaces depends on the deployment. The default policy limits creation to instance admins.
+Creation permissions depend on the deployment.
+The default policy permits only instance admins to create workspaces.
 
-When creation is available:
+For GitHub, when creation is available:
 
-- **GitHub:** install the Hephaestus GitHub App on an organisation. Hephaestus creates the workspace from the installation.
-- **GitLab:** link your GitLab account on the GitLab instance your deployment uses, enter an access token for it, choose a group, and finish the creation wizard. The workspace belongs to that GitLab account.
+1. Install the Hephaestus GitHub App on an organization.
 
-If **Create workspace** is not available to you, ask an instance admin.
+Hephaestus creates the workspace from the installation.
+
+For GitLab, when creation is available:
+
+1. Connect your account on the GitLab instance your deployment uses.
+2. Enter an access token for that account.
+3. Choose a group.
+4. Complete the creation wizard.
+
+The workspace belongs to that GitLab account.
+
+1. If **Create workspace** is unavailable, ask an instance admin.
 
 ## Repositories
 
-How repository access is managed depends on the connection:
+How you manage repository access depends on the connection.
+For a **GitHub App** workspace, Hephaestus mirrors the repositories that you grant to the app.
+For a **token-managed** workspace, a workspace admin manages the monitored repositories.
 
-- For a **GitHub App** workspace, change repository access in the app installation on GitHub. Hephaestus mirrors the repositories granted to the app.
-- For a **token-managed** workspace, a workspace admin can open **Administration → Integrations → GitHub/GitLab → Manage repositories → Add a repository** and enter its full repository path. Removing a monitored repository permanently deletes the data Hephaestus mirrored from it; the upstream repository is not changed.
+For a GitHub App workspace:
 
-Initial sync time depends on the size and history of the connected repositories. Later changes are picked up by webhooks and scheduled reconciliation.
+1. Change repository access in the app installation on GitHub.
+
+For a token-managed workspace, as a workspace admin:
+
+1. Open **Administration → Integrations → GitHub/GitLab → Manage repositories → Add a repository**.
+2. Enter the full repository path.
+
+**CAUTION:** Removal of a monitored repository permanently deletes its mirrored Hephaestus data.
+To keep that data, do not remove the repository monitor.
+The upstream repository does not change.
+
+The first sync takes longer for large repositories and long histories.
+Webhooks and scheduled reconciliation collect later changes.
 
 ## Members and teams
 
-Members and teams are scoped to one workspace.
+Members and teams belong to one workspace:
 
-- GitHub App workspaces mirror organisation members, teams, and repository access from GitHub.
+- GitHub App workspaces mirror organization members, teams, and repository access from GitHub.
 - GitLab workspaces mirror the connected group and its projects.
 - Workspace admins can review membership and role information under **Administration**.
 
-If source-managed membership is wrong, correct it in GitHub or GitLab and wait for the next sync.
+If source-managed membership is incorrect:
+
+1. Correct it in GitHub or GitLab.
+2. Wait for the next sync.
 
 ## Practices and AI
 
 Workspace admins choose:
 
-- which engineering practices are active
-- each practice's feedback setting: **Off**, **Review before sending** (the default), or **Send automatically**. Review before sending records observations but waits for a workspace admin to approve feedback on the work
-- whether practice reviews run automatically or can be triggered manually
-- which connected AI model powers practice reviews and Heph; Heph is offered to every member once a
-  model for it is set up
-- the monthly AI spending cap
+- The active engineering practices.
+- Each practice’s feedback setting: **Off**, **Review before sending** (the default), or **Send automatically**.
+- Whether practice reviews run automatically or permit manual requests.
+- The connected AI model for practice reviews and Heph.
+- The monthly AI spending cap.
 
+**Review before sending** records observations but waits for workspace admin approval of feedback on the work.
+Heph is available when the workspace has a model that meets your AI choice.
+If you choose **No AI**, Heph does not answer.
 These settings apply only to that workspace.
-
-[Activity](./activity) is part of every workspace and has no setting of its own; see there for hiding
-a member or a team from workspace activity.
+[Activity](./activity) is part of each workspace without its own setting.
+That guide explains how to hide members or teams from workspace activity.
 
 ## Troubleshooting
 
-- **Workspace missing?** Confirm that you are signed in with an identity linked to a workspace member.
-- **Repository missing?** Check the GitHub App installation or the monitored repository list, depending on the connection type.
-- **Repository or Slack channel sync error?** Open **Administration → Integrations → GitHub/GitLab → Manage repositories** for a repository, or **Administration → Integrations → Slack** for a channel, and check the affected resource's last error. Check its access in the connected service, then run a new sync. Each error clears after its affected sync path succeeds; a skipped pass keeps its error.
-- **Team missing?** Confirm that the team exists in the connected source platform and has synced.
-- **Practice profile missing?** Ask a workspace admin whether practice reviews are on in this workspace.
-- **Heph not answering?** See [Who can use Heph](./ai-mentor#who-can-use-heph).
+For a missing workspace:
+
+1. Confirm that your sign-in identity is linked to a workspace member.
+
+For a missing repository:
+
+1. Check the GitHub App installation or monitored repository list, as applicable to the connection.
+
+For a sync error, ask a workspace admin to check the affected connection.
+If you are a workspace admin:
+
+1. For repository errors, open **Administration → Integrations → GitHub/GitLab → Manage repositories**.
+2. For Slack errors instead, open **Administration → Integrations → Slack**.
+3. Read the affected resource’s last error.
+4. Check its access in the connected service.
+5. Run a new sync.
+
+Each error clears after its affected sync path succeeds.
+A skipped pass keeps its error.
+
+For a missing team:
+
+1. Confirm that the team exists in the connected source platform.
+2. Confirm that it has synced.
+
+For a missing Practice profile:
+
+1. Ask a workspace admin whether practice reviews are on in this workspace.
+
+[Who can use Heph](./ai-mentor#who-can-use-heph) explains what to do if Heph does not answer.
 
 ## Your AI choice
 
-Your choice applies across all your workspaces. See [User settings](./user-settings#your-ai-choice)
-for **In-house**, **Cloud**, **No AI**, and the account links required during first-visit setup.
+Your AI choice applies across all your workspaces on this instance.
+Workspace model settings do not change your answer.
+[User settings](./user-settings#your-ai-choice) explains **In-house**, **Cloud**, **No AI**, and the account links required during first-visit setup.
 
 ## GitLab token alerts
 
-Hephaestus checks GitLab tokens each day and rotates a token before it expires when GitLab permits it.
-The connection page shows its expiry date, or **no expiry**. If a token cannot be rotated or GitLab
-refuses it, replace it in workspace integration settings. Your repositories and synced work stay.
+Hephaestus checks GitLab tokens daily and rotates them before expiry when GitLab permits it.
+The connection page shows the expiry date, or says that the token has no expiry.
 
-Owners and administrators can enable the **Workspace alerts** email in notification settings.
-It reports a token that needs replacement and reports recovery after rotation or replacement.
-Repeated checks of the same problem do not send duplicate alerts. GitHub App tokens renew
-automatically; GitHub personal access token expiry is not tracked.
+1. If rotation fails or GitLab refuses the token, replace it in workspace integration settings.
+
+Your repositories and synced work stay.
+Workspace admins can turn on **Workspace connection alerts** in **User settings → Email notifications**.
+These emails report tokens that need replacement, and recovery after rotation or replacement.
+Repeated checks of the same problem do not send duplicate alerts.
+GitHub App tokens renew automatically.
+Hephaestus does not track GitHub personal access token expiry.
 
 ## Unavailable repositories
 
-If a monitored GitHub or GitLab repository cannot be read, **Administration → Integrations** shows
-**Repository not found or not accessible**. This does not mean that the repository was deleted.
-It can also mean that its name changed or that the connection no longer has access.
-Hephaestus keeps the monitor and the work it has already stored.
+For an unreadable monitored GitHub or GitLab repository, **Administration → Integrations** shows **Repository not found or not accessible**.
+This does not prove deletion.
+The name may have changed, or the connection may have lost access.
+Hephaestus keeps the monitor and stored work.
 
-After two consecutive unavailable responses, Hephaestus checks the repository at most once every
-24 hours. Recent sync and backfill wait while it is unavailable. A successful check clears the error
-and resumes sync automatically. Connection authentication errors, rate limits, and network errors
-keep their normal retry behavior.
+After two consecutive unavailable responses, Hephaestus checks at most once every 24 hours.
+Recent sync and backfill wait while the repository is unavailable.
+A successful check clears the error and automatically resumes sync.
+Connection authentication errors, rate limits, and network errors keep their normal retry behavior.
 
-To recover, give the connection access to the repository again. A workspace admin can select
-**Sync now** on the connection to check immediately instead of waiting for the next daily check.
-If you no longer want the repository in the workspace, stop monitoring it. For a GitHub App
-connection, change repository access in the installation. For a token-managed connection, remove
-it from the monitored repositories. Removing a monitor permanently deletes its mirrored data;
-it does not delete the upstream repository.
+To recover:
+
+1. Give the connection access to the repository again.
+2. As a workspace admin, select **Sync now** on the connection to check immediately.
+
+Otherwise, the check waits for its next daily run.
+
+**CAUTION:** Removal of a monitor permanently deletes mirrored data, but not the upstream repository.
+To keep mirrored data, do not remove the monitor.
+
+If the repository is no longer wanted in the workspace:
+
+1. For a GitHub App connection, change repository access in the installation.
+2. For a token-managed connection, remove it from the monitored repositories.

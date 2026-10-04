@@ -52,9 +52,9 @@ export function ReviewPersonFacet({
 	const selectedOption =
 		options.find((option) => option.userId === selected) ??
 		(selected == null ? null : { userId: selected, label: fallbackName ?? `#${selected}` });
-	let emptyText = "No matches";
+	let emptyText = "No matches. Try a different search.";
 	if (people.isError) {
-		emptyText = "Could not load people";
+		emptyText = "We could not load people";
 	} else if (options.length === 0) {
 		emptyText = "No people in this workspace";
 	}
@@ -117,8 +117,8 @@ export function ReviewPersonFacet({
 				</ComboboxList>
 				{capped && (
 					<p className="border-t px-2 py-1.5 text-xs text-muted-foreground">
-						Showing the first {MEMBER_PAGE_SIZE} members. Search looks only at these — to filter by
-						someone further down the list, open their work and follow the link from a row.
+						Showing the first {MEMBER_PAGE_SIZE} members. Search covers only these. To filter by
+						anyone else, open their work and follow the link from a row.
 					</p>
 				)}
 				{selectedOption && (

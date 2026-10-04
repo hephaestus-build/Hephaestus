@@ -32,7 +32,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
 		const input = canvas.getByLabelText("Add a repository");
-		const addButton = canvas.getByRole("button", { name: /^add$/iu });
+		const addButton = canvas.getByRole("button", { name: /^add repository$/iu });
 
 		await expect(addButton).toBeDisabled();
 		await userEvent.type(input, "not-a-repo");
@@ -68,12 +68,14 @@ export const ManyRepositories: Story = {
 
 export const RemoveConfirm: Story = {
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /remove octocat\/Hello-World/iu }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: /stop monitoring octocat\/Hello-World/iu }),
+		);
 
 		const dialog = await screen.findByRole("alertdialog");
 		within(dialog).getByText(/stop monitoring octocat\/Hello-World/iu);
-		within(dialog).getByText(/permanently erases everything Hephaestus has mirrored/iu);
-		within(dialog).getByText(/repository on GitHub itself is not affected/iu);
+		within(dialog).getByText(/permanently erases everything it has mirrored/iu);
+		within(dialog).getByText(/repository on GitHub is not affected/iu);
 		within(dialog).getByText(/monitoring it again later/iu);
 		await expect(within(dialog).getByRole("button", { name: /stop monitoring/iu })).toBeEnabled();
 	},
@@ -84,7 +86,9 @@ export const RemoveInProgress: Story = {
 		isRemovingRepository: true,
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /remove microsoft\/vscode/iu }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: /stop monitoring microsoft\/vscode/iu }),
+		);
 
 		const dialog = await screen.findByRole("alertdialog");
 		const confirm = within(dialog).getByRole("button", { name: /stopping/iu });
@@ -95,7 +99,9 @@ export const RemoveInProgress: Story = {
 
 export const RemoveHoldsDialogOpen: Story = {
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /remove facebook\/react/iu }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: /stop monitoring facebook\/react/iu }),
+		);
 
 		const dialog = await screen.findByRole("alertdialog");
 		await userEvent.click(within(dialog).getByRole("button", { name: /stop monitoring/iu }));
@@ -132,7 +138,7 @@ export const LoadError: Story = {
 		onRetry: fn(),
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/couldn't load the monitored repositories/iu);
+		canvas.getByText(/could not load the monitored repositories/iu);
 		canvas.getByText(/repositories service is unavailable/iu);
 		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalledTimes(1);

@@ -28,7 +28,7 @@ export const PLACEMENT_DEFS: StatusDefs<PlacementType> = {
 		label: "As a turn in the conversation",
 		icon: BotMessageSquareIcon,
 		badgeVariant: "outline",
-		description: "Spoken by the mentor during a chat with the developer.",
+		description: "Spoken by Heph during a chat with the developer.",
 	},
 };
 

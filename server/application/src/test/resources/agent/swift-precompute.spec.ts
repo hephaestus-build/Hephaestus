@@ -167,6 +167,7 @@ void test("an API use is shown with the usage keys located for it and where, nev
 		assert.match(said, /Camera — keys located: NSCameraUsageDescription \(project\.yml\)/u);
 		assert.match(said, /does not show the target declares it/u);
 		assert.doesNotMatch(said, /No usage key found/u);
+		assert.match(said, /A root view can be the feature that needs authorization/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -284,6 +285,8 @@ void test("detached work needs no written reason, and default isolation text is 
 		assert.doesNotMatch(said, /stated reason|whether \.task was available/u);
 		assert.match(said, /missing @MainActor on an added line does not by itself/u);
 		assert.match(said, /leaves the module's default unknown rather than nonisolated/u);
+		assert.match(said, /Check the SDK before relying on inherited SwiftUI View isolation/u);
+		assert.match(said, /Swallowed failures belong to handles-errors-instead-of-swallowing-them/u);
 		// Two targets that disagree, and a SwiftPM setting that is commented out.
 		writeFileSync(
 			path.join(root, "repo/project.yml"),
@@ -455,6 +458,7 @@ void test("a literal and a named asset color are told apart, and the asset's dar
 			metadata,
 		);
 		assert.equal(result.metrics.literalColors, 2);
+		assert.match(result.directions.join(" "), /A translucent scrim over an image is content/u);
 		assert.equal(result.metrics.systemAdaptiveColors, 0);
 		assert.equal(result.metrics.namedAssetColors, 1);
 		assert.equal(result.metrics.assetsWithoutDarkAppearance, 0);
@@ -576,6 +580,31 @@ void test("system gray colors remain adaptive leads rather than literals", async
 		);
 		assert.equal(result.metrics.literalColors, 1);
 		assert.equal(result.metrics.systemAdaptiveColors, 2);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("framework storage is not direct view I/O", async () => {
+	const { root, script } = await stage("keeps-views-free-of-networking-and-persistence");
+	try {
+		const source = `import SwiftUI
+import CoreData
+struct Settings: View {
+    @AppStorage("compact") private var compact = false
+    @SceneStorage("selection") private var selection = ""
+    @FetchRequest(sortDescriptors: []) private var items: FetchedResults<Item>
+    var body: some View { Text(selection) }
+}
+`;
+		writeFileSync(path.join(root, "repo/App/Settings.swift"), source);
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([whole("App/Settings.swift", source)]),
+			metadata,
+		);
+		assert.equal(result.metrics.ioCallsInViews, 0);
+		assert.deepEqual(result.hints, []);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

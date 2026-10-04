@@ -9,8 +9,8 @@ describe("LandingFaqSection", () => {
 		const user = userEvent.setup();
 		render(<LandingFaqSection />);
 		await user.click(screen.getByRole("button", { name: "Where does feedback appear?" }));
-		const answer = await screen.findByText(/on your private Practice profile/u);
-		expect(answer.textContent).toContain("waits for a workspace admin's approval by default");
+		const answer = await screen.findByText(/on your private practice profile/u);
+		expect(answer.textContent).toContain("waits for a workspace admin’s approval by default");
 	});
 
 	it("names the member AI choice and Slack permission", async () => {
@@ -19,7 +19,7 @@ describe("LandingFaqSection", () => {
 		await user.click(screen.getByRole("button", { name: "What project data can Hephaestus use?" }));
 		const answer = await screen.findByText(/Each member chooses In-house, Cloud or No AI/u);
 		expect(answer.textContent).toContain(
-			"Slack channel messages are used only with the member's permission",
+			"Slack channel messages are used only with the member’s permission",
 		);
 		expect(answer.textContent).not.toContain("set per deployment");
 	});
@@ -28,10 +28,10 @@ describe("LandingFaqSection", () => {
 		const user = userEvent.setup();
 		render(<LandingFaqSection />);
 		await user.click(screen.getByRole("button", { name: "What does it cost?" }));
-		const answer = await screen.findByText(/The instance admin sets each workspace's monthly cap/u);
+		const answer = await screen.findByText(/The instance admin sets each workspace’s monthly cap/u);
 		expect(answer.textContent).toContain("for shared models");
 		expect(answer.textContent).toContain(
-			"the workspace admin sets the cap for the workspace's own provider",
+			"The workspace admin sets the cap for the workspace’s own provider",
 		);
 	});
 });

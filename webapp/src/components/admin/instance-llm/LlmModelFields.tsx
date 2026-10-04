@@ -155,23 +155,23 @@ const COPY = {
 	instance: {
 		displayNamePlaceholder: "e.g. GPT-5",
 		upstreamIdPlaceholder: "e.g. openai/gpt-5",
-		upstreamIdHint: "The exact id the provider expects. Slashes are part of the id.",
+		upstreamIdHint: "The exact ID the provider expects. Slashes are part of the ID.",
 		activeHintEdit: "Only active models can be selected for new workspace requests.",
 		activeHintCreate:
 			"New models are saved inactive. Review the saved price and sharing before activating.",
 		deactivationTitle: "Work on this model stops immediately, in every workspace",
 		deactivationBody:
-			"Practice reviews and Heph can't run on it until you reactivate it, or until each workspace picks another model.",
+			"Practice reviews and Heph cannot run on it until you reactivate it, or until each workspace picks another model.",
 	},
 	workspace: {
 		displayNamePlaceholder: "e.g. GPT-5 mini",
 		upstreamIdPlaceholder: "e.g. openai/gpt-5-mini",
-		upstreamIdHint: "The exact id your provider expects. Slashes are part of the id.",
+		upstreamIdHint: "The exact ID your provider expects. Slashes are part of the ID.",
 		activeHintEdit: "Only active models with a declared price can be selected.",
 		activeHintCreate: "Starts inactive. Add a price, then activate.",
 		deactivationTitle: "Work on this model stops immediately",
 		deactivationBody:
-			"Practice reviews and Heph can't run until you reactivate this model or pick another.",
+			"Practice reviews and Heph cannot run until you reactivate this model or pick another.",
 	},
 } satisfies Record<LlmAudience, Record<string, string>>;
 
@@ -302,7 +302,7 @@ export function LlmModelFields({
 			</Field>
 
 			<Field data-invalid={Boolean(errors.upstreamModelId)}>
-				<FieldLabel htmlFor={`${idPrefix}-upstream-id`}>Upstream model id</FieldLabel>
+				<FieldLabel htmlFor={`${idPrefix}-upstream-id`}>Upstream model ID</FieldLabel>
 				<Input
 					id={`${idPrefix}-upstream-id`}
 					value={value.upstreamModelId}
@@ -323,7 +323,7 @@ export function LlmModelFields({
 					</datalist>
 				)}
 				<FieldDescription>
-					{isEdit ? "Create a new model to use a different upstream id." : copy.upstreamIdHint}
+					{isEdit ? "Create a new model to use a different upstream ID." : copy.upstreamIdHint}
 				</FieldDescription>
 				{hasText(errors.upstreamModelId) && (
 					<FieldError id={upstreamModelIdErrorId}>{errors.upstreamModelId}</FieldError>
@@ -437,7 +437,7 @@ export function LlmModelFields({
 					<Alert variant="warning">
 						<AlertTriangle aria-hidden />
 						<AlertTitle>
-							Rows holding this model as {DATA_HANDLING_DEFS[leftTier].label} stop serving
+							Assignments holding this model as {DATA_HANDLING_DEFS[leftTier].label} stop serving
 						</AlertTitle>
 						<AlertDescription>
 							A row holds only models declared as its own tier. Nothing runs on this model there
@@ -574,7 +574,7 @@ export function LlmModelFields({
 							</Select>
 							<FieldDescription id={`${idPrefix}-reasoning-effort-description`}>
 								Provider default sends no effort setting. Supported levels and defaults depend on
-								the model and provider. Choose only a supported level; None requests no reasoning.
+								the model and provider. Choose only a supported level. None requests no reasoning.
 							</FieldDescription>
 						</Field>
 					</FieldGroup>

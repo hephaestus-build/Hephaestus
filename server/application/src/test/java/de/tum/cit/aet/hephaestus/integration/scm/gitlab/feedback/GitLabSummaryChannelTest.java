@@ -180,7 +180,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(true);
         assertThatThrownBy(() -> channel.postSummary(target, new FeedbackContent("body", "marker")))
                 .isInstanceOf(FeedbackNotSentException.class)
-                .hasMessageContaining("rate limit critical");
+                .hasMessageContaining("rate limit is critical");
         verify(gitLabProvider, never()).forScope(anyLong());
     }
 

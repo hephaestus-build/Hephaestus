@@ -94,7 +94,7 @@ function BudgetAmountDialogContent({
 	const canRemove = currentValueUsd != null;
 	// Names the remove button only when it is on screen; a subject with no cap yet has none.
 	const emptyError = canRemove ? `Enter an amount, or use ${removeLabel}.` : "Enter an amount.";
-	let localError = "Use at most two decimal places.";
+	let localError = "Enter an amount with at most two decimal places.";
 	if (isEmpty) {
 		localError = emptyError;
 	} else if (!Number.isFinite(parsed) || parsed < 0) {

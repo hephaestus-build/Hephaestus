@@ -66,7 +66,7 @@ export const Default: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Actions for Ada Admin" }));
 		// A disabled Base UI item has pointer-events:none, so the guard is asserted rather than clicked.
 		const revokeSelf = await screen.findByRole("menuitem", {
-			name: /can't revoke your own admin/iu,
+			name: /cannot revoke your own instance admin role/iu,
 		});
 		await expect(revokeSelf).toHaveAttribute("data-disabled");
 	},
@@ -76,7 +76,7 @@ export const Default: Story = {
 export const ChangeAnotherUsersRole: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Actions for Bob User" }));
-		await userEvent.click(await screen.findByRole("menuitem", { name: "Change role" }));
+		await userEvent.click(await screen.findByRole("menuitem", { name: "Grant instance admin" }));
 		await expect(args.onChangeRole).toHaveBeenCalledWith(user);
 	},
 };
@@ -86,7 +86,7 @@ export const Loading: Story = { args: { users: [], isLoading: true } };
 export const Empty: Story = {
 	args: { users: [], totalLoaded: 0 },
 	play: async ({ canvas }) => {
-		canvas.getByText("No users found");
+		canvas.getByText("No users yet");
 	},
 };
 
@@ -94,14 +94,14 @@ export const Empty: Story = {
 export const EmptySearch: Story = {
 	args: { users: [], hasSearch: true, totalLoaded: 3 },
 	play: async ({ canvas }) => {
-		canvas.getByText(/adjusting your search/iu);
+		canvas.getByText(/try a different search/iu);
 	},
 };
 
 export const ErrorState: Story = {
 	args: { users: [], isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/failed to load users/iu);
+		canvas.getByText(/could not load users/iu);
 	},
 };
 

@@ -16,6 +16,6 @@ public class LlmConnectionSlugConflictException extends RuntimeException {
     }
 
     public LlmConnectionSlugConflictException(String slug, @Nullable Throwable cause) {
-        super("An LLM connection with slug '" + slug + "' already exists.", cause);
+        super("An LLM connection with slug “" + slug + "” already exists.", cause);
     }
 }

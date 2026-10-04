@@ -38,7 +38,7 @@ export const WithoutSupport: Story = {
 		await userEvent.hover(canvas.getByRole("button"));
 		const tooltip = await settledPopup();
 		await expect(tooltip).toHaveTextContent(
-			"There is not yet enough reviewed work on both sides to compare.",
+			"There is not enough reviewed work yet to compare recent and earlier work.",
 		);
 		await expect(tooltip).not.toHaveTextContent("Based on");
 	},

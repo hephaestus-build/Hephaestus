@@ -1,7 +1,6 @@
 import { Hammer } from "lucide-react";
 import { HephIcon } from "@/components/brand/HephIcon";
 import { InstitutionalAttribution } from "@/components/layout/InstitutionalAttribution";
-import { Badge } from "@/components/ui/badge";
 import { FeatureCard, type FeatureData } from "./FeatureCard";
 
 const FEATURES_DATA: FeatureData[] = [
@@ -17,9 +16,9 @@ const FEATURES_DATA: FeatureData[] = [
 		icon: <HephIcon size={20} strokeWidth={1.7} animated={false} />,
 		badge: "Core feature",
 		title: "Talk it through",
-		description: "Ask why, push back, or work out the next step",
+		description: "Ask Heph why, or disagree and decide the next step",
 		content:
-			"In chat Hephaestus goes by Heph, and draws on recent project activity, the feedback a developer has received, and any Slack messages or Outline documents their admins connected. Available in the web app and, when connected, in Slack.",
+			"In chat Hephaestus goes by Heph. It draws on recent project activity, the feedback a developer has received, and any Slack messages or Outline documents their admins connected. You can chat in the web app or, when Slack is connected, in Slack.",
 	},
 ];
 
@@ -27,19 +26,15 @@ export function AboutMissionSection() {
 	return (
 		<section aria-labelledby="about-mission-heading" className="space-y-12">
 			<div>
-				<Badge className="mb-4" variant="outline">
-					Our purpose
-				</Badge>
 				<h2 id="about-mission-heading" className="mb-6 text-3xl font-bold">
 					The mission
 				</h2>
 
 				<p className="text-lg leading-relaxed">
-					Developers learn to work well in a team by doing the work and getting feedback on it. That
-					feedback is a mentor’s job, whether that is a coach on a university capstone or an
-					experienced maintainer on an open-source project, and there is never enough of that
-					attention to go round. The developers who need it most often get none. Hephaestus carries
-					the routine part so that everyone gets some.
+					Developers learn to work well in a team by doing the work and getting feedback on it.
+					Mentors give that feedback: a coach on a university capstone or an experienced maintainer
+					on an open-source project. Mentors cannot review everyone’s work, so some developers get
+					little or none. Hephaestus reviews the routine part, so more developers get feedback.
 				</p>
 			</div>
 

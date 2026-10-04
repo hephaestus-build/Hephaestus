@@ -53,9 +53,9 @@ export const MENTOR_PREFERENCE_COPY = {
 		cta: "Change your AI choice",
 	},
 	"not-set-up": {
-		title: "Heph isn't set up in this workspace yet",
+		title: "Heph is not set up in this workspace yet",
 		description:
-			"No Heph model is ready for any AI choice here. A workspace owner sets one up under AI models.",
+			"No Heph model is ready for any AI choice here. Ask a workspace owner to set one up under AI models.",
 	},
 	"choice-required": {
 		title: "Choose which AI may handle your work",
@@ -64,9 +64,9 @@ export const MENTOR_PREFERENCE_COPY = {
 		cta: "Make your AI choice",
 	},
 	unavailable: {
-		title: "Heph isn't set up for your AI choice yet",
+		title: "Heph is not set up for your AI choice yet",
 		description: {
-			before: "No Heph model is within ",
+			before: "No Heph model is set up for ",
 			after: " yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
 		},
 		cta: "Change your AI choice",

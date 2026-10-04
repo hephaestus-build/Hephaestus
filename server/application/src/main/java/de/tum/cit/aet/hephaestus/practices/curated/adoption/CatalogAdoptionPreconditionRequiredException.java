@@ -8,6 +8,6 @@ public class CatalogAdoptionPreconditionRequiredException extends RuntimeExcepti
     private static final long serialVersionUID = 1L;
 
     public CatalogAdoptionPreconditionRequiredException() {
-        super("If-Match must contain the adoption preview ETag.");
+        super("The If-Match header must contain the ETag of the adoption preview.");
     }
 }

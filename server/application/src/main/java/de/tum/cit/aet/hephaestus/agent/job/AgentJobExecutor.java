@@ -6,10 +6,12 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewCoalescedException;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.AnsweredPractice;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -688,6 +690,25 @@ public class AgentJobExecutor {
             } catch (Exception persistenceFailure) {
                 metricOutcome = handleExecutionFailure(jobId, job, persistenceFailure, false);
             }
+        } catch (ReviewCoalescedException e) {
+            // Recorded like a refusal, through the same fenced terminal write, but it is not one: the evidence was
+            // sufficient, and every answer this run would give stands as an earlier completed review's observation.
+            try (PreparedJobInputs coalesced = e.preparedInputs()) {
+                persistRefusedEvidence(jobId, job.getRetryCount(), coalesced);
+                ObjectNode output = objectMapper.createObjectNode().put("outcome", ReviewRunOutcome.COALESCED.name());
+                output.set("answeredPractices", objectMapper.valueToTree(coalesced.answeredPractices()));
+                Integer updated = transactionTemplate.execute(status -> jobRepository.transitionToEvidenceRefused(
+                        jobId, workerId, job.getRetryCount(), Instant.now(), output));
+                if (updated != null && updated == 1) {
+                    metricOutcome = ReviewRunOutcome.COALESCED.name();
+                    jobTelemetry.terminal(job, AgentJobStatus.COMPLETED, AgentJobTelemetry.age(job));
+                    log.info("Completed agent job without model execution: jobId={}, outcome=COALESCED", jobId);
+                } else {
+                    metricOutcome = "OWNERSHIP_LOST";
+                }
+            } catch (Exception persistenceFailure) {
+                metricOutcome = handleExecutionFailure(jobId, job, persistenceFailure, false);
+            }
         } catch (TerminalPersistenceException e) {
             // Provider work already completed. Leave RUNNING for the zombie sweeper to terminalize
             // and account as UNPRICED; never execute the provider a second time.
@@ -802,6 +823,7 @@ public class AgentJobExecutor {
                     preparedInputs.directories(),
                     job.getRetryCount(),
                     preparedInputs.automatedReviewReadinessReport(),
+                    preparedInputs.answeredPractices(),
                     reviewedArtifactId(job));
             return new PreparedSandbox(sandboxSpec, preparedInputs);
         } catch (RuntimeException exception) {
@@ -819,6 +841,7 @@ public class AgentJobExecutor {
                 preparedInputs.directories(),
                 retryCount,
                 preparedInputs.automatedReviewReadinessReport(),
+                preparedInputs.answeredPractices(),
                 null);
     }
 
@@ -834,10 +857,14 @@ public class AgentJobExecutor {
             List<EvidenceDirectory> inputDirectories,
             int retryCount,
             @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
+            List<AnsweredPractice> answeredPractices,
             @Nullable Long reviewedArtifactId) {
         String inputsDigest = ProvenanceDigest.inputsDigestHex(inputFiles, inputPaths, inputDirectories, jobId);
         JsonNode evidenceSnapshot = evidenceSnapshot(
-                snapshotMetadata(inputFiles, inputPaths), automatedReviewReadinessReport, reviewedArtifactId);
+                snapshotMetadata(inputFiles, inputPaths),
+                automatedReviewReadinessReport,
+                answeredPractices,
+                reviewedArtifactId);
         Integer updated = transactionTemplate.execute(status -> jobRepository.updateProvenanceDigests(
                 jobId,
                 workerId,
@@ -876,9 +903,14 @@ public class AgentJobExecutor {
         return metadata;
     }
 
+    /**
+     * {@code practices} is what the model was asked, the readiness report what was ready, and
+     * {@code answeredPractices} the ready practices an earlier completed review had already answered on the same code.
+     */
     private @Nullable JsonNode evidenceSnapshot(
             Map<String, byte[]> inputFiles,
             @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
+            List<AnsweredPractice> answeredPractices,
             @Nullable Long reviewedArtifactId) {
         byte[] manifest = inputFiles.get(SandboxLayout.MANIFEST_PATH);
         byte[] practices = inputFiles.get(SandboxLayout.PRACTICES_PREFIX + "index.json");
@@ -894,6 +926,9 @@ public class AgentJobExecutor {
         if (generatedPaths != null) snapshot.set("generatedPaths", objectMapper.readTree(generatedPaths));
         if (practices != null) {
             snapshot.set("practices", objectMapper.readTree(practices));
+        }
+        if (!answeredPractices.isEmpty()) {
+            snapshot.set("answeredPractices", objectMapper.valueToTree(answeredPractices));
         }
         if (reviewedArtifactId != null) {
             ReviewedWork.captured(manifest, inputFiles, reviewedArtifactId, objectMapper)
@@ -1157,7 +1192,7 @@ public class AgentJobExecutor {
                     job.getWorkspace().getId(), job.getJobType(), job.getMetadata())) {
                 job.setStatus(AgentJobStatus.CANCELLED);
                 job.setCompletedAt(Instant.now());
-                job.setErrorMessage("Processing is blocked by a personal-data erasure request.");
+                job.setErrorMessage("A personal-data erasure request blocks this job.");
                 job.setCancellationReason(AgentJobCancellationReason.PERSON_DATA_ERASED);
                 jobRepository.save(job);
                 recordPracticeReviewRefusal(job, "person_data_erased");
@@ -1271,7 +1306,7 @@ public class AgentJobExecutor {
         if (tooOldToHold) {
             job.setStatus(AgentJobStatus.CANCELLED);
             job.setCompletedAt(now);
-            job.setErrorMessage("Cancelled: over the monthly AI budget, and this job is more than "
+            job.setErrorMessage("Cancelled. The monthly AI budget is exceeded, and this job is more than "
                     + BUDGET_HOLD_MAX_JOB_AGE.toDays()
                     + " days old.");
             job.setCancellationReason(AgentJobCancellationReason.BUDGET_EXHAUSTED);
@@ -1302,7 +1337,7 @@ public class AgentJobExecutor {
     }
 
     private ClaimAttempt refuseUnavailableModel(AgentJob job) {
-        String message = "Configured model is unavailable.";
+        String message = "The configured model is not available.";
         job.setStatus(AgentJobStatus.CANCELLED);
         job.setCompletedAt(Instant.now());
         job.setErrorMessage(message);
@@ -1422,8 +1457,8 @@ public class AgentJobExecutor {
             AgentJobStatus terminalStatus = determineTerminalStatus(sandboxResult, agentResult, locked);
             String errorMessage =
                     switch (terminalStatus) {
-                        case TIMED_OUT -> "Container timed out";
-                        case FAILED -> "Container exited with code " + sandboxResult.exitCode();
+                        case TIMED_OUT -> "The container timed out.";
+                        case FAILED -> "The container exited with code " + sandboxResult.exitCode() + ".";
                         default -> null;
                     };
             int updated = transitionTerminal(jobId, terminalStatus, Instant.now(), errorMessage);

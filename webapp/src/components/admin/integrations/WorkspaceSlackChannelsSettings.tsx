@@ -108,11 +108,11 @@ export function WorkspaceSlackChannelsSettings({
 				<CardHeader>
 					<IntegrationCardHeading>Slack channel monitoring</IntegrationCardHeading>
 					<CardDescription>
-						Monitored channels have their <strong>new</strong> messages read to generate AI practice
-						feedback. Reading is <strong>forward-only</strong> (never past history), each monitored
-						channel gets a <strong>visible in-channel announcement</strong>, and any member can{" "}
-						<strong>opt out</strong> from the app’s Home tab. Removing a channel{" "}
-						<strong>permanently erases</strong> everything collected from it.
+						Hephaestus reads the <strong>new</strong> messages in monitored channels and uses AI to
+						write practice feedback. It reads <strong>forward only</strong> and never reads past
+						history. Each monitored channel gets a <strong>visible announcement</strong> in the
+						channel, and any member can <strong>opt out</strong> from the app’s Home tab. Removing a
+						channel <strong>permanently erases</strong> everything collected from it.
 					</CardDescription>
 					{hasSlackConnection && (
 						<CardAction>
@@ -128,7 +128,7 @@ export function WorkspaceSlackChannelsSettings({
 					{hasSlackConnection && (
 						<p className="text-sm text-muted-foreground">
 							You can also invite Hephaestus from Slack. In the channel, run{" "}
-							<code className="rounded bg-muted px-1 py-0.5">/invite @Hephaestus</code>; it appears
+							<code className="rounded bg-muted px-1 py-0.5">/invite @Hephaestus</code>. It appears
 							here as <strong>Not started</strong> until an admin activates monitoring.
 						</p>
 					)}
@@ -254,7 +254,7 @@ function ChannelsContent({
 					<EmptyTitle>Connect Slack to monitor channels</EmptyTitle>
 					<EmptyDescription>
 						Channel monitoring needs an installed Slack app. Connect a Slack workspace in the Slack
-						integration card above, then allow-list the channels you want feedback from.
+						integration card above, then add the channels you want feedback from.
 					</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
@@ -272,7 +272,7 @@ function ChannelsContent({
 		return (
 			<QueryErrorAlert
 				error={error}
-				title="We couldn't load the monitored channels"
+				title="We could not load the monitored channels"
 				onRetry={onRetry}
 			/>
 		);
@@ -286,8 +286,8 @@ function ChannelsContent({
 					</EmptyMedia>
 					<EmptyTitle>No channels monitored yet</EmptyTitle>
 					<EmptyDescription>
-						Allow-list a Slack channel to start generating AI practice feedback from its
-						conversations. You choose exactly when monitoring begins.
+						Add a Slack channel to get AI practice feedback from its conversations. Monitoring
+						begins only when you activate the channel.
 					</EmptyDescription>
 				</EmptyHeader>
 				<EmptyContent>

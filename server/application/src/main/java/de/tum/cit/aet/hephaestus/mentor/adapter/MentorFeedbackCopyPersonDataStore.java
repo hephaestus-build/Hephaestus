@@ -66,7 +66,7 @@ final class MentorFeedbackCopyPersonDataStore extends JdbcPersonDataStore {
             if (rs.getLong(3) != rs.getLong(4)) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
-                        "A conversation copy has a different workspace; correct its exact delivery reference");
+                        "A conversation copy has a different workspace. Correct the exact delivery reference of the copy.");
             }
             return new PersonDataSelection.RowKey(
                     runtime

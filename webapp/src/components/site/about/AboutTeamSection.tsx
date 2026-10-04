@@ -1,5 +1,4 @@
 import type { Contributor } from "@/components/common/ContributorGrid";
-import { Badge } from "@/components/ui/badge";
 
 import { ContributorSection } from "./ContributorSection";
 import { type ProjectManager, ProjectManagerCard } from "./ProjectManagerCard";
@@ -19,9 +18,6 @@ export function AboutTeamSection({
 }: AboutTeamSectionProps) {
 	return (
 		<section aria-labelledby="about-team-heading">
-			<Badge className="mb-4" variant="outline">
-				Our people
-			</Badge>
 			<h2 id="about-team-heading" className="mb-10 text-3xl font-bold">
 				The team
 			</h2>

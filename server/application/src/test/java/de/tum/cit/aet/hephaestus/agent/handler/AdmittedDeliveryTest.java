@@ -31,8 +31,7 @@ class AdmittedDeliveryTest extends BaseUnitTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private final Composition composition =
-            new Composition(ArtifactKinds.PULL_REQUEST, Map.of(), List.of(), LEAD, Set.of());
+    private final Composition composition = new Composition(ArtifactKinds.PULL_REQUEST, Map.of(), List.of(), LEAD);
 
     private JsonNode coverage(int eligible, int evaluated) {
         ObjectNode output = objectMapper.createObjectNode();
@@ -80,8 +79,7 @@ class AdmittedDeliveryTest extends BaseUnitTest {
     void shouldWithholdTheNoteWhenAPartialReviewFoundNoProblem() {
         ValidatedObservation met = observation(Outcome.MET, null);
         // A strength with a composed unit, so the all-clear would have a note to post.
-        Composition withStrength =
-                new Composition(ArtifactKinds.PULL_REQUEST, Map.of(), List.of(onTheWork(met)), LEAD, Set.of());
+        Composition withStrength = new Composition(ArtifactKinds.PULL_REQUEST, Map.of(), List.of(onTheWork(met)), LEAD);
 
         AdmittedDelivery delivery =
                 AdmittedDelivery.decide(coverage(4, 2), List.of(met), List.of(), List.of(met), withStrength);

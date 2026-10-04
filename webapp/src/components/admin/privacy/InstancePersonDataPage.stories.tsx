@@ -102,7 +102,7 @@ export const Preview: Story = {
 	args: { state: ready },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText(/14 rows in 5 of 7 stores/u)).toBeVisible();
-		await expect(canvas.getByText(/GITLAB — https:\/\/gitlab\.example\.com: user/u)).toBeVisible();
+		await expect(canvas.getByText(/GITLAB · https:\/\/gitlab\.example\.com: user/u)).toBeVisible();
 		await expect(canvas.getByRole("cell", { name: "slack_message" })).toBeVisible();
 		await expect(canvas.queryByRole("cell", { name: "user_preferences" })).toBeNull();
 

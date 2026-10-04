@@ -135,7 +135,7 @@ export function IntegrationOverviewCard({
 						params={{ workspaceSlug }}
 						className={buttonVariants({ size: "sm", variant: "ghost" })}
 					>
-						View details
+						View details<span className="sr-only"> for {entry.displayName}</span>
 						<ArrowRightIcon className="size-3.5" />
 					</Link>
 				</CardFooter>
@@ -183,7 +183,7 @@ function OverviewBody({
 					</p>
 				) : (
 					<Link to={detailTo} params={{ workspaceSlug }} className={buttonVariants({ size: "sm" })}>
-						Connect
+						Connect<span className="sr-only"> {entry.displayName}</span>
 						<ArrowRightIcon className="size-3.5" />
 					</Link>
 				)}
@@ -213,7 +213,7 @@ function OverviewBody({
 		return (
 			<QueryErrorAlert
 				error={statusError}
-				title="We couldn't load sync status"
+				title="We could not load sync status"
 				onRetry={onRetryStatus}
 			/>
 		);

@@ -27,12 +27,12 @@ const RETRY_NOTICES = {
 	busy: {
 		variant: "warning",
 		title: "Heph is busy",
-		description: "Please try again in a moment.",
+		description: "Try again in a moment.",
 	},
 	failed: {
 		variant: "destructive",
-		title: "Something went wrong",
-		description: "An error occurred while generating the response. Please try again.",
+		title: "Heph could not finish this reply",
+		description: "Try again. If it keeps failing, contact your instance operator.",
 	},
 } as const satisfies Record<
 	ChatFailure,
@@ -160,7 +160,7 @@ export function Chat({
 								{onReload && (
 									<Button variant="outline" size="sm" onClick={onReload} className="shrink-0">
 										<RotateCcwIcon />
-										Try again
+										Retry
 									</Button>
 								)}
 							</AlertDescription>
@@ -175,7 +175,7 @@ export function Chat({
 						/>
 					)}
 					<p className="text-center text-xs text-balance text-muted-foreground">
-						Heph can make mistakes. Consider verifying important information.
+						Heph can make mistakes. Check anything important before you rely on it.
 					</p>
 				</div>
 			</div>

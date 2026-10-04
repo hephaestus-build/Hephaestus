@@ -61,7 +61,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("Available")).not.toBeInTheDocument();
-		await expect(canvas.getByText("Name unavailable")).toBeVisible();
+		await expect(canvas.getByText("Name in use")).toBeVisible();
 		await expect(canvas.queryByText("Keep pull requests focused")).not.toBeInTheDocument();
 		await expect(
 			detailParamOf(canvas.getByRole("link", { name: /Describe what changed and why/u })),
@@ -75,7 +75,7 @@ export const Default: Story = {
 export const DeletedGroupStillHasSomethingToAdd: Story = {
 	args: { existingGroupSlugs: new Set() },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("link", { name: /Review group · 1 practice/u })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /Add group · 1 practice/u })).toBeVisible();
 		await expect(
 			detailParamOf(canvas.getByRole("link", { name: /Keep pull requests focused/u })),
 		).toBe('["practice:review-scope"]');

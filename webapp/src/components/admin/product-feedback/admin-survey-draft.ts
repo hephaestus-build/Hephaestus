@@ -163,7 +163,7 @@ export function validateSurveyDraft(draft: SurveyDraft, now: number): SurveyDraf
 		errors.title = "Give the survey a title.";
 	}
 	if (!draft.description.trim()) {
-		errors.description = "Tell members why you're asking.";
+		errors.description = "Tell members why you are asking.";
 	}
 	const endsAt = localDateTime(draft.endsAt);
 	if (endsAt && endsAt.getTime() <= (localDateTime(draft.startsAt)?.getTime() ?? now)) {

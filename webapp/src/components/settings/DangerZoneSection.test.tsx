@@ -49,9 +49,9 @@ describe("DangerZoneSection — data export", () => {
 	});
 });
 
-/** The trigger button (collapsed) is labelled "Delete"; opening reveals the confirm input. */
+/** The trigger button (collapsed) is labelled "Delete account"; opening reveals the confirm input. */
 function openDeleteDialog() {
-	fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+	fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
 }
 
 describe("DangerZoneSection — account deletion", () => {

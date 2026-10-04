@@ -67,10 +67,11 @@ public record NatsConsumerProperties(
                 && !inactiveThreshold.isZero()
                 && !inactiveThreshold.isNegative()
                 && inactiveThreshold.compareTo(INACTIVE_THRESHOLD_FLOOR) < 0) {
-            throw new IllegalArgumentException("inactive-threshold (" + inactiveThreshold
-                    + ") must be 0 to disable reaping, or at least "
-                    + INACTIVE_THRESHOLD_FLOOR
-                    + " — a shorter one reaps a durable across an ordinary restart and loses its position");
+            throw new IllegalArgumentException(
+                    "inactive-threshold (" + inactiveThreshold
+                            + ") must be 0 to disable reaping, or at least "
+                            + INACTIVE_THRESHOLD_FLOOR
+                            + ". A shorter value reaps a durable across an ordinary restart. The durable then loses its position.");
         }
     }
 

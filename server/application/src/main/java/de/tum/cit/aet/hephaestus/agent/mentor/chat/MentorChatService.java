@@ -87,7 +87,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
 
     private static final Logger log = LoggerFactory.getLogger(MentorChatService.class);
     private static final JsonNodeFactory NODES = JsonNodeFactory.instance;
-    private static final String REPLY_NOT_SAVED = "Heph's reply couldn't be saved. Please try again.";
+    private static final String REPLY_NOT_SAVED = "Heph could not save the reply. Try again.";
 
     private final UserRepository userRepository;
     private final ChatThreadRepository chatThreadRepository;
@@ -145,7 +145,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         } catch (RejectedExecutionException rejected) {
             log.warn("Mentor turn rejected by executor (probably shutting down): {}", rejected.getMessage());
             metrics.recordCompleted(MentorChatMetrics.Outcome.REJECTED);
-            channel.completeWithError("Mentor service is shutting down — please retry shortly.");
+            channel.completeWithError("Heph is not available because the server is stopping. Try again in a moment.");
         }
     }
 
@@ -179,7 +179,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         } catch (RejectedExecutionException rejected) {
             log.warn("Slack mentor turn rejected by executor: {}", rejected.getMessage());
             metrics.recordCompleted(MentorChatMetrics.Outcome.REJECTED);
-            channel.completeWithError("Mentor service is shutting down — please retry shortly.");
+            channel.completeWithError("Heph is not available because the server is stopping. Try again in a moment.");
         }
     }
 
@@ -235,7 +235,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     t);
             metrics.recordCompleted(MentorChatMetrics.Outcome.ERROR);
             try {
-                channel.completeWithError("Mentor turn failed unexpectedly.");
+                channel.completeWithError("Heph could not finish this reply. Try again.");
             } catch (RuntimeException ignored) {
                 // Best-effort: the channel may already be closed.
             }
@@ -455,7 +455,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     "Mentor turn timed out waiting for agent_end (threadId={}): {}",
                     request.threadId(),
                     timeout.toString());
-            failTurn(turn, state, channel, cookie, timeout, "Mentor turn timed out before completion.");
+            failTurn(turn, state, channel, cookie, timeout, "Heph took too long to reply and stopped. Try again.");
             outcome = MentorChatMetrics.Outcome.TIMEOUT;
         } catch (ClientDisconnectedException disconnect) {
             if (clientHolder.get() == null) {
@@ -883,21 +883,22 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             return PiEventToUiChunkTranslator.REPLY_LOST_IN_TRANSIT;
         }
         if (e instanceof LlmBudgetExhaustedException budget) {
-            return Objects.requireNonNullElse(budget.getMessage(), "The mentor budget is exhausted.");
+            return Objects.requireNonNullElse(budget.getMessage(), "The budget for Heph is used up.");
         }
         if (e instanceof LlmUnpricedUsageBlockedException unpriced) {
             return Objects.requireNonNullElse(
-                    unpriced.getMessage(), "The mentor cannot use an unpriced model under the current budget policy.");
+                    unpriced.getMessage(),
+                    "Heph cannot use a model that has no price under the current budget policy.");
         }
         if (e instanceof MentorRunnerException) {
-            return "The mentor hit an unexpected error. Please try again.";
+            return "Heph had an unexpected error. Try again.";
         }
         if (e instanceof TimeoutException) {
-            return "Mentor turn timed out before completion.";
+            return "Heph took too long to reply and stopped. Try again.";
         }
         if (e instanceof ClientDisconnectedException) {
             // Should never surface to a still-connected client, but guard anyway.
-            return "Connection lost.";
+            return "The connection was lost.";
         }
         if (e instanceof MentorRefusedException refused) {
             return refused.reason().userMessage();
@@ -906,9 +907,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             return Objects.requireNonNullElse(rejected.getMessage(), MentorRetryRejectedException.NOT_RETRYABLE);
         }
         if (e instanceof InteractiveSandboxException) {
-            return "I couldn't start the mentor runtime. Please try again in a moment.";
+            return "Heph could not start. Try again in a moment.";
         }
-        return "Mentor turn failed unexpectedly.";
+        return "Heph could not finish this reply. Try again.";
     }
 
     private Map<String, byte[]> buildMentorContext(MentorTurnRequest request, User user, UUID currentUserMessageId) {

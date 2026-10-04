@@ -58,7 +58,7 @@ export function InstanceSetupForm({
 					inputMode="url"
 					autoComplete="url"
 					required
-					placeholder="https://hephaestus.your-organisation.example"
+					placeholder="https://hephaestus.your-organization.example"
 					value={origin}
 					onChange={(event) => setOrigin(event.target.value)}
 					aria-invalid={invalid ? true : undefined}
@@ -66,7 +66,7 @@ export function InstanceSetupForm({
 					className={INPUT_CLASSES}
 				/>
 				<p id={originHintId} className="text-xs text-muted-foreground">
-					The address your organisation runs Hephaestus at. It must use HTTPS.
+					The address where your organization runs Hephaestus. It must use HTTPS.
 				</p>
 			</div>
 			{developmentBuild ? (
@@ -94,10 +94,10 @@ export function InstanceSetupForm({
 			<div className="flex flex-wrap items-center gap-3">
 				<Button type="submit" variant="outline" disabled={pending || disabled}>
 					{pending ? <Spinner /> : null}
-					{pending ? "Connecting…" : "Connect"}
+					{pending ? "Connecting…" : "Connect instance"}
 				</Button>
 				<p className="text-xs text-muted-foreground">
-					Chrome asks before the extension may reach this address.
+					Chrome asks you to let the extension reach this address.
 				</p>
 			</div>
 		</form>

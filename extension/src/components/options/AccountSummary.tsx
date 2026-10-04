@@ -67,7 +67,7 @@ export function AccountSummary({
 				</p>
 				<p className="text-xs text-muted-foreground">
 					Signed in to {instanceHost}
-					{expires === undefined ? "" : ` until ${expires} at the latest, or until Chrome closes`}
+					{expires === undefined ? "" : ` until Chrome closes or ${expires}, whichever comes first`}
 				</p>
 			</div>
 			<Button variant="outline" disabled={signingOut} onClick={onSignOut}>

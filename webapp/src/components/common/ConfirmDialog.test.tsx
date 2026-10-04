@@ -23,7 +23,7 @@ function Harness({ onConfirm }: { onConfirm: (subject: Row) => void }) {
 				subject={deleting}
 				onClose={() => setDeleting(null)}
 				title={(subject) => `Delete “${subject.displayName}”?`}
-				description="This cannot be undone."
+				description="You cannot undo this."
 				confirmLabel="Delete"
 				onConfirm={onConfirm}
 			/>

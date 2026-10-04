@@ -59,7 +59,7 @@ function renderPage(overrides: Partial<AgentBindingsPageProps> = {}) {
 
 type Scope = ReturnType<typeof within<typeof queries>>;
 
-const UNCHOSEN_ROW = "Members who haven't chosen";
+const UNCHOSEN_ROW = "Members who have not chosen";
 
 function row(purpose: string, title: string): Scope {
 	const card = screen.getByRole("region", { name: purpose });
@@ -94,7 +94,7 @@ describe("AgentBindingsPage", () => {
 		expect(unassignedSwitch.getAttribute("aria-disabled")).toBe("true");
 	});
 
-	it("previews who gets which model by the ceiling rule, including members who haven't chosen", () => {
+	it("previews who gets which model by the member’s choice, including members who have not chosen", () => {
 		renderPage({ bindings: [inHouseBinding, cloudBinding] });
 		const reviews = within(screen.getByRole("region", { name: "Practice reviews" }));
 		const definitionAfter = (term: string) =>
@@ -102,14 +102,14 @@ describe("AgentBindingsPage", () => {
 
 		expect(definitionAfter("In-house")).toBe("GPT Test (In-house)");
 		expect(definitionAfter("Cloud")).toBe("GPT Test (In-house)");
-		expect(definitionAfter("Members who haven't chosen")).toBe("Nothing runs for them");
+		expect(definitionAfter("Members who have not chosen")).toBe("No model is used");
 	});
 
 	it("drops the unchosen preview row once the choice is required", () => {
 		renderPage({ aiChoiceRequired: true });
 		const reviews = within(screen.getByRole("region", { name: "Practice reviews" }));
-		expect(reviews.queryByText("Members who haven't chosen", { selector: "dt" })).toBeNull();
-		row("Practice reviews", UNCHOSEN_ROW).getByText(/serves no one now/u);
+		expect(reviews.queryByText("Members who have not chosen", { selector: "dt" })).toBeNull();
+		row("Practice reviews", UNCHOSEN_ROW).getByText(/no one uses it now/u);
 	});
 
 	it("names the readiness of a bound row and says nothing for an empty one", () => {
@@ -129,7 +129,7 @@ describe("AgentBindingsPage", () => {
 			true,
 		);
 		expect(inHouse.getByText(/is now declared as/u).textContent).toBe(
-			"GPT Other is now declared as Cloud and no longer serves this row. Clear the assignment, or ask your host for a model declared as In-house.",
+			"GPT Other is now declared as Cloud and no longer serves this assignment. Clear the assignment, or ask an instance admin for a model declared as In-house.",
 		);
 	});
 
@@ -153,12 +153,12 @@ describe("AgentBindingsPage", () => {
 	it("shows the server's refusal on the row it refused", () => {
 		renderPage({
 			saveErrors: {
-				"PRACTICE_REVIEW:IN_HOUSE": "This model is declared as Cloud. Assign it to that row.",
+				"PRACTICE_REVIEW:IN_HOUSE": "This model is declared as Cloud. Assign it under Cloud.",
 			},
 		});
 		const inHouse = reviewsInHouse();
 		expect(inHouse.getByRole("alert").textContent).toBe(
-			"This model is declared as Cloud. Assign it to that row.",
+			"This model is declared as Cloud. Assign it under Cloud.",
 		);
 		expect(inHouse.getByRole("combobox", { name: /In-house/u }).getAttribute("aria-invalid")).toBe(
 			"true",

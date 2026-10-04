@@ -220,15 +220,15 @@ void test("a commit row lists the edited files with their line counts before the
 		// A feature and its package entry: two top-level locations, one piece of work.
 		commit(
 			"2222222",
-			"Add cast fetching, and adjust movie fetching\n",
+			"Add order history, and adjust invoice loading\n",
 			["p"],
 			[
-				{ status: "M", path: "Movies/CreditViewModel.swift", additions: 40, deletions: 2 },
+				{ status: "M", path: "Orders/HistoryViewModel.swift", additions: 40, deletions: 2 },
 				{ status: "M", path: "project.yml", additions: 3, deletions: 0 },
 				{
 					status: "R",
-					oldPath: "Movies/MovieResponse.swift",
-					path: "Movies/MovieListResponse.swift",
+					oldPath: "Orders/InvoiceResponse.swift",
+					path: "Orders/InvoiceListResponse.swift",
 					additions: 3,
 					deletions: 3,
 				},
@@ -250,7 +250,7 @@ void test("a commit row lists the edited files with their line counts before the
 		assert.equal(feature.flags.joinedClauses, true);
 		assert.equal(
 			feature.flags.paths,
-			"Movies/CreditViewModel.swift +40/-2, project.yml +3/-0, Movies/MovieListResponse.swift +3/-3",
+			"Orders/HistoryViewModel.swift +40/-2, project.yml +3/-0, Orders/InvoiceListResponse.swift +3/-3",
 		);
 		for (const hint of result.hints) {
 			assert.equal("kinds" in hint.flags, false);

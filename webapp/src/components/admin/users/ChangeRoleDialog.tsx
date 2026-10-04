@@ -62,9 +62,9 @@ export function ChangeRoleDialog({
 					<AlertDialogDescription>
 						{granting ? (
 							<>
-								<strong>{name}</strong> gets the {APP_ROLE_LABELS[nextRole]} role: full access to
-								administer this instance, including managing other users and read-only user views.
-								Continue?
+								<strong>{name}</strong> gets the {APP_ROLE_LABELS[nextRole]} role. It gives full
+								access to administer this instance, including managing other users and read-only
+								user views.
 							</>
 						) : (
 							<>
@@ -94,7 +94,7 @@ export function ChangeRoleDialog({
 						}}
 					>
 						{isPending ? <Spinner className="size-4" /> : null}
-						{granting ? "Grant admin" : "Revoke admin"}
+						{granting ? "Grant instance admin" : "Revoke instance admin"}
 					</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>

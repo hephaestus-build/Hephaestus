@@ -8,6 +8,6 @@ public class StalePracticeReleaseException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     public StalePracticeReleaseException() {
-        super("The practice or catalog offer changed. Reload the proposal before deciding.");
+        super("The practice or the catalog offer changed. Reload the proposal before you decide.");
     }
 }

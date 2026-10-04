@@ -72,10 +72,10 @@ export function ConfigureWorkspaceStep() {
 					hasText(fieldErrors.displayName) && touched.displayName === true ? "true" : undefined
 				}
 			>
-				<FieldLabel htmlFor="workspace-display-name">Display Name</FieldLabel>
+				<FieldLabel htmlFor="workspace-display-name">Display name</FieldLabel>
 				<Input
 					id="workspace-display-name"
-					placeholder="My Workspace"
+					placeholder="My workspace"
 					value={state.displayName}
 					onChange={(e) => handleDisplayNameChange(e.target.value)}
 					onBlur={() => handleBlur("displayName")}
@@ -100,7 +100,7 @@ export function ConfigureWorkspaceStep() {
 					hasText(fieldErrors.workspaceSlug) && touched.workspaceSlug === true ? "true" : undefined
 				}
 			>
-				<FieldLabel htmlFor="workspace-slug">URL Slug</FieldLabel>
+				<FieldLabel htmlFor="workspace-slug">URL slug</FieldLabel>
 				<Input
 					id="workspace-slug"
 					placeholder="my-workspace"

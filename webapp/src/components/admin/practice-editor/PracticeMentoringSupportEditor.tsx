@@ -89,7 +89,7 @@ export function practicePolicyError(policy: PracticeAutomatedReviewPolicy) {
 		policy.automatedReview.evidenceSufficiency === "DECLARED_EVIDENCE_INSUFFICIENT" &&
 		policy.knownLimitations.length === 0;
 	return limitationIsMissing
-		? "Explain at least one limitation that requires additional context."
+		? "Add at least one limitation that needs context from a person."
 		: undefined;
 }
 
@@ -175,8 +175,8 @@ export function PracticeMentoringSupportEditor({
 					How this practice is mentored
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					Choose the responsible level of support. This does not limit what a developer, peer, or
-					human mentor can observe.
+					Choose how far automated review goes for this practice. This does not limit what a
+					developer, peer, or human mentor can observe.
 				</p>
 			</div>
 
@@ -280,8 +280,8 @@ export function PracticeMentoringSupportEditor({
 					<div>
 						<p className="font-medium">What this evidence cannot support</p>
 						<p className="text-sm text-muted-foreground">
-							State which claims this kind of work cannot support, however a review was occasioned
-							and even when every requirement passes.
+							List the claims this kind of work can never support, whatever starts the review and
+							even when every requirement passes.
 						</p>
 					</div>
 					{value.knownLimitations.map((limitation, index) => {

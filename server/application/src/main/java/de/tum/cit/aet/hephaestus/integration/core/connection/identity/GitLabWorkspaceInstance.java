@@ -31,7 +31,7 @@ public class GitLabWorkspaceInstance {
                 .findFirst()
                 .flatMap(WorkspaceProviderAvailability::hintUrl)
                 .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.FORBIDDEN, "GitLab workspace creation is not enabled"));
+                        new ResponseStatusException(HttpStatus.FORBIDDEN, "GitLab workspace creation is not enabled."));
         if (serverUrl == null || serverUrl.isBlank()) {
             return instance;
         }
@@ -39,8 +39,8 @@ public class GitLabWorkspaceInstance {
         if (requested.isEmpty() || !requested.equals(ScmOrigin.of(instance))) {
             throw new ResponseStatusException(
                     HttpStatus.UNPROCESSABLE_CONTENT,
-                    "Hephaestus reads GitLab only from " + instance + ", so a workspace cannot be created on "
-                            + serverUrl.trim());
+                    "Hephaestus reads GitLab only from " + instance + ". You cannot create a workspace on "
+                            + serverUrl.trim() + ".");
         }
         return instance;
     }

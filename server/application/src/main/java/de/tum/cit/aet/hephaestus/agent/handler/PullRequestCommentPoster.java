@@ -270,8 +270,8 @@ class PullRequestCommentPoster {
     private SummaryChannel requireChannel(IntegrationKind kind) {
         SummaryChannel channel = channels.get(kind);
         if (channel == null) {
-            throw new JobDeliveryException("No SummaryChannel wired for kind " + kind
-                    + " — check that the vendor integration is enabled and its channel bean is registered");
+            throw new JobDeliveryException("No SummaryChannel is wired for kind " + kind
+                    + ". Check that the vendor integration is enabled and its channel bean is registered.");
         }
         return channel;
     }
@@ -280,7 +280,8 @@ class PullRequestCommentPoster {
         IntegrationKind kind = job.getIntegrationKind();
         if (kind == null) {
             throw new JobDeliveryException(
-                    "AgentJob.integrationKind is null — cannot resolve a delivery channel. jobId=" + job.getId());
+                    "AgentJob.integrationKind is null, so the server cannot resolve a delivery channel. jobId="
+                            + job.getId());
         }
         return kind;
     }
@@ -373,7 +374,7 @@ class PullRequestCommentPoster {
         result = EXCESSIVE_NEWLINES.matcher(result).replaceAll("\n\n");
 
         result = result.strip();
-        String truncationNotice = "\n\n[... truncated — comment exceeded length limit]";
+        String truncationNotice = "\n\n[... truncated. The comment exceeded the length limit.]";
         boolean truncated = result.length() > MAX_BODY_LENGTH;
         if (truncated) {
             int bodyBudget = MAX_BODY_LENGTH - truncationNotice.length();

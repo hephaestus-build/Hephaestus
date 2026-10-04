@@ -57,7 +57,8 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 PreparedJobInputsFixtures.freezer(),
                 mock(
                         PracticeRevisionService.class,
-                        invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision()));
+                        invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision()),
+                mock(AnsweredPractices.class));
     }
 
     private JobTypeHandler prReviewHandler() {
@@ -74,8 +75,7 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 mock(FeedbackResponseSuppressionFilter.class),
                 InContextDeliveryGateFixtures.gate(
                         practiceRepository, mock(ObservationRepository.class), mock(FeedbackLedgerRecorder.class)),
-                mock(ObservationRepository.class),
-                InContextDeliveryGateFixtures.noRecurrence());
+                mock(ObservationRepository.class));
     }
 
     private JobTypeHandler issueReviewHandler() {
@@ -97,8 +97,7 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 mock(FeedbackResponseSuppressionFilter.class),
                 mock(ObservationRepository.class),
                 mock(PracticeFeedbackDispatchService.class),
-                mock(FeedbackDeliveryService.class),
-                InContextDeliveryGateFixtures.noRecurrence());
+                mock(FeedbackDeliveryService.class));
     }
 
     private JobTypeHandler conversationReviewHandler() {

@@ -12,7 +12,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { name: "On the work itself" })).toBeVisible();
-		await expect(canvas.getByRole("heading", { name: "Changes are confirmed" })).toBeVisible();
+		await expect(canvas.getByRole("heading", { name: "You confirm every change" })).toBeVisible();
 	},
 };
 

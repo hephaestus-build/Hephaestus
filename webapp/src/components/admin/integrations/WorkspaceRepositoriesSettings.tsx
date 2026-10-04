@@ -69,7 +69,11 @@ function RepositoryRow({
 				<AlertDialog open={open} onOpenChange={setOpen}>
 					<AlertDialogTrigger
 						render={
-							<Button variant="outline" size="icon" aria-label={`Remove ${repo.nameWithOwner}`}>
+							<Button
+								variant="outline"
+								size="icon"
+								aria-label={`Stop monitoring ${repo.nameWithOwner}`}
+							>
 								<Trash2Icon className="size-4" />
 							</Button>
 						}
@@ -78,13 +82,13 @@ function RepositoryRow({
 						<AlertDialogHeader>
 							<AlertDialogTitle>Stop monitoring {repo.nameWithOwner}?</AlertDialogTitle>
 							<AlertDialogDescription>
-								This stops syncing the repository and{" "}
+								Hephaestus stops syncing the repository and{" "}
 								<strong>
-									permanently erases everything Hephaestus has mirrored from it — its issues, pull
-									requests, reviews, and the practice reviews built from them
+									permanently erases everything it has mirrored from it: issues, pull requests,
+									reviews, and the practice reviews built from them
 								</strong>
-								. The repository on {providerLabel} itself is not affected, and you can start
-								monitoring it again later.
+								. The repository on {providerLabel} is not affected. You can start monitoring it
+								again later.
 							</AlertDialogDescription>
 						</AlertDialogHeader>
 						<AlertDialogFooter>
@@ -165,7 +169,7 @@ export function WorkspaceRepositoriesSettings({
 		list = (
 			<QueryErrorAlert
 				error={error}
-				title="We couldn't load the monitored repositories"
+				title="We could not load the monitored repositories"
 				onRetry={onRetry}
 			/>
 		);
@@ -207,8 +211,8 @@ export function WorkspaceRepositoriesSettings({
 				<CardHeader>
 					<IntegrationCardHeading>Manage repositories</IntegrationCardHeading>
 					<CardDescription>
-						Add or remove the repositories Hephaestus watches for practice reviews and mentoring.
-						Their per-class sync freshness is shown in the sync-state table above.
+						Add or remove the repositories that Hephaestus watches for practice reviews and
+						mentoring. The sync table above shows how recently each one synced.
 					</CardDescription>
 				</CardHeader>
 
@@ -232,7 +236,7 @@ export function WorkspaceRepositoriesSettings({
 									onClick={handleAddRepository}
 									disabled={!isValidInput || isAddingRepository}
 								>
-									Add
+									Add repository
 								</InputGroupButton>
 							</InputGroupAddon>
 						</InputGroup>

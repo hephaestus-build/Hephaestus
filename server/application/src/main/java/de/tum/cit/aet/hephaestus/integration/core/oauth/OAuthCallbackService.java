@@ -112,7 +112,9 @@ public class OAuthCallbackService {
         }
         Workspace workspace = workspaceRepository
                 .findById(workspaceId)
-                .orElseThrow(() -> new EntityNotFoundException("Workspace not found: id=" + workspaceId));
+                .orElseThrow(
+                        () -> new EntityNotFoundException(
+                                "We could not find that workspace. It may have been deleted. Reload the page to see what is current."));
         Connection fresh = new Connection(workspace, kind, /* instanceKey */ null, defaultConfig(kind));
         return connectionRepository.save(fresh);
     }
@@ -223,10 +225,10 @@ public class OAuthCallbackService {
                     return administers(owner.getId(), actorAccountId)
                             ? "This " + exclusive.noun() + " is already connected to the Hephaestus workspace \""
                                     + owner.getDisplayName() + "\" (" + owner.getWorkspaceSlug()
-                                    + "). Disconnect " + exclusive.provider() + " there before connecting it here."
+                                    + "). Disconnect " + exclusive.provider() + " there before you connect it here."
                             : "This " + exclusive.noun() + " is already connected to another Hephaestus workspace."
-                                    + " An administrator of that workspace must disconnect " + exclusive.provider()
-                                    + " there first.";
+                                    + " A workspace admin there must disconnect " + exclusive.provider()
+                                    + " first.";
                 });
     }
 

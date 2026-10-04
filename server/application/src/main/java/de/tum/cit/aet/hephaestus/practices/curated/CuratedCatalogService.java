@@ -95,7 +95,7 @@ public class CuratedCatalogService {
         CuratedCatalogModel.validatePracticeGroup(before, definition);
         definitionValidator.validate(definition);
         if (before.practice(slug).isPresent()) {
-            throw new CuratedCatalogConflictException("A practice with slug '" + slug + "' already exists.");
+            throw new CuratedCatalogConflictException("A practice with slug “" + slug + "” already exists.");
         }
         Instant now = clock.instant();
         CuratedPracticeOverride override = new CuratedPracticeOverride(slug, now);
@@ -113,7 +113,7 @@ public class CuratedCatalogService {
         CatalogEntry<PracticeDefinition> entry =
                 CuratedCatalogModel.requireEntry(loadCatalog().practice(slug), CATALOG_PRACTICE, slug, precondition);
         if (entry.shipped() == null) {
-            throw new CuratedCatalogConflictException("Hephaestus ships no definition for '" + slug + "'.");
+            throw new CuratedCatalogConflictException("Hephaestus ships no definition for “" + slug + "”.");
         }
         practiceOverrides.findBySlug(slug).ifPresent(override -> {
             override.clearDefinition(clock.instant());
@@ -190,7 +190,7 @@ public class CuratedCatalogService {
         lockCatalog();
         EffectiveCatalog before = loadCatalog();
         if (before.group(slug).isPresent()) {
-            throw new CuratedCatalogConflictException("A group with slug '" + slug + "' already exists.");
+            throw new CuratedCatalogConflictException("A group with slug “" + slug + "” already exists.");
         }
         Instant now = clock.instant();
         CuratedGroupOverride override = new CuratedGroupOverride(slug, now);
@@ -209,7 +209,7 @@ public class CuratedCatalogService {
         CatalogEntry<GroupDefinition> entry =
                 CuratedCatalogModel.requireEntry(loadCatalog().group(slug), CATALOG_GROUP, slug, precondition);
         if (entry.shipped() == null) {
-            throw new CuratedCatalogConflictException("Hephaestus ships no definition for '" + slug + "'.");
+            throw new CuratedCatalogConflictException("Hephaestus ships no definition for “" + slug + "”.");
         }
         groupOverrides.findBySlug(slug).ifPresent(override -> {
             override.clearDefinition(clock.instant());
@@ -344,7 +344,7 @@ public class CuratedCatalogService {
         }
         String sourceGroupSlug = entry.effective().groupSlug();
         if (Objects.equals(sourceGroupSlug, groupSlug)) {
-            throw new IllegalArgumentException("Use the reorder endpoint to move a practice within its group");
+            throw new IllegalArgumentException("Use the reorder endpoint to move a practice within its group.");
         }
         List<String> source = CuratedCatalogModel.practicesIn(before, sourceGroupSlug).stream()
                 .map(CatalogEntry::slug)
@@ -354,7 +354,8 @@ public class CuratedCatalogService {
                 .map(CatalogEntry::slug)
                 .collect(Collectors.toCollection(ArrayList::new));
         if (position < 0 || position > target.size()) {
-            throw new IllegalArgumentException("position exceeds the destination size");
+            throw new IllegalArgumentException(
+                    "position must be from 0 up to the number of practices in the destination.");
         }
         target.add(position, slug);
 

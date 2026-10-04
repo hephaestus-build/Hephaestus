@@ -28,7 +28,7 @@ public final class ProductionConfigurationEnvironmentPostProcessor implements En
                         + fact.documentationUrl())
                 .collect(Collectors.joining("\n"));
         log.error("Production configuration validation failed with " + failures.size() + " problem(s):\n" + diagnosis);
-        throw new IllegalStateException("Production configuration validation failed; diagnostic identifiers: "
+        throw new IllegalStateException("Production configuration validation failed. Diagnostic identifiers: "
                 + failures.stream().map(ConfigurationFactDTO::id).collect(Collectors.joining(", ")));
     }
 

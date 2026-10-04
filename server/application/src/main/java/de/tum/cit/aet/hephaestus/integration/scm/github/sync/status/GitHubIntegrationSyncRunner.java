@@ -173,7 +173,7 @@ public class GitHubIntegrationSyncRunner implements IntegrationSyncRunner {
 
     /**
      * The one human sentence the UI renders for a backfill page, e.g.
-     * {@code "Backfilling ls1intum/Artemis — issues #4812 → #3200"}.
+     * {@code "Backfilling ls1intum/Artemis: issues #4812 → #3200"}.
      *
      * <p>Backfill walks issue/PR numbers down toward #1, so the range reads as a countdown: high-water
      * mark on the left, live position on the right — the repository's own numbering rather than an
@@ -182,6 +182,6 @@ public class GitHubIntegrationSyncRunner implements IntegrationSyncRunner {
     static String step(String repositoryName, SyncPhase phase, int lowestNumberSeen, @Nullable Integer highWaterMark) {
         String entity = phase == SyncPhase.ISSUES ? "issues" : "pull requests";
         String range = highWaterMark == null ? "#" + lowestNumberSeen : "#" + highWaterMark + " → #" + lowestNumberSeen;
-        return "Backfilling " + repositoryName + " — " + entity + " " + range;
+        return "Backfilling " + repositoryName + ": " + entity + " " + range;
     }
 }

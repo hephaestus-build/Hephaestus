@@ -144,8 +144,8 @@ public final class ConfigurationReadinessEvaluator {
                 ConfigurationRequirement.REQUIRED,
                 server || webhook,
                 value -> validWebhookSecret(value) && !Objects.equals(value, property("hephaestus.webhook.secret")),
-                "A routing secret of at least 32 printable ASCII characters, different from the webhook secret, is "
-                        + "required to register and verify GitLab group hooks.",
+                "A routing secret is required to register and verify GitLab group hooks. "
+                        + "It must have at least 32 printable ASCII characters and differ from the webhook secret.",
                 "webhooks");
         add(
                 facts,
@@ -155,7 +155,7 @@ public final class ConfigurationReadinessEvaluator {
                 ConfigurationRequirement.REQUIRED,
                 true,
                 validNatsRoleContract(server, webhook),
-                "NATS must be enabled for server/webhook ingestion and disabled on a worker-only process.",
+                "NATS must be enabled for ingestion in the server and webhook roles. NATS must be disabled on a worker-only process.",
                 "nats");
         add(
                 facts,
@@ -205,7 +205,7 @@ public final class ConfigurationReadinessEvaluator {
                 ConfigurationRequirement.RECOMMENDED,
                 worker,
                 "runsc".equals(property("hephaestus.sandbox.docker.container-runtime")),
-                "gVisor (runsc) is recommended for stronger agent sandbox isolation.",
+                "gVisor (runsc) gives stronger agent sandbox isolation. We recommend it.",
                 "sandbox-isolation");
         String legacySandboxKey = firstConfiguredLegacySandboxKey();
         add(
@@ -218,7 +218,8 @@ public final class ConfigurationReadinessEvaluator {
                 legacySandboxKey == null,
                 legacySandboxKey == null
                         ? "Docker sandbox settings live under hephaestus.sandbox.docker.*."
-                        : "\"" + legacySandboxKey + "\" moved under hephaestus.sandbox.docker.* and is no longer read.",
+                        : "\"" + legacySandboxKey
+                                + "\" moved under hephaestus.sandbox.docker.*. The server no longer reads it.",
                 "docker-configuration");
         add(
                 facts,
@@ -242,7 +243,7 @@ public final class ConfigurationReadinessEvaluator {
                 server,
                 relayConfigured,
                 relayConfigured && notBlank(property("hephaestus.email.from")),
-                "Email is optional; with a relay host set, hephaestus.email.from must name the sender address.",
+                "Email is optional. If you set a relay host, hephaestus.email.from must name the sender address.",
                 "email");
 
         verifyCatalogue(facts);

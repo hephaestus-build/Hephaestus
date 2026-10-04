@@ -97,7 +97,7 @@ describe("PracticeReviewSettings", () => {
 		await screen.findByRole("alertdialog");
 		expect(preview).toHaveBeenCalledOnce();
 		await act(async () => {
-			fireEvent.click(screen.getByRole("button", { name: "Apply wider coverage" }));
+			fireEvent.click(screen.getByRole("button", { name: "Widen coverage" }));
 		});
 		expect(onUpdate).toHaveBeenCalledWith(
 			{
@@ -266,7 +266,7 @@ describe("PracticeReviewSettings", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
 
 		const alert = await screen.findByRole("alert");
-		expect(alert.textContent).toMatch(/^Couldn't save the coverage\./u);
+		expect(alert.textContent).toMatch(/^We could not save the coverage\./u);
 		expect(
 			screen.getByRole("radio", { name: "Selected repositories" }).getAttribute("aria-checked"),
 		).toBe("true");

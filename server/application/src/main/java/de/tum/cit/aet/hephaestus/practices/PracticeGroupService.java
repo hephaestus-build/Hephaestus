@@ -50,7 +50,8 @@ public class PracticeGroupService {
     @Transactional
     public void reorder(WorkspaceContext ctx, List<String> orderedSlugs) {
         if (new HashSet<>(orderedSlugs).size() != orderedSlugs.size()) {
-            throw new IllegalArgumentException("orderedSlugs must not contain duplicate slugs");
+            throw new IllegalArgumentException(
+                    "The order lists a practice group twice. Reload the page and try again.");
         }
         lockWorkspace(ctx);
         List<PracticeGroup> groups = practiceGroupRepository.findByWorkspaceIdOrderByDisplayOrderAscNameAsc(ctx.id());
@@ -65,7 +66,7 @@ public class PracticeGroupService {
                 throw new EntityNotFoundException("PracticeGroup", unknown);
             }
             throw new IllegalArgumentException(
-                    "orderedSlugs must contain every practice group in the workspace (a complete ordering)");
+                    "The practice groups changed. Reload the page to see the current order.");
         }
         Map<String, PracticeGroup> bySlug = groups.stream().collect(Collectors.toMap(PracticeGroup::getSlug, a -> a));
         int order = 0;
@@ -96,7 +97,7 @@ public class PracticeGroupService {
             WorkspaceContext ctx, String slug, GroupAttributes attributes, boolean recordAudit) {
         if (practiceGroupRepository.existsByWorkspaceIdAndSlug(ctx.id(), slug)) {
             throw new PracticeGroupSlugConflictException(
-                    "A practice group with slug '" + slug + "' already exists in this workspace.");
+                    "A practice group with slug “" + slug + "” already exists in this workspace.");
         }
         Workspace workspace = lockWorkspace(ctx);
 
@@ -119,7 +120,7 @@ public class PracticeGroupService {
                 throw ex;
             }
             throw new PracticeGroupSlugConflictException(
-                    "A practice group with slug '" + slug + "' already exists in this workspace.", ex);
+                    "A practice group with slug “" + slug + "” already exists in this workspace.", ex);
         }
         if (recordAudit) {
             configAudit.record(ConfigAuditEntry.created(

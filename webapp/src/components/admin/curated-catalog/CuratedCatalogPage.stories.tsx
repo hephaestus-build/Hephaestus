@@ -266,11 +266,11 @@ export const ExcludingAGroupListsItsPractices: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(
 			await canvas.findByRole("switch", {
-				name: "Offer Packaging work for review to workspaces",
+				name: "Include Packaging work for review for workspaces",
 			}),
 		);
 		const dialog = await screen.findByRole("alertdialog");
-		await within(dialog).findByText(/also stops offering 3 currently offered practices/u);
+		await within(dialog).findByText(/also excludes 3 included practices/u);
 		await within(dialog).findByText("Say what changed and why");
 	},
 };
@@ -299,7 +299,7 @@ export const PracticeInsideExcludedGroup: Story = {
 		await expect(inheritedSwitch).not.toBeChecked();
 		await expect(inheritedSwitch).toHaveAttribute("aria-disabled", "true");
 		const directlyExcludedSwitch = await canvas.findByRole("switch", {
-			name: "Say what changed and why is not offered to workspaces",
+			name: "Say what changed and why is excluded from workspaces",
 		});
 		await expect(directlyExcludedSwitch).not.toBeChecked();
 		await expect(directlyExcludedSwitch).toHaveAttribute("aria-disabled", "true");
@@ -322,11 +322,11 @@ export const ExcludingAGroupCountsOnlyIncludedPractices: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(
 			await canvas.findByRole("switch", {
-				name: "Offer Packaging work for review to workspaces",
+				name: "Include Packaging work for review for workspaces",
 			}),
 		);
 		const dialog = await screen.findByRole("alertdialog");
-		await within(dialog).findByText(/also stops offering 1 currently offered practice/u);
+		await within(dialog).findByText(/also excludes 1 included practice/u);
 		await within(dialog).findByText("Keep a change to one concern");
 		await expect(within(dialog).queryByText("Say what changed and why")).not.toBeInTheDocument();
 	},
@@ -355,7 +355,7 @@ export const ExcludingAGroupDoesNotRecountExcludedPractices: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(
 			await canvas.findByRole("switch", {
-				name: "Offer Packaging work for review to workspaces",
+				name: "Include Packaging work for review for workspaces",
 			}),
 		);
 		await screen.findByText(/No additional practices are affected/u);

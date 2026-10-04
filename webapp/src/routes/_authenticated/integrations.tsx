@@ -16,11 +16,15 @@ const OUTCOMES = {
 		iconClass: "size-12 text-success",
 		title: "Integration connected",
 	},
-	error: { Icon: XCircleIcon, iconClass: "size-12 text-destructive", title: "Connection failed" },
+	error: {
+		Icon: XCircleIcon,
+		iconClass: "size-12 text-destructive",
+		title: "We could not connect the integration",
+	},
 	none: {
 		Icon: InfoIcon,
 		iconClass: "size-12 text-muted-foreground",
-		title: "Nothing to show here",
+		title: "Open an integration from workspace administration",
 	},
 };
 
@@ -46,7 +50,7 @@ export const Route = createFileRoute("/_authenticated/integrations")({
 		if (search.status === "success") {
 			toast.success("Slack workspace connected");
 		} else if (search.status === "error") {
-			toast.error("Slack connection failed", { description: failureDetail(search) });
+			toast.error("We could not connect Slack", { description: failureDetail(search) });
 		}
 		throw redirect({
 			to: "/w/$workspaceSlug/admin/integrations/slack",
@@ -73,7 +77,7 @@ function IntegrationsCallback() {
 		if (status === "success") {
 			toast.success("Integration connected");
 		} else if (status === "error") {
-			toast.error("Integration connection failed", { description: detail });
+			toast.error("We could not connect the integration", { description: detail });
 		}
 	}, [status, detail]);
 
@@ -90,7 +94,7 @@ function IntegrationsCallback() {
 						)}
 					</div>
 					<Button nativeButton={false} render={<Link to="/" />}>
-						Return to dashboard
+						Back to dashboard
 					</Button>
 				</CardContent>
 			</Card>

@@ -5,7 +5,10 @@ title: Contributor guide
 description: Orientation for engineers who build and operate the Hephaestus platform.
 ---
 
-Hephaestus is maintained by the Applied Education Technologies (AET) team at TUM. It gives developers practice feedback on pull requests, merge requests, and issues, and includes Heph, a conversational AI mentor. This guide covers the codebase and development workflow, from local setup to production releases.
+The Applied Education Technologies (AET) team at TUM maintains Hephaestus.
+Hephaestus gives developers practice feedback on pull requests, merge requests, and issues.
+It includes Heph, a conversational AI mentor.
+This guide covers the codebase and development workflow, from local setup to production releases.
 
 ## Repository layout
 
@@ -24,35 +27,36 @@ in its own container in production — [Runtime roles](../admin/runtime-roles#mo
 
 ## How to use this guide
 
-| Goal | Start here |
-| --- | --- |
-| Run the repository locally | [Local development](./local-development) |
-| Choose and run the right test tier | [Testing](./testing) |
-| Understand a cross-module change | [System design](./system-design) |
-| Change persisted data safely | [Database migration](./database-migration) |
+| Goal                               | Start here                                                 |
+| ---------------------------------- | ---------------------------------------------------------- |
+| Run the repository locally         | [Local development](./local-development)                   |
+| Choose and run the right test tier | [Testing](./testing)                                       |
+| Understand a cross-module change   | [System design](./system-design)                           |
+| Change persisted data safely       | [Database migration](./database-migration)                 |
 | Change practice review or feedback | [Practice review pipeline](./practice-review-pipeline.mdx) |
-| Prepare a release | [Release management](./release-management) |
-| Work with a coding agent | [Coding agents](./ai-agent-workflow) |
+| Prepare a release                  | [Release management](./release-management)                 |
+| Work with a coding agent           | [Coding agents](./ai-agent-workflow)                       |
 
-Repository-level `AGENTS.md` files hold the commands and traps an automated coding agent must follow,
-and [Coding agents](./ai-agent-workflow) explains how they reach it. The pages here explain the system
-and human workflow; when they disagree with executable configuration, generated API output, or tests,
-fix the prose in the same pull request.
+Repository-level `AGENTS.md` files hold the commands and constraints for an automated coding agent.
+[Coding agents](./ai-agent-workflow) explains how the agent receives them.
+The pages here explain the system and human workflow.
+If they disagree with executable configuration, generated API output, or tests, fix the prose in the same pull request.
 
 ## Where the architecture decisions live
 
-The ADRs are **not on this site**, on purpose. They live in the repository under
-[`docs/decisions/`](https://github.com/hephaestus-build/Hephaestus/tree/main/docs/decisions), indexed by
-[`decisions/README.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/README.md) —
-they are written against internal class names and are amended by the same PR that changes the code,
-so their reader already has the repository open. The same applies to `docs/runbooks/`,
-`docs/auth-architecture.md` and `docs/auth-glossary.md`.
+The ADRs are intentionally **not on this site**.
+They live in the repository under
+[`docs/decisions/`](https://github.com/hephaestus-build/Hephaestus/tree/main/docs/decisions).
+[`decisions/README.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/README.md) indexes them.
+They refer to internal class names, so their reader already has the repository open.
+The PR that changes the code also amends the applicable ADR.
+The same applies to `docs/runbooks/`, `docs/auth-architecture.md` and `docs/auth-glossary.md`.
 
 Two rules when you touch them:
 
 - **Link them by absolute GitHub URL** from any page on this site. A relative `../decisions/…` link
   resolves to nothing here and fails the docs build (`onBrokenMarkdownLinks: 'throw'`).
-- **An ADR records a decision, not a fix log.** A bug you fixed afterwards goes in a changeset;
-  amend an ADR only when the decision or one of its consequences actually changed.
+- **An ADR records a decision, not a fix log.** Record a later bug fix in a changeset.
+  Amend an ADR only when the decision or one of its consequences changed.
 
 Continue with [Local development](./local-development) to set up your environment.

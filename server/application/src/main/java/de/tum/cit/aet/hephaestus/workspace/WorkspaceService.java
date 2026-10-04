@@ -194,7 +194,7 @@ public class WorkspaceService {
                     .map(user -> Objects.requireNonNull(user.getId()))
                     .findFirst()
                     .orElseThrow(() -> new AccessForbiddenException(
-                            "Link your GitHub account before creating a GitHub workspace"));
+                            "Connect your GitHub account before you create a GitHub workspace."));
         }
 
         Workspace workspace =
@@ -253,10 +253,9 @@ public class WorkspaceService {
 
     private void createOwnerRole(Workspace workspace, @Nullable Long ownerUserId) {
         if (ownerUserId == null) {
-            throw new IllegalStateException("Cannot create workspace without an owner. "
-                    + "The authenticated user must have a corresponding git provider User entity. "
-                    + "workspaceSlug="
-                    + workspace.getWorkspaceSlug());
+            log.warn("Workspace has no owner user: workspaceSlug={}", workspace.getWorkspaceSlug());
+            throw new IllegalStateException("We could not create this workspace because your account has no "
+                    + "connected GitHub or GitLab account. Connect one in User settings, then try again.");
         }
         workspaceMembershipService.createMembership(workspace, ownerUserId, WorkspaceMembership.WorkspaceRole.OWNER);
     }
@@ -265,7 +264,9 @@ public class WorkspaceService {
     public Workspace updateAccountLogin(Long workspaceId, String accountLogin) {
         Workspace workspace = workspaceRepository
                 .findById(workspaceId)
-                .orElseThrow(() -> new IllegalArgumentException("Workspace not found: " + workspaceId));
+                .orElseThrow(
+                        () -> new IllegalArgumentException(
+                                "We could not find that workspace. It may have been deleted. Reload the page to see what is current."));
 
         if (!Objects.equals(workspace.getAccountLogin(), accountLogin)) {
             workspace.setAccountLogin(accountLogin);

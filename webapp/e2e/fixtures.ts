@@ -60,13 +60,13 @@ export async function loginAsDevAdmin(page: Page, username = "e2e"): Promise<voi
 	if (await terms.isVisible()) {
 		await terms.check();
 		// The research question is only asked where an organisation is configured to run one.
-		const decline = page.getByRole("radio", { name: /don't take part/u });
+		const decline = page.getByRole("radio", { name: /keep my data out of research/u });
 		if (await decline.isVisible()) {
 			await decline.click();
 		}
-		await page.getByRole("button", { name: "Continue" }).click();
+		await page.getByRole("button", { name: "Save and continue" }).click();
 		// The consent route can mask its URL, so URL changes do not prove submission finished.
-		await expect(page.getByRole("heading", { name: "Let’s get you set up" })).toBeHidden();
+		await expect(page.getByRole("heading", { name: "Get set up" })).toBeHidden();
 		await page.waitForURL((url) => url.pathname !== "/consent");
 	}
 }

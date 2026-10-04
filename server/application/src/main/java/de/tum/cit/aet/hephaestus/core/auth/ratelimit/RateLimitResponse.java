@@ -35,8 +35,9 @@ public final class RateLimitResponse {
             HttpServletRequest request, HttpServletResponse response, long retryAfterSeconds, ObjectMapper objectMapper)
             throws IOException {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.TOO_MANY_REQUESTS, "Rate limit exceeded. Retry after " + retryAfterSeconds + " seconds.");
-        problem.setTitle("Too Many Requests");
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Too many requests. Wait " + retryAfterSeconds + " seconds, then try again.");
+        problem.setTitle("Too many requests");
         problem.setProperty("retryAfterSeconds", retryAfterSeconds);
         problem.setInstance(URI.create(request.getRequestURI()));
 

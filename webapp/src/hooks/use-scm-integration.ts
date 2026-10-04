@@ -93,14 +93,16 @@ export function useScmIntegration(workspaceSlug: string) {
 		...addRepositoryToMonitorMutation(),
 		onSuccess: invalidateRepositorySet,
 		onError: (e) => {
-			toast.error("Failed to add repository", { description: problemDetailOf(e) });
+			toast.error("We could not add the repository", { description: problemDetailOf(e) });
 		},
 	});
 	const removeRepository = useMutation({
 		...removeRepositoryToMonitorMutation(),
 		onSuccess: invalidateRepositorySet,
 		onError: (e) => {
-			toast.error("Failed to stop monitoring repository", { description: problemDetailOf(e) });
+			toast.error("We could not stop monitoring the repository", {
+				description: problemDetailOf(e),
+			});
 		},
 	});
 

@@ -22,7 +22,8 @@ public class PiEventToUiChunkTranslator {
 
     private static final Logger log = LoggerFactory.getLogger(PiEventToUiChunkTranslator.class);
 
-    public static final String REPLY_LOST_IN_TRANSIT = "Part of Heph's reply was lost in transit. Please try again.";
+    public static final String REPLY_LOST_IN_TRANSIT =
+            "Part of Heph’s reply was lost before it reached you. Try again.";
 
     public List<UIMessageChunk> translate(JsonNode piEvent, TranslatorState state) {
         if (piEvent == null || !piEvent.path("type").isString()) {
@@ -111,7 +112,7 @@ public class PiEventToUiChunkTranslator {
         // text block first so the AI SDK reducer doesn't crash on an `error` chunk
         // following an unmatched `*-start` (vercel/ai#11700).
         List<UIMessageChunk> out = new ArrayList<>(closeOpenStreamingBlocks(state));
-        out.add(new UIMessageChunk.TurnError("Mentor turn timed out before completion."));
+        out.add(new UIMessageChunk.TurnError("Heph took too long to reply and stopped. Try again."));
         return out;
     }
 
@@ -388,7 +389,7 @@ public class PiEventToUiChunkTranslator {
         out.addAll(closeOpenStreamingBlocks(state));
         // The runner forwards agent_end only after Pi settles its retries.
         if (mapStopReason(piStopReason) == UIMessageChunk.FinishReason.ERROR) {
-            out.add(new UIMessageChunk.TurnError("Heph couldn't finish this reply. Please try again."));
+            out.add(new UIMessageChunk.TurnError("Heph could not finish this reply. Try again."));
             return out;
         }
         UIMessageChunk.MessageMetadata metadata = UIMessageChunk.MessageMetadata.of(

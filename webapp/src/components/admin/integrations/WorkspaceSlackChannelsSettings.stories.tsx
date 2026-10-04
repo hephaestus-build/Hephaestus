@@ -190,11 +190,11 @@ export const RevokeTypeToConfirm: Story = {
 	args: { channels: [active] },
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /actions for team-standup/iu }));
-		await userEvent.click(await screen.findByRole("menuitem", { name: /remove & erase/iu }));
+		await userEvent.click(await screen.findByRole("menuitem", { name: /remove and erase/iu }));
 		const dialog = await screen.findByRole("alertdialog");
 
 		// Enabled, but it will not erase anything until the ID matches — and it says so.
-		const confirm = within(dialog).getByRole("button", { name: /remove & erase/iu });
+		const confirm = within(dialog).getByRole("button", { name: /remove and erase/iu });
 		await expect(confirm).toBeEnabled();
 		await userEvent.click(confirm);
 		within(dialog).getByText(/that does not match/iu);
@@ -216,7 +216,7 @@ export const RevokeTypeToConfirm: Story = {
 export const Loading: Story = {
 	args: { isLoading: true, channels: [] },
 	play: async ({ canvas }) => {
-		canvas.getByText(/monitored channels have their/iu);
+		canvas.getByText(/messages in monitored channels and uses AI to write practice feedback/iu);
 	},
 };
 
@@ -226,7 +226,7 @@ export const LoadError: Story = {
 	play: async ({ args, canvas }) => {
 		await expect(canvas.queryByText(/no channels monitored yet/iu)).not.toBeInTheDocument();
 		await expect(canvas.getByRole("alert")).toHaveTextContent(
-			/couldn't load the monitored channels/iu,
+			/could not load the monitored channels/iu,
 		);
 
 		// Retry is wired, not decorative.
@@ -240,7 +240,7 @@ export const RemovePendingNothingCollected: Story = {
 	args: { channels: [pending] },
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /actions for team-intro/iu }));
-		await userEvent.click(await screen.findByRole("menuitem", { name: /remove & erase/iu }));
+		await userEvent.click(await screen.findByRole("menuitem", { name: /remove and erase/iu }));
 		const dialog = await screen.findByRole("alertdialog");
 		within(dialog).getByText(/nothing has been collected/iu);
 		await expect(within(dialog).queryByLabelText(/to confirm/iu)).not.toBeInTheDocument();

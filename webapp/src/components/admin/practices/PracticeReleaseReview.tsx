@@ -49,7 +49,7 @@ const BASE_SOURCE = {
 	REVISION_FINGERPRINT_MATCH:
 		"A recorded version matched by its saved source fingerprint. It may not show the original guidance or delivery. Choose a version for each changed field.",
 	CURRENT_DEFINITION:
-		"The current definition, because the original adopted version could not be proved. Choose a version for each changed field.",
+		"The current definition, because we could not verify the version you originally adopted. Choose a version for each changed field.",
 } satisfies Record<PracticeReleaseProposal["baseSource"], string>;
 
 function fieldText(definition: PracticeDefinition, field: Field): string {
@@ -107,7 +107,7 @@ export function PracticeReleaseReview({
 	};
 
 	return (
-		<section className="space-y-5" aria-label={`Review update for ${proposal.slug}`}>
+		<section className="space-y-5" aria-label={`Review update for ${proposal.offered.name}`}>
 			<div className="space-y-1">
 				<h2 className="text-lg font-semibold">{proposal.offered.name}</h2>
 				<p className="text-sm text-muted-foreground">
@@ -121,14 +121,14 @@ export function PracticeReleaseReview({
 			</Alert>
 			<Table bordered className="min-w-220 table-fixed">
 				<caption className="sr-only">
-					Changed fields in the adopted, current, and offered versions
+					Changed fields in the adopted, current, and proposed versions
 				</caption>
 				<TableHeader>
 					<TableRow variant="static">
 						<TableHead className="w-38">Field</TableHead>
 						<TableHead>Base</TableHead>
 						<TableHead>Current</TableHead>
-						<TableHead>Offered</TableHead>
+						<TableHead>Proposed</TableHead>
 						<TableHead className="w-42">Use</TableHead>
 					</TableRow>
 				</TableHeader>
@@ -173,7 +173,7 @@ export function PracticeReleaseReview({
 											<RadioGroupItem id={`${id}-${field}-current`} value="CURRENT" /> Current
 										</label>
 										<label className="flex items-center gap-2" htmlFor={`${id}-${field}-offered`}>
-											<RadioGroupItem id={`${id}-${field}-offered`} value="OFFERED" /> Offered
+											<RadioGroupItem id={`${id}-${field}-offered`} value="OFFERED" /> Proposed
 										</label>
 									</RadioGroup>
 								) : (
@@ -194,7 +194,7 @@ export function PracticeReleaseReview({
 				</Button>
 			</div>
 			<p className="text-xs text-muted-foreground">
-				Declining leaves this practice unchanged. A different catalogue version will be offered
+				Declining leaves this practice unchanged. A different catalog version will be proposed
 				again.
 			</p>
 		</section>

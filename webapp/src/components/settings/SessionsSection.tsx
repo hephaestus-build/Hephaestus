@@ -101,7 +101,7 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 	let body: ReactNode;
 	if (state.status === "loading") {
 		body = (
-			<div className="space-y-3" role="list" aria-busy="true" aria-label="Loading sessions">
+			<div className="space-y-3" role="list" aria-busy="true" aria-label="Loading sessions…">
 				{Array.from({ length: 2 }, (_, index) => (
 					<div
 						key={index}
@@ -124,7 +124,7 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 		body = (
 			<QueryErrorAlert
 				error={state.error}
-				title="Could not load sessions"
+				title="We could not load your sessions"
 				onRetry={state.onRetry}
 			/>
 		);
@@ -184,10 +184,10 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 											state.onRevoke(session.jti);
 										}
 									}}
-									aria-label="Revoke this session"
+									aria-label={`Sign out ${deviceLabel}`}
 								>
 									{isRevokingThis ? <Spinner className="mr-1.5" /> : null}
-									Revoke
+									Sign out
 								</Button>
 							)}
 						</div>
@@ -202,7 +202,7 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 			<div className="flex items-start justify-between gap-4">
 				<div className="space-y-1">
 					<h2 id="sessions-heading" className="text-xl font-semibold">
-						Active Sessions
+						Active sessions
 					</h2>
 					<p className="text-sm text-muted-foreground">
 						Devices and browsers currently signed in to your account.
@@ -231,7 +231,7 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 									{otherSessionCount === 1 ? "session" : "sessions"}?
 								</AlertDialogTitle>
 								<AlertDialogDescription>
-									This revokes every session except the one you are using now. The other{" "}
+									This ends every session except the one you are using now. The other{" "}
 									{otherSessionCount === 1 ? "device" : `${otherSessionCount} devices`} will need to
 									sign in again.
 								</AlertDialogDescription>
@@ -239,7 +239,7 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 							<AlertDialogFooter>
 								<AlertDialogCancel>Cancel</AlertDialogCancel>
 								<AlertDialogAction onClick={state.onRevokeOthers} disabled={state.revokingOthers}>
-									Sign out others
+									Sign out other sessions
 								</AlertDialogAction>
 							</AlertDialogFooter>
 						</AlertDialogContent>

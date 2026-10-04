@@ -59,7 +59,7 @@ async function logout() {
 		await authClient.logout();
 		clearUserView();
 	} catch {
-		toast.error("Could not confirm sign-out. Please try again.");
+		toast.error("We could not confirm that you signed out. Try again.");
 	}
 }
 

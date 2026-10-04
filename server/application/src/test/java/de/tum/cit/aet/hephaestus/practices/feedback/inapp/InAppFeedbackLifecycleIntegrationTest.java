@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback.inapp;
 import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_MET;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -19,8 +20,10 @@ import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppFeedbackPreparer;
 import de.tum.cit.aet.hephaestus.agent.handler.inapp.InAppFeedbackRouter;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
+import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
@@ -30,6 +33,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.feedback.PreviousInAppFeedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.dto.InAppFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
@@ -222,6 +226,93 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
         assertThat(state(first)).isEqualTo(FeedbackDeliveryState.SUPERSEDED);
         assertThat(second.getReplacesId()).isEqualTo(first.getId());
         assertThat(cited(second)).isNotEmpty().doesNotContain(beforeTheWindow);
+    }
+
+    /**
+     * An author who merged their own work is the person a MERGER practice is about, so the same lapse on two of
+     * their pieces of work is a card on their page. It cites both, and nothing filed against a colleague or in
+     * another workspace.
+     */
+    @Test
+    @DisplayName("a lapse the author made as merger on two pieces of work is prepared for the author, citing both")
+    void shouldPrepareACardWhenTheAuthorLapsedAsMergerOnTwoPiecesOfWork() {
+        Practice authored =
+                persistPractice(workspace, null, "merges-only-after-approval", "Merge only after approval", null);
+        authored.setSubject(ActorRole.MERGER);
+        authored.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(authored, 2)));
+        Practice merger = practiceRepository.saveAndFlush(authored);
+        Instant earlierAt = NOW.minus(Duration.ofDays(3));
+        AgentJob earlierRun = persistPullRequestReview(workspace, 21, earlierAt);
+        UUID earlier = observe(
+                merger, earlierRun, 21, developer, NOT_MET, Severity.MINOR, earlierAt, admittedEvidence(earlierRun));
+        User colleague = persistUser("lifecycle-colleague");
+        ensureWorkspaceMembership(workspace, colleague, WorkspaceMembership.WorkspaceRole.MEMBER);
+        Instant colleagueAt = NOW.minus(Duration.ofDays(2));
+        AgentJob colleagueRun = persistPullRequestReview(workspace, 23, colleagueAt);
+        observe(
+                merger,
+                colleagueRun,
+                23,
+                colleague,
+                NOT_MET,
+                Severity.MINOR,
+                colleagueAt,
+                admittedEvidence(colleagueRun));
+        Workspace elsewhere = createWorkspace(
+                "lifecycle-elsewhere",
+                "Lifecycle elsewhere",
+                "lifecycle-elsewhere-org",
+                AccountType.ORG,
+                persistUser("lifecycle-elsewhere-owner"));
+        ensureWorkspaceMembership(elsewhere, developer, WorkspaceMembership.WorkspaceRole.MEMBER);
+        Practice elsewherePractice = persistPractice(elsewhere, null, merger.getSlug(), merger.getName(), null);
+        Instant elsewhereAt = NOW.minus(Duration.ofDays(1));
+        AgentJob elsewhereRun = persistPullRequestReview(elsewhere, 24, elsewhereAt);
+        observe(
+                elsewherePractice,
+                elsewhereRun,
+                24,
+                developer,
+                NOT_MET,
+                Severity.MINOR,
+                elsewhereAt,
+                admittedEvidence(elsewhereRun));
+        AgentJob run = persistPullRequestReview(workspace, 22, NOW);
+        UUID current = observe(
+                merger,
+                run,
+                22,
+                developer,
+                NOT_MET,
+                Severity.MINOR,
+                NOW.minus(Duration.ofHours(1)),
+                admittedEvidence(run));
+        run.setOutput(OBJECT_MAPPER.readTree("""
+                {"feedback":{
+                  "observations":[{"id":"%s","practiceSlug":"%s"}],
+                  "units":[{"channel":"IN_APP","action":"NEW","practiceSlug":"%s","basedOn":["%s"],
+                   "title":"Merged before anyone else approved",
+                   "body":"Two of your pull requests were merged with no approval from another person.",
+                   "nextStep":"Wait for a reviewer's approval before you merge."}]}}
+                """.formatted(current, merger.getSlug(), merger.getSlug(), current)));
+        agentJobRepository.save(run);
+
+        transactionTemplate.executeWithoutResult(status -> inAppLane.prepare(run.getId(), workspace.getId()));
+
+        List<Feedback> cards = feedbackRepository.findReadableInAppForRecipient(workspace.getId(), developer.getId());
+        assertThat(cards).hasSize(1);
+        Feedback card = cards.getFirst();
+        assertThat(card.getAgentJobId()).isEqualTo(run.getId());
+        assertThat(card.getRecipientUserId()).isEqualTo(developer.getId());
+        assertThat(card.getAboutUserId()).isEqualTo(developer.getId());
+        assertThat(card.getDeliveryState()).isEqualTo(FeedbackDeliveryState.PREPARED);
+        List<FeedbackObservationRepository.BoundObservation> bound =
+                feedbackObservationRepository.findBoundObservations(workspace.getId(), card.getId());
+        assertThat(bound)
+                .extracting(
+                        FeedbackObservationRepository.BoundObservation::getObservationId,
+                        FeedbackObservationRepository.BoundObservation::getRole)
+                .containsExactlyInAnyOrder(tuple(current, EvidenceRole.PRIMARY), tuple(earlier, EvidenceRole.PRIMARY));
     }
 
     @Test

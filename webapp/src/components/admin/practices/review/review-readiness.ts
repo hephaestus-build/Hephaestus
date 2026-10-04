@@ -34,7 +34,7 @@ export const REVIEW_RUNNING_DEFS: StatusDefs<ReviewRunningTone> = {
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
 		description:
-			"Practice reviews are on and a review model is ready. Each developer's AI choice still decides whether it runs for them.",
+			"Practice reviews are on and a review model is ready. Each developer’s AI choice still decides whether it runs for them.",
 	},
 	checking: {
 		label: "Checking reviews",
@@ -43,14 +43,13 @@ export const REVIEW_RUNNING_DEFS: StatusDefs<ReviewRunningTone> = {
 		description: "Looking up whether a review model is ready…",
 	},
 	unconfirmed: {
-		label: "Reviews can't be confirmed",
+		label: "Reviews cannot be confirmed",
 		icon: CircleHelpIcon,
 		badgeVariant: "warning",
-		description:
-			"Practice reviews are on, but whether a review model is ready couldn't be checked just now.",
+		description: "Practice reviews are on, but we could not check whether a review model is ready.",
 	},
 	blocked: {
-		label: "Reviews can't start",
+		label: "Reviews cannot start",
 		icon: TriangleAlertIcon,
 		badgeVariant: "warning",
 		description: "Practice reviews are on, but no review model is ready, so none can start.",
@@ -94,7 +93,7 @@ export function reviewRunningDescription(running: ReviewRunningState): string {
 		tier === "UNDECLARED"
 			? "a review model is ready for members who have not chosen"
 			: `a review model declared as ${DATA_HANDLING_DEFS[tier].label} is ready`;
-	return `Practice reviews are on and ${subject}. Each developer's AI choice still decides whether it runs for them.`;
+	return `Practice reviews are on and ${subject}. Each developer’s AI choice still decides whether it runs for them.`;
 }
 
 /**

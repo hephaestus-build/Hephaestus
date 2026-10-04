@@ -20,7 +20,7 @@ public class SyncNotSupportedException extends RuntimeException {
     private final transient IntegrationKind kind;
 
     public SyncNotSupportedException(IntegrationKind kind) {
-        super("Manual sync is not supported for kind=" + kind);
+        super("The integration kind " + kind + " does not support manual sync.");
         this.kind = kind;
     }
 

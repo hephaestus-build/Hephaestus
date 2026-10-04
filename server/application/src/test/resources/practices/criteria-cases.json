@@ -1,0 +1,291 @@
+[
+	{
+		"id": "fixed-url",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "NOT_APPLICABLE"
+		},
+		"files": {
+			"repo/Loader.swift": "import Foundation\nfunc endpoint() -> URL? {\n    guard let url = URL(string: \"https://example.org/items\") else { return nil }\n    return url\n}\n"
+		},
+		"reason": "A valid fixed URL adds no runtime-dependent failure path.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "runtime-url",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "NOT_MET"
+		},
+		"files": {
+			"repo/Loader.swift": "import Foundation\nfunc endpoint(_ input: String) -> URL? {\n    guard let url = URL(string: input) else { return nil }\n    return url\n}\n"
+		},
+		"reason": "Runtime input can fail to parse and the bare return drops that failure.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "recorded-error",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "MET"
+		},
+		"files": {
+			"repo/Loader.swift": "import Foundation\nimport OSLog\nlet logger = Logger(subsystem: \"example\", category: \"load\")\nfunc load() -> Data? {\n    do { return try Data(contentsOf: URL(fileURLWithPath: \"/data/items\")) }\n    catch { logger.error(\"Load failed: \\(error)\"); return nil }\n}\nfunc show() { guard let data = load() else { return }; consume(data) }\n"
+		},
+		"reason": "The handler records the failure before the later empty-value check.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "framework-storage",
+		"expected": {
+			"keeps-views-free-of-networking-and-persistence": "MET"
+		},
+		"files": {
+			"repo/Settings.swift": "import SwiftUI\nimport CoreData\nstruct Settings: View {\n    @AppStorage(\"compact\") private var compact = false\n    @SceneStorage(\"selection\") private var selection = \"\"\n    @FetchRequest(sortDescriptors: []) private var items: FetchedResults<Item>\n    var body: some View { Toggle(\"Compact\", isOn: $compact); Text(selection); Text(\"\\(items.count)\") }\n}\n"
+		},
+		"reason": "The framework supports these property wrappers in views.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "direct-storage",
+		"expected": {
+			"keeps-views-free-of-networking-and-persistence": "NOT_MET"
+		},
+		"files": {
+			"repo/Settings.swift": "import SwiftUI\nstruct Settings: View {\n    var body: some View { Button(\"Save\") { UserDefaults.standard.set(true, forKey: \"compact\") } }\n}\n"
+		},
+		"reason": "A direct UserDefaults write in the view is still direct I/O.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "root-feature",
+		"expected": {
+			"declares-permissions-truthfully-at-point-of-use": "MET"
+		},
+		"files": {
+			"repo/Map.swift": "import SwiftUI\nimport CoreLocation\nimport MapKit\nstruct RootView: View {\n    let location = CLLocationManager()\n    var body: some View { Map().onAppear { location.requestWhenInUseAuthorization() } }\n}\n",
+			"repo/Info.plist": "<plist><dict><key>NSLocationWhenInUseUsageDescription</key><string>Show your position on the map.</string></dict></plist>\n"
+		},
+		"reason": "The root view presents the map that needs location.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "root-before-feature",
+		"expected": {
+			"declares-permissions-truthfully-at-point-of-use": "NOT_MET"
+		},
+		"files": {
+			"repo/Welcome.swift": "import SwiftUI\nimport CoreLocation\nimport MapKit\nstruct RootView: View {\n    let location = CLLocationManager()\n    var body: some View { NavigationStack { NavigationLink(\"Open map\") { Map() } }.onAppear { location.requestWhenInUseAuthorization() } }\n}\n",
+			"repo/Info.plist": "<plist><dict><key>NSLocationWhenInUseUsageDescription</key><string>Show your position on the map.</string></dict></plist>\n"
+		},
+		"reason": "The root view requests location before the developer opens the map feature.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "adr-in-change",
+		"expected": {
+			"records-significant-decisions-with-rationale": "MET"
+		},
+		"files": {
+			"repo/schema.sql": "ALTER TABLE notes ADD COLUMN draft TEXT;\n",
+			"repo/docs/decisions/keep-drafts.md": "# Keep drafts\n\nStore drafts so an interrupted session does not lose the text.\n"
+		},
+		"reason": "The ADR added with the schema change records the need for persistence.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "schema-without-reason",
+		"expected": {
+			"records-significant-decisions-with-rationale": "NOT_MET"
+		},
+		"files": {
+			"repo/schema.sql": "ALTER TABLE notes ADD COLUMN draft TEXT;\n"
+		},
+		"reason": "A persistence decision still needs a recorded reason.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "dependency-label",
+		"expected": {
+			"changes-dependencies-deliberately": "NOT_MET",
+			"records-significant-decisions-with-rationale": "NOT_APPLICABLE"
+		},
+		"files": {
+			"context/description.md": "Add format-kit dependency.\n",
+			"repo/package.json": "{\"dependencies\":{\"format-kit\":\"1.0.0\"}}\n"
+		},
+		"reason": "Naming a new package does not explain its purpose. The dependency practice alone owns that gap.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "dependency-reason",
+		"expected": {
+			"changes-dependencies-deliberately": "MET",
+			"records-significant-decisions-with-rationale": "NOT_APPLICABLE"
+		},
+		"files": {
+			"context/description.md": "Use format-kit to format dates consistently across report exports. This project does not commit a lockfile.\n",
+			"repo/package.json": "{\"dependencies\":{\"format-kit\":\"1.0.0\"}}\n",
+			"repo/README.md": "This library does not commit a lockfile.\n"
+		},
+		"reason": "A reason describes the need in this change, not just the package name.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "dependency-and-schema",
+		"expected": {
+			"changes-dependencies-deliberately": "MET",
+			"records-significant-decisions-with-rationale": "NOT_MET"
+		},
+		"files": {
+			"context/description.md": "Use format-kit to format dates consistently across report exports. This project does not commit a lockfile.\n",
+			"repo/package.json": "{\"dependencies\":{\"format-kit\":\"1.0.0\"}}\n",
+			"repo/README.md": "This library does not commit a lockfile.\n",
+			"repo/schema.sql": "ALTER TABLE notes ADD COLUMN draft TEXT;\n"
+		},
+		"reason": "The dependency reason does not explain a separate persistence decision.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "image-scrim",
+		"expected": {
+			"uses-adaptive-colors-for-every-appearance": "MET"
+		},
+		"files": {
+			"repo/Header.swift": "import SwiftUI\nstruct Header: View {\n    var body: some View { Image(\"hero\").overlay(Color.black.opacity(0.3)) }\n}\n"
+		},
+		"reason": "A translucent scrim belongs to the image content, not to the adaptive system background.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "screen-background",
+		"expected": {
+			"uses-adaptive-colors-for-every-appearance": "NOT_MET"
+		},
+		"files": {
+			"repo/Header.swift": "import SwiftUI\nstruct Header: View {\n    var body: some View { Text(\"Reports\").frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.white) }\n}\n"
+		},
+		"reason": "A literal screen background still fixes one appearance.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "async-swallow",
+		"expected": {
+			"uses-structured-concurrency-safely": "MET",
+			"handles-errors-instead-of-swallowing-them": "NOT_MET"
+		},
+		"files": {
+			"repo/Store.swift": "import SwiftUI\n@MainActor final class Store: ObservableObject {\n    @Published var text = \"\"\n    func load() async {\n        do { text = try await service.load() } catch {}\n    }\n}\nstruct Feed: View {\n    @StateObject private var store = Store()\n    var body: some View { Text(store.text).task { await store.load() } }\n}\n"
+		},
+		"reason": "The task follows the view lifecycle and actor isolation. The errors practice alone owns the empty catch.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "diagnostic-print",
+		"expected": {
+			"logs-through-the-platform-logger": "NOT_MET",
+			"leaves-the-code-clean-with-intent-revealing-comments": "MET"
+		},
+		"files": {
+			"repo/Store.swift": "import Foundation\nfinal class Store {\n    func load() { print(\"load reached\") }\n}\n"
+		},
+		"reason": "A diagnostic print has one owner, even if it could be a temporary trace.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "independent-residue",
+		"expected": {
+			"logs-through-the-platform-logger": "NOT_MET",
+			"leaves-the-code-clean-with-intent-revealing-comments": "NOT_MET"
+		},
+		"files": {
+			"repo/Store.swift": "import Foundation\nfinal class Store {\n    func load() {\n        print(\"load reached\")\n        // TEMP: remove before merge\n        // oldStore.load()\n    }\n}\n"
+		},
+		"reason": "The print and the inactive temporary implementation are separate gaps.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "placeholder-permission",
+		"expected": {
+			"declares-permissions-truthfully-at-point-of-use": "NOT_MET",
+			"avoids-insecure-defaults-and-over-broad-permissions": "MET"
+		},
+		"files": {
+			"repo/Map.swift": "import SwiftUI\nimport CoreLocation\nstruct MapView: View {\n    let location = CLLocationManager()\n    var body: some View { Text(\"Your position\").onAppear { location.requestWhenInUseAuthorization() } }\n}\n",
+			"repo/Info.plist": "<plist><dict><key>NSLocationWhenInUseUsageDescription</key><string>needed</string></dict></plist>\n"
+		},
+		"reason": "The permission practice owns the placeholder description. It is not wider access by itself.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "credential-print",
+		"expected": {
+			"avoids-insecure-defaults-and-over-broad-permissions": "NOT_MET",
+			"logs-through-the-platform-logger": "NOT_APPLICABLE",
+			"leaves-the-code-clean-with-intent-revealing-comments": "MET"
+		},
+		"files": {
+			"repo/Session.swift": "import Foundation\nfunc diagnose(_ authorization: String) {\n    print(\"Authorization: \\(authorization)\")\n}\n"
+		},
+		"reason": "The security practice owns credential exposure. Neither logger choice nor residue repeats it.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "external-context",
+		"expected": {
+			"issue-points-to-relevant-context": "MET"
+		},
+		"files": {
+			"context/description.md": "Implement the retention process from [the design](https://example.org/design/retention).\n",
+			"context/docs/retention.md": "# Retention design\n\nDelete expired records after 30 days. Keep active records.\n"
+		},
+		"reason": "A captured relevant design counts even when its URL is outside the wiki.",
+		"workType": "issue"
+	},
+	{
+		"id": "unrelated-context",
+		"expected": {
+			"issue-points-to-relevant-context": "NOT_MET"
+		},
+		"files": {
+			"context/description.md": "Implement the retention process agreed in the design. See [the guide](https://example.org/design/colors).\n",
+			"context/docs/colors.md": "# Color guide\n\nUse semantic colors.\n"
+		},
+		"reason": "An unrelated external document does not supply the retention design.",
+		"workType": "issue"
+	},
+	{
+		"id": "fixed-url-network-failure",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "NOT_MET"
+		},
+		"files": {
+			"repo/Loader.swift": "import Foundation\nfunc load() async {\n    guard let url = URL(string: \"https://example.org/items\") else { return }\n    do { _ = try await URLSession.shared.data(from: url) } catch {}\n}\n"
+		},
+		"reason": "The fixed URL is valid, but the network request can fail and the empty catch drops that failure.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "async-lifecycle-with-handled-error",
+		"expected": {
+			"uses-structured-concurrency-safely": "NOT_MET",
+			"handles-errors-instead-of-swallowing-them": "MET"
+		},
+		"files": {
+			"repo/Feed.swift": "import SwiftUI\nimport OSLog\n@MainActor final class Store: ObservableObject {\n    @Published var text = \"\"\n    private let logger = Logger(subsystem: \"example\", category: \"load\")\n    func load() async {\n        do { text = try await service.load() } catch { logger.error(\"Load failed: \\(error)\") }\n    }\n}\nstruct Feed: View {\n    @StateObject private var store = Store()\n    var body: some View { Text(store.text).onAppear { Task { await store.load() } } }\n}\n",
+			"context/description.md": "Load the remote feed only while its screen is visible. Stop the request when the screen disappears.\n"
+		},
+		"reason": "The failure is recorded, but the view-lifecycle request has no cancellation path.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "printed-error",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "MET",
+			"logs-through-the-platform-logger": "NOT_MET",
+			"leaves-the-code-clean-with-intent-revealing-comments": "MET"
+		},
+		"files": {
+			"repo/Loader.swift": "import Foundation\nfunc load() {\n    do { try store.save() } catch { print(\"Save failed: \\(error)\") }\n}\n"
+		},
+		"reason": "The print records the failure with context. Only the logger practice asks for a different reporting mechanism.",
+		"workType": "pull_request"
+	}
+]

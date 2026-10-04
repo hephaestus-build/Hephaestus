@@ -82,7 +82,9 @@ function AdminMembersContainer() {
 			});
 		},
 		onError: (error) => {
-			toast.error(`Failed to update visibility: ${error.message}`);
+			toast.error("We could not update visibility in workspace activity", {
+				description: error.message,
+			});
 		},
 	});
 

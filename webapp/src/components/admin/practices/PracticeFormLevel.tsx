@@ -23,7 +23,7 @@ export function PracticeFormLevel({ creating, nested, path, children }: Practice
 				description={
 					creating
 						? "Define a way of working and choose how it is reviewed."
-						: "Update this practice's review rules and developer guidance."
+						: "Update this practice’s review rules and developer guidance."
 				}
 			/>
 			{children}

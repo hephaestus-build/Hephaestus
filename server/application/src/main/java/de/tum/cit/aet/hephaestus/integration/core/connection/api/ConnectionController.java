@@ -114,12 +114,12 @@ public class ConnectionController {
             @Nullable Authentication authentication) {
         Long workspaceId = workspace.id();
         if (body == null || body.kind() == null) {
-            throw new IllegalArgumentException("kind is required");
+            throw new IllegalArgumentException("Choose an integration to connect.");
         }
 
         ConnectionStrategy strategy = strategies.get(body.kind());
         if (strategy == null) {
-            throw new IllegalArgumentException("No ConnectionStrategy registered for kind=" + body.kind());
+            throw new IllegalArgumentException("This instance cannot connect that integration.");
         }
 
         // Strategy-level validation failures (e.g. missing 'pat' for GitLab) surface as
@@ -167,7 +167,7 @@ public class ConnectionController {
                     case SUSPENDED -> "SUSPEND";
                     case UNINSTALLED -> "DISCONNECT";
                     case PENDING ->
-                        throw new IllegalArgumentException("PENDING is not an admin-settable connection state");
+                        throw new IllegalArgumentException("An admin cannot set a connection to the state PENDING.");
                 };
 
         String correlationId = eventType.toLowerCase(Locale.ROOT) + "-" + connection.getId() + "-" + UUID.randomUUID();
@@ -183,8 +183,9 @@ public class ConnectionController {
     private ConnectionStrategy strategyForDisconnect(Connection connection) {
         ConnectionStrategy strategy = strategies.get(connection.getKind());
         if (strategy == null) {
-            throw new IllegalStateException("Cannot disconnect " + connection.getKind()
-                    + ": the integration is disabled on this instance, so its data cannot be erased");
+            throw new IllegalStateException(
+                    "We could not disconnect this integration because it is turned off on this instance. "
+                            + "Ask your instance operator to turn it on, then disconnect again.");
         }
         return strategy;
     }

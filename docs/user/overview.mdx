@@ -1,72 +1,82 @@
 ---
 id: overview
 title: Welcome to Hephaestus
-description: Learn how Hephaestus gives developers feedback on the practices behind their work, and how to talk it through.
+description: Learn how Hephaestus gives developers feedback on the practices behind their work, and how to discuss it.
 ---
 
-**Learn from the work you're already doing.** Hephaestus is an open-source AI mentor for software teams. It reads the work you already do — issues, pull requests, reviews and the discussion around them — against the practices your project cares about, then says what went well, what could be better, and a way to get there. Ask it why, push back, or work out the next step together.
+Hephaestus is an open-source AI mentor for software teams.
+It helps you improve engineering practices through feedback on the work you already do.
+You work in GitHub or GitLab as usual.
+Hephaestus checks eligible work against your workspace’s practices and can give feedback with evidence.
+You can ask why, disagree, or decide on the next step with **Heph**, the conversational assistant.
 
-This guide is for developers who use Hephaestus and workspace admins who set it up. Deployment and development documentation live in the **Admin Guide** and **Contributor Guide**.
+Start with [Getting started](./getting-started) to sign in and open your workspace.
+If you already use Hephaestus, choose a task below.
+The **Admin Guide** covers running the instance and setting up workspaces.
+The **Contributor Guide** covers development.
 
 ## What Hephaestus offers
 
 ### Practice feedback
 
-- Uses AI to read pull requests, merge requests, issues and the conversation around them against the practices configured for your workspace.
-- Names the practice each piece of feedback came from, and points to the evidence in your work.
-- Says what went well as well as what could be better, and suggests a way to get there.
-- Feedback on the work waits for a workspace admin's approval by default.
-- Reaches you where you will see it: on the work itself, on your own practice pages, or in your next conversation with Hephaestus.
+Read feedback about a pull request, merge request, or issue.
+Each piece names its practice and points to evidence in your work.
+Feedback on the work waits for a workspace admin’s approval by default.
+Other feedback appears on your practice pages or in a conversation with Heph.
+[Practice feedback](./ai-code-review) explains how to read it, respond, and ask for another review.
 
 ### Talking it through
 
-- In chat Hephaestus goes by **Heph**.
-- Draws on recent project activity, the feedback you have received, team conversations, and documentation as context.
-- Available in the web app and, when connected, in a Slack direct message.
+Ask Heph about feedback, a review request, or a next step for your work.
+Heph can use the workspace context it’s allowed to see, so you do not need to repeat every detail.
+[Chat with Heph](./ai-mentor) explains how to start in the web app or Slack.
 
 ### Practice profile
 
-Your [Practice profile](./practice-profile) is the workspace home when it reviews practices.
-It shows how your own work stands, the evidence behind it, and your private feedback.
+Your [Practice profile](./practice-profile) is the home page of a workspace that reviews practices.
+It shows how your work stands, the evidence behind it, and your private feedback.
 A workspace that does not review practices opens on Activity.
 
 ### Activity
 
-- Shows what is waiting on your review, what you have open, and what you did lately.
-- Shows the workspace's activity, or one team's, with each member listed by name.
-- Counts and lists work, and opens each piece of it on GitHub or GitLab. See [Activity](./activity).
+Find pull requests that need your review, check your assigned issues, or copy recent work for a standup.
+Workspace activity shows work for the workspace or one team, with each member listed by name.
+[Activity](./activity) explains both pages.
+They count work without ranking people.
 
 ### Project context
 
-Connected GitHub, GitLab, Slack, and Outline integrations provide project activity, team conversations, and documentation that can help Hephaestus understand the work.
+Your connected GitHub, GitLab, Slack, and Outline integrations supply project activity, team conversations, and documentation.
+This context can help Hephaestus understand the work.
 
 ### Workspace management
 
-- Connect GitHub or GitLab repositories and keep each team's data separate.
-- Adopt practices from the instance catalog and rewrite them for your project.
+Workspace admins can:
+
+- Connect GitHub or GitLab repositories and keep each team’s data separate.
+- Adopt practices from the instance catalog and customize them for the project.
 - Choose the AI model and set a monthly spending cap.
 - Manage members, teams, and integrations.
 
 ## Your data and privacy
 
-Read [Your data in Hephaestus](./privacy.mdx) to understand what connected services share, how AI uses it, how long copies remain, and how to request access, correction, or erasure — even if you have never signed in.
+[Your data in Hephaestus](./privacy.mdx) explains what connected services share and how AI uses it.
+It also explains how long copies stay and how to request access, correction, or erasure.
+This includes people who have never signed in.
 
 ## Terms used in this guide
 
-- **Engineering practice:** an observable way of working, such as keeping a change reviewable or explaining why it is needed.
-- **Practice feedback:** feedback about one or more engineering practices, tied to evidence from software project work.
-- **Heph:** what Hephaestus is called in the chat, in the web app or Slack.
+- **Practice:** a way of working that a review can observe. Examples are changes that are easy to review and explanations of their purpose.
+- **Practice feedback:** guidance about your practices, with evidence from your project work.
+- **Heph:** the assistant you talk to in the web app or in Slack.
 - **Workspace:** the repositories, members, teams, practice catalog, and settings for one group.
 - **Workspace admin:** a member who configures a workspace. An **instance admin** operates the whole deployment.
 
 ## Quick start
 
-1. Sign in with one of the providers offered by your deployment.
-2. Choose a workspace you belong to. On your first visit, choose **In-house**, **Cloud**, or **No AI**
-   when asked, and connect any required accounts. You can change your answer in **User settings**.
-3. Open your **Practice profile**, or **Activity** if this workspace does not review practices.
-   Work normally in a connected GitHub or GitLab repository.
-4. Open feedback from a contribution when practice reviews are enabled.
-5. Ask a follow-up question about any feedback you receive.
+1. Follow [Getting started](./getting-started) to sign in and complete any required setup.
+2. Open **Practice profile** to read feedback, or **Activity** to find work that needs you.
+3. To ask about your work or feedback, open **Heph**.
 
-Continue with [Getting started](./getting-started) for a tour of the current navigation.
+Your workspace determines which AI features are set up.
+You can change your AI choice in **User settings**.

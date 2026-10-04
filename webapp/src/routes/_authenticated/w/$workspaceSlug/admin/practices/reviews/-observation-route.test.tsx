@@ -167,7 +167,7 @@ describe("observation level", () => {
 		assert(submit);
 		await user.click(submit);
 
-		await screen.findByText("Couldn't change this observation");
+		await screen.findByText("We could not change this observation");
 		expect(screen.getByRole("textbox", { name: "Reason" })).toHaveProperty(
 			"value",
 			"The 404 comes from the router.",
@@ -176,7 +176,7 @@ describe("observation level", () => {
 	});
 
 	it.each([
-		{ from: "PENDING", seen: /still bringing the comments/u, after: 10_000 },
+		{ from: "PENDING", seen: /still correcting the comments/u, after: 10_000 },
 		{ from: "UNRESOLVED", seen: /cannot correct every comment/u, after: 60_000 },
 	] as const)(
 		"keeps watching a $from correction until it is corrected, then stops",

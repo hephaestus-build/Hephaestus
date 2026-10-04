@@ -39,7 +39,7 @@ public class FeedbackWithdrawalService {
                 .orElseThrow(() -> new EntityNotFoundException("Feedback", feedbackId.toString()));
         if (feedback.getChannel() != FeedbackChannel.IN_APP) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "Only feedback on a developer's practice page can be withdrawn");
+                    HttpStatus.CONFLICT, "You can withdraw only feedback on a developer’s practice page.");
         }
         var active = withdrawalRepository.findActive(workspaceId, feedbackId);
         if (!withdrawn) {
@@ -53,7 +53,7 @@ public class FeedbackWithdrawalService {
                 && feedback.getDeliveryState() != FeedbackDeliveryState.DELIVERED) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Only feedback that is waiting on or shown on the practice page can be withdrawn");
+                    "You can withdraw only feedback that waits to appear or already appears on the practice page.");
         }
         withdrawalRepository.save(new FeedbackWithdrawal(feedback, accountId, reason.strip(), clock.instant()));
     }

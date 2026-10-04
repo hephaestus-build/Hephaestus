@@ -45,7 +45,9 @@ export function SlackChannelPasteField({
 				/>
 			</InputGroup>
 			<FieldDescription>{description}</FieldDescription>
-			{invalid && <FieldError>Paste a Slack channel URL, mention, or C…/G… channel ID.</FieldError>}
+			{invalid && (
+				<FieldError>Paste a Slack channel link, mention, or ID. IDs start with C or G.</FieldError>
+			)}
 		</Field>
 	);
 }

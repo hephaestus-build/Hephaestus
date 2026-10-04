@@ -34,7 +34,7 @@ public final class PracticeDefinitionValidator {
         validateSignals(definition);
         validateReviewWhenAndPrecondition(definition);
         if (!canRunAutomatedReview && definition.precomputeScript() != null) {
-            throw new IllegalArgumentException("A practice Hephaestus cannot review cannot define a precompute script");
+            throw new IllegalArgumentException("A precompute script needs a practice that Hephaestus can review.");
         }
         rejectReviewResultLabels("Why it matters", definition.whyItMatters());
         rejectReviewResultLabels("What good looks like", definition.whatGoodLooksLike());
@@ -79,14 +79,14 @@ public final class PracticeDefinitionValidator {
         for (SignalName signal : definition.signals()) {
             if (signalOptions.isManualRequest(signal)) {
                 throw new IllegalArgumentException("Remove “" + signalOptions.displayNameOf(signal)
-                        + "”. A review somebody asks for by hand already reviews every practice on this work "
-                        + "type, whatever state the work is in, so it is not a moment to choose.");
+                        + "”. A review someone asks for by hand already covers every practice on this work type, "
+                        + "whatever state the work is in. It is not a moment to choose.");
             }
             if (!declared.contains(signal)) {
                 // Every declared signal but the hand-asked one is bindable, so this one is undeclared and
                 // has no words to name it by.
-                throw new IllegalArgumentException("One of the chosen moments is not one this kind of work offers. "
-                        + "Choose from the moments listed for it.");
+                throw new IllegalArgumentException("This kind of work does not offer one of the chosen moments. "
+                        + "Choose from the moments it offers.");
             }
         }
     }
@@ -104,8 +104,9 @@ public final class PracticeDefinitionValidator {
      * message says where the sources this kind of work has are listed.
      */
     private static String unknownSource(SourceKind source) {
-        return source.value() + " is not an evidence source Hephaestus knows. Choose from the sources listed under "
-                + "“Reads” in “When this practice is reviewed”.";
+        return source.value()
+                + " is not an evidence source Hephaestus knows. Choose from the sources listed under “Reads” "
+                + "in “When this practice is reviewed”.";
     }
 
     /** The editor's label for each relation, as its “Person this practice judges” list shows it. */
@@ -125,7 +126,7 @@ public final class PracticeDefinitionValidator {
         Matcher label = REVIEW_RESULT_LABEL.matcher(value);
         if (label.find()) {
             throw new IllegalArgumentException(field + " is guidance for people. Remove the review result label “"
-                    + label.group() + "” and say it in plain words.");
+                    + label.group() + "”. Use plain words instead.");
         }
     }
 
@@ -138,7 +139,7 @@ public final class PracticeDefinitionValidator {
         }
         if (!definition.automatedReviewPolicy().automatedReview().canAttemptAutomatedReview()) {
             throw new IllegalArgumentException(
-                    "A practice Hephaestus does not review cannot declare what it applies to; nothing would read it");
+                    "A practice that Hephaestus does not review cannot declare what it applies to. Nothing would read it.");
         }
         for (PracticePreconditionClause clause : subject.anyOf()) {
             SourceKind readFrom = clause.readsFrom();
@@ -146,14 +147,14 @@ public final class PracticeDefinitionValidator {
                 // The gate is typed as JSON, so the source is named by its label and its id together.
                 throw new IllegalArgumentException(named(readFrom)
                         .map(source -> "This kind of work has no “" + source + "” (" + readFrom.value()
-                                + "), so a condition that reads it could never be decided. Choose a "
-                                + "condition this kind of work can answer, or remove it.")
+                                + "). A condition that reads it can never be decided. Choose a "
+                                + "condition that this kind of work can answer, or remove the condition.")
                         .orElseGet(() -> unknownSource(readFrom)));
             }
             ArtifactSourceContract source = sourceCatalogs.requireSource(version, readFrom);
             if (!source.completenessPolicy().supportsComplete()) {
-                throw new IllegalArgumentException("“" + source.displayName() + "” (" + readFrom.value()
-                        + ") can never be captured completely, so finding nothing in it cannot show that this "
+                throw new IllegalArgumentException("A capture of “" + source.displayName() + "” (" + readFrom.value()
+                        + ") is never complete, so an empty result cannot show that this "
                         + "practice does not apply. Choose a condition that reads other evidence.");
             }
         }
@@ -172,7 +173,7 @@ public final class PracticeDefinitionValidator {
                 throw new IllegalArgumentException(named(need.sourceKind())
                         .map(source -> "“" + source
                                 + "” is not available for this kind of work. Turn it off, or choose "
-                                + "evidence this kind of work has.")
+                                + "evidence that this kind of work has.")
                         .orElseGet(() -> unknownSource(need.sourceKind())));
             }
             var contract = sourceCatalogs.requireSource(version, need.sourceKind());
@@ -181,9 +182,9 @@ public final class PracticeDefinitionValidator {
             // "permanently refusing" and "nobody has done this yet" produce the same report.
             if (need.stance().demandsCompleteCapture()
                     && !contract.completenessPolicy().supportsComplete()) {
-                throw new IllegalArgumentException("“" + contract.displayName()
-                        + "” can never be captured completely, so a review cannot claim something is absent "
-                        + "from it. Untick “May claim something is absent” for this source.");
+                throw new IllegalArgumentException("A capture of “" + contract.displayName()
+                        + "” is never complete, so a review cannot claim that something is absent "
+                        + "from it. Clear the checkbox “May claim something is absent” for this source.");
             }
         }
     }

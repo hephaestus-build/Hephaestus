@@ -42,7 +42,7 @@ function OutlineIntegrationTestContainer() {
 		return (
 			<QueryErrorAlert
 				error={outline.connectionsError}
-				title="We couldn't load the Outline connection"
+				title="We could not load the Outline connection"
 				onRetry={outline.retryConnections}
 			/>
 		);
@@ -52,7 +52,7 @@ function OutlineIntegrationTestContainer() {
 			{outline.tokenStatusError && (
 				<QueryErrorAlert
 					error={outline.tokenStatusError}
-					title="We couldn't verify the Outline token"
+					title="We could not verify the Outline token"
 					onRetry={outline.retryTokenStatus}
 				/>
 			)}
@@ -328,7 +328,7 @@ describe("Outline integration — remove with confirm", () => {
 		await screen.findByText("Engineering");
 
 		fireEvent.click(screen.getByRole("button", { name: /actions for engineering/iu }));
-		fireEvent.click(await screen.findByRole("menuitem", { name: /remove & erase/iu }));
+		fireEvent.click(await screen.findByRole("menuitem", { name: /remove and erase/iu }));
 
 		const dialog = await screen.findByRole("alertdialog");
 		// Nothing is deleted until the confirm — and the copy must state the mirror erase.
@@ -337,7 +337,7 @@ describe("Outline integration — remove with confirm", () => {
 			/permanently erases all 12 mirrored documents\s+from Hephaestus/iu,
 		);
 
-		fireEvent.click(within(dialog).getByRole("button", { name: /remove & erase/iu }));
+		fireEvent.click(within(dialog).getByRole("button", { name: /remove and erase/iu }));
 
 		await waitFor(() => expect(deletedId).toBe("col-eng"));
 		await screen.findByText(/no collections mirrored yet/iu);
@@ -399,7 +399,7 @@ describe("Outline integration — token lifecycle", () => {
 
 		renderContainer();
 
-		await screen.findByText(/we couldn't verify the outline token/iu);
+		await screen.findByText(/we could not verify the outline token/iu);
 		screen.getByRole("button", { name: /retry/iu });
 	});
 

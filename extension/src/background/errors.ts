@@ -21,13 +21,16 @@ export function signedOut(): WorkerError {
 export function consentRequired(): WorkerError {
 	return new WorkerError(
 		"consent-required",
-		"Hephaestus needs you to read its current notice in the web app before it can show anything.",
+		"Read and accept the current notice in the Hephaestus web app. The extension shows nothing until you do.",
 	);
 }
 
 /** A result that arrived after the session, instance, workspace or tab it was asked about changed. */
 export function stale(): WorkerError {
-	return new WorkerError("stale", "What you were looking at changed; showing the current page.");
+	return new WorkerError(
+		"stale",
+		"What you were looking at changed, so the extension now shows the current page.",
+	);
 }
 
 /** The server said no to this reader for this work: not theirs to see or change. */
@@ -40,7 +43,7 @@ export function forbidden(
 export function network(): WorkerError {
 	return new WorkerError(
 		"network",
-		"Hephaestus could not be reached. Check your connection and try again.",
+		"We could not reach Hephaestus. Check your connection, then try again.",
 	);
 }
 
@@ -48,8 +51,8 @@ export function server(status: number): WorkerError {
 	return new WorkerError(
 		"server",
 		status >= 500
-			? "Hephaestus ran into a problem answering. Try again in a moment."
-			: "Hephaestus refused the request.",
+			? "We could not get an answer from Hephaestus. Try again in a moment."
+			: "Hephaestus did not accept the request. Try again. If it keeps failing, contact your instance operator.",
 	);
 }
 
@@ -57,5 +60,5 @@ export function toRpcError(error: unknown): RpcError {
 	if (error instanceof WorkerError) {
 		return { code: error.code, message: error.message };
 	}
-	return { code: "server", message: "Something went wrong inside the extension." };
+	return { code: "server", message: "The extension hit an unexpected problem. Try again." };
 }

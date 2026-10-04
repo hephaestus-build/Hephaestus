@@ -65,7 +65,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * Populated, including an env-seeded row (badged "seeded"). Provider types render as human labels —
+ * Populated, including an env-seeded row (badged "Seeded"). Provider types render as human labels —
  * never the raw `GITHUB` / `OUTLINE` enum — and each row exposes its redirect URI as a readonly,
  * copyable field for registering on the upstream OAuth app.
  */
@@ -77,8 +77,8 @@ export const Default: Story = {
 		canvas.getByText("Outline");
 		await expect(canvas.queryByText("OUTLINE")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("GITLAB")).not.toBeInTheDocument();
-		// The env-seeded row carries the "seeded" badge; the admin-created ones do not.
-		canvas.getByText("seeded");
+		// The env-seeded row carries the "Seeded" badge; the admin-created ones do not.
+		canvas.getByText("Seeded");
 		canvas.getByRole("button", { name: /Copy redirect URI for GitHub/iu });
 	},
 };
@@ -101,9 +101,11 @@ export const ConfirmDelete: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /Delete ACME Outline/iu }));
 		const dialog = await screen.findByRole("alertdialog");
-		await expect(within(dialog).getByRole("heading")).toHaveTextContent("Delete “ACME Outline”?");
+		await expect(within(dialog).getByRole("heading")).toHaveTextContent(
+			"Delete login provider “ACME Outline”?",
+		);
 
-		const confirm = within(dialog).getByRole("button", { name: "Delete" });
+		const confirm = within(dialog).getByRole("button", { name: "Delete provider" });
 		await userEvent.click(confirm);
 		await expect(args.onDelete).toHaveBeenCalledWith(
 			expect.objectContaining({ registrationId: "outline-acme" }),
@@ -139,7 +141,7 @@ export const ErrorState: Story = {
 		error: { detail: "Upstream database unavailable." },
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/Could not load login providers/iu);
+		canvas.getByText(/We could not load login providers/iu);
 		canvas.getByText(/Upstream database unavailable/iu);
 		await userEvent.click(canvas.getByRole("button", { name: /Retry/iu }));
 		await expect(args.onRetry).toHaveBeenCalled();

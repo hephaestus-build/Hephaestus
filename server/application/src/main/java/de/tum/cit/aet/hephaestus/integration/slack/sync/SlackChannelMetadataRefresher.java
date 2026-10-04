@@ -99,16 +99,17 @@ public class SlackChannelMetadataRefresher {
                     return;
                 }
                 if (info.archived()) {
-                    consentService.pauseForPlatformEvent(workspaceId, channelId, "channel archived — detected by sync");
+                    consentService.pauseForPlatformEvent(
+                            workspaceId, channelId, "The sync found that the channel is archived.");
                 } else if (!info.member()) {
                     consentService.pauseForPlatformEvent(
-                            workspaceId, channelId, "bot removed from channel — detected by sync");
+                            workspaceId, channelId, "The sync found that the bot was removed from the channel.");
                 }
             }
             case ConversationLookup.NotFound(var ignored) -> {
                 if (channel.getConsentState() == ConsentState.ACTIVE) {
                     consentService.pauseForPlatformEvent(
-                            workspaceId, channelId, "channel no longer exists — detected by sync");
+                            workspaceId, channelId, "The sync found that the channel no longer exists.");
                 }
             }
             case ConversationLookup.Unavailable(var error) ->

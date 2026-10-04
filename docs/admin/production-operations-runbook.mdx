@@ -6,130 +6,188 @@ description: Safe deployment, incident containment, external feedback removal, a
 
 # Production operations runbook
 
-For the **instance operator**. Record the instance URL, Compose project, signed release lock,
-incident owner and rollback point before changing state. Keep credentials and feedback bodies out of tickets.
+This runbook is for the **instance operator**.
 
-:::danger Before broad or unattended delivery
+1. Before changing state, record the instance URL, Compose project, signed release lock, incident owner, and rollback point.
+2. Keep credentials and feedback bodies out of tickets.
+
+:::caution CAUTION: Before broad or unattended delivery
 The operator must execute and sign off the three drills below on isolated, representative infrastructure.
 An operator-owned silent run requires the silent deployment checklist first.
 :::
 
 ## First response and kill-switch map
 
-If external feedback is wrong, engage **Instance admin → Settings → Silent Mode** immediately. If the
-control plane is unavailable or an already-started request may still write, block provider egress at the
-host/network boundary and stop every application server, worker, and active sandbox. A switch cannot
-recall a request already accepted by a provider. Stop ingress too when preserving a recovery point.
+1. If external feedback is wrong, immediately turn on silent mode in **Instance admin → Instance settings**.
+2. If the control plane is unavailable, block provider egress at the host/network boundary.
+3. Apply the same block if a request already in progress may still write.
+4. Under either condition, stop all application servers, workers, and active sandboxes.
+5. To preserve a recovery point, also stop ingress.
 
-| Control and location | What it stops | What it does not stop |
-| --- | --- | --- |
-| **Silent Mode**, instance settings | New SCM, Slack and email writes through the egress gateway, including edits, inline comments, approvals, reactions, mentor replies, reminders, retries, and every email the notification module sends (a withheld email is final; it is not sent on release) | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, and operator-alert exemptions |
-| `AGENT_ENABLED=false`, deployment environment on submitting servers and claiming workers | Queued review runtime; recreate affected containers to apply it | Already-running sandboxes, interactive mentor, sync, or every external write; not a runtime global AI stop |
-| Workspace **Review settings** controls: **Start from work activity**, **Start requested reviews** | Their respective review entry points | Other workspaces, existing work, or external delivery already in progress |
-| Workspace/group/practice autonomy **Off** | Reviewing those practices under the effective inherited policy | Other practices and other AI features; a workspace default does not override explicit group/practice choices |
-| Workspace **Sending feedback → Send feedback** off | External practice feedback and mentor delivery for that workspace | Measurement and in-app feedback; not an instance restore boundary |
-| Recipient **Comments and Slack reminders** off | Covered feedback comments and related reminders for that recipient | All other recipients, integration plumbing, or all mentor activity |
-| Every **Heph** row turned off under the workspace's **AI models**; `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on applicable roles | Respective mentor/Slack features | SCM writes, other AI work, or restored database credentials |
-| Model/connection disabled; each funding source's budget set to zero | Work using that model/connection or budget | Other funding sources; already-incurred costs; budgets are not strict reservations |
+A switch cannot recall a request that a provider already accepted.
+
+| Control and location                                                                                                                | What it stops                                                                                                                                                                                                                                                                                | What it does not stop                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Silent mode**, instance settings                                                                                                  | New SCM, Slack, and email writes through the egress gateway. This includes edits, inline comments, approvals, reactions, mentor replies, reminders, and retries. It covers all email from the notification module. Withheld email is final and does not send when silent mode is turned off. | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, and operator-alert exemptions |
+| `AGENT_ENABLED=false`, deployment environment on submitting servers and claiming workers                                            | Queued review runtime. Recreate affected containers to apply it                                                                                                                                                                                                                              | Already-running sandboxes, interactive mentor, sync, or every external write. Not a runtime global AI stop                       |
+| Workspace **Review settings** controls: **Start from work activity**, **Start requested reviews**                                   | Their respective review entry points                                                                                                                                                                                                                                                         | Other workspaces, existing work, or external delivery already in progress                                                        |
+| Workspace/group/practice autonomy **Off**                                                                                           | Reviewing those practices under the effective inherited policy                                                                                                                                                                                                                               | Other practices and other AI features. A workspace default does not override explicit group/practice choices                     |
+| Workspace **Sending feedback → Send feedback** off                                                                                  | External practice feedback and mentor delivery for that workspace                                                                                                                                                                                                                            | Measurement and in-app feedback. Not an instance restore boundary                                                                |
+| Recipient **Comments and Slack reminders** off                                                                                      | Covered feedback comments and related reminders for that recipient                                                                                                                                                                                                                           | All other recipients, integration plumbing, or all mentor activity                                                               |
+| Every **Heph** row turned off under the workspace's **AI models**. `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on applicable roles | Respective mentor/Slack features                                                                                                                                                                                                                                                             | SCM writes, other AI work, or restored database credentials                                                                      |
+| Model/connection disabled. Each funding source's budget set to zero                                                                 | Work using that model/connection or budget                                                                                                                                                                                                                                                   | Other funding sources. Already-incurred costs. Budgets are not strict reservations                                               |
 
 [Practice review](./practice-review#autonomy-coverage-and-delivery) defines workspace and recipient
-controls; there is no independent per-channel toggle matrix. For an immediate all-AI stop, stop
-server/worker/sandbox processes and deny model-provider egress. Silent Mode does not stop compute.
+controls. There is no independent per-channel toggle matrix. For an immediate all-AI stop, stop
+server/worker/sandbox processes and deny model-provider egress. Silent mode does not stop compute.
 
-### Engage, verify, and release Silent Mode
+### Turn silent mode on, verify it, and turn it off
 
-The authenticated instance-admin API is `GET /api/admin/settings` and
-`PATCH /api/admin/settings/silent-mode` with `{"engaged":true,"reason":"incident reference"}`.
-Read back `silentModeEngaged=true`; retain the audit event and current `ETag`.
-Release uses `{"engaged":false,"reason":"approved release reference"}` and **the current** `If-Match`
-ETag. A `412` means re-read and reassess; `428` means the required precondition was omitted. Do not
-retry release blindly. The UI handles these preconditions.
+The authenticated instance-admin API uses `GET /api/admin/settings` and `PATCH /api/admin/settings/silent-mode`.
+The UI handles the preconditions below.
 
-**Restored settings can contain Silent Mode off**: the default does not override an explicit release
-decision. Release affects every workspace and never flushes suppressed feedback.
+1. Turn on silent mode with `{"engaged":true,"reason":"incident reference"}`.
+2. Read back `silentModeEngaged=true`.
+3. Retain the audit event and current `ETag`.
+4. To turn it off, use `{"engaged":false,"reason":"approved release reference"}` with **the current** `If-Match` ETag.
+5. If the response is `412`, read again.
+6. After a `412`, reassess turning it off.
+7. Do not retry turning it off blindly.
+
+`428` means the required precondition is missing.
+**Restored settings can contain silent mode off**.
+The default does not override an explicit decision to turn silent mode off.
+Turning silent mode off affects all workspaces and never flushes suppressed feedback.
 
 ## Silent deployment checklist
 
-1. **Contain.** Engage and read back Silent Mode on the running instance. For a clone, establish the
-   pre-boot isolation below instead. Record exceptions: zero *content delivery* is not zero network traffic.
-2. **Capture rollback.** Stop ingress and application writers, including remote workers and running
-   sandboxes. Save a restorable database backup, matching secrets, configuration and signed release lock;
-   verify the archive, checksum and off-host copy. Record the recovery point and permitted outage/data loss.
-3. **Validate then deploy.** Complete the staging migration below and
-   [prepare the tested release](./install#upgrades). Keep `AGENT_ENABLED=false` on server and worker roles,
-   Slack disabled, and public ingress blocked. From `/opt/hephaestus/docker/self-host`, start infrastructure
-   and the application server (including its required Compose dependencies) with
-   `docker compose --env-file .env --env-file release-lock.env up -d --wait postgres nats-server application-server`.
-   Verify migration completion and read back Silent Mode before starting `webhook-server` or enabling
-   review execution. Compose health alone does not verify the brake.
-4. **Prove silence.** After readback, keep Silent Mode engaged. Set `AGENT_ENABLED=true` on the
-   submitting server and claiming worker roles, enable the intended review/Slack settings, and recreate
-   affected containers. Keep restore-clone network isolation; use controlled providers for its drills.
-   Run bounded reviews on controlled GitHub/GitLab work and Slack conversations for
-   every enabled lane. Inspect observations and `SUPPRESSED` / `INSTANCE_SILENCED` outcomes. Correlate
-   provider-side object inventories and egress observations, including retries and edits to existing
-   feedback. Outline is a source integration: verify no unplanned document writes or webhook registration.
-5. **Inspect and decide.** Inspect capture failures, withheld feedback, policy traces, queue age and
-   spend under small budgets. Record known integration/readiness failures caused by isolation. Remain
-   silent on unexplained writes, migration failures or unaccounted spend; use recovery below if needed.
-6. **Release deliberately.** Only after the applicable rollout gates pass, review all workspace
-   populations, recipient consent, mentor settings and autonomy, then release with current ETag.
-   Prefer **Review before sending** for a bounded pilot. Prove old suppressed work stays suppressed and
-   only a fresh eligible event can deliver. Re-engage immediately if that fails.
+1. **Contain**. For the running instance, turn on silent mode.
+2. For the running instance, read back silent mode.
+3. For a clone, use the pre-boot isolation below instead.
+4. Record exceptions.
+   Zero *content delivery* is not zero network traffic.
+
+5. **Capture rollback**. Stop ingress.
+6. Stop application writers, including remote workers and active sandboxes.
+7. Save a restorable database backup with matching secrets, configuration, and signed release lock.
+8. Verify the archive.
+9. Verify the checksum.
+10. Verify the off-host copy.
+11. Record the recovery point and permitted outage/data loss.
+
+12. **Validate then deploy**. Complete the staging migration below.
+13. [Prepare the tested release](./install#upgrades).
+14. Keep `AGENT_ENABLED=false` on server and worker roles.
+15. Keep Slack disabled and public ingress blocked.
+16. From `/opt/hephaestus/docker/self-host`, run the startup command below.
+
+    The command starts infrastructure and the application server with its required Compose dependencies.
+
+    ```bash
+    docker compose --env-file .env --env-file release-lock.env up -d --wait postgres nats-server application-server
+    ```
+
+17. Verify migration completion.
+18. Before starting `webhook-server` or enabling reviews, read back silent mode.
+
+    Compose health alone does not verify the brake.
+
+19. **Prove silence**. After readback, keep silent mode on.
+20. Set `AGENT_ENABLED=true` on the submitting server and claiming worker roles.
+21. Enable the intended review/Slack settings.
+22. Recreate affected containers.
+23. Keep restore-clone network isolation.
+24. Use controlled providers for clone drills.
+25. Run bounded reviews on controlled GitHub/GitLab work and Slack conversations for each enabled lane.
+26. Inspect observations and `SUPPRESSED` / `INSTANCE_SILENCED` outcomes.
+27. Correlate provider-side object inventories and egress observations, including retries and edits to existing feedback.
+28. For Outline, verify no unplanned document writes or webhook registration.
+
+    Outline is a source integration.
+
+29. **Inspect and decide**. Inspect capture failures, withheld feedback, policy traces, queue age, and spend under small budgets.
+30. Record known integration/readiness failures caused by isolation.
+31. Remain silent if writes are unexplained, migrations fail, or spend is unaccounted for.
+32. If necessary, use recovery below.
+
+33. **Turn off silent mode deliberately**. Only after the rollout gates pass, review all workspace populations, recipient consent, mentor settings, and autonomy.
+34. After the rollout gates pass, turn silent mode off with the current ETag.
+35. Prefer **Review before sending** for a bounded pilot.
+36. Prove that old suppressed work stays suppressed.
+37. Prove that only a fresh eligible event can deliver.
+38. If either check fails, turn silent mode on again immediately.
 
 ## Upgrade and failed-migration recovery
 
 ### Validate the actual production data
 
-Use a restricted staging copy of production, subject to the same access and retention rules as the
-backup. Apply the pre-boot isolation below **before** restoring secrets or starting application code.
-When crossing the v0.77.4 baseline, complete the
-[baseline synchronization prerequisites](./liquibase-baseline-runbook#before-deployment) before candidate
-startup; rehearse the synchronization on this same isolated copy.
-Run Liquibase **update**, not just `validate` or SQL generation: starting the target release's
-application server with the production profile runs Spring Boot's Liquibase update against the staging
-database. Use that exact release's changelog, contexts, PostgreSQL image/extensions, secrets and role
-configuration. Keep ingress, workers and sandbox execution disabled and external destinations denied.
-Do not use the test/specs profile, Hibernate `ddl-auto`, or an empty database as this proof.
+Use a restricted staging copy of production with the backup's access and retention rules.
+Starting the target release's application server with the production profile runs Spring Boot's Liquibase update against staging.
+The update must use that exact release's changelog, contexts, PostgreSQL image/extensions, secrets, and role configuration.
 
-Record migration duration, errors, free disk/WAL growth, locks, and before/after checks for representative
-workspace relationships, encrypted-credential readability, practice catalog, and ledger row counts.
-Check `databasechangelog` for the expected target changesets and `databasechangeloglock` for a released
-lock; then verify application readiness and authenticated reads. Set an outage budget and abort if the
-rehearsal exceeds it. Repeat against a fresh copy after fixing any migration failure.
+1. Apply pre-boot isolation below **before** restoring secrets or starting application code.
+2. When crossing the v0.77.4 baseline, complete the [baseline synchronization prerequisites](./liquibase-baseline-runbook#before-deployment) before candidate startup.
+3. When crossing that baseline, rehearse synchronization on this same isolated copy.
+4. Run Liquibase **update**, not just `validate` or SQL generation.
+5. Keep ingress, workers, and sandbox execution disabled.
+6. Keep external destinations denied.
+7. Do not use a test/specs profile, Hibernate `ddl-auto`, or an empty database as this proof.
+8. Record migration duration, errors, free disk/WAL growth, and locks.
+9. Record before/after checks for representative workspace relationships and encrypted-credential readability.
+10. Record before/after checks for the practice catalog and ledger row counts.
+11. Check `databasechangelog` for the expected target changesets.
+12. Check `databasechangeloglock` for a released lock.
+13. Verify application readiness.
+14. Verify authenticated reads.
+15. Set an outage budget.
+16. If the rehearsal exceeds it, abort.
+17. After fixing a migration failure, repeat against a fresh copy.
 
 [CI migration checks](/contributor/database-migration#ci-validation) cover empty and seeded databases,
-not your production data; they do not replace this staging update.
+not your production data. They do not replace this staging update.
 
 ### Production upgrade
 
-[Install → Upgrades](./install#upgrades) prepares the release; the silent checklist above owns startup.
+[Install → Upgrades](./install#upgrades) prepares the release. The silent checklist above owns startup.
 Follow the [compatibility policy](./compatibility-policy#upgrade-guarantee) for skip-version support and
 read intervening release notes. PostgreSQL 18 and the
 [baseline synchronization](./liquibase-baseline-runbook) are required when crossing the v0.77.4 cut-point.
 In-place downgrades are unsupported.
 
-Before manual changes, [pause reconciliation](./pull-based-deployment#operating-it) and wait for any
-active service run to finish. Before resuming it, ensure the channel matches the recovered release or
-is frozen; otherwise the next tick can reapply the failed upgrade.
+1. Before manual changes, [pause reconciliation](./pull-based-deployment#operating-it).
+2. Wait for any active service run to finish.
+3. Before resuming, make sure the channel matches the recovered release or is frozen.
+
+Otherwise, the next tick can reapply the failed upgrade.
 
 ### If migration fails
 
-1. Keep ingress and all application writers stopped. Preserve the error, failed changeset identity,
-   `databasechangelog`/lock diagnostics, target image lock and a forensic snapshot if feasible.
-2. Do **not** clear checksums, edit released changelogs, mark the changeset as run, or run an older binary
-   against the partly migrated database. Do not release a Liquibase lock until proving no migrator is alive;
-   removing a stale lock does not repair a failed migration.
-3. Restore the pre-upgrade backup into a fresh database with its matching PostgreSQL version/extensions,
-   encryption keys and **previous signed release lock**, following [Backup & restore](./backup-restore).
-   Reset/quarantine divergent JetStream state using the next section before booting consumers.
-4. Boot only under pre-boot isolation, read back/engage Silent Mode, verify the restored schema,
-   representative data and readiness. Complete the silent checklist's **Prove silence**, **Inspect and decide**
-   and **Release deliberately** steps. Report actual recovery
-   point/time and any lost writes; preserve the failed database until investigation/retention permits removal.
+:::caution CAUTION: Failed migration
+Do not clear checksums, edit released changelogs, or mark the changeset as run.
+Do not run an older binary against the partly migrated database.
+Do not release a Liquibase lock until you prove that no migrator is alive.
+Removal of a stale lock does not repair a failed migration.
+:::
 
-**Drill:** introduce a controlled migration failure only in a disposable rehearsal, restore the old
-backup/release pair, and prove old-version readiness and data integrity without any provider write.
+1. Keep ingress and all application writers stopped.
+2. Preserve the error and failed changeset identity.
+3. Preserve `databasechangelog`/lock diagnostics and the target image lock.
+4. If feasible, preserve a forensic snapshot.
+5. Follow [Backup & restore](./backup-restore) to restore the pre-upgrade backup into a fresh database.
+6. Use matching PostgreSQL version/extensions, encryption keys, and the **previous signed release lock**.
+7. Before consumers boot, reset/quarantine divergent JetStream state with the next section.
+8. Boot only under pre-boot isolation.
+9. Read back silent mode, and turn it on if it is off.
+10. Verify the restored schema, representative data, and readiness.
+11. Complete **Prove silence**, **Inspect and decide**, and **Turn off silent mode deliberately** in the silent checklist.
+12. Report actual recovery point/time and any lost writes.
+13. Preserve the failed database until investigation/retention permits removal.
+
+**Drill**
+
+1. Introduce a controlled migration failure only in a disposable rehearsal.
+2. Restore the old backup/release pair.
+3. Prove old-version readiness and data integrity without any provider write.
 
 ## Backup, restore and PostgreSQL × JetStream
 
@@ -142,58 +200,94 @@ The self-host Compose implementation and its schedule are in [Backup & restore](
 The shared redacted backup status required by [Readiness](https://github.com/hephaestus-build/Hephaestus/issues/1547),
 [Operations](https://github.com/hephaestus-build/Hephaestus/issues/1387), and
 [System Information](https://github.com/hephaestus-build/Hephaestus/issues/1548) does not exist yet.
-Those consumers must show **unknown**, not infer health from a configured timer or a passing
-`pgbackrest verify`. Until the status publisher and [operator alert service](https://github.com/hephaestus-build/Hephaestus/issues/1369)
-exist, the operator must monitor failed systemd units, WAL archive lag and disk space, pgBackRest
-`info`/`verify`, and the last actual drill record. A passing backup is not a restore result or release
-gate. [Application metrics](./observability.mdx#scrape-metrics) do not report backup or WAL freshness
-or restore-rehearsal outcomes. Configure those alerts in the host or backup monitoring tools to cover
-stale backup/WAL, failed attempts, and an expired or failed restore rehearsal.
+Those consumers must show **unknown**.
+They must not infer health from a configured timer or a passing `pgbackrest verify`.
+A passing backup is not a restore result or release gate.
+[Application metrics](./observability.mdx#scrape-metrics) do not report backup/WAL freshness or restore-rehearsal outcomes.
 
-Set explicit RPO/RTO, backup schedule, retention, owner, off-host destination and restore-test cadence.
-Monitor last successful backup/WAL archive and restore drill. Test loss of the primary host and backup
-failure alerts. For PITR, validate the base
-backup and continuous WAL coverage to the selected timestamp/timeline. Include evidence storage where
-exact replay is required. Preserve the active **and prior** credential-encryption keys and their versions
-if the backup overlaps a [key rotation](./credential-key-rotation); disable rotation during recovery.
-Take broker-supported snapshots or a cold copy of the stopped JetStream store
-for incident forensics; never treat a live filesystem copy as a consistent broker backup. With an
-authenticated CLI on the isolated broker network, use
-[`nats stream backup --check STREAM /restricted/incident/STREAM`](https://github.com/nats-io/natscli/blob/main/cli/backup_command.go)
-for **each** stream and record the start/end time, stream sequence, consumer ACK positions, CLI
-version, and checksum of every snapshot. The snapshot includes message payloads and, by default,
-consumers: encrypt and move it off-host under the same access and expiry policy as the database.
-Per-stream snapshots are not atomic with each other, PostgreSQL, or external provider writes;
-preserve them for gap analysis, not automatic replay after PITR.
+Until the status publisher and [operator alert service](https://github.com/hephaestus-build/Hephaestus/issues/1369) exist:
+
+1. Monitor failed systemd units, WAL archive lag, and disk space.
+2. Monitor pgBackRest `info`/`verify` and the last actual drill record.
+3. Configure host or backup-tool alerts for stale backup/WAL, failed attempts, and expired or failed restore rehearsals.
+
+For backup and recovery:
+
+1. Set explicit RPO/RTO, backup schedule, retention, owner, off-host destination, and restore-test frequency.
+2. Monitor the last successful backup/WAL archive and restore drill.
+3. Test loss of the primary host.
+4. Test backup failure alerts.
+5. For PITR, validate the base backup.
+6. For PITR, validate continuous WAL coverage to the selected timestamp/timeline.
+7. Where exact replay is required, include evidence storage.
+8. If the backup overlaps a [key rotation](./credential-key-rotation), preserve active **and prior** credential-encryption keys and versions.
+9. Disable rotation during recovery.
+
+   :::caution CAUTION: Broker snapshot consistency
+   Never treat a live filesystem copy as a consistent broker backup.
+   Per-stream snapshots are not atomic with each other, PostgreSQL, or external provider writes.
+   Preserve them for gap analysis, not automatic replay after PITR.
+   :::
+
+10. For incident forensics, take broker-supported snapshots or a cold copy of the stopped JetStream store.
+11. Use an authenticated CLI on the isolated broker network.
+12. For **each** stream, run the [NATS backup command](https://github.com/nats-io/natscli/blob/main/cli/backup_command.go):
+
+    ```bash
+    nats stream backup --check STREAM /restricted/incident/STREAM
+    ```
+
+13. Record start/end time, stream sequence, consumer ACK positions, CLI version, and each snapshot's checksum.
+14. Encrypt the snapshots.
+15. Move them off-host under the database's access and expiry policy.
+
+Snapshots include message payloads and, by default, consumers.
 
 ### Pre-boot isolation — mandatory for every restore
 
-1. Stop ingress, all server/worker replicas and active sandboxes; suspend automatic restarts/reconcilers.
-   Use a separate host for the supported self-host clone: its Compose project name and network/subnet
-   are fixed, so changing only the directory or `-p` is not isolation. Give it a separate database,
-   NATS store, domain and credentials. Do not connect it to production volumes, NATS or provider webhooks.
-2. Deny external traffic from application **and sandbox** networks before any application starts.
-   Allow only required isolated database/broker/admin access; Silent Mode permits model calls and
-   control-plane traffic.
-3. Set `AGENT_ENABLED=false` on server/worker roles and
-   `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on Slack-capable roles. Withhold SCM write credentials,
-   including app signing keys, PATs and credentials encrypted **inside the restored database**. Removing
-   `.env` seeds does not remove database-backed credentials. Keep network denial while inspecting them.
-   Turn off every Heph model row before permitting interactive access (the restore-clone lockdown does this);
-   a turned-off row alone is never a boundary.
-   Arrange admin authentication under isolation before the drill; stop if it is unavailable.
-4. Review effective Compose configuration privately (it contains secrets); verify the variables reach
-   the containers. Boot only infrastructure and run the
-   [restore-clone lockdown](./backup-restore#automated-off-host-backup-self-host-compose) against the
-   recovered database before any application role. The restore overlay refuses direct server, worker
-   and webhook starts; an operator-owned isolated override is needed to inspect application health.
-   Keep `AGENT_ENABLED=false` on the server and the worker: the server submits and recovers reviews and
-   the worker runs them. Read back Silent Mode
-   and workspace delivery pause before permitting review execution. Record provider-readiness failures
-   caused by isolation without restoring live write access.
-5. For releases predating Silent Mode, the environment, mentor/Slack shutdown, credential withholding
-   and network barrier above are mandatory throughout. They permit restore inspection, **not** a full
-   silent review run. Upgrade and validate the egress brake before allowing such a run.
+The supported self-host clone needs a separate host.
+Its Compose project name and network/subnet are fixed.
+A different directory or `-p` alone does not provide isolation.
+Silent mode permits model calls and control-plane traffic.
+A disabled Heph row alone is never an isolation boundary.
+
+1. Stop ingress, all server/worker replicas, and active sandboxes.
+2. Suspend automatic restarts/reconcilers.
+3. Use a separate host for the supported self-host clone.
+4. Give it a separate database, NATS store, domain, and credentials.
+5. Do not connect it to production volumes, NATS, or provider webhooks.
+6. Before any application starts, deny external traffic from application **and sandbox** networks.
+7. Allow only required isolated database/broker/admin access.
+8. Set `AGENT_ENABLED=false` on server/worker roles.
+9. Set `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on Slack-capable roles.
+10. Withhold SCM write credentials, including app signing keys, PATs, and credentials encrypted **inside the restored database**.
+
+    Removal of `.env` seeds does not remove database-backed credentials.
+
+11. Keep network denial while inspecting those credentials.
+12. Before interactive access, turn off all Heph model rows.
+    The restore-clone lockdown does this.
+13. Arrange admin authentication under isolation before the drill.
+14. If admin authentication is unavailable, stop.
+15. Review effective Compose configuration privately because it contains secrets.
+16. Verify that the variables reach the containers.
+17. Boot only infrastructure.
+18. Before any application role, run the [restore-clone lockdown](./backup-restore#automated-off-host-backup-self-host-compose) against the recovered database.
+
+    The restore overlay refuses direct server, worker, and webhook starts.
+    Application-health inspection needs an operator-owned isolated override.
+    The server submits and recovers reviews.
+    The worker runs them.
+
+19. Keep `AGENT_ENABLED=false` on server and worker.
+20. Before review execution, read back silent mode and the workspace delivery pause.
+21. Record provider-readiness failures caused by isolation without restoring live write access.
+
+    Releases before silent mode require the environment, mentor/Slack shutdown, credential withholding, and network barrier throughout.
+    These controls permit restore inspection, **not** a full silent review run.
+
+22. Before such a run, upgrade.
+23. Before such a silent review run, validate the egress brake.
 
 ### Choose the broker recovery strategy before starting consumers
 
@@ -201,116 +295,198 @@ Restoring PostgreSQL to T-1 while JetStream retains T can replay work whose loca
 records disappeared. Broker publish deduplication and consumer ACKs are **not** external-delivery
 idempotency. A provider comment written after T-1 can still exist with no restored ledger entry.
 
-**Default: quarantine and recreate the instance's broker state.** Accept and record event loss rather
-than silently replaying a divergent buffer:
+**Default: quarantine and recreate the instance's broker state.**
+Accept and record event loss rather than silently replaying a divergent buffer.
+The self-host broker publishes no host port.
 
-1. With publishers and consumers stopped, record each stream and consumer's configuration, sequence/ACK
-   positions and pending counts using an authenticated NATS CLI context for the intended instance.
-   Use `nats stream report`, `nats stream info STREAM` and `nats consumer info STREAM CONSUMER`.
-   The self-host broker publishes no host port; run the CLI on its isolated Compose network.
-2. Stop NATS. Identify the **exact** `nats-server` data mount through container inspection and Compose
-   project labels. Preserve a cold snapshot and the configuration in restricted incident storage.
-3. For the dedicated self-host broker, remove only that instance's `nats-server` container and its
-   confirmed `nats-data` volume, then recreate NATS with an empty store. Never use `down -v`, a wildcard,
-   or the first volume name ending in `nats-data`. On a shared broker, do not remove the broker volume:
-   have its owner delete/recreate only this instance's streams and consumers after exporting them.
-4. Start the isolated application server first so Liquibase completes, then engage/read back Silent Mode.
-   Start the isolated webhook role to recreate streams; its Compose dependency requires the migrated
-   application server. Keep public ingress blocked.
-   Verify the server consumers attach once streams exist; restart only the isolated server if necessary.
-   Check fresh stream/consumer positions and no old pending deliveries before reconnecting provider
-   ingress. Keep Silent Mode engaged during reconciliation.
-5. Inventory the gap. Run/observe supported provider reconciliation within its configured monitoring
-   window. It can restore current source state, **not every historical event or deleted source**. GitHub,
-   GitLab, Slack and Outline have different recovery limits; record unrecoverable intervals explicitly.
+1. Stop publishers and consumers.
+2. Use an authenticated NATS CLI context for the intended instance on its isolated Compose network.
+3. Record each stream and consumer's configuration, sequence/ACK positions, and pending counts.
+4. Use these commands:
 
-**Replay is an exception requiring a separate drill.** Preserve the retained stream; record the exact
-consumer start sequence/time and recreate only the chosen consumer under isolation. Do not merely
-reset an ACK cursor and reconnect production writers. Exercise provider-marker reconciliation with the
-specific target release and every enabled destination. The
-[dispatch recovery contract](./practice-review-operations#running-instance) covers interrupted writes,
-but does not establish that identities derived from lost jobs survive a database rewind. If a stable
-identity cannot be reconstructed, provider lookup is inconclusive, or any live placement is unaccounted
-for, **do not release replay externally**. Leave delivery suppressed and reconcile manually.
+   ```bash
+   nats stream report
+   nats stream info STREAM
+   nats consumer info STREAM CONSUMER
+   ```
 
-**Drill:** create a controlled delivery after the chosen restore point; retain newer broker events; restore
-PostgreSQL; exercise the chosen reset/replay strategy. Include duplicate delivery, provider success with
-lost local acknowledgement, a partially written summary/inline package, and a provider lookup outage.
-Verify no duplicate provider objects, no historical suppressed work released, and the recorded data-loss
-window. Even an empty broker does not remove restored PostgreSQL jobs/proposals or prevent source sync
-from creating new reviews: check those before release too.
+5. Stop NATS.
+6. Identify the **exact** `nats-server` data mount through container inspection and Compose project labels.
+7. Preserve a cold snapshot and configuration in restricted incident storage.
+
+   :::caution CAUTION: Remove only confirmed instance storage
+   Never use `down -v`, a wildcard, or the first volume name ending in `nats-data`.
+   On a shared broker, do not remove the broker volume.
+   Have its owner export this instance's streams and consumers first.
+   Have the owner delete/recreate only those streams and consumers.
+   :::
+
+8. For a dedicated self-host broker, remove only that instance's `nats-server` container and confirmed `nats-data` volume.
+9. For a dedicated self-host broker, recreate NATS with an empty store.
+10. Start the isolated application server first so Liquibase completes.
+11. Turn on silent mode and read it back.
+12. Start the isolated webhook role to recreate streams.
+
+    Its Compose dependency requires the migrated application server.
+
+13. Keep public ingress blocked.
+14. Verify that server consumers attach after streams exist.
+15. If necessary, restart only the isolated server.
+16. Before provider ingress returns, check fresh stream/consumer positions and no old pending deliveries.
+17. Keep silent mode on during reconciliation.
+18. Inventory the gap.
+19. Run supported provider reconciliation within its configured monitoring window.
+20. Observe that reconciliation.
+21. Explicitly record unrecoverable intervals.
+
+Reconciliation can restore current source state, **not all historical events or deleted sources**.
+GitHub, GitLab, Slack, and Outline have different recovery limits.
+
+**Replay is an exception requiring a separate drill.**
+The [dispatch recovery contract](./practice-review-operations#running-instance) covers interrupted writes.
+It does not establish that identities derived from lost jobs survive a database rewind.
+
+1. Preserve the retained stream.
+2. Record the exact consumer start sequence/time.
+3. Recreate only the chosen consumer under isolation.
+4. Do not merely reset an ACK cursor and reconnect production writers.
+5. Exercise provider-marker reconciliation with the specific target release and all enabled destinations.
+
+   Do not release replay externally under any of these conditions:
+
+   - A stable identity cannot be reconstructed.
+   - Provider lookup is inconclusive.
+   - Any live placement is unaccounted for.
+
+6. Under those conditions, leave delivery suppressed.
+7. Under those same conditions, reconcile manually.
+
+**Drill**
+
+1. Create a controlled delivery after the chosen restore point.
+2. Retain newer broker events.
+3. Restore PostgreSQL.
+4. Exercise the chosen reset/replay strategy.
+5. Include duplicate delivery and provider success with lost local acknowledgment.
+6. Include a partially written summary/inline package and a provider lookup outage.
+7. Verify no duplicate provider objects.
+8. Verify no historical suppressed work was released.
+9. Verify the recorded data-loss window.
+10. Before release, also check restored PostgreSQL jobs/proposals and reviews created by source sync.
+
+An empty broker does not remove those jobs/proposals or prevent source sync from creating new reviews.
 
 ## Access and erasure for one person
 
-Use **Instance administration → Person data**. Only an instance administrator with a recent sign-in
-can create a preview, download an export or start erasure. Requests and replies go through the
-privacy contact in the instance notice; this page is not a data-subject request portal.
+Use **Instance administration → Person data**.
+Only an instance admin with a recent sign-in can create a preview, download an export, or start erasure.
+Requests and replies go through the privacy contact in the instance notice.
+This page is not a data-subject request portal.
 
-1. Verify the requester's identity and authority under your privacy procedure. Enter the account ID
-   or the exact provider instance and provider user ID. For Slack, also enter the native Slack
-   workspace ID. Add all verified identities that belong to the request. Do not match names, logins or email
-   addresses. A conflicting account link stops resolution; repair the verified link or correct the
-   supplied exact IDs before creating another preview. Cached Slack-to-SCM actor stamps are not
-   identity proof. If collected work has such a stamp, include the verified exact keys for both
-   providers, or repair the conflicting association; the page does not infer an identity from it.
-2. Select **Preview data**. Check the resolved identities and the store counts; stores with no rows
-   are listed under **stores hold no rows**.
-   The preview expires after 48 hours. Export and erasure use its frozen row keys; changed data needs
-   a new preview, not an SQL supplement.
-3. For an access request, select **Download JSON export** and transfer the file securely. The file
-   has a schema version and a `stores` object keyed by store name. It excludes credentials and
-   session capabilities. Handle the file as personal data; the completed erasure receipt is not an
-   export archive.
-4. For erasure, follow [Un-deliver external feedback, then purge](#un-deliver-external-feedback-then-purge)
-   for each provider locator in the preview. An unconfirmed write can have no comment ID: inspect
-   the linked reviewed work for both summary and inline feedback, including preserved discussions.
-   The application does not automatically delete comments already posted on a provider.
-5. Select **Erase data…**. In the dialog, confirm that the listed provider copies were removed, type
-   **ERASE** and select **Erase data**. The page follows the job until it finishes; keep the request
-   URL to return to it after a reload.
-   The job records progress one store at a time. If it stops, correct the operational failure and
-   select **Resume erasure…** on the same request. Do not create a second request to bypass a failed
-   job. Worker evidence owners must acknowledge removal of every attempt and copy before database
-   evidence is cleared; an unavailable owner is a failure, not proof of erasure.
-6. Check **Erasure complete** and the per-store receipt before replying. The receipt retains the
-   acting administrator, operational state, times and counts, not the erased content or selected
-   subject keys. Working request keys are cleared on completion; abandoned previews are cleared on
-   expiry. Failed jobs retain the working keys required to resume.
+1. Verify the requester's identity and authority under your privacy procedure.
+2. Enter the account ID or exact provider instance and provider user ID.
+3. For Slack, also enter the native Slack workspace ID.
+4. Add all verified identities that belong to the request.
+5. Do not match names, logins, or email addresses.
+
+   A conflicting account link stops resolution.
+   Cached Slack-to-SCM actor stamps are not identity proof.
+   The page does not infer an identity from those stamps.
+
+6. Before another preview, repair the verified link or correct the supplied exact IDs.
+7. If collected work has a cached actor stamp, include verified exact keys for both providers.
+8. If stamped work has a conflicting association, alternatively repair that association.
+9. Select **Preview data**.
+10. Check resolved identities and store counts.
+
+    Stores with no rows appear under **stores hold no rows**.
+    The preview expires after 48 hours.
+    Export and erasure use its frozen row keys.
+    Changed data needs a new preview, not an SQL supplement.
+
+11. For an access request, select **Download JSON export**.
+12. For an access request, transfer the file securely.
+13. For an access request, handle the file as personal data.
+
+    The export has a schema version and a `stores` object keyed by store name.
+    It excludes credentials and session capabilities.
+    The completed erasure receipt is not an export archive.
+
+14. For erasure, follow [Un-deliver external feedback, then purge](#un-deliver-external-feedback-then-purge) for each provider locator in the preview.
+15. For erasure of an unconfirmed write without a comment ID, inspect the linked reviewed work for summary and inline feedback.
+16. For that erasure inspection, include preserved discussions.
+
+    The application does not automatically delete provider comments already posted.
+
+17. For erasure, select **Erase data…**.
+18. For erasure, in the dialog, confirm removal of the listed provider copies.
+19. For erasure, type **ERASE**.
+20. For erasure, select **Erase data**.
+21. For erasure, keep the request URL for access after a reload.
+
+    The page follows the job until it finishes.
+    The job records progress one store at a time.
+    Worker evidence owners must acknowledge removal of each attempt and copy before database evidence clears.
+    An unavailable owner is a failure, not proof of erasure.
+
+22. For erasure, if the job stops, correct the operational failure.
+23. For erasure, after correcting a stopped job's failure, select **Resume erasure…** on the same request.
+24. For erasure, do not create a second request to bypass a failed job.
+25. For erasure, before replying, check **Erasure complete** and the per-store receipt.
+
+The receipt retains the acting instance admin, operational state, times, and counts.
+It retains neither erased content nor selected subject keys.
+Completion clears working request keys.
+Expiry clears abandoned previews.
+Failed jobs retain the working keys needed to resume.
 
 Review-package provider requests hold capture admission until their outcomes have been recorded. Erasure cannot
 pass an in-flight provider request. A queued call cannot recreate feedback after its review has
 entered erasure or its job capability has been revoked.
 
-Delivery facts are frozen with the preview, not only row IDs. If a provider write starts or its
-result changes after inspection, export and erasure reject the stale preview. Create a new preview
-and inspect the current locators before confirming removal again. An unconfirmed write or legacy comment with no
-exact inspection locator stops the request and names its dispatch or review; it is not treated as never delivered.
+The preview freezes delivery facts, not only row IDs.
+If a provider write starts or its result changes after inspection, export and erasure reject the stale preview.
+An unconfirmed write or legacy comment without an exact inspection locator stops the request and identifies its dispatch or review.
+The system does not treat it as never delivered.
 
-Observations and feedback belong to the developer they are about. The person's own are exported and
-erased, including copies of their feedback in someone else's Heph conversation. Another developer's
-observations and feedback stay, even when the person commented on that work; the review's captured
-inputs and Heph's hidden memory in the affected workspaces are erased instead.
+1. If the preview is stale, create a new preview before confirming removal again.
+2. If the preview is stale, inspect the current locators before confirming removal again.
 
-Exact provider-key suppression is held separately from the audit receipt. It prevents the erased
-identity from being processed again and is not a reversible workspace consent choice. Provider sync
-can still mirror records that remain upstream. Tell the requester what remains outside the active
-application's control: original provider records, provider comments not yet removed, delivered mailbox
-copies, third-party retention and [backups](./backup-restore). A restore must follow the isolation and
-reconciliation procedure above before processing resumes. Do not claim selective deletion in backups.
+   Observations and feedback belong to the developer they describe.
+   The person's own observations and feedback are exported and erased, including feedback copies in another person's Heph conversation.
+   Another developer's observations and feedback remain, even when the person commented on that work.
+   Instead, erasure removes the review's captured inputs and Heph's hidden memory in affected workspaces.
+
+   Exact provider-key suppression is separate from the audit receipt.
+   It prevents further processing of the erased identity.
+   It is not a reversible workspace consent choice.
+   Provider sync can still mirror upstream records.
+
+3. Tell the requester what remains outside the active application's control:
+   - Original provider records.
+   - Provider comments not yet removed.
+   - Delivered mailbox copies.
+   - Third-party retention and [backups](./backup-restore).
+4. After a restore, follow isolation and reconciliation above before processing resumes.
+5. Do not claim selective deletion in backups.
 
 The [personal-data map](./dsms/personal-data-map) owns store-specific export, removal and residual
 retention. The [record of processing](./dsms/record-of-processing) owns the legal and retention record.
 
 ### Exact source bindings for person requests
 
-A connected GitHub, GitLab, Slack or Outline source is available in the person-request provider list,
-even when the person has no account. Use its exact native user ID and, for Slack, native workspace ID.
-A connected source cannot be changed to a different provider instance; create a new connection.
+Connected GitHub, GitLab, Slack, and Outline sources appear in the person-request provider list, even for a person without an account.
+A connected source cannot change to a different provider instance.
 Equivalent host case and default-port spellings remain the same instance and keep processing controls.
+The upgrade registers existing source instances.
+Names, logins, email addresses, and document text are not binding proof.
 
-The upgrade registers existing source instances. If it reports an Outline connection with mirrored
-documents but no provider instance, restore a verified state with that exact binding before upgrading.
-Visible document content stays. Names, logins, email addresses and document text are not binding proof.
+1. Use the source's exact native user ID.
+2. For Slack, also use the native workspace ID.
+3. To change the provider instance, create a new connection.
+4. If upgrade reports mirrored Outline documents without a provider instance, restore verified state with that exact binding before upgrading.
+
+Visible document content remains.
 
 ### An evidence store is offline
 
@@ -319,45 +495,66 @@ The owning worker cancels the affected attempt and removes the whole job folder,
 rendering folders and retries. It confirms deletion only after the runtime releases its folder.
 A server that has no such folder cannot confirm deletion for another worker's volume.
 
-If the mounted owner does not confirm deletion, the request fails and can be resumed. Restore the
-same worker volume, let its deletion poll run, then resume the request in instance administration.
-The store identity stays on the volume across a worker restart. Do not replace the volume with an
-empty one and report the old copy as erased. Keep a disconnected old volume under access controls
-until its copy has been removed and its deletion has been confirmed.
+If the mounted owner does not confirm deletion, the request fails and can resume.
+The store identity stays on the volume across a worker restart.
 
-This does not change the normal job-folder contract: admission removes the admitted folder,
-ended attempts have a one-hour grace period, and restart cleanup removes old attempts.
+1. Restore the same worker volume.
+2. Let its deletion poll run.
+3. Resume the request in instance administration.
+4. Do not replace the volume with an empty one and report the old copy as erased.
+5. Keep a disconnected old volume under access controls until removal of its copy and confirmation of deletion.
+
+This does not change the normal job-folder contract:
+
+- Admission removes the admitted folder.
+- Ended attempts have a one-hour grace period.
+- Restart cleanup removes old attempts.
 
 ### Git history and repository owners
 
-The JSON export's `git_repository_history` section lists repositories whose history may contain the
-person's commits, using exact stored provider identities and contributor references. Do not use
-names, logins or email addresses to infer ownership. This list is not a proof of every author string
-in raw Git history: some Git attribution has no native provider person ID.
+The JSON export's `git_repository_history` section lists repositories whose history may contain the person's commits.
+It uses exact stored provider identities and contributor references.
+The list does not prove each author string in raw Git history.
+Some Git attribution has no native provider person ID.
 
-Raw Git objects in mirrors and job folders cache the upstream repository controlled by the
-workspace's organization. Hephaestus does not rewrite them or refuse capture. Rewriting changes
-commit IDs, breaks citations, and is undone by a later fetch. If Git authorship must be erased, ask
-the source repository's owner to remove it there and to apply their repository retention procedure.
-Sync can mirror records that still exist upstream.
+1. Do not infer ownership from names, logins, or email addresses.
 
-Hephaestus erases what it derives and records about the person. The erasure job cancels affected
-in-flight review attempts and removes their evidence folders through the evidence-erasure hook.
-It must not report completion without proof of removal for the affected copies. Normal job-folder
-retention stays unchanged: admission removes the verified folder, ended attempts have a one-hour
-cleanup grace, and restart cleanup removes abandoned folders. No unfiltered Git object archive is
-placed in a person export.
+   Raw Git objects in mirrors and job folders cache the upstream repository controlled by the workspace's organization.
+   Hephaestus does not rewrite them or refuse capture.
+   A rewrite changes commit IDs and breaks citations.
+   A later fetch reverses the rewrite.
+   Sync can mirror records that still exist upstream.
+
+2. If Git authorship must be erased, ask the source repository's owner to remove it there.
+3. Ask that owner to apply the repository retention procedure.
+
+Hephaestus erases what it derives and records about the person.
+The erasure job cancels affected active review attempts.
+It removes their evidence folders through the evidence-erasure hook.
+It must not report completion without proof of removal for affected copies.
+No unfiltered Git object archive enters a person export.
+
+Normal job-folder retention stays unchanged:
+
+- Admission removes the verified folder.
+- Ended attempts have a one-hour cleanup grace.
+- Restart cleanup removes abandoned folders.
 
 ## Un-deliver external feedback, then purge
 
 Deleting in-app data does not delete a provider comment. If external copies must be scrubbed,
 **complete un-deliver before workspace purge, disconnect or person erasure removes their locator records**.
 
-1. Engage Silent Mode; stop active writers/sandboxes and preserve their dispatch state. Pause sending
-   for the affected workspace too, so releasing the instance brake later cannot recreate the content.
-2. Locate the piece of feedback from the workspace review trace. With authorized read-only database
-   access, inventory **all** placements, not just the summary. This query uses `psql` variables set to
-   the verified workspace and feedback IDs and intentionally omits bodies:
+1. Turn on silent mode.
+2. Stop active writers/sandboxes.
+3. Preserve their dispatch state.
+4. Pause sending for the affected workspace.
+   This prevents content recreation when silent mode is later turned off.
+5. Locate the piece of feedback from the workspace review trace.
+6. With authorized read-only database access, inventory **all** placements, not only the summary.
+7. Run the query below with `psql` variables set to verified workspace and feedback IDs.
+
+   The query deliberately omits bodies.
 
    ```sql
    SELECT f.id, f.agent_job_id, f.artifact_kind, f.artifact_id,
@@ -369,142 +566,203 @@ Deleting in-app data does not delete a provider comment. If external copies must
      AND f.id = :'feedback_id'::uuid;
    ```
 
-   For conversational placements, follow `chat_message_id` through `chat_message.thread_id`
-   to the workspace-scoped `mentor_slack_thread.chat_thread_id` mapping to identify the Slack conversation.
-   The thread root is **not** the outgoing reply's deletion ID: use the provider's paginated
-   [conversation replies](https://docs.slack.dev/reference/methods/conversations.replies/) API to find
-   each exact bot-authored reply and its `ts`. Some mentor replies and reminders have no feedback placement
-   or durable outgoing timestamp; the ledger query alone cannot establish complete Slack removal. If the
-   provider inventory is inaccessible or ambiguous, record the gap and keep removal incomplete.
+8. For conversational placements, follow `chat_message_id` through `chat_message.thread_id` to the workspace-scoped `mentor_slack_thread.chat_thread_id` mapping.
 
-   Follow replacement history and check matching workspace/job rows in `feedback_dispatch`, including
-   `delivered_external_ref`, `delivered_placements` and `UNCERTAIN` partial writes not yet projected into
-   the ledger. Verify repository/project, artifact, provider account, author and content against the
-   provider before deleting. Never infer an API object type from a numeric ID alone.
-3. Use a separate authorized operator session to delete each confirmed provider object. Do not release
-   application Silent Mode to perform cleanup. Select the endpoint for the actual placement:
+   That mapping identifies the Slack conversation.
+   The thread root is **not** the outgoing reply's deletion ID.
+   Some mentor replies and reminders have no feedback placement or durable outgoing timestamp.
+   The ledger query alone cannot establish complete Slack removal.
 
-   | Placement | Provider API |
-   | --- | --- |
-   | GitHub issue or pull-request summary comment | `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}` — [issue comments](https://docs.github.com/en/rest/issues/comments#delete-an-issue-comment) |
-   | GitHub inline review comment | `DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}` — [review comments](https://docs.github.com/en/rest/pulls/comments#delete-a-review-comment-for-a-pull-request) |
-   | GitLab issue or merge-request note | `DELETE /projects/:id/issues/:issue_iid/notes/:note_id` or `DELETE /projects/:id/merge_requests/:merge_request_iid/notes/:note_id` — [notes](https://docs.gitlab.com/api/notes/) |
-   | GitLab discussion/diff note | Use its discussion and note IDs — [discussions](https://docs.gitlab.com/api/discussions/#delete-a-merge-request-discussion-note) |
-   | Slack feedback or mentor reply | `chat.delete` with the exact channel and message `ts`, using a token permitted to delete that author's message — [Slack API](https://docs.slack.dev/reference/methods/chat.delete/) |
-   | Outline | No current external feedback destination; do not delete source documents as a substitute for removing feedback |
+9. Use the provider's paginated [conversation replies](https://docs.slack.dev/reference/methods/conversations.replies/) API to find each exact bot-authored reply and its `ts`.
+10. If provider inventory is inaccessible or ambiguous, record the gap.
+11. If provider inventory is inaccessible or ambiguous, keep removal incomplete.
+12. Follow replacement history.
+13. Check matching workspace/job rows in `feedback_dispatch`.
+14. Include `delivered_external_ref`, `delivered_placements`, and `UNCERTAIN` partial writes not yet projected into the ledger.
+15. Before deletion, verify repository/project, artifact, provider account, author, and content against the provider.
+16. Never infer an API object type from a numeric ID alone.
+17. Use a separate authorized operator session to delete each confirmed provider object.
+18. Do not turn off application silent mode for cleanup.
+19. Select the endpoint for the actual placement:
 
-   A submitted GitHub review/approval is not an issue comment; use the provider-supported review
-   dismissal/remediation flow and report any retained content. For all providers, obey rate limits,
-   verify the response (Slack requires `ok: true`), and read back absence with credentials known to have
-   access. A `404` can mean hidden/inaccessible, not deleted. A timeout is ambiguous: read before retrying.
-4. Record each ledger ID/provider reference, deletion result, verification time and operator in the
-   restricted incident record, including partial failures. External deletion does **not** mark the
-   immutable ledger as retracted: no admin removal API exists. Do not substitute `SUPERSEDED`,
-   `DISCARDED`, recipient resolution or edited dispatch fences. Complete in-product retraction requires
-   the [retraction workflow](https://github.com/hephaestus-build/Hephaestus/issues/1507).
-5. Verify there are no still-live placements or unresolved dispatches that could recreate them before
-   resuming delivery. Keep the workspace paused if this cannot be proved. Only then purge if requested;
-   retain minimal lawful removal evidence under the incident retention policy. Deletion cannot recall
-   email notifications, screenshots or third-party archives.
+    | Placement                                    | Provider API                                                                                                                                                                        |
+    | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | GitHub issue or pull-request summary comment | `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}` — [issue comments](https://docs.github.com/en/rest/issues/comments#delete-an-issue-comment)                             |
+    | GitHub inline review comment                 | `DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}` — [review comments](https://docs.github.com/en/rest/pulls/comments#delete-a-review-comment-for-a-pull-request)           |
+    | GitLab issue or merge-request note           | `DELETE /projects/:id/issues/:issue_iid/notes/:note_id` or `DELETE /projects/:id/merge_requests/:merge_request_iid/notes/:note_id` — [notes](https://docs.gitlab.com/api/notes/)    |
+    | GitLab discussion/diff note                  | Use its discussion and note IDs — [discussions](https://docs.gitlab.com/api/discussions/#delete-a-merge-request-discussion-note)                                                    |
+    | Slack feedback or mentor reply               | `chat.delete` with the exact channel and message `ts`, using a token permitted to delete that author's message — [Slack API](https://docs.slack.dev/reference/methods/chat.delete/) |
+    | Outline                                      | No current external feedback destination. Do not delete source documents as a substitute for removing feedback                                                                      |
 
-**Drill:** remove a summary plus inline comments and a Slack reply on controlled fixtures, including
-permission denial and timeout recovery. Re-run the inventory, exercise restart/retry under containment,
-and verify the incident record matches provider state.
+    A submitted GitHub review/approval is not an issue comment.
+    A `404` can mean hidden/inaccessible, not deleted.
+    A timeout is ambiguous.
+    External deletion does **not** mark the immutable ledger as retracted.
+    No admin removal API exists.
+    Complete in-product retraction requires the [retraction workflow](https://github.com/hephaestus-build/Hephaestus/issues/1507).
+
+20. For a submitted GitHub review/approval, use the provider-supported review dismissal/remediation flow.
+21. Report any retained content.
+22. For all providers, obey rate limits.
+23. Verify the response.
+    Slack requires `ok: true`.
+24. Read back absence with credentials known to have access.
+25. After a timeout, read before retrying.
+26. Record each ledger ID/provider reference, deletion result, verification time, and operator in the restricted incident record.
+27. Include partial failures.
+28. Do not substitute `SUPERSEDED`, `DISCARDED`, recipient resolution, or edited dispatch fences for retraction.
+29. Before delivery resumes, verify no live placements or unresolved dispatches can recreate the content.
+30. If you cannot prove this, keep the workspace paused.
+31. Only then purge, if requested.
+32. Retain minimal lawful removal evidence under the incident retention policy.
+
+Deletion cannot recall email notifications, screenshots, or third-party archives.
+
+**Drill**
+
+1. Remove a summary, inline comments, and a Slack reply on controlled fixtures.
+2. Include permission denial and timeout recovery.
+3. Run the inventory again.
+4. Exercise restart/retry under containment.
+5. Verify that the incident record matches provider state.
 
 ## Alert response
 
 Use [Scrape metrics](./observability.mdx#scrape-metrics) for the private endpoint and example alert
 rules. Use the instrumented metrics in [Practice review operations](./practice-review-operations#queue-health)
-and [Webhook ingestion operations](./webhook-ingestion-operations); configure thresholds against your
+and [Webhook ingestion operations](./webhook-ingestion-operations). Configure thresholds against your
 traffic and recovery objectives. Assign an owner and test the alert delivery route.
 
-| Signal | Contain and diagnose | Recovery proof |
-| --- | --- | --- |
-| Poison events / repeated consumer failures | Preserve stream sequence, kind, reason and delivery count, not raw payloads in logs. Current poison handling **ACKs** at the retry limit; it does not move data to a durable DLQ. NATS maximum-delivery advisories are not a DLQ either. Recover the retained event before retention expires if authorized; never raise the retry cap to hide a poison loop. | Reproduce with a sanitized fixture, fix the cause, replay one controlled event under silence, then reconcile the bounded gap; healthy subsequent events continue. |
-| Dead-letter alert from deployment tooling | Identify which system owns the queue; do not assume an application replay endpoint exists. Preserve IDs/configuration and restrict payload access. | Redrive only after fixing the cause, with a bounded batch and verified delivery idempotency; record irrecoverable events. |
-| Rising oldest queue age, stale sampler, failed jobs | Check eligible/held/running separately, worker availability, readiness, model bindings, database and provider health. Do not delete jobs or reset leases manually. | Oldest age falls and new work completes; held work is explained rather than silently counted as healthy. |
-| `UNCERTAIN` / failed dispatch | Engage silence if content safety is in doubt. Restore provider lookup/credentials; never clear the write fence or create a new dispatch to bypass uncertainty. | Existing provider objects are reconciled without duplicate creates, including inline placements. |
-| Budget breach / unpriced usage | Identify shared versus workspace-owned funding; pause each affected budget/model. For runaway global spend stop all AI processes/egress. Silent Mode does not stop spending. | Validate usage ledger against provider billing, explain unpriced buckets and in-flight overshoot; observe a bounded fresh run before restoring caps. Budget-held work can resume automatically. |
-| Backup stale / restore failed | Preserve the last good backup, check destination credentials, disk, WAL coverage and encryption-key recovery. Escalate at the agreed RPO, not after the next deploy. | A new off-host backup and isolated restore succeed within measured objectives. |
-| Broker storage exhaustion | Follow the documented broker/receiver restart order after freeing space; keep ingress loss visible. Do not purge streams merely to clear an alert. | Receiver durable acknowledgements and consumption recover; inventory missing events and verify configured bounds. |
+| Signal                                              | Contain and diagnose                                                                                                                                                                                                                                                                                                                                         | Recovery proof                                                                                                                                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Poison events / repeated consumer failures          | Preserve stream sequence, kind, reason and delivery count, not raw payloads in logs. Current poison handling **ACKs** at the retry limit. It does not move data to a durable DLQ. NATS maximum-delivery advisories are not a DLQ either. Recover the retained event before retention expires if authorized. Never raise the retry cap to hide a poison loop. | Reproduce with a sanitized fixture, fix the cause, replay one controlled event under silence, then reconcile the bounded gap. Healthy subsequent events continue.                               |
+| Dead-letter alert from deployment tooling           | Identify which system owns the queue. Do not assume an application replay endpoint exists. Preserve IDs/configuration and restrict payload access.                                                                                                                                                                                                           | Redrive only after fixing the cause, with a bounded batch and verified delivery idempotency. Record irrecoverable events.                                                                       |
+| Rising oldest queue age, stale sampler, failed jobs | Check eligible/held/running separately, worker availability, readiness, model bindings, database and provider health. Do not delete jobs or reset leases manually.                                                                                                                                                                                           | Oldest age falls and new work completes. Held work is explained rather than silently counted as healthy.                                                                                        |
+| `UNCERTAIN` / failed dispatch                       | Turn on silent mode if content safety is in doubt. Restore provider lookup/credentials. Never clear the write fence or create a new dispatch to bypass uncertainty.                                                                                                                                                                                          | Existing provider objects are reconciled without duplicate creates, including inline placements.                                                                                                |
+| Budget breach / unpriced usage                      | Identify shared versus workspace-owned funding. Pause each affected budget/model. For runaway global spend stop all AI processes/egress. Silent mode does not stop spending.                                                                                                                                                                                 | Validate usage ledger against provider billing, explain unpriced buckets and in-flight overshoot. Observe a bounded fresh run before restoring caps. Budget-held work can resume automatically. |
+| Backup stale / restore failed                       | Preserve the last good backup, check destination credentials, disk, WAL coverage and encryption-key recovery. Escalate at the agreed RPO, not after the next deploy.                                                                                                                                                                                         | A new off-host backup and isolated restore succeed within measured objectives.                                                                                                                  |
+| Broker storage exhaustion                           | Follow the documented broker/receiver restart order after freeing space. Keep ingress loss visible. Do not purge streams merely to clear an alert.                                                                                                                                                                                                           | Receiver durable acknowledgments and consumption recover. Inventory missing events and verify configured bounds.                                                                                |
 
 ## Model pricing update
 
-Prices are runtime catalog data, not a source-code pricing table. Follow
-[AI provider pricing](./ai-providers#4-pricing-a-model): record the vendor/contract rate source, upstream
-model ID, currency, effective date and all token buckets. Update the instance catalog or the workspace's
-own catalog as appropriate; confirm **USD per million tokens**, including cache read/write rates.
-Never mark an unknown model `NO_CHARGE` to bypass a refused call.
+Prices are runtime catalog data, not a source-code pricing table.
+Instance prices are superseded with history.
+Workspace-owned models use inline prices.
+Missing cache rates can leave the entire call unpriced.
 
-For new/unpriced models, create disabled, price, then enable and bind. For repricing, use the catalog UI;
-instance prices are superseded with history, while workspace-owned models use inline prices. Verify
-historical usage was not re-billed and a controlled new call uses the intended rate snapshot. Compare a
-hand-calculated token-cost example and provider billing; missing cache rates can unprice the entire call.
-If wrong, correct the current catalog, keep affected models disabled, and document the accounting gap
-rather than rewriting historical usage.
+1. Follow [AI provider pricing](./ai-providers#4-pricing-a-model).
+2. Record the vendor/contract rate source, upstream model ID, currency, effective date, and all token buckets.
+3. Update the instance catalog or workspace-owned catalog as applicable.
+4. Confirm **USD per million tokens**, including cache read/write rates.
+5. Never mark an unknown model `NO_CHARGE` to bypass a refused call.
+6. For a new/unpriced model, create it disabled.
+7. For a new/unpriced model, price it.
+8. For a new/unpriced model, enable it.
+9. For a new/unpriced model, bind it.
+10. For repricing, use the catalog UI.
+11. Verify that historical usage was not billed again.
+12. Verify that a controlled new call uses the intended rate snapshot.
+13. Compare a hand-calculated token-cost example and provider billing.
+14. If the rate is wrong, correct the current catalog.
+15. If the rate is wrong, keep affected models disabled.
+16. If the rate is wrong, document the accounting gap instead of rewriting historical usage.
 
 ## Decommission
 
-Engage silence and stop writers, workers, sandboxes and deployment automation. Complete external removal
-before erasure if required; take only the final backups mandated by retention. Deregister webhooks and
-uninstall/revoke the relevant GitHub App installations, GitLab tokens/hooks, Slack app subscriptions and
-tokens, and Outline app/API credentials and hooks; do not delete a shared app still used by another
-instance. Revoke OAuth and LLM credentials, remove DNS/TLS and alert routes, then destroy volumes,
-secrets and off-host backups when retention permits. Verify provider subscriptions and recurring AI or
-storage charges have stopped. Record any retained legal evidence and its deletion owner/date.
+:::caution CAUTION: Shared integrations and retained data
+Do not delete a shared app that another instance still uses.
+Destroy data only when retention permits.
+:::
+
+1. Turn on silent mode.
+2. Stop writers, workers, sandboxes, and deployment automation.
+3. If required, complete external removal before erasure.
+4. Take only final backups required by retention.
+5. Deregister webhooks.
+6. Uninstall/revoke relevant GitHub App installations.
+7. Revoke relevant GitLab tokens/hooks.
+8. Remove relevant Slack app subscriptions and tokens.
+9. Revoke relevant Outline app/API credentials and hooks.
+10. Revoke OAuth and LLM credentials.
+11. Remove DNS/TLS and alert routes.
+12. When retention permits, destroy volumes, secrets, and off-host backups.
+13. Verify that provider subscriptions and recurring AI or storage charges have stopped.
+14. Record retained legal evidence and its deletion owner/date.
 
 ## Operator evidence and authoritative guidance
 
-Keep drill evidence in the restricted deployment record: operator/reviewer, UTC date, release locks,
-isolated URL/project, provider fixtures, backup checksum and recovery target, broker strategy/positions,
-measured recovery point/time, provider counts before/after, failures and follow-up owner. Re-run after
-changes to migrations, dispatch identity, provider APIs, broker configuration or backups.
+Keep drill evidence in the restricted deployment record.
+It must include these facts:
+
+- Operator/reviewer and UTC date.
+- Release locks and isolated URL/project.
+- Provider fixtures, backup checksum, and recovery target.
+- Broker strategy/positions and measured recovery point/time.
+- Provider counts before/after.
+- Failures and follow-up owner.
+
+1. Repeat drills after changes to migrations, dispatch identity, provider APIs, broker configuration, or backups.
 
 - [GitLab Silent Mode](https://docs.gitlab.com/administration/silent_mode/)
 - [PostgreSQL continuous archiving](https://www.postgresql.org/docs/current/continuous-archiving.html)
 - [pgBackRest user guide](https://pgbackrest.org/user-guide.html)
-- [NATS delivery and acknowledgement](https://docs.nats.io/learn/jetstream/delivery-and-acknowledgment)
+- [NATS delivery and acknowledgment](https://docs.nats.io/learn/jetstream/delivery-and-acknowledgment)
 - [AWS runbook guidance](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_ready_to_support_use_runbooks.html)
 - [Google SRE launch guidance](https://sre.google/sre-book/reliable-product-launches/)
 
 ## Email delivery operations
 
-Use **Instance settings → Email → Send test email** to distinguish a missing configuration, Silent
-Mode, exhausted capacity and relay failures. `SENT` is relay acceptance, not inbox delivery. SMTP
-health must not be a liveness or readiness dependency. Page the operator through an **external**
-monitoring channel for application, database, NATS, scheduler or SMTP outages: a broken email path
-cannot reliably report its own failure by email.
+`SENT` means relay acceptance, not inbox delivery.
+SMTP health must not be a liveness or readiness dependency.
+A broken email path cannot reliably report its own failure by email.
+Sustained `unavailable`, `rate_limited`, `rejected`, or `expired` outcomes require investigation.
 
-Monitor the `notification.email.delivery` counter by bounded `kind` and `outcome`; sustained
-`unavailable`, `rate_limited`, `rejected` or `expired` outcomes warrant investigation. Inspect the
-publication backlog without selecting `serialized_event`:
+1. Use **Instance settings → Email → Send test email** to distinguish missing configuration, silent mode, exhausted capacity, and relay failures.
+2. For application, database, NATS, scheduler, or SMTP outages, page the operator through an **external** monitoring channel.
+3. Monitor the `notification.email.delivery` counter by bounded `kind` and `outcome`.
+4. Inspect the publication backlog without selecting `serialized_event`:
 
-```sql
-SELECT status, count(*) AS publications, min(publication_date) AS oldest_publication
-FROM event_publication
-GROUP BY status;
-```
+   ```sql
+   SELECT status, count(*) AS publications, min(publication_date) AS oldest_publication
+   FROM event_publication
+   GROUP BY status;
+   ```
 
-Alert when pending/failed publications age beyond the expected five-minute retry interval and
-investigate before the notification's expiry. Retry batches prioritize publications least recently
-retried, so one failing batch does not indefinitely block later work. This is fairness, not a promise
-of delivery within five minutes: capacity limits and backlog size still apply. Use a separate database-monitoring identity with
-least privilege. Do not replay a backlog blindly: each listener rechecks current eligibility, and
-Silent Mode deliberately completes withheld mail rather than saving a flood for later.
+   Retry batches prioritize publications least recently retried.
+   One failed batch therefore does not indefinitely block later work.
+   This fairness does not promise delivery within five minutes.
+   Capacity limits and backlog size still apply.
+   Each listener rechecks current eligibility.
+   silent mode completes withheld mail rather than retaining a flood for later.
 
-Before inviting a large audience, confirm the relay's quota, SPF/DKIM/DMARC alignment, monitored
-reply address, and bounce/complaint handling. Hephaestus records synchronous SMTP rejection; it does
-**not** claim to ingest asynchronous delivery-status notifications or provider complaints. Use a
-relay with suppression of hard bounces and complaints, monitor that suppression list, and keep
-optional bulk mail disabled until that operational path works. Never re-enable a suppressed address
-without resolving the reason. See [email configuration](./production-setup#email).
+5. Alert when pending/failed publications age beyond the expected five-minute retry interval.
+6. Investigate before notification expiry.
+7. Use a separate database-monitoring identity with least privilege.
+8. Do not replay a backlog blindly.
 
-Unsubscribe URLs contain narrowly scoped bearer capabilities. Redact `/notifications/unsubscribe/*`
-in reverse-proxy access logs and never retain the `token` query of the public confirmation page.
-Validate the externally reachable HTTPS POST path and DKIM coverage of both unsubscribe headers
-with a real message; a local Mailpit MIME test alone cannot prove DNS or DKIM configuration.
+Hephaestus records synchronous SMTP rejection.
+It does **not** claim to ingest asynchronous delivery-status notifications or provider complaints.
+
+Before inviting a large audience:
+
+1. Confirm the relay's quota and SPF/DKIM/DMARC alignment.
+2. Confirm the monitored reply address and bounce/complaint handling.
+3. Use a relay that suppresses hard bounces and complaints.
+4. Monitor that suppression list.
+5. Keep optional bulk mail disabled until this operational path works.
+6. Never re-enable a suppressed address without resolving the reason.
+
+See [email configuration](./production-setup#email).
+
+Unsubscribe URLs contain narrowly scoped bearer capabilities.
+A local Mailpit MIME test alone cannot prove DNS or DKIM configuration.
+
+1. Redact `/notifications/unsubscribe/*` in reverse-proxy access logs.
+2. Never retain the public confirmation page's `token` query.
+3. With a real message, validate the externally reachable HTTPS POST path.
+4. Validate DKIM coverage of both unsubscribe headers.
 
 Workspace connection alerts cover recorded Slack credential revocation and verified GitHub app
 suspension, with paired recovery. Intentional disconnection, routine token refresh, and first-time
 connection are not incidents. GitLab and Outline do not yet expose equivalent durable incident
-signals; monitor their existing health/configuration surfaces rather than assuming email coverage.
+signals. Monitor their existing health/configuration surfaces rather than assuming email coverage.

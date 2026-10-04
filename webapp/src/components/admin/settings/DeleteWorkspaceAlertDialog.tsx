@@ -60,36 +60,34 @@ export function DeleteWorkspaceAlertDialog({
 					<AlertDialogTitle ref={titleRef} tabIndex={-1}>
 						Permanently delete <span className="font-mono break-all">{workspaceSlug}</span>?
 					</AlertDialogTitle>
-					<AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+					<AlertDialogDescription>You cannot undo this.</AlertDialogDescription>
 					<div className="space-y-3 text-left text-sm text-muted-foreground">
 						<p>Deleting the workspace permanently erases:</p>
 						<ul className="list-disc space-y-1 pl-5">
-							<li>memberships and access;</li>
-							<li>workspace, team, and repository settings;</li>
-							<li>Hephaestus copies of synced integration content;</li>
-							<li>practice feedback and mentor conversations;</li>
-							<li>locally stored integration and AI-provider credentials.</li>
+							<li>memberships and access</li>
+							<li>workspace, team, and repository settings</li>
+							<li>Hephaestus copies of synced integration content</li>
+							<li>practice feedback and mentor conversations</li>
+							<li>locally stored integration and AI-provider credentials</li>
 						</ul>
 						<p>These survive:</p>
 						<ul className="list-disc space-y-1 pl-5">
 							<li>
 								messages and comments Hephaestus posted to external providers, including GitHub,
-								GitLab, and Slack;
+								GitLab, and Slack
 							</li>
-							<li>
-								GitHub, GitLab, and Outline access tokens at their providers; revoke them there if
-								no longer needed;
-							</li>
-							<li>
-								the Slack app installation; its bot token is revoked only when no other workspace
-								uses it;
-							</li>
-							<li>security, audit, and accounting records for prior activity;</li>
+							<li>GitHub, GitLab, and Outline access tokens at their providers</li>
+							<li>the Slack app installation</li>
+							<li>security, audit, and accounting records for prior activity</li>
 							<li>
 								the name <span className="font-mono break-all">{workspaceSlug}</span>, which stays
-								reserved and can never be used for a new workspace.
+								reserved so that no new workspace can ever use it
 							</li>
 						</ul>
+						<p>
+							Revoke the access tokens at their providers if you no longer need them. Hephaestus
+							revokes the Slack bot token only when no other workspace uses it.
+						</p>
 					</div>
 				</AlertDialogHeader>
 

@@ -36,6 +36,7 @@ import type {
 	UpdateUserSettingsResponse,
 	UserSettings,
 } from "@/api/types.gen";
+import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import type { EmailPreferencesSectionProps } from "@/components/settings/EmailPreferencesSection";
 import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAccountsSection";
 import type { SessionsSectionProps } from "@/components/settings/SessionsSection";
@@ -95,7 +96,7 @@ function RouteComponent() {
 			toast.error(
 				problemStatusOf(error) === 412
 					? "Email choices changed elsewhere. Review the updated choices and try again."
-					: problemDetailOf(error, "Could not update your email choices. Please try again."),
+					: problemDetailOf(error, "We could not update your email choices. Try again."),
 			);
 		},
 	});
@@ -158,7 +159,7 @@ function RouteComponent() {
 			if (context?.previousSettings) {
 				queryClient.setQueryData(userSettingsQueryKey, context.previousSettings);
 			}
-			toast.error("Failed to update settings. Please try again later.");
+			toast.error("We could not update your settings. Try again.");
 		},
 		onSuccess: (data) => {
 			queryClient.setQueryData(userSettingsQueryKey, data);
@@ -191,21 +192,27 @@ function RouteComponent() {
 			// Research surveys are offered on the strength of this answer, so the menu must follow it.
 			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
 		},
-		onError: () => {
+		onError: (error) => {
 			// The refusal may be the notice moving on — a renamed research organisation, or setup owed
 			// again. Re-read it so the control reflects what this instance is now asking.
 			void queryClient.invalidateQueries({ queryKey: getConsentStatusQueryKey({}) });
-			toast.error("Failed to update research participation. Please try again.");
+			// A retry cannot succeed while this page still shows words the server has replaced.
+			toast.error(
+				problemStatusOf(error) === 409
+					? "Hephaestus was updated while this page was open. Reload the page, then try again."
+					: "We could not update your research participation. Try again.",
+			);
 		},
 	});
 
-	// Echo the notice and organisation this page rendered: a settings tab left open across a change of
-	// research organisation would otherwise record a decision about one the reader never saw.
+	// Echo the wording and organisation this page rendered: a settings tab left open across a new
+	// release or a change of research organisation would otherwise record a decision about words the
+	// reader never saw. The server refuses the mismatch.
 	const handleResearchToggle = (checked: boolean) =>
 		researchConsentMutation.mutate({
 			body: {
 				granted: checked,
-				noticeVersion: accountConsent?.noticeVersion ?? "",
+				noticeVersion: WORDING_VERSION,
 				researchOrganization: accountConsent?.researchOrganization,
 			},
 		});
@@ -219,7 +226,7 @@ function RouteComponent() {
 			void queryClient.invalidateQueries({ queryKey: memberOnboardingQueryScope() });
 		},
 		onError: () => {
-			toast.error("Couldn’t save your AI choice. Please try again.");
+			toast.error("We could not save your AI choice. Try again.");
 		},
 	});
 
@@ -237,10 +244,10 @@ function RouteComponent() {
 			void queryClient.invalidateQueries({ queryKey: listLinkedIdentitiesQueryKey({}) });
 			// The primary identity (avatar, username) the app shows may have been the one removed.
 			void queryClient.invalidateQueries({ queryKey: getCurrentUserQueryKey() });
-			toast.success("Account disconnected.");
+			toast.success("Account disconnected");
 		},
 		onError: (error: DefaultError) => {
-			toast.error(problemDetailOf(error, "Couldn't disconnect that account. Please try again."));
+			toast.error(problemDetailOf(error, "We could not disconnect that account. Try again."));
 		},
 	});
 
@@ -271,7 +278,7 @@ function RouteComponent() {
 			);
 		},
 		onError: (error: DefaultError) => {
-			toast.error(problemDetailOf(error, "Couldn't update Slack preferences. Please try again."));
+			toast.error(problemDetailOf(error, "We could not update your Slack preferences. Try again."));
 		},
 	});
 
@@ -347,10 +354,10 @@ function RouteComponent() {
 		...revokeSessionMutation(),
 		onSuccess: () => {
 			void invalidateSessions();
-			toast.success("Session revoked");
+			toast.success("Signed out of that session");
 		},
 		onError: () => {
-			toast.error("Failed to revoke session. Please try again later.");
+			toast.error("We could not sign out that session. Try again.");
 		},
 	});
 	const revokeOtherSessions = useMutation({
@@ -360,7 +367,7 @@ function RouteComponent() {
 			toast.success("Signed out of all other sessions");
 		},
 		onError: () => {
-			toast.error("Failed to sign out other sessions. Please try again later.");
+			toast.error("We could not sign out your other sessions. Try again.");
 		},
 	});
 	let sessionsState: SessionsSectionProps["state"] = { status: "loading" };
@@ -396,7 +403,7 @@ function RouteComponent() {
 				onTogglePracticeFeedback: handlePracticeFeedbackToggle,
 				isLoading: updateSettingsMutation.isPending,
 			}}
-			// No configured organisation means no study on this deployment, and a switch for a study
+			// No configured organisation means no research on this deployment, and a switch for it
 			// nobody runs is a promise the instance cannot keep.
 			// Setup owns the question until it is answered for the organisation currently named; a switch
 			// before that would stand in for a consent this account has not given. A failed read still

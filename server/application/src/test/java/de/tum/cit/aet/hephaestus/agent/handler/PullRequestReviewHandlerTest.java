@@ -19,17 +19,20 @@ import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewCoalescedException;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewRepositoryPreparer;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewRepositoryPreparer.PreparedReview;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewOutputService.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.AnsweredPractice;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
@@ -104,6 +107,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     @Mock
     private ObservationRepository observationRepository;
 
+    @Mock
+    private AnsweredPractices answeredPractices;
+
     private static final Long WORKSPACE_ID = 99L;
 
     private ReviewResultParser resultParser;
@@ -127,7 +133,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                         PreparedJobInputsFixtures.freezer(),
                         mock(
                                 PracticeRevisionService.class,
-                                invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision())),
+                                invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision()),
+                        answeredPractices),
                 resultParser,
                 new FeedbackCompositionResultParser(),
                 deliveryService,
@@ -138,8 +145,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                         mock(FeedbackLedgerRecorder.class)),
                 InContextDeliveryGateFixtures.gate(
                         practiceRepository, mock(ObservationRepository.class), mock(FeedbackLedgerRecorder.class)),
-                observationRepository,
-                InContextDeliveryGateFixtures.noRecurrence());
+                observationRepository);
     }
 
     @Test
@@ -480,6 +486,55 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             assertThat(files).containsKey("inputs/practices/pr-description-quality.md");
             assertThat(files).containsKey("inputs/practices/error-handling.md");
             assertThat(files).containsKey("work/analysis/practices/.gitkeep");
+        }
+
+        private static final UUID EARLIER_REVIEW = UUID.fromString("22222222-2222-2222-2222-222222222222");
+
+        /** A practice a completed review already answered on the same code is left out of what the model is asked. */
+        @Test
+        void shouldStageOnlyThePracticesNoCompletedReviewAnswered() {
+            stubDefaults();
+            AgentJob job = jobWithMetadata(sampleJobMetadata());
+            var answered = new AnsweredPractice("error-handling", 7L, EARLIER_REVIEW);
+            when(answeredPractices.answered(eq(job), any(), any(), any())).thenReturn(List.of(answered));
+
+            PreparedJobInputs inputs = handler.prepareInputs(job);
+            Map<String, byte[]> files = PreparedJobInputsFixtures.files(inputs);
+
+            assertThat(objectMapper
+                            .readTree(files.get(SandboxLayout.PRACTICES_PREFIX + "index.json"))
+                            .valueStream()
+                            .map(entry -> entry.path("slug").asString())
+                            .toList())
+                    .containsExactly("pr-description-quality");
+            assertThat(files)
+                    .containsKey(SandboxLayout.PRACTICES_PREFIX + "pr-description-quality.md")
+                    .doesNotContainKey(SandboxLayout.PRACTICES_PREFIX + "error-handling.md");
+            assertThat(inputs.answeredPractices()).containsExactly(answered);
+            assertThat(Objects.requireNonNull(inputs.automatedReviewReadinessReport())
+                            .decisions())
+                    .allSatisfy(decision -> assertThat(decision.ready()).isTrue());
+        }
+
+        /** Nothing left to ask is not missing evidence: preparation ends with the answers and the captured evidence. */
+        @Test
+        void shouldEndAsCoalescedWhenACompletedReviewAnsweredEveryReadyPractice() {
+            stubDefaults();
+            AgentJob job = jobWithMetadata(sampleJobMetadata());
+            var answered = List.of(
+                    new AnsweredPractice("error-handling", 7L, EARLIER_REVIEW),
+                    new AnsweredPractice("pr-description-quality", 8L, EARLIER_REVIEW));
+            when(answeredPractices.answered(eq(job), any(), any(), any())).thenReturn(answered);
+
+            assertThatThrownBy(() -> handler.prepareInputs(job))
+                    .isInstanceOfSatisfying(ReviewCoalescedException.class, coalesced -> {
+                        try (PreparedJobInputs inputs = coalesced.preparedInputs()) {
+                            assertThat(inputs.answeredPractices()).containsExactlyElementsOf(answered);
+                            assertThat(inputs.automatedReviewReadinessReport()).isNotNull();
+                            assertThat(PreparedJobInputsFixtures.files(inputs))
+                                    .doesNotContainKey(SandboxLayout.PRACTICES_PREFIX + "index.json");
+                        }
+                    });
         }
 
         @Test

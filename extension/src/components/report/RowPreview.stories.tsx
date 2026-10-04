@@ -86,13 +86,13 @@ export const OneHeightInEveryState: Story = {
 	render: (args) => {
 		const states: Partial<RowPreviewProps>[] = [
 			{ state: { status: "loading" } },
-			{ state: { status: "failed", message: "Hephaestus could not be reached." } },
+			{ state: { status: "failed", message: "We could not reach Hephaestus." } },
 			{ state: { status: "signed-out", instanceHost: "heph.example.test" } },
 			{ state: { status: "not-found", instanceHost: "heph.example.test", workLabel: "#1" } },
 			{ feedback: { status: "ready", data: NO_FEEDBACK } },
-			{ feedback: { status: "error", message: "Could not load." } },
+			{ feedback: { status: "error", message: "We could not load." } },
 			{ activity: "pending" },
-			{ stale: { message: "Hephaestus could not be reached." } },
+			{ stale: { message: "We could not reach Hephaestus." } },
 			{},
 		];
 		return (
@@ -121,13 +121,15 @@ export const OneHeightInEveryState: Story = {
 export const NotRefreshed: Story = {
 	args: {
 		activity: "pending",
-		stale: { message: "Hephaestus could not be reached." },
+		stale: { message: "We could not reach Hephaestus." },
 	},
 	play: async ({ canvas, args }) => {
 		await expect(canvas.getByRole("status")).toHaveTextContent(
-			/^Practice review: Not refreshed: Hephaestus could not be reached\. Last answer: · Review decision pending/u,
+			/^Practice review: Not refreshed: We could not reach Hephaestus\. Last answer: · Review decision pending/u,
 		);
-		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Retry refreshing the practice review" }),
+		);
 		await expect(args.onRetry).toHaveBeenCalledOnce();
 	},
 };
@@ -147,18 +149,25 @@ export const Loading: Story = { args: { state: { status: "loading" }, feedback: 
 export const CommentsLoading: Story = { args: { feedback: { status: "loading" } } };
 
 export const LoadFailed: Story = {
-	args: { state: { status: "failed", message: "Hephaestus could not be reached." } },
+	args: { state: { status: "failed", message: "We could not reach Hephaestus." } },
 	play: async ({ canvas, args }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Retry loading the practice review" }),
+		);
 		await expect(args.onRetry).toHaveBeenCalledOnce();
 	},
 };
 
 export const CommentsFailed: Story = {
-	args: { feedback: { status: "error", message: "Hephaestus ran into a problem." } },
+	args: {
+		feedback: {
+			status: "error",
+			message: "We could not get an answer from Hephaestus. Try again in a moment.",
+		},
+	},
 	play: async ({ canvas, args }) => {
-		await expect(canvas.getByRole("status")).toHaveTextContent(/Your feedback could not load/u);
-		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+		await expect(canvas.getByRole("status")).toHaveTextContent(/We could not load your comments/u);
+		await userEvent.click(canvas.getByRole("button", { name: "Retry loading comments" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();
 	},
 };

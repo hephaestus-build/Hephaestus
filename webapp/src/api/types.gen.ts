@@ -199,7 +199,7 @@ export type AdminWorkspaceLlmUsage = {
    */
   events: number;
   /**
-   * Whether shared-model spend is within the instance cap, has reached it, or can't be confirmed because some shared-model usage has no price set.
+   * Whether shared-model spend is within the instance cap, has reached it, or cannot be confirmed because some shared-model usage has no price set.
    */
   instanceBudgetVerdict: 'WITHIN' | 'EXHAUSTED' | 'UNVERIFIABLE';
   /**
@@ -304,6 +304,10 @@ export type AgentBindingRequest = {
  */
 export type AgentJob = {
   /**
+   * Ready practices this review did not ask because a completed review had already answered them on the same code; available on review detail after evidence capture. Empty when every ready practice was asked.
+   */
+  answeredPractices?: Array<AnsweredPractice>;
+  /**
    * When this job becomes eligible to be claimed. In the future while the job is waiting — on a retry backoff, or on a hold. Read together with holdReason: a QUEUED job with availableAt in the future is waiting, not starved for workers.
    */
   availableAt: Date;
@@ -400,9 +404,9 @@ export type AgentJob = {
    */
   retryCount: number;
   /**
-   * Why a COMPLETED run produced the observations it did. INSUFFICIENT_EVIDENCE means no model ran because required evidence was missing, unreadable, stale, or unauthorized — so no observations means nothing was assessed, not that nothing was wrong. REVIEWED means the model ran against sufficient evidence.
+   * Why a COMPLETED run produced the observations it did. INSUFFICIENT_EVIDENCE means no model ran because required evidence was missing, unreadable, stale, or unauthorized — so no observations means nothing was assessed, not that nothing was wrong. COALESCED means no model ran because a completed review had already answered every ready practice on exactly the same code — its answers are listed in answeredPractices, and this run assessed nothing anew. REVIEWED means the model ran against sufficient evidence.
    */
-  reviewOutcome: 'REVIEWED' | 'INSUFFICIENT_EVIDENCE';
+  reviewOutcome: 'REVIEWED' | 'INSUFFICIENT_EVIDENCE' | 'COALESCED';
   /**
    * Timestamp when the job started running
    */
@@ -425,6 +429,24 @@ export type Answer = {
   questionId: string;
   rating?: number;
   text?: string;
+};
+
+/**
+ * A ready practice this review did not ask, because a completed review had already answered it on exactly the same code. Its observation belongs to that review; this review recorded none for it.
+ */
+export type AnsweredPractice = {
+  /**
+   * The practice left out
+   */
+  practiceSlug: string;
+  /**
+   * The completed review whose observation answers it
+   */
+  reviewId: string;
+  /**
+   * The practice revision the earlier answer was made under
+   */
+  revisionId: number;
 };
 
 /**
@@ -966,7 +988,7 @@ export type ConsentStatus = {
   noticeVersion: string;
   participateInResearch: boolean;
   /**
-   * Organisation running the optional research programme, or null when this instance runs none
+   * Organization that runs the optional research program, or null when this instance runs none
    */
   researchOrganization?: string;
 };
@@ -1945,11 +1967,11 @@ export type FeedbackWorkspaceRef = {
 export type FirstLoginConsent = {
   noticeVersion: string;
   /**
-   * Required when the instance names a research organisation, omitted otherwise
+   * Required when the instance names a research organization, omitted otherwise
    */
   participateInResearch?: boolean;
   /**
-   * The organisation the research question named on screen; omitted when it asked none
+   * The organization the research question named on screen; omitted when it asked none
    */
   researchOrganization?: string;
   termsAccepted: boolean;
@@ -4520,7 +4542,7 @@ export type ResearchConsent = {
   granted: boolean;
   noticeVersion: string;
   /**
-   * The organisation this control named on screen
+   * The organization this control named on screen
    */
   researchOrganization?: string;
 };
@@ -6318,7 +6340,7 @@ export type UpdateWorkspaceFeaturesRequest = {
    */
   practiceReviewAutoTriggerEnabled?: boolean;
   /**
-   * Enable manual practice reviews triggered via bot command
+   * Enable manual practice reviews triggered through a bot command
    */
   practiceReviewManualTriggerEnabled?: boolean;
   /**
@@ -6648,7 +6670,7 @@ export type Workspace = {
    */
   practiceReviewAutoTriggerEnabled: boolean;
   /**
-   * Whether manual practice reviews triggered via bot command are enabled
+   * Whether manual practice reviews triggered through a bot command are enabled
    */
   practiceReviewManualTriggerEnabled: boolean;
   /**
@@ -6927,7 +6949,7 @@ export type WorkspaceLlmUsageReport = {
    */
   fx?: FxRateInfo;
   /**
-   * Whether host-funded (shared-model) spend is within its cap, has reached it, or can't be confirmed because some shared-model usage has no price set.
+   * Whether host-funded (shared-model) spend is within its cap, has reached it, or cannot be confirmed because some shared-model usage has no price set.
    */
   instanceBudgetVerdict: 'WITHIN' | 'EXHAUSTED' | 'UNVERIFIABLE';
   /**
@@ -8778,11 +8800,11 @@ export type LogoutClientSessionErrors = {
    */
   400: ProblemDetail;
   /**
-   * The request carries the browser session cookie without a valid CSRF token; refused before the endpoint runs
+   * The request carries the browser session cookie without a valid CSRF token. The server refuses it before the endpoint runs.
    */
   403: unknown;
   /**
-   * Too many installed-client requests from this address; retry after the Retry-After seconds
+   * This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again.
    */
   429: ProblemDetail;
 };
@@ -8811,15 +8833,15 @@ export type RefreshClientSessionErrors = {
    */
   400: ProblemDetail;
   /**
-   * The session has ended; sign in again
+   * The session has ended. Sign in again.
    */
   401: ProblemDetail;
   /**
-   * The request carries the browser session cookie without a valid CSRF token; refused before the endpoint runs
+   * The request carries the browser session cookie without a valid CSRF token. The server refuses it before the endpoint runs.
    */
   403: unknown;
   /**
-   * Too many installed-client requests from this address; retry after the Retry-After seconds
+   * This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again.
    */
   429: ProblemDetail;
 };
@@ -8848,11 +8870,11 @@ export type ExchangeClientSignInErrors = {
    */
   400: ProblemDetail;
   /**
-   * The request carries the browser session cookie without a valid CSRF token; refused before the endpoint runs
+   * The request carries the browser session cookie without a valid CSRF token. The server refuses it before the endpoint runs.
    */
   403: unknown;
   /**
-   * Too many installed-client requests from this address; retry after the Retry-After seconds
+   * This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again.
    */
   429: ProblemDetail;
 };
@@ -11231,7 +11253,7 @@ export type ListOutlineCollectionCandidatesErrors = {
    */
   502: unknown;
   /**
-   * Outline is rate-limiting requests; the Retry-After header carries the seconds to wait before retrying
+   * Outline limited the request rate. The Retry-After header carries the seconds to wait before retrying.
    */
   503: unknown;
 };
@@ -12038,7 +12060,7 @@ export type PreflightBackfillRunErrors = {
    */
   400: ProblemDetail;
   /**
-   * A campaign is already under way for this workspace
+   * A backfill is already active for this workspace
    */
   409: ProblemDetail;
 };

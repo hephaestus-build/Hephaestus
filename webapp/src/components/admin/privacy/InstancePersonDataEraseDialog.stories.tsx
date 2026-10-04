@@ -45,7 +45,7 @@ export const ProviderCopiesRequireConfirmation: Story = {
 	args: { externalDeliveryCount: 2 },
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("alertdialog"));
-		const removed = dialog.getByRole("checkbox", { name: /removed the 2 feedback copies/iu });
+		const removed = dialog.getByRole("checkbox", { name: /removed the 2 pieces of feedback/iu });
 		await userEvent.type(dialog.getByLabelText(/to confirm/iu), "ERASE");
 		await userEvent.click(dialog.getByRole("button", { name: "Erase data" }));
 		await expect(args.onConfirm).not.toHaveBeenCalled();

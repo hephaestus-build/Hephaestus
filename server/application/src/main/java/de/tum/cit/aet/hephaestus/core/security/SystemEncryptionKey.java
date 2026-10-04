@@ -25,7 +25,7 @@ public final class SystemEncryptionKey {
         if (encryptionKey == null || encryptionKey.isBlank()) {
             if (environment.matchesProfiles("prod")) {
                 throw new IllegalStateException(
-                        "Encryption key is required in production! Set hephaestus.security.encryption-key");
+                        "An encryption key is required in production. Set hephaestus.security.encryption-key.");
             }
             if (environment.matchesProfiles("specs", "cds-training")) {
                 log.debug("System encryption is unavailable during artifact generation: reason=missing_key");

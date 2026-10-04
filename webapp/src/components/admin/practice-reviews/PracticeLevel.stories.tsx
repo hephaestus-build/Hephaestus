@@ -102,7 +102,7 @@ export const Default: Story = {
 			{ name: "1 of 33 marked incorrect" },
 		);
 		panel.getByText(
-			"Only observations an admin found wrong are marked; an unmarked one is not confirmed correct.",
+			"Only observations an admin found wrong are marked. An unmarked one is not confirmed correct.",
 		);
 		// Feedback opens the feedback citing this practice, by family.
 		const cited = within(panel.getByRole("list", { name: "Feedback by delivery" }));
@@ -234,13 +234,13 @@ export const CountsFailed: Story = {
 	args: {
 		counts: {
 			status: "error",
-			error: { status: 500, detail: "Something went wrong." },
+			error: { status: 500 },
 			onRetry: fn(),
 		},
 	},
 	play: async ({ args, userEvent }) => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Couldn't load this practice's counts")).toBeVisible();
+		await expect(panel.getByText("We could not load the counts for this practice")).toBeVisible();
 		panel.getByRole("list", { name: "Observations" });
 		await userEvent.click(panel.getByRole("button", { name: "Retry" }));
 		if (args.counts.status !== "error") {
@@ -260,7 +260,7 @@ export const ObservationsFailed: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Couldn't load observations")).toBeVisible();
+		await expect(panel.getByText("We could not load observations")).toBeVisible();
 		panel.getByRole("list", { name: "Observations by outcome" });
 	},
 };

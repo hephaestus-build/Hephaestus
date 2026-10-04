@@ -268,7 +268,7 @@ public class Connection {
                     && !ScmOrigin.of(previous.orElseThrow().serverUrl())
                             .equals(ScmOrigin.of(next.orElseThrow().serverUrl())))
                 throw new IllegalStateException(
-                        "A bound connection cannot change provider instance; create a new connection");
+                        "A bound connection cannot change its provider instance. Create a new connection.");
         }
         this.config = config;
     }

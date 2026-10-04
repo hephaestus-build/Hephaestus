@@ -36,9 +36,9 @@ export function SetBudgetDialog({
 			description={
 				workspace === null ? null : (
 					<>
-						What <strong>{workspace.displayName}</strong> ({workspace.workspaceSlug}) can spend on
-						shared models each month. When the budget is reached, shared-model work pauses until the
-						month resets; the workspace’s own provider is not affected. $0 pauses now.
+						The most <strong>{workspace.displayName}</strong> ({workspace.workspaceSlug}) can spend
+						on shared models each month. When the budget is reached, shared-model work pauses until
+						the month resets. The workspace’s own provider is not affected. Enter $0 to pause now.
 					</>
 				)
 			}

@@ -89,7 +89,9 @@ function rateLimitReading(rateLimit: RateLimitSnapshot, now: number): ReactNode 
 	const throttledUntil = asDate(rateLimit.throttledUntil);
 	if (throttledUntil && throttledUntil.getTime() > now) {
 		return (
-			<span className="text-warning">Throttled · retry {relativeTime(throttledUntil, now)}</span>
+			<span className="text-warning">
+				Throttled · try again {relativeTime(throttledUntil, now)}
+			</span>
 		);
 	}
 
@@ -276,8 +278,8 @@ export function SyncStatusHeader({
 					error={error.cause}
 					title={
 						error.failedQuery === "connection"
-							? `We couldn't load the ${label} connection`
-							: `We couldn't load ${label} sync status`
+							? `We could not load the ${label} connection`
+							: `We could not load ${label} sync status`
 					}
 					onRetry={onRetry}
 				/>
@@ -394,7 +396,7 @@ export function SyncStatusHeader({
 								disabled={isCancelling || activeJob.cancelRequested}
 								onClick={onCancel}
 							>
-								{activeJob.cancelRequested ? "Stopping after current step…" : "Cancel"}
+								{activeJob.cancelRequested ? "Stopping after current step…" : "Cancel sync"}
 							</Button>
 						)}
 					</ButtonGroup>

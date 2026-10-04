@@ -477,7 +477,7 @@ function LastSyncedCell({
 					{divergent && (
 						<TriangleAlertIcon
 							className="size-3.5 text-warning"
-							aria-label="A tracked class is further behind than this reading"
+							aria-label="Some item types last synced longer ago than this"
 						/>
 					)}
 				</HoverCardTrigger>
@@ -497,8 +497,8 @@ function LastSyncedCell({
 					)}
 					{untracked.length > 0 && (
 						<p className="text-xs text-muted-foreground">
-							No separate watermark is kept for {andList.format(untracked)} — they are written by
-							the same sync pass.
+							No separate watermark is kept for {andList.format(untracked)}. The same sync pass
+							writes them.
 						</p>
 					)}
 				</HoverCardContent>
@@ -630,7 +630,7 @@ function TotalsFooter({
 										<span className="tabular-nums">0</span>
 									</TooltipTrigger>
 									<TooltipContent>
-										No {column.label.toLowerCase()} mirrored in any {resourceNoun} — the{" "}
+										No {column.label.toLowerCase()} are mirrored in any {resourceNoun}. The{" "}
 										{column.label.toLowerCase()} pipeline may not be running.
 									</TooltipContent>
 								</Tooltip>
@@ -701,7 +701,7 @@ export function SyncResourcesTable({
 		return (
 			<QueryErrorAlert
 				error={error}
-				title={`We couldn't load the ${resourceNoun} sync state`}
+				title={`We could not load the ${resourceNoun} sync state`}
 				onRetry={onRetry}
 			/>
 		);
@@ -729,7 +729,7 @@ export function SyncResourcesTable({
 					</EmptyMedia>
 					<EmptyTitle>No {resourceNounPlural} synced yet</EmptyTitle>
 					<EmptyDescription>
-						Synced {resourceNounPlural} and their per-class counts appear here once a sync job runs.
+						Synced {resourceNounPlural} and their item counts appear here once a sync job runs.
 					</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
@@ -813,7 +813,7 @@ export function SyncResourcesTable({
 						aria-label={`Filter ${resourceNounPlural} by status`}
 					>
 						<ToggleGroupItem value="all">All</ToggleGroupItem>
-						<ToggleGroupItem value="attention">Attention ({attentionCount})</ToggleGroupItem>
+						<ToggleGroupItem value="attention">Needs attention ({attentionCount})</ToggleGroupItem>
 						<ToggleGroupItem value="fresh">Fresh ({freshCount})</ToggleGroupItem>
 					</ToggleGroup>
 				)}
@@ -827,11 +827,13 @@ export function SyncResourcesTable({
 				>
 					{normalizedQuery ? (
 						<>
-							{visible.length} of {resources.length} {resourceNounPlural}
+							{visible.length} of {resources.length}{" "}
+							{resources.length === 1 ? resourceNoun : resourceNounPlural}
 						</>
 					) : (
 						<>
-							{resources.length} {resourceNounPlural} · {totalItems.toLocaleString()} items
+							{resources.length} {resources.length === 1 ? resourceNoun : resourceNounPlural} ·{" "}
+							{totalItems.toLocaleString()} {totalItems === 1 ? "item" : "items"}
 						</>
 					)}
 				</p>
@@ -858,7 +860,7 @@ export function SyncResourcesTable({
 									<>No {resourceNounPlural} match the current filter.</>
 								)}{" "}
 								<Button variant="ghost" size="sm" onClick={clearFilters}>
-									Clear filter
+									Clear filters
 								</Button>
 							</TableCell>
 						</TableRow>

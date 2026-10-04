@@ -56,7 +56,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private static final String GENERIC_CONFLICT = "This Slack workspace is already connected to another Hephaestus"
-            + " workspace. An administrator of that workspace must disconnect Slack there first.";
+            + " workspace. A workspace admin there must disconnect Slack first.";
 
     @Autowired
     private WebTestClient webTestClient;
@@ -151,7 +151,7 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
                         "description",
                         "This Slack workspace is already connected to the Hephaestus workspace \"Staging\" ("
                                 + source.getWorkspaceSlug()
-                                + "). Disconnect Slack there before connecting it here.");
+                                + "). Disconnect Slack there before you connect it here.");
         assertThat(connectionRepository.findActive(target.getId(), IntegrationKind.SLACK))
                 .isEmpty();
     }

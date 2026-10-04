@@ -112,7 +112,7 @@ describe("LoginProviderFormDialog", () => {
 		});
 	});
 
-	it("tells the admin Outline is link-only and which redirect URI to register in Outline", () => {
+	it("tells the admin Outline is connect-only and which redirect URI to register in Outline", () => {
 		render(
 			<LoginProviderFormDialog
 				open

@@ -23,8 +23,8 @@ describe("problemDetailOf", () => {
 	});
 
 	it("falls back to the legacy `{ error }` shape when title/detail are absent", () => {
-		expect(problemDetailOf({ error: "Could not validate", message: "msg" })).toBe(
-			"Could not validate",
+		expect(problemDetailOf({ error: "We could not validate", message: "msg" })).toBe(
+			"We could not validate",
 		);
 	});
 
@@ -36,14 +36,14 @@ describe("problemDetailOf", () => {
 		expect(
 			problemDetailOf(
 				new TypeError("Cannot read properties of undefined (reading 'id')"),
-				"Could not save the model",
+				"We could not save the model",
 			),
-		).toBe("Could not save the model");
-		expect(problemDetailOf(new TypeError("Failed to fetch"), "Could not save the model")).toBe(
-			"Could not save the model",
+		).toBe("We could not save the model");
+		expect(problemDetailOf(new TypeError("Failed to fetch"), "We could not save the model")).toBe(
+			"We could not save the model",
 		);
 		expect(problemDetailOf({ message: "boom" })).toBe(
-			"An unexpected error occurred. Please try again.",
+			"We could not finish that. Try again. If it keeps failing, contact your instance operator.",
 		);
 	});
 
@@ -58,12 +58,18 @@ describe("problemDetailOf", () => {
 	});
 
 	it("falls back to a generic message for unhandled shapes", () => {
-		expect(problemDetailOf(null)).toBe("An unexpected error occurred. Please try again.");
-		expect(problemDetailOf(undefined)).toBe("An unexpected error occurred. Please try again.");
-		expect(problemDetailOf({ status: 500 })).toBe(
-			"An unexpected error occurred. Please try again.",
+		expect(problemDetailOf(null)).toBe(
+			"We could not finish that. Try again. If it keeps failing, contact your instance operator.",
 		);
-		expect(problemDetailOf(42)).toBe("An unexpected error occurred. Please try again.");
+		expect(problemDetailOf(undefined)).toBe(
+			"We could not finish that. Try again. If it keeps failing, contact your instance operator.",
+		);
+		expect(problemDetailOf({ status: 500 })).toBe(
+			"We could not finish that. Try again. If it keeps failing, contact your instance operator.",
+		);
+		expect(problemDetailOf(42)).toBe(
+			"We could not finish that. Try again. If it keeps failing, contact your instance operator.",
+		);
 	});
 });
 

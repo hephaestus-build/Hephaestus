@@ -54,7 +54,8 @@ public record PracticeDefinition(
         var sources = new HashSet<String>();
         for (PracticeEvidenceRequirement requirement : evidenceRequirements) {
             if (!sources.add(requirement.sourceKind().value())) {
-                throw new IllegalArgumentException("An evidence source is listed twice. List each source once.");
+                throw new IllegalArgumentException(
+                        "The practice lists an evidence source twice. List each source once.");
             }
         }
         subject = subject == null ? ActorRole.AUTHOR : subject;
@@ -64,10 +65,10 @@ public record PracticeDefinition(
         boolean automatedReviewDisabled =
                 automatedReviewPolicy.automatedReview().mode() == PracticeAutomatedReviewMode.NONE;
         if (automatedReviewDisabled && !evidenceRequirements.isEmpty()) {
-            throw new IllegalArgumentException("A practice without automated review cannot declare evidence");
+            throw new IllegalArgumentException("A practice without automated review cannot declare evidence.");
         }
         if (!automatedReviewDisabled && evidenceRequirements.stream().noneMatch(PracticeEvidenceRequirement::refuses)) {
-            throw new IllegalArgumentException("Automated review requires at least one required evidence source");
+            throw new IllegalArgumentException("Automated review needs at least one required evidence source.");
         }
         precomputeScript = blankToNull(precomputeScript);
         whyItMatters = blankToNull(whyItMatters);
@@ -212,7 +213,7 @@ public record PracticeDefinition(
             throw new IllegalArgumentException("Choose at least one moment that starts a review.");
         }
         if (new HashSet<>(sorted).size() != sorted.size()) {
-            throw new IllegalArgumentException("The same moment is chosen twice. Choose each moment once.");
+            throw new IllegalArgumentException("You chose the same moment twice. Choose each moment once.");
         }
         ArtifactKind kind = sorted.getFirst().artifactKind();
         if (sorted.stream().anyMatch(signal -> !kind.equals(signal.artifactKind()))) {

@@ -602,7 +602,7 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 		observations: [
 			{
 				id: "bbbbbbbb-2222-2222-2222-222222222222",
-				summary: "Invoice numbering leaks the ledger's table name into the public API",
+				summary: "Invoice numbering leaks the ledger’s table name into the public API",
 				evidenceRationale:
 					"The response field is called ledgerSeqNo, which is the column the number is stored in. Callers outside billing have to learn the storage layout to read an invoice, and the day the ledger is replaced the field is either wrong or frozen.",
 				practiceSlug: "product-language",
@@ -1421,7 +1421,7 @@ export const mockJobTimedOut: AgentJob = {
 	createdAt: new Date("2026-05-20T08:00:00Z"),
 	availableAt: new Date("2026-05-20T08:03:00Z"),
 	completedAt: new Date("2026-05-20T08:20:00Z"),
-	errorMessage: "Agent exceeded the 1200s timeout and was terminated.",
+	errorMessage: "Agent exceeded the 1200s timeout and was stopped.",
 	llmModel: "gpt-oss-120b",
 	retryCount: 1,
 	exitCode: 124,

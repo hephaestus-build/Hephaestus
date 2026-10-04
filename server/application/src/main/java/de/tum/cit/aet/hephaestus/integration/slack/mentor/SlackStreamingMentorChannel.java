@@ -139,7 +139,7 @@ public class SlackStreamingMentorChannel implements MentorChannel {
     public void startKeepAlive() {
         // Liveness while the sandbox warms up. Best-effort (assistant threads only); superseded by the first stream
         // write.
-        slack.setStatus(workspaceId, channel, threadTs, "Thinking...");
+        slack.setStatus(workspaceId, channel, threadTs, "Thinking…");
         ensureFlushing();
     }
 
@@ -159,7 +159,7 @@ public class SlackStreamingMentorChannel implements MentorChannel {
             append("\n\n⚠️ " + safeError(error.errorText()));
             ensureFlushing();
         } else if (chunk instanceof UIMessageChunk.ToolInputStart) {
-            slack.setStatus(workspaceId, channel, threadTs, "Reviewing your practice history...");
+            slack.setStatus(workspaceId, channel, threadTs, "Reviewing your practice history…");
         }
         // Start/Reasoning/tool-output/Finish chunks are not part of the visible Slack stream; the orchestrator
         // drives terminals through completeWith*.
@@ -182,7 +182,7 @@ public class SlackStreamingMentorChannel implements MentorChannel {
             return;
         }
         stopFlusher();
-        slack.setStatus(workspaceId, channel, threadTs, "Still working on the previous message...");
+        slack.setStatus(workspaceId, channel, threadTs, "Still working on the previous message…");
     }
 
     @Override
@@ -392,7 +392,7 @@ public class SlackStreamingMentorChannel implements MentorChannel {
         // A turn that finishes before the first flush tick (or leaves a tail) writes here. No further tick will
         // run, so retry the terminal write inline rather than dropping it on a transient blip.
         boolean unopened = streamTs.get() == null;
-        String body = (unopened && remainder.isBlank()) ? "_(the mentor produced no response)_" : remainder;
+        String body = (unopened && remainder.isBlank()) ? "_(Heph gave no response.)_" : remainder;
         boolean written = (body.isBlank() && !unopened) || terminalWrite(body);
         try {
             String ts = streamTs.get();
@@ -493,6 +493,6 @@ public class SlackStreamingMentorChannel implements MentorChannel {
     }
 
     private static String safeError(String text) {
-        return (text == null || text.isBlank()) ? "The mentor hit an error." : text;
+        return (text == null || text.isBlank()) ? "Heph could not finish this reply. Try again." : text;
     }
 }

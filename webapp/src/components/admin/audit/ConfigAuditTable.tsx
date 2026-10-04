@@ -76,12 +76,15 @@ export function ConfigAuditTable({
 					<EmptyMedia variant="icon">
 						<History />
 					</EmptyMedia>
-					<EmptyTitle>Couldn&rsquo;t load the audit log</EmptyTitle>
+					<EmptyTitle>We could not load the audit log</EmptyTitle>
+					<EmptyDescription>
+						Try again in a moment. If it keeps failing, reload the page.
+					</EmptyDescription>
 				</EmptyHeader>
 				{onRetry && (
 					<EmptyContent>
 						<Button variant="outline" size="sm" onClick={onRetry}>
-							Try again
+							Retry
 						</Button>
 					</EmptyContent>
 				)}
@@ -109,7 +112,7 @@ export function ConfigAuditTable({
 				{hasFilter && onResetFilters && (
 					<EmptyContent>
 						<Button variant="outline" onClick={onResetFilters}>
-							Reset filters
+							Clear filters
 						</Button>
 					</EmptyContent>
 				)}
@@ -187,13 +190,13 @@ export function ConfigAuditTable({
 											type="button"
 											variant="ghost"
 											size="sm"
-											aria-label={`View details: ${actionLabel(entry.action)} ${subject.label}`}
+											aria-label={`View details for ${subject.label}, ${actionLabel(entry.action).toLowerCase()}`}
 											onClick={() => {
 												setDetail(entry);
 												setDetailOpen(true);
 											}}
 										>
-											Details
+											View details
 										</Button>
 									</TableCell>
 								</TableRow>

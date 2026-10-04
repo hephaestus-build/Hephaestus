@@ -32,7 +32,7 @@ function AdminSettings() {
 			<div className="max-w-4xl">
 				<QueryErrorAlert
 					error={featureState.error}
-					title="Couldn't load workspace settings"
+					title="We could not load workspace settings"
 					onRetry={featureState.refetch}
 				/>
 			</div>

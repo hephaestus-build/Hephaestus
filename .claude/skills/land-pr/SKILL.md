@@ -32,10 +32,13 @@ Nothing staged or modified means nothing to land.
 
 ## 2. Know which CI legs your diff triggers
 
-`detect-changes` in `.github/workflows/cicd.yml` holds the path filters; read it rather than
-guessing. Two shapes surprise people: `docs/**`, `scripts/**` and the root lint, format and
-tsconfig files select the `Tooling and Docs` leg, not the App Server leg; and `package.json` or
-`pnpm-lock.yaml` select every source leg.
+`detect-changes` in `.github/workflows/cicd.yml` holds the path filters.
+Read it instead of guessing.
+Two path groups need attention:
+
+- `docs/**`, `scripts/**`, and the root lint, format, and tsconfig files select the `Tooling and Docs` leg.
+  They do not select the App Server leg.
+- `package.json` or `pnpm-lock.yaml` select every source leg.
 
 ## 3. Format, then check
 
@@ -45,7 +48,7 @@ vp run check
 ```
 
 `check` is the complete local quality gate: every gate in the `quality` group in `vite.config.ts`,
-and every one also runs in CI. CI additionally runs service tests, builds, images,
+and every one also runs in CI. CI also runs service tests, builds, images,
 security checks, and workflow-specific gates. Formatting must never be the reason a remote build
 fails.
 
@@ -61,8 +64,9 @@ vp run db:generate-erd-docs  # after pruning a changelog
 ```
 
 `generate:api:specs` packages the server and boots the executable JAR on ports
-it allocates itself, so nothing needs freeing; root `AGENTS.md` § Command caveats covers the
-`HEPHAESTUS_APPLICATION_JAR` shortcut for a JAR you already built.
+it allocates itself.
+Thus, no ports need to be freed.
+Root `AGENTS.md` § Command caveats covers the `HEPHAESTUS_APPLICATION_JAR` shortcut for a JAR you already built.
 
 ## 5. Run the tests your diff can break
 
@@ -73,7 +77,9 @@ vp run test:server:unit
 
 ## 6. Re-run format + check
 
-Regeneration produces unformatted output. Run step 3 again; both must be green on the final tree.
+Regeneration produces unformatted output.
+Run step 3 again.
+Both commands must pass on the final tree.
 
 ## 7. Changeset
 
@@ -85,10 +91,15 @@ vp exec changeset          # user-facing: pick the bump, write the summary in th
 vp exec changeset --empty  # no user-facing effect; say why in the body
 ```
 
-`vp exec changeset` is interactive — with no TTY, hand-write `.changeset/<slug>.md`. The rules — voice,
-bump, pre-1.0 `minor` with `**Operators:**` and a `.migration/<slug>.md` fragment, never
-`MIGRATION.md` — are in `.changeset/README.md`. Touching `db/changelog/` without touching
-`.changeset/` is always wrong.
+`vp exec changeset` is interactive.
+With no TTY, hand-write `.changeset/<slug>.md`.
+`.changeset/README.md` owns the rules:
+
+- The voice and version bump.
+- Pre-1.0 `minor` with `**Operators:**` and a `.migration/<slug>.md` fragment.
+- Never change `MIGRATION.md`.
+
+Changing `db/changelog/` without changing `.changeset/` is always wrong.
 
 ## 8. Branch, commit, push
 
@@ -101,8 +112,9 @@ git push -u origin HEAD
 ```
 
 Types and scopes are enumerated in `commitlint.config.ts`, which is what validates the PR title —
-read it there rather than from a copy. No `!` in the title; pre-1.0 breaking changes are carried by
-the changeset, not the header.
+read it there instead of in a copy.
+Do not put `!` in the title.
+The changeset, not the header, carries pre-1.0 breaking changes.
 
 ## 9. Open the PR
 
@@ -141,7 +153,7 @@ BODY
 
 For a UI change, save PR-only evidence under the ignored `tmp/` directory and inspect it for
 secrets, personal data, and unrelated content. Give each image alt text that describes the visible
-state. For a video, describe the demonstrated behavior in the PR body.
+state. For a video, describe the behavior that the video shows in the PR body.
 
 ```bash
 mkdir -p tmp

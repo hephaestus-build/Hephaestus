@@ -64,7 +64,7 @@ export const LivePushUnavailable: Story = {
 	],
 	play: async ({ canvas }) => {
 		canvas.getByText(/live updates are unavailable/iu);
-		canvas.getByText(/refreshing periodically/iu);
+		canvas.getByText(/refreshes on a timer/iu);
 	},
 };
 

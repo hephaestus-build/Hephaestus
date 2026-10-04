@@ -71,10 +71,11 @@ public record PracticeAutomatedReviewPolicy(
         boolean declaredInsufficient =
                 automatedReview.evidenceSufficiency() == PracticeEvidenceSufficiency.DECLARED_EVIDENCE_INSUFFICIENT;
         if (declaredInsufficient && insufficiencyReason == null) {
-            throw new IllegalArgumentException("Insufficient evidence must state why a human is needed");
+            throw new IllegalArgumentException("Insufficient evidence must state why a human is needed.");
         }
         if (!declaredInsufficient && insufficiencyReason != null) {
-            throw new IllegalArgumentException("Only insufficient evidence carries a reason a human is needed");
+            throw new IllegalArgumentException(
+                    "Only a practice with insufficient evidence can state why a human is needed.");
         }
     }
 

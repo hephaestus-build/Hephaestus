@@ -329,8 +329,8 @@ public class GitLabDeletionSweepService {
     static String sweepSummary(SweepOutcome outcome) {
         if (outcome.total() == 0) {
             return outcome.skipped()
-                    ? "Checked for deleted items — some projects could not be verified"
-                    : "Checked for deleted items — none found";
+                    ? "Checked for deleted items: some projects could not be verified"
+                    : "Checked for deleted items: none found";
         }
         return "Retired " + outcome.total() + " item" + (outcome.total() == 1 ? "" : "s") + " deleted upstream";
     }

@@ -88,6 +88,6 @@ export const Empty: Story = {
 export const DeleteConfirm: Story = {
 	play: async ({ canvas }) => {
 		const dialog = await openDeleteConfirm(canvas, /delete gpt-5 mini/iu);
-		within(dialog).getByText(/stop working/iu);
+		within(dialog).getByText(/stop using this model/iu);
 	},
 };

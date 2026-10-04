@@ -94,7 +94,9 @@ export function AdminLlmConnectionsTable({
 	const modelsOn = (connection: LlmConnection) => modelCounts[connection.id] ?? 0;
 
 	if (isError) {
-		return <QueryErrorAlert error={error} title="Could not load connections" onRetry={onRetry} />;
+		return (
+			<QueryErrorAlert error={error} title="We could not load connections" onRetry={onRetry} />
+		);
 	}
 
 	if (isLoading) {
@@ -222,8 +224,8 @@ export function AdminLlmConnectionsTable({
 				subject={deleting}
 				onClose={() => setDeleting(null)}
 				title={(connection) => `Delete “${connection.displayName}”?`}
-				description="A connection with models still on it can't be deleted. Delete its models first. This cannot be undone."
-				confirmLabel="Delete"
+				description="A connection with models still on it cannot be deleted. Delete its models first. You cannot undo this."
+				confirmLabel="Delete connection"
 				onConfirm={onDelete}
 			/>
 
@@ -235,7 +237,7 @@ export function AdminLlmConnectionsTable({
 					<>
 						This immediately stops requests through{" "}
 						{modelsOn(connection) === 1 ? "the model" : `all ${modelsOn(connection)} models`} on
-						this connection. Practice reviews and Mentor can’t run on them until you turn the
+						this connection. Practice reviews and Heph cannot run on them until you turn the
 						connection back on, or until each workspace picks another model.
 					</>
 				)}

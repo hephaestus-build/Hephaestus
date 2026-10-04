@@ -52,7 +52,7 @@ class GitHubPrNodeIdResolver {
                 .block(GRAPHQL_TIMEOUT);
 
         if (response == null) {
-            throw new FeedbackDeliveryException("Null response resolving " + kind + " node ID: " + ref);
+            throw new FeedbackDeliveryException("The lookup of the " + kind + " node ID returned no response: " + ref);
         }
         gitHubProvider.trackRateLimit(scopeId, response);
 
@@ -60,7 +60,7 @@ class GitHubPrNodeIdResolver {
         if (nodeId == null) {
             List<?> errors = response.getErrors();
             throw new FeedbackDeliveryException(
-                    kind + " not found via GraphQL: " + ref + (errors.isEmpty() ? "" : ", errors=" + errors));
+                    kind + " not found through GraphQL: " + ref + (errors.isEmpty() ? "" : ", errors=" + errors));
         }
         return nodeId;
     }

@@ -153,7 +153,7 @@ class ConnectionServiceTest extends BaseUnitTest {
                         connection,
                         TransitionRequest.byAccount(IntegrationState.ACTIVE, "REVIVE", "ADMIN", 42L, "corr-x", "nope")))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Illegal transition")
+                .hasMessageContaining("cannot change from")
                 .hasMessageContaining("UNINSTALLED")
                 .hasMessageContaining("ACTIVE");
 
@@ -431,7 +431,7 @@ class ConnectionServiceTest extends BaseUnitTest {
                 .isInstanceOf(ConnectionBusyException.class)
                 // The 409 names the job and promises a retry, because the fence already asked it to stop.
                 .hasMessageContaining("active sync job 99")
-                .hasMessageContaining("retry");
+                .hasMessageContaining("Disconnect again");
 
         verifyNoInteractions(strategy);
         assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);

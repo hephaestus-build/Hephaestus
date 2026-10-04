@@ -46,7 +46,7 @@ proliferation and enable flexible composition.
 
 **Impact: CRITICAL (prevents unmaintainable component variants)**
 
-Don't add boolean props like `isThread`, `isEditing`, `isDMThread` to customize
+Do not add boolean props like `isThread`, `isEditing`, `isDMThread` to customize
 
 component behavior. Each boolean doubles possible states and creates
 
@@ -147,7 +147,7 @@ sharing a single monolithic parent.
 
 Structure complex components as compound components with a shared context. Each
 
-subcomponent accesses shared state via context, not props. Consumers compose the
+subcomponent accesses shared state through context, not props. Consumers compose the
 
 pieces they need.
 
@@ -266,7 +266,7 @@ composed components.
 
 The provider component should be the only place that knows how state is managed.
 
-UI components consume the context interface—they don't know if state comes from
+UI components consume the context interface—they do not know if state comes from
 
 useState, Zustand, or a server sync.
 
@@ -554,7 +554,7 @@ function MessagePreview() {
 
 The provider boundary is what matters—not the visual nesting. Components that
 
-need shared state don't have to be inside the `Composer.Frame`. They just need
+need shared state do not have to be inside the `Composer.Frame`. They just need
 
 to be within the provider.
 
@@ -685,15 +685,15 @@ function ForwardButton() {
 
 The ForwardButton lives outside the Composer.Frame but still has access to the
 
-submit action because it's within the provider. Even though it's a one-off
+submit action because it is within the provider. Even though it is a one-off
 
 component, it can still access the composer's state and actions from outside the
 
 UI itself.
 
-**Key insight:** Components that need shared state don't have to be visually
+**Key insight:** Components that need shared state do not have to be visually nested inside each other.
 
-nested inside each other—they just need to be within the same provider.
+They only need to be within the same provider.
 
 ---
 
@@ -811,7 +811,7 @@ No boolean prop combinations to reason about. No impossible states.
 
 Use `children` for composition instead of `renderX` props. Children are more
 
-readable, compose naturally, and don't require understanding callback
+readable, compose naturally, and do not require understanding callback
 
 signatures.
 
@@ -897,13 +897,13 @@ Use children when composing static structure.
 
 **Impact: MEDIUM**
 
-React 19+ only. Don't use `forwardRef`; use `use()` instead of `useContext()`.
+React 19+ only. Do not use `forwardRef`. Use `use()` instead of `useContext()`.
 
 ### 4.1 React 19 API Changes
 
 **Impact: MEDIUM (cleaner component definitions and context usage)**
 
-> **⚠️ React 19+ only.** Skip this if you're on React 18 or earlier.
+> **⚠️ React 19+ only.** Skip this if you are on React 18 or earlier.
 
 In React 19, `ref` is now a regular prop (no `forwardRef` wrapper needed), and `use()` replaces `useContext()`.
 

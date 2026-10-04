@@ -50,7 +50,7 @@ export const NotSetUp: Story = {
 	args: { notice: { reason: "not-set-up" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent(
-			"Heph isn't set up in this workspace yet",
+			"Heph is not set up in this workspace yet",
 		);
 		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
 	},
@@ -60,7 +60,7 @@ export const Unavailable: Story = {
 	args: { notice: { reason: "unavailable", choice: "CLOUD" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent(
-			"Heph isn't set up for your AI choice yet",
+			"Heph is not set up for your AI choice yet",
 		);
 		// The title is emphasised so its comma does not split the sentence.
 		const title = canvas.getByText("Cloud", {
@@ -68,7 +68,7 @@ export const Unavailable: Story = {
 		});
 		await expect(title).toBeVisible();
 		await expect(title.parentElement).toHaveTextContent(
-			"No Heph model is within Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
+			"No Heph model is set up for Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
 		);
 		await expect(canvas.getByRole("link", { name: "Change your AI choice" })).toHaveAttribute(
 			"href",

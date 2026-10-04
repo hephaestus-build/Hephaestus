@@ -49,7 +49,7 @@ export interface ReviewAttentionProps {
 interface ProblemDef {
 	key: "failedReviews" | "unprocessedResults" | "failedDeliveries";
 	phrase: (count: number) => string;
-	/** For the error alert: "Couldn't load failed reviews". */
+	/** For the error alert: "We could not load failed reviews". */
 	what: string;
 }
 
@@ -62,7 +62,7 @@ const PROBLEMS: readonly ProblemDef[] = [
 	{
 		key: "unprocessedResults",
 		phrase: (count) =>
-			`${count} ${count === 1 ? "review's" : "reviews'"} results could not be processed or delivered`,
+			`${count} ${count === 1 ? "review’s" : "reviews’"} results could not be processed or delivered`,
 		what: "reviews whose results could not be processed or delivered",
 	},
 	{
@@ -137,7 +137,7 @@ function Approvals({
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Couldn't load the feedback awaiting your approval"
+				title="We could not load the feedback awaiting your approval"
 				onRetry={state.onRetry}
 			/>
 		);
@@ -164,7 +164,7 @@ function Approvals({
 						className="text-sm"
 						render={<ReviewListLink workspaceSlug={workspaceSlug} destination={list} />}
 					>
-						See all {state.total}
+						See all {state.total} awaiting approval
 					</InlineLink>
 				) : undefined
 			}
@@ -218,7 +218,7 @@ function Problems({
 				<QueryErrorAlert
 					key={problem.key}
 					error={state.error}
-					title={`Couldn't load ${problem.what}`}
+					title={`We could not load ${problem.what}`}
 					onRetry={state.onRetry}
 				/>
 			))}

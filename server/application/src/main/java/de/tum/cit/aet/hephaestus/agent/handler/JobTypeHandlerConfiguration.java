@@ -93,14 +93,16 @@ public class JobTypeHandlerConfiguration {
             PracticeCatalogInjector practiceCatalogInjector,
             GitRepositoryManager gitRepositoryManager,
             JobEvidenceFiles evidenceFiles,
-            PracticeRevisionService practiceRevisionService) {
+            PracticeRevisionService practiceRevisionService,
+            AnsweredPractices answeredPractices) {
         return new PracticeReviewPreparation(
                 workspaceContextBuilder,
                 practiceCatalogInjector,
                 taskEnvelopeWriter,
                 gitRepositoryManager,
                 evidenceFiles,
-                practiceRevisionService);
+                practiceRevisionService,
+                answeredPractices);
     }
 
     @Bean
@@ -112,8 +114,7 @@ public class JobTypeHandlerConfiguration {
             ReviewOutputService deliveryService,
             FeedbackDeliveryService feedbackService,
             InContextDeliveryGate inContextDeliveryGate,
-            ObservationRepository observationRepository,
-            RecurringLapses recurringLapses) {
+            ObservationRepository observationRepository) {
         return new PullRequestReviewHandler(
                 objectMapper,
                 practiceCatalogInjector,
@@ -124,8 +125,7 @@ public class JobTypeHandlerConfiguration {
                 feedbackService,
                 feedbackResponseSuppressionFilter,
                 inContextDeliveryGate,
-                observationRepository,
-                recurringLapses);
+                observationRepository);
     }
 
     @Bean
@@ -143,8 +143,7 @@ public class JobTypeHandlerConfiguration {
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter,
             ObservationRepository observationRepository,
             PracticeFeedbackDispatchService dispatchService,
-            FeedbackDeliveryService feedbackDeliveryService,
-            RecurringLapses recurringLapses) {
+            FeedbackDeliveryService feedbackDeliveryService) {
         return new IssueReviewHandler(
                 objectMapper,
                 preparation,
@@ -160,8 +159,7 @@ public class JobTypeHandlerConfiguration {
                 feedbackResponseSuppressionFilter,
                 observationRepository,
                 dispatchService,
-                feedbackDeliveryService,
-                recurringLapses);
+                feedbackDeliveryService);
     }
 
     @Bean

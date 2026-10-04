@@ -9,10 +9,13 @@ public class OutboundEgressSuppressedException extends FeedbackDeliveryException
     private static final long serialVersionUID = 1L;
 
     public OutboundEgressSuppressedException(String operation) {
-        super("Instance Silent Mode suppressed outbound operation: " + operation);
+        super("Silent mode blocked the outbound operation: " + operation);
     }
 
     public OutboundEgressSuppressedException(String operation, Throwable cause) {
-        super("Outbound operation blocked because Silent Mode state could not be read: " + operation, cause);
+        super(
+                "Hephaestus blocked the outbound operation because it could not read the silent mode state: "
+                        + operation,
+                cause);
     }
 }

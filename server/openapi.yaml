@@ -54,6 +54,9 @@ tags:
   name: Outline collections
 - description: The starting catalog copied into new workspaces
   name: Admin Practice Catalog
+- description: Why each practice did or did not run on one piece of work. Any workspace
+    member can read it.
+  name: Practice review trace
 - description: Instance-wide operator settings
   name: Instance Settings
 - description: Current instance definitions visible to workspace administrators
@@ -130,9 +133,6 @@ tags:
 - description: "Workspace-scoped \"bring your own\" AI provider connections, models\
     \ and settings"
   name: Workspace LLM
-- description: Why each practice did or did not run on one piece of work; readable
-    by any workspace member
-  name: Practice review trace
 - description: Active sessions
   name: Account
 - description: |-
@@ -2229,14 +2229,14 @@ paths:
           content:
             application/json: {}
           description: The request carries the browser session cookie without a valid
-            CSRF token; refused before the endpoint runs
+            CSRF token. The server refuses it before the endpoint runs.
         "429":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Too many installed-client requests from this address; retry
-            after the Retry-After seconds
+          description: "This address sent too many installed-client requests. Wait\
+            \ the number of seconds in the Retry-After header, then try again."
       summary: End the session its refresh secret belongs to
       tags:
       - Client session
@@ -2268,19 +2268,19 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: The session has ended; sign in again
+          description: The session has ended. Sign in again.
         "403":
           content:
             application/json: {}
           description: The request carries the browser session cookie without a valid
-            CSRF token; refused before the endpoint runs
+            CSRF token. The server refuses it before the endpoint runs.
         "429":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Too many installed-client requests from this address; retry
-            after the Retry-After seconds
+          description: "This address sent too many installed-client requests. Wait\
+            \ the number of seconds in the Retry-After header, then try again."
       summary: Rotate the session's access token and refresh secret
       tags:
       - Client session
@@ -2312,14 +2312,14 @@ paths:
           content:
             application/json: {}
           description: The request carries the browser session cookie without a valid
-            CSRF token; refused before the endpoint runs
+            CSRF token. The server refuses it before the endpoint runs.
         "429":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Too many installed-client requests from this address; retry
-            after the Retry-After seconds
+          description: "This address sent too many installed-client requests. Wait\
+            \ the number of seconds in the Retry-After header, then try again."
       summary: Redeem a sign-in handoff code with its PKCE verifier
       tags:
       - Client session
@@ -5079,8 +5079,8 @@ paths:
           description: The Outline server could not be reached or answered with an
             error
         "503":
-          description: Outline is rate-limiting requests; the Retry-After header carries
-            the seconds to wait before retrying
+          description: Outline limited the request rate. The Retry-After header carries
+            the seconds to wait before retrying.
       summary: List the Outline collections available to mirror (live proxy; doubles
         as connectivity probe)
       tags:
@@ -6036,7 +6036,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: A campaign is already under way for this workspace
+          description: A backfill is already active for this workspace
       summary: Enumerate and price a backfill campaign
       tags:
       - Practice Review Backfill
@@ -9495,7 +9495,7 @@ components:
         instanceBudgetVerdict:
           type: string
           description: "Whether shared-model spend is within the instance cap, has\
-            \ reached it, or can't be confirmed because some shared-model usage has\
+            \ reached it, or cannot be confirmed because some shared-model usage has\
             \ no price set."
           enum:
           - WITHIN
@@ -9667,6 +9667,13 @@ components:
       type: object
       description: Agent job execution record (job_token intentionally omitted)
       properties:
+        answeredPractices:
+          type: array
+          description: Ready practices this review did not ask because a completed
+            review had already answered them on the same code; available on review
+            detail after evidence capture. Empty when every ready practice was asked.
+          items:
+            $ref: "#/components/schemas/AnsweredPractice"
         availableAt:
           type: string
           format: date-time
@@ -9778,11 +9785,14 @@ components:
           description: "Why a COMPLETED run produced the observations it did. INSUFFICIENT_EVIDENCE\
             \ means no model ran because required evidence was missing, unreadable,\
             \ stale, or unauthorized — so no observations means nothing was assessed,\
-            \ not that nothing was wrong. REVIEWED means the model ran against sufficient\
-            \ evidence."
+            \ not that nothing was wrong. COALESCED means no model ran because a completed\
+            \ review had already answered every ready practice on exactly the same\
+            \ code — its answers are listed in answeredPractices, and this run assessed\
+            \ nothing anew. REVIEWED means the model ran against sufficient evidence."
           enum:
           - REVIEWED
           - INSUFFICIENT_EVIDENCE
+          - COALESCED
         startedAt:
           type: string
           format: date-time
@@ -9837,6 +9847,27 @@ components:
           minLength: 0
       required:
       - questionId
+    AnsweredPractice:
+      type: object
+      description: "A ready practice this review did not ask, because a completed\
+        \ review had already answered it on exactly the same code. Its observation\
+        \ belongs to that review; this review recorded none for it."
+      properties:
+        practiceSlug:
+          type: string
+          description: The practice left out
+        reviewId:
+          type: string
+          format: uuid
+          description: The completed review whose observation answers it
+        revisionId:
+          type: integer
+          format: int64
+          description: The practice revision the earlier answer was made under
+      required:
+      - practiceSlug
+      - reviewId
+      - revisionId
     ArtifactTrace:
       type: object
       description: "Every practice's answer for one artifact, and the occurrences\
@@ -10846,7 +10877,7 @@ components:
           type: boolean
         researchOrganization:
           type: string
-          description: "Organisation running the optional research programme, or null\
+          description: "Organization that runs the optional research program, or null\
             \ when this instance runs none"
       required:
       - completed
@@ -12643,11 +12674,11 @@ components:
           type: string
         participateInResearch:
           type: boolean
-          description: "Required when the instance names a research organisation,\
+          description: "Required when the instance names a research organization,\
             \ omitted otherwise"
         researchOrganization:
           type: string
-          description: The organisation the research question named on screen; omitted
+          description: The organization the research question named on screen; omitted
             when it asked none
         termsAccepted:
           type: boolean
@@ -16449,7 +16480,7 @@ components:
           type: string
         researchOrganization:
           type: string
-          description: The organisation this control named on screen
+          description: The organization this control named on screen
       required:
       - granted
       - noticeVersion
@@ -19304,7 +19335,7 @@ components:
           description: Enable automatic practice reviews triggered by PR events
         practiceReviewManualTriggerEnabled:
           type: boolean
-          description: Enable manual practice reviews triggered via bot command
+          description: Enable manual practice reviews triggered through a bot command
         practicesEnabled:
           type: boolean
           description: Enable the practice review feature
@@ -19718,8 +19749,8 @@ components:
             enabled
         practiceReviewManualTriggerEnabled:
           type: boolean
-          description: Whether manual practice reviews triggered via bot command are
-            enabled
+          description: Whether manual practice reviews triggered through a bot command
+            are enabled
         practicesEnabled:
           type: boolean
           description: Whether practice reviews are on
@@ -20137,7 +20168,7 @@ components:
         instanceBudgetVerdict:
           type: string
           description: "Whether host-funded (shared-model) spend is within its cap,\
-            \ has reached it, or can't be confirmed because some shared-model usage\
+            \ has reached it, or cannot be confirmed because some shared-model usage\
             \ has no price set."
           enum:
           - WITHIN
@@ -20431,7 +20462,7 @@ components:
     bearerAuth:
       bearerFormat: JWT
       description: Hephaestus-native JWT bearer authentication. The SPA normally authenticates
-        via the `__Host-HEPHAESTUS_AT` session cookie; this scheme documents the equivalent
-        bearer token.
+        through the `__Host-HEPHAESTUS_AT` session cookie. This scheme documents the
+        equivalent bearer token.
       scheme: bearer
       type: http

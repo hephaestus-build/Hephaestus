@@ -58,7 +58,7 @@ public class SlackIntegrationSyncRunner implements IntegrationSyncRunner {
                 .append(summary.channels())
                 .append(summary.channels() == 1 ? " channel" : " channels");
         if (summary.ingested() > 0) {
-            step.append(" — ").append(summary.ingested()).append(" messages");
+            step.append(" · ").append(summary.ingested()).append(summary.ingested() == 1 ? " message" : " messages");
         }
         if (summary.skipped() > 0) {
             step.append(" · ").append(summary.skipped()).append(" skipped");
@@ -67,7 +67,7 @@ public class SlackIntegrationSyncRunner implements IntegrationSyncRunner {
             step.append(" · ").append(summary.failed()).append(" failed");
         }
         if (summary.budgetExhausted()) {
-            step.append(" · request budget exhausted");
+            step.append(" · request budget used up");
         }
         return SyncProgress.ofResource(
                 SyncPhase.CHANNELS, step.toString(), null, summary.synced() + summary.skipped(), summary.channels());

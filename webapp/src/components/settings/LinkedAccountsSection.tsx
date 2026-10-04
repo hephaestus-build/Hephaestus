@@ -49,8 +49,8 @@ type LinkableProvider = IdentityProviderView & { registrationId: string };
  * has to earn the click on its own — the account it links to is not a way into Hephaestus.
  */
 const LINK_ONLY_RATIONALE: Record<string, string> = {
-	SLACK: "Connect Slack to manage your channel-message preference and reach the mentor in a DM.",
-	OUTLINE: "Connect Outline so the documents you write there are recognised as your work.",
+	SLACK: "Connect Slack to manage your channel-message preference and talk to Heph in a DM.",
+	OUTLINE: "Connect Outline so the documents you write there are recognized as your work.",
 };
 
 export interface LinkedAccountsSectionProps {
@@ -102,7 +102,7 @@ export function LinkedAccountsSection({
 	if (isLoading) {
 		return (
 			<LinkedAccountsFrame headingRef={headingRef}>
-				<ItemGroup aria-busy="true" aria-label="Loading connected accounts">
+				<ItemGroup aria-busy="true" aria-label="Loading connected accounts…">
 					{Array.from({ length: 2 }, (_, index) => (
 						<Item key={index} variant="outline" role="listitem">
 							<ItemMedia variant="icon">
@@ -126,7 +126,7 @@ export function LinkedAccountsSection({
 			<LinkedAccountsFrame headingRef={headingRef}>
 				<QueryErrorAlert
 					error={error}
-					title="Could not load connected accounts"
+					title="We could not load your connected accounts"
 					onRetry={onRetry}
 				/>
 			</LinkedAccountsFrame>
@@ -257,8 +257,8 @@ export function LinkedAccountsSection({
 				<div className="space-y-2 pt-2">
 					<h3 className="text-sm font-medium">Connect another account</h3>
 					<p className="text-xs text-muted-foreground">
-						Connecting a provider sends you to its sign-in page; the identity you sign in with is
-						then linked to this account.
+						Connecting a provider sends you to its sign-in page. After you sign in there, Hephaestus
+						adds that identity to this account.
 					</p>
 					<div className="flex flex-wrap gap-2 pt-1">
 						{signInProviders.map((provider) => {
@@ -315,12 +315,11 @@ function LinkedAccountsFrame({
 					id="linked-accounts-heading"
 					className="rounded-sm text-xl font-semibold outline-none focus:ring-2 focus:ring-ring"
 				>
-					Connected Accounts
+					Connected accounts
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					The identity providers you can sign in to Hephaestus with, plus content tools you connect
-					so your work is attributed to you. Connect another provider, or disconnect ones you no
-					longer use.
+					The identity providers you sign in with, and the content tools you connect so your work is
+					attributed to you. Connect another provider, or disconnect one you no longer use.
 				</p>
 			</div>
 
@@ -357,7 +356,7 @@ function UnlinkControl({
 				id={`lockout-hint-${identityId}`}
 				className="max-w-3xs shrink-0 text-xs text-muted-foreground"
 			>
-				Your only sign-in method. Delete your account in the Danger Zone to remove it.
+				This is your only sign-in method. To remove it, delete your account in Danger zone.
 			</p>
 		);
 	}
@@ -392,8 +391,8 @@ function UnlinkControl({
 					<AlertDialogTitle>Disconnect {name}?</AlertDialogTitle>
 					<AlertDialogDescription>
 						{isLinkOnly
-							? `Hephaestus will stop attributing your ${provider} activity to this account. You can reconnect ${provider} anytime from Settings.`
-							: `You'll no longer be able to sign in to Hephaestus with this ${provider} account. You can reconnect it anytime by signing in with ${provider} again.`}
+							? `Hephaestus will stop attributing your ${provider} activity to this account. You can reconnect ${provider} at any time from User settings.`
+							: `You’ll no longer be able to sign in to Hephaestus with this ${provider} account. You can reconnect it at any time by signing in with ${provider} again.`}
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>

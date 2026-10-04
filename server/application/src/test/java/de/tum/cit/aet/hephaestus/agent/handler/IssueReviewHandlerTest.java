@@ -99,7 +99,8 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                         PreparedJobInputsFixtures.freezer(),
                         mock(
                                 PracticeRevisionService.class,
-                                invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision())),
+                                invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision()),
+                        mock(AnsweredPractices.class)),
                 practiceCatalogInjector,
                 new ReviewResultParser(objectMapper),
                 new FeedbackCompositionResultParser(),
@@ -113,8 +114,7 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                 feedbackResponseSuppressionFilter,
                 mock(ObservationRepository.class),
                 dispatchService,
-                mock(FeedbackDeliveryService.class),
-                InContextDeliveryGateFixtures.noRecurrence());
+                mock(FeedbackDeliveryService.class));
         lenient()
                 .when(feedbackResponseSuppressionFilter.evaluate(any(), any()))
                 .thenAnswer(invocation ->

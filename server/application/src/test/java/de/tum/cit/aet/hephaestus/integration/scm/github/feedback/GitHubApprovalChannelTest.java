@@ -99,7 +99,7 @@ class GitHubApprovalChannelTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> channel.approve(target, "ok"))
                 .isInstanceOf(FeedbackDeliveryException.class)
-                .hasMessageContaining("rate limit critical");
+                .hasMessageContaining("rate limit is critical");
     }
 
     @Test

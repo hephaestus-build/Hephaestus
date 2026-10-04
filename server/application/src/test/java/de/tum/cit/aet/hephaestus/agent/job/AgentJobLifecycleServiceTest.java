@@ -200,7 +200,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> service.cancel(1L, jobId))
                     .isInstanceOf(AgentJobStateConflictException.class)
-                    .hasMessage("This review has already finished, so it cannot be cancelled.");
+                    .hasMessage("This review already finished. You cannot cancel it.");
         }
 
         @Test
@@ -227,7 +227,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> service.cancel(1L, jobId))
                     .isInstanceOf(AgentJobStateConflictException.class)
-                    .hasMessage("This review finished while it was being cancelled, so it cannot be cancelled.");
+                    .hasMessage("This review finished before the server could cancel it.");
 
             verify(sandboxManager, never()).cancel(any());
         }
@@ -383,7 +383,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> service.retryDelivery(WORKSPACE_ID, jobId))
                     .isInstanceOf(EntityNotFoundException.class)
-                    .hasMessageContaining("AgentJob");
+                    .hasMessageContaining("We could not find that review.");
         }
 
         @Test
@@ -394,7 +394,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> service.retryDelivery(WORKSPACE_ID, jobId))
                     .isInstanceOf(AgentJobStateConflictException.class)
-                    .hasMessageContaining("delivery status FAILED");
+                    .hasMessageContaining("whose delivery failed");
 
             verify(handler, never()).deliver(any());
         }
@@ -429,7 +429,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> service.retryDelivery(WORKSPACE_ID, jobId))
                     .isInstanceOf(AgentJobStateConflictException.class)
-                    .hasMessage("The feedback could not be posted. Try again later.")
+                    .hasMessage("We could not post the feedback. Try again in a moment.")
                     .hasRootCauseMessage("GitHub API rate limited");
 
             verify(agentJobRepository)

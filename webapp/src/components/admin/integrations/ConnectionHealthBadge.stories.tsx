@@ -22,7 +22,7 @@ const meta = {
 		},
 		isSyncing: {
 			control: "boolean",
-			description: "A running job overrides the health label with 'Syncing'.",
+			description: "A running job overrides the health label with “Syncing”.",
 		},
 	},
 } satisfies Meta<typeof ConnectionHealthBadge>;

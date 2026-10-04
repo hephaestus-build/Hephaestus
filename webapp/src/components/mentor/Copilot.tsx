@@ -63,7 +63,7 @@ export function Copilot({
 						<HephIcon className="-mx-1.5" size={32} pad={4} />
 						Heph{" "}
 						<Badge variant="muted">
-							<Sparkles /> AI Mentor
+							<Sparkles /> AI mentor
 						</Badge>
 					</DrawerTitle>
 					<DrawerDescription className="sr-only">
@@ -79,14 +79,14 @@ export function Copilot({
 												variant="outline"
 												size="icon"
 												onClick={onOpenFullChat}
-												aria-label="Open in mentor view"
+												aria-label="Open full chat"
 												disabled={!hasMessages}
 											/>
 										}
 									>
 										<SquareArrowOutUpRight />
 									</TooltipTrigger>
-									<TooltipContent>Open in full screen</TooltipContent>
+									<TooltipContent>Open full chat</TooltipContent>
 								</Tooltip>
 							)}
 							{onNewChat && (
@@ -104,7 +104,7 @@ export function Copilot({
 									>
 										<SquarePen />
 									</TooltipTrigger>
-									<TooltipContent>New chat</TooltipContent>
+									<TooltipContent>Start new chat</TooltipContent>
 								</Tooltip>
 							)}
 							<Tooltip>

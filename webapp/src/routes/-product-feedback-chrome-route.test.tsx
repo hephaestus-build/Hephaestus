@@ -83,7 +83,7 @@ describe("survey invitations in the app chrome", () => {
 			),
 		);
 		renderRouteAt(`/w/acme?survey=${unseen.id}`);
-		await screen.findByRole("heading", { name: "Could not load survey" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: "We could not load the survey" }, ROUTE_RENDER_WAIT);
 		expect(screen.queryByText(/no longer offered/u)).toBeNull();
 		server.use(
 			http.get("*/workspaces/acme/product-feedback/surveys", () => HttpResponse.json([unseen])),

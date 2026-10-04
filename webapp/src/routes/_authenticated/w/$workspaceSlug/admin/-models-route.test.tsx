@@ -127,7 +127,7 @@ async function renderModelsRoute(bindings: () => AgentBinding[], aiChoiceRequire
 }
 
 type PurposeTitle = "Practice reviews" | "Heph";
-const UNCHOSEN = "Members who haven't chosen";
+const UNCHOSEN = "Members who have not chosen";
 
 function row(purpose: PurposeTitle, title: string = UNCHOSEN): HTMLElement {
 	return within(screen.getByRole("region", { name: purpose })).getByRole("group", {
@@ -285,13 +285,13 @@ describe("workspace AI models route", () => {
 		expect(previewTerm("Practice reviews", UNCHOSEN)?.nextElementSibling?.textContent).toBe(
 			"GPT Test (Not declared)",
 		);
-		expect(within(row("Practice reviews")).queryByText(/serves no one now/u)).toBeNull();
+		expect(within(row("Practice reviews")).queryByText(/no one uses it now/u)).toBeNull();
 	});
 
 	it("drops the unchosen preview row once the workspace requires the choice", async () => {
 		await renderModelsRoute(() => [binding("PRACTICE_REVIEW", 20)], true);
 		expect(previewTerm("Practice reviews", UNCHOSEN)).toBeNull();
-		within(row("Practice reviews")).getByText(/serves no one now/u);
+		within(row("Practice reviews")).getByText(/no one uses it now/u);
 	});
 
 	it("keeps one row pending while its sibling of the same purpose stays editable", async () => {
@@ -325,7 +325,7 @@ describe("workspace AI models route", () => {
 						type: "about:blank",
 						title: "Conflict",
 						status: 409,
-						detail: "This model is declared as a different tier; assign it to that row.",
+						detail: "This model is declared as a different tier. Assign it under that tier.",
 						declaredTier: "CLOUD",
 					},
 					{ status: 409 },
@@ -337,7 +337,7 @@ describe("workspace AI models route", () => {
 		fireEvent.click(saveButton("Practice reviews", "In-house"));
 
 		const inHouse = row("Practice reviews", "In-house");
-		await within(inHouse).findByText("This model is declared as Cloud. Assign it to that row.");
+		await within(inHouse).findByText("This model is declared as Cloud. Assign it under Cloud.");
 		expect(pickerOf(inHouse).getAttribute("aria-invalid")).toBe("true");
 		expect(within(row("Practice reviews")).queryByRole("alert")).toBeNull();
 		expect(screen.queryByRole("status")).toBeNull();
@@ -352,7 +352,7 @@ it("shows a slot refusal that names no tier as the server phrased it", async () 
 					type: "about:blank",
 					title: "Conflict",
 					status: 409,
-					detail: "This model's data handling isn't declared yet.",
+					detail: "This model's data handling is not declared yet.",
 				},
 				{ status: 409 },
 			),
@@ -363,7 +363,7 @@ it("shows a slot refusal that names no tier as the server phrased it", async () 
 	fireEvent.click(saveButton("Practice reviews", "In-house"));
 
 	await within(row("Practice reviews", "In-house")).findByText(
-		"This model's data handling isn't declared yet.",
+		"This model's data handling is not declared yet.",
 	);
 });
 

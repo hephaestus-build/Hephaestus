@@ -16,8 +16,7 @@ export function ContributorSection({ contributors, isLoading, isError }: Contrib
 				<h3 className="text-xl font-bold">Contributors</h3>
 			</div>
 			<p className="mb-8 text-muted-foreground">
-				Hephaestus is built by students, researchers, and open-source contributors. These are the
-				people who have shaped it so far.
+				Students, researchers, and open-source contributors have built Hephaestus.
 			</p>
 
 			<ContributorGrid
@@ -32,7 +31,7 @@ export function ContributorSection({ contributors, isLoading, isError }: Contrib
 					<AlertCircle className="mx-auto mb-4 h-8 w-8 text-destructive" />
 					<h4 className="mb-2 text-lg font-medium">Contributor data unavailable</h4>
 					<p className="text-muted-foreground">
-						We’re having trouble reaching our contributor information. Please check back soon.
+						We could not load the contributor list. Reload the page to try again.
 					</p>
 				</div>
 			)}

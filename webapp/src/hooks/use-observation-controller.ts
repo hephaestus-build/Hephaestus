@@ -75,7 +75,7 @@ export function useObservationController(
 		},
 		onError: (error) => {
 			void observationQuery.refetch();
-			toast.error("Couldn't change this observation", { description: problemDetailOf(error) });
+			toast.error("We could not change this observation", { description: problemDetailOf(error) });
 		},
 	});
 

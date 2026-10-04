@@ -13,7 +13,7 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type { Answer, FeedbackRequest, SurveyInvitation } from "@/api/types.gen";
 import { READERS } from "@/components/product-feedback/feedback-copy";
-import { isResearch, studyOf } from "@/components/product-feedback/survey-purpose-defs";
+import { isResearch, researchOf } from "@/components/product-feedback/survey-purpose-defs";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 
@@ -40,10 +40,10 @@ const DRAFT_KEPT = "Your draft is still here.";
 function submissionError(error: unknown, subject: "survey" | "feedback"): string {
 	const status = problemStatusOf(error);
 	if (status === undefined) {
-		return `Couldn't send. ${DRAFT_KEPT} Check your connection and try again.`;
+		return `We could not send that. ${DRAFT_KEPT} Check your connection, then try again.`;
 	}
 	if (status === 429) {
-		return `Please wait a minute before sending more feedback. ${DRAFT_KEPT}`;
+		return `Wait a minute before sending more feedback. ${DRAFT_KEPT}`;
 	}
 	if (status === 401) {
 		return "Your session has expired. Sign in again before sending.";
@@ -54,7 +54,7 @@ function submissionError(error: unknown, subject: "survey" | "feedback"): string
 	if (subject === "survey" && status === 404) {
 		return "This survey is no longer available. Your answers have not been sent.";
 	}
-	return `Couldn't send (${problemDetailOf(error, "the server refused the request")}). ${DRAFT_KEPT}`;
+	return `We could not send that. ${problemDetailOf(error, "The server refused the request.")} ${DRAFT_KEPT}`;
 }
 
 /** What a member needs to know about a survey to be thanked for it: `submit` takes it from the dialog. */
@@ -62,8 +62,8 @@ type SurveyIdentity = Pick<SurveyInvitation, "id" | "purpose" | "researchOrganiz
 
 function surveyAcknowledgement(survey: SurveyIdentity): string {
 	return isResearch(survey)
-		? `Thank you — your answers were recorded for ${studyOf(survey)}.`
-		: `Thank you — your answers are on their way to ${READERS}.`;
+		? `Thanks. Your answers were recorded for ${researchOf(survey)}.`
+		: `Thanks. Your answers are on their way to ${READERS}.`;
 }
 
 export function useProductSurveys(workspaceSlug: string | undefined) {
@@ -114,11 +114,11 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		retry: false,
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
-			toast.success("Decline undone. The survey is back in the header's feedback menu.");
+			toast.success("Decline undone. The survey is back in the header’s feedback menu.");
 		},
 		onError: () =>
 			toast.error(
-				"Couldn't undo the decline. The survey may no longer be available. Please try again.",
+				"We could not undo the decline. The survey may no longer be available. Try again.",
 			),
 	});
 	const decline = useMutation({
@@ -127,7 +127,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		retry: false,
 		onSuccess: (_, variables) => {
 			removeFromCaches(variables.path.surveyId);
-			toast.success("Survey declined. You won't be asked again.", {
+			toast.success("Survey declined. You will not be asked again.", {
 				duration: 15_000,
 				action: { label: "Undo", onClick: () => undoDecline.mutate({ path: variables.path }) },
 			});
@@ -182,9 +182,9 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 }
 
 const FEEDBACK_SENT: Record<FeedbackRequest["kind"], string> = {
-	IDEA: `Thanks — your idea is on its way to ${READERS}.`,
-	BUG: `Thanks — your bug report is on its way to ${READERS}.`,
-	FEEDBACK: `Thanks — your feedback is on its way to ${READERS}.`,
+	IDEA: `Thanks. Your idea is on its way to ${READERS}.`,
+	BUG: `Thanks. Your bug report is on its way to ${READERS}.`,
+	FEEDBACK: `Thanks. Your feedback is on its way to ${READERS}.`,
 };
 
 export function useSubmitProductFeedback(workspaceSlug: string | undefined) {

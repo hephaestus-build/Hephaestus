@@ -82,7 +82,8 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
     @Override
     public ConnectInitiation initiate(InitiateRequest request) {
         if (redirectUri == null || redirectUri.isBlank()) {
-            throw new IllegalStateException("Slack redirect URI must be configured");
+            throw new IllegalStateException(
+                    "Slack is not set up on this instance. Ask your instance operator to set it up.");
         }
         String state = oauthStateService.issue(request.workspaceId(), IntegrationKind.SLACK, request.actorAccountId());
         StringBuilder url = new StringBuilder(AUTHORIZE_URL)
@@ -101,26 +102,27 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
     public ConnectFinalization finalizeConnect(IntegrationRef ref, Map<String, String> callbackParams) {
         String code = callbackParams == null ? null : callbackParams.get("code");
         if (code == null || code.isBlank()) {
-            return new ConnectFinalization.Failed("missing code");
+            return new ConnectFinalization.Failed("Slack did not send an authorization code.");
         }
         if (redirectUri == null || redirectUri.isBlank()) {
-            return new ConnectFinalization.Failed("Slack redirect URI must be configured");
+            return new ConnectFinalization.Failed(
+                    "Slack is not set up on this instance. Ask your instance operator to set it up.");
         }
         OAuthV2Access r;
         try {
             r = oauthClient.exchangeCode(code, redirectUri());
         } catch (SlackOAuthException e) {
             log.warn("Slack OAuth exchange failed: workspaceId={}, error={}", ref.workspaceId(), e.getMessage());
-            return new ConnectFinalization.Failed("slack oauth failed: " + e.getMessage());
+            return new ConnectFinalization.Failed("Hephaestus could not finish connecting to Slack: " + e.getMessage());
         }
         if (r.expiresIn() != null || r.refreshToken() != null) {
-            return new ConnectFinalization.Failed("Token rotation not yet supported");
+            return new ConnectFinalization.Failed("Hephaestus does not support token rotation yet.");
         }
         if (r.team() == null || r.team().id() == null) {
-            return new ConnectFinalization.Failed("oauth response missing team");
+            return new ConnectFinalization.Failed("The Slack OAuth response has no team.");
         }
         if (r.accessToken() == null || r.accessToken().isBlank()) {
-            return new ConnectFinalization.Failed("oauth response missing access_token");
+            return new ConnectFinalization.Failed("The Slack OAuth response has no access_token.");
         }
         ConnectionConfig.SlackConfig config =
                 new ConnectionConfig.SlackConfig(r.team().id(), r.team().name(), /* retentionDays */ null, Set.of());

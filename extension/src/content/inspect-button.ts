@@ -46,7 +46,7 @@ export function createInspectButton(
 	style.textContent = inspectCss;
 	const button = document.createElement("button");
 	button.type = "button";
-	const name = `Hephaestus review of ${workPageLabel(work)}`;
+	const name = `Practice review of ${workPageLabel(work)}`;
 	button.setAttribute("aria-label", name);
 	button.title = name;
 	button.setAttribute("aria-expanded", "false");

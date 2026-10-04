@@ -5,7 +5,7 @@ title: Database Migration Workflow
 description: How a schema change becomes a Liquibase changelog, and what CI checks.
 ---
 
-Liquibase manages schema changes in the application server. This page is the procedure; the entity
+Liquibase manages schema changes in the application server. This page is the procedure. The entity
 conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
 
 ## Quick start
@@ -17,18 +17,20 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
    vp run db:draft-changelog
    ```
 
-   The command applies the whole chain to a disposable database, diffs it against the JPA model,
-   and writes the difference as change sets into
-   `server/application/src/main/resources/db/changelog/<timestamp>_changelog.xml`, with ids
-   `<timestamp>-1`, `-2`, … and the author `hephaestus`. A branch gets one such file: the first run
-   creates it and appends its `<include>` to `master.xml`; later runs add change sets to it. It then
+   The command applies the whole chain to a disposable database.
+   It compares the result with the JPA model.
+   It writes the difference as change sets into `server/application/src/main/resources/db/changelog/<timestamp>_changelog.xml`.
+   These use ids `<timestamp>-1`, `-2`, … and author `hephaestus`.
+
+   A branch gets one such file: the first run
+   creates it and appends its `<include>` to `master.xml`. Later runs add change sets to it. It then
    refreshes the ERD. With no drift it writes nothing.
 
-3. **Review the change sets.** Keep the real deltas and remove what the diff only inferred. Prefer
-   `renameColumn` over a drop-and-add pair, start new sequences at `1` unless there is a data
-   migration plan, and follow the destructive-change policy below. Use preconditions to reject
-   incompatible database states; use `onFail="MARK_RAN"` only when failure proves the intended change
-   is already present. Provide a tested rollback when reversal is safe; otherwise document recovery
+3. **Review the change sets.** Keep the real deltas and remove what the diff only inferred. Prefer `renameColumn` to a drop-and-add pair.
+   Unless there is a data migration plan, start new sequences at `1`.
+   Follow the destructive-change policy below. Use preconditions to reject
+   incompatible database states. Use `onFail="MARK_RAN"` only when failure proves the intended change
+   is already present. Provide a tested rollback when reversal is safe. Otherwise document recovery
    through a verified backup in the operator instructions. If you edit the changelog, refresh the ERD:
 
    ```bash
@@ -37,8 +39,8 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
 
 4. Add a release changeset: `vp exec changeset`, or hand-write `.changeset/<slug>.md`
    (`.changeset/README.md`). A Liquibase `<changeSet>` and a release changeset are different things
-   and a schema change needs both; `verify-changesets` fails a PR that touches `db/changelog/`
-   without one. Keep the summary user-facing; the release notes flag the migration automatically.
+   and a schema change needs both. `verify-changesets` fails a PR that touches `db/changelog/`
+   without one. Keep the summary user-facing. The release notes flag the migration automatically.
 5. Commit the changelog, the `master.xml` edit, the changeset, and `docs/contributor/erd/schema.mmd`.
 
 ## Native objects the JPA diff does not cover
@@ -51,22 +53,36 @@ same command:
 node scripts/db-utils.ts draft-changelog --from-draft .context/<name>.xml
 ```
 
-The draft is one `<databaseChangeLog>` holding only change sets. Promotion writes them into this
-branch's changelog with the usual ids and author, replays the whole chain on a disposable database
-and refreshes the ERD, as above. It refuses a draft that is malformed, declares a DOCTYPE, contains
-anything outside a change set, sets a root attribute other than the standard Liquibase and XML Schema
-namespaces and `xsi:schemaLocation`, or sets a change-set attribute other than `id` and `author`,
-because promotion would drop it: state conditions as `preConditions` inside the change set. Review the
-result as in step 3, and add the database-level test that the paragraph on populated tables below
-calls for.
+The draft is one `<databaseChangeLog>` with only change sets.
+Promotion writes these into this branch's changelog with the usual ids and author.
+It replays the whole chain on a disposable database and refreshes the ERD, as above.
+It refuses a draft with any of these properties:
+
+- Malformed XML.
+- A DOCTYPE declaration.
+- Content outside a change set.
+- Root attributes other than the standard Liquibase and XML Schema namespaces and `xsi:schemaLocation`.
+- Change-set attributes other than `id` and `author`.
+
+Promotion would drop unsupported attributes.
+State conditions as `preConditions` inside the change set.
+Review the result as in step 3.
+Add the database-level test required by the paragraph on populated tables below.
 
 ## Data corrections
 
-A fix that leaves wrong rows behind corrects them in the code that writes them, so the next sync or event heals
-them. Only rows that nothing will ever write again, such as merge requests that incremental sync never reads again,
-get a hand-written `<sql>` change set. It goes in this branch's single changelog, with a comment saying which rows are
-wrong and why, a `HALT` precondition on the columns it reads, and a `<rollback><stop>` that names the backup to
-restore. A data correction needs maintainer approval in the pull request.
+If a fix leaves wrong rows, correct them in the code that writes them.
+The next sync or event then repairs them.
+Only rows that nothing will write again get a hand-written `<sql>` change set.
+Merge requests that incremental sync never reads again are an example.
+Put this change set in the branch's single changelog.
+Include these safeguards:
+
+- A comment that states which rows are wrong and why.
+- A `HALT` precondition on the columns it reads.
+- A `<rollback><stop>` that names the backup to restore.
+
+A data correction needs maintainer approval in the pull request.
 
 ## Changelog immutability policy
 
@@ -75,22 +91,21 @@ instance upgrades by replaying exactly these files, in `master.xml` order. That 
 if history never changes underneath an instance that already ran part of it.
 
 1. **Released changesets are never edited.** A changeset is *released* once it reaches
-   `main` — from that moment it may already be applied to a production database. Editing it
-   causes checksum errors at boot on upgraded instances while fresh installs silently get a
-   different schema. Fix mistakes **forward** with a new changelog file. Liquibase
-   [excludes preconditions, contexts and labels from checksums](https://www.liquibase.com/blog/what-affects-changeset-checksums)
-   and ignores deleted changesets, so those edits desynchronise installed instances without any
-   error.
-2. **`master.xml` is append-only.** Never remove or reorder existing `<include>` entries;
-   new changelogs go at the end. The maintainer-approved v0.77.4 cut-point guard is a
+   `main` — from that moment it may already be applied to a production database. An edit causes checksum errors at boot on upgraded instances.
+   Fresh installs silently get a different schema. Fix mistakes **forward** with a new changelog file. Liquibase [excludes preconditions, contexts and labels from checksums](https://www.liquibase.com/blog/what-affects-changeset-checksums).
+   It ignores deleted changesets.
+   Thus, those edits make installed instances inconsistent without an error.
+2. **`master.xml` is append-only.** Never remove or reorder existing `<include>` entries.
+   New changelogs go at the end. The maintainer-approved v0.77.4 cut-point guard is a
    changelog-level precondition at the head, not a change to released changesets. It protects
    both startup and `changeLogSyncToTag` without changing checksums or include order.
 3. **Destructive changes follow deprecate-then-remove across two releases.** Renaming or
-   dropping a table/column that shipped in a release happens in two steps: release *N*
-   stops writing/reading it (and migrates data if needed), release *N+1* drops it. A single
+   dropping a released table or column happens in two steps.
+   Release *N* stops reads and writes, and migrates data if necessary.
+   Release *N+1* drops it. A single
    release must stay bootable against the schema left behind by the previous one.
 
-CI enforces 1 and 2 mechanically (see below); 3 is a review responsibility. The sole archival
+CI enforces 1 and 2 mechanically (see below). 3 is a review responsibility. The sole archival
 transition is the verified v0.77.4 baseline: archived files remain byte-identical and test-only.
 The baseline and subsequent migrations follow the same immutability policy. Existing installations
 must follow the [baseline synchronization runbook](../admin/liquibase-baseline-runbook).
@@ -99,69 +114,74 @@ must follow the [baseline synchronization runbook](../admin/liquibase-baseline-r
 
 Objects the application stopped writing, to be dropped in the release after the one that shipped
 the listed changelog. Each is excluded from the
-drift gate in `--exclude-objects` (`server/application/build.gradle.kts`, `liquibaseDiff`); the
+drift gate in `--exclude-objects` (`server/application/build.gradle.kts`, `liquibaseDiff`). The
 changeset that drops the object also removes its exclusion.
 
-| Object | Changelog that stopped writing it | Exclusion to remove |
-|---|---|---|
-| `consent_notice` table | `1789067582535_changelog.xml` | `table:consent_notice` |
-| `consent_decision.notice_sha256` column | `1789067582535_changelog.xml` | `column:notice_sha256` |
-| `product_survey_submission` table | `1789117764980_changelog.xml` | `table:product_survey_submission` |
-| `llm_model.supports_reasoning`, `workspace_llm_model.supports_reasoning` columns | `1789135709162_changelog.xml` | `column:supports_reasoning` |
+| Object                                                                           | Changelog that stopped writing it | Exclusion to remove               |
+| -------------------------------------------------------------------------------- | --------------------------------- | --------------------------------- |
+| `consent_notice` table                                                           | `1789067582535_changelog.xml`     | `table:consent_notice`            |
+| `consent_decision.notice_sha256` column                                          | `1789067582535_changelog.xml`     | `column:notice_sha256`            |
+| `product_survey_submission` table                                                | `1789117764980_changelog.xml`     | `table:product_survey_submission` |
+| `llm_model.supports_reasoning`, `workspace_llm_model.supports_reasoning` columns | `1789135709162_changelog.xml`     | `column:supports_reasoning`       |
 
 ## CI validation
 
 1. **Migration-chain replay, schema drift and ERD** — Build workflow, job *App Server: Generated
-   artifacts*. `vp run db:check-drift` applies the full `master.xml` chain to an empty database
-   from the repository's PostgreSQL image (`docker/postgres`) and diffs the result against the JPA
-   entities; a changelog that does not parse or apply fails here. `vp run db:generate-erd-docs`
+   artifacts*. `vp run db:check-drift` applies the full `master.xml` chain to an empty database from the repository's PostgreSQL image (`docker/postgres`).
+   It compares the result with the JPA entities. A changelog that does not parse or apply fails here. `vp run db:generate-erd-docs`
    then has to leave `docs/contributor/erd/schema.mmd` unchanged.
 2. **Changelog immutability** — Security workflow, job *Dependencies, secrets, and policy*, step
-   *Changelog immutability guard*. A git diff from the PR base commit fails if any file under
-   `db/changelog/` was modified, renamed or deleted, or if an existing `<include>` in
-   `master.xml` was removed, reordered or had its attributes changed. The v0.77.4 transition additionally requires the
-   pinned original master and byte-identical archives; it is not a general squash bypass.
-3. **Seeded release upgrade** — `release-upgrade.yml` runs three independent paths: the previous
-   stable release, pinned v0.77.4 → baseline synchronization → target release, and pinned v0.76.0
-   → expected refusal. Successful upgrades check readiness, seeded relationships, the practice
-   catalog and authenticated reads. The refusal path checks both startup and `changeLogSyncToTag`,
-   the required v0.77.4 message, unchanged data and history, and a released lock. Release publication
-   depends on every path; the same matrix also runs weekly.
+   *Changelog immutability guard*. A git diff from the PR base commit checks two conditions.
+   No file under `db/changelog/` can have a modification, rename, or deletion.
+   No existing `<include>` in `master.xml` can have a removal, order change, or attribute change.
+   Either prohibited change fails the check. The v0.77.4 transition also requires the
+   pinned original master and byte-identical archives. It is not a general squash bypass.
+3. **Seeded release upgrade** — `release-upgrade.yml` runs three independent paths.
+   One upgrades the previous stable release.
+   One follows pinned v0.77.4 → baseline synchronization → target release.
+   One follows pinned v0.76.0 → expected refusal. Successful upgrades check readiness, seeded relationships, the practice
+   catalog and authenticated reads. The refusal path checks both startup and `changeLogSyncToTag`.
+   It checks the required v0.77.4 message, unchanged data and history, and a released lock. Release publication
+   depends on every path. The same matrix also runs weekly.
 
 The empty-database replay sets no context filter. It evaluates the full chain, but preconditions can
-skip changesets; a successful replay does not prove that every change ran. It also does not reproduce
+skip changesets. A successful replay does not prove that every change ran. It also does not reproduce
 the context selection of a `dev` or `prod` boot (`spring.liquibase.contexts`).
 
 Add focused migration tests for populated tables, rejected database states and any supported rollback.
 Empty-database replay cannot prove that existing rows satisfy a new `NOT NULL` or `CHECK` constraint,
 and it does not exercise rollback. Preconditions run during replay, but only against the states that
 replay reaches. The JPA diff cannot establish equivalence for objects Hibernate does not model, such
-as triggers, partitioning and partial-index predicates; verify those through database-level tests.
+as triggers, partitioning and partial-index predicates. Verify those through database-level tests.
 
 ## Baseline release gates
 
-The v0.77.4 baseline remains the baseline for 1.0. **A future baseline is permitted only at a
-major-version boundary and only with automated synchronization.** Released migrations and the
+The v0.77.4 baseline remains the baseline for 1.0. **A future baseline requires both a major-version boundary and automated synchronization.** Released migrations and the
 archived chain remain immutable.
 
 A global Liquibase precondition checks the database cut-point before either update or synchronization.
 Liquibase permits one global `preConditions` container, so the guard shares it with the PostgreSQL 18
 check. Its failure message covers both prerequisites. Migration identities use id, author and logical
-filename, not just id or row count. An empty history is permitted for fresh initialization; the
+filename, not just id or row count. An empty history is permitted for fresh initialization. The
 baseline's existing schema precondition still refuses a partially populated schema.
 
 [Liquibase preconditions](https://docs.liquibase.com/concepts/changelogs/preconditions.html) use lazy
 evaluation, so a missing history table never reaches the row query.
 [Liquibase 5.0.4 validates the changelog](https://github.com/liquibase/liquibase/blob/v5.0.4/liquibase-standard/src/main/java/liquibase/command/core/helpers/DatabaseChangelogCommandStep.java)
-before `changeLogSyncToTag`; changeset-level preconditions cannot protect that command.
-The baseline integration suite proves refusal without DDL, fresh initialization, native-object
-equivalence, synchronization without DDL or data loss, subsequent upgrades and lock recovery in
-both `dev` and `prod`.
+before `changeLogSyncToTag`. Changeset-level preconditions cannot protect that command.
+The baseline integration suite proves these properties in both `dev` and `prod`:
+
+- Refusal without DDL.
+- Fresh initialization.
+- Native-object equivalence.
+- Synchronization without DDL or data loss.
+- Subsequent upgrades.
+- Lock recovery.
 
 - Record a seven-calendar-day staging soak against a restored production snapshot before production.
 - Freeze new changelogs for at least 48 hours after production deployment.
 - Keep `docs/db/archive/v0.77.4/` for at least two release cycles. Historical regression tests use it
-  only as test resources; it must not enter the application JAR.
+  only as test resources. It must not enter the application JAR.
 - Announce the cut-point and synchronization requirement before merging. Developer reset:
   `vp run dev:reset`, then `vp run dev`. This destroys local database data.
 
@@ -176,21 +196,20 @@ Severity is required only for `NOT_MET`. The forward migration maps the previous
 outcomes for archival integrity and refuses inconsistent historical rows rather than inventing
 certainty or severity. It does not reassess old evidence against the complete practice standard.
 
-Historical revision fingerprints remain unchanged. Earlier fingerprint schemes and missing
-fingerprints are `UNVERIFIABLE` under the current standard, so these observations remain available
-in authorized history but do not count as current evidence; a review-run summary counts their met or
+Historical revision fingerprints remain unchanged. Earlier fingerprint schemes and missing fingerprints are `UNVERIFIABLE` under the current standard.
+These observations remain available in authorized history, but do not count as current evidence. A review-run summary counts their met or
 not-met verdict as undecided. A new review receives a new immutable revision under the current
-fingerprint scheme; old observations retain their original revision.
+fingerprint scheme. Old observations retain their original revision.
 
-The migration keeps criteria as they were written: installed bundled copies in workspaces, instance
-overrides of bundled practices and custom definitions all keep their pre-cutover criteria, including
-instructions written for the presence and assessment matrix. Keep automated reviews paused until every
-active definition states its positive standard under the new outcome contract: instance overrides
-first, then workspace copies through audited catalogue releases, and custom practices in the editor.
+The migration keeps criteria as written before cutover, including instructions for the presence and assessment matrix.
+This applies to installed bundled workspace copies, instance overrides of bundled practices, and custom definitions.
+Keep automated reviews paused until every active definition states its positive standard under the new outcome contract.
+Update instance overrides first.
+Then update workspace copies through audited catalog releases and custom practices in the editor.
 
 Before upgrading, make and verify a database backup. Upgrade the server, sandbox runtime, webapp
 and custom API consumers together. The migration removes the old assessment axes and nested
-practice bindings; there are no compatibility readers. Consumers must use the explicit `outcome`
+practice bindings. There are no compatibility readers. Consumers must use the explicit `outcome`
 and the flat practice definition. Restore the verified backup to undo the destructive cutover.
 
 Preserve schema versions on exported evaluation data. Frozen historical reports must not be silently

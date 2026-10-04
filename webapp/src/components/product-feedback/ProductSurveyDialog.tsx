@@ -19,7 +19,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { hasText } from "@/lib/text";
 
 import { READERS } from "./feedback-copy";
-import { isResearch, studyOf, SURVEY_PURPOSE_DEFS } from "./survey-purpose-defs";
+import { isResearch, researchOf, SURVEY_PURPOSE_DEFS } from "./survey-purpose-defs";
 import { type SurveyResponseDraft, surveyEstimate } from "./survey-questions";
 import { SurveyQuestionnaire } from "./SurveyQuestionnaire";
 
@@ -37,7 +37,7 @@ export interface ProductSurveyDialogProps {
 
 /**
  * The draft belongs to the host so closing keeps it; declining is a ghost button so it never
- * competes with Send. A research survey says whose study the answers join and where to withdraw,
+ * competes with Send. A research survey says whose research the answers join and where to withdraw,
  * because the member agreed to a named organisation, not to surveys in general.
  */
 export function ProductSurveyDialog({
@@ -93,20 +93,23 @@ export function ProductSurveyDialog({
 						<p className="text-xs text-muted-foreground">
 							{isResearch(survey) ? (
 								<>
-									Part of {studyOf(survey)}, which you agreed to join. Your answers go to that
-									study, linked to your account, and are kept apart from product feedback. Skip
-									anything you’d rather not answer. You can leave the study in{" "}
+									Part of {researchOf(survey)}, which you allowed. Your answers go to that research,
+									linked to your account, and are kept apart from product feedback. Skip any
+									question you prefer not to answer. You can withdraw in{" "}
 									<Link
 										to="/settings"
 										className="underline underline-offset-2"
 										onClick={() => onOpenChange(false)}
 									>
 										User settings
-									</Link>{" "}
-									— answers already sent stay with the study.
+									</Link>
+									. Answers already sent stay with the research.
 								</>
 							) : (
-								<>Read by {READERS}, with your name attached. Not research.</>
+								<>
+									Your answers go to {READERS}, with your name attached. This survey is not
+									research.
+								</>
 							)}
 						</p>
 					</DialogHeader>

@@ -109,7 +109,7 @@ export const DeletedAccountFallback: Story = {
 
 export const RowDetail: Story = {
 	play: async ({ canvas }) => {
-		const [firstDetails] = canvas.getAllByRole("button", { name: /View details/iu });
+		const [firstDetails] = canvas.getAllByRole("button", { name: /^View details for/iu });
 		if (!firstDetails) {
 			throw new Error("The table rendered no rows to open");
 		}
@@ -130,7 +130,7 @@ export const ElevatedWorkspaceAccess: Story = {
 export const ElevatedRowDetail: Story = {
 	args: { events: [elevatedAccess] },
 	play: async ({ canvas }) => {
-		const [details] = canvas.getAllByRole("button", { name: /View details/iu });
+		const [details] = canvas.getAllByRole("button", { name: /^View details for/iu });
 		if (!details) {
 			throw new Error("The table rendered no rows to open");
 		}
@@ -165,7 +165,7 @@ export const EmptyWithFilter: Story = {
 export const ErrorState: Story = {
 	args: { events: [], isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/Couldn’t load the audit log/iu);
+		canvas.getByText(/We could not load the audit log/iu);
 	},
 };
 
@@ -212,9 +212,9 @@ export const AccountlessUserView: Story = {
 		canvas.getByText("High-risk event:");
 		await expect(canvas.getByText("Elevated")).toBeVisible();
 		await expect(
-			canvas.getByRole("button", { name: "View details: User view authorized — Grace Hopper" }),
+			canvas.getByRole("button", { name: "View details for User view authorized, Grace Hopper" }),
 		).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: /View details/u }));
+		await userEvent.click(canvas.getByRole("button", { name: /^View details for/u }));
 		await expectSettledVisible(await screen.findByText("Viewed user"));
 		screen.getByText("#99");
 	},

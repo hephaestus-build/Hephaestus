@@ -4,163 +4,205 @@ title: Configuration readiness
 
 # Configuration readiness
 
-The production profile validates deployment settings during startup. The server-role endpoint
-`GET /api/admin/configuration-readiness` returns those facts plus checks that need runtime state. It
-requires the `app_admin` authority and is available only when boot-fatal checks pass. Diagnostics
-never contain configured values.
+The production profile checks deployment settings at startup.
+The server-role endpoint `GET /api/admin/configuration-readiness` returns those facts and checks that need runtime state.
+It requires the `app_admin` authority.
+It is available only after checks that can prevent startup pass.
+Diagnostics never contain configured values.
 
-Each fact has a stable `id`, the affected configuration `subject`, applicable runtime `roles`, a
-`requirement`, a `status`, an explanation, and a documentation link. Requirements are `REQUIRED`,
-`RECOMMENDED`, or `OPTIONAL`. Status is one of:
+Each fact has these fields:
 
-| Status | Meaning |
-| --- | --- |
-| `SATISFIED` | The applicable check passed. |
-| `ACTION_REQUIRED` | An applicable check failed. During startup, required deployment facts with this status prevent startup. |
-| `NOT_CONFIGURED` | An optional setting is absent. |
-| `NOT_APPLICABLE` | The check does not apply to this process's runtime roles. |
+- A stable `id`.
+- The affected configuration `subject`.
+- Applicable runtime `roles`.
+- A `requirement` and a `status`.
+- An explanation and a documentation link.
+
+Requirements are `REQUIRED`, `RECOMMENDED`, or `OPTIONAL`.
+Status is one of:
+
+| Status            | Meaning                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------- |
+| `SATISFIED`       | The applicable check passed.                                                            |
+| `ACTION_REQUIRED` | An applicable check failed. Required deployment facts with this status prevent startup. |
+| `NOT_CONFIGURED`  | An optional setting is absent.                                                          |
+| `NOT_APPLICABLE`  | The check does not apply to this process's runtime roles.                               |
 
 The table names variables inside the application container. In the supported self-host stack,
 Compose maps `POSTGRES_PASSWORD` to `DATABASE_PASSWORD` and owns the runtime-role values.
 
-| Setting | Application environment variable |
-| --- | --- |
-| `spring.datasource.url` | `DATABASE_URL` |
-| `spring.datasource.username` | `DATABASE_USERNAME` |
-| `spring.datasource.password` | `DATABASE_PASSWORD` |
-| `hephaestus.runtime.server.enabled` | `HEPHAESTUS_RUNTIME_SERVER_ENABLED` |
-| `hephaestus.runtime.worker.enabled` | `HEPHAESTUS_RUNTIME_WORKER_ENABLED` |
-| `hephaestus.runtime.webhook.enabled` | `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED` |
-| `hephaestus.host-url` | `APPLICATION_HOST_URL` |
-| `hephaestus.security.encryption-key` | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` |
+| Setting                                         | Application environment variable                |
+| ----------------------------------------------- | ----------------------------------------------- |
+| `spring.datasource.url`                         | `DATABASE_URL`                                  |
+| `spring.datasource.username`                    | `DATABASE_USERNAME`                             |
+| `spring.datasource.password`                    | `DATABASE_PASSWORD`                             |
+| `hephaestus.runtime.server.enabled`             | `HEPHAESTUS_RUNTIME_SERVER_ENABLED`             |
+| `hephaestus.runtime.worker.enabled`             | `HEPHAESTUS_RUNTIME_WORKER_ENABLED`             |
+| `hephaestus.runtime.webhook.enabled`            | `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED`            |
+| `hephaestus.host-url`                           | `APPLICATION_HOST_URL`                          |
+| `hephaestus.security.encryption-key`            | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`            |
 | `hephaestus.security.credential-encryption-key` | `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` |
-| `hephaestus.webhook.secret` | `WEBHOOK_SECRET` |
-| `hephaestus.webhook.routing.secret` | `WEBHOOK_ROUTING_SECRET` |
-| `hephaestus.webhook.routing.previous-secret` | `WEBHOOK_ROUTING_PREVIOUS_SECRET` |
-| `hephaestus.sync.nats.enabled` | `NATS_ENABLED` |
-| `hephaestus.sync.nats.server` | `NATS_SERVER` |
-| `hephaestus.sync.nats.username` | `NATS_USERNAME` |
-| `hephaestus.sync.nats.password` | `NATS_PASSWORD` |
-| `hephaestus.auth.state-cookie-key` | `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` |
-| `hephaestus.llm.egress.allow-loopback` | `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` |
-| `hephaestus.agent.image.require-digest` | `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` |
-| `hephaestus.agent.image.reference` | `HEPHAESTUS_AGENT_IMAGE_REFERENCE` |
-| `hephaestus.sandbox.docker.container-runtime` | `SANDBOX_DOCKER_CONTAINER_RUNTIME` |
-| `hephaestus.sentry.dsn` | `SENTRY_DSN` |
-| `spring.mail.host` | `SPRING_MAIL_HOST` |
-| `hephaestus.email.from` | `HEPHAESTUS_EMAIL_FROM` |
+| `hephaestus.webhook.secret`                     | `WEBHOOK_SECRET`                                |
+| `hephaestus.webhook.routing.secret`             | `WEBHOOK_ROUTING_SECRET`                        |
+| `hephaestus.webhook.routing.previous-secret`    | `WEBHOOK_ROUTING_PREVIOUS_SECRET`               |
+| `hephaestus.sync.nats.enabled`                  | `NATS_ENABLED`                                  |
+| `hephaestus.sync.nats.server`                   | `NATS_SERVER`                                   |
+| `hephaestus.sync.nats.username`                 | `NATS_USERNAME`                                 |
+| `hephaestus.sync.nats.password`                 | `NATS_PASSWORD`                                 |
+| `hephaestus.auth.state-cookie-key`              | `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`              |
+| `hephaestus.llm.egress.allow-loopback`          | `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK`          |
+| `hephaestus.agent.image.require-digest`         | `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST`         |
+| `hephaestus.agent.image.reference`              | `HEPHAESTUS_AGENT_IMAGE_REFERENCE`              |
+| `hephaestus.sandbox.docker.container-runtime`   | `SANDBOX_DOCKER_CONTAINER_RUNTIME`              |
+| `hephaestus.sentry.dsn`                         | `SENTRY_DSN`                                    |
+| `spring.mail.host`                              | `SPRING_MAIL_HOST`                              |
+| `hephaestus.email.from`                         | `HEPHAESTUS_EMAIL_FROM`                         |
 
 ## Runtime roles
 
-Enable at least one of `hephaestus.runtime.server.enabled`, `worker.enabled`, or `webhook.enabled`;
-each accepts only `true` or `false`.
-The supported split topology enables only webhook on the webhook process, only worker on a remote
-worker, and server (optionally with a colocated worker) on the application process.
+1. Enable at least one of `hephaestus.runtime.server.enabled`, `worker.enabled`, or `webhook.enabled`.
+2. Use only `true` or `false` for each value.
+
+The supported split topology enables only webhook on the webhook process and only worker on a remote worker.
+The application process enables server, optionally with a colocated worker.
 
 ## Database
 
-Every role uses PostgreSQL. `DATABASE_URL` must be a PostgreSQL URL; the production profile adds the
-`jdbc:` prefix. Supply a non-empty username and password. This syntax check does not replace the
-connection and migration health checks performed by Spring Boot and Liquibase.
+Every role uses PostgreSQL.
+`DATABASE_URL` must be a PostgreSQL URL.
+The production profile adds the `jdbc:` prefix.
+Spring Boot and Liquibase perform separate connection and migration health checks.
+This syntax check does not replace them.
 
-Remote databases require TLS. Prefer `sslmode=verify-full`, which encrypts the connection and verifies
-the server identity. `sslmode=require` encrypts without verifying identity. Production startup rejects
-plaintext remote connections unless `HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE=true` explicitly permits
-them.
+1. Supply a non-empty username.
+2. Supply a non-empty password.
+
+Remote databases require TLS.
+Prefer `sslmode=verify-full`, which encrypts the connection and verifies server identity.
+`sslmode=require` encrypts without identity verification.
+Production startup rejects plaintext remote connections unless `HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE=true` explicitly permits them.
 
 ## Credential encryption
 
-Set both encryption keys to exactly 32 printable, non-space ASCII characters and keep them with the
-database backup. The supported self-host setup generates the master key and copies it into an empty credential-key
-setting. These are separate settings even when their initial values match. Do not change the general encryption
-key on an existing installation. Rotate the credential key with the documented online procedure.
+:::caution CAUTION: Preserve encryption keys
+
+Do not change the general encryption key on an existing installation.
+Rotate the credential key with the documented online procedure.
+
+:::
+
+1. Set each encryption key to exactly 32 printable, non-space ASCII characters.
+2. Keep both keys with the database backup.
+
+The supported self-host setup generates the master key and copies it into an empty credential-key setting.
+These settings are separate even when their initial values match.
 
 ## External URL
 
-Set `hephaestus.host-url` to the public HTTPS origin, without credentials, a path other than `/`, a
-query, or a fragment.
+Set `hephaestus.host-url` to the public HTTPS origin.
+The origin must have no credentials, query, fragment, or path other than `/`.
 
 ## Webhooks
 
-Server and webhook roles require `hephaestus.webhook.secret` with at least 32 printable, non-space ASCII
-characters. The supported self-host setup generates an independent value; never reuse another
-application key.
+Server and webhook roles require `hephaestus.webhook.secret` with at least 32 printable, non-space ASCII characters.
+The supported self-host setup generates an independent value.
+Never reuse another application key.
 
-The REQUIRED fact `webhook.routing-secret` applies to server and webhook roles on every production
-deployment, even without GitLab. Set `WEBHOOK_ROUTING_SECRET` to at least 32 printable, non-space
-ASCII characters, different from `WEBHOOK_SECRET`. Use the same value on both roles.
+The REQUIRED fact `webhook.routing-secret` applies to server and webhook roles on every production deployment, even without GitLab.
+
+1. Set `WEBHOOK_ROUTING_SECRET` to at least 32 printable, non-space ASCII characters.
+2. Use a value different from `WEBHOOK_SECRET`.
+3. Use the same value on both roles.
 
 ## NATS
 
-Server and webhook roles require NATS and an explicit `nats://` or `tls://` URI with a host, an optional
-valid port, and no query, fragment, or non-root path. A worker-only process must disable NATS because
-its job queue is PostgreSQL-backed. The supported Compose deployment requires `NATS_USERNAME` and `NATS_PASSWORD`;
-setup generates both. This credential requirement comes from Compose, not a readiness fact.
-Readiness validates syntax and role consistency, not
-connectivity or JetStream health.
+Server and webhook roles require NATS and an explicit `nats://` or `tls://` URI.
+The URI must have a host and, optionally, a valid port.
+It must have no query, fragment, or non-root path.
+A worker-only process must disable NATS because its job queue uses PostgreSQL.
+
+The supported Compose deployment requires `NATS_USERNAME` and `NATS_PASSWORD`.
+Setup generates both.
+Compose, not a readiness fact, requires these credentials.
+Readiness checks syntax and role consistency, not connectivity or JetStream health.
 
 ## Login
 
-The server role requires a Base64-encoded 32-byte `hephaestus.auth.state-cookie-key` and an enabled
-GitHub or GitLab sign-in provider in the database-backed provider catalogue. Environment provider
-entries are seeds, not the readiness authority. Slack and Outline are link-only providers and do not
-satisfy sign-in readiness. Worker and webhook roles do not load login providers.
+The server role requires a Base64-encoded 32-byte `hephaestus.auth.state-cookie-key`.
+It also requires an enabled GitHub or GitLab sign-in provider in the database-backed provider catalogue.
+Environment provider entries are seeds, not the readiness authority.
+Slack and Outline are link-only providers and do not satisfy sign-in readiness.
+Worker and webhook roles do not load login providers.
 
-Compose does not forward custom auth session or user-view rate-limit variables. To change the
-properties below, supply an explicit application-server environment or mounted configuration override.
-A value placed only in the stack's `.env` does not change these limits.
+Compose does not forward custom auth session or user-view rate-limit variables.
+To change the properties below, supply an explicit application-server environment or mounted configuration override.
+A value only in the stack's `.env` does not change these limits.
 
 ### Recent sign-in for sensitive actions
 
-Changing an account's role, forcing an account out of all its sessions, viewing as a user,
-changing a login provider, registering an LLM connection, and linking an identity all require a
-sign-in from the last few minutes. `hephaestus.auth.step-up-max-age` sets that window; it defaults to
-`5m` and must be a positive duration shorter than the absolute session lifetime, or the gate can
-never bind.
+These actions require a sign-in from the last few minutes:
 
-Confirming access uses a provider the account is already linked to. This is a local confirmation, not
-multi-factor authentication: an identity provider that still holds a session may complete it without
-asking for anything, so enforce MFA at the provider. A refused action is not replayed once access is
-confirmed — review it and submit it again.
+- Change an account's role.
+- Force an account out of all its sessions.
+- View as a user.
+- Change a login provider.
+- Register an LLM connection.
+- Link an identity.
+
+`hephaestus.auth.step-up-max-age` sets that window and defaults to `5m`.
+It must be a positive duration shorter than the absolute session lifetime.
+Otherwise, the gate can never bind.
+
+Access confirmation uses a provider already connected to the account.
+This is local confirmation, not multi-factor authentication.
+An identity provider with an existing session may complete it without another request to the user.
+Enforce MFA at the provider.
+
+The server does not replay a refused action after access confirmation.
+
+1. Review the action.
+2. Submit it again.
 
 ### Session deadlines
 
-The access cookie lasts `24h` by default (`hephaestus.auth.access-ttl`). The browser renews it
-approximately hourly while active, before expiry, or when returning to a tab whose renewal is due.
-Hidden or inactive tabs do not continuously renew it. This is a renewable credential lifetime, not a precise
-last-request idle timeout: after the cookie expires, signing in is required. Tokens stay in HttpOnly,
-Secure, host-only, SameSite=Lax cookies in production; they are never stored in browser local storage.
+The access cookie lasts `24h` by default (`hephaestus.auth.access-ttl`).
+While active, the browser renews it about hourly, before expiry, or after a return to a tab whose renewal is due.
+Hidden or inactive tabs do not renew it continuously.
+This is a renewable credential lifetime, not a precise last-request idle timeout.
+After the cookie expires, the user must sign in.
 
-A session ends at `hephaestus.auth.session-max-lifetime` (default `7d`) no matter how active it is;
-renewing an access token rolls within that deadline and never past it. Reads through a
-[user view](/contributor/instance-admin#read-only-user-views) are budgeted per instance
-administrator: `hephaestus.auth.rate-limit.user-view.capacity` per
-`hephaestus.auth.rate-limit.user-view.period`, 120 per minute by default. Every read about the
-viewed member counts, so one page usually spends several. While the rate-limit store is
-unavailable, views are refused rather than left unbudgeted.
+In production, tokens stay in HttpOnly, Secure, host-only, SameSite=Lax cookies.
+The browser never stores them in local storage.
+A session ends at `hephaestus.auth.session-max-lifetime` (default `7d`), regardless of activity.
+Access token renewal stays within that deadline, never past it.
+
+Reads through a [user view](/contributor/instance-admin#read-only-user-views) have a per-instance-admin budget.
+`hephaestus.auth.rate-limit.user-view.capacity` per `hephaestus.auth.rate-limit.user-view.period` defaults to 120 per minute.
+Every read about the viewed member counts, so one page usually uses several.
+If the rate-limit store is unavailable, the server refuses views rather than permitting them without a budget.
 
 ### Choosing session limits
 
 Longer sessions reduce interruptions but increase exposure to stolen cookies and unattended devices.
-The defaults suit individual devices used for routine team work. Shorten both limits for shared
-computers or sensitive deployments; require MFA at the identity provider. The recent-sign-in gate
-above does not establish a second factor.
+The defaults suit individual devices for routine team work.
+For shared computers or sensitive deployments, shorten both limits.
+Require MFA at the identity provider.
+The recent-sign-in gate above does not establish a second factor.
 
-[NIST SP 800-63B-4 §2.1.3](https://pages.nist.gov/800-63-4/sp800-63b.html#aal1reauth) recommends an
-overall timeout of no more than 30 days at AAL1 and does not require an inactivity timeout there.
-[OWASP's session guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#automatic-session-expiration)
-gives more conservative examples: 15–30 minutes idle and a 4–8 hour overall timeout. These are
-risk-based reference points, not an assurance-level certification for Hephaestus.
+[NIST SP 800-63B-4 §2.1.3](https://pages.nist.gov/800-63-4/sp800-63b.html#aal1reauth) recommends an overall timeout of no more than 30 days at AAL1.
+It does not require an inactivity timeout there.
+[OWASP's session guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#automatic-session-expiration) gives more conservative examples: 15–30 minutes idle and a 4–8 hour overall timeout.
+These are risk-based reference points, not an assurance-level certification for Hephaestus.
 
-Explicit overrides take precedence over defaults. Renewal applies the configured access lifetime but
-preserves the session's original absolute deadline and sign-in time. Revocation and account
-suspension still deny access before either deadline.
+Explicit overrides take precedence over defaults.
+Renewal applies the configured access lifetime but preserves the session's original absolute deadline and sign-in time.
+Revocation and account suspension still deny access before either deadline.
 
-Temporary renewal failures leave the page open; they do not bypass server authentication. A failed
-sign-out reports an error and can be retried. If the server rotates a token but its response is lost,
-signing in again may be necessary. Cross-tab coordination requires
-[Web Locks support](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API) and a secure
-context (HTTPS in production).
+Temporary renewal failures leave the page open.
+They do not bypass server authentication.
+A failed sign-out reports an error, which the user can retry.
+If the server rotates a token but its response is lost, the user may need to sign in again.
+Cross-tab coordination requires [Web Locks support](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API) and a secure context (HTTPS in production).
 
 ## LLM proxy
 
@@ -182,117 +224,187 @@ recommendation is non-fatal.
 
 For the single-host deployment, keep the local Unix socket default. Docker-specific settings under
 `hephaestus.sandbox.docker.*` apply to processes with the worker role enabled.
-The gateway keeps its independent `hephaestus.sandbox.gateway.*` settings; resource limits, capacity
-and workspace transfer limits remain under `hephaestus.sandbox.*`.
+The gateway keeps its independent `hephaestus.sandbox.gateway.*` settings.
+Resource limits, capacity, and workspace transfer limits remain under `hephaestus.sandbox.*`.
 
-| Property under `hephaestus.sandbox.docker` | Environment variable                     | Default                       |
-| ------------------------------------------ | ---------------------------------------- | ----------------------------- |
-| `host`                                     | `SANDBOX_DOCKER_HOST`                    | `unix:///var/run/docker.sock` |
-| `tls-verify`                               | `SANDBOX_DOCKER_TLS_VERIFY`              | `false`                       |
-| `cert-path`                                | `SANDBOX_DOCKER_CERT_PATH`               | unset                         |
-| `container-runtime`                        | `SANDBOX_DOCKER_CONTAINER_RUNTIME`       | Docker daemon default         |
-| `owner`                                    | `SANDBOX_DOCKER_OWNER`                   | `default`                     |
+| Property under `hephaestus.sandbox.docker` | Environment variable               | Default                       |
+| ------------------------------------------ | ---------------------------------- | ----------------------------- |
+| `host`                                     | `SANDBOX_DOCKER_HOST`              | `unix:///var/run/docker.sock` |
+| `tls-verify`                               | `SANDBOX_DOCKER_TLS_VERIFY`        | `false`                       |
+| `cert-path`                                | `SANDBOX_DOCKER_CERT_PATH`         | unset                         |
+| `container-runtime`                        | `SANDBOX_DOCKER_CONTAINER_RUNTIME` | Docker daemon default         |
+| `owner`                                    | `SANDBOX_DOCKER_OWNER`             | `default`                     |
 
-Compose forwards these variables to `application-worker` only; `application-server` runs without the
-worker role. Each worker joins a job network as the container Docker identifies by its default
-hostname, so keep the worker's default hostname; a worker running outside Docker joins none, and its
-practice reviews, which run on an internal network, are refused.
+Compose forwards these variables only to `application-worker`.
+`application-server` runs without the worker role.
+Each worker joins a job network as the container Docker identifies by its default hostname.
+Keep the worker's default hostname.
+A worker outside Docker joins no job network.
+The server refuses its practice reviews, which run on an internal network.
 
-Use a distinct `owner` for each installation that shares a Docker daemon but uses a different
-database. All worker-capable roles of the same installation must use the same stable value.
-It accepts 1–63 lowercase letters, digits and hyphens, starting with a letter or digit.
-Container inventory, capacity accounting and cleanup select the `hephaestus.sandbox-owner` label;
-job and interactive-session networks use `hephaestus-sandbox-<owner>--<UUID>`.
-This prevents accidental cross-installation cleanup; it is not an authorization boundary against
-a process with Docker daemon access.
+Use a distinct `owner` for each installation that shares a Docker daemon but uses a different database.
+All worker-capable roles of the same installation must use the same stable value.
+It accepts 1–63 lowercase letters, digits, and hyphens, with a letter or digit first.
+Container inventory, capacity accounting, and cleanup select the `hephaestus.sandbox-owner` label.
+Job and interactive-session networks use `hephaestus-sandbox-<owner>--<UUID>`.
+This prevents accidental cross-installation cleanup.
 
-Interactive-session networks, attempt volumes and containers also record the application container
-that started them, found by its own `HOSTNAME`, and when it started. Cleanup removes them only
-after that container has stopped or restarted, and keeps any whose owner it cannot establish. So
-keep the default container hostname: with a customised `hostname:` or an application running
-outside Docker, the application logs that it cannot identify its container, and interactive
-resources a crash leaves behind must be removed by hand; until then that session cannot start a
-new sandbox, and the error names the network. Networks created before this record
-existed are kept for the same reason.
+It is not an authorization boundary against a process with Docker daemon access.
+Interactive-session networks, attempt volumes, and containers also record the application container that started them, identified by its own `HOSTNAME`.
+They record its start time.
+Cleanup removes them only after that container stops or restarts.
+It keeps resources whose owner it cannot establish.
 
-The REQUIRED fact `sandbox.docker-legacy-configuration` rejects old Docker settings outside
-`hephaestus.sandbox.docker.*` on workers. Move them to the property names above; the old settings
-are not read.
+Keep the default container hostname.
+With a custom `hostname:` or an application outside Docker, the application logs that it cannot identify its container.
+After a crash, those interactive resources require manual removal.
+Until removal, that session cannot start a new sandbox.
+The error names the network.
+Cleanup also keeps networks created before this record existed.
+
+The REQUIRED fact `sandbox.docker-legacy-configuration` rejects old Docker settings outside `hephaestus.sandbox.docker.*` on workers.
+Move them to the property names above.
+The worker does not read the old settings.
 
 #### Removing leftover sandbox networks
 
-A sandbox network's name only identifies its session. It does not show that nothing uses the network:
-while a conversation's sandbox starts, which can take minutes, the application container can be the
-only thing attached. So establish its owner first.
+:::caution CAUTION: Establish network ownership before removal
+
+A sandbox network's name identifies only its session, not whether the network is unused.
+A conversation's sandbox can take minutes to start.
+During that time, only the application container may be attached.
+Establish the owner before you remove the network.
+
+:::
 
 1. Read the recorded creator:
-   `docker network inspect --format '{{index .Labels "hephaestus.creator-container"}} {{index .Labels "hephaestus.creator-started-at"}}' <network>`.
-2. If a creator is recorded, check it with
-   `docker container inspect --format '{{.State.Running}} {{.State.StartedAt}}' <creator>`.
-   If it is running with the recorded start time, it still owns the network: leave it. If it no
-   longer exists, has stopped, or has started again since, automatic cleanup removes the network on
-   its next pass; nothing needs doing by hand.
-3. If no creator is recorded, or the check cannot be read, nothing but a pause proves the network
-   unused. Stop every application process of this installation (this `owner`) that uses this Docker
-   daemon, application server and workers alike, so none can start or attach a sandbox. Other
-   installations on the daemon are unaffected.
-4. Only then inspect the network afresh:
-   `docker network inspect --format '{{range $id, $c := .Containers}}{{$id}} {{$c.Name}}{{println}}{{end}}' <network>`.
-   Resolve the configured app-server container to its full id with
-   `docker container inspect --format '{{.Id}}' <app-server-container>`. If any attached container
-   has another id, a sandbox still uses the network: leave it.
-5. Disconnect the app-server container, if it is still attached, by that full id, then remove the
-   network: `docker network disconnect <network> <app-server-id>` and `docker network rm <network>`.
-6. The network name ends in the session id. Remove that session's attempt volumes with
-   `docker volume ls -q --filter label=hephaestus.session-id=<session-id>` and `docker volume rm`,
-   which refuses a volume a container still uses.
 
-Before upgrading from unscoped sandbox ownership or changing `owner`, drain reviews and interactive
-sessions and stop that installation's workers. Remove its remaining containers and networks only
-after verifying ownership. Cleanup never adopts containers labelled `hephaestus.managed=true`,
-`agent-net-` networks, or resources belonging to a previous owner.
+   ```bash
+   docker network inspect --format '{{index .Labels "hephaestus.creator-container"}} {{index .Labels "hephaestus.creator-started-at"}}' <network>
+   ```
 
-Java operations and interactive Docker CLI commands use the same host, TLS and certificate settings.
-Inherited `DOCKER_CONTEXT`, `DOCKER_HOST` and Docker TLS environment variables do not override
-interactive commands. `cli` selects only the executable.
+2. If a creator is recorded, check it:
 
-A TCP connection changes how the worker reaches Docker, not where its containers run: the daemon
-must manage the worker container and its sandbox networks. Follow [Docker's mutual-TLS setup](https://docs.docker.com/engine/security/protect-access/).
-Set `SANDBOX_DOCKER_TLS_VERIFY=true` and mount client certificates read-only into each worker-capable
-container using a Compose override. `SANDBOX_DOCKER_CERT_PATH` must name that **container** directory
-containing `ca.pem`, `cert.pem` and `key.pem`; setting a host path in `.env` does not mount it.
+   ```bash
+   docker container inspect --format '{{.State.Running}} {{.State.StartedAt}}' <creator>
+   ```
+
+   If it runs with the recorded start time, it still owns the network.
+   Leave that network.
+   If the creator no longer exists, stopped, or restarted, automatic cleanup removes the network on its next pass.
+   No manual action is necessary.
+
+3. If the creator record is absent or unreadable, stop this installation's application processes on this Docker daemon.
+   Include the application server and workers with this `owner`.
+   Only this pause proves the network unused: no process can start or attach a sandbox.
+   Other installations on the daemon are unaffected.
+4. Only after that pause, inspect the network again:
+
+   ```bash
+   docker network inspect --format '{{range $id, $c := .Containers}}{{$id}} {{$c.Name}}{{println}}{{end}}' <network>
+   ```
+
+5. Resolve the configured app-server container to its full id:
+
+   ```bash
+   docker container inspect --format '{{.Id}}' <app-server-container>
+   ```
+
+   If an attached container has another id, a sandbox still uses the network.
+   Leave that network.
+
+6. If the app-server container is still attached, disconnect it by its full id:
+
+   ```bash
+   docker network disconnect <network> <app-server-id>
+   ```
+
+7. Remove the network:
+
+   ```bash
+   docker network rm <network>
+   ```
+
+8. List the session's attempt volumes, using the session id at the end of the network name:
+
+   ```bash
+   docker volume ls -q --filter label=hephaestus.session-id=<session-id>
+   ```
+
+9. Remove those volumes:
+
+   ```bash
+   docker volume rm
+   ```
+
+   The command refuses a volume that a container still uses.
+
+Before an upgrade from unscoped sandbox ownership or a change to `owner`:
+
+1. Drain reviews and interactive sessions.
+2. Stop that installation's workers.
+3. Verify ownership of its remaining containers and networks.
+4. Only after verification, remove those resources.
+
+Cleanup never adopts containers labelled `hephaestus.managed=true`, `agent-net-` networks, or resources of a previous owner.
+Java operations and interactive Docker CLI commands use the same host, TLS, and certificate settings.
+Inherited `DOCKER_CONTEXT`, `DOCKER_HOST`, and Docker TLS environment variables do not override interactive commands.
+`cli` selects only the executable.
+
+A TCP connection changes how the worker reaches Docker, not where its containers run.
+The daemon must manage the worker container and its sandbox networks.
+
+1. Follow [Docker's mutual-TLS setup](https://docs.docker.com/engine/security/protect-access/).
+2. Set `SANDBOX_DOCKER_TLS_VERIFY=true`.
+3. With a Compose override, mount client certificates read-only into each worker-capable container.
+4. Set `SANDBOX_DOCKER_CERT_PATH` to that **container** directory, which must contain `ca.pem`, `cert.pem`, and `key.pem`.
+
+A host path in `.env` does not mount it.
 Never mount the Docker socket or client certificates in a sandbox.
 
-Unknown keys under `hephaestus.sandbox.docker`, blank `host` or `cli`, and TLS verification without a
-certificate path prevent worker startup. These checks do not verify daemon connectivity or runtime
-availability. See [runtime roles](./runtime-roles) for the gateway boundary.
+These conditions prevent worker startup:
 
-Harden the Docker host itself; the application cannot enforce these from inside a container. The
-supported host matrix's [Docker Engine version](./install#supported-host-matrix) already closes
-CVE-2024-29018's DNS-exfiltration path; in addition:
+- Unknown keys under `hephaestus.sandbox.docker`.
+- Blank `host` or `cli`.
+- TLS verification without a certificate path.
 
-- Block the cloud metadata endpoint on the host: `iptables -I DOCKER-USER -d 169.254.0.0/16 -j DROP`.
-- Recommended: front the daemon socket with a proxy such as Tecnativa's `docker-socket-proxy`
-  configured with `EXEC=0`.
-- Recommended: `userns-remap=default` in `/etc/docker/daemon.json`.
+These checks do not verify daemon connectivity or runtime availability.
+See [runtime roles](./runtime-roles) for the gateway boundary.
+
+The application cannot harden the Docker host from inside a container.
+The supported host matrix's [Docker Engine version](./install#supported-host-matrix) already closes CVE-2024-29018's DNS-exfiltration path.
+For further host protection:
+
+1. Block the cloud metadata endpoint on the host:
+
+   ```bash
+   iptables -I DOCKER-USER -d 169.254.0.0/16 -j DROP
+   ```
+
+2. Recommended: put a proxy such as Tecnativa's `docker-socket-proxy`, configured with `EXEC=0`, in front of the daemon socket.
+3. Recommended: set `userns-remap=default` in `/etc/docker/daemon.json`.
 
 ## Optional observability
 
-Sentry is optional. When configured, `hephaestus.sentry.dsn` must use HTTPS. The fact is classified
-`OPTIONAL` and never prevents startup. Activating it requires the processing review in the
-[processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).
+Sentry is optional.
+If configured, `hephaestus.sentry.dsn` must use HTTPS.
+The fact is `OPTIONAL` and never prevents startup.
+Before activation, complete the processing review in the [processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).
 
-Frontend error rates include only browsers whose users accepted error monitoring. Treat them as
-consent-biased diagnostics, not as an availability metric or a basis for comparing deployments.
+Frontend error rates include only browsers whose users accepted error monitoring.
+Treat them as consent-biased diagnostics, not an availability metric or a basis to compare deployments.
 Server-side error rates do not have this selection bias.
 
 ## Email
 
-Email is optional. The fact `notification.email` is `NOT_CONFIGURED` until `spring.mail.host` names a
-relay, and `ACTION_REQUIRED` when a relay is set but `hephaestus.email.from` is blank: with no sender
-address every notification is withheld and recorded as `NOT_CONFIGURED`. This optional readiness
-fact never prevents startup. Personal settings do not expose SMTP setup warnings; administrators
-configure the capability in instance settings. See the supported no-email behavior in the setup guide.
-Configuration and verification are in [Production setup → Email](./production-setup#email); activating
-email requires the processing review in the
-[processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).
+Email is optional.
+The fact `notification.email` is `NOT_CONFIGURED` until `spring.mail.host` names a relay.
+It is `ACTION_REQUIRED` if a relay is set but `hephaestus.email.from` is blank.
+Without a sender address, every notification is withheld and recorded as `NOT_CONFIGURED`.
+This optional readiness fact never prevents startup.
+
+Personal settings do not expose SMTP setup warnings.
+Instance admins configure the capability in instance settings.
+See the supported no-email behavior in the setup guide.
+[Production setup → Email](./production-setup#email) gives configuration and verification instructions.
+Before email activation, complete the processing review in the [processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).

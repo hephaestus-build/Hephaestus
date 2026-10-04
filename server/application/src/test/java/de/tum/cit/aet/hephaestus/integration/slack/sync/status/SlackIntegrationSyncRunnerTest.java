@@ -86,7 +86,7 @@ class SlackIntegrationSyncRunnerTest extends BaseUnitTest {
 
     @Test
     void progressDetail_carriesEveryFieldOfTheSummary() {
-        WorkspaceSyncSummary summary = new WorkspaceSyncSummary(3, 2, 1, 7L, 4, true, 1);
+        WorkspaceSyncSummary summary = new WorkspaceSyncSummary(3, 1, 2, 7L, 4, true, 2);
 
         SyncProgress detail = SlackIntegrationSyncRunner.progressDetail(summary);
 
@@ -94,10 +94,15 @@ class SlackIntegrationSyncRunnerTest extends BaseUnitTest {
         assertThat(detail.unitsCompleted()).isEqualTo(3);
         assertThat(detail.unitsTotal()).isEqualTo(3);
         assertThat(detail.currentStep())
-                .contains("2 of 3 channels")
-                .contains("7 messages")
-                .contains("1 skipped")
-                .contains("1 failed")
-                .contains("request budget exhausted");
+                .isEqualTo("Synced 1 of 3 channels · 7 messages · 2 skipped · 2 failed · request budget used up");
+    }
+
+    @Test
+    void progressDetail_usesSingularNounsWhenEachCountIsOne() {
+        WorkspaceSyncSummary summary = new WorkspaceSyncSummary(1, 0, 1, 1L, 1, false, 1);
+
+        SyncProgress detail = SlackIntegrationSyncRunner.progressDetail(summary);
+
+        assertThat(detail.currentStep()).isEqualTo("Synced 0 of 1 channel · 1 message · 1 skipped · 1 failed");
     }
 }

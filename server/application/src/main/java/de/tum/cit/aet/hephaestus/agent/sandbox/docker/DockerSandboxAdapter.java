@@ -178,8 +178,8 @@ public class DockerSandboxAdapter implements SandboxManager {
                 // host.docker.internal is reachable only from a non-internal network.
                 if (!allowInternet) {
                     throw new SandboxException(
-                            "Practice reviews run on an internal network, which only a worker running in a Docker "
-                                    + "container under its default hostname can join");
+                            "Practice reviews run on an internal network. Only a worker that runs in a Docker "
+                                    + "container with its default hostname can join this network.");
                 }
                 appServerIp = "host.docker.internal";
                 extraHosts = List.of("host.docker.internal:host-gateway");

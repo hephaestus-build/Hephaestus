@@ -171,7 +171,7 @@ class WorkspaceOnboardingService {
             return created;
         });
         if (request.revision() != policy.getRevision())
-            throw conflict("Onboarding settings changed. Reload before saving.");
+            throw conflict("Onboarding settings changed. Reload the settings before you save.");
         if (request.requiredConnectionIds().stream().distinct().count()
                 != request.requiredConnectionIds().size())
             throw conflict("Select each required integration only once.");
@@ -198,13 +198,16 @@ class WorkspaceOnboardingService {
     private void requireMember(long workspaceId, long accountId) {
         if (memberships.membershipsForAccount(accountId).stream()
                 .noneMatch(member -> member.workspaceId() == workspaceId))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Join this workspace before starting onboarding.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Join this workspace before you start onboarding.");
     }
 
     private Workspace lockWorkspace(long id) {
         return workspaces
                 .findByIdForUpdate(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace not found"));
+                .orElseThrow(
+                        () -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "We could not find that workspace. It may have been deleted. Reload the page to see what is current."));
     }
 
     private static WorkspaceOnboardingSettingsDTO toDTO(WorkspaceOnboardingSettings policy) {

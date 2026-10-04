@@ -120,16 +120,17 @@ public class GitLabWebhookService {
         }
 
         if (!webhookProperties.isConfigured()) {
-            return WebhookSetupResult.skipped("Webhook properties not configured (missing external URL or secret)");
+            return WebhookSetupResult.skipped(
+                    "The webhook properties are not configured. The external URL or the secret is missing.");
         }
         if (!routeCredential.isConfigured()) {
-            return WebhookSetupResult.skipped("Webhook routing secret not configured");
+            return WebhookSetupResult.skipped("The webhook routing secret is not configured.");
         }
 
         var client = webhookClientProvider.getIfAvailable();
         if (client == null) {
             return WebhookSetupResult.skipped(
-                    "GitLab webhook client unavailable (hephaestus.integration.gitlab.enabled=false)");
+                    "The GitLab webhook client is not available because hephaestus.integration.gitlab.enabled is false.");
         }
 
         Long scopeId = workspace.getId();
@@ -226,7 +227,7 @@ public class GitLabWebhookService {
         } catch (WebClientResponseException e) {
             if (GitLabWebhookClient.isPermissionOrNotFoundError(e.getStatusCode())) {
                 String reason = String.format(
-                        "Insufficient permissions (HTTP %d). Requires Owner role on GitLab group '%s' with Premium tier.",
+                        "Insufficient permissions (HTTP %d). You need the Owner role on GitLab group '%s' with the Premium tier.",
                         e.getStatusCode().value(), workspace.getAccountLogin());
                 log.info("Webhook registration failed: workspaceId={}, reason={}", scopeId, reason);
                 return WebhookSetupResult.failed(reason);

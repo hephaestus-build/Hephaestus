@@ -54,6 +54,69 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
             assertThat(entry.reviewId()).isEqualTo(RUN);
         }
 
+        /**
+         * A later push review that left this practice out, because the Ready review had already answered it on the
+         * same code, records it ready with no coverage of its own. The trace names the review whose observation
+         * answers it, not the later run and not an unreached practice.
+         */
+        @Test
+        void attributesAPracticeALaterReviewLeftOutToTheReviewThatAnsweredIt() {
+            var synchronizedSignal = new PracticeSignalDTO(ScmSignals.PULL_REQUEST_SYNCHRONIZED, "Pushed");
+            UUID push = UUID.fromString("33333333-3333-3333-3333-333333333333");
+            var leftOut = completed(Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null, null)));
+
+            var entry = only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY, synchronizedSignal),
+                    List.of(
+                            triggered(READY, RUN),
+                            new SignalOccurrence(
+                                    UUID.fromString("44444444-4444-4444-4444-444444444444"),
+                                    synchronizedSignal,
+                                    AT.plusSeconds(600),
+                                    SignalState.TRIGGERED,
+                                    null,
+                                    push)),
+                    Map.of(RUN, completed(), push, leftOut),
+                    Map.of(1L, new PracticeOutput(1, 1, List.of(), RUN, AT)));
+
+            assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.REVIEWED);
+            assertThat(entry.reviewId()).isEqualTo(RUN);
+            assertThat(entry.observationCount()).isOne();
+        }
+
+        /**
+         * The same push review named on its own: only its occurrence is offered and it observed nothing for the
+         * practice. Its recorded reuse names the earlier review as the answer and keeps its own zero counts, instead
+         * of reading as unreached or as a clean assessment of its own.
+         */
+        @Test
+        void namesTheAnsweringReviewWhenTheNamedReviewReusedItsAnswer() {
+            UUID push = UUID.fromString("33333333-3333-3333-3333-333333333333");
+            var reused = new ReviewOutcome(
+                    ReviewRunState.COMPLETED,
+                    false,
+                    AT.plusSeconds(600),
+                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null, null)),
+                    Map.of(),
+                    Map.of("slug", RUN));
+
+            var entry = only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY),
+                    List.of(triggered(READY, push)),
+                    Map.of(push, reused),
+                    Map.of());
+
+            assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.REVIEWED);
+            assertThat(entry.reviewId()).isEqualTo(RUN);
+            assertThat(entry.occasionedById()).isEqualTo(OCCURRENCE);
+            assertThat(entry.decidedAt()).isEqualTo(AT.plusSeconds(600));
+            assertThat(entry.observationCount()).isZero();
+            assertThat(entry.deliveredCount()).isZero();
+            assertThat(entry.explanation())
+                    .contains("earlier review", "did not assess it again")
+                    .doesNotContain("nothing to report");
+        }
+
         @Test
         void letsPastMeasurementsOutrankATierTurnedOffSince() {
             var entry = only(
@@ -81,7 +144,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.REVIEWED);
-            assertThat(entry.explanation()).contains("nothing to report");
+            assertThat(entry.explanation()).contains("found nothing to report");
             assertThat(entry.observationCount()).isZero();
         }
 
@@ -159,16 +222,17 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                                     new PracticeReadinessOutcome(
                                             false,
                                             List.of(
-                                                    "Only part of “Code changes” was captured.",
-                                                    "“Review threads” was not captured."),
+                                                    "The review captured only part of “Code changes”.",
+                                                    "The review did not capture “Review threads”."),
                                             null,
                                             null)))),
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.NOT_ASSESSABLE);
             assertThat(entry.explanation())
-                    .isEqualTo("The review could not read the evidence this practice needs. "
-                            + "Only part of “Code changes” was captured. “Review threads” was not captured.");
+                    .isEqualTo(
+                            "The review could not read the evidence this practice needs. "
+                                    + "The review captured only part of “Code changes”. The review did not capture “Review threads”.");
         }
 
         /**
@@ -187,13 +251,13 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                                     new PracticeReadinessOutcome(
                                             false,
                                             List.of(),
-                                            "This practice needs human review, so it is not reviewed automatically.",
+                                            "This practice needs human review, so no automatic review covers it.",
                                             null)))),
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.SKIPPED);
             assertThat(entry.explanation())
-                    .isEqualTo("This practice needs human review, so it is not reviewed automatically.")
+                    .isEqualTo("This practice needs human review, so no automatic review covers it.")
                     .doesNotContain("could not read", "captured");
             assertThat(entry.reviewId()).isEqualTo(RUN);
         }
@@ -253,7 +317,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.NOT_REACHED);
-            assertThat(entry.explanation()).contains("ended before reaching");
+            assertThat(entry.explanation()).contains("ended before it reached");
         }
 
         @Test

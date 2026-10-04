@@ -75,7 +75,7 @@ export const Default: Story = {
 			screen.getByText(/5 promoters \(9–10\) · 5 passives \(7–8\) · 4 detractors \(0–6\)/u),
 		).toBeVisible();
 		// A free-text question has no distribution to draw.
-		await expect(screen.getByText("9 answers — read them in the responses below.")).toBeVisible();
+		await expect(screen.getByText("9 answers. Read them in the responses below.")).toBeVisible();
 		// Every response reads as a sentence, whoever sent it and whatever they decided.
 		await expect(screen.getByText("Deleted account")).toBeVisible();
 		await expect(screen.getByText("Declined", { selector: "p" })).toBeVisible();
@@ -91,7 +91,7 @@ export const Research: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("Research"));
 		await expect(
-			screen.getByText(/belong to the study run by Technical University of Munich/u),
+			screen.getByText(/belong to the research run by Technical University of Munich/u),
 		).toBeVisible();
 	},
 };
@@ -126,6 +126,7 @@ export const NoResponses: Story = {
 				questions: surveySummary.questions.map((question) => ({
 					...question,
 					answered: 0,
+					other: question.other === undefined ? undefined : 0,
 					counts: question.counts.map((count) => ({ ...count, count: 0 })),
 					average: undefined,
 					score: undefined,
@@ -135,7 +136,7 @@ export const NoResponses: Story = {
 		}),
 	},
 	play: async () => {
-		await expectSettledVisible(await screen.findByText("No responses yet."));
+		await expectSettledVisible(await screen.findByText("No responses yet"));
 		// A rate over nobody is not zero.
 		await expect(screen.getByText("—")).toBeVisible();
 		await expect(screen.getByRole("button", { name: "Export CSV" })).toBeDisabled();
@@ -174,6 +175,6 @@ export const Loading: Story = {
 export const Error: Story = {
 	args: { state: { status: "error", error: new TypeError("Failed to fetch"), onRetry: fn() } },
 	play: async () => {
-		await expectSettledVisible(await screen.findByText("Survey results couldn't be loaded"));
+		await expectSettledVisible(await screen.findByText("We could not load survey results"));
 	},
 };

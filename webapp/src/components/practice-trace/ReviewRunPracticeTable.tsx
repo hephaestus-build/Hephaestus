@@ -78,13 +78,28 @@ const NO_OBSERVATIONS: ObservationDetail[] = [];
 
 /**
  * The practices this review decided, in the trace's order. The trace is asked for this review, which
- * still lists the practices no review speaks for — turned off, never occasioned — without its id.
+ * still lists the practices no review speaks for — turned off, never occasioned — without its id. A
+ * practice it left to an earlier review's answer names that review instead, so it belongs here through
+ * the occurrence this review started.
  */
 export function runPractices(
 	entries: PracticeTraceEntry[],
+	signals: TracedSignal[],
 	reviewId: string | undefined,
 ): PracticeTraceEntry[] {
-	return reviewId === undefined ? [] : entries.filter((entry) => entry.reviewId === reviewId);
+	if (reviewId === undefined) {
+		return [];
+	}
+	const startedHere = new Set(
+		signals.filter((signal) => signal.reviewId === reviewId).map((signal) => signal.id),
+	);
+	return entries.filter(
+		(entry) =>
+			entry.reviewId === reviewId ||
+			(hasText(entry.reviewId) &&
+				hasText(entry.occasionedById) &&
+				startedHere.has(entry.occasionedById)),
+	);
 }
 
 function groupNameOf(entry: PracticeTraceEntry): string {
@@ -183,7 +198,7 @@ export function ReviewRunPracticeTable({
 					<TableRow variant="static">
 						<TableCell colSpan={3} className="p-4 whitespace-normal">
 							<p className="text-sm text-muted-foreground">
-								{entries.length > 0 ? "No practice here matches your filters." : emptyMessage}
+								{entries.length > 0 ? "No practices match your filters." : emptyMessage}
 							</p>
 						</TableCell>
 					</TableRow>

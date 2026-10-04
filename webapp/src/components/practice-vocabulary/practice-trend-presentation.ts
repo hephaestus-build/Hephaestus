@@ -77,7 +77,7 @@ export function formatTrendProvenance(
 		const missing = support.opportunitiesUntilComparable;
 		const needed =
 			missing > 0
-				? ` ${capitalise(spell(missing))} more with something to judge ${missing === 1 ? "is" : "are"} needed before a direction can be shown.`
+				? ` A direction needs ${spell(missing)} more ${missing === 1 ? "piece" : "pieces"} of reviewed work with something to judge.`
 				: "";
 		return `Based on ${reviewedWork(opportunities)}.${needed}${spanSentence}`;
 	}

@@ -183,8 +183,8 @@ export function PracticeGroupDetailLevel({
 			)}
 			empty={{
 				icon: <ClipboardCheckIcon />,
-				title: "No practices here yet.",
-				description: "Practices appear here once an admin adds them to this group.",
+				title: "No practices yet",
+				description: "Practices appear here once a workspace admin adds them to this group.",
 			}}
 			isLoading={isLoading}
 			loadingRow={loadingRow}
@@ -207,8 +207,8 @@ export function PracticeGroupDetailLevel({
 				error={error}
 				title={
 					group
-						? `Could not load your standing for ${group.name}`
-						: "Could not load this practice group"
+						? `We could not load your standing for ${group.name}`
+						: "We could not load this practice group"
 				}
 				onRetry={onRetry}
 			/>
@@ -295,7 +295,8 @@ export function PracticeGroupDetailLevel({
 	} else {
 		body = (
 			<p className="text-sm text-muted-foreground">
-				This practice group does not exist or is not active in this workspace.
+				We could not find this practice group. Check the link, or ask a workspace admin whether it
+				is active in this workspace.
 			</p>
 		);
 	}

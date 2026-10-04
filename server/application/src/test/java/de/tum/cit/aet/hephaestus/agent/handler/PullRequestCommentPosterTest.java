@@ -233,7 +233,7 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
 
             assertThat(result).hasSizeLessThanOrEqualTo(PullRequestCommentPoster.MAX_BODY_LENGTH);
             assertThat(result).doesNotStartWith(opener);
-            assertThat(result).endsWith("[... truncated — comment exceeded length limit]");
+            assertThat(result).endsWith("[... truncated. The comment exceeded the length limit.]");
         }
 
         @Test
@@ -377,7 +377,7 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> githubOnly.summaryWrite(job, false, "Formatted review", "marker"))
                     .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("No SummaryChannel wired for kind GITLAB");
+                    .hasMessageContaining("No SummaryChannel is wired for kind GITLAB");
         }
 
         @Test

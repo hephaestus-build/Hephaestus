@@ -122,7 +122,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> channel.postSummary(target, new FeedbackContent("body", "marker")))
                 .isInstanceOf(FeedbackNotSentException.class)
-                .hasMessageContaining("rate limit critical");
+                .hasMessageContaining("rate limit is critical");
         verify(gitHubProvider, never()).forScope(anyLong());
     }
 
@@ -257,7 +257,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> channel.postSummary(target, new FeedbackContent("body", "marker")))
                 .isInstanceOf(FeedbackDeliveryException.class)
-                .hasMessageContaining("Null response from AddPullRequestComment");
+                .hasMessageContaining("The AddPullRequestComment mutation returned no response");
     }
 
     @Test

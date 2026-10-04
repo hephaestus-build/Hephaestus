@@ -34,12 +34,12 @@ public record DormantBinding(Long practiceId, Set<SignalName> signals, Set<Integ
     public String reason(Function<SignalName, String> signalName, Function<IntegrationKind, String> integrationName) {
         String moments = signals.stream().map(signalName).distinct().sorted().collect(Collectors.joining(", "));
         if (raisedByAnyOf.isEmpty()) {
-            return "Nothing Hephaestus can connect reports the moments this practice watches for (" + moments
-                    + "), so it is never reviewed.";
+            return "Nothing that Hephaestus can connect reports the moments this practice watches for (" + moments
+                    + "), so no review ever covers this practice.";
         }
         String integrations =
                 raisedByAnyOf.stream().map(integrationName).sorted().collect(Collectors.joining(" or "));
-        return "Nothing connected to this workspace reports the moments this practice watches for (" + moments + "); "
-                + integrations + " would.";
+        return "Nothing connected to this workspace reports the moments this practice watches for (" + moments + "). "
+                + integrations + " can report them.";
     }
 }

@@ -39,7 +39,7 @@ export function WorkspaceCapabilitiesSettings({
 				<Capability
 					icon={<Activity />}
 					title="Activity"
-					description="Always on. Every member sees their own activity and the workspace's. Hide members or teams from workspace activity under Members and Teams."
+					description="Always on. Every member sees their own activity and the workspace’s. Hide members or teams from workspace activity under Members and Teams."
 				/>
 				<Capability
 					icon={<Compass />}
@@ -47,7 +47,7 @@ export function WorkspaceCapabilitiesSettings({
 					description={
 						practicesEnabled
 							? "On. Hephaestus reviews work against the practices this workspace adopted."
-							: "Off. Turn them on once practices are adopted and a review model is set up."
+							: "Off. Turn them on after the workspace adopts practices and you set up a review model."
 					}
 					action={
 						<CapabilityLink
@@ -62,7 +62,7 @@ export function WorkspaceCapabilitiesSettings({
 				<Capability
 					icon={<HephIcon />}
 					title="Heph"
-					description="Offered to every member once a Heph model is set up. Each member's AI choice still applies."
+					description="Every member can use Heph once you set up a Heph model. Each member’s AI choice still applies."
 					action={
 						<CapabilityLink
 							link={<Link to="/w/$workspaceSlug/admin/models" params={{ workspaceSlug }} />}

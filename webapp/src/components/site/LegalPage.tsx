@@ -14,7 +14,7 @@ import {
 const DISCLAIMER_BANNER =
 	"This deployment has not been configured with a legal profile. The content below is a placeholder and does not identify the operator of this instance.";
 
-const ERROR_COPY = "Unable to load legal content.";
+const ERROR_COPY = "We could not load this page. Reload to try again.";
 
 // Treat host-supplied legal overrides as untrusted at the browser rendering boundary.
 function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnchorElement>) {

@@ -51,7 +51,7 @@ public class AuthLifecycleController {
             // An installed-client session rotates through its refresh secret, which keeps its family and
             // deadline in step; a cookie rotation here would mint a token outside that family.
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Installed-client sessions refresh at /auth/client/refresh");
+                    HttpStatus.BAD_REQUEST, "Refresh installed-client sessions at /auth/client/refresh.");
         }
         boolean sessionContinues = sessionService.refresh(
                 CurrentAccount.requireId(),

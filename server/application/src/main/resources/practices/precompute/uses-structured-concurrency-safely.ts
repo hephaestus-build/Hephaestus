@@ -106,7 +106,7 @@ export default async function usesStructuredConcurrencySafely(
 			settings.length > 0
 				? `Default actor isolation text in project files: ${settings.join("; ")}. Each applies only to its own target or SwiftPM module and build configuration, and a commented line sets nothing: read which target and configuration build the changed file before relying on any of them.`
 				: "No default actor isolation text was found in the project files read, which leaves the module's default unknown rather than nonisolated.",
-			"A type's isolation comes from its declaration, its module's setting or what it inherits; a missing @MainActor on an added line does not by itself put a mutation off the main actor.",
+			"A type's isolation comes from its declaration, its module's setting or what it inherits. A missing @MainActor on an added line does not by itself put a mutation off the main actor. Check the SDK before relying on inherited SwiftUI View isolation. Swallowed failures belong to handles-errors-instead-of-swallowing-them, not this practice.",
 		);
 	}
 	return { hints: scan.hints, metrics, directions };

@@ -72,22 +72,22 @@ export const JOB_STATUS_LABEL: Record<SyncJob["status"], string> = {
 	SUCCEEDED: "Succeeded",
 	SUCCEEDED_WITH_WARNINGS: "Succeeded with warnings",
 	FAILED: "Failed",
-	CANCELLED: "Cancelled",
+	CANCELLED: "Canceled",
 };
 
 /**
  * Both `SyncResourceState.state` and `BackfillSummary.state` are free-form, integration-defined
- * strings on the wire, so title-case whatever arrives rather than render a raw SCREAMING_SNAKE token:
- * `IN_PROGRESS` → "In Progress". There is deliberately no lookup table — each integration owns its own
+ * strings on the wire, so sentence-case whatever arrives rather than render a raw SCREAMING_SNAKE token:
+ * `IN_PROGRESS` → "In progress". There is deliberately no lookup table — each integration owns its own
  * vocabulary, so a table here could only drift out of date and fall back to this same rule anyway.
  */
 export function stateLabel(state: string): string {
-	return state
+	const words = state
 		.toLowerCase()
 		.split(/[\s_]+/u)
 		.filter(Boolean)
-		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
 		.join(" ");
+	return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /**
@@ -153,7 +153,7 @@ export function jobCurrentStep(job: Pick<SyncJob, "progress">): string | undefin
 }
 
 /**
- * Display names for the phase tokens `SyncPhase` emits. Unknown tokens are title-cased by
+ * Display names for the phase tokens `SyncPhase` emits. Unknown tokens are sentence-cased by
  * {@link phaseLabel} rather than dropped — an integration can add a phase without the UI shipping
  * first, and a readable guess beats hiding the chip.
  */

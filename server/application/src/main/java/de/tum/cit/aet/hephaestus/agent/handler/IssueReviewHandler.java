@@ -65,7 +65,6 @@ public class IssueReviewHandler implements JobTypeHandler {
     private final ObservationRepository observationRepository;
     private final PracticeFeedbackDispatchService dispatchService;
     private final FeedbackDeliveryService feedbackDeliveryService;
-    private final RecurringLapses recurringLapses;
 
     IssueReviewHandler(
             JsonMapper objectMapper,
@@ -82,8 +81,7 @@ public class IssueReviewHandler implements JobTypeHandler {
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter,
             ObservationRepository observationRepository,
             PracticeFeedbackDispatchService dispatchService,
-            FeedbackDeliveryService feedbackDeliveryService,
-            RecurringLapses recurringLapses) {
+            FeedbackDeliveryService feedbackDeliveryService) {
         this.objectMapper = objectMapper;
         this.preparation = preparation;
         this.practiceCatalogInjector = practiceCatalogInjector;
@@ -99,7 +97,6 @@ public class IssueReviewHandler implements JobTypeHandler {
         this.observationRepository = observationRepository;
         this.dispatchService = dispatchService;
         this.feedbackDeliveryService = feedbackDeliveryService;
-        this.recurringLapses = recurringLapses;
     }
 
     @Override
@@ -212,7 +209,6 @@ public class IssueReviewHandler implements JobTypeHandler {
                     return validated(observation);
                 })
                 .toList();
-        Set<String> recurring = recurringLapses.recurringSlugs(persisted);
         if (feedbackDeliveryService.recoverAutomaticPackageIfPresent(job)) return;
         List<ReviewResultParser.ValidatedObservation> eligible =
                 feedbackResponseSuppressionFilter.evaluate(job, observations).deliverable();
@@ -221,7 +217,7 @@ public class IssueReviewHandler implements JobTypeHandler {
         Map<String, String> why = practiceCatalogInjector.whyBySlug(job.getWorkspace(), ArtifactKinds.ISSUE);
         List<ComposedFeedbackUnit> units = compositionResultParser.parse(job.getOutput(), FeedbackChannel.IN_CONTEXT);
         String lead = compositionResultParser.lead(job.getOutput());
-        var composition = new AdmittedDelivery.Composition(ArtifactKinds.ISSUE, why, units, lead, recurring);
+        var composition = new AdmittedDelivery.Composition(ArtifactKinds.ISSUE, why, units, lead);
         switch (AdmittedDelivery.decide(job.getOutput(), observations, proposals, loudEnough, composition)) {
             case AdmittedDelivery.Withheld withheld -> {
                 log.info(
@@ -302,7 +298,7 @@ public class IssueReviewHandler implements JobTypeHandler {
         }
         if (result.status() == PracticeFeedbackDispatchService.Result.Status.SUPPRESSED) return;
         throw new JobDeliveryException(
-                "Issue review package dispatch is awaiting reconciliation: jobId=" + job.getId());
+                "The dispatch of the issue review package waits for reconciliation. jobId=" + job.getId());
     }
 
     private void recordSuppressed(

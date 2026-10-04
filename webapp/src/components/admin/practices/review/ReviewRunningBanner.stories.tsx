@@ -42,7 +42,7 @@ export const Unconfirmed: Story = {
 export const Blocked: Story = {
 	args: { running: { enabled: true, model: { status: "ready" } } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("status")).toHaveTextContent("Reviews can't start");
+		await expect(canvas.getByRole("status")).toHaveTextContent("Reviews cannot start");
 	},
 };
 

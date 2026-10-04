@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Survey, SurveySummary } from "@/api/types.gen";
+import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import type { Wire } from "@/lib/dates";
 import { isRecord } from "@/lib/is-record";
 import { server } from "@/mocks/server";
@@ -106,7 +107,7 @@ describe("instance surveys route", () => {
 		await user.click(await screen.findByRole("link", { name: survey.title }, ROUTE_RENDER_WAIT));
 		const setup = await screen.findByRole("link", { name: "Set up email" }, ROUTE_RENDER_WAIT);
 		expect(setup.getAttribute("href")).toBe("/admin/settings");
-		expect(screen.queryByRole("button", { name: "Queue email invitations…" })).toBeNull();
+		expect(screen.queryByRole("button", { name: "Send email invitations…" })).toBeNull();
 		await screen.findByRole("heading", { name: survey.title });
 	});
 
@@ -137,7 +138,7 @@ describe("instance surveys route", () => {
 		);
 		renderRouteAt("/admin/surveys");
 		await user.click(await screen.findByRole("link", { name: survey.title }, ROUTE_RENDER_WAIT));
-		const queue = await screen.findByRole("button", { name: "Queue email invitations…" });
+		const queue = await screen.findByRole("button", { name: "Send email invitations…" });
 		expect(requests).toHaveLength(0);
 		await user.click(queue);
 		const confirmation = await screen.findByRole("alertdialog");
@@ -147,7 +148,7 @@ describe("instance surveys route", () => {
 		expect(reminder.getAttribute("aria-checked")).toBe("false");
 		await user.click(reminder);
 		expect(requests).toHaveLength(0);
-		await user.click(within(confirmation).getByRole("button", { name: "Queue invitations" }));
+		await user.click(within(confirmation).getByRole("button", { name: "Send invitations" }));
 		await waitFor(() => expect(requests).toStrictEqual([{ sendReminder: true }]));
 		await screen.findByText("420");
 		await user.click(queue);
@@ -282,7 +283,7 @@ describe("instance surveys route", () => {
 		const drawer = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
 		await user.click(await within(drawer).findByRole("button", { name: "Export CSV" }));
 
-		await screen.findByText("Couldn't export the responses. Please try again.");
+		await screen.findByText("We could not export the responses. Try again.");
 	});
 
 	it("publishes a survey from the composer and opens its results", async () => {
@@ -354,7 +355,7 @@ describe("instance surveys route", () => {
 			http.get("*/user/consent", () =>
 				HttpResponse.json({
 					completed: true,
-					noticeVersion: "2026-09-11",
+					noticeVersion: WORDING_VERSION,
 					participateInResearch: true,
 					researchOrganization: "Technical University of Munich",
 				}),

@@ -21,7 +21,7 @@ describe("workspace provider availability", () => {
 		renderRouteAt("/workspaces/new");
 
 		await screen.findByText(
-			"No providers are currently available. Contact your administrator.",
+			"No providers are available. Contact an instance admin.",
 			{},
 			ROUTE_RENDER_WAIT,
 		);
@@ -33,7 +33,7 @@ describe("workspace provider availability", () => {
 		renderRouteAt("/workspaces/new");
 
 		await screen.findByText(
-			"No providers are currently available. Contact your administrator.",
+			"No providers are available. Contact an instance admin.",
 			{},
 			ROUTE_RENDER_WAIT,
 		);

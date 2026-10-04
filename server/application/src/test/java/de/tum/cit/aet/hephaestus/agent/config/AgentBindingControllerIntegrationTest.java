@@ -189,7 +189,7 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .jsonPath("$.declaredTier")
                 .isEqualTo("IN_HOUSE")
                 .jsonPath("$.detail")
-                .isEqualTo("This model is declared as a different tier; assign it to that row.");
+                .isEqualTo("This model is declared as a different tier. Assign it to that row.");
     }
 
     @Test
@@ -217,8 +217,8 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .jsonPath("$.declaredTier")
                 .doesNotExist()
                 .jsonPath("$.detail")
-                .isEqualTo("This model's data handling isn't declared yet. "
-                        + "Declare it first, or assign it to Members who haven't chosen.");
+                .isEqualTo("This model’s data handling is not declared yet. "
+                        + "Declare it first, or assign it to Members who have not chosen.");
     }
 
     @Test

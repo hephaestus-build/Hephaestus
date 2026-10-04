@@ -43,8 +43,8 @@ public class OutlineCollectionControllerAdvice {
     ResponseEntity<ProblemDetail> handleRateLimited(OutlineRateLimitedException exception) {
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.SERVICE_UNAVAILABLE);
         problem.setType(URI.create("/problems/outline-rate-limited"));
-        problem.setTitle("Outline is rate-limiting requests");
-        problem.setDetail("The Outline server is throttling requests. Try again shortly.");
+        problem.setTitle("Outline is limiting requests");
+        problem.setDetail("Outline is limiting how fast Hephaestus can send requests. Try again in a moment.");
         ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE);
         Duration retryAfter = exception.getRetryAfter();
         if (retryAfter != null) {
@@ -57,7 +57,7 @@ public class OutlineCollectionControllerAdvice {
     ProblemDetail handleApiFailure(OutlineApiException exception) {
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.BAD_GATEWAY);
         problem.setType(URI.create("/problems/outline-unreachable"));
-        problem.setTitle("The Outline server could not be reached");
+        problem.setTitle("Hephaestus could not reach the Outline server");
         problem.setDetail(LoggingUtils.sanitizeForLog(exception.getMessage()));
         return problem;
     }

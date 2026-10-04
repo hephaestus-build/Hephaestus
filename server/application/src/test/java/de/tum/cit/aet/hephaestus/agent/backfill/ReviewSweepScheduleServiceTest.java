@@ -55,7 +55,7 @@ class ReviewSweepScheduleServiceTest extends BaseUnitTest {
                                 context(),
                                 request(ArtifactKinds.PULL_REQUEST, ReviewSweepCadence.valueOf(cadence), lookbackDays)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("start a backfill under “Review past work”")
+                .hasMessageContaining("use “Review past work”")
                 .hasMessageNotContaining("sweep")
                 .hasMessageNotContaining("measur");
 

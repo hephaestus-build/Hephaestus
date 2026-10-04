@@ -92,7 +92,7 @@ export const packagingGroup = group(1, "review-ready-work", "Packaging work for 
 	icon: "Package",
 	color: "sky",
 	description:
-		"Make changes easy to review before asking for feedback: one concern per change, a description that says what moved and why, and evidence that it works.",
+		"Make changes easy to review before asking for feedback. Use one concern per change, a description that says what moved and why, and evidence that it works.",
 });
 
 /** The shipped catalog's groups, by slug, so the overview's sentences find their rows. */

@@ -58,7 +58,7 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
             throw invalid("Supply an account id or at least one exact provider identity");
         }
         if (supplied.size() > 32) {
-            throw invalid("At most 32 provider identities are permitted");
+            throw invalid("Supply no more than 32 provider identities");
         }
         if (accountId != null && (accountId <= 0 || !accountExists(accountId))) {
             throw invalid("The account id does not exist");
@@ -73,7 +73,7 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
             owners.addAll(linkedOwners(identity));
         }
         if (owners.size() > 1) {
-            throw conflict("The supplied identities belong to different accounts; correct the exact identity scope");
+            throw conflict("The supplied identities belong to different accounts. Correct the exact identity scope.");
         }
         Long resolvedAccount = owners.stream().findFirst().orElse(null);
         if (resolvedAccount != null) {
@@ -108,7 +108,7 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                         nativeId);
                 if (!conflictingCaches.isEmpty()) {
                     throw conflict(
-                            "An SCM identity has a conflicting cached actor; repair the exact provider link first");
+                            "An SCM identity has a conflicting cached actor. Repair the exact provider link first.");
                 }
                 users.addAll(jdbc.query(
                         "SELECT id FROM \"user\" WHERE provider_id = ? AND native_id = ?",
@@ -120,7 +120,7 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
             // with an internally conflicting link must not widen an erasure request silently.
             List<Long> linked = linkedOwners(identity);
             if (linked.stream().anyMatch(owner -> !owner.equals(resolvedAccount))) {
-                throw conflict("A provider identity is linked to another account; resolve the link conflict first");
+                throw conflict("A provider identity is linked to another account. Resolve the link conflict first.");
             }
         }
         requireVerifiedSlackCaches(identities, users);
@@ -159,8 +159,8 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                     .findFirst()
                     .orElseThrow(() -> invalid("The provider instance id does not exist"));
             var origin = ScmOrigin.of(selected.serverUrl())
-                    .orElseThrow(
-                            () -> conflict("The provider instance has no valid origin; repair its exact instance key"));
+                    .orElseThrow(() ->
+                            conflict("The provider instance has no valid origin. Repair its exact instance key."));
             for (var candidate : instances) {
                 if (candidate.type().equals(selected.type())
                         && ScmOrigin.of(candidate.serverUrl())
@@ -198,8 +198,8 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                         || slackProviders.stream()
                                 .noneMatch(provider -> identities.contains(
                                         new PersonIdentity(provider, cache.subject(), cache.teamId()))))
-                    throw conflict("Collected Slack work has cached SCM attribution without an exact Slack identity; "
-                            + "add its provider instance, native Slack user id and native workspace id");
+                    throw conflict("Collected Slack work has cached SCM attribution without an exact Slack identity. "
+                            + "Add its provider instance, native Slack user id, and native workspace id.");
             }
         }
         for (PersonIdentity identity : identities) {
@@ -217,8 +217,8 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                     identity.subject(),
                     identity.teamId());
             if (!users.containsAll(cachedActors))
-                throw conflict("Collected Slack work has an unverified cached SCM actor; "
-                        + "add the person's exact SCM provider identity or repair the conflicting association");
+                throw conflict("Collected Slack work has an unverified cached SCM actor. "
+                        + "Add the exact SCM provider identity of the person, or repair the conflicting association.");
         }
     }
 

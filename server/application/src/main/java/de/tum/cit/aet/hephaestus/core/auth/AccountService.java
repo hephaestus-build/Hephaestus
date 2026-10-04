@@ -60,7 +60,7 @@ public class AccountService {
     public Account requireById(Long id) {
         return accountRepository
                 .findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "account not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The account was not found."));
     }
 
     public List<IdentityLink> activeIdentities(Long accountId) {
@@ -120,16 +120,21 @@ public class AccountService {
         IdentityLink target = active.stream()
                 .filter(il -> il.getId().equals(identityLinkId))
                 .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "identity link not found"));
+                .orElseThrow(
+                        () -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "We could not find that connected account. It may have been deleted. Reload the page to see what is current."));
         if (active.size() <= 1) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "You can't unlink your only sign-in method. Link another provider first, or delete your account.");
+                    "You cannot disconnect your only sign-in method. Connect another provider first, or delete your account.");
         }
         Long gitProviderId = target.getProviderId();
         if (identityLinkRepository.deleteByIdAndAccountId(identityLinkId, accountId) == 0) {
             // Lost a race (concurrently removed) — nothing to do; surface as not-found.
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "identity link not found");
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "We could not find that connected account. It may have been deleted. Reload the page to see what is current.");
         }
         // The link row is now gone, so don't reference its id in the audit (its auth_event FK is
         // ON DELETE SET NULL anyway); account + provider record who unlinked which provider.
@@ -160,7 +165,8 @@ public class AccountService {
             try {
                 role = Account.AppRole.valueOf(appRole);
             } catch (IllegalArgumentException e) {
-                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, "unknown app role: " + appRole, e);
+                throw new ResponseStatusException(
+                        HttpStatus.UNPROCESSABLE_CONTENT, "The app role is not known: " + appRole, e);
             }
             // Last-admin lockout guard: demoting the only remaining APP_ADMIN — or yourself —
             // would lock everyone out of /admin with no recovery.
@@ -168,7 +174,8 @@ public class AccountService {
             if (isDemotion) {
                 if (accountId.equals(actingAccountId)) {
                     throw new ResponseStatusException(
-                            HttpStatus.CONFLICT, "You can't revoke your own admin access. Have another admin do it.");
+                            HttpStatus.CONFLICT,
+                            "You cannot revoke your own admin access. Ask another admin to do it.");
                 }
                 // Locked (FOR UPDATE) count so concurrent demotions serialize instead of both passing.
                 long activeAdmins = accountRepository
@@ -177,7 +184,7 @@ public class AccountService {
                 if (activeAdmins <= 1) {
                     throw new ResponseStatusException(
                             HttpStatus.CONFLICT,
-                            "You can't revoke the last admin. Grant admin to another account first.");
+                            "You cannot revoke the last admin. Grant admin to another account first.");
                 }
             }
             Account.AppRole previousRole = account.getAppRole();

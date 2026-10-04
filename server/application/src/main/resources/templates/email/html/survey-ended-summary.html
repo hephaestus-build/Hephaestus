@@ -9,8 +9,8 @@
                 <tr><td th:replace="~{email/html/layout :: header}"></td></tr>
                 <tr>
                     <td style="padding: 24px; font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px; color: #111827;">
-                        <h1 style="margin: 0 0 16px 0; font-size: 20px; line-height: 28px;" th:text="#{email.survey-ended-summary.subject}">A Hephaestus survey has ended</h1>
-                        <p style="margin: 0 0 16px 0;">A survey has ended. These are its participation totals; individual answers are available only in the authenticated administrator console.</p>
+                        <h1 style="margin: 0 0 16px 0; font-size: 20px; line-height: 28px;" th:text="#{email.survey-ended-summary.subject}">A Hephaestus survey ended</h1>
+                        <p style="margin: 0 0 16px 0;">A survey ended. These are its participation totals. Only a signed-in instance admin can read individual answers, on the Surveys page.</p>
                         <p>People shown an in-app invitation: <strong th:text="${invited}">0</strong><br>Responded: <strong th:text="${responded}">0</strong><br>Declined: <strong th:text="${declined}">0</strong></p>
                         <p style="margin: 0;"><a th:href="${webappUrl + '/admin/surveys'}" style="color: #2563eb;">Open surveys</a></p>
                     </td>

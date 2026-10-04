@@ -7,9 +7,8 @@ description: Runtime roles, execution boundaries, and safe extension points for 
 
 # Practice review runtime
 
-Use this page when changing where practice-review work executes or extending an artifact handler. For the
-review lifecycle and its product semantics, start with the
-[practice review pipeline](./practice-review-pipeline.mdx).
+Use this page to change where practice-review work executes or to extend an artifact handler.
+For the review lifecycle and its product semantics, start with the [practice review pipeline](./practice-review-pipeline.mdx).
 
 ## Execution sequence
 
@@ -49,57 +48,66 @@ sequenceDiagram
   the review queue.
 - **Evidence capture runs on the claiming worker.** `ReviewRepositoryPreparer` authorizes the repository
   and clones or refreshes the worker-local mirror before pinning the review range. A missing mirror alone
-  does not make the source unavailable. Disabled checkout records the tree as not collected; preparation
+  does not make the source unavailable. Disabled checkout records the tree as not collected. Preparation
   failures are recorded in the capture result.
-- **`evidence_snapshot` and `review_readiness` are written before the container starts**, in their own
-  transaction, and a failed write fails the run before any model cost accrues. The result is a separate,
+- **`evidence_snapshot` and `review_readiness` are written before the container starts**, in their own transaction.
+  A failed write fails the run before any model cost accrues. The result is a separate,
   later transaction.
-- **One session per review, inside the sandbox.** `pi-runner.ts` loads a brief from the captured record
-  and derived change view, then supplies criteria and each practice's precomputed leads one practice
-  group per turn; a turn ends once each of its practices has a recorded result. The session carries
-  every turn's reading of the work into the next, which keeps practices that share an occasion
-  consistent. The first turn carries the task, the brief and three example observations; when the
-  context fills and is compacted, the next turn carries them again with what was recorded so far, so the
-  model quotes the captured text rather than a summary of it. The brief numbers the lines of captured
-  files only; the derived change files are shown as written and marked not citable, and `files.json`
-  gives each file's lines in `diff.patch` so a large diff can be read a file at a time. Recording tools
-  validate each item separately so one invalid item does not discard valid siblings: their schemas
-  carry no list or object type the SDK could check all or nothing, so each item is answered on its own;
-  scalar types stay, because they tell the model what a value is.
-  What the run already knows is filled in and reported rather than refused — a source kind or artifact
-  from the manifest, a line written as `L12`, a line number of `diff.patch` itself that names one line of
-  the cited file, an empty stray field, a WITHHOLD's own NOT_MET observations. A refusal names every
-  problem of an item at once, with the field, the value received and what would be accepted, and states
-  facts rather than doubting the outcome. A resend of what is already recorded is an error that names what is still owed, an
-  identical resend of a refused item gets the same answer at once, and a third identical send ends the
-  turn. An unreadable list shows where it breaks and is charged to no practice. A call cut off at the model's output limit reaches its tool incomplete: the model is told that the error is the cut, and a second cut in the turn ends it. Progress and repetition
-  limits stop unproductive turns. Recorded results are saved under `work/notes/`.
-  The session is Pi's coding-agent `AgentSession`. Pi 1.0 also ships `pi-durable`, an experimental
-  harness that checkpoints every model call and tool call so a crashed run can resume; it is not used.
-  A review runs once in a sandbox that is discarded with its storage, a run that fails is retried by
-  the server from the captured evidence, and `pi-durable` has no codemode.
-- **Work, not time, bounds a turn.** Each turn gets its own budget of model calls and output tokens:
-  `PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` per practice it
-  carries, never less than three practices' worth, whatever earlier turns spent
-  ([practice-review operations](/admin/practice-review-operations)). The turn text does not
-  state the budget: told its call budget up front, an open model read less and missed more negatives.
-  A turn is asked once to record when two calls are left, or when its tokens left only pay for
-  the observations it still owes at the tokens per observation the session has shown. It ends at the
-  first turn boundary after the call that spends the budget, so the tools of that call, a recording
-  among them, have run; an aborted call records nothing. The budget is a cap on a turn that runs away,
-  several times what a turn normally spends, not a pace. Composition gets one unit per NOT_MET
-  practice, at most a full turn's worth. Time is used for liveness only: a turn with no session event for five minutes
-  is aborted as stalled, two stalls in a row end measuring, and the binding's timeout is a safety
-  ceiling, split so measuring stops early enough for admission and composition to land. An aborted turn
+- **One session per review, inside the sandbox.** `pi-runner.ts` loads a brief from the captured record and derived change view.
+  It supplies criteria and each practice's precomputed leads, one practice group per turn. A turn ends once each of its practices has a recorded result. The session carries every turn's reading of the work into the next.
+  This keeps practices that share an occasion consistent. The first turn carries the task, the brief and three example observations. When the context fills and is compacted, the next turn carries them again.
+  It also carries the results recorded so far.
+  Thus, the model quotes the captured text, not a summary. The brief numbers the lines of captured
+  files only. The derived change files are shown as written and marked not citable.
+  `files.json` gives each file's lines in `diff.patch`.
+  Thus, a large diff can be read a file at a time. Recording tools validate each item separately so one invalid item does not discard valid siblings.
+  Their schemas carry no list or object type that the SDK could check all or nothing.
+  Thus, each item gets its own answer.
+  Scalar types stay because they tell the model what a value is.
+  The run fills in and reports what it already knows instead of refusing it:
+
+  - A source kind or artifact from the manifest.
+  - A line written as `L12`.
+  - A line number of `diff.patch` itself that names one line of the cited file.
+  - An empty stray field.
+  - A WITHHOLD's own NOT_MET observations.
+    A refusal names every problem of an item at once.
+    It gives the field, the received value, and the accepted values.
+    It states facts instead of doubting the outcome. A resend of an already recorded result is an error that names what is still owed.
+    An identical resend of a refused item gets the same answer at once.
+    A third identical send ends the turn. An unreadable list shows where it breaks and is charged to no practice. A call cut off at the model's output limit reaches its tool incomplete.
+    The model is told that the cut caused the error.
+    A second cut in the turn ends it. Progress and repetition
+    limits stop unproductive turns. Recorded results are saved under `work/notes/`.
+    The session is Pi's coding-agent `AgentSession`. Pi 1.0 also ships the experimental harness `pi-durable`.
+    It checkpoints every model call and tool call so a crashed run can resume. It is not used.
+    A review runs once in a sandbox that is discarded with its storage.
+    The server retries a failed run from the captured evidence.
+    `pi-durable` has no codemode.
+
+- **Work, not time, bounds a turn.** Each turn gets its own model-call and output-token budget.
+  Each practice it carries adds `PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS`.
+  The budget is never less than three practices' worth, whatever earlier turns spent
+  ([practice-review operations](/admin/practice-review-operations)). The turn text does not state the budget.
+  When told its call budget up front, an open model read less and missed more negatives.
+  A turn gets one request to record when two calls remain.
+  The request also occurs if the remaining tokens only pay for the observations still owed.
+  This uses the session's observed tokens per observation. It ends at the first turn boundary after the call that spends the budget.
+  Thus, that call's tools have run, including a recording. An aborted call records nothing. The budget caps a turn that runs away.
+  It is several times normal turn spend, not a pace. Composition gets one unit per NOT_MET
+  practice, at most a full turn's worth. Time is used for liveness only.
+  A turn with no session event for five minutes is aborted as stalled.
+  Two stalls in a row end measuring.
+  The binding's timeout is a safety ceiling.
+  Its split stops measuring early enough for admission and composition to complete. An aborted turn
   must become idle before another turn starts. Practices still missing get a finishing turn with their
-  criteria and their own budget; they are not treated as completed reviews. See
+  criteria and their own budget. They are not treated as completed reviews. See
   [recorded-result coverage](./practice-review-pipeline.mdx#recorded-result-coverage).
-- **Composition follows durable admission.** The same session composes feedback from the admitted
-  projection and bounded history, making room by compaction first when the turn would not fit. The turn
+- **Composition follows durable admission.** The same session composes feedback from the admitted projection and bounded history.
+  If the turn would not fit, compaction first makes room. The turn
   shows NOT_MET observations with their rationale and cited coordinates and the others by what they
-  found; after a compaction it carries the task and the brief again, not the measuring examples. An
-  earlier review of the same work is the same piece of work when a pattern is counted, as the server
-  counts it. It cannot add observations during composition. There is no separate reconnaissance,
+  found. After a compaction it carries the task and the brief again, not the measuring examples. For a pattern count, an earlier review of the same work is the same piece of work.
+  The server counts it this way. It cannot add observations during composition. There is no separate reconnaissance,
   per-practice or retry session.
 - **The worker posts public feedback.** It validates sandbox output, persists observations and feedback,
   and applies delivery policy before calling the provider. Model composition runs in the sandbox.
@@ -108,9 +116,9 @@ sequenceDiagram
 
 ## Extension points
 
-Artifact handlers assemble context and delivery constraints. Provider adapters own provider identifiers,
-diff and comment APIs, and conversation storage; the practices module owns definitions, observations, and
-the feedback ledger.
+Artifact handlers assemble context and delivery constraints.
+Provider adapters own provider identifiers, diff and comment APIs, and conversation storage.
+The practices module owns definitions, observations, and the feedback ledger.
 
 The extension boundaries are:
 
@@ -119,21 +127,24 @@ The extension boundaries are:
   [ADR 0025](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0025-agent-job-queue-on-postgresql.md).
 - **Workspace ABI** — the sandbox receives read-only `inputs/`, disposable `work/`, and returns only
   `out/`. [Agent workspace ABI](agent/workspace-abi.mdx) is the source of truth for paths and exit codes.
-- **Observations** — the agent reports through `report_observation`; server admission validates it, and
+- **Observations** — the agent reports through `report_observation`. Server admission validates it, and
   persistence assigns an occurrence identity and a separate evidence-location grouping key.
 - **Feedback** — after admission, the same agent session reports through `report_feedback` in a closed
-  intervention phase; the runner refuses a practice-page card unless the practice is NOT_MET on as many
-  distinct pieces of work as the composition request's `minDistinctArtifacts`, counting this work and
-  the staged history, so one occurrence stays a note on the work.
+  intervention phase. The runner refuses a practice-page card unless the practice is NOT_MET on at least `minDistinctArtifacts` distinct pieces of work.
+  This threshold comes from the composition request.
+  The count includes this work and the staged history.
+  Thus, one occurrence stays a note on the work.
   Server admission validates the result without invalidating completed measurement. Admitted feedback,
-  server suppressions, replacements, and placements enter the ledger; a model `WITHHOLD` remains only in
+  server suppressions, replacements, and placements enter the ledger. A model `WITHHOLD` remains only in
   the bounded job output. The seam itself is
   [ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md).
 
-When changing sandbox inputs or outputs: update the owning runtime type or parser first; update the ABI
-page only for a durable ABI change; add a behavioural test at the narrowest owning boundary; regenerate
-OpenAPI and the web client when the HTTP contract changes. To extend the bundled catalogue, follow
-[Practice catalogue curation](practice-catalogue.md).
+When changing sandbox inputs or outputs: update the owning runtime type or parser first.
+Update the ABI page only for a durable ABI change.
+Add a behavioral test at the narrowest owning boundary.
+Regenerate OpenAPI and the web client when the HTTP contract changes.
 
-Avoid copying file trees, enum inventories, defaults, or database columns into this guide. Those details
-are owned by executable types, Liquibase, the generated database schema, and OpenAPI.
+To extend the bundled catalogue, follow [Practice catalogue curation](practice-catalogue.md).
+
+Avoid copying file trees, enum inventories, defaults, or database columns into this guide.
+Those details are owned by executable types, Liquibase, the generated database schema, and OpenAPI.

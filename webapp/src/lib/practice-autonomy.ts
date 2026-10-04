@@ -23,11 +23,10 @@ export const PRACTICE_AUTONOMY_DESCRIPTIONS: Record<PracticeAutonomy, string> = 
 };
 
 export const PRACTICE_AUTONOMY_ADDS: Record<PracticeAutonomy, string> = {
-	OFF: "Nothing runs. No review, no record, nothing said.",
+	OFF: "Hephaestus does not review this practice. Nothing is recorded.",
 	HUMAN_APPROVAL:
-		"Adds assisted delivery. Feedback on the work waits for an authorized reviewer to approve or reject it; practice pages and the mentor are written regardless.",
-	AUTOMATIC:
-		"Adds automatic delivery. Eligible feedback is sent onto the work without waiting for approval.",
+		"Feedback on the work waits for an authorized reviewer to approve or reject it. Practice pages and Heph show feedback without waiting.",
+	AUTOMATIC: "Eligible feedback is sent to the work without waiting for approval.",
 };
 
 export const WORKSPACE_DEFAULT_SOURCE = "the workspace default";
@@ -72,7 +71,7 @@ export function autonomyTotal(counts: Record<string, number>): number {
 
 export function autonomyDistributionSentence(counts: Record<string, number>): string {
 	const parts = autonomyDistribution(counts).map(
-		({ autonomy, count }) => `${count} ${PRACTICE_AUTONOMY_LABELS[autonomy].toLowerCase()}`,
+		({ autonomy, count }) => `${count} set to ${PRACTICE_AUTONOMY_LABELS[autonomy].toLowerCase()}`,
 	);
 	if (parts.length === 0) {
 		return "No practices yet.";

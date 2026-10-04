@@ -68,7 +68,7 @@ describe("product feedback wire contract", () => {
 				false,
 			);
 		});
-		await waitFor(() => expect(result.current.error).toContain("wait a minute"));
+		await waitFor(() => expect(result.current.error).toContain("Wait a minute"));
 		expect(requests).toBe(1);
 	});
 
@@ -152,7 +152,7 @@ describe("product feedback wire contract", () => {
 			),
 			http.post("*/workspaces/acme/product-feedback/surveys/:id/responses", () =>
 				HttpResponse.json(
-					{ status: 400, detail: "a required question was not answered" },
+					{ status: 400, detail: "The response does not answer a required question." },
 					{ status: 400 },
 				),
 			),
@@ -164,12 +164,12 @@ describe("product feedback wire contract", () => {
 		});
 		await waitFor(() =>
 			expect(result.current.error).toBe(
-				"Couldn't send (a required question was not answered). Your draft is still here.",
+				"We could not send that. The response does not answer a required question. Your draft is still here.",
 			),
 		);
 	});
 
-	it("thanks a respondent for the study a research survey belongs to, and a sender by kind", async () => {
+	it("thanks a respondent for the research a research survey belongs to, and a sender by kind", async () => {
 		server.use(
 			http.get("*/workspaces/acme/product-feedback/surveys", () =>
 				HttpResponse.json([surveyInvitation, researchInvitation]),
@@ -191,14 +191,12 @@ describe("product feedback wire contract", () => {
 			await expect(surveys.result.current.submit(researchInvitation, [])).resolves.toBe(true);
 		});
 		await screen.findByText(
-			"Thank you — your answers were recorded for a study run by Technical University of Munich.",
+			"Thanks. Your answers were recorded for research run by Technical University of Munich.",
 		);
 		await act(async () => {
 			await expect(surveys.result.current.submit(surveyInvitation, [])).resolves.toBe(true);
 		});
-		await screen.findByText(
-			"Thank you — your answers are on their way to your instance administrators.",
-		);
+		await screen.findByText("Thanks. Your answers are on their way to your instance admins.");
 
 		const feedback = renderHook(() => useSubmitProductFeedback("acme"), { wrapper });
 		await act(async () => {
@@ -206,7 +204,7 @@ describe("product feedback wire contract", () => {
 				feedback.result.current.submit({ kind: "IDEA", message: "Pin it" }),
 			).resolves.toBe(true);
 		});
-		await screen.findByText("Thanks — your idea is on its way to your instance administrators.");
+		await screen.findByText("Thanks. Your idea is on its way to your instance admins.");
 	});
 
 	it("undoes a decline from the toast", async () => {

@@ -55,7 +55,7 @@ public class PracticeReviewCoverageService {
         Map<String, List<String>> validated = new HashMap<>();
         requested.forEach((name, patterns) -> {
             if (!monitors.containsKey(name)) {
-                throw new InvalidReviewCoverageException("Repository is not monitored by this workspace: " + name);
+                throw new InvalidReviewCoverageException("This workspace does not monitor the repository: " + name);
             }
             validated.put(name, GeneratedPaths.normalize(patterns));
         });
@@ -136,7 +136,7 @@ public class PracticeReviewCoverageService {
         for (ReviewRepositoryTarget repository : requested.repositories()) {
             if (!monitored.contains(repository.nameWithOwner())) {
                 throw new InvalidReviewCoverageException(
-                        "Repository is not monitored by this workspace: " + repository.nameWithOwner());
+                        "This workspace does not monitor the repository: " + repository.nameWithOwner());
             }
         }
         Set<Long> eligible = membershipService.practiceReviewEligibleUserIds(workspaceId);

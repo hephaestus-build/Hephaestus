@@ -410,7 +410,7 @@ void test("deferred asks are one row each, with the record's facts and none of t
 				comments: [
 					{
 						author: "jennifer",
-						body: "Please add the confetti in your next MR",
+						body: "Please add the empty state in your next MR",
 						createdAt: "2026-04-13T14:50:00Z",
 					},
 					{ author: "ada", body: "Will do, tracked in #21", createdAt: "2026-04-13T14:55:00Z" },
@@ -435,8 +435,8 @@ void test("deferred asks are one row each, with the record's facts and none of t
 		assert.equal(result.metrics.asks, 3);
 		assert.equal(result.metrics.inlineAsks, 2);
 		assert.equal(result.metrics.conversationAsks, 1);
-		const [stock, capitalisation, confetti] = result.hints;
-		assert.ok(stock && capitalisation && confetti);
+		const [stock, capitalisation, emptyState] = result.hints;
+		assert.ok(stock && capitalisation && emptyState);
 		// The stock ask: the file is in the change but nothing near line 55 changed, no reply,
 		// resolved — and the reviewer's own later word on the thread drops it.
 		assert.equal(stock.flags.fileInChange, true);
@@ -453,10 +453,10 @@ void test("deferred asks are one row each, with the record's facts and none of t
 		assert.equal(capitalisation.flags.waiverWordsInFollowUp, false);
 		// The conversation ask: the reply names an issue and defers in words, and the approval
 		// followed it — a fact the review weighs, not a waiver by itself.
-		assert.equal(confetti.pattern, "conversation ask");
-		assert.equal(confetti.flags.issueNamedInReply, true);
-		assert.equal(confetti.flags.deferralWordsInReply, true);
-		assert.equal(confetti.flags.approvedAfterAsk, true);
+		assert.equal(emptyState.pattern, "conversation ask");
+		assert.equal(emptyState.flags.issueNamedInReply, true);
+		assert.equal(emptyState.flags.deferralWordsInReply, true);
+		assert.equal(emptyState.flags.approvedAfterAsk, true);
 		assert.match(result.directions[0] ?? "", /is a deferral to track, not a waiver/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -871,7 +871,7 @@ void test("a conversation note is a row, with the reviewer's approval, their set
 					thread: 10,
 					path: "App/QuizView.swift",
 					line: 3,
-					body: "Nitpick: it still says Untitled",
+					body: "Nitpick: the header still says Draft",
 					author: "tutor",
 					created_at: "2026-04-13T12:00:00Z",
 				},
@@ -880,7 +880,7 @@ void test("a conversation note is a row, with the reviewer's approval, their set
 				comments: [
 					{
 						author: "tutor",
-						body: "Looks good and works fine! Just two things for next iteration: replace the hardcoded language.",
+						body: "Approved, it works. Two ideas for next iteration: move the date format into a setting.",
 						createdAt: "2026-04-13T13:00:00.100Z",
 					},
 					{
@@ -924,7 +924,7 @@ void test("a conversation note is a row, with the reviewer's approval, their set
 		const [nitpick, advice, thanks, afterMerge] = result.hints;
 		assert.ok(nitpick && advice && thanks && afterMerge);
 		// The reviewer's own next note stands beside the resolution of the inline nitpick.
-		assert.match(String(nitpick.flags.reviewerLaterNote), /^Looks good and works fine!/u);
+		assert.match(String(nitpick.flags.reviewerLaterNote), /^Approved, it works\./u);
 		assert.equal(
 			nitpick.flags.reviewerApprovedAfter,
 			"3600s later; 1 commit(s) and 0 author note(s) between",

@@ -97,7 +97,7 @@ export function OutlineCollectionsSection({
 		content = (
 			<QueryErrorAlert
 				error={error}
-				title="We couldn't load the mirrored collections"
+				title="We could not load the mirrored collections"
 				onRetry={onRetry}
 			/>
 		);
@@ -141,8 +141,8 @@ export function OutlineCollectionsSection({
 					</EmptyMedia>
 					<EmptyTitle>No collections mirrored yet</EmptyTitle>
 					<EmptyDescription>
-						Pick the Outline collections whose documents should reach practice reviews. Only what
-						you select is read.
+						Add the Outline collections whose documents should reach practice reviews. Hephaestus
+						reads only the collections you add.
 					</EmptyDescription>
 				</EmptyHeader>
 				<EmptyContent>
@@ -163,7 +163,7 @@ export function OutlineCollectionsSection({
 					<CardDescription>
 						Documents in mirrored collections are kept in sync and reach practice reviews as
 						context. Pausing a collection <strong>freezes syncing but keeps its documents</strong>
-						{"; "}removing it <strong>erases every mirrored document</strong> from Hephaestus.
+						{". "}Removing it <strong>erases every mirrored document</strong> from Hephaestus.
 					</CardDescription>
 					<CardAction>
 						<Button size="sm" onClick={() => setAddOpen(true)}>

@@ -49,14 +49,14 @@ function WorkCard({ preview }: { preview: ActionPreview }) {
 }
 
 function explanation(preview: ActionPreview): string {
-	return `Hephaestus reviews this ${workNoun(preview.work)} against the practices ${preview.workspace.displayName} follows. What it records, and whether feedback is posted where the developer sees it, follows the workspace's settings.`;
+	return `Hephaestus reviews this ${workNoun(preview.work)} against the practices ${preview.workspace.displayName} follows. The workspace’s settings decide what the review records and whether feedback is posted where the developer sees it.`;
 }
 
 function outcomeText(outcome: ActionOutcome): { title: string; body: string; done: boolean } {
 	return outcome.status === "SUBMITTED"
 		? {
 				title: "Review requested",
-				body: "It runs in the background. Its results appear here when your review is recorded.",
+				body: "The review runs in the background. Its results appear in the practice review on the page once they are recorded.",
 				done: true,
 			}
 		: {
@@ -117,7 +117,7 @@ function Result({
 export function ActionConfirmation({ state, onConfirm, onClose }: ActionConfirmationProps) {
 	if (state.status === "loading") {
 		return (
-			<Frame title="Confirm">
+			<Frame title="Request a practice review">
 				<div className="flex flex-col gap-2" aria-hidden>
 					<Skeleton className="h-4 w-3/4" />
 					<Skeleton className="h-20 w-full" />
@@ -161,8 +161,8 @@ export function ActionConfirmation({ state, onConfirm, onClose }: ActionConfirma
 	} else if (state.status === "unknown") {
 		result = (
 			<Result icon={CircleAlertIcon} tone="text-warning" title="No answer from Hephaestus">
-				The change may or may not have gone through. Check the practice review on the page before
-				trying again.
+				Your request may or may not have gone through. Check the practice review on the page before
+				you try again.
 			</Result>
 		);
 	}
@@ -184,7 +184,7 @@ export function ActionConfirmation({ state, onConfirm, onClose }: ActionConfirma
 						</Button>
 						<Button variant="mentor" disabled={state.status === "sending"} onClick={onConfirm}>
 							{state.status === "sending" ? <Spinner /> : null}
-							Request review
+							{state.status === "sending" ? "Requesting review…" : "Request review"}
 						</Button>
 					</>
 				)}

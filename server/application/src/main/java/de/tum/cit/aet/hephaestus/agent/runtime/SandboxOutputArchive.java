@@ -157,7 +157,7 @@ public final class SandboxOutputArchive {
             byte type = header.getLinkFlag();
             if (isNameExtension(type)) {
                 throw new IOException("Output archive paths must be at most " + TarConstants.NAMELEN
-                        + " ASCII bytes; tar name extension records are not read");
+                        + " ASCII bytes. The server does not read tar name extension records.");
             }
             boolean regular =
                     (type == TarConstants.LF_NORMAL || type == TarConstants.LF_OLDNORM) && !header.isDirectory();

@@ -78,7 +78,7 @@ export function ProfileReviewsLevel({
 			body = (
 				<QueryErrorAlert
 					error={feed.error}
-					title="Could not load reviews of your work"
+					title="We could not load reviews of your work"
 					onRetry={feed.onRetry}
 				/>
 			);
@@ -116,8 +116,8 @@ export function ProfileReviewsLevel({
 						{REVIEWS_OF_YOUR_WORK}
 					</DrawerTitle>
 					<DrawerDescription className="max-w-2xl">
-						Reviews that recorded something about your work, newest first; one still running appears
-						once it does.
+						Reviews that recorded something about your work, newest first. A review that is still
+						running appears once it records something.
 					</DrawerDescription>
 				</div>
 			</DetailDrawerHeader>

@@ -121,7 +121,7 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 					</Alert>
 					{onContinueWithDraft && (
 						<Button type="button" variant="outline" size="sm" onClick={onContinueWithDraft}>
-							Continue with my draft
+							Continue with your draft
 						</Button>
 					)}
 				</div>
@@ -139,9 +139,8 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 						<AlertDialogTitle>{resetLabel}?</AlertDialogTitle>
 						<AlertDialogDescription>
 							This replaces the customization and discards unsaved changes. It does not change
-							whether workspace administrators can add the practice. Existing workspace copies
-							remain unchanged. Future updates apply automatically until the practice is customized
-							again.
+							whether workspace admins can add the practice. Existing workspace copies remain
+							unchanged. Future updates apply automatically until the practice is customized again.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -153,7 +152,7 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 								onUseHephaestusVersion?.();
 							}}
 						>
-							{isResetPending ? `${resetLabel}…` : resetLabel}
+							{isResetPending ? "Restoring default…" : resetLabel}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -189,8 +188,9 @@ export function CuratedPracticeForm(props: CuratedPracticeFormProps) {
 									<h2 className="text-lg font-semibold">What the author declared</h2>
 									<p className="text-sm text-muted-foreground">
 										The evidence requirements above are the author’s own claim about this practice.
-										Nobody has checked them independently. The digests record the exact rules that
-										were declared, so a later change to them is visible rather than silent.
+										Nobody has checked them independently. The codes below identify the exact rules
+										and policy that were declared, so a later change to them is visible rather than
+										silent.
 									</p>
 								</div>
 								<PracticeAutomatedReviewValidationSummary

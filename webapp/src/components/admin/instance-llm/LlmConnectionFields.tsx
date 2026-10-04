@@ -213,7 +213,7 @@ export function LlmConnectionFields({
 								Use the Responses API
 							</FieldLabel>
 							<FieldDescription>
-								Clear it only for an endpoint that serves Chat Completions alone.
+								Turn this off only if the endpoint serves Chat Completions alone.
 							</FieldDescription>
 						</FieldContent>
 					</Field>
@@ -236,7 +236,7 @@ export function LlmConnectionFields({
 				/>
 				{isEdit && (
 					<FieldDescription>
-						Endpoint, API shape and authentication can’t change. Add a connection instead.
+						Endpoint, API shape and authentication cannot change. Add a connection instead.
 					</FieldDescription>
 				)}
 				{hasText(errors.baseUrl) && <FieldError id={baseUrlErrorId}>{errors.baseUrl}</FieldError>}
@@ -281,8 +281,8 @@ export function LlmConnectionFields({
 					</ComboboxContent>
 				</Combobox>
 				<FieldDescription>
-					For example, Logos, Azure, or a gateway. Its mark does not say who operates the model or
-					where data stays.
+					For example, Logos, Azure, or a gateway. A logo does not show who runs the model or where
+					data stays.
 				</FieldDescription>
 			</Field>
 
@@ -329,7 +329,7 @@ export function LlmConnectionFields({
 						autoComplete="off"
 					/>
 					<FieldDescription>
-						{hasApiKey ? "Leave blank to keep the current key." : "Stored encrypted."}
+						{hasApiKey ? "Leave blank to keep the current key." : "The key is stored encrypted."}
 					</FieldDescription>
 				</Field>
 

@@ -16,7 +16,7 @@ export const Default: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.queryByLabelText(/Web app address/u)).toBeNull();
 		await userEvent.type(canvas.getByLabelText("Hephaestus address"), "https://heph.example.test");
-		await userEvent.click(canvas.getByRole("button", { name: "Connect" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Connect instance" }));
 		await expect(args.onConnect).toHaveBeenCalledWith({
 			origin: "https://heph.example.test",
 			webAppOrigin: undefined,
@@ -29,7 +29,7 @@ export const DevelopmentBuild: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await userEvent.type(canvas.getByLabelText("Hephaestus address"), "http://localhost:18480");
 		await userEvent.type(canvas.getByLabelText(/Web app address/u), "http://localhost:14280");
-		await userEvent.click(canvas.getByRole("button", { name: "Connect" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Connect instance" }));
 		await expect(args.onConnect).toHaveBeenCalledWith({
 			origin: "http://localhost:18480",
 			webAppOrigin: "http://localhost:14280",
@@ -40,7 +40,7 @@ export const DevelopmentBuild: Story = {
 export const DisabledWhileAnotherConnects: Story = {
 	args: { disabled: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Connect" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Connect instance" })).toBeDisabled();
 	},
 };
 

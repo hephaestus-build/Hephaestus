@@ -78,13 +78,13 @@ public class AuthenticatedGitProviderUserService {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Your account has more than one GitLab identity on " + serverUrl
-                            + ". Unlink the one you don't use in Settings → Linked Accounts.");
+                            + ". Disconnect the one you do not use in User settings, under Connected accounts.");
         }
         if (matching.isEmpty()) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Link your GitLab account on " + serverUrl
-                            + " before creating a workspace there. Go to Settings → Linked Accounts.");
+                    "Connect your GitLab account on " + serverUrl
+                            + " before you create a workspace there. Do this in User settings, under Connected accounts.");
         }
         return resolveOrProvisionUser(matching.getFirst());
     }
@@ -99,8 +99,9 @@ public class AuthenticatedGitProviderUserService {
     private User resolveOrProvisionUser(IdentityLinkView link) {
         IdentityProvider provider = gitProviderRepository
                 .findById(link.gitProviderId())
-                .orElseThrow(() -> new IllegalStateException(
-                        "git_provider row missing for IdentityLink.gitProviderId=" + link.gitProviderId()));
+                .orElseThrow(
+                        () -> new IllegalStateException(
+                                "We could not find the provider for this connected account. Disconnect it in User settings, then connect it again."));
         long nativeId = parseSubject(link.subject(), provider.getType());
         Optional<User> existing = userRepository.findByNativeIdAndProviderId(nativeId, link.gitProviderId());
         if (existing.isPresent()) {
@@ -121,7 +122,8 @@ public class AuthenticatedGitProviderUserService {
         accountIdentityQuery.linkExternalActor(link.identityLinkId(), userId);
         return userRepository
                 .findById(userId)
-                .orElseThrow(() -> new IllegalStateException("User not found after upsert: userId=" + userId));
+                .orElseThrow(() ->
+                        new IllegalStateException("We could not load your provider profile. Try again in a moment."));
     }
 
     private static long parseSubject(String subject, IdentityProviderType type) {
@@ -131,8 +133,8 @@ public class AuthenticatedGitProviderUserService {
             // A mutable login cannot substitute for the provider's numeric actor id.
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Linked " + type
-                            + " identity has a non-numeric subject; the account must be re-linked. Go to Settings → Linked Accounts.",
+                    "Hephaestus cannot use your connected " + type
+                            + " account because its ID is not a number. Disconnect it in User settings, under Connected accounts, then connect it again.",
                     e);
         }
     }
@@ -162,7 +164,7 @@ public class AuthenticatedGitProviderUserService {
             // Only current provider evidence can reassign a login; a signup snapshot cannot prove a rename.
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Your saved provider username belongs to a different identity. Refresh or synchronize your provider profile before using account settings.");
+                    "Your saved provider username belongs to a different identity. Refresh your provider profile before you use account settings.");
         }
         userRepository.upsertUser(
                 nativeId,
@@ -184,6 +186,7 @@ public class AuthenticatedGitProviderUserService {
         return userRepository
                 .findByNativeIdAndProviderId(nativeId, providerId)
                 .map(User::getId)
-                .orElseThrow(() -> new IllegalStateException("User not found after upsert: nativeId=" + nativeId));
+                .orElseThrow(() ->
+                        new IllegalStateException("We could not load your provider profile. Try again in a moment."));
     }
 }

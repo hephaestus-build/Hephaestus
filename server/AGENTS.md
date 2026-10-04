@@ -1,9 +1,11 @@
 # Server
 
 All prose follows the [writing standard](../docs/contributor/simplified-technical-english.md).
-Apply it to docs, UI text, user-facing responses, comments, and repository instructions.
+It has two profiles.
+UI text, user-facing responses, and user docs use the product voice.
+Admin docs, contributor docs, and repository instructions use STE.
 
-Spring Boot 4 / Java 21 / Spring Modulith 2. Liquibase owns the schema; the OpenAPI spec and the
+Spring Boot 4 / Java 21 / Spring Modulith 2. Liquibase owns the schema. The OpenAPI spec and the
 GraphQL clients are generated. Package layout under
 `application/src/main/java/de/tum/cit/aet/hephaestus/` follows the domain (`core/`, `workspace/`, `agent/`,
 `practices/`, `integration/`, `mentor/`, …) — read it rather than a copy of it here.
@@ -13,13 +15,13 @@ are not here: write code that reads like the file you are editing.
 
 ## Local development loop
 
-- **No devtools.** Hot reload is JVM HotSwap via the IDE — IntelliJ's Spring Boot run config with
-  _Update Classes and Resources_ on save. Method-body edits reload; signature changes, new methods and
+- **No devtools.** Hot reload is JVM HotSwap through the IDE — IntelliJ's Spring Boot run config with
+  _Update Classes and Resources_ on save. Method-body edits reload. Signature changes, new methods and
   `@Configuration` edits need a full restart
   ([ref](https://docs.spring.io/spring-boot/how-to/hotswapping.html)).
 - **`ddl-auto: validate`** locally — Liquibase owns DDL. If the validator fails on boot your DB has
   drifted: `vp run dev:reset`.
-- **`BufferingApplicationStartup`** is wired in `Application.main()`; `StartupBudgetIntegrationTest`
+- **`BufferingApplicationStartup`** is wired in `Application.main()`. `StartupBudgetIntegrationTest`
   reads its timeline and fails on a slow step. `/actuator/startup` is not exposed.
 
 ## Build traps
@@ -29,19 +31,19 @@ are not here: write code that reads like the file you are editing.
 - **Select a tier by task**, not by a system property. `test`, `architectureTest`, `integrationTest`,
   `databaseTest` and `liveTest` each own their JUnit tag filter. Every non-live tier excludes `live`.
 - **`clean` is not cache-disabled.** Use `--no-build-cache` as well for a cold measurement.
-  Configuration cache reuses task configuration; build cache reuses declared task outputs.
-- **Handwritten javac warnings fail compilation.** Application and test sources use `-Werror`;
+  Configuration cache reuses task configuration. Build cache reuses declared task outputs.
+- **Handwritten javac warnings fail compilation.** Application and test sources use `-Werror`.
   generated clients stay in their separate module. Missing dependency annotation metadata belongs
   on the needed compile-only classpath, not in lint suppressions or annotation processors.
 - **Error Prone's default checks fail compilation**, as do unnecessary fully qualified names and
   wildcard imports. Suppress only a false positive: `@SuppressWarnings("Check") // why` on the
   smallest scope. Lombok expands `@Builder.Default` to its fully qualified name before Error Prone
-  runs, so import `lombok.Builder.Default` and write `@Default`; a nested `Type`, `Builder`, `Key` or
+  runs, so import `lombok.Builder.Default` and write `@Default`. A nested `Type`, `Builder`, `Key` or
   `Id` is not imported but written `Outer.Type` (BadImport).
 - **One build invocation per checkout at a time.** Gradle owns the module `build/` directories.
-- **Tests always execute when requested.** Test result caching and up-to-date skipping are disabled;
+- **Tests always execute when requested.** Test result caching and up-to-date skipping are disabled.
   PostgreSQL, containers and provider state are not content-addressed inputs. Compilation remains
-  incremental and cacheable. Test JVMs set `MANAGEMENT_PORT=0 SERVER_PORT=0`; local OAuth settings
+  incremental and cacheable. Test JVMs set `MANAGEMENT_PORT=0 SERVER_PORT=0`. Local OAuth settings
   in `server/.env` can still affect environment-sensitive tests.
 - **Packaged-artifact consumption is CI-only.** `-PpackagedServer=true` uses restored compiled
   classes for database tooling and database tests. Never use it after editing source locally.
@@ -60,11 +62,12 @@ controller.
 
 ## Null-safety
 
-NullAway checks all handwritten production and test code in JSpecify mode; generated sources are
+NullAway checks all handwritten production and test code in JSpecify mode. Generated sources are
 excluded. Every new package needs a `package-info.java` containing
 `@org.jspecify.annotations.NullMarked`, and the build rejects missing null-marking scopes and
 `NullAway` suppressions. Use `@Nullable` only for genuine absence and place it on the precise type:
-`List<@Nullable String>` permits null elements; `String @Nullable []` permits a null array reference.
+`List<@Nullable String>` permits null elements. `String @Nullable []` permits a null array reference.
+
 Fix violations at the contract or implementation boundary. In tests, refine a nullable result once
 before using it rather than adding duplicate assertions. Run `vp run test:server:unit` after changing
 a nullness contract.
@@ -82,54 +85,56 @@ a nullness contract.
 Live-test credential gates and setup: [Testing Guide](../docs/contributor/testing.mdx#live-external-service-tests).
 
 **JUnit tags, not filename patterns, select tests.** Keep descriptive `*Test` and `*IntegrationTest`
-names for readers. `TestTierTaggingArchTest` uses JUnit discovery to reject untagged tests;
-`vp run test:server:selection` proves actual tier coverage and disjoint integration shards using
-Gradle's test dry-run reports in one invocation, without executing Spring contexts. Its inventories
+names for readers. `TestTierTaggingArchTest` uses JUnit discovery to reject untagged tests.
+`vp run test:server:selection` proves actual tier coverage and disjoint integration shards.
+It uses Gradle's test dry-run reports in one invocation, without executing Spring contexts. Its inventories
 write only to `application/build/test-selection/`, never execution or coverage reports.
 
-Name tests `should[ExpectedBehavior]When[Condition]`. Controller-level integration tests extend
-`AbstractWorkspaceIntegrationTest` (or a domain-specific base) and exercise access control through
-`WebTestClient` + `TestAuthUtils` — the identity comes from the mock JWT **token string**, not from an
-annotation.
+Name tests `should[ExpectedBehavior]When[Condition]`. Controller-level integration tests extend `AbstractWorkspaceIntegrationTest` or a domain-specific base.
+They exercise access control through `WebTestClient` + `TestAuthUtils`.
+The identity comes from the mock JWT **token string**, not from an annotation.
 
 **Consume every HTTP response.** A `WebTestClient` status or header assertion does not consume its
 body. If the body is irrelevant to the assertion, finish with `.expectBody(Void.class)` so a large
-response cannot hold a pooled connection indefinitely. Body assertions already consume it; streaming
-tests own their subscription and cancellation explicitly. Use `.returnResult(Void.class)` when only
-response headers or cookies are needed; a non-void `returnResult` leaves the body subscription to you.
+response cannot hold a pooled connection indefinitely.
+Body assertions already consume it.
 
-**Rows written by earlier tests are already there.** Assert on the row you created, never on a count
-or on "the only" result, and never write cleanup that another test depends on having run.
+Streaming tests own their subscription and cancellation explicitly.
+Use `.returnResult(Void.class)` when only
+response headers or cookies are needed. A non-void `returnResult` leaves the body subscription to you.
+
+**Rows written by earlier tests are already there.** Assert on the row you created.
+Never assert on a count or on "the only" result.
+Never write cleanup that another test depends on having run.
 
 ## Things that bite
 
 - **Keep proxied methods overridable.** Spring's class-based proxies and Hibernate entity proxies
   cannot intercept a `final` method. To avoid an overridable constructor call, use constructor-local
-  values or a private calculation helper instead; making the public method `final` can read
+  values or a private calculation helper instead. Making the public method `final` can read
   uninitialized proxy fields rather than the target's state.
 - **`Issue` is SINGLE_TABLE with `PullRequest` as a subclass.** A JPQL query over `Issue` therefore
   returns pull requests too. Any query that means "issues only" must say `WHERE TYPE(i) = Issue`
   explicitly — see `MentorContextQueryRepository` and `ReviewableArtifactOwnershipRepository`. A test
   with a mocked repository cannot catch a missing `TYPE(…)`.
-- **Integration tests do not prove migrations.** Their schema uses `ddl-auto: create`; run
+- **Integration tests do not prove migrations.** Their schema uses `ddl-auto: create`. Run
   `vp run db:check-drift` to replay and compare the changelog
   (`docs/contributor/database-migration.mdx`).
-- **A native `@Query` may not contain an apostrophe inside a `--` comment.** Hibernate reads it as the
-  start of a string literal and the whole `ApplicationContext` fails to build, naming something else;
+- **A native `@Query` may not contain an apostrophe inside a `--` comment.** Hibernate reads it as the start of a string literal.
+  The whole `ApplicationContext` fails to build, naming something else.
   `NativeQueryCommentArchTest` turns that into a named failure.
 - **`EntityManager` is injected as a `@PersistenceContext` field**, not through the constructor
-  (`WorkspaceMembershipService`, `GitHubUserProcessor`). Everything else is constructor injection via
+  (`WorkspaceMembershipService`, `GitHubUserProcessor`). Everything else is constructor injection through
   `@RequiredArgsConstructor`.
-- **A bean that exists in one runtime role only is gated on that role** (`@ConditionalOnServerRole`,
-  `@ConditionalOnWorkerRole` or `@ConditionalOnWebhookRole`), and a consumer that must survive its
-  absence takes `ObjectProvider` (`WorkspaceSyncTargetProvider`). An ungated consumer crash-loops the
+- **A bean that exists in one runtime role only is gated on that role** (`@ConditionalOnServerRole`, `@ConditionalOnWorkerRole` or `@ConditionalOnWebhookRole`).
+  If a consumer must survive its absence, it takes `ObjectProvider` (`WorkspaceSyncTargetProvider`). An ungated consumer crash-loops the
   `worker` and `webhook` runtimes, which start a different slice of the context.
-- **A test-tree `package-info.java` shadows the main one.** Test classes sit first on the classpath,
-  so a `@NullMarked`-only `package-info` under `src/test` hides a main package's `@NamedInterface` from
-  Modulith and the architecture tier reports the package as non-exposed. Main's annotation already
-  covers the test package; do not add a second file.
-- **`SlackMessageService` resolves bot tokens per workspace at send time** via `ConnectionService`.
-  There is no global `App` bean and no `slack.token` property; admins connect each workspace through
+- **A test-tree `package-info.java` shadows the main one.** Test classes sit first on the classpath.
+  Thus, a `@NullMarked`-only `package-info` under `src/test` hides a main package's `@NamedInterface` from Modulith.
+  The architecture tier reports the package as non-exposed. Main's annotation already
+  covers the test package. Do not add a second file.
+- **`SlackMessageService` resolves bot tokens per workspace at send time** through `ConnectionService`.
+  There is no global `App` bean and no `slack.token` property. Admins connect each workspace through
   `/oauth/callback/slack`.
 
 ## API and security conventions
@@ -137,8 +142,9 @@ or on "the only" result, and never write cleanup that another test depends on ha
 - Workspace-scoped controllers carry `@WorkspaceScopedController` and take a `WorkspaceContext`.
   Authorization is declared, never assumed: `@RequireAtLeastWorkspaceAdmin`, `@RequireWorkspaceOwner`,
   `@PreAuthorize("hasAuthority('app_admin')")` for instance-admin routes.
-  A `/user-view` handler addressed at a user is a `GET` carrying `@UserViewRead`, which records the
-  `USER_VIEW` row before the handler runs — `UserViewArchitectureTest` enforces both, and
+  A `/user-view` handler addressed at a user is a `GET` carrying `@UserViewRead`.
+  This annotation records the `USER_VIEW` row before the handler runs.
+  `UserViewArchitectureTest` enforces both requirements.
   `docs/contributor/instance-admin.md` § Read-only user views has the mechanism. Admin mutations declare
   `@Audited` or `@AuditExempt` — an ArchUnit rule enforces it.
 - Express lifecycle transitions as HTTP methods (`PATCH /workspaces/{slug}/status`), not RPC verbs.
@@ -148,55 +154,60 @@ or on "the only" result, and never write cleanup that another test depends on ha
   `OpenAPIConfiguration.ALLOWED_DOMAIN_OBJECTS`. The webapp client then simply has no type for it, with
   no error anywhere. Domain types the API deliberately exposes (`ProblemDetail`, `PracticeDefinition`, …)
   are there for this reason.
-- DTOs are records. All bare components are non-null under `@NullMarked`; add JSpecify `@NonNull` when
+- DTOs are records. All bare components are non-null under `@NullMarked`. Add JSpecify `@NonNull` when
   that component must also appear in the generated schema's `required` list. A primitive takes
   `@Schema(requiredMode = RequiredMode.REQUIRED)` instead, since a nullness annotation on it fails the
   build. A component the API may omit is `@Nullable`, never bare.
-- **Never wrap a DTO component in `Optional<>`.** springdoc unwraps it to the value type but still marks
-  it required, so the generated TypeScript declares it non-optional and its response transformer
-  converts it unconditionally — a value the server never sends is typed as one it always sends. Use
+- **Never wrap a DTO component in `Optional<>`.** springdoc unwraps it to the value type but still marks it required.
+  Thus, the generated TypeScript declares it non-optional.
+  Its response transformer converts it unconditionally.
+  A value the server never sends is typed as one it always sends. Use
   `@Nullable T`.
 
 ## Schema changes
 
 Procedure: `docs/contributor/database-migration.mdx`. What the drift gate reads from an entity:
 
-- An un-annotated field in a `@NullMarked` package is a NOT NULL column; a column that may be NULL
+- An un-annotated field in a `@NullMarked` package is a NOT NULL column. A column that may be NULL
   carries `@Nullable` on the field.
-- A foreign key backing a plain id column with no JPA association is named `sfk_*`; the gate
+- A foreign key backing a plain id column with no JPA association is named `sfk_*`. The gate
   ignores that prefix (`application/build.gradle.kts`, `liquibaseDiff`). An association's foreign key
   keeps `fk_*` and is drift-checked, so a misnamed constraint fails in either direction.
 
 ## Webhook receiver
 
-`integration/core/webhook/` is the receive-side substrate: one `POST /webhooks/{kind}` entry point
-resolves the kind through `IntegrationKindRouting` and hands it to `WebhookIngestPipeline`, which
-selects that adapter's `WebhookSignatureVerifier` and `SubjectKeyDeriver` and publishes the verified
-envelope to JetStream, all gated with `@ConditionalOnWebhookRole`. Configuration binds to
+`integration/core/webhook/` is the receive-side substrate.
+One `POST /webhooks/{kind}` entry point resolves the kind through `IntegrationKindRouting`.
+It hands the kind to `WebhookIngestPipeline`.
+The pipeline selects that adapter's `WebhookSignatureVerifier` and `SubjectKeyDeriver`.
+It publishes the verified envelope to JetStream.
+`@ConditionalOnWebhookRole` gates all these operations.
+
+Configuration binds to
 `hephaestus.webhook.*` through `core.webhook.WebhookProperties`, shared with auto-registration in
 `integration/scm/gitlab/workspace/GitLabWebhookService`.
 
 - **Production runs it in its own `webhook-server` container** — the same image as `application-server`
   with `SPRING_PROFILES_ACTIVE=prod,webhook` — so an app-server deploy does not interrupt reception.
-  That matters because push events on GitHub and GitLab are **not manually redeliverable**: a webhook
-  missed during a restart is lost.
-- **Subject grammar**: `github.<owner>.<repo>.<event>`; registered GitLab group hooks use
+  Push events on GitHub and GitLab are **not manually redeliverable**.
+  Thus, a webhook missed during a restart is lost.
+- **Subject grammar**: `github.<owner>.<repo>.<event>`. Registered GitLab group hooks use
   `gitlab.?connection.<connectionId>.<event>` from `GitLabSubjectKeyDeriver.deriveConnectionSubject`,
   after the connection endpoint verifies the route credential. Operator-created GitLab hooks on
   the shared endpoint retain `gitlab.<namespace>.<project>.<event>`.
-  `ConsumerSubjectMath#connectionFilter` matches connection subjects;
+  `ConsumerSubjectMath#connectionFilter` matches connection subjects.
   `ConsumerSubjectMath#buildSubjectPrefix` matches path subjects, where dots inside a path segment
   become `~` and nested GitLab groups join with `~`. Producer and consumer must agree —
   `SubjectGrammarRoundTripTest` enforces it for every committed fixture.
 - **ArchUnit guards the primitives**: `HexEncodingArchTest` (only `HexFormat.of()`),
-  `LocaleSafetyArchTest` (no `Locale.getDefault()`). `application/build.gradle.kts` sets
-  per-package JaCoCo branch floors, checked by the unit coverage task and `verification`: `test:server:unit`,
-  `test:server:verification` and the _App Server: Unit and architecture_ CI job. Raise a floor when
+  `LocaleSafetyArchTest` (no `Locale.getDefault()`). `application/build.gradle.kts` sets per-package JaCoCo branch floors.
+  The unit coverage task and `verification` check them.
+  These checks run through `test:server:unit`, `test:server:verification`, and the _App Server: Unit and architecture_ CI job. Raise a floor when
   its package clears the next step.
 
 ## Container image
 
-Paketo Cloud Native Buildpacks with Application CDS; no `Dockerfile`. From `server/`:
+Paketo Cloud Native Buildpacks with Application CDS. No `Dockerfile`. From `server/`:
 `./gradlew :application:bootJar`, then
 `pack build hephaestus/application-server --path application/build/libs/hephaestus-application-*.jar --descriptor application/project.toml --run-image <the run image pinned in .github/workflows/cicd.yml>`.
 Pinning and rationale: `docs/admin/buildpacks-cds-decision.md`.

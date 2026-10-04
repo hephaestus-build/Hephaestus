@@ -19,13 +19,13 @@ export function SilentModeBanner({ settings }: SilentModeBannerProps) {
 		<Alert variant="destructive">
 			<VolumeX aria-hidden />
 			<AlertTitle className="min-w-0 break-words">
-				Silent mode is engaged — workspace delivery is blocked
+				Silent mode is on: workspace delivery is blocked
 			</AlertTitle>
 			<AlertDescription className="min-w-0 break-words">
-				Practice feedback and workspace Slack messages are suppressed across this instance.
+				Practice feedback and workspace Slack messages are withheld across this instance.
 				{settings.silentModeChangedByAccountId != null || engagedAt ? (
 					<>
-						{" Engaged"}
+						{" Turned on"}
 						{settings.silentModeChangedByAccountId == null
 							? ""
 							: ` by account #${settings.silentModeChangedByAccountId}`}
@@ -35,7 +35,7 @@ export function SilentModeBanner({ settings }: SilentModeBannerProps) {
 								<RelativeTime value={settings.silentModeChangedAt} tooltip={false} />
 							</>
 						) : null}
-						{hasText(settings.silentModeReason) ? ` — “${settings.silentModeReason}”` : ""}.
+						.{hasText(settings.silentModeReason) ? ` Reason: “${settings.silentModeReason}”` : ""}
 					</>
 				) : null}
 			</AlertDescription>

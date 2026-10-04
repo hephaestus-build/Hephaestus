@@ -33,7 +33,7 @@ function SlackIntegrationPage() {
 			<PageHeader
 				icon={<SlackIcon className="size-6" />}
 				title="Slack"
-				description="Connection, monitored channels and sync activity for this workspace's Slack app."
+				description="Connection, monitored channels and sync activity for this workspace’s Slack app."
 			/>
 
 			{slack.isLoading && <Skeleton className="h-48 w-full" />}
@@ -41,7 +41,7 @@ function SlackIntegrationPage() {
 			{slack.loadError && (
 				<QueryErrorAlert
 					error={slack.loadError}
-					title="We couldn't load the Slack connection"
+					title="We could not load the Slack connection"
 					onRetry={slack.retryLoad}
 				/>
 			)}

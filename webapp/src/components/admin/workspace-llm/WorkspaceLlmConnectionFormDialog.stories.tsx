@@ -54,14 +54,14 @@ export const MobileReflow: Story = {
 		chromatic: { viewports: [320, 375, 768] },
 	},
 	play: async () => {
-		await screen.findByRole("button", { name: /^connect provider$/iu });
+		await screen.findByRole("button", { name: "Add connection" });
 		await expectDialogFitsViewport();
 	},
 };
 
 export const ValidationError: Story = {
 	play: async () => {
-		await userEvent.click(await screen.findByRole("button", { name: /^connect provider$/iu }));
-		await expectSettledVisible(await screen.findByText(/display name is required/iu));
+		await userEvent.click(await screen.findByRole("button", { name: "Add connection" }));
+		await expectSettledVisible(await screen.findByText(/enter a display name/iu));
 	},
 };

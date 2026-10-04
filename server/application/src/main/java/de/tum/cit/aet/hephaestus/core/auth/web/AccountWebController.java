@@ -133,7 +133,7 @@ public class AccountWebController {
         Long accountId = CurrentAccount.requireId();
         if (confirmHeader == null || !confirmHeader.equals(String.valueOf(accountId))) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "X-Confirm-Delete header must equal your account id to confirm deletion");
+                    HttpStatus.BAD_REQUEST, "To confirm deletion, set the X-Confirm-Delete header to your account ID.");
         }
         accountService.softDelete(accountId);
         return ResponseEntity.noContent().build();

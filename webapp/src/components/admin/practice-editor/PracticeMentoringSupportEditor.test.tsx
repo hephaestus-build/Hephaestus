@@ -169,7 +169,7 @@ describe("PracticeMentoringSupportEditor", () => {
 				},
 				knownLimitations: [],
 			}),
-		).toBe("Explain at least one limitation that requires additional context.");
+		).toBe("Add at least one limitation that needs context from a person.");
 		expect(
 			practicePolicyError({ ...recommended, knownLimitations: [{ code: "X", description: "a" }] }),
 		).toBe("Limitation identifiers must use 3–64 uppercase letters, numbers, and underscores.");

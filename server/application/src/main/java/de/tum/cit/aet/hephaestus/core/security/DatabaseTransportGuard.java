@@ -56,8 +56,8 @@ public class DatabaseTransportGuard {
         boolean tls = !sslModes.isEmpty() && sslModes.stream().allMatch(TLS_SSL_MODES::contains);
         if (!tls) {
             throw new IllegalStateException("Remote PostgreSQL host '" + hosts
-                    + "' must use TLS. Set sslmode=require, verify-ca, or verify-full; only set "
-                    + "HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE=true after explicitly accepting plaintext transport.");
+                    + "' must use TLS. Set sslmode=require, verify-ca, or verify-full. "
+                    + "Set HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE=true only if you accept plaintext transport.");
         }
     }
 

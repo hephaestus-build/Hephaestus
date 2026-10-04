@@ -62,7 +62,7 @@ export const EveryRegistry: Story = {
 	render: (args: { def: StatusDef }) => (
 		<div className="space-y-6">
 			<Gallery heading="Delivery outcome" defs={DELIVERY_STATE_DEFS} />
-			<Gallery heading="Delivery place" defs={DELIVERY_PLACE_DEFS} />
+			<Gallery heading="Delivery channel" defs={DELIVERY_PLACE_DEFS} />
 			<Gallery heading="Dashboard visibility" defs={DASHBOARD_VISIBILITY_DEFS} />
 			<Gallery heading="Why withheld" defs={WITHHOLDING_FAMILY_DEFS} />
 			<Gallery heading="Outcome" defs={OUTCOME_DEFS} />

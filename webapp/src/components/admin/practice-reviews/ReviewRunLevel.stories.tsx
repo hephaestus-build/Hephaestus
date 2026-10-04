@@ -201,7 +201,52 @@ export const DeclinedForInsufficientEvidence: Story = {
 			expect(await panel.findAllByText("Nothing was assessed")).toHaveLength(2),
 		);
 		await expect(panel.queryByText("No observations were recorded")).toBeNull();
-		await expect(panel.queryByText("No feedback")).toBeNull();
+		await expect(panel.queryByText("No feedback was composed")).toBeNull();
+	},
+};
+
+/**
+ * A run whose every ready practice an earlier review had already answered on the same code also completes with
+ * no observations of its own. The empty state says the answers are that review's, not that this one looked.
+ * No model ran, so the run reports no calls and no tokens; the model it was admitted on is still named.
+ */
+export const AnsweredByAnEarlierReview: Story = {
+	args: {
+		job: {
+			status: "ready",
+			job: {
+				...reviewJob(COMPLETED_RUN),
+				reviewOutcome: "COALESCED",
+				answeredPractices: [
+					{
+						practiceSlug: "errors-carry-context",
+						revisionId: 3,
+						reviewId: "cccccccc-1111-1111-1111-111111111111",
+					},
+				],
+				llmModel: undefined,
+				llmTotalCalls: 0,
+				llmTotalInputTokens: 0,
+				llmTotalOutputTokens: 0,
+				llmTotalReasoningTokens: 0,
+				generatedPaths: { patterns: [], paths: [] },
+				exitCode: undefined,
+			},
+		},
+		observations: NOTHING,
+		feedback: NOTHING,
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await waitFor(async () =>
+			expect(await panel.findAllByText("Answered by an earlier review")).toHaveLength(2),
+		);
+		await expect(panel.getByRole("link", { name: "an earlier review" })).toBeVisible();
+		await expect(panel.getByRole("link", { name: "Errors carry their context" })).toBeVisible();
+		await expect(panel.queryByText("No observations were recorded")).toBeNull();
+		await expect(panel.queryByText("Nothing was assessed")).toBeNull();
+		const calls = panel.getAllByRole("term").find((term) => term.textContent === "Model calls");
+		await expect(calls?.nextElementSibling).toHaveTextContent(/^0$/u);
 	},
 };
 
@@ -244,7 +289,7 @@ export const Cancelling: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expectGenuinelyDisabled(panel.getByRole("button", { name: "Cancelling…" }));
+		await expectGenuinelyDisabled(panel.getByRole("button", { name: "Canceling…" }));
 	},
 };
 
@@ -275,7 +320,7 @@ export const FailedWithoutOutput: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Review couldn’t be completed")).toBeVisible();
+		await expect(panel.getByText("We could not complete this review")).toBeVisible();
 		await expect(
 			panel.getByText("This review ended before it produced observations or feedback."),
 		).toBeVisible();
@@ -301,7 +346,7 @@ export const FailedWithPartialOutput: Story = {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByText("Review output may be incomplete")).toBeVisible();
 		panel.getByText("A dropped delivery is logged at debug and never counted");
-		await expect(panel.queryByText("Review couldn’t be completed")).not.toBeInTheDocument();
+		await expect(panel.queryByText("We could not complete this review")).not.toBeInTheDocument();
 	},
 };
 
@@ -328,7 +373,7 @@ export const Loading: Story = {
 	play: async ({ args, userEvent }) => {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByRole("heading", { level: 2 })).toHaveAccessibleName("Loading review");
-		await expect(panel.queryByText("Couldn't load this review")).not.toBeInTheDocument();
+		await expect(panel.queryByText("We could not load this review")).not.toBeInTheDocument();
 		await userEvent.click(panel.getByRole("button", { name: "Practice reviews" }));
 		await expect(args.path.onClose).toHaveBeenCalledWith(0);
 	},
@@ -345,7 +390,7 @@ export const LoadFailed: Story = {
 	},
 	play: async ({ args, userEvent }) => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Couldn't load this review")).toBeVisible();
+		await expect(panel.getByText("We could not load this review")).toBeVisible();
 		// With no record to name it, the level is named for what it is.
 		await expect(screen.getByRole("dialog")).toHaveAccessibleName("Review");
 		panel.getByRole("button", { name: "Practice reviews" });
@@ -368,7 +413,7 @@ export const OneSectionFailed: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Couldn't load observations")).toBeVisible();
+		await expect(panel.getByText("We could not load observations")).toBeVisible();
 		// The other section is unaffected, which is the whole point of two states rather than one.
 		await panel.findByText(/2 issues to tighten in this change/u);
 	},

@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -303,99 +302,31 @@ class DeliveryComposerTest extends BaseUnitTest {
             null,
             "The body lists what changed but not why."));
 
+    /** A lapse is explained from this work alone, however often the developer had it before. */
     @Test
-    void shouldNameARecurringLapseInOneLineAndExplainTheRestInFull() {
-        ValidatedObservation recurring = negativeObservation(
-                "describe-what-and-why",
-                "The description says what changed but not why.",
-                Severity.MINOR,
-                null,
-                null,
-                "Only the what.");
-        ValidatedObservation fresh = negativeObservation(
-                "ships-tests-with-the-change",
-                "The new parser ships with no test.",
-                Severity.MINOR,
-                null,
-                null,
-                "No test file in the change.");
-        String note = note(DeliveryComposer.composeAdmitted(
-                List.of(recurring, fresh),
-                ArtifactKinds.PULL_REQUEST,
-                Map.of(),
-                List.of(),
-                null,
-                Set.of("describe-what-and-why")));
-
-        assertThat(note).contains("The new parser ships with no test.");
-        assertThat(note)
-                .contains("**Still open from your earlier changes**")
-                .contains("- The description says what changed but not why.");
-        assertThat(note).containsOnlyOnce("The description says what changed but not why.");
-        assertThat(note.indexOf("Still open")).isGreaterThan(note.indexOf("The new parser"));
-        assertThat(note).doesNotContain("practice page");
-    }
-
-    @Test
-    void shouldNameOnlyRecurringLapsesWithoutPromisingPrivateFeedback() {
-        ValidatedObservation recurring = negativeObservation(
+    void shouldExplainAMinorLapseWithItsNextStepAndCountItAsAContributor() {
+        ValidatedObservation lapse = identified(negativeObservation(
                         "describe-what-and-why",
                         "The description says what changed but not why.",
                         Severity.MINOR,
                         null,
                         null,
                         "Only the what.")
-                .withKeys(new ObservationKeys("occ-r", "rk-r"));
+                .withKeys(new ObservationKeys("occ-why", "rk-why")));
+
         DeliveryContent result = content(DeliveryComposer.composeAdmitted(
-                List.of(recurring),
+                List.of(lapse),
                 ArtifactKinds.PULL_REQUEST,
                 Map.of(),
-                List.of(),
-                null,
-                Set.of("describe-what-and-why")));
+                List.of(artifactInContextUnit(lapse, "The why is missing", COMPOSED_NEXT_STEP)),
+                null));
 
         assertThat(result.mrNote())
-                .contains("**Still open from your earlier changes**")
-                .contains("- The description says what changed but not why.")
-                .doesNotContain("practice page");
+                .contains("The why is missing")
+                .contains(COMPOSED_NEXT_STEP)
+                .doesNotContain("Still open");
         assertThat(result.withheld()).isEmpty();
-        assertThat(result.summaryContributors()).containsExactly("occ-r");
-    }
-
-    @Test
-    void shouldStillExplainARecurringLapseInFullWhenItBlocks() {
-        ValidatedObservation blocking = negativeObservation(
-                "avoids-insecure-defaults-and-over-broad-permissions",
-                "An API key is committed in Config.swift.",
-                Severity.MAJOR,
-                null,
-                null,
-                "The literal on line 4 is a live key.");
-        String note = note(DeliveryComposer.composeAdmitted(
-                List.of(blocking),
-                ArtifactKinds.PULL_REQUEST,
-                Map.of(),
-                List.of(),
-                null,
-                Set.of("avoids-insecure-defaults-and-over-broad-permissions")));
-        assertThat(note).contains("An API key is committed in Config.swift.").doesNotContain("Still open");
-    }
-
-    @Test
-    void shouldNotSpendTheImprovementCapOnRecurringLapses() {
-        List<ValidatedObservation> observations = new ArrayList<>();
-        observations.add(negativeObservation(
-                "describe-what-and-why", "No why in the description.", Severity.MINOR, null, null, "r1"));
-        for (String slug : List.of(
-                "commit-subjects-explain-each-change",
-                "commits-are-atomic-and-cohesive",
-                "states-how-to-verify-the-change")) {
-            observations.add(
-                    negativeObservation(slug, humanizeTitle(slug) + " is missing.", Severity.MINOR, null, null, "r"));
-        }
-        String note = note(DeliveryComposer.composeAdmitted(
-                observations, ArtifactKinds.PULL_REQUEST, Map.of(), List.of(), null, Set.of("describe-what-and-why")));
-        assertThat(note).doesNotContain("not shown").contains("- No why in the description.");
+        assertThat(result.summaryContributors()).containsExactly("occ-why");
     }
 
     private static String noteWithLead(List<ValidatedObservation> observations, String lead) {
@@ -1536,7 +1467,7 @@ class DeliveryComposerTest extends BaseUnitTest {
                 List.of(artifactInContextUnit(focused, "One concern", COMPOSED_NEXT_STEP)),
                 null));
 
-        assertThat(note).contains("What's working well here");
+        assertThat(note).contains("What’s working well here");
         assertThat(note).doesNotContain("_Why this matters:_");
     }
 

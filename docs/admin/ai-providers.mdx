@@ -1,287 +1,381 @@
 ---
 id: ai-providers
 title: Connect an AI Provider
-description: Register an OpenAI-compatible provider, test it, price its models, and share them — field by field, with what a failed probe actually means.
+description: Register an OpenAI-compatible provider. Test it. Price and share its models. Understand each field and failed probe.
 ---
 
-Hephaestus ships with **no** provider, model, or key. Nothing about a provider is an environment
-variable: connections, models, prices and grants are runtime catalog data you enter in the UI, and
-every AI feature — practice review, the mentor — stays inert until a model is registered, priced,
-and bound to a purpose.
+Hephaestus ships with **no** provider, model, or key.
+Provider configuration does not use environment variables.
+Connections, models, prices, and grants are runtime catalog data you enter in the UI.
+Practice review and the mentor stay inactive until a model is registered, priced, and bound to a purpose.
 
-There are two catalogs, and which one you use decides who pays:
+The catalog you use determines whose provider account pays:
 
-|  | **Instance catalog** | **Workspace's own provider (BYO)** |
-| --- | --- | --- |
-| Who sets it up | Instance admin, under **Instance admin → AI models** | Workspace admin, under the workspace's **Administration → AI models** |
-| Whose provider account is billed | Yours — you registered the key | Theirs |
-| Who may use a model | Every workspace, or only the ones you grant it to | Only that workspace |
-| Monthly cap | The **shared-model budget** you set per workspace | The workspace's own **provider cap** |
+|                                  | **Instance catalog**                                 | **Workspace's own provider (BYO)**                                    |
+| -------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------- |
+| Who sets it up                   | Instance admin, under **Instance admin → AI models** | Workspace admin, under the workspace's **Administration → AI models** |
+| Whose provider account is billed | Yours, because you registered the key                | Theirs                                                                |
+| Who may use a model              | Every workspace, or only those you grant access      | Only that workspace                                                   |
+| Monthly cap                      | The **shared-model budget** you set per workspace    | The workspace's own **provider cap**                                  |
 
-The two are never added together, and neither cap pauses the other's work — see
-[Workspace budgets](./production-setup#workspace-budgets-and-alerting). A workspace admin can only
-add their own provider while **Let workspaces add providers and models** is on in instance settings;
-turning it off blocks *new* connections and models with a `403`, and leaves existing ones fully
-manageable.
+The two caps are never added together.
+Neither pauses the other's work.
+See [Workspace budgets](./production-setup#workspace-budgets-and-alerting).
+A workspace admin can add a provider only while **Let workspaces add providers and models** is on in instance settings.
+If you turn it off, new connections and models return `403`.
+Existing ones remain fully manageable.
 
 ## 1. The staged flow, and why it is staged
 
-A connection and a model are both created **inactive**, and the server refuses to activate a model
-until it can be paid for:
+A new connection and model are **inactive**.
+The server refuses model activation until the model has a cost declaration.
 
-1. Create the connection (it saves disabled — the create form always sends `enabled: false`).
-2. **Test & fetch models** against it.
-3. Add a model under that connection, with its upstream model id.
-4. Declare the model's price, or mark it **No metered API cost**.
-5. Enable the connection, then the model. Share it: public to all workspaces, or granted to a list.
-6. A workspace admin binds it to a purpose — **Practice reviews**, **Heph** — on their own
-   **AI models** page. Nothing runs until this step.
+1. Create the connection.
+   It saves disabled: the create form always sends `enabled: false`.
+2. Select **Test and fetch models** for it.
+3. Add a model under that connection, with its upstream model ID.
+4. Declare its price or mark it **No metered API cost**.
+5. Enable the connection.
+6. Enable the model.
+7. Share it publicly with all workspaces or grant it to a list.
+8. As a workspace admin, bind it to **Practice reviews** or **Heph** on your workspace's **AI models** page.
 
-For Heph, binding a model to the **Heph** purpose is the whole access path: Heph is offered to every
-member of the workspace once a Heph row on **AI models** is ready, and turning every Heph row off stops
-it. There is no separate workspace switch and no per-account grant to make before inviting a cohort;
-each member's [AI choice](#data-handling-and-members-ai-choices) decides whether Heph answers them.
-An instance admin who is not a member can administer a workspace but does not get Heph there.
+Nothing runs until the last step.
+A ready **Heph** row on **AI models** offers Heph to every workspace member.
+If you turn all Heph rows off, Heph stops.
+There is no separate workspace switch or per-account grant before you invite a cohort.
+Each member's [AI choice](#data-handling-and-members-ai-choices) determines whether Heph answers them.
+An instance admin without workspace membership can administer it but cannot use Heph there.
 
-Attempting to skip a stage returns HTTP 400 with a specific message rather than a generic
-validation error:
+An attempt to skip a stage returns HTTP 400 with a specific message, not a generic validation error:
 
-| Attempt | What you get back |
-| --- | --- |
-| Create a model with `enabled: true` | *Create the model disabled, set its price, then activate it.* |
-| Enable a model whose connection is off, or whose price is `UNPRICED` | *Activate the connection and configure a price before activating the model.* |
-| Reprice an **enabled** model to `UNPRICED` | *Disable the model before changing its price to UNPRICED.* |
+| Attempt                                                        | What you get back                                                        |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Create a model with `enabled: true`                            | “Create the model disabled, set its price, then activate it.”            |
+| Enable a model with an inactive connection or `UNPRICED` price | “Activate the connection and set a price before you activate the model.” |
+| Reprice an **enabled** model to `UNPRICED`                     | “Disable the model before you change its price to UNPRICED.”             |
 
-That last one is the whole point of the staging: an enabled model with no price would spend money
-nobody can account for, and would make the month's budget verdict UNVERIFIABLE instead of merely
-uncapped.
+An enabled model without a price would spend money that nobody can account for.
+It would make the month's budget verdict UNVERIFIABLE rather than uncapped.
+The staged flow prevents this.
 
 ## 2. Connection fields
 
-The same field set backs both catalogs. Only `displayName`, `baseUrl` and `apiProtocol` are
-required.
+Both catalogs use the same fields.
+Only `displayName`, `baseUrl`, and `apiProtocol` are required.
 
-| Field | Required | What it is |
-| --- | --- | --- |
-| **Display name** | yes | Free text, ≤ 128 characters. Editable after creation. Display name, service declaration, API key, and enabled state can change; routing identity and slug cannot. |
-| **Base URL** | yes | The provider's OpenAI-compatible root, ≤ 2048 characters — e.g. `https://api.openai.com/v1`, or `https://<resource>.openai.azure.com/openai/v1` for Azure. Must be HTTPS, must carry no credentials, query string or fragment. **Immutable after create.** |
-| **API shape** | yes | `openai-responses` (Responses API) or `openai-completions` (Chat Completions). In the form this is the *"Use the Responses API"* checkbox, ticked for a new connection. Prefer the Responses API: a review or the mentor calls tools across many turns, and the Responses API can preserve reasoning between tool calls for models and providers that support it. OpenAI, the Vercel AI Gateway, OpenRouter and vLLM offer this API, but support depends on the model and deployment. Clear the checkbox for an endpoint that supports only Chat Completions. **Immutable after create.** |
-| **Authentication** | no | `BEARER` → `Authorization: Bearer <key>`, or `API_KEY` → `api-key: <key>`. Defaults to `BEARER`; Azure needs `API_KEY`. **Immutable after create.** |
-| **Service receiving requests** | no | Search for the service the configured endpoint sends requests to, such as Logos, Azure, or Vercel AI Gateway. Leave it as **Not listed or unknown** if the service is absent or uncertain. This is a display declaration, not proof of where inference runs or who operates the model. You can change or clear it later. |
-| **API key** | no | Write-only. Encrypted at rest, never returned — a saved connection reports only `hasApiKey` and the last four characters. Leave it blank on edit to keep the stored key; tick **Remove stored API key** to delete it. Genuinely optional: a self-hosted vLLM or Ollama gateway may need no credential at all. |
-| **Slug** | no | Internal identifier, ≤ 63 characters. Derived from the display name when you omit it. **Immutable after create.** |
+| Field                          | Required | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Display name**               | yes      | Free text, ≤ 128 characters. Editable after creation. Display name, service declaration, API key, and enabled state can change. Routing identity and slug cannot.                                                                                                                                                                                                                                                                                                                                                                                |
+| **Base URL**                   | yes      | The provider's OpenAI-compatible root, ≤ 2048 characters. Examples: `https://api.openai.com/v1`, or `https://<resource>.openai.azure.com/openai/v1` for Azure. Requires HTTPS. Must have no credentials, query string, or fragment. **Immutable after create.**                                                                                                                                                                                                                                                                                  |
+| **API shape**                  | yes      | `openai-responses` (Responses API) or `openai-completions` (Chat Completions). The form's exact checkbox label is “Use the Responses API”. It is selected for new connections. Prefer Responses API for reviews and the mentor, which call tools across many turns. It can preserve reasoning between tool calls for supported models and providers. OpenAI, Vercel AI Gateway, OpenRouter, and vLLM offer it. Support depends on the model and deployment. For Chat Completions-only endpoints, clear the checkbox. **Immutable after create.** |
+| **Authentication**             | no       | `BEARER` → `Authorization: Bearer <key>`, or `API_KEY` → `api-key: <key>`. Defaults to `BEARER`. Azure needs `API_KEY`. **Immutable after create.**                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Service receiving requests** | no       | Search for the service that receives requests from the configured endpoint, such as Logos, Azure, or Vercel AI Gateway. If absent or uncertain, leave **Not listed or unknown**. This display declaration does not prove where inference runs or who operates the model. You can change or clear it later.                                                                                                                                                                                                                                       |
+| **API key**                    | no       | Write-only and encrypted at rest. Never returned. A saved connection reports only `hasApiKey` and the last four characters. On edit, leave blank to keep the stored key. To delete it, select **Remove stored API key**. Optional: a self-hosted vLLM or Ollama gateway may need no credential.                                                                                                                                                                                                                                                  |
+| **Slug**                       | no       | Internal identifier, ≤ 63 characters. Derived from the display name if omitted. **Immutable after create.**                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
-**Three fields are immutable on purpose.** Base URL, API shape and authentication mode are the
-connection's *routing identity*: every job that ever ran on it froze that identity into its
-provenance snapshot, so editing them in place would silently re-point historical runs at an endpoint
-they never used. The form says so — *"Endpoint, API shape and authentication can't change. Add a
-connection instead."* To move providers: create a replacement, test it, re-point the bindings,
-disable the old one.
+**Three fields are immutable on purpose.**
+Base URL, API shape, and authentication mode form the connection's *routing identity*.
+Every job preserves that identity in its provenance snapshot.
+An in-place edit would silently point historical runs at an endpoint they never used.
+The form's exact explanation is:
 
-**A slug you type is taken literally.** A slug *derived* from the display name gets a `-2`, `-3`
-suffix if it collides; one you supply yourself does not, so a collision comes back as a 409
-`llm-connection-slug-conflict` rather than silently becoming something else.
+```text
+Endpoint, API shape and authentication cannot change. Add a connection instead.
+```
+
+To move providers:
+
+1. Create a replacement connection.
+2. Test it.
+3. Point the bindings to it.
+4. Disable the old connection.
+
+**A slug you type is taken literally.**
+A derived slug gets a `-2`, `-3` suffix if it conflicts.
+A supplied slug does not.
+A conflict returns 409 `llm-connection-slug-conflict` rather than silently changing the slug.
 
 ### The presets
 
-The create form offers **OpenAI** (`https://api.openai.com/v1`, Bearer), **Azure OpenAI v1**
-(`https://RESOURCE.openai.azure.com/openai/v1`, API key) and **Other OpenAI-compatible endpoint**.
-These only prefill the two fields; nothing about the preset is stored. Reopening an Azure connection
-for editing shows it as "Other", because the preset itself is not persisted. Use the separate
-**Service receiving requests** declaration if you want a member to see an Azure mark beside a model in a
-workspace. For a gateway, name the gateway that receives the request, not an unknown downstream
-service. Leave it blank if you cannot confirm the connection. The platform is not inferred from
-the URL and does not set the model's data-handling tier.
+The create form offers these presets:
+
+- **OpenAI** (`https://api.openai.com/v1`, Bearer).
+- **Azure OpenAI v1** (`https://RESOURCE.openai.azure.com/openai/v1`, API key).
+- **Other OpenAI-compatible endpoint**.
+
+They only prefill the two fields.
+Nothing about the preset is stored.
+On edit, an Azure connection appears as "Other" because the preset itself is not persisted.
+For an Azure mark beside a workspace model, use the separate **Service receiving requests** declaration.
+
+For a gateway, name the gateway that receives the request, not an unknown downstream service.
+If you cannot confirm the connection, leave it blank.
+The URL does not determine the platform.
+The platform does not set the model's data-handling tier.
 
 ### What the URL guard rejects, and when
 
-The base URL is validated **on create only** — an update cannot change it, so there is nothing to
-re-check. All four rejections are HTTP 400 with title `Invalid request`:
+The server validates the base URL **only on create**.
+An update cannot change it, so no repeat check is necessary.
+The table lists four rejections.
+The HTTP 400 rejections have title `Invalid request`:
 
-| Message | Cause |
-| --- | --- |
-| *Provider URLs must not contain credentials or query parameters.* | The URL carries userinfo, a query string or a fragment. Gateways that want their key in the URL (`https://gw/v1?api-key=…`) are refused: that value would end up in snapshots, DTOs and logs. |
-| *Provider host must be a public HTTPS URL* | Not HTTPS, or the host resolves to a private, link-local, loopback or CGNAT address. Unconditional — the SSRF guard has no override, and it is re-applied at connect time so a DNS rebind between save and dial does not slip past. |
-| *Provider host `<host>` is not in the allowed list* | Instance settings define an egress allowlist and this host is not on it. A blank allowlist allows any public host. |
-| — (HTTP 403) *Connecting your own AI provider is disabled on this server.* | A workspace admin tried to add a connection or model while **Let workspaces add providers and models** is off. |
+| Message                                                                        | Cause                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| “Provider URLs must not contain credentials or query parameters.”              | The URL has userinfo, a query string, or a fragment. Gateways with URL keys (`https://gw/v1?api-key=…`) are refused. That value would enter snapshots, DTOs, and logs.                    |
+| “Provider host must be a public HTTPS URL”                                     | Non-HTTPS, or a private, link-local, loopback, or CGNAT host address. The SSRF guard has no override. It checks again at connect time to prevent DNS rebinds between save and connection. |
+| “Provider host `<host>` is not in the allowed list”                            | Instance settings define an egress allowlist without this host. A blank allowlist allows any public host.                                                                                 |
+| — (HTTP 403) “This server does not allow you to connect your own AI provider.” | A workspace admin tried to add a connection or model with **Let workspaces add providers and models** off.                                                                                |
 
-`HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK=true` permits `http://localhost` base URLs for local
-development. **Never set it in production** — it lets a workspace admin aim a "provider" at
-host-local services. It does not relax the private-address check.
+:::caution CAUTION: Keep the loopback exception out of production
 
-## 3. What "Test & fetch models" does
+`HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK=true` permits `http://localhost` base URLs for local development.
+It lets a workspace admin direct a "provider" to host-local services.
+**Never set it in production.**
+It does not relax the private-address check.
 
-Exactly one thing: an unauthenticated-by-you, credentialled `GET {baseUrl}/models` with
-`Accept: application/json` and your key in the header the auth mode selects. No request body, no
-query parameters, no other endpoint. Then it reads `data[].id` out of the response and returns those
-ids — up to 1 000 of them, skipping any longer than 256 characters — and discards everything else
-the provider said.
+:::
 
-Four things it deliberately does **not** do:
+## 3. What "Test and fetch models" does
 
-- **It stores nothing.** Not the discovered ids, not a "last tested" timestamp, not a health flag.
-  The ids populate the model form's suggestions in your browser and are gone on reload; you still
-  create each model explicitly.
-- **It does not follow redirects.** A 3xx is a failure. Only the URL you entered was egress-checked,
-  and following the redirect would hand your API key to whatever host the `Location` names.
-- **It does not validate the API shape.** The probe always calls `/models`, whichever of Chat
-  Completions or Responses the connection declares. A green probe says the endpoint exists and your
-  key is accepted; it does not prove a completion will work.
-- **It does not hold a database connection.** The call runs outside a transaction, so admins probing
-  a stalled provider cannot pin the pool.
+The probe sends one credentialled `GET {baseUrl}/models`.
+It needs no separate authentication by you.
+It uses `Accept: application/json` and your key in the header selected by the authentication mode.
+It sends no request body or query parameters and calls no other endpoint.
 
-Timeouts are 5 seconds to connect and 5 seconds to read. A response body over 1 MiB is refused
-unread past that point.
+It reads `data[].id` from the response.
+It returns up to 1 000 ids and skips ids longer than 256 characters.
+It discards everything else the provider returns.
 
-**Before you save:** the instance form can probe a connection that does not exist yet — type the
-base URL and key, press **Test & fetch models**. The credential is used for that one call and never
-persisted. There is no draft probe on the workspace side; a workspace admin can only test a
-connection they have already saved.
+The probe has these limits:
 
-**When editing:** the button says *Test saved connection* if you have not typed a new key, and
-*Test changes* if you have — the difference being whether the stored credential or the one on screen
-is used. Changing the base URL, auth mode or key discards an in-flight result; renaming the
-connection does not.
+- **It stores nothing.** It stores no discovered ids, last-tested timestamp, or health flag.
+  The ids supply suggestions in your browser's model form and disappear on reload.
+  You still create each model explicitly.
+- **It does not follow redirects.** A 3xx fails.
+  Only your entered URL passed the egress check.
+  A redirect could send your API key to the `Location` host.
+- **It does not validate the API shape.** It always calls `/models`, whether the connection declares Chat Completions or Responses.
+  A green probe confirms the endpoint exists and accepts your key, not that a completion works.
+- **It does not hold a database connection.** It runs outside a transaction.
+  A stalled provider cannot occupy the pool while admins probe it.
+
+Connect and read timeouts are each 5 seconds.
+The probe refuses a response body over 1 MiB and reads no further.
+
+The instance form can probe an unsaved connection.
+For that draft probe:
+
+1. Enter the base URL.
+2. Enter the key.
+3. Select **Test and fetch models**.
+
+The probe uses the credential for that call only and never persists it.
+Workspace admins have no draft probe.
+They can test only a connection already saved.
+
+On edit, the exact button label is *Test saved connection* until you enter a new key.
+Then it is *Test changes*.
+The first uses the stored credential, and the second uses the key on screen.
+A change to the base URL, authentication mode, or key discards a result in progress.
+A name change does not.
 
 ### Reading a probe result
 
-A probe always answers HTTP 200. The upstream's failure is data, not an error — so a red banner here
-is never "Hephaestus is broken":
+A probe always returns HTTP 200.
+An upstream failure is data, not an error response.
+A red banner therefore does not mean Hephaestus is broken.
+The table preserves the exact result text:
 
-| What you see | What it means | What to do |
-| --- | --- | --- |
-| *Reachable. Found N models.* | 2xx, and `data[].id` parsed. | Nothing. Note N can be 0 — a 2xx with no `data` array is still reachable. |
-| *Provider returned HTTP 401 / 403* | The endpoint is there and answered; your key is wrong, expired, or lacks permission. | Re-enter the key. On Azure check you chose **API key**, not Bearer. |
-| *Provider returned HTTP 404* | The host is right, the path is not — usually a base URL missing `/v1`, or one with a trailing path segment. | Fix the base URL. It is immutable, so this means creating the connection again. |
-| *Provider returned HTTP 3xx* | A redirect, which the probe refuses to follow. | Enter the URL the provider actually serves from. |
-| *Could not reach the provider: `<ExceptionName>`* | Nothing answered: DNS failure, connection refused, TLS failure, a timeout at 5 s, or the connect-time address guard rejecting where the host resolved. The exception's *message* is deliberately withheld — it can carry host detail — and the class name is all you get. | Check the host from the server, not your laptop. The server log carries the same class name at INFO. |
-| *Provider response was too large* | Over 1 MiB of `/models`. | Almost certainly not an OpenAI-compatible `/models` endpoint. |
-| *Discovery unsupported.* (any failure) | The banner's headline for all of the above. | You can still save the connection and type the model id by hand — **a failed probe never blocks anything.** |
+| What you see                                                   | What it means                                                                                                                                                                                                                                                                | What to do                                                                                            |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| “Reachable. Found N models.”                                   | 2xx, with `data[].id` parsed. N can be 0. A 2xx without a `data` array is still reachable.                                                                                                                                                                                   | Nothing.                                                                                              |
+| “The provider answered with HTTP 401 / 403.”                   | The endpoint answered. Your key is wrong, expired, or lacks permission.                                                                                                                                                                                                      | Re-enter the key. On Azure, check for **API key**, not Bearer.                                        |
+| “The provider answered with HTTP 404.”                         | The host is correct but the path is not. Usually, the base URL lacks `/v1` or has an extra path segment.                                                                                                                                                                     | Correct the base URL. Because it is immutable, create the connection again.                           |
+| “The provider answered with HTTP 3xx.”                         | The probe refuses a redirect.                                                                                                                                                                                                                                                | Enter the URL the provider serves from.                                                               |
+| “Hephaestus could not reach the provider (`<ExceptionName>`).” | Nothing answered. Causes include DNS failure, refused connection, TLS failure, a 5 s timeout, or the connect-time address guard. The guard rejects the resolved address. The exception message is withheld because it can contain host details. Only the class name appears. | Check the host from the server, not your laptop. The server log has the same class name at INFO.      |
+| “The provider’s response was too large.”                       | `/models` response over 1 MiB.                                                                                                                                                                                                                                               | Almost certainly not an OpenAI-compatible `/models` endpoint.                                         |
+| “We could not fetch the model list.” (any failure)             | The banner headline for all these failures.                                                                                                                                                                                                                                  | Save the connection if needed. Enter the model ID manually. **A failed probe never blocks anything.** |
 
-A workspace admin sees a deliberately narrower result: *Connected. N models available.* or the same
-failure message, but never the provider's model ids.
+A workspace admin sees a narrower result:
+
+```text
+Connected. N models available.
+```
+
+Failures show the same message, but provider model IDs never appear.
 
 ### Reasoning effort
 
-A model's **Reasoning effort** is how hard a reasoning model is asked to think on every call a review
-or the mentor makes with it: **None**, **Minimal**, **Low**, **Medium**, **High**, **Extra high** or
-**Max**, OpenAI's scale, sent as `reasoning_effort` on chat completions and `reasoning.effort` on the
-responses API. **Provider default** sends no effort value, so the provider's default for that model
-applies. Defaults and supported levels differ by model; check the provider's model documentation. **None** asks a reasoning model not to reason; a model that does not reason at
-all belongs at **Provider default**, because a provider may reject the parameter. Not every model takes
-every level, and a level the model refuses fails the call rather than being rounded. The same field
-exists on a workspace's own models. Higher efforts spend more output tokens; the reasoning share is
-recorded with each job's usage and priced as output, never twice.
+**Reasoning effort** sets how hard a reasoning model thinks on every review or mentor call.
+It uses OpenAI's scale:
 
-A model that was marked as supporting reasoning before this field existed keeps what it was sent:
-**Medium**.
+- **None**.
+- **Minimal**.
+- **Low**.
+- **Medium**.
+- **High**.
+- **Extra high**.
+- **Max**.
+
+Chat completions receive `reasoning_effort`.
+The responses API receives `reasoning.effort`.
+**Provider default** sends no effort value, so the model's provider default applies.
+Defaults and supported levels differ by model.
+Check the provider's model documentation.
+
+**None** asks a reasoning model not to reason.
+For a non-reasoning model, use **Provider default**, because the provider may reject the parameter.
+Not every model accepts every level.
+A refused level fails the call rather than changing to a supported level.
+The same field exists on workspace-owned models.
+
+Higher efforts use more output tokens.
+Each job's usage records the reasoning share and prices it as output, never twice.
+A model marked as supporting reasoning before this field existed keeps its previous value: **Medium**.
 
 ## 4. Pricing a model
 
-**Hephaestus never infers a price.** OpenAI-compatible responses report token *counts*, not your
-account's dollar charge — rates differ by contract, region and commitment — so every model must be
-told what it costs. Each model is one of:
+**Hephaestus never infers a price.**
+OpenAI-compatible responses report token *counts*, not your account's dollar charge.
+Rates differ by contract, region, and commitment.
+Every model therefore needs a cost declaration.
 
-- **Price per 1M tokens** (`PRICED`) — you supply the rates below.
-- **No metered API cost** (`NO_CHARGE`) — asserts a real $0, counts as confirmed $0 spend, satisfies
-  a cap. Requires a note saying why (e.g. *internal endpoint; infrastructure billed separately*).
-  Infrastructure cost may still be real; this is only about a per-token API charge.
-- **No price set** (`UNPRICED`) — asserts nothing. Usage is recorded but excluded from monthly
-  totals, and a **capped** purse whose month contains unpriced usage reads **UNVERIFIABLE** and is
-  paused exactly like an exhausted one. A model cannot be enabled in this state.
+Each model has one of these states:
+
+- **Price per 1M tokens** (`PRICED`): you supply the rates below.
+- **No metered API cost** (`NO_CHARGE`): declares a real $0, counts as confirmed $0 spend, and satisfies a cap.
+  It requires a note with the reason, such as an internal endpoint with infrastructure billed separately.
+  Infrastructure can still cost money.
+  This declaration covers only per-token API charges.
+- **No price set** (`UNPRICED`): makes no cost declaration.
+  Usage is recorded but excluded from monthly totals.
+  A **capped** purse with unpriced monthly usage reads **UNVERIFIABLE** and pauses exactly like an exhausted purse.
+  You cannot enable a model in this state.
 
 ### The rate fields
 
 Four rates, all **US dollars per 1,000,000 tokens**, stored as `NUMERIC(18,8)`:
 
-| Field | Required for `PRICED` | Notes |
-| --- | --- | --- |
-| **Input (USD)** | yes | Prompt tokens. |
-| **Output (USD)** | yes | Completion tokens. **Reasoning tokens are already inside this count** and are not priced a second time. |
-| **Cache read (USD)** | no | Prompt-cache hits, where the provider reports them. |
-| **Cache write (USD)** | no | Prompt-cache writes, where the provider reports them. |
+| Field                 | Required for `PRICED` | Notes                                                                                                   |
+| --------------------- | --------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Input (USD)**       | yes                   | Prompt tokens.                                                                                          |
+| **Output (USD)**      | yes                   | Completion tokens. **Reasoning tokens are already inside this count** and are not priced a second time. |
+| **Cache read (USD)**  | no                    | Prompt-cache hits, where the provider reports them.                                                     |
+| **Cache write (USD)** | no                    | Prompt-cache writes, where the provider reports them.                                                   |
 
-Rules the server enforces, verbatim as you will see them:
+The server enforces these rules with the exact messages below:
 
-- *A price requires at least an input rate and an output rate (per 1M tokens).*
-- *A price requires at least one rate greater than zero. For a model without usage charges, choose No metered API cost instead.*
-- *Rates must be zero or greater.* — and below `10000000` per 1M tokens, which is not the column's
-  limit but the point past which a rate cannot survive a round-trip through the browser's binary64
-  unchanged.
-- *Rates can only be set when the model has a price; clear them or set a price first.*
+```text
+A price needs at least an input rate and an output rate (per 1M tokens).
+```
 
-**Repricing is a supersede, never an edit.** The instance catalog keeps price history: repricing
-closes the current row's `effective_to` and inserts a new one, so every past run keeps the rates it
-was actually billed at and a price change never rewrites history. (A workspace's own model keeps its
-price inline with no history — the workspace owns both the model and the provider account, so there
-is no cross-party record to preserve.)
+```text
+A price needs at least one rate greater than zero. For a model without usage charges, choose No metered API cost.
+```
 
-**A rate you leave out can un-price the whole call.** If a run reports tokens in a bucket whose rate
-is `null` — say the provider reported cache-read tokens and you priced only input and output — the
-*entire event* is recorded as unpriced rather than charged for the buckets it can price. A partial
-charge would read as a confirmed total that is quietly too low. If your provider reports cache
-tokens, price them.
+```text
+Rates must be zero or greater.
+```
+
+Rates must also be below `10000000` per 1M tokens.
+This is not the column's limit.
+Above it, a rate cannot pass through the browser's binary64 representation and return unchanged.
+
+```text
+You can set rates only when the model has a price. Clear the rates, or set a price first.
+```
+
+**Repricing replaces a price, never edits it.**
+The instance catalog keeps price history.
+A new price closes the current row's `effective_to` and creates another row.
+Past runs retain their actual billed rates.
+A price change never rewrites history.
+
+A workspace's own model stores its price inline, without history.
+The workspace owns both model and provider account.
+There is no cross-party record to preserve.
+
+**An omitted rate can make the whole call unpriced.**
+If a run reports tokens in a bucket with a `null` rate, the *entire event* is unpriced.
+For example, this happens with cache-read tokens if you priced only input and output.
+The ledger does not charge only the priced buckets.
+A partial charge would falsely present a confirmed total below the real amount.
+If your provider reports cache tokens, price them.
 
 ### Worked example
 
-A model priced input **$2.50**, output **$10.00**, cache read **$0.25** per 1M tokens, cache write
-unpriced. One completed run reports 12 345 input tokens, 3 210 output tokens, 40 000 cache-read
-tokens, 0 cache-write tokens. Each bucket is `tokens ÷ 1 000 000 × rate`:
+The example model has these rates per 1M tokens:
 
-| Bucket | Tokens | Rate / 1M | Amount |
-| --- | ---: | ---: | ---: |
-| Input | 12 345 | $2.50 | 0.012345 × 2.50 = **$0.0308625** |
-| Output | 3 210 | $10.00 | 0.003210 × 10.00 = **$0.0321000** |
-| Cache read | 40 000 | $0.25 | 0.040000 × 0.25 = **$0.0100000** |
-| Cache write | 0 | — | 0 tokens, so **$0** — an unpriced bucket with no tokens is not a missing rate |
-| | | **raw** | **$0.0729625** |
+- Input: **$2.50**.
+- Output: **$10.00**.
+- Cache read: **$0.25**.
+- Cache write: unpriced.
 
-The ledger column is `NUMERIC(18,6)`, so that is rounded to six decimals with **banker's rounding**:
-the seventh digit is exactly 5, and the sixth (`2`) is already even, so it stays — stored as
-**$0.072962**, not `$0.072963`. Rounding half-to-even rather than half-up is what stops a long run
-of amounts from drifting upward against you.
+One completed run reports 12 345 input, 3 210 output, 40 000 cache-read, and 0 cache-write tokens.
+Each bucket uses `tokens ÷ 1 000 000 × rate`:
 
-Two edges worth knowing:
+| Bucket      | Tokens | Rate / 1M |                                                                        Amount |
+| ----------- | -----: | --------: | ----------------------------------------------------------------------------: |
+| Input       | 12 345 |     $2.50 |                                              0.012345 × 2.50 = **$0.0308625** |
+| Output      |  3 210 |    $10.00 |                                             0.003210 × 10.00 = **$0.0321000** |
+| Cache read  | 40 000 |     $0.25 |                                              0.040000 × 0.25 = **$0.0100000** |
+| Cache write |      0 |         — | 0 tokens, so **$0** — an unpriced bucket with no tokens is not a missing rate |
+|             |        |   **raw** |                                                                **$0.0729625** |
 
-- **A tiny paid call never stores $0.** One input token at $0.05 / 1M is $0.00000005, which rounds
-  to zero at six decimals. It is stored as **$0.000001** instead, so "we made a paid call" stays
-  distinguishable from "this was free". The over-billing is under a millionth of a dollar per call.
-- **The UI rounds differently from the ledger.** Published *rates* render with up to four decimals
-  (`$0.075 / 1M`) because you check them against a price list; *spend* renders as cents, with
-  `<$0.01` for a non-zero amount below one cent. Neither is the stored number.
+The ledger column is `NUMERIC(18,6)`.
+It rounds the total to six decimals with **banker's rounding**.
+The seventh digit is exactly 5, and the sixth (`2`) is already even.
+The stored amount is therefore **$0.072962**, not `$0.072963`.
+Half-to-even rather than half-up rounding prevents a long sequence of amounts from drifting upward against you.
 
-Set `HEPHAESTUS_LLM_DISPLAY_CURRENCY=EUR` to show a converted figure **alongside** USD. It is
-display only — never an input to a price, a budget or the ledger. `EUR` is the only accepted value
-and anything else fails startup naming what is accepted, so a currency the instance cannot convert
-to can never hide as a missing feature.
+Two further limits apply:
+
+- **A tiny paid call never stores $0.** One input token at $0.05 / 1M costs $0.00000005.
+  Six-decimal rounding would make it zero.
+  The ledger stores **$0.000001** instead to distinguish a paid call from a free call.
+  The excess charge is less than a millionth of a dollar per call.
+- **The UI rounds differently from the ledger.** Published *rates* show up to four decimals (`$0.075 / 1M`) for price-list checks.
+  *Spend* appears as cents, with `<$0.01` for a non-zero amount below one cent.
+  Neither display is the stored number.
+
+Set `HEPHAESTUS_LLM_DISPLAY_CURRENCY=EUR` to show a converted amount **alongside** USD.
+This is display-only, never an input to a price, budget, or ledger.
+`EUR` is the only accepted value.
+Any other value fails startup with an explanation of accepted values.
+An unsupported currency cannot silently appear as a missing feature.
 
 ## 5. Sharing an instance model
 
-A model is **granted** by default: usable only by workspaces you name. Switch it to **public** to
-share it with every workspace, which also clears the grant list. Revoking a grant, or disabling the
-connection, stops every workspace bound to that model — and the binding stays in place looking
-perfectly correct, so this is a leading cause of a workspace that has silently stopped running
-reviews. Work through
-[the triage list](./practice-review#when-a-workspace-goes-quiet) when that
-happens.
+A model is **granted** by default.
+Only named workspaces can use it.
+To share it with every workspace, switch it to **public**.
+This also clears the grant list.
 
-A workspace admin choosing a model sees only its display name, connection name, reasoning effort
-and price framing — never an upstream model id, base URL or credential.
+A revoked grant or disabled connection stops every workspace bound to that model.
+The binding stays in place and appears correct.
+This is a common cause of silently stopped workspace reviews.
+If that happens, use [the triage list](./practice-review#when-a-workspace-goes-quiet).
+
+A workspace admin who chooses a model sees its display name, connection name, reasoning effort, and price framing.
+They never see an upstream model ID, base URL, or credential.
 
 ## 6. Errors you can hit
 
-Beyond the 400s already listed, the catalog answers with these RFC 7807 problem types. The `type`
-slug is API surface; the title is what the UI shows.
+In addition to the HTTP 400 responses above, the catalog returns these RFC 7807 problem types.
+The `type` slug is an API contract.
+The UI shows the title.
 
-| Status | `type` | When |
-| --- | --- | --- |
-| 409 | `llm-connection-in-use` | Deleting a connection that still has models. Delete the models first. |
-| 409 | `llm-model-in-use` | Deleting a model still bound to an assignment. Re-bind that workspace first. |
-| 409 | `llm-connection-slug-conflict` | The slug you typed is taken. |
-| 409 | `llm-model-slug-conflict` | The model slug is taken on this connection. |
-| 409 | `llm-model-upstream-id-conflict` | Two catalog entries would point at the same upstream id on one connection. Refused because pricing would then match either one nondeterministically — a `NO_CHARGE` twin could silently shadow a `PRICED` model for billing. |
-| 409 | `agent-binding-slot-mismatch` | Assigning a model to a tier row it is not declared as. The body's `declaredTier` names the model's tier and the UI words the refusal from it; an undeclared model carries no `declaredTier`, only the detail. |
-| 404 | *Resource not found* | Unknown connection or model id. |
+| Status | `type`                           | When                                                                                                                                                                                                             |
+| ------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 409    | `llm-connection-in-use`          | A connection still has models. Delete the models before the connection.                                                                                                                                          |
+| 409    | `llm-model-in-use`               | A model still has an assignment. Re-bind that workspace before deletion.                                                                                                                                         |
+| 409    | `llm-connection-slug-conflict`   | Your supplied slug is taken.                                                                                                                                                                                     |
+| 409    | `llm-model-slug-conflict`        | The model slug is taken on this connection.                                                                                                                                                                      |
+| 409    | `llm-model-upstream-id-conflict` | Two catalog entries would use the same upstream id on one connection. This is refused because price selection would be nondeterministic. A `NO_CHARGE` copy could silently replace a `PRICED` model for billing. |
+| 409    | `agent-binding-slot-mismatch`    | A model's declared tier does not match the assignment row. The body's `declaredTier` names the model tier, which the UI uses to explain the refusal. An undeclared model has no `declaredTier`, only the detail. |
+| 404    | *Resource not found*             | Unknown connection or model id.                                                                                                                                                                                  |
 
 ## Next
 
@@ -291,112 +385,174 @@ slug is API surface; the title is what the UI shows.
 
 ## Data handling and members' AI choices
 
-Owners configure **Administration → Member onboarding** after membership is already managed by the
-workspace's existing mechanism. In that workspace, members can see the display names of models
-that are ready for their answer. You can declare an optional **Model maker** on a model and an
-optional **Service receiving requests** on its connection. Their marks appear beside the actual model only
-in this workspace, and name different facts: who made the model and which service receives its
-requests. Leave either blank when you cannot confirm it. Neither field sets the data-handling tier;
-**Operated by** does. For example, an OpenAI model served by Azure can show both marks. A private
-endpoint does not by itself mean your organisation operates the model: Microsoft-managed
-[Foundry inference](https://learn.microsoft.com/en-us/azure/foundry/concepts/deployments-overview)
-is provider-operated, while a model your organisation runs on its own Azure machines can be
-declared in-house. **Logos** is the AI service in Edutelligence, with its own webapp and mark; it
-is not an Edutelligence brand choice. Your organisation can run Logos itself, or a provider can run
-it. Select the Logos mark only when this connection actually receives requests through Logos; then
-declare **Operated by** from your deployment and agreement, not from that mark. Hephaestus does not
-infer these facts from a model ID or connection URL. Choose
-display names you are happy for developers to read. The setup page is hidden by default. Declare and assign models before
-enabling it, and wait until every runtime role has been upgraded before assigning models by tier.
+Owners configure **Administration → Member onboarding** after the workspace's existing mechanism manages membership.
+Members can see display names of models ready for their answer in that workspace.
+An optional model **Model maker** names who made it.
+An optional connection **Service receiving requests** names the service that receives requests.
+Their marks appear beside the actual model only in this workspace.
+Leave either blank if you cannot confirm it.
 
-1. In either model console, declare each model's **Data handling** with one fact, **Operated by**:
-   **Your organisation**, or **A provider** under terms your organisation accepted. This declaration
-   does not verify a provider's retention or training terms. Check those terms with your provider
-   before you enable the model. From the operator fact Hephaestus derives one tier,
-   **In-house** or **Cloud**, and shows it as a badge wherever the model appears. Declare what the
-   agreement says, not what the hostname suggests: verify the endpoint, gateway routing,
-   subprocessors and data-handling agreement first. A note for admins carries the region, the
-   agreement, its renewal date and any retention details, and is shown to admins only. Token
-   limits and the reasoning switch sit under **Advanced**.
-2. In the workspace's **AI models**, each purpose (**Practice reviews** and **Heph**) has three
-   rows: **In-house**, **Cloud** and **Members who haven't chosen**. A row holds only a model
-   declared as that tier. Assigning a model declared as another tier is refused with *This model
-   is declared as \{tier\}. Assign it to that row.*, and an undeclared model with *This model's
-   data handling isn't declared yet. Declare it first, or assign it to Members who haven't
-   chosen.* A model whose declaration later loosens no longer matches its row, reads **Not ready**
-   and stops serving until you reassign it. Nothing is substituted. Existing grants, price
-   declarations, funding sources, the practice-review switch and budgets still apply, and **Max concurrent
-   runs** applies independently to each row.
-3. Optionally require Slack or Outline account links under **Member onboarding**. A required link
-   needs an active integration and an enabled account-linking provider for the same server. Slack
-   also needs the configured team; Outline needs the configured instance identity.
-4. Turn on **Ask members to set up on their first visit**. From then on, personal AI activity
-   requires an explicit member choice. The page asks only members who have not answered anywhere on
-   this instance; a member who already chose in another workspace sees it only if this workspace
-   requires an account link they have not connected. Unknown or unlinked developers are not assumed
-   to have agreed.
+Neither field sets the data-handling tier.
+**Operated by** does.
+An OpenAI model served by Azure can show both marks.
+A private endpoint alone does not mean your organization operates the model.
+Microsoft-managed [Foundry inference](https://learn.microsoft.com/en-us/azure/foundry/concepts/deployments-overview) is provider-operated.
+A model your organization runs on its own Azure machines can be declared in-house.
 
-A member's choice is a ceiling: the loosest tier they accept. It belongs to the account, is answered
-once, and holds in every workspace the member belongs to on this instance. Members change it from
-**Your AI choice** in any workspace's sidebar or in **User settings**. **In-house** is served by
-the **In-house** row, and **Cloud** by the **Cloud** row or the **In-house** row. Hephaestus picks
-the loosest ready row within the ceiling and never a looser one, in each workspace from that
-workspace's rows. A member
-whose ceiling no ready row in this workspace is within gets no practice reviews and no Heph here, and
-the page they chose on says so in one sentence below the answers. Members may choose any answer,
-including one no row covers yet.
+**Logos** is the AI service in Edutelligence, with its own webapp and mark.
+It is not an Edutelligence brand choice.
+Your organization or a provider can run it.
+Select the Logos mark only if this connection receives requests through Logos.
+Declare **Operated by** from your deployment and agreement, not that mark.
+Hephaestus does not infer these facts from a model ID or connection URL.
 
-Adding, removing or re-declaring models and providers never asks members again: the ceiling is
-checked on every request, and a model whose declared facts loosen stops serving until you reassign
-it. Members see the setup page again only after you change **Member onboarding** itself, and only
-those who skipped it or have a newly required link still open.
+The setup page is hidden by default.
+Before you enable it:
 
-The **Members who haven't chosen** row preserves existing assignments for workspaces that have never
-required member choices. It serves only members without a choice where the choice is optional and
-is never a fallback for a member who chose. Existing models upgrade with nothing declared
-(**Not declared**) and existing assignments land in that row. Hephaestus does not infer data handling
-from names or endpoints.
+1. Choose display names suitable for developers to read.
+2. Declare models.
+3. Before tier assignments, wait until every runtime role has been upgraded.
+4. Assign models.
 
-A reviewed developer no account resolves to — never signed in, or their identity unlinked — counts
-as not having answered: that row serves them where the choice is optional, and only a workspace that
-has turned the setup page on, which makes a choice required there, keeps AI off their work.
-Reconnect the developer's identity to restore their own choice; this does not change another
-identified member's choice.
+For each model, configure its declaration:
 
-Members may choose **No AI** even when model configuration or required account links are unavailable.
-This stops new practice reviews about them and new conversations with Heph in every workspace, not
-membership or access to existing feedback. A review is checked against the developer whose work is
-being reviewed, not the administrator who requested it. A changed choice is checked again at
-execution, before each model request, and before new feedback is accepted or delivered. An outbound
-request already in progress cannot be recalled, and the choice does not remove shared source content
-from other members' reviews.
+1. In either model console, open **Data handling**.
+2. Declare **Operated by** as **Your organization** or **A provider** under terms your organization accepted.
+3. Before you enable the model, check provider retention and training terms with your provider.
+4. Verify the endpoint, gateway routing, subprocessors, and data-handling agreement.
+5. Declare the agreement's facts, not assumptions from the hostname.
+6. In the admin-only note, record the region, agreement, renewal date, and retention details.
+
+The declaration does not verify provider retention or training terms.
+From **Operated by**, Hephaestus derives **In-house** or **Cloud**.
+It shows that tier as a badge wherever the model appears.
+Token limits and the reasoning switch are under **Advanced**.
+
+In workspace **AI models**, each purpose (**Practice reviews** and **Heph**) has three rows:
+
+- **In-house**.
+- **Cloud**.
+- **`Members who have not chosen`**.
+
+A row holds only a model declared as that tier.
+A model from another tier is refused with this exact text:
+
+```text
+This model is declared as \{tier\}. Assign it under \{tier\}.
+```
+
+An undeclared model is refused with:
+
+```text
+This model’s data handling is not declared yet. Declare it first, or assign it to Members who have not chosen.
+```
+
+If a model's declaration becomes less restrictive, it no longer matches its row.
+It reads **Not ready** and stops serving until you reassign it.
+Nothing is substituted.
+Grants, prices, funding sources, the practice-review switch, and budgets still apply.
+**Max concurrent runs** applies independently to each row.
+
+For workspace member setup:
+
+1. Assign a matching model to each required purpose and tier row.
+2. Optionally require Slack or Outline account links under **Member onboarding**.
+3. Turn on **Ask members to set up on their first visit**.
+
+A required link needs an active integration and an enabled account-linking provider for the same server.
+Slack also needs the configured team.
+Outline needs the configured instance identity.
+Once the page is enabled, personal AI activity requires an explicit member choice.
+It asks only members who have not answered anywhere on this instance.
+
+A member who chose in another workspace sees it only for a required account link they have not connected.
+Unknown or unlinked developers are not assumed to have agreed.
+
+A member's choice is a ceiling: the least restrictive tier they accept.
+It belongs to the account, has one answer, and applies in every workspace they belong to on this instance.
+Members can change it from **Your AI choice** in any workspace sidebar or **User settings**.
+The **In-house** row serves **In-house** choices.
+The **Cloud** or **In-house** row serves **Cloud** choices.
+
+In each workspace, Hephaestus selects the least restrictive ready row within the ceiling, never a less restrictive one.
+If no ready row fits the ceiling, that member gets no practice reviews or Heph there.
+Their choice page states this in one sentence below the answers.
+Members may choose any answer, including one no row covers yet.
+
+Model and provider additions, removals, or new declarations never ask members again.
+The ceiling is checked on every request.
+A model with a less restrictive declaration stops serving until reassignment.
+Members see setup again only after you change **Member onboarding** itself.
+Only members who skipped setup or still have a newly required link see it again.
+
+**`Members who have not chosen`** preserves existing assignments in workspaces that never required member choices.
+It serves only members without a choice where choice is optional.
+It is never a fallback for someone who chose.
+Existing models upgrade as **Not declared**, with no declaration.
+Existing assignments go into that row.
+Hephaestus does not infer data handling from names or endpoints.
+
+A reviewed developer without a resolved account counts as not having answered.
+This includes developers who never signed in or have an unlinked identity.
+The optional-choice row serves them where choice is optional.
+Only a workspace with setup enabled, which requires a choice there, keeps AI off their work.
+Reconnect the developer's identity to restore their own choice.
+
+This does not change another identified member's choice.
+Members may choose **No AI** even if model configuration or required account links are unavailable.
+It stops new practice reviews about them and new Heph conversations across every workspace.
+It does not stop membership or access to existing feedback.
+A review checks the developer whose work it reviews, not the requesting admin.
+
+A changed choice is checked again at execution and before each model request.
+It is also checked before acceptance or delivery of new feedback.
+An outbound request already in progress cannot be recalled.
+The choice does not remove shared source content from other members' reviews.
 
 ### Changing or pausing setup
 
-Clear a required account link to make it optional. A disconnected required integration stays visible
-as unavailable until it is repaired or its requirement is removed; it is not silently waived. Disabling
-a sign-in provider does not erase an already verified matching link.
+To make a required account link optional, clear its requirement.
+A disconnected required integration stays visible as unavailable until repair or removal of its requirement.
+It is not silently waived.
+A disabled sign-in provider does not erase a verified matching link.
 
-Hiding the setup page does **not** clear saved choices or restore unrestricted AI for members who
-have not chosen; the page shows a reminder while that is the case. Members can still open **Your AI
-choice** in the sidebar. Disabling a model or changing its data handling stops incompatible new
-requests; it never substitutes a looser tier. Turning an assignment off and on does not change a
-member's choice.
+A hidden setup page does **not** clear saved choices or restore unrestricted AI for members without a choice.
+The page shows a reminder while that is the case.
+Members can still open **Your AI choice** in the sidebar.
+A disabled model or changed data handling stops incompatible new requests.
+It never substitutes a less restrictive tier.
+An assignment switched off and on does not change a member's choice.
 
-The schema upgrade is additive apart from widening the assignment's uniqueness key to include its
-tier. A rollback is supported before onboarding settings, member choices, declarations or
-tier-specific assignments have been saved. Once used, rollback is deliberately refused: losing a
-saved refusal could restore unrestricted processing. Recover through a [verified pre-upgrade backup](./backup-restore),
-not by deleting member choices to bypass the safeguard.
+The schema upgrade is additive except for an assignment uniqueness key widened to include its tier.
+Rollback is supported before onboarding settings, member choices, declarations, or tier-specific assignments have been saved.
+After use, rollback is deliberately refused.
+Loss of a saved refusal could restore unrestricted processing.
+
+:::caution CAUTION: Preserve saved AI refusals
+
+A lost saved refusal could restore unrestricted processing.
+Recover through a [verified pre-upgrade backup](./backup-restore).
+Do not delete member choices to bypass the safeguard.
+
+:::
 
 ## Replace an unavailable model
 
-When a provider withdraws a model, register its replacement disabled, set its price and data-handling
-declaration, test the connection, then enable it. Update each affected practice-review and Heph
-assignment, including the separate AI-choice tiers. Do not rename the old model's provider ID to
-the replacement: historical usage must keep its model identity.
+When a provider withdraws a model:
 
-Disable the old model so new requests cannot select it. An assignment to a disabled model remains
-visible but cannot run; it does not silently select a different handling tier. Remove or replace
-assignments before deleting a model, since deletion of an assigned model is refused. Provider
-unavailability does not remove recorded feedback or earlier conversations.
+1. Register its replacement disabled.
+2. Set its price.
+3. Set its data-handling declaration.
+4. Test the connection.
+5. Enable the replacement.
+6. Update each affected practice-review and Heph assignment, including separate AI-choice tiers.
+7. Disable the old model so new requests cannot select it.
+
+Do not rename the old model's provider ID to the replacement.
+Historical usage must retain its model identity.
+An assignment to a disabled model stays visible but cannot run.
+It never silently selects another handling tier.
+
+Before you delete a model, remove or replace its assignments.
+The server refuses deletion of an assigned model.
+Provider unavailability does not remove recorded feedback or earlier conversations.

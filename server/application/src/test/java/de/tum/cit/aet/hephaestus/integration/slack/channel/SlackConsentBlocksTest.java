@@ -43,11 +43,12 @@ class SlackConsentBlocksTest extends BaseUnitTest {
         assertThat(SlackConsentBlocks.fallbackText())
                 .isNotBlank()
                 .contains(
-                        "Starting now",
+                        "From now on",
                         "new messages and thread replies",
-                        "context for private mentoring about software practices",
-                        "It does not read earlier history and will not reply in this channel",
-                        "deletes your already collected channel-message data",
+                        "mentor each person privately about software practices",
+                        "Hephaestus does not read earlier history",
+                        "It will not reply in this channel",
+                        "deletes the channel-message data that Hephaestus already collected from you",
                         "Do not use my channel messages")
                 .doesNotContain("AI-powered", "Opt me out", "Exclude my channel messages", "—", ";");
     }
@@ -63,7 +64,9 @@ class SlackConsentBlocksTest extends BaseUnitTest {
     void lateJoinText_isSpecificToLateJoiner() {
         assertThat(SlackConsentBlocks.lateJoinFallbackText())
                 .contains(
-                        "You joined a Hephaestus-monitored channel", "From now on", "Manage this anytime from App Home")
+                        "You joined a channel that Hephaestus monitors",
+                        "From now on",
+                        "You can manage this at any time in App Home")
                 .doesNotContain("Starting now");
     }
 }

@@ -254,12 +254,13 @@ function PracticeCatalogRoute() {
 			stackControls.close(0);
 			await invalidateCatalogQueries();
 			const changes = [
-				result.added.length > 0 && `${result.added.length} added`,
+				result.added.length > 0 &&
+					`${result.added.length} ${result.added.length === 1 ? "practice" : "practices"} added`,
 				result.moved.length > 0 && `${result.moved.length} moved`,
 			].filter(Boolean);
 			toast.success("Group updated", { description: changes.join(", ") });
 		},
-		onError: () => toast.error("Couldn't add the group. Nothing was changed."),
+		onError: () => toast.error("We could not add the group. Nothing was changed. Try again."),
 	});
 	const adoptCatalogPractice = useMutation({
 		...adoptPracticeMutation(),
@@ -296,11 +297,13 @@ function PracticeCatalogRoute() {
 				if (refreshed.isSuccess) {
 					setStaleLevelKey(detailStackKey(entry));
 				} else {
-					toast.error("The adoption preview changed but couldn't be refreshed");
+					toast.error(
+						"The catalog changed and the preview could not reload. Reopen the practice to try again.",
+					);
 				}
 				return;
 			}
-			toast.error("Couldn't add the practice");
+			toast.error("We could not add the practice. Try again.");
 		}
 	};
 
@@ -311,7 +314,7 @@ function PracticeCatalogRoute() {
 		catalogTree = (
 			<QueryErrorAlert
 				error={groupsQuery.error ?? practicesQuery.error ?? definitionOptionsQuery.error}
-				title="Couldn't load practices"
+				title="We could not load practices"
 				onRetry={() => {
 					void groupsQuery.refetch();
 					void practicesQuery.refetch();
@@ -421,16 +424,15 @@ function PracticeCatalogRoute() {
 				}
 				description={
 					<>
-						Organize this workspace’s practices and add suggestions from the instance catalog. The
-						autonomy — whether each practice is reviewed, and how far its reviews go on their own —
-						is set on{" "}
+						Organize this workspace’s practices and add suggestions from the instance catalog.
+						Whether each practice is reviewed, and how far its reviews go on their own, is set in{" "}
 						<Link
 							to="/w/$workspaceSlug/admin/practices/review"
 							params={{ workspaceSlug }}
 							search={{}}
 							className="font-medium underline underline-offset-4 hover:text-foreground"
 						>
-							Review
+							Review settings
 						</Link>
 						.
 					</>
@@ -475,7 +477,9 @@ function PracticeCatalogRoute() {
 								if (refreshed.isSuccess) {
 									setStaleLevelKey(detailStackKey(entry));
 								} else {
-									toast.error("The group plan changed but couldn't be refreshed");
+									toast.error(
+										"The catalog changed and the group plan could not reload. Reopen the group to try again.",
+									);
 								}
 							}
 						};
@@ -643,10 +647,11 @@ function PracticeCatalogRoute() {
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Delete “{deletingGroup?.name}”?</AlertDialogTitle>
+						<AlertDialogTitle>Delete group “{deletingGroup?.name}”?</AlertDialogTitle>
 						<AlertDialogDescription>
 							Choose whether to keep this group’s practices in the workspace or delete them with the
-							group. Deleting practices also permanently deletes their observations.
+							group. Deleting practices also permanently deletes their observations. You cannot undo
+							this.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter className="sm:grid sm:grid-cols-3">
@@ -664,7 +669,10 @@ function PracticeCatalogRoute() {
 								);
 							}}
 						>
-							{catalog.deleteGroup.isPending ? "Deleting…" : "Keep practices unassigned"}
+							{catalog.deleteGroup.isPending &&
+							catalog.deleteGroup.variables.query?.deletePractices !== true
+								? "Deleting group…"
+								: "Keep practices unassigned"}
 						</AlertDialogAction>
 						<AlertDialogAction
 							variant="destructive"
@@ -682,7 +690,10 @@ function PracticeCatalogRoute() {
 								);
 							}}
 						>
-							{catalog.deleteGroup.isPending ? "Deleting…" : "Delete group and practices"}
+							{catalog.deleteGroup.isPending &&
+							catalog.deleteGroup.variables.query?.deletePractices === true
+								? "Deleting group and practices…"
+								: "Delete group and practices"}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -698,9 +709,9 @@ function PracticeCatalogRoute() {
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Delete &ldquo;{deletingPractice?.name}&rdquo;?</AlertDialogTitle>
+						<AlertDialogTitle>Delete practice “{deletingPractice?.name}”?</AlertDialogTitle>
 						<AlertDialogDescription>
-							This permanently deletes the practice and its observations. This can’t be undone.
+							This permanently deletes the practice and its observations. You cannot undo this.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

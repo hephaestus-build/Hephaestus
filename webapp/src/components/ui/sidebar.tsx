@@ -29,6 +29,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
  *    app's main navigation, and a screen reader's landmark list had nothing to jump to (WCAG 2.2
  *    SC 1.3.1, 2.4.1). The mobile sheet's panel is the same landmark. Upstream report:
  *    https://github.com/shadcn-ui/ui/issues/11533
+ * 3. The user-visible text is sentence case ("Toggle sidebar"), and the mobile sheet is named
+ *    "Navigation" so it matches the "Close navigation" button in `AppSidebar`.
  */
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
@@ -188,8 +190,8 @@ function Sidebar({
 					side={side}
 				>
 					<SheetHeader className="sr-only">
-						<SheetTitle>Sidebar</SheetTitle>
-						<SheetDescription>Displays the mobile sidebar.</SheetDescription>
+						<SheetTitle>Navigation</SheetTitle>
+						<SheetDescription>Links to the pages of this app.</SheetDescription>
 					</SheetHeader>
 					<nav aria-label="Primary" className="flex h-full w-full flex-col">
 						{children}
@@ -263,7 +265,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
 			{...props}
 		>
 			<PanelLeftIcon />
-			<span className="sr-only">Toggle Sidebar</span>
+			<span className="sr-only">Toggle sidebar</span>
 		</Button>
 	);
 }
@@ -277,10 +279,10 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
 			type="button"
 			data-sidebar="rail"
 			data-slot="sidebar-rail"
-			aria-label="Toggle Sidebar"
+			aria-label="Toggle sidebar"
 			tabIndex={-1}
 			onClick={toggleSidebar}
-			title="Toggle Sidebar"
+			title="Toggle sidebar"
 			className={cn(
 				"absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
 				"in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",

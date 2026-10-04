@@ -224,7 +224,7 @@ function JobRow({ job }: { job: SyncJob }) {
 							render={
 								<button
 									type="button"
-									aria-label={`Error for job ${job.id}`}
+									aria-label={`Show error for job ${job.id}`}
 									className={cn("inline-flex cursor-help rounded-sm", FOCUS_RING)}
 								/>
 							}
@@ -266,7 +266,7 @@ export function SyncJobsTable({
 }: SyncJobsTableProps) {
 	if (isError) {
 		return (
-			<QueryErrorAlert error={error} title="We couldn't load the job history" onRetry={onRetry} />
+			<QueryErrorAlert error={error} title="We could not load the job history" onRetry={onRetry} />
 		);
 	}
 

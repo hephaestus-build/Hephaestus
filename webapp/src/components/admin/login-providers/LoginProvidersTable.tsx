@@ -86,7 +86,7 @@ export function LoginProvidersTable({
 
 	if (isError) {
 		return (
-			<QueryErrorAlert error={error} title="Could not load login providers" onRetry={onRetry} />
+			<QueryErrorAlert error={error} title="We could not load login providers" onRetry={onRetry} />
 		);
 	}
 
@@ -103,7 +103,7 @@ export function LoginProvidersTable({
 					</EmptyMedia>
 					<EmptyTitle>No login providers yet</EmptyTitle>
 					<EmptyDescription>
-						Add one so users can sign in, or link a Slack or Outline account from their settings.
+						Add one so users can sign in, or connect a Slack or Outline account in User settings.
 					</EmptyDescription>
 				</EmptyHeader>
 				{onAdd && (
@@ -142,7 +142,7 @@ export function LoginProvidersTable({
 										{provider.registrationId}
 										{provider.seededFromEnv === true && (
 											<Badge variant="outline" className="ml-2 align-middle">
-												seeded
+												Seeded
 											</Badge>
 										)}
 									</div>
@@ -233,10 +233,10 @@ export function LoginProvidersTable({
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Delete “{deleting?.displayName}”?</AlertDialogTitle>
+						<AlertDialogTitle>Delete login provider “{deleting?.displayName}”?</AlertDialogTitle>
 						<AlertDialogDescription>
-							Users will no longer be able to sign in with this provider. Existing linked accounts
-							are unaffected. This cannot be undone.
+							Users will no longer be able to sign in with this provider. Existing connected
+							accounts are unaffected. You cannot undo this.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -250,7 +250,7 @@ export function LoginProvidersTable({
 								}
 							}}
 						>
-							{isDeletePending ? "Deleting…" : "Delete"}
+							{isDeletePending ? "Deleting…" : "Delete provider"}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

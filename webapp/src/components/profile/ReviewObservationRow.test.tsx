@@ -101,7 +101,7 @@ describe("ReviewObservationRow", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "Disputed" }));
 		const comment = screen.getByRole<HTMLInputElement>("textbox", {
-			name: "What was missed?",
+			name: "Why do you dispute this?",
 		});
 		fireEvent.change(comment, { target: { value: "   " } });
 		fireEvent.click(screen.getByRole("button", { name: "Send" }));

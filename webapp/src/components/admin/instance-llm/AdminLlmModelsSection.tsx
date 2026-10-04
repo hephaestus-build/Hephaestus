@@ -68,7 +68,9 @@ function shareLabel(model: LlmModel, workspaces: WorkspaceOption[]): string {
 		(workspace) => workspace.id === model.grantedWorkspaceIds[0],
 	)?.displayName;
 	if (!hasText(firstName)) {
-		return `${model.grantedWorkspaceIds.length} workspaces`;
+		return model.grantedWorkspaceIds.length === 1
+			? "1 workspace"
+			: `${model.grantedWorkspaceIds.length} workspaces`;
 	}
 	return model.grantedWorkspaceIds.length === 1
 		? firstName
@@ -194,8 +196,8 @@ export function AdminLlmModelsSection({
 				subject={deleting}
 				onClose={() => setDeleting(null)}
 				title={(model) => `Delete “${model.displayName}”?`}
-				description="A model still bound to a workspace's agent can't be deleted. This cannot be undone."
-				confirmLabel="Delete"
+				description="This deletes the model. If a workspace still uses it, the delete fails. You cannot undo this."
+				confirmLabel="Delete model"
 				onConfirm={onDelete}
 			/>
 		</div>

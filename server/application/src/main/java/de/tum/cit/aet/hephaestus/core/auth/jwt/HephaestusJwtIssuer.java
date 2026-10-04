@@ -136,7 +136,8 @@ public class HephaestusJwtIssuer {
                 accountId,
                 accountRepository
                         .lockAuthorityForShare(accountId)
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "account is not active")));
+                        .orElseThrow(
+                                () -> new ResponseStatusException(HttpStatus.FORBIDDEN, "The account is not active.")));
         Instant sessionExpiresAt = constraints.sessionExpiresAt();
         Instant now = clock.instant();
         Instant expiresAt = now.plus(properties.accessTtl());

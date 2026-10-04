@@ -5,7 +5,7 @@ title: Local Development
 description: Prepare your workstation and run each Hephaestus service locally.
 ---
 
-Hephaestus supports full-stack development across Java and TypeScript. This guide focuses on the development environment; production operations are covered in the Admin Guide, starting with [Install (Self-Hosted)](/admin/install).
+Hephaestus supports full-stack development across Java and TypeScript. This guide focuses on the development environment. Production operations are covered in the Admin Guide, starting with [Install (Self-Hosted)](/admin/install).
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ Install and configure the following tools before you attempt a local build:
 
 1. **Java JDK 21** – Required for the Spring Boot application server. Gradle reads the target JDK
    from `.java-version` and uses its Java toolchain support. The checked-in wrapper downloads the
-   pinned Gradle distribution and verifies `server/gradle/wrapper/gradle-wrapper.properties`' checksum;
+   pinned Gradle distribution and verifies `server/gradle/wrapper/gradle-wrapper.properties`' checksum.
    CI also validates the wrapper JAR. No global Gradle installation is needed.
 2. **Docker and Docker Compose** – Required for PostgreSQL and NATS. Verify both with `docker info`
    and `docker compose version`.
@@ -26,16 +26,20 @@ Install and configure the following tools before you attempt a local build:
 
    On Windows: `irm https://vite.plus/ps1 | iex`. The launcher's own version does not matter: it
    runs the `vite-plus` this repository pins. Managed mode is on afterwards and provides the
-   Node.js `devEngines.runtime` pins; run `vp env off` if you manage Node.js yourself. `vp install`
+   Node.js `devEngines.runtime` pins. Run `vp env off` if you manage Node.js yourself. `vp install`
    then installs dependencies through the pinned pnpm, which Vite+ downloads itself: no global
-   pnpm, no Corepack. The installer adds `vp` to your login shell; anything that does not start
+   pnpm, no Corepack.
+
+   The installer adds `vp` to your login shell. Anything that does not start
    from one, an IDE task or a desktop app, needs `vp` on its PATH like `node` and `git`.
 
    After `vp install`, `vp --version` prints the pinned `vite-plus`.
 
 4. **NATS CLI (optional)** – Helpful when inspecting the webhook/sync event stream (NATS is disabled by default locally). The agent job queue runs on PostgreSQL and needs no NATS.
 
-If you push branches to the repository rather than to a fork, configure commit signing as well — [CONTRIBUTING.md § Signed Commits](https://github.com/hephaestus-build/Hephaestus/blob/main/CONTRIBUTING.md#signed-commits) has the setup, and `vp install` warns while it is missing.
+If you push branches to the repository instead of a fork, also configure commit signing.
+[CONTRIBUTING.md § Signed Commits](https://github.com/hephaestus-build/Hephaestus/blob/main/CONTRIBUTING.md#signed-commits) has the setup.
+`vp install` warns while it is missing.
 
 ## Recommended IDE setup
 
@@ -89,7 +93,7 @@ the per-role and per-purpose overlays (`worker`, `webhook`, `e2e`, `cds-training
 they are used.
 
 These are Spring profiles, not build profiles. Gradle’s `bootRun` passes `-Pprofiles=…` through to
-Spring; `vp run dev:server:e2e` uses that interface.
+Spring. `vp run dev:server:e2e` uses that interface.
 
 Create `application-local.yml` in `server/application/src/main/resources` to override defaults. This file is gitignored.
 
@@ -99,7 +103,7 @@ Never commit `application-local.yml`. It may contain secrets and machine-specifi
 
 ### Running the stack
 
-1. Ensure the Docker daemon is running with `docker info`.
+1. Check that the Docker daemon runs with `docker info`.
 2. From the repo root, start everything with one command:
 
    ```bash
@@ -115,7 +119,7 @@ Never commit `application-local.yml`. It may contain secrets and machine-specifi
    vp run dev:webapp   # terminal 2 — Vite dev server
    ```
 
-3. Open the configured server and webapp ports; see the [port map](#default-port-map).
+3. Open the configured server and webapp ports. See the [port map](#default-port-map).
    The defaults are `http://localhost:8080` and `http://localhost:4200`.
 
    The OpenAPI description and Swagger UI are **off** by default. When enabled, these endpoints are
@@ -129,9 +133,9 @@ To wipe the local database (e.g. after a bad migration or sync), run `vp run dev
 
 ### Seeding a Practice profile
 
-To try the Practice profile against the server, `vp run dev:practice-profile:seed` writes review
-runs, observations and in-app feedback for one developer into the local database, dated relative
-to the moment it runs. Whose work it seeds comes from flags, or from the environment, or from the
+To try the Practice profile against the server, use `vp run dev:practice-profile:seed`.
+It writes review runs, observations, and in-app feedback for one developer into the local database.
+It dates them relative to its execution time. Whose work it seeds comes from flags, or from the environment, or from the
 defaults the `HephaestusTest` fixtures are synced under:
 
 | Flag                        | Environment                    | Default                              |
@@ -141,13 +145,14 @@ defaults the `HephaestusTest` fixtures are synced under:
 | `--pull-request-repository` | `SEED_PULL_REQUEST_REPOSITORY` | `HephaestusTest/practice-validation` |
 | `--issue-repository`        | `SEED_ISSUE_REPOSITORY`        | `HephaestusTest/MaxTestRepo`         |
 
-Flags follow the task name, `vp run dev:practice-profile:seed --developer you`. The runs name their
-pull requests and issues by number in those two repositories, and the seed refuses to run against a
-database that has not synced them. It connects with the `POSTGRES_*` values in `server/.env` and
+Flags follow the task name, `vp run dev:practice-profile:seed --developer you`. The runs name their pull requests and issues by number in those two repositories.
+The seed refuses to run against a database that has not synced them. It connects with the `POSTGRES_*` values in `server/.env` and
 refuses any `POSTGRES_HOST` that is not a loopback address, so it cannot be pointed at a shared
-database. Every seeded row carries a recognisable id, so the seed replaces itself on re-run and
-`vp run dev:practice-profile:remove` removes exactly those rows. Nothing it writes is addressed to a
-provider: the runs are complete and only in-app feedback is seeded.
+database. Every seeded row carries a recognizable id, so the seed replaces itself on re-run and
+`vp run dev:practice-profile:remove` removes exactly those rows.
+
+The seed addresses no writes to a provider.
+The runs are complete, and the seed writes only in-app feedback.
 
 ### Port overrides
 
@@ -155,33 +160,35 @@ Every host-side port is configurable so multiple Hephaestus instances (or other 
 
 #### Default port map
 
-| Service            | Default | Variable           | Config location |
-| ------------------ | ------- | ------------------ | --------------- |
-| PostgreSQL         | 5432    | `POSTGRES_PORT`    | `server/.env`   |
-| Application server | 8080    | `SERVER_PORT`      | `server/.env`   |
-| Sandbox gateway    | 8081    | `SANDBOX_API_PORT` | `server/.env`   |
-| Mailpit SMTP       | 1025    | `MAILPIT_SMTP_PORT`| `server/.env`   |
-| Mailpit UI         | 8025    | `MAILPIT_UI_PORT`  | `server/.env`   |
-| Webapp (Vite dev)  | 4200    | `WEBAPP_PORT`      | Shell env only  |
+| Service            | Default | Variable            | Config location |
+| ------------------ | ------- | ------------------- | --------------- |
+| PostgreSQL         | 5432    | `POSTGRES_PORT`     | `server/.env`   |
+| Application server | 8080    | `SERVER_PORT`       | `server/.env`   |
+| Sandbox gateway    | 8081    | `SANDBOX_API_PORT`  | `server/.env`   |
+| Mailpit SMTP       | 1025    | `MAILPIT_SMTP_PORT` | `server/.env`   |
+| Mailpit UI         | 8025    | `MAILPIT_UI_PORT`   | `server/.env`   |
+| Webapp (Vite dev)  | 4200    | `WEBAPP_PORT`       | Shell env only  |
 
 :::tip Pre-flight check
-Run `vp run check:ports` before starting the stack. It checks the six ports above; a NATS
+Run `vp run check:ports` before starting the stack. It checks the six ports above. A NATS
 container binds 4222 as well, and a conflict there shows up only at boot.
 :::
 
 ### Email
 
-The `local` profile sends every email to the Mailpit container from `server/compose.yaml`; nothing
+The `local` profile sends every email to the Mailpit container from `server/compose.yaml`. Nothing
 leaves your machine. Its SMTP and inbox ports bind to `127.0.0.1` only. Open [http://localhost:8025](http://localhost:8025) (`MAILPIT_UI_PORT`) to read
 what the server sent, with the HTML part, the plain-text alternative and the headers side by side.
+
 The quickest end-to-end check is the **Send test email** button on the instance settings page
-(`/admin/settings`); it goes through the same gateway as every notification, including Silent Mode.
+(`/admin/settings`). It goes through the same gateway as every notification, including silent mode.
+
 Templates live in `server/application/src/main/resources/templates/email/` — `html/` and `text/`
 hold the two parts of one message, and `messages.properties` holds the subjects.
 
 #### How it works
 
-The `.env` file in `server/` is read by **both** Docker Compose (for container port mappings) and Spring Boot (via `spring.config.import`). The webapp port is a separate shell setting, as listed above.
+The `.env` file in `server/` is read by **both** Docker Compose (for container port mappings) and Spring Boot (through `spring.config.import`). The webapp port is a separate shell setting, as listed above.
 
 Ports flow through the system like this:
 
@@ -302,7 +309,7 @@ Hephaestus supports two GitHub authentication modes. Pick the one that fits your
        init-default: false # Workspaces created from installations
    ```
 
-3. Install the app on your organization. Workspaces and monitors are created automatically.
+3. Install the app on your organization. Hephaestus creates workspaces and monitors automatically.
 
 ### Limiting sync scope (development filters)
 
@@ -325,7 +332,7 @@ hephaestus:
 Empty lists = no filtering (production behavior). Non-empty = only sync matching items.
 
 :::tip
-Filters don't delete data – they just skip sync operations. Workspace and organization metadata is still created for all installations.
+Filters do not delete data – they just skip sync operations. Workspace and organization metadata is still created for all installations.
 :::
 
 ### AI model (local)
@@ -333,21 +340,24 @@ Filters don't delete data – they just skip sync operations. Workspace and orga
 Practice reviews and the mentor need at least one enabled model. Providers are registered at
 runtime — either an instance-wide catalog entry (Instance admin → AI models) or a workspace's own
 "bring your own AI provider" connection. Configure it through the same admin UI/API used in
-production; there is deliberately no second env-var catalog or startup seeder that can drift from
-the stored configuration. New connections and models start inactive. Test the connection, declare
-its price (or explicitly mark it as having no metered API cost), then activate it and bind it to a
-purpose (`PRACTICE_REVIEW` or `MENTOR`) on the workspace's **AI models** page.
+production. There is deliberately no second env-var catalog or startup seeder that can drift from
+the stored configuration.
 
-For an automated local end-to-end setup, use `vp run dev:e2e:setup`. It creates the connection,
-model, and agent binding through the application API and keeps provider credentials out of source
-control and command-line history by reading them from `E2E_*` environment variables.
+New connections and models start inactive. Test the connection.
+Declare its price or explicitly mark it as having no metered API cost.
+Activate it.
+Bind it to a purpose (`PRACTICE_REVIEW` or `MENTOR`) on the workspace's **AI models** page.
+
+For an automated local end-to-end setup, use `vp run dev:e2e:setup`. It creates the connection, model, and agent binding through the application API.
+It reads provider credentials from `E2E_*` environment variables.
+Thus, they stay outside source control and command-line history.
 
 Models always use the in-app LLM proxy: the upstream key is injected by the proxy and never reaches
 the sandbox.
 
-Provider base URLs are validated by an SSRF egress guard (`EgressPolicy`) that, in production,
-refuses anything but a public HTTPS host — a plain-HTTP `localhost`/`127.0.0.1`/`::1` target is
-rejected outright. To point a connection at a local OpenAI-compatible gateway during development,
+An SSRF egress guard (`EgressPolicy`) validates provider base URLs.
+In production, it accepts only a public HTTPS host.
+It rejects plain-HTTP `localhost`/`127.0.0.1`/`::1` targets. To point a connection at a local OpenAI-compatible gateway during development,
 set:
 
 ```yaml
@@ -356,12 +366,12 @@ hephaestus.llm.egress.allow-loopback: true
 ```
 
 or `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK=true` in `server/.env`. It is off by default and
-`application-e2e.yml` is the only shipped profile that turns it on; never enable it in a deployed
+`application-e2e.yml` is the only shipped profile that turns it on. Never enable it in a deployed
 environment.
 
 ### Authentication (local)
 
-Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md)). The server federates to GitHub (and optionally GitLab — gitlab.com or a self-hosted instance) via Spring Security `oauth2Login`, then issues its own short-lived ES256 cookie-session JWT. The webapp reads `GET /user` and redirects to `/auth/login` — there is no token in the browser.
+Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md)). The server federates to GitHub (and optionally GitLab — gitlab.com or a self-hosted instance) through Spring Security `oauth2Login`, then issues its own short-lived ES256 cookie-session JWT. The webapp reads `GET /user` and redirects to `/auth/login` — there is no token in the browser.
 
 #### Configure GitHub login
 
@@ -375,27 +385,37 @@ Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://gith
    # GITHUB_OAUTH_CLIENT_SECRET=<github-client-secret>
    ```
 
-3. (Optional) To enable GitLab login locally, register an OAuth application on your GitLab instance
-   (callback `http://localhost:8080/login/oauth2/code/gitlab`, scope `read_user`),
-   set `GITLAB_OAUTH_CLIENT_ID` / `GITLAB_OAUTH_CLIENT_SECRET`, and point `GITLAB_OAUTH_BASE_URL` at the
-   instance (defaults to `https://gitlab.com`; e.g. `https://gitlab.lrz.de`). Leave the client id blank to hide the GitLab button.
-4. Run the application server with `vp run dev:server`; it brings up the Compose services, installs
+3. (Optional) To enable local GitLab login, register an OAuth application on your GitLab instance.
+   Use callback `http://localhost:8080/login/oauth2/code/gitlab` and scope `read_user`.
+   Set `GITLAB_OAUTH_CLIENT_ID` / `GITLAB_OAUTH_CLIENT_SECRET`.
+   Point `GITLAB_OAUTH_BASE_URL` at the instance.
+   Its default is `https://gitlab.com`, but you can use, for example, `https://gitlab.lrz.de`.
+   To hide the GitLab button, leave the client id blank.
+4. Run the application server with `vp run dev:server`. It brings up the Compose services, installs
    the generated-clients module and starts the application module. Open the webapp and click
-   **Sign in with GitHub**.
+   **Continue with GitHub**.
 
 GitLab workspaces are created only on `GITLAB_DEFAULT_SERVER_URL`, falling back to
 `GITLAB_OAUTH_BASE_URL`. Set it consistently on the server and workers. Additional GitLab login
-providers permit sign-in and identity linking; they do not permit syncing another GitLab instance.
+providers permit sign-in and identity linking. They do not permit syncing another GitLab instance.
 
 #### Super admin
 
-App-level admin is the `APP_ADMIN` role on the `account` table (authority `app_admin` in the JWT — `admin` is the per-workspace role name and is stripped from instance tokens), managed from the `/admin/users` UI by an existing admin. The first admin is seeded by listing them in `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` (e.g. `github:@you`) before first boot: the promotion runs on their first login, and is idempotent and promote-only. Hand-editing the DB is a last-resort fallback.
+App-level admin is the `APP_ADMIN` role on the `account` table, with authority `app_admin` in the JWT.
+`admin` is the per-workspace role name, which instance tokens exclude.
+An existing admin manages this role from the `/admin/users` UI.
+
+Before first boot, list the first admin in `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS`, for example `github:@you`.
+Promotion runs on their first login.
+It is idempotent and promote-only.
+Manual database edits are a last resort.
 
 #### Troubleshooting auth
 
-- **401 after login:** ensure `GITHUB_OAUTH_CLIENT_ID/SECRET` are set and the callback URL on the GitHub app matches your `SERVER_PORT`.
-- **Logins don't survive a server restart locally:** set `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` (base64 32-byte; `openssl rand -base64 32`) in `server/.env` — otherwise an ephemeral per-boot key is used.
-- **Reset everything:** `vp run dev:reset` (see Running the stack); on next login the account and identity link are recreated.
+- **401 after login:** check that `GITHUB_OAUTH_CLIENT_ID/SECRET` are set.
+  Check that the GitHub app's callback URL matches your `SERVER_PORT`.
+- **Logins do not survive a server restart locally:** set `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` (base64 32-byte. `openssl rand -base64 32`) in `server/.env` — otherwise an ephemeral per-boot key is used.
+- **Reset everything:** `vp run dev:reset` (see Running the stack). On next login the account and identity link are recreated.
 
 ### Webhook receiver
 
@@ -416,8 +436,8 @@ export WEBHOOK_SECRET=$(openssl rand -hex 32)
 echo "WEBHOOK_SECRET=$WEBHOOK_SECRET" >> docker/.env
 ```
 
-The value must match the secret configured on your GitHub and GitLab webhooks (validated via
-`X-Hub-Signature-256` for GitHub; `X-Gitlab-Token`, or `webhook-signature` for a hook with a signing
+The value must match the secret configured on your GitHub and GitLab webhooks (validated through
+`X-Hub-Signature-256` for GitHub. `X-Gitlab-Token`, or `webhook-signature` for a hook with a signing
 token, for GitLab — see [`WEBHOOK_SECRET`](../admin/production-setup#gitlab-rollout-bundle)).
 
 For Slack app setup, use the scope/event checklist in
@@ -443,8 +463,8 @@ For Slack app setup, use the scope/event checklist in
 ### UI foundations
 
 - We ship Tailwind CSS 4 in JIT mode. Keep utility classes in JSX and rely on design tokens defined in `src/styles/theme-tokens.css`.
-- Ensure Tailwind IntelliSense is enabled in your IDE – typeahead prevents typos and invalid compositions.
-- Avoid premature abstractions with `@apply`; duplication is fine when it keeps components readable.
+- Enable Tailwind IntelliSense in your IDE. Typeahead prevents typos and invalid compositions.
+- Avoid premature abstractions with `@apply`. Duplication is fine when it keeps components readable.
 
 ### Component workflow (Storybook + Chromatic)
 
@@ -458,7 +478,7 @@ vp run --filter webapp chromatic:ci        # Visual regression in CI
 
 - Every new UI component ships with at least one story covering empty, loading, and error states.
 - CI runs Chromatic for same-repository pull requests that change the webapp – review visual diffs before merging.
-- Reference [ui.shadcn.com](https://ui.shadcn.com/) for composition patterns; a new widget builds on the Base UI primitives already wrapped under `src/components/ui/**`.
+- Reference [ui.shadcn.com](https://ui.shadcn.com/) for composition patterns. A new widget builds on the Base UI primitives already wrapped under `src/components/ui/**`.
 
 ### OpenAPI client
 
@@ -473,14 +493,14 @@ vp run generate:api   # regenerates server/openapi.yaml from the packaged JAR, t
 spec: this one and the Chrome extension's `extension/src/api/**`. Commit the spec and both clients
 with the change.
 
-- Schema names carry no `DTO` suffix; the server strips it when it publishes the spec.
-- Pair every new endpoint with its generated TanStack Query options; never hand-roll `fetch` — the
+- Schema names carry no `DTO` suffix. The server strips it when it publishes the spec.
+- Pair every new endpoint with its generated TanStack Query options. Never hand-roll `fetch` — the
   generated client is configured once and carries the cookie session.
 
 ### Updating Java dependencies
 
 Edit `server/gradle/libs.versions.toml`, then resolve the graphs and exercise the changed tools.
-Strict dependency locking rejects missing lock state as well as version drift; do not delete a
+Strict dependency locking rejects missing lock state as well as version drift. Do not delete a
 lockfile or disable verification to make an update pass.
 The root `dependencies` report covers both projects, including PMD's auxiliary classpath, so
 Renovate's standard lock and checksum commands refresh the same graphs used by source builds.
@@ -497,7 +517,7 @@ generating metadata, so cached resolution cannot omit parent POM or module-descr
 
 Review the dependency-lock diffs and independently verify newly trusted artifacts against their
 publisher before committing `server/gradle/verification-metadata.xml`. Metadata generation records
-what was downloaded; it does not establish trust. Run the checks again without metadata-writing
+what was downloaded. It does not establish trust. Run the checks again without metadata-writing
 flags, still without configuration caching and with another empty Gradle user home, to verify fresh
 downloads. Exercise changed generators, formatters, Liquibase or mutation tooling as well: their
 classpaths are separate from the application runtime. Restore your usual Gradle user home afterward.
@@ -505,4 +525,4 @@ classpaths are separate from the application runtime. Restore your usual Gradle 
 For a Gradle wrapper update, also run the build with `--warning-mode all` and review plugin
 compatibility before accepting a new major. Do not suppress upstream deprecations to make the
 upgrade appear clean. A JDK-line change updates `.java-version` and Renovate's matching
-`constraints.java`; `gate:toolchain` rejects drift between them.
+`constraints.java`. `gate:toolchain` rejects drift between them.

@@ -85,7 +85,7 @@ type Story = StoryObj<typeof meta>;
 
 async function fillIdentity(dialog: HTMLElement) {
 	await userEvent.type(within(dialog).getByLabelText("Display name"), "GPT-5");
-	await userEvent.type(within(dialog).getByLabelText("Upstream model id"), "gpt-5");
+	await userEvent.type(within(dialog).getByLabelText("Upstream model ID"), "gpt-5");
 }
 
 export const Default: Story = {};
@@ -143,9 +143,9 @@ export const RedeclareLeavesRows: Story = {
 		const dialog = await screen.findByRole("dialog");
 		await expect(within(dialog).queryByText(/stop serving/u)).not.toBeInTheDocument();
 
-		await userEvent.click(within(dialog).getByRole("radio", { name: "Your organisation" }));
+		await userEvent.click(within(dialog).getByRole("radio", { name: "Your organization" }));
 		await expectSettledVisible(
-			within(dialog).getByText("Rows holding this model as Cloud stop serving"),
+			within(dialog).getByText("Assignments holding this model as Cloud stop serving"),
 		);
 
 		await userEvent.click(within(dialog).getByRole("radio", { name: "A provider" }));
@@ -157,12 +157,12 @@ export const EditLegacyUndeclared: Story = {
 	args: { editing: legacyModel },
 	play: async ({ args }) => {
 		const dialog = await screen.findByRole("dialog");
-		for (const name of ["Your organisation", "A provider"]) {
+		for (const name of ["Your organization", "A provider"]) {
 			await expect(within(dialog).getByRole("radio", { name })).not.toBeChecked();
 		}
 		await expectSettledVisible(within(dialog).getByText("Not declared"));
 		// The undeclared row takes any model, so declaring one leaves no row behind.
-		await userEvent.click(within(dialog).getByRole("radio", { name: "Your organisation" }));
+		await userEvent.click(within(dialog).getByRole("radio", { name: "Your organization" }));
 		await expect(within(dialog).queryByText(/stop serving/u)).not.toBeInTheDocument();
 		await userEvent.click(within(dialog).getByRole("button", { name: "Leave undeclared" }));
 		await userEvent.click(within(dialog).getByRole("button", { name: /save changes/iu }));
@@ -202,8 +202,8 @@ export const EditKeepsAccessSeparate: Story = {
 export const ValidationError: Story = {
 	play: async () => {
 		await userEvent.click(await screen.findByRole("button", { name: /add model/iu }));
-		await expectSettledVisible(await screen.findByText(/display name is required/iu));
-		await expectSettledVisible(await screen.findByText(/upstream model id is required/iu));
+		await expectSettledVisible(await screen.findByText(/enter a display name/iu));
+		await expectSettledVisible(await screen.findByText(/enter the upstream model ID/iu));
 	},
 };
 

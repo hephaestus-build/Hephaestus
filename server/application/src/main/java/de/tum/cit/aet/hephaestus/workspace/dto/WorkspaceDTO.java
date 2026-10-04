@@ -72,7 +72,7 @@ public record WorkspaceDTO(
         @NonNull @Schema(description = "Whether automatic practice reviews triggered by PR events are enabled")
         Boolean practiceReviewAutoTriggerEnabled,
 
-        @NonNull @Schema(description = "Whether manual practice reviews triggered via bot command are enabled")
+        @NonNull @Schema(description = "Whether manual practice reviews triggered through a bot command are enabled")
         Boolean practiceReviewManualTriggerEnabled) {
     /** Builds a DTO pulling integration metadata from the Connection registry. */
     public static WorkspaceDTO from(Workspace workspace, ConnectionService connectionService) {

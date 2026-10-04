@@ -132,7 +132,7 @@ export const Sending: Story = {
 
 export const Error: Story = {
 	args: {
-		error: "Couldn't send. Your draft is still here.",
+		error: "We could not send that. Your draft is still here.",
 		onSubmit: fn(async () => false),
 	},
 	play: async () => {

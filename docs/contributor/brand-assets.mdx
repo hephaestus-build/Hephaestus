@@ -29,14 +29,19 @@ Do not edit generated files under `webapp/public/`, `extension/public/icon/`, `d
 The exporter also synchronizes the inline maintenance-page mark in `docker/compose.proxy.yaml`. CI
 regenerates all of these outputs and fails when the committed result differs.
 
-The exporter renders everything into a temporary directory and writes to the repository only once
-every output rendered, so a failed or interrupted run leaves the committed assets as they were. For
-the README images it starts its own Storybook on a free loopback port, never one another checkout's
-Storybook may hold, and stops it when it finishes, fails or is interrupted.
+The exporter renders every output into a temporary directory.
+Only after all outputs render does it write to the repository.
+Thus, a failed or interrupted run leaves the committed assets unchanged.
 
-Images with text — the lockups, social cards and README captures — rasterize slightly differently on
-macOS and on CI's Linux runners, and the committed files are CI's. When a local run changes only
-those, and the change is not yours, restore them rather than commit the difference.
+For README images, it starts its own Storybook on a free loopback port.
+It never uses a port that another checkout's Storybook can hold.
+It stops Storybook when it finishes, fails, or receives an interruption.
+
+Images with text include lockups, social cards, and README captures.
+These images rasterize slightly differently on macOS and CI's Linux runners.
+The committed files come from CI.
+If a local run changes only those images without an intended change, restore them.
+Do not commit that difference.
 
 The README images capture the landing-page export stories, not just the static mark. Changes to
 those stories, their component tree, or the shared theme also require regenerating the assets.
@@ -46,46 +51,52 @@ favicons, and maskable icons keep their platform-appropriate spacing.
 
 ## Usage
 
-| Context | Asset |
-|---|---|
-| In-app product lockup | `HephaestusLogo` or `HephMark` |
-| Mentor conversation | `HephIcon` |
-| README and documentation navbar | Light/dark lockup PNGs |
-| Browser tab | `favicon.png` |
-| Installed web app | 192px, 512px, and maskable PNGs from `webapp/public/manifest.json` |
-| Chrome extension toolbar and management | `extension/public/icon/16.png`, `32.png`, and `48.png` |
-| Chrome extension installation and Web Store | `extension/public/icon/128.png` |
-| Chrome Web Store promotional image | `docs/static/img/brand/chrome-extension-promo-440x280.png` |
-| Link preview | `hephaestus-social-card.png` |
-| Slack app | `docs/static/img/brand/slack-app-icon-512.png` |
-| GitHub App, GitHub OAuth App, and other external profiles | `docs/static/img/brand/external-app-icon-1024.png` |
-| GitHub repository social preview | `docs/static/img/brand/github-repository-social-preview-1280x640.png` |
+| Context                                                   | Asset                                                                 |
+| --------------------------------------------------------- | --------------------------------------------------------------------- |
+| In-app product lockup                                     | `HephaestusLogo` or `HephMark`                                        |
+| Mentor conversation                                       | `HephIcon`                                                            |
+| README and documentation navbar                           | Light/dark lockup PNGs                                                |
+| Browser tab                                               | `favicon.png`                                                         |
+| Installed web app                                         | 192px, 512px, and maskable PNGs from `webapp/public/manifest.json`    |
+| Chrome extension toolbar and management                   | `extension/public/icon/16.png`, `32.png`, and `48.png`                |
+| Chrome extension installation and Web Store               | `extension/public/icon/128.png`                                       |
+| Chrome Web Store promotional image                        | `docs/static/img/brand/chrome-extension-promo-440x280.png`            |
+| Link preview                                              | `hephaestus-social-card.png`                                          |
+| Slack app                                                 | `docs/static/img/brand/slack-app-icon-512.png`                        |
+| GitHub App, GitHub OAuth App, and other external profiles | `docs/static/img/brand/external-app-icon-1024.png`                    |
+| GitHub repository social preview                          | `docs/static/img/brand/github-repository-social-preview-1280x640.png` |
 
 The static mark remains signal blue (`#315FDC`) in both color modes. UI wordmarks use the
-mode-aware `brand-accent` token from `webapp/src/styles/theme-tokens.css`; prose always spells the product name
-“Hephaestus.” Unlabelled React marks are decorative. Informative uses need a concise accessible name.
+mode-aware `brand-accent` token from `webapp/src/styles/theme-tokens.css`.
+Prose always spells the product name “Hephaestus.”
+Unlabeled React marks are decorative. Informative uses need a concise accessible name.
 
-The README uses [GitHub's theme-aware picture sources](https://github.blog/changelog/2021-11-24-specify-theme-context-for-images-in-markdown/),
-the documentation navbar uses [Docusaurus light/dark logo sources](https://docusaurus.io/docs/api/themes/configuration),
-and the installed-app exports follow the manifest [icon-purpose contract](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/icons)
+The README uses [GitHub's theme-aware picture sources](https://github.blog/changelog/2021-11-24-specify-theme-context-for-images-in-markdown/).
+The documentation navbar uses [Docusaurus light/dark logo sources](https://docusaurus.io/docs/api/themes/configuration).
+The installed-app exports follow the manifest [icon-purpose contract](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/icons)
 and [maskable safe zone](https://web.dev/articles/maskable-icon).
 
 The Chrome extension exports PNGs with transparent corners, preserving the circular brand mark.
-The 16px and 32px toolbar versions use the existing application crop to keep Heph's face legible;
-48px uses 42px artwork. The 128px store icon uses a centered 112px circle with 8px transparent margins,
+The 16px and 32px toolbar versions use the existing application crop to keep Heph's face legible.
+The 48px version uses 42px artwork. The 128px store icon uses a centered 112px circle with 8px transparent margins,
 following Chrome's [shape-specific icon sizing](https://developer.chrome.com/docs/webstore/images#icon-size).
+
 The 96px artwork and 16px margins on that page apply to square icons. These exports cover Chrome's
 [manifest icon sizes](https://developer.chrome.com/docs/extensions/develop/ui/configure-icons).
 The store promotional image uses the same mark and pinned Inter font, with no simulated product UI.
 Chrome requires this [440×280 promotional image](https://developer.chrome.com/docs/webstore/images#promotional-images)
-alongside real screenshots of the extension; screenshots are captured from the running product.
+alongside real screenshots of the extension.
+Capture screenshots from the running product.
 
 ## External surfaces
 
 Generated files do not update third-party accounts. After changing the static mark, maintainers must
 upload the named assets in Slack and GitHub settings. The 1024px external icon is a high-resolution
-master, not a vendor-mandated size; upload controls may resize it. Keep the mark square, without text
-or pre-rounded corners. [Slack renders app logos at 36px on mobile and applies its own corner
+master, not a vendor-mandated size.
+Upload controls can resize it. Keep the mark square, without text
+or pre-rounded corners.
+
+[Slack renders app logos at 36px on mobile and applies its own corner
 treatment](https://api.slack.com/start/designing#logo_assets). GitHub's
 [repository social-preview settings](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/customizing-your-repositorys-social-media-preview)
 use the separately composed 1280×640 export.

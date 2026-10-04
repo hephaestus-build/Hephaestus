@@ -92,7 +92,9 @@ export const WithoutAddWorkspace: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: /AET/u }));
 		const menu = within(await screen.findByRole("menu"));
 		await expectSettledVisible(menu.getByRole("menuitem", { name: /AET/u }));
-		await expect(menu.queryByRole("menuitem", { name: "Add workspace" })).not.toBeInTheDocument();
+		await expect(
+			menu.queryByRole("menuitem", { name: "Create workspace" }),
+		).not.toBeInTheDocument();
 	},
 };
 

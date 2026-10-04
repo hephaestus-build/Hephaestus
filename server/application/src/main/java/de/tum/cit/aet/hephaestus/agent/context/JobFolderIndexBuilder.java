@@ -303,7 +303,7 @@ public class JobFolderIndexBuilder {
         // under the contract this runtime ships, so a practice left behind by a migration fails here.
         if (!catalogs.current().version().equals(plan.contractVersion())) {
             throw new JobPreparationException("Practices pin source contract " + plan.contractVersion()
-                    + "; this runtime captures under " + catalogs.current().version());
+                    + ". This runtime captures under " + catalogs.current().version());
         }
         return catalogs.current().sources().stream()
                 .map(ArtifactSourceContract::kind)

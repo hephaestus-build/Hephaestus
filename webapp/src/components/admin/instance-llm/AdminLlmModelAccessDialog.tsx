@@ -97,8 +97,8 @@ function AdminLlmModelAccessDialogContent({
 			<DialogHeader>
 				<DialogTitle>Manage access to {model.displayName}</DialogTitle>
 				<DialogDescription>
-					Choose which workspaces can discover and use this model. Provider credentials remain
-					hidden from workspace admins.
+					Choose which workspaces can find and use this model. Workspace admins never see the
+					provider credentials.
 				</DialogDescription>
 			</DialogHeader>
 
@@ -118,11 +118,11 @@ function AdminLlmModelAccessDialogContent({
 							<>
 								<QueryErrorAlert
 									error={workspacesError}
-									title="Could not load workspaces"
+									title="We could not load workspaces"
 									onRetry={onRetryWorkspaces}
 								/>
 								<p className="text-xs text-muted-foreground">
-									Saving a workspace list stays disabled until the directory loads.
+									You can save a workspace list after the workspaces load.
 								</p>
 							</>
 						) : (
@@ -159,8 +159,8 @@ function AdminLlmModelAccessDialogContent({
 						<AlertTriangle aria-hidden />
 						<AlertTitle>Access is reduced immediately</AlertTitle>
 						<AlertDescription>
-							Practice reviews and Mentor stop in the workspaces you removed, until each of them
-							picks another model.
+							Practice reviews and Heph stop in the workspaces you removed, until each of them picks
+							another model.
 						</AlertDescription>
 					</Alert>
 				)}
@@ -168,7 +168,7 @@ function AdminLlmModelAccessDialogContent({
 					<Alert role="status">
 						<AlertTitle>Future workspaces will need an explicit grant</AlertTitle>
 						<AlertDescription>
-							Every workspace using it today keeps it, so nothing stops running.
+							Every workspace that uses this model today keeps it, so nothing stops running.
 						</AlertDescription>
 					</Alert>
 				)}

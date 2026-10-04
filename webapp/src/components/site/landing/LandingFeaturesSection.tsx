@@ -23,7 +23,7 @@ import styles from "./LandingVisuals.module.css";
 const practiceGroups = [
 	{ name: "Packaging work for review", color: "sky", icon: "Package" },
 	{ name: "Writing issues a maintainer can act on", color: "violet", icon: "FileText" },
-	{ name: "Reviewing a teammate's work constructively", color: "teal", icon: "Eye" },
+	{ name: "Reviewing a teammate’s work constructively", color: "teal", icon: "Eye" },
 	{ name: "Acting on review feedback", color: "cyan", icon: "MessageSquareReply" },
 	{ name: "Testing your changes", color: "amber", icon: "TestTube" },
 	{ name: "Handling failure well", color: "rose", icon: "ShieldAlert" },
@@ -65,12 +65,11 @@ export function LandingFeaturesSection() {
 						id="landing-features-heading"
 						className="text-3xl font-bold tracking-tight text-balance sm:text-4xl"
 					>
-						Not only the diff
+						Feedback on the whole workflow
 					</h2>
 					<p className="mt-4 text-lg leading-relaxed text-pretty text-muted-foreground">
-						A mentor watches how someone works, not just what they shipped. Hephaestus reads the
-						code, the conversation around it, and the plan behind it — and authors and reviewers
-						both get feedback.
+						A mentor watches how someone works. Hephaestus reads the code, the conversation around
+						it, and the plan behind it. Authors and reviewers both get feedback.
 					</p>
 
 					<h3 className="mt-8 text-sm font-semibold">

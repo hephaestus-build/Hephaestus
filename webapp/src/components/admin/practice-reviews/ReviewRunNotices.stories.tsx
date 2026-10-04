@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
+import { levelsOpenedBy } from "@/test/detail-stack";
+
 import { reviewJob } from "./fixtures";
 import { ReviewRunNotices } from "./ReviewRunNotices";
 
@@ -18,7 +20,7 @@ const meta = {
 	component: ReviewRunNotices,
 	parameters: { layout: "padded", chromatic: { viewports: [320, 1440] } },
 	tags: ["autodocs"],
-	args: { job: completed, outputMayBeIncomplete: false },
+	args: { job: completed, practices: undefined, outputMayBeIncomplete: false },
 } satisfies Meta<typeof ReviewRunNotices>;
 
 export default meta;
@@ -36,7 +38,9 @@ export const OutputMayBeIncomplete: Story = {
 	args: { job: failed, outputMayBeIncomplete: true },
 	play: async ({ canvas }) => {
 		canvas.getByText("Review output may be incomplete");
-		canvas.getByText("The review ended before it completed.");
+		canvas.getByText(
+			"The review ended early. The observations and feedback below may be only part of what it would have found.",
+		);
 	},
 };
 
@@ -56,7 +60,7 @@ export const HeldForBudget: Story = {
 	args: { job: { ...completed, status: "QUEUED", holdReason: "BUDGET" } },
 	play: async ({ canvas }) => {
 		canvas.getByText("Over the AI budget");
-		canvas.getByText(/parked rather than failed/u);
+		canvas.getByText(/this review is waiting, not failed/u);
 	},
 };
 
@@ -67,8 +71,50 @@ export const HeldForAnUnknownReason: Story = {
 		canvas.getByText("On hold");
 		await expect(canvas.queryByText(/PROVIDER_OUTAGE|Provider outage/u)).not.toBeInTheDocument();
 		canvas.getByText(
-			"This run is parked rather than failed. It resumes on its own once the hold lifts.",
+			"This review is waiting, not failed. It continues on its own when the hold ends.",
 		);
+	},
+};
+
+/**
+ * A push review that asked fewer practices than were ready, because earlier reviews of the same code
+ * had already answered the rest. Each answered practice links to the review that answered it,
+ * so the gap between ready and asked reads as reuse, not as practices the review skipped. A practice
+ * whose name has not loaded is named by its slug, so two of them never read alike.
+ */
+export const AnsweredByAnEarlierReview: Story = {
+	args: {
+		practices: [
+			{ slug: "removes-duplication-instead-of-copy-pasting", name: "Remove duplication" },
+		],
+		job: {
+			...completed,
+			answeredPractices: [
+				{
+					practiceSlug: "removes-duplication-instead-of-copy-pasting",
+					revisionId: 1822,
+					reviewId: "aaaaaaaa-1111-1111-1111-111111111111",
+				},
+				{
+					practiceSlug: "handles-errors-instead-of-swallowing-them",
+					revisionId: 1838,
+					reviewId: "cccccccc-1111-1111-1111-111111111111",
+				},
+			],
+		},
+	},
+	play: async ({ canvas }) => {
+		canvas.getByText("2 practices were answered by an earlier review");
+		await expect(canvas.getByRole("link", { name: "Remove duplication" })).toBeVisible();
+		await expect(
+			canvas.getByRole("link", { name: "handles-errors-instead-of-swallowing-them" }),
+		).toBeVisible();
+		const [first, second] = canvas.getAllByRole("link", { name: "an earlier review" });
+		if (first === undefined || second === undefined) {
+			throw new Error("Each answered practice links to the review that answered it.");
+		}
+		await expect(levelsOpenedBy(first)).toContain("review:aaaaaaaa-1111-1111-1111-111111111111");
+		await expect(levelsOpenedBy(second)).toContain("review:cccccccc-1111-1111-1111-111111111111");
 	},
 };
 

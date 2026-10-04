@@ -49,7 +49,8 @@ public class GitHubApprovalChannel implements ApprovalChannel {
         egressGuard.requireDeliveryAllowed("github.approve");
         long scopeId = target.ref().workspaceId();
         if (gitHubProvider.isRateLimitCritical(scopeId)) {
-            throw new FeedbackDeliveryException("GitHub rate limit critical — skipping approval for scope " + scopeId);
+            throw new FeedbackDeliveryException(
+                    "The GitHub rate limit is critical. Hephaestus skips the approval for scope " + scopeId);
         }
 
         PrCoordinates pr = GitHubSummaryChannel.parseSubjectExternalId(target.subjectExternalId());
@@ -64,7 +65,7 @@ public class GitHubApprovalChannel implements ApprovalChannel {
                 .block(GRAPHQL_TIMEOUT);
 
         if (response == null) {
-            throw new FeedbackDeliveryException("Null response from ApprovePullRequest mutation");
+            throw new FeedbackDeliveryException("The ApprovePullRequest mutation returned no response");
         }
         gitHubProvider.trackRateLimit(scopeId, response);
 

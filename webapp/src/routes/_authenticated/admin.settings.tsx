@@ -35,18 +35,18 @@ function WorkspaceSettingsPage() {
 			queryClient.setQueryData(adminGetInstanceSettingsQueryKey(), data);
 			toast.success(
 				data.silentModeEngaged
-					? "Silent mode engaged — workspace feedback and messages are now suppressed"
-					: "Silent mode released — workspace feedback and messages can go out again",
+					? "Silent mode is on. Workspace feedback and messages are withheld."
+					: "Silent mode is off. Workspace feedback and messages can go out again.",
 			);
 		},
 		onError: async (error) => {
 			if (problemStatusOf(error) === 412) {
 				await queryClient.invalidateQueries({ queryKey: adminGetInstanceSettingsQueryKey() });
-				toast.error("Instance settings changed. Verify the current state before trying again.");
+				toast.error("The instance settings changed. Check the current state, then try again.");
 				return;
 			}
 			void queryClient.invalidateQueries({ queryKey: adminGetInstanceSettingsQueryKey() });
-			toast.error(problemDetailOf(error, "Could not update silent mode"));
+			toast.error(problemDetailOf(error, "We could not update silent mode. Try again."));
 		},
 	});
 
@@ -55,13 +55,13 @@ function WorkspaceSettingsPage() {
 		onSuccess: (data) => {
 			const def = EMAIL_TEST_OUTCOME_DEFS[data.outcome];
 			if (data.outcome === "SENT") {
-				toast.success(`Relay accepted test email to ${data.to ?? "your address"}`);
+				toast.success(`The mail server accepted the test email to ${data.to ?? "your address"}.`);
 			} else {
 				toast.warning(def.label, { description: def.description });
 			}
 		},
 		onError: (error) => {
-			toast.error(problemDetailOf(error, "Could not send the test email"));
+			toast.error(problemDetailOf(error, "We could not send the test email. Try again."));
 		},
 	});
 
@@ -72,7 +72,7 @@ function WorkspaceSettingsPage() {
 				{settingsQuery.isError ? (
 					<QueryErrorAlert
 						error={settingsQuery.error}
-						title="Couldn't verify the current instance settings"
+						title="We could not verify the current instance settings"
 						onRetry={() => {
 							void settingsQuery.refetch();
 						}}
@@ -97,7 +97,7 @@ function WorkspaceSettingsPage() {
 		body = (
 			<QueryErrorAlert
 				error={settingsQuery.error}
-				title="Couldn't load instance settings"
+				title="We could not load instance settings"
 				onRetry={() => {
 					void settingsQuery.refetch();
 				}}
@@ -112,7 +112,7 @@ function WorkspaceSettingsPage() {
 			<PageHeader
 				icon={<Settings2 />}
 				title="Instance settings"
-				description="Instance-wide operator controls. These apply across every workspace and override workspace settings while active."
+				description="Instance-wide controls. These apply across every workspace and override workspace settings while active."
 			/>
 
 			<div className="space-y-4">

@@ -4,11 +4,11 @@ import { asDate, type DateLike } from "@/lib/dates";
 export type LlmJobType = LlmUsageByJobType["jobType"];
 
 export const JOB_TYPE_LABELS: Record<LlmJobType, string> = {
-	PULL_REQUEST_REVIEW: "PR review",
+	PULL_REQUEST_REVIEW: "Pull request review",
 	ISSUE_REVIEW: "Issue review",
 	CONVERSATION_REVIEW: "Conversation review",
 	DOCUMENT_REVIEW: "Document review",
-	MENTOR_TURN: "Mentor turn",
+	MENTOR_TURN: "Heph turn",
 };
 
 /** Current calendar month in UTC as ISO `yyyy-MM`. */

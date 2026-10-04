@@ -136,7 +136,7 @@ export const ThePeopleCouldNotBeLoaded: Story = {
 	args: { people: { options: [], capped: false, isLoading: false, isError: true } },
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Developer" }));
-		await screen.findByText("Could not load people");
+		await screen.findByText("We could not load people");
 	},
 };
 

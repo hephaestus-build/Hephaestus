@@ -66,7 +66,7 @@ export const DiscoveryFailed: Story = {
 		if (args.options.status !== "error") {
 			throw new Error("story misconfigured");
 		}
-		await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
+		await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
 		await expect(args.options.onRetry).toHaveBeenCalled();
 		await expect(screen.queryByRole("button", { name: /continue with/iu })).toBeNull();
 	},

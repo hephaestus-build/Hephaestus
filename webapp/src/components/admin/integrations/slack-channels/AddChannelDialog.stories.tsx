@@ -93,7 +93,7 @@ export const NothingChosen: Story = {
 		await userEvent.click(submit);
 
 		await expect(args.onSubmit).not.toHaveBeenCalled();
-		dialog.getByText(/choose a channel from the list/iu);
+		dialog.getByText(/select a channel from the list/iu);
 	},
 };
 
@@ -121,7 +121,7 @@ export const InvalidPaste: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await userEvent.type(dialog.getByLabelText(/paste a channel link or id/iu), "not-a-channel");
-		dialog.getByText(/paste a slack channel url, mention, or/iu);
+		dialog.getByText(/paste a slack channel link, mention, or id/iu);
 	},
 };
 

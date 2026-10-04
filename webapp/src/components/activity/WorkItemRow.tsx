@@ -28,7 +28,7 @@ export interface WorkItemRowProps {
 	/** Whose list the row is in; the author is named only when it is someone else. */
 	login: string;
 	/**
-	 * "Review this now" at the row's end, on work the reader may ask a review of; `asking` while the
+	 * "Request review" at the row's end, on work the reader may ask a review of; `asking` while the
 	 * ask is on its way. Absent where no review can be asked for from here.
 	 */
 	reviewNow?: { onReviewNow: () => void; asking: boolean };
@@ -65,7 +65,7 @@ export function WorkItemRow({ work, providerType, login, reviewNow }: WorkItemRo
 							teams.length > 0 && (
 								<span key="teams" className="inline-flex items-center gap-1">
 									<TeamIcon size={12} className="shrink-0" />
-									via {andList.format(teams.map((team) => team.name))}
+									through {andList.format(teams.map((team) => team.name))}
 								</span>
 							),
 							work.author && work.author.login !== login && `by ${work.author.name}`,
@@ -99,10 +99,10 @@ export function WorkItemRow({ work, providerType, login, reviewNow }: WorkItemRo
 							size="xs"
 							disabled={reviewNow.asking}
 							onClick={reviewNow.onReviewNow}
-							aria-label={`${reviewNow.asking ? "Asking…" : "Review this now"}: ${workReference(providerType, work)}`}
+							aria-label={`${reviewNow.asking ? "Requesting review…" : "Request review"}: ${workReference(providerType, work)}`}
 						>
 							<PlayIcon aria-hidden data-icon="inline-start" />
-							{reviewNow.asking ? "Asking…" : "Review this now"}
+							{reviewNow.asking ? "Requesting review…" : "Request review"}
 						</Button>
 					)}
 				</ItemActions>

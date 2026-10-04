@@ -123,7 +123,10 @@ describe("report summary", () => {
 				activity: undefined,
 				feedback: { status: "error", message: "failed" },
 			}),
-		).toMatchObject({ text: "Your feedback could not load · reviewed 1 hr. ago", tone: "error" });
+		).toMatchObject({
+			text: "We could not load your comments · reviewed 1 hr. ago",
+			tone: "error",
+		});
 	});
 
 	it("offers no request from a list row's preview", () => {

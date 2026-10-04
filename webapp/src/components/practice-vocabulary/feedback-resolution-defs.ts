@@ -16,7 +16,7 @@ export const FEEDBACK_RESOLUTION_DEFS: StatusDefs<FeedbackResolution> = {
 		label: "Disputed",
 		icon: MessageCircleQuestionMarkIcon,
 		badgeVariant: "warning",
-		description: "You disagree with this observation. Say why, so a human can weigh it.",
+		description: "You disagree with this observation. Say why, so workspace admins can weigh it.",
 	},
 	NOT_APPLICABLE: {
 		label: "Not applicable",

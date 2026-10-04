@@ -132,7 +132,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Workspace not found");
+                .hasMessageContaining("We could not find that workspace");
     }
 
     @Test
@@ -275,11 +275,11 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                 new ConnectFinalization.Completed("T1", new BearerToken("t", null), null);
         when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
         when(connectionService.transition(any(Connection.class), any(TransitionRequest.class)))
-                .thenThrow(new IllegalStateException("Illegal transition for connection 7"));
+                .thenThrow(new IllegalStateException("Connection 7 cannot change from UNINSTALLED to ACTIVE."));
 
         assertThatThrownBy(() -> service.completeConnection(pending, completed, 42L))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Illegal transition");
+                .hasMessageContaining("cannot change from");
     }
 
     @Test
@@ -328,7 +328,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), 5L))
                 .isInstanceOf(OAuthCallbackService.InstanceConnectedElsewhereException.class)
                 .hasMessage("This GitHub App installation is already connected to the Hephaestus workspace"
-                        + " \"Acme Engineering\" (acme-eng). Disconnect GitHub there before connecting it here.");
+                        + " \"Acme Engineering\" (acme-eng). Disconnect GitHub there before you connect it here.");
         verify(connectionRepository, never()).save(any());
         verify(connectionService, never()).transition(any(), any());
     }
@@ -343,7 +343,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), 5L))
                 .isInstanceOf(OAuthCallbackService.InstanceConnectedElsewhereException.class)
                 .hasMessage("This GitHub App installation is already connected to another Hephaestus workspace."
-                        + " An administrator of that workspace must disconnect GitHub there first.");
+                        + " A workspace admin there must disconnect GitHub first.");
     }
 
     @Test

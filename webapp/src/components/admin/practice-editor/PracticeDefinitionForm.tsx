@@ -290,16 +290,16 @@ function formErrors(
 	const preferredSlug = form.deliveryBehavior.redundantToSlug?.trim();
 	const deliveryError =
 		hasText(preferredSlug) && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(preferredSlug)
-			? "Use lowercase letters, numbers, and single hyphens."
+			? "Use lowercase letters, numbers and single hyphens."
 			: undefined;
 	const summary = [
 		nameTooShort && {
 			fieldId: "practice-name",
-			message: "Give the practice a name of at least three characters.",
+			message: "Enter a name of at least 3 characters.",
 		},
 		criteriaTooShort && {
 			fieldId: "practice-criteria",
-			message: "Say what this practice checks, in at least three characters.",
+			message: "Enter at least 3 characters in What to look for.",
 		},
 		policy && {
 			fieldId: practicePolicyErrorTarget(form.automatedReviewPolicy),
@@ -310,7 +310,7 @@ function formErrors(
 		hasText(gateError) && { fieldId: "practice-gate", message: gateError },
 		slugInvalid && {
 			fieldId: "practice-slug",
-			message: "The identifier must be lowercase letters, numbers and hyphens.",
+			message: "Enter an identifier of 3–64 lowercase letters, numbers and single hyphens.",
 			// Lives inside the collapsed Technical settings panel, which unmounts its contents.
 			reveal: revealSlug,
 		},
@@ -321,9 +321,9 @@ function formErrors(
 		},
 	].filter((entry): entry is FormError => Boolean(entry));
 	return {
-		name: nameTooShort ? "Name must be at least 3 characters" : undefined,
-		slug: slugInvalid ? "Use 3–64 lowercase letters, numbers, and single hyphens." : undefined,
-		criteria: criteriaTooShort ? "Criteria must be at least 3 characters" : undefined,
+		name: nameTooShort ? "Enter a name of at least 3 characters." : undefined,
+		slug: slugInvalid ? "Use 3–64 lowercase letters, numbers and single hyphens." : undefined,
+		criteria: criteriaTooShort ? "Enter at least 3 characters." : undefined,
 		policy,
 		reviewSettings,
 		gate: gateError,
@@ -571,8 +571,8 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 					    this form. Prose still gets a reading width of its own. */}
 					<div className="space-y-10">
 						<p className="max-w-2xl text-sm text-muted-foreground">
-							Define one observable way of working. The same definition should make sense to a
-							developer, peer, human mentor, and an automated reviewer.
+							Define one way of working that someone can observe. Write it so that developers,
+							mentors and automated reviewers read it the same way.
 						</p>
 
 						<section className="space-y-4">
@@ -598,7 +598,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 										aria-invalid={hasText(shownErrors.name)}
 										aria-describedby={hasText(shownErrors.name) ? "practice-name-error" : undefined}
 									/>
-									<FieldDescription>Use a short, action-oriented name.</FieldDescription>
+									<FieldDescription>Start with a verb and keep it short.</FieldDescription>
 									{hasText(shownErrors.name) && (
 										<FieldError id="practice-name-error">{shownErrors.name}</FieldError>
 									)}
@@ -630,7 +630,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 										</SelectContent>
 									</Select>
 									<FieldDescription id="practice-group-description">
-										Put this practice in a group.
+										Optional. A group collects related practices.
 									</FieldDescription>
 								</Field>
 							</FieldGroup>
@@ -648,11 +648,10 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 							<Field data-invalid={hasText(shownErrors.criteria) ? "true" : undefined}>
 								<FieldLabel htmlFor="practice-criteria">What to look for *</FieldLabel>
 								<FieldDescription id="practice-criteria-description">
-									Describe one observable way of working, what demonstrates it, and when a reviewer
-									should stay silent. Do not ask the reviewer to infer intent or facts outside the
-									selected work. For example: “Look for a description that explains the behavior
-									change and why. Stay silent for automated dependency updates.” Markdown is
-									supported.
+									Describe what shows this practice and when a reviewer should stay silent. Do not
+									ask the reviewer to infer intent or facts outside the selected work. For example:
+									“Look for a description that explains the behavior change and why. Stay silent for
+									automated dependency updates.” Markdown is supported.
 								</FieldDescription>
 								<Textarea
 									id="practice-criteria"
@@ -688,7 +687,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									maxLength={2000}
 								/>
 								<FieldDescription>
-									Shown to developers; it does not change review rules.
+									Shown to developers. It does not change review rules.
 								</FieldDescription>
 							</Field>
 							<Field>
@@ -729,16 +728,16 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 								</h2>
 								<p className="text-sm text-muted-foreground">
 									A practice is reviewed on one occasion: the moments that start a review, and what
-									that review reads. A way of working worth judging differently at a different
-									moment, such as what is in front of you when the work arrives or what was never
-									resolved by the merge, is a second practice rather than a second occasion.
+									that review reads. If a way of working needs a different judgment at a different
+									moment, make it a second practice, not a second occasion. For example, what is in
+									front of you when the work arrives differs from what the merge never resolved.
 								</p>
 							</div>
 
 							<FieldSet>
 								<FieldLegend variant="label">Review this kind of work</FieldLegend>
 								<FieldDescription>
-									Changing this starts the moments and the evidence again from the recommended ones.
+									Changing this resets the review moments and the evidence to the recommended ones.
 								</FieldDescription>
 								<RadioGroup
 									value={artifactKind}
@@ -951,12 +950,12 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									</Field>
 									<Field>
 										<FieldLabel htmlFor={`${deliveryId}-redundant`}>
-											Preferred practice slug
+											Preferred practice identifier
 										</FieldLabel>
 										<Input
 											id={`${deliveryId}-redundant`}
 											pattern="[a-z0-9]+(-[a-z0-9]+)*"
-											title="Use lowercase letters, numbers, and single hyphens."
+											title="Use lowercase letters, numbers and single hyphens."
 											aria-invalid={hasText(shownErrors.delivery)}
 											aria-describedby={
 												hasText(shownErrors.delivery) ? `${deliveryId}-redundant-error` : undefined
@@ -998,7 +997,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 												setForm((previous) => ({ ...previous, precomputeScript: value }))
 											}
 											language="typescript"
-											ariaLabel="Precompute script"
+											ariaLabel="Static analysis script"
 											className="h-[400px]"
 											readOnly={formDisabled}
 										/>

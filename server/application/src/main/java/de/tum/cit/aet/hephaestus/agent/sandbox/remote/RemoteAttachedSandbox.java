@@ -115,7 +115,7 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
         pending.put(requestId, result);
         try {
             if (!worker.send(new MentorSessionCommand(identity.sessionId(), requestId, operation, body))) {
-                lost("The worker connection ended. Please try again.");
+                lost("The worker connection ended. Try again.");
                 throw new InteractiveSandboxException("Worker session send failed");
             }
             return await(result, timeout);
@@ -204,7 +204,7 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
                     if (future != null) future.completeExceptionally(error);
                 }
             }
-            case CLOSED -> end("The worker session ended. Please try again.", true);
+            case CLOSED -> end("The worker session ended. Try again.", true);
         }
     }
 
@@ -264,6 +264,6 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
                 UUID.randomUUID(),
                 MentorSessionCommand.Operation.CLOSE,
                 mapper.createObjectNode().put("graceMillis", graceTimeout.toMillis())));
-        lost("The worker session ended. Please try again.");
+        lost("The worker session ended. Try again.");
     }
 }

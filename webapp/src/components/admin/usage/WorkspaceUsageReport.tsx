@@ -7,7 +7,14 @@ import { BudgetExhaustedAlert } from "@/components/admin/workspace-llm/BudgetExh
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import {
+	Empty,
+	EmptyContent,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "@/components/ui/empty";
 import { formatCapUsd, formatCostUsd } from "@/lib/money";
 
 import { BudgetPaceAlert } from "./BudgetPaceAlert";
@@ -124,13 +131,14 @@ export function WorkspaceUsageReport({
 					<CircleAlert aria-hidden />
 					<AlertTitle>
 						{unpricedEventCount === 1
-							? "1 run isn't counted in these totals"
-							: `${unpricedEventCount.toLocaleString()} runs aren't counted in these totals`}
+							? "1 run is not counted in these totals"
+							: `${unpricedEventCount.toLocaleString()} runs are not counted in these totals`}
 					</AlertTitle>
 					<AlertDescription>
 						<p>
 							They have no price set, so real spend may be higher. Add prices for your own models in{" "}
-							<AiModelsLink workspaceSlug={workspaceSlug} />; for shared models, ask your host.
+							<AiModelsLink workspaceSlug={workspaceSlug} />. For shared models, ask an instance
+							admin.
 						</p>
 					</AlertDescription>
 				</Alert>
@@ -209,6 +217,9 @@ export function WorkspaceUsageReport({
 							<CircleDollarSign />
 						</EmptyMedia>
 						<EmptyTitle>No AI usage in {formatMonthLabel(month)}</EmptyTitle>
+						<EmptyDescription>
+							Spend appears here after practice reviews or Heph use a model.
+						</EmptyDescription>
 					</EmptyHeader>
 					<EmptyContent>
 						<Link
@@ -262,8 +273,8 @@ function CapHeadline({ spendUsd, capUsd, titleFx }: CapHeadlineProps) {
 const PURSE_COPY = {
 	shared: {
 		spendLabel: "Shared-model spend",
-		capDescription: "Shared-model budget · set by your host",
-		noCapDescription: "No shared-model budget set by your host",
+		capDescription: "Shared-model budget · set by an instance admin",
+		noCapDescription: "No shared-model budget set by an instance admin",
 		meterLabel: "Shared-model budget used",
 	},
 	provider: {

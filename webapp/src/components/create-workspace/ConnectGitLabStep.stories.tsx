@@ -70,7 +70,7 @@ export const TokenInvalid: Story = {
 			personalAccessToken: "glpat-bad-token",
 			preflightResult: {
 				valid: false,
-				error: "Token lacks required 'api' scope.",
+				error: "Token lacks required “api” scope.",
 			},
 		}),
 	],

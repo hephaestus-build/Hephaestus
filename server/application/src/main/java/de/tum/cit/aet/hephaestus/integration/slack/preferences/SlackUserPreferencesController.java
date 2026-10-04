@@ -33,12 +33,12 @@ abstract class SlackUserPreferencesController {
      */
     protected static long accountId(JwtAuthenticationToken auth) {
         if (auth == null || auth.getToken() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "not authenticated");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "You are not authenticated.");
         }
         try {
             return Long.parseLong(auth.getToken().getSubject());
         } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "not authenticated", e);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "You are not authenticated.", e);
         }
     }
 }

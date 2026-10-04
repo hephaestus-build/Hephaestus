@@ -135,7 +135,7 @@ export const tracedSignals = [
 		discoveredVia: "EVENT",
 		state: "SUPPRESSED",
 		stateReason: "GATE_SKIPPED",
-		stateReasonDescription: "This workspace's review settings turned it away.",
+		stateReasonDescription: "This workspace’s review settings did not allow a review of this work.",
 	},
 	{
 		id: "sig-ready",
@@ -157,7 +157,7 @@ export const tracedSignals = [
 		state: "SUPPRESSED",
 		stateReason: "COOLDOWN_ACTIVE",
 		stateReasonDescription:
-			"This work was already reviewed within the workspace's cooldown period.",
+			"This work already had a review within this workspace’s cooldown period.",
 	},
 	{
 		id: "sig-review-requested",
@@ -177,7 +177,7 @@ export const tracedSignals = [
 		discoveredVia: "BACKFILL",
 		state: "LAPSED",
 		stateReason: "PENDING_DEADLINE_EXCEEDED",
-		stateReasonDescription: "It waited too long to be picked up for review.",
+		stateReasonDescription: "This work waited too long for a review to start.",
 	},
 ] satisfies TracedSignal[];
 
@@ -277,7 +277,7 @@ const practiceTraceEntries = [
 		groupName: "Acting on review feedback",
 		autonomy: "AUTOMATIC",
 		outcome: "NOT_REACHED",
-		explanation: "The review ended before reaching this practice.",
+		explanation: "The review ended before it reached this practice.",
 		watches: [READY],
 		occasionedBy: READY,
 		occasionedById: "sig-ready",

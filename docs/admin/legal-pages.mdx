@@ -4,86 +4,213 @@ title: Legal Pages (Imprint & Privacy)
 description: How Hephaestus resolves the /imprint and /privacy pages, and what the operator of a self-hosted deployment is responsible for.
 ---
 
-Hephaestus ships with two legal pages, `/imprint` and `/privacy`, that are rendered from Markdown files served directly by nginx. This page explains the three-layer resolution used by the webapp, and what each self-hosted operator is responsible for.
+Hephaestus ships with two legal pages: `/imprint` and `/privacy`.
+The webapp renders them from Markdown files that nginx serves directly.
+This page explains the webapp's three-layer resolution and each self-hosted operator's responsibilities.
 
-:::danger Configure legal notices before admitting users
+:::caution CAUTION: Configure legal notices before admitting users
 The built-in “not configured” pages are placeholders, not legal notices. Use `LEGAL_PROFILE=tumaet`
-only for the TUM/AET deployment it describes; other operators must supply their own notices.
+only for the TUM/AET deployment it describes. Other operators must supply their own notices.
 :::
 
 ## First-login consent notice
 
-The first-login screen carries no operator-specific text. It states the terms of use and points to
-`/privacy` and `/imprint` for who runs the deployment, what it stores and for how long, so the same
-wording is accurate on every instance and these overrides are what make it complete.
+The first-login screen carries no operator-specific text.
+It states the terms of use and links to `/privacy` and `/imprint`.
+Those pages identify the deployment operator, the data it stores, and its retention periods.
+Thus, the same text is accurate on every instance.
+These overrides make it complete.
 
-The sign-in and first-login screens carry their own `/privacy` and `/imprint` links, because they
-render without the site footer. **Configure both pages before the first user signs in**: on a
-deployment that still serves the placeholder, the first-login screen points at nothing.
+The sign-in and first-login screens have their own `/privacy` and `/imprint` links.
+They render without the site footer.
+On a deployment that still serves the placeholder, the first-login screen links to no legal notice.
 
-Submitting the screen records, against the notice version shown, that the account accepted the terms
-and that this wording — which links the privacy notice — was put in front of it. Both come from the one
-checkbox: the ledger evidences what the account was shown and agreed to, not that anybody opened the
-link. A research answer is recorded as a third, separate decision where the question is asked at all
-(below), and either answer completes setup. Nothing is recorded until the account holder submits.
-[Your data in Hephaestus](/user/privacy#signing-in-and-choosing-research-participation) describes the
-same screen for the person answering it.
+1. Configure both pages before the first user signs in.
+
+When the account holder selects **Save and continue**, the ledger records two facts against the notice version shown:
+
+- The account accepted the terms with **I accept the terms of use**.
+- The screen presented this text, which links to the privacy notice.
+
+Both facts come from one checkbox.
+The ledger records the text presented to the account and its agreement.
+It does not establish that anybody opened the link.
+
+Where the screen asks the research question below, it records the research answer as a third, separate decision.
+Either answer completes setup.
+Hephaestus records nothing until the account holder selects **Save and continue**.
+[Your data in Hephaestus](/user/privacy#signing-in-and-choosing-research-participation) describes the same screen for the person who answers it.
 
 ## The optional research question
 
-`HEPHAESTUS_RESEARCH_ORGANIZATION` names the organisation that runs a study on this deployment, and its
-presence is what decides whether there is one. Consent has to be informed, and the identity of the
-controller is part of that ([EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf)
-§ 3.3), so the name you set is shown beside the choice on the first-login screen and in account
-settings rather than left to a link.
+`HEPHAESTUS_RESEARCH_ORGANIZATION` names the organization that runs research on this deployment.
+Its presence determines whether the research question appears.
+[Production Setup](./production-setup) lists the setting with the other deployment settings.
+The organization does not need to be academic.
+Choose a name that reads correctly in the sentence "If you say yes, the organization may use your data for research."
+
+Consent must be informed.
+This includes the controller's identity ([EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) § 3.3).
+Thus, the configured name appears beside the choice on the first-login screen and in account settings, not only in a link.
 
 ```env
 HEPHAESTUS_RESEARCH_ORGANIZATION="Technical University of Munich (AET)"
 ```
 
-Leave it unset — the default — and no question is asked: first-login setup is the terms alone, the
-account-settings switch is hidden, and `PUT /user/consent/research` answers 404.
+By default, the variable is unset.
+In this state, no research question appears.
+First-login setup contains only the terms.
+The account-settings switch is hidden.
+`PUT /user/consent/research` returns 404.
 
-**Changing this value is a new question, and it is treated as one.** Every research decision records
-the organisation it was asked about, in `consent_decision.research_organization`, because consent to a
-study is consent to the organisation running it — and because after a rename nothing else can say who
-an account was actually asked about. Point the setting at a different name and no account's grant to
-the previous one authorises anything: `participatesInResearch` reports false, setup asks again, and
-the earlier decisions stay in the ledger as the record of what was asked and answered at the time.
-Terms acceptance is unaffected, since the terms did not change. A cosmetic rename therefore costs
-every account one more setup screen; make it deliberately.
+### What the question asks
 
-Both the setup screen and the settings switch send back the organisation they displayed, and a
-submission naming one this instance no longer runs is refused with `409`. A tab left open across a
-change cannot record a decision about an organisation its reader never saw.
+The screen asks **Allow research use of your data?** with two answers: **Yes, allow research use** and **No, keep my data out of research**.
+The legal basis is consent under Art. 6(1)(a) GDPR.
+It is a broad consent to an area of research, not to one research project.
+
+[Recital 33 GDPR](https://gdpr-info.eu/recitals/no-33/) allows this when the purpose of the research cannot be fully specified at collection.
+[EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 153 to 163 set the conditions.
+The obligations below follow from those conditions.
+
+The area of research is how developers work and learn, and how AI systems can review and support that work.
+It includes building and running benchmarks and evaluation datasets for such AI systems.
+The data it may use is:
+
+- The participant's work in the tools that the project connects.
+- Hephaestus observations and feedback about that work.
+- The participant's responses to that feedback.
+- How the participant uses Hephaestus, including conversations with Heph and answers to research surveys.
+
+Sign-in credentials and access tokens are never used.
+Slack messages that a participant stops Hephaestus from using stay out of research too.
+
+The consent is optional and separate from the terms.
+Saying no or withdrawing has no disadvantage ([Art. 7(4) GDPR](https://gdpr-info.eu/art-7-gdpr/)).
+
+Research that falls outside this area is not covered by this consent.
+For such research, change the wording with a new `WORDING_VERSION` after legal review.
+
+### A change is a new question
+
+**A change to the organization name is a new question. Hephaestus treats it as one.**
+Every research decision records the organization that the question named in `consent_decision.research_organization`.
+Consent to research is consent to the organization that runs it.
+After a rename, no other record identifies the organization that the account saw in the question.
+
+If the setting has a different name, no account's grant to the previous one authorizes anything.
+`participatesInResearch` reports false.
+Setup asks the research question again.
+Earlier decisions stay in the ledger as a record of the questions and answers at that time.
+Terms acceptance stays unchanged because the terms did not change.
+
+**A change to the wording is a new question for every account.**
+A new `WORDING_VERSION` is a new notice version.
+Every account sees the setup screen once more, with the terms and, where an organization is named, the research question.
+An earlier yes is not carried over to a broader scope.
+Only a decision on the current version and the current organization authorizes anything.
+
+Until an account answers, `participatesInResearch` reports false and research survey invitations stop.
+
+Even a cosmetic rename gives every account one more setup screen.
+Make a change to the name or the wording deliberately.
+
+Both the setup screen and the settings switch return the organization that they displayed.
+If a submission names an organization that this instance no longer runs, Hephaestus refuses it with `409`.
+A tab left open across a change cannot record a decision about an organization that its reader never saw.
 
 Research-purpose surveys and their email invitations require a current grant for the configured
-organisation. Withdrawal stops new research survey participation and invitation delivery; it does not
-stop ordinary practice reviews or automatically erase already stored study data. The Slack App Home
-links to account settings rather than maintaining a separate research decision. Operators must also
-apply the authoritative consent record to research exports and analyses, and handle withdrawal and
-erasure requests for data already shared with the study.
+organization. Withdrawal stops new research survey participation and invitation delivery. It does not
+stop ordinary practice reviews or erase rows in the instance database. The research team removes the data from its datasets that are not yet anonymized. The Slack App Home
+links to account settings rather than maintaining a separate research decision.
 
-`ConsentService.WORDING_VERSION` identifies the wording an account accepted; the wording itself
-is the first-login screen, published in a signed release and immutable in git. The webapp holds the
-same constant beside those words and submits its own, so a browser tab that predates a deployment
-cannot record acceptance of wording it never rendered. A fork that changes the words changes both
-constants in the same commit.
+### Withdrawal
+
+A participant withdraws with one switch, **Allow research use of my data**, in **User settings → Research participation**.
+This is as easy as giving consent ([Art. 7(3) GDPR](https://gdpr-info.eu/art-7-gdpr/)).
+New research use stops, and research survey invitations stop.
+The research organization removes the participant's data from datasets that are not yet anonymized.
+Research done before the withdrawal stays lawful.
+
+Anonymized data in a published result or dataset cannot be traced back and cannot be removed.
+
+Withdrawal does not erase other stored data by itself.
+Account erasure is a separate request.
+
+### No separate consent for datasets
+
+The consent has no second choice for sharing or publishing datasets.
+Only anonymized data leaves the research team.
+Anonymous data is outside the GDPR ([Recital 26](https://gdpr-info.eu/recitals/no-26/)).
+Paragraph 47 of [EDPB Guidelines 1/2026](https://www.edpb.europa.eu/system/files/2026-05/edpb_guidelines_202601_scientificresearch_en.pdf) (draft, adopted 15 April 2026) lets a broad consent cover the provision of data within the research area.
+
+A release needs a separate choice and a new wording version when it would do any of the following:
+
+- Contain data that is not anonymized.
+- Serve a purpose outside the stated area of research.
+- Go to a third country without adequate safeguards.
+
+### What operators must do
+
+The broad consent is valid only if the operator meets these obligations.
+Meet all of them before you set `HEPHAESTUS_RESEARCH_ORGANIZATION`, and keep to them while the research runs.
+
+1. Before any research export, analysis, or benchmark run, apply the latest `RESEARCH_PARTICIPATION` decision of each account.
+   Use only a grant for the current notice version and the current organization.
+2. Remove the data of withdrawn accounts from datasets that are not yet anonymized within `[removal time limit]`.
+   Treat an erasure request for data in such a dataset the same way.
+   Treat a Slack message-use opt-out the same way for the affected messages.
+3. Keep a research information page.
+   List the current research projects and the released datasets on it.
+   See [EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 161 and 162.
+   See also [EDPB 1/2026](https://www.edpb.europa.eu/system/files/2026-05/edpb_guidelines_202601_scientificresearch_en.pdf) paragraphs 48 and 49.
+4. Hold an ethics board approval: `[ethics approval reference]`.
+5. Keep the research team separate from grading and line management.
+   A power imbalance can weaken the free choice of a participant.
+   See [EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 16 to 24 and 46 to 48.
+   See also [Recital 43](https://gdpr-info.eu/recitals/no-43/).
+   Instance admins can read research survey answers, so give the admin role only to people who meet this rule.
+6. Test a dataset for re-identification before you call it anonymous.
+   Release it only if the test passes.
+   Free text and code are hard to anonymize ([EDPB 1/2026](https://www.edpb.europa.eu/system/files/2026-05/edpb_guidelines_202601_scientificresearch_en.pdf) paragraph 164).
+7. Honor the AI choice of each participant in benchmark runs.
+   Model providers may see only pseudonymized data, under a data processing agreement.
+8. Do not use the consent for browsing activity from the browser extension.
+   The privacy notice already says so.
+9. Keep each safeguard that the consent text states.
+   The research team replaces identifiers with a code, stores the key apart, and screens text for names.
+   It restricts access to the team and its processors.
+   It sends model providers only pseudonymized data, under a data processing agreement.
+
+Publish the retention and recipient details of the research in your privacy notice.
+The bundled TUM notice shows the expected shape, with placeholders where the legal owner must decide.
+
+`ConsentService.WORDING_VERSION` identifies the text that an account accepted.
+That text is the first-login screen, published in a signed release and immutable in git.
+The webapp holds the same constant beside the text.
+It submits its own constant.
+Thus, a browser tab that predates a deployment cannot record acceptance of text it never rendered.
+
+A fork that changes the text must change both constants in the same commit.
+Such a change gives every account one more setup screen.
+Make it on purpose.
 
 ## Operator obligations
 
-Identify the organisation responsible for your deployment and its processing purposes. Under
-[Art. 4(7) GDPR](https://eur-lex.europa.eu/eli/reg/2016/679/oj), the controller is the party that determines
-the purposes and means of processing; using Hephaestus does not make the upstream project your controller.
-
-Publish a privacy notice covering the information required by Arts. 13 and 14 GDPR, including data about
-contributors who never sign in. Publish the operator identification required in your jurisdiction;
+Under [Art. 4(7) GDPR](https://eur-lex.europa.eu/eli/reg/2016/679/oj), the controller determines the purposes and means of processing.
+Use of Hephaestus does not make the upstream project your controller.
 [§ 5 DDG](https://www.gesetze-im-internet.de/ddg/__5.html) applies to qualifying German digital services.
-Linking to the upstream notices does not describe a separately operated deployment.
+Links to the upstream notices do not describe a separately operated deployment.
+
+1. Identify the organization responsible for your deployment and its processing purposes.
+2. Publish a privacy notice with the information that Arts. 13 and 14 GDPR require.
+   It must include data about contributors who never sign in.
+3. Publish the operator identification that your jurisdiction requires.
 
 ## Three-layer resolution
 
-At page load, the webapp fetches the relevant Markdown file in this priority order — first hit wins:
+At page load, the webapp fetches the relevant Markdown file in this priority order.
+It uses the first file it finds:
 
 | Priority | Path                                        | Typical source                         |
 | -------: | ------------------------------------------- | -------------------------------------- |
@@ -91,23 +218,31 @@ At page load, the webapp fetches the relevant Markdown file in this priority ord
 |       2. | `/legal/profiles/<LEGAL_PROFILE>/<page>.md` | Baked into the image (bundled profile) |
 |       3. | `/legal/_disclaimer/<page>.md`              | Shipped safety-fallback                |
 
-`<page>` is `imprint` or `privacy`. A banner alerts end users whenever the disclaimer is being served.
+`<page>` is `imprint` or `privacy`.
+A banner alerts end users whenever the webapp serves the disclaimer.
 
 ## Choosing a configuration mode
 
 ### Mode A — Bundled profile (operators of `hephaestus.build`)
 
-If your deployment is the canonical TUM / AET deployment, set `LEGAL_PROFILE=tumaet` in your environment. The bundled texts describe the deployment documented in the [data-protection records](./dsms). Verify that your enabled services and processing still match those records.
+The bundled texts describe the deployment in the [data-protection records](./dsms).
+
+1. If your deployment is the canonical TUM / AET deployment, set `LEGAL_PROFILE=tumaet` in your environment.
+2. Verify that your enabled services and processing still match those records.
 
 ```env
 LEGAL_PROFILE=tumaet
 ```
 
-Other operators must **not** select `LEGAL_PROFILE=tumaet` — the `tumaet` profile names TU München and the AET research group as the responsible parties and would be legally inaccurate for any other deployment.
+Other operators must **not** select `LEGAL_PROFILE=tumaet`.
+The `tumaet` profile names TU München and the AET research group as the responsible parties.
+This would be legally inaccurate for any other deployment.
 
 ### Mode B — Deployment-specific overrides (recommended for forks)
 
-This is the recommended mode for self-hosters. You author two Markdown files and bind-mount them into the webapp container. They shadow the bundled profile (if any) and the safety-fallback.
+This is the recommended mode for self-hosters.
+You write two Markdown files and bind-mount them into the webapp container.
+They override the bundled profile, if present, and the safety-fallback.
 
 1. Create a directory next to your Compose file:
 
@@ -128,7 +263,8 @@ This is the recommended mode for self-hosters. You author two Markdown files and
          - ./legal-overrides:/usr/share/nginx/html/legal-overrides:ro
    ```
 
-   On Kubernetes, project the Markdown files into the same path via a `ConfigMap` volume. The simplest form mounts the whole ConfigMap as the directory:
+   On Kubernetes, project the Markdown files into the same path through a `ConfigMap` volume.
+   The simplest form mounts the whole ConfigMap as the directory:
 
    ```yaml
    volumes:
@@ -141,30 +277,47 @@ This is the recommended mode for self-hosters. You author two Markdown files and
        readOnly: true
    ```
 
-   To overlay only some of the files onto an existing directory, use `items` with `subPath`, or a
-   `projected` volume — a whole-ConfigMap mount hides the directory's original contents.
+   A whole-ConfigMap mount hides the directory's original contents.
+   For an overlay of only some files, use `items` with `subPath`, or a `projected` volume.
 
-3. On Coolify, add `/usr/share/nginx/html/legal-overrides` as a **Bind Mount** (not a Volume) so the files remain editable from the host filesystem. The file paths are checked on each request, so you can update them by editing the files in the mount — no redeploy needed.
+3. On Coolify, add `/usr/share/nginx/html/legal-overrides` as a **Bind Mount**, not a Volume.
+   The files remain editable from the host filesystem.
+   The webapp checks file paths on each request.
+   Thus, you can update the files in the mount without a redeploy.
 
 Resolution is per page: a single-file override leaves the other page on the next available layer. Verify both pages identify the correct operator.
 
 ### Mode C — Built-in fallback (developer default, not a production configuration)
 
-If `LEGAL_PROFILE` is empty and no overrides are mounted, the webapp serves a clearly-worded placeholder (`_disclaimer/*.md`) that tells visitors no legal content has been configured and asks them to contact the operator directly. A red banner is shown in the UI. This is **not** a valid imprint or privacy statement and must not be used in production — it is intended for local development and for catching misconfigured deployments loudly rather than silently.
+If `LEGAL_PROFILE` is empty and no overrides are mounted, the webapp serves a clear placeholder (`_disclaimer/*.md`).
+It tells visitors that no legal content is configured.
+It asks them to contact the operator directly.
+The UI shows a red banner.
 
-## Authoring guidelines for a custom privacy statement
+This is **not** a valid imprint or privacy notice.
+You must not use it in production.
+It is for local development and visible identification of misconfigured deployments.
 
-Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least the following categories, which your privacy statement must cover:
+## Authoring guidelines for a custom privacy notice
 
-- **Identity and authentication** — Hephaestus-native auth federating to GitHub / LRZ GitLab; per federated identity we store the provider, stable subject id, login, email-at-signup, and display name (ADR 0017).
-- **Repository synchronisation** — for every configured repository: pull/merge requests, issues, reviews, review comments, commit metadata, profile information of the authors. State the retention triggers: this mirrored copy is erased when the last workspace stops monitoring the source repository, when the workspace's integration is disconnected, or when the workspace is purged — see the erasure triggers in the [record of processing](./dsms/record-of-processing.md).
-- **Account settings and email notifications** — user preferences, and the provider-verified primary email address used for account-security and deletion email, and optional notification subscriptions, survey invitation records and unsubscribe capabilities when the operator has configured a relay; name the relay operator as a recipient.
+Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least the following categories, which your privacy notice must cover:
+
+- **Identity and authentication** — Hephaestus-native auth federates to GitHub / LRZ GitLab.
+  Each federated identity stores the provider, stable subject id, login, email-at-signup, and display name (ADR 0017).
+- **Repository synchronization** — each configured repository supplies pull/merge requests, issues, reviews, review comments, commit metadata, and author profile information.
+  The notice must state the retention triggers in the [record of processing](./dsms/record-of-processing.md).
+  The mirror is erased when the last workspace stops monitoring the source repository.
+  Disconnection of the workspace's integration or a workspace purge also erases it.
+- **Account settings and email notifications** — user preferences and the provider-verified primary email address for account-security and deletion email.
+  With a configured relay, this also includes optional notification subscriptions, survey invitation records, and unsubscribe capabilities.
+  The notice must name the relay operator as a recipient.
 - **AI-assisted features** — if enabled: messages sent to the configured LLM provider, persisted conversations, generated observations.
 - **Server logs** — IP address and request metadata.
-- **Error telemetry** — if you run a Sentry (or equivalent) instance, state so explicitly and link its retention policy.
+- **Error telemetry** — if you run a Sentry or equivalent instance, the notice must explicitly state this.
+  It must link to the instance's retention policy.
 
-Determine a lawful basis for each processing purpose with your data-protection adviser; neither
-self-hosting nor accepting terms supplies one automatically. Art. 6(1)(f) GDPR does not apply to public
+Determine a lawful basis for each processing purpose with your data-protection adviser.
+Neither self-hosting nor acceptance of terms supplies one automatically. Art. 6(1)(f) GDPR does not apply to public
 authorities processing data in the performance of their tasks.
 
 For international transfers, document the applicable Chapter V safeguard for the actual recipient,
@@ -173,35 +326,54 @@ contractual safeguards rather than inferring coverage from a provider's brand.
 
 ## Verifying the configuration
 
-After deploying, confirm the correct layer is serving each page. A 200 status is not sufficient — SPA-catchall proxies frequently return `200 text/html` for missing files. Check both the status **and** the content type:
+A 200 status is not sufficient.
+SPA-catchall proxies frequently return `200 text/html` for missing files.
 
-```sh
-curl -sI https://<your-host>/legal-overrides/privacy.md \
-  | grep -E '^(HTTP|Content-Type)'   # expect 200 + text/markdown if overrides are mounted
-curl -sI https://<your-host>/legal/profiles/<profile>/privacy.md \
-  | grep -E '^(HTTP|Content-Type)'
-curl -sI https://<your-host>/legal/_disclaimer/privacy.md \
-  | grep -E '^(HTTP|Content-Type)'   # always 200 + text/markdown
-```
+1. After deployment, confirm that the correct layer serves each page.
+2. Check both the status **and** the content type:
 
-Then fetch the body of the layer you expect to be served and confirm it is your content:
+   ```sh
+   curl -sI https://<your-host>/legal-overrides/privacy.md \
+     | grep -E '^(HTTP|Content-Type)'   # expect 200 + text/markdown if overrides are mounted
+   curl -sI https://<your-host>/legal/profiles/<profile>/privacy.md \
+     | grep -E '^(HTTP|Content-Type)'
+   curl -sI https://<your-host>/legal/_disclaimer/privacy.md \
+     | grep -E '^(HTTP|Content-Type)'   # always 200 + text/markdown
+   ```
 
-```sh
-curl -s https://<your-host>/imprint | head -c 200   # SPA shell
-curl -s https://<your-host>/legal-overrides/privacy.md | head -n 3   # should start with your heading
-```
+3. Fetch the body of the layer that you expect to serve the page:
+   Confirm that it is your content.
 
-Finally, open `/imprint` and `/privacy` in a browser. If the red "not configured" banner appears, the disclaimer is being served and you still owe a configuration.
+   ```sh
+   curl -s https://<your-host>/imprint | head -c 200   # SPA shell
+   curl -s https://<your-host>/legal-overrides/privacy.md | head -n 3   # should start with your heading
+   ```
+
+4. Open `/imprint` in a browser.
+5. Open `/privacy` in a browser.
+
+If the red "not configured" banner appears, the webapp serves the disclaimer.
+You must still configure the legal pages.
 
 ## Changing the texts over time
 
-Markdown files are static resources. Overrides under `/legal-overrides/` are served with `Cache-Control: no-cache, must-revalidate`, so an edit on the host takes effect on the next page load (browsers revalidate every time). The bundled `/legal/` layer is served with `max-age=300`, so edits to a bundled profile require a rebuild and up to five minutes for caches to clear. When you ship a new bundled profile that replaces a previous one, update the text in place under `webapp/public/legal/profiles/<profile>/` and rebuild the image; there is no extra registry to maintain.
+Markdown files are static resources.
+Overrides under `/legal-overrides/` use `Cache-Control: no-cache, must-revalidate`.
+An edit on the host takes effect on the next page load.
+Browsers revalidate every time.
+
+The bundled `/legal/` layer uses `max-age=300`.
+Edits to a bundled profile require a rebuild and up to five minutes for caches to clear.
+No extra registry needs maintenance.
+
+1. For a new bundled profile that replaces a previous one, update the text under `webapp/public/legal/profiles/<profile>/` in place.
+2. Rebuild the image.
 
 ### Email activation and the TUM profile
 
 The bundled TUM privacy profile describes TUM/LRZ mail services, not an arbitrary SMTP provider.
-Leave email disabled until the deployment record confirms the actual service, institutional
-arrangement and relay retention terms. If a different relay is used, update the public notice's
-recipient and transfer information before enabling it. Configuration and a successful test email
-are technical checks, not institutional approval. Self-hosters must publish their own applicable
-recipient information rather than adopting TUM's notice.
+Configuration and a successful test email are technical checks, not institutional approval.
+Self-hosters must publish their own applicable recipient information instead of TUM's notice.
+
+1. Keep email disabled until the deployment record confirms the actual service, institutional arrangement, and relay retention terms.
+2. If you use a different relay, update the public notice's recipient and transfer information before you enable it.

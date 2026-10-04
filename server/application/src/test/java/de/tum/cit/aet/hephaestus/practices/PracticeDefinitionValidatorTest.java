@@ -45,8 +45,8 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
         assertThatThrownBy(() -> validator.validate(definition(
                         SignalName.of("scm.pull_request.rebased"), null, List.of(need(DIFF)), languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("One of the chosen moments is not one this kind of work offers. "
-                        + "Choose from the moments listed for it.")
+                .hasMessage("This kind of work does not offer one of the chosen moments. "
+                        + "Choose from the moments it offers.")
                 .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
@@ -58,8 +58,9 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         List.of(need(new SourceKind("scm.pull-request.unknown"))),
                         languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("scm.pull-request.unknown is not an evidence source Hephaestus knows. Choose from the "
-                        + "sources listed under “Reads” in “When this practice is reviewed”.");
+                .hasMessage(
+                        "scm.pull-request.unknown is not an evidence source Hephaestus knows. Choose from the sources "
+                                + "listed under “Reads” in “When this practice is reviewed”.");
     }
 
     @Test
@@ -89,7 +90,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         ScmSignals.PULL_REQUEST_OPENED, null, List.of(need(FOR_ANOTHER_KIND)), languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("“Issue details” is not available for this kind of work. Turn it off, or choose "
-                        + "evidence this kind of work has.")
+                        + "evidence that this kind of work has.")
                 .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
@@ -123,7 +124,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         definition(ScmSignals.PULL_REQUEST_MANUAL_REVIEW, null, List.of(need(DIFF)), languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageStartingWith("Remove “Review requested by hand”.")
-                .hasMessageContaining("not a moment to choose")
+                .hasMessageContaining("It is not a moment to choose.")
                 .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
@@ -143,7 +144,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                                         new SourceKind("scm.linked-work-items"), EvidenceStance.EXHAUSTIVE)),
                         languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageStartingWith("“Linked work items” can never be captured completely")
+                .hasMessageStartingWith("A capture of “Linked work items” is never complete")
                 .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
@@ -177,7 +178,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
         assertThatThrownBy(() -> validator.validate(definition(
                         ScmSignals.PULL_REQUEST_OPENED, "export default {}", List.of(), withoutAutomatedReview())))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("A practice Hephaestus cannot review cannot define a precompute script");
+                .hasMessage("A precompute script needs a practice that Hephaestus can review.");
     }
 
     @ParameterizedTest
@@ -200,7 +201,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
         assertThatThrownBy(() -> validator.validate(definition))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Why it matters is guidance for people. Remove the review result label “" + label
-                        + "” and say it in plain words.");
+                        + "”. Use plain words instead.");
     }
 
     /**

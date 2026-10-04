@@ -117,7 +117,7 @@ describe("WorkspaceDangerZoneSettings", () => {
 
 		await waitFor(
 			() =>
-				expect(toast.error).toHaveBeenCalledWith("Failed to delete workspace", {
+				expect(toast.error).toHaveBeenCalledWith("We could not delete the workspace", {
 					description: "Workspace has an active sync.",
 				}),
 			WAIT,

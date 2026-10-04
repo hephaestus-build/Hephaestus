@@ -27,7 +27,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		);
 		expect(screen.queryByLabelText("Slug")).toBeNull();
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPU coder" } });
-		fireEvent.change(screen.getByLabelText("Upstream model id"), {
+		fireEvent.change(screen.getByLabelText("Upstream model ID"), {
 			target: { value: "gpu-coder" },
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Add inactive model" }));
@@ -51,7 +51,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 			"Provider default",
 		);
 		fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "GPU coder" } });
-		fireEvent.change(screen.getByLabelText("Upstream model id"), {
+		fireEvent.change(screen.getByLabelText("Upstream model ID"), {
 			target: { value: "gpu-coder" },
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Add inactive model" }));
@@ -123,7 +123,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 				onUpdate={onUpdate}
 			/>,
 		);
-		expect(screen.getByLabelText<HTMLInputElement>("Upstream model id").disabled).toBe(true);
+		expect(screen.getByLabelText<HTMLInputElement>("Upstream model ID").disabled).toBe(true);
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onUpdate.mock.calls[0]?.[1]).not.toHaveProperty("upstreamModelId");
 	});
@@ -220,8 +220,8 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: "Leave undeclared" }));
-		screen.getByText("Rows holding this model as Cloud stop serving");
-		fireEvent.click(screen.getByRole("radio", { name: "Your organisation" }));
+		screen.getByText("Assignments holding this model as Cloud stop serving");
+		fireEvent.click(screen.getByRole("radio", { name: "Your organization" }));
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onUpdate).toHaveBeenCalledTimes(3);
 		expect(onUpdate.mock.calls[2]?.[1]).toStrictEqual(

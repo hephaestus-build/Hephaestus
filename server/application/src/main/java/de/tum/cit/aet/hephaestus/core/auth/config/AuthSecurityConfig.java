@@ -210,13 +210,14 @@ public class AuthSecurityConfig {
             byte[] decoded = Base64.getDecoder().decode(properties.stateCookieKey());
             if (decoded.length != 32) {
                 throw new IllegalStateException(
-                        "hephaestus.auth.state-cookie-key must decode to 32 bytes (256-bit AES); got "
+                        "hephaestus.auth.state-cookie-key must decode to 32 bytes (256-bit AES). It decoded to "
                                 + decoded.length);
             }
             return decoded;
         }
         if (environment.matchesProfiles("prod")) {
-            throw new IllegalStateException("hephaestus.auth.state-cookie-key is required in production (fail-closed). "
+            throw new IllegalStateException("hephaestus.auth.state-cookie-key is required in production. "
+                    + "The server fails closed and does not start without it. "
                     + "Set it to a base64-encoded 32-byte (256-bit AES) value.");
         }
         byte[] ephemeral = new byte[32];
@@ -224,8 +225,9 @@ public class AuthSecurityConfig {
         if (environment.matchesProfiles("specs", "cds-training")) {
             log.debug("Created an ephemeral state-cookie key for artifact generation");
         } else {
-            log.warn("auth: hephaestus.auth.state-cookie-key is unset — generated ephemeral 256-bit key for this boot. "
-                    + "In-flight logins will not survive a restart. Set the env var for stable behaviour.");
+            log.warn(
+                    "auth: hephaestus.auth.state-cookie-key is unset. Hephaestus generated an ephemeral 256-bit key for this boot. "
+                            + "In-flight logins do not survive a restart. Set the env var for stable behavior.");
         }
         return ephemeral;
     }

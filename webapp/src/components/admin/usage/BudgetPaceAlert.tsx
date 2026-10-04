@@ -8,7 +8,7 @@ import { type BudgetProjection, formatDayLabel } from "./usage-utils";
 
 export interface BudgetPaceAlertProps {
 	scope: "provider" | "shared";
-	/** Absent on the workspace's own page ("You've used …"), the name on the instance console. */
+	/** Absent on the workspace's own page ("You’ve used …"), the name on the instance console. */
 	subjectName?: string;
 	percent: number;
 	spendUsd: number;
@@ -36,7 +36,7 @@ export function BudgetPaceAlert({
 			<TrendingUp aria-hidden />
 			<AlertTitle>
 				{subjectName == null
-					? `You've used ${Math.round(percent)}% of your ${capName}`
+					? `You’ve used ${Math.round(percent)}% of your ${capName}`
 					: `${subjectName} has used ${Math.round(percent)}% of its ${capName}`}
 			</AlertTitle>
 			<AlertDescription>

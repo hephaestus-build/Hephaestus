@@ -68,7 +68,7 @@ describe("workspace practice scope", () => {
 		await user.click(screen.getByRole("button", { name: /Technical settings/u }));
 		await user.click(screen.getByRole("switch", { name: /Show this practice in the summary/u }));
 		await user.type(
-			screen.getByRole("textbox", { name: "Preferred practice slug" }),
+			screen.getByRole("textbox", { name: "Preferred practice identifier" }),
 			"preferred-practice",
 		);
 		await user.click(screen.getByRole("button", { name: "Save changes" }));
@@ -88,16 +88,18 @@ describe("workspace practice scope", () => {
 		const user = userEvent.setup();
 		await user.click(screen.getByRole("button", { name: /Technical settings/u }));
 		await user.type(
-			screen.getByRole("textbox", { name: "Preferred practice slug" }),
+			screen.getByRole("textbox", { name: "Preferred practice identifier" }),
 			"Invalid Slug",
 		);
 		await user.click(screen.getByRole("button", { name: "Save changes" }));
 
 		expect(onSubmit).not.toHaveBeenCalled();
 		expect(
-			screen.getByRole("textbox", { name: "Preferred practice slug" }).getAttribute("aria-invalid"),
+			screen
+				.getByRole("textbox", { name: "Preferred practice identifier" })
+				.getAttribute("aria-invalid"),
 		).toBe("true");
-		expect(screen.getAllByText("Use lowercase letters, numbers, and single hyphens.")).toHaveLength(
+		expect(screen.getAllByText("Use lowercase letters, numbers and single hyphens.")).toHaveLength(
 			2,
 		);
 	});

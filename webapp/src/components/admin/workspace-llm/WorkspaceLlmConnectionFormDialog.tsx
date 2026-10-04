@@ -143,7 +143,7 @@ function WorkspaceLlmConnectionFormDialogContent({
 							<FieldDescription>
 								{isEdit
 									? "Turn off to stop new requests using this connection."
-									: "Starts inactive. Test it, add a priced model, then activate both."}
+									: "Starts inactive. Turn it on after you add a priced model."}
 							</FieldDescription>
 						</FieldContent>
 						<Switch
@@ -158,7 +158,7 @@ function WorkspaceLlmConnectionFormDialogContent({
 							<AlertTriangle aria-hidden />
 							<AlertTitle>All workspace models will stop immediately</AlertTitle>
 							<AlertDescription>
-								Practice reviews and the mentor can’t run until you reactivate this provider or pick
+								Practice reviews and Heph cannot run until you reactivate this provider or pick
 								another model.
 							</AlertDescription>
 						</Alert>
@@ -167,7 +167,7 @@ function WorkspaceLlmConnectionFormDialogContent({
 				<DialogFooter>
 					<DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
 					<Button type="submit" disabled={isSubmitting}>
-						{isEdit ? "Save changes" : "Connect provider"}
+						{isEdit ? "Save changes" : "Add connection"}
 					</Button>
 				</DialogFooter>
 			</DialogForm>

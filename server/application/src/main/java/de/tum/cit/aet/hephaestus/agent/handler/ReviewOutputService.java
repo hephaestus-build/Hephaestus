@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
 import de.tum.cit.aet.hephaestus.agent.context.HistoricalGitEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
@@ -33,6 +34,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import java.io.BufferedReader;
+import java.io.Reader;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,6 +52,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
+import tools.jackson.core.JsonParser;
+import tools.jackson.core.JsonToken;
+import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -58,6 +63,8 @@ import tools.jackson.databind.node.ObjectNode;
 public class ReviewOutputService {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewOutputService.class);
+
+    private static final String CONVERSATION_THREAD = "context/conversation_thread.json";
 
     private final PracticeRevisionRepository practiceRevisionRepository;
     private final ObservationRepository observationRepository;
@@ -132,7 +139,7 @@ public class ReviewOutputService {
             if (!practices.add(slug)) {
                 throw new ObservationsRefusedException(
                         "ambiguous_practice_observations",
-                        "A review must submit one final observation per practice; repeated practice: " + slug,
+                        "A review must submit one final observation for each practice. This practice repeats: " + slug,
                         objectMapper.createArrayNode());
             }
         }
@@ -217,7 +224,7 @@ public class ReviewOutputService {
                         .put("observationIndex", submittedIndex)
                         .put("citationIndex", ex.citationIndex())
                         .put("status", "REJECTED")
-                        .put("reasonCode", "QUOTE_LOCATION_MISMATCH");
+                        .put("reasonCode", ex.reasonCode());
                 JsonNode submittedEvidence = Objects.requireNonNull(observation.evidence());
                 JsonNode citation = Objects.requireNonNull(
                         submittedEvidence.path("citations").get(ex.citationIndex()));
@@ -445,8 +452,8 @@ public class ReviewOutputService {
         if (changeOwed && observations.stream().noneMatch(f -> f.outcome().isDecided()) && !readTheDiff(observations)) {
             throw new ObservationsRefusedException(
                     "did_not_read_the_diff",
-                    "No observation decided anything or quoted the change, and a change was captured — the"
-                            + " review answered without reading it. Refusing to deliver. jobId="
+                    "No observation decided anything or quoted the change, and a change was captured."
+                            + " The review answered without reading the change, so the server does not deliver it. jobId="
                             + jobId);
         }
     }
@@ -487,7 +494,8 @@ public class ReviewOutputService {
     private Admissible requireAdmissible(AgentJob job, JsonNode metadata) {
         if (!citedSourceAccess.permitsReviewResult(job))
             throw new ObservationsRefusedException(
-                    "member_ai_declined", "The developer's AI choice no longer permits recording this review result.");
+                    "member_ai_declined",
+                    "The AI choice of the developer no longer permits the server to record this review result.");
         CapturedEvidence evidence = CapturedEvidence.of(job, objectMapper);
         for (SourceKind kind : evidence.availableSources()) {
             if (!sourceCatalogs.isSourceUsePermitted(
@@ -811,7 +819,71 @@ public class ReviewOutputService {
             citedSourceAccess.bind(job, (ObjectNode) citation, artifact.sha256());
             CitationVerification.record((ObjectNode) citation, job, artifact.sha256(), quoteDigest);
         }
+        if (job.getJobType() == AgentJobType.CONVERSATION_REVIEW
+                && observation.outcome() == Outcome.NOT_MET
+                && !citesReviewedTurn(job, citations, captured)) {
+            throw new EvidenceQuoteUnverifiedException(
+                    "A NOT_MET of a conversation review cites no turn of the participant under review: slug="
+                            + observation.practiceSlug()
+                            + ", jobId="
+                            + job.getId(),
+                    0,
+                    "NOT_THE_REVIEWED_PARTICIPANT");
+        }
         return evidence;
+    }
+
+    /**
+     * A conversation is reviewed once for each participant, so a lapse must rest on a turn that participant
+     * wrote: a citation inside a turn that {@code conversation_thread.json} marks {@code underReview}.
+     */
+    private boolean citesReviewedTurn(AgentJob job, JsonNode citations, CapturedEvidence captured) {
+        CapturedEvidence.Artifact thread = captured.artifact(CONVERSATION_THREAD);
+        if (thread == null) return false;
+        List<int[]> turns = evidenceFiles
+                .inspect(job, CONVERSATION_THREAD, thread.sha256(), this::reviewedTurnLines)
+                .orElseThrow(() -> new JobDeliveryException("The cited conversation is unavailable"));
+        for (JsonNode citation : citations) {
+            if (!CONVERSATION_THREAD.equals(citation.path("artifactPath").asString())) continue;
+            int first = citation.path("startLine").asInt();
+            int last = citation.path("endLine").asInt(first);
+            for (int[] turn : turns) {
+                if (turn[0] <= first && last <= turn[1]) return true;
+            }
+        }
+        return false;
+    }
+
+    /** The first and last line of each turn marked {@code underReview}, as the record is written. */
+    private List<int[]> reviewedTurnLines(Reader input) {
+        List<int[]> turns = new ArrayList<>();
+        try (JsonParser parser = objectMapper
+                .reader()
+                .without(StreamReadFeature.AUTO_CLOSE_SOURCE)
+                .createParser(input)) {
+            if (parser.nextToken() != JsonToken.START_OBJECT) return turns;
+            while (parser.nextToken() == JsonToken.PROPERTY_NAME) {
+                String name = parser.currentName();
+                if (parser.nextToken() != JsonToken.START_ARRAY || !"messages".equals(name)) {
+                    parser.skipChildren();
+                    continue;
+                }
+                while (parser.nextToken() == JsonToken.START_OBJECT) {
+                    int first = parser.currentTokenLocation().getLineNr();
+                    boolean underReview = false;
+                    while (parser.nextToken() == JsonToken.PROPERTY_NAME) {
+                        String field = parser.currentName();
+                        JsonToken value = parser.nextToken();
+                        if ("underReview".equals(field)) underReview = value == JsonToken.VALUE_TRUE;
+                        else parser.skipChildren();
+                    }
+                    if (underReview)
+                        turns.add(
+                                new int[] {first, parser.currentTokenLocation().getLineNr()});
+                }
+            }
+        }
+        return turns;
     }
 
     /** Requires NOT_APPLICABLE claims to identify the subject, exclusion reason, and consulted sources. */
@@ -833,7 +905,7 @@ public class ReviewOutputService {
                 || inapplicability.path("ruledOutBy").asString().isBlank()) {
             throw new JobDeliveryException(
                     "A NOT_APPLICABLE observation must name what the practice looks for and what rules it out "
-                            + "here; if it could not be told either way the answer is UNDETERMINED: slug="
+                            + "here. If you cannot tell either way, the answer is UNDETERMINED. slug="
                             + observation.practiceSlug()
                             + ", jobId="
                             + job.getId());

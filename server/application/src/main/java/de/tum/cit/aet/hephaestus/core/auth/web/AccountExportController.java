@@ -63,7 +63,7 @@ public class AccountExportController {
         Long accountId = CurrentAccount.requireId();
         ExportStatusDTO status = exportService
                 .status(id, accountId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "export not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The export was not found."));
         return ResponseEntity.ok(status);
     }
 
@@ -73,7 +73,7 @@ public class AccountExportController {
         Long accountId = CurrentAccount.requireId();
         byte[] payload = exportService
                 .downloadPayload(id, accountId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "export not available"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The export is not available."));
         ContentDisposition disposition = ContentDisposition.attachment()
                 .filename("hephaestus-export-" + id + ".json")
                 .build();

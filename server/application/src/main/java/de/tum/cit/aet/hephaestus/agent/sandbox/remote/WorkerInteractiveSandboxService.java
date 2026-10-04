@@ -158,7 +158,7 @@ public final class WorkerInteractiveSandboxService implements InteractiveSandbox
                 .filter(s -> s.worker().sessionId().equals(event.sessionId())
                         && s.worker().workerId().equals(event.workerId()))
                 .toList();
-        lost.forEach(s -> s.lost("The worker connection ended. Please try again."));
+        lost.forEach(s -> s.lost("The worker connection ended. Try again."));
     }
 
     private record Key(String userId, String workspaceId) {}

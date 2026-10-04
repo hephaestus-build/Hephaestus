@@ -116,7 +116,7 @@ export function useConnectionSync({
 			toast.success(job.type === "BACKFILL" ? "Backfill started" : "Sync started");
 		},
 		onError: (e) => {
-			toast.error("Failed to start sync", { description: problemDetailOf(e) });
+			toast.error("We could not start the sync", { description: problemDetailOf(e) });
 		},
 	});
 
@@ -124,10 +124,10 @@ export function useConnectionSync({
 		...updateConnectionSyncJobMutation(),
 		onSuccess: () => {
 			invalidateSyncActivity();
-			toast.success(`Cancelling — stopping after current ${cancelsAfter}…`);
+			toast.success(`Canceling the sync. It stops after the current ${cancelsAfter}.`);
 		},
 		onError: (e) => {
-			toast.error("Failed to cancel sync", { description: problemDetailOf(e) });
+			toast.error("We could not cancel the sync", { description: problemDetailOf(e) });
 		},
 	});
 

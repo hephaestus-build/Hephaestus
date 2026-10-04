@@ -9,7 +9,7 @@ import { WorkspaceLlmUsagePage, type WorkspaceLlmUsagePageProps } from "./Worksp
 
 const pricedReport = withOwnProvider(usageReport("2026-07"));
 
-/** Two Mentor turns without a price: enough to make the no-price warnings and the pause banners speak. */
+/** Two Heph turns without a price: enough to make the no-price warnings and the pause banners speak. */
 const baseReport: WorkspaceLlmUsageReport = {
 	...pricedReport,
 	unpricedEventCount: 2,
@@ -58,7 +58,7 @@ describe("WorkspaceLlmUsagePage", () => {
 		await renderPage();
 
 		screen.getByText("Shared-model spend so far");
-		screen.getByText("Shared-model budget · set by your host");
+		screen.getByText("Shared-model budget · set by an instance admin");
 		screen.getByText("Your provider spend so far");
 		screen.getByText("Provider cap · set by you, billed by your provider");
 
@@ -87,8 +87,10 @@ describe("WorkspaceLlmUsagePage", () => {
 	it("gives the right pricing owner an actionable no-price-set warning", async () => {
 		await renderPage();
 
-		screen.getByText("2 runs aren't counted in these totals");
-		screen.getByText(/Add prices for your own models in .*; for shared models, ask your host\./u);
+		screen.getByText("2 runs are not counted in these totals");
+		screen.getByText(
+			/Add prices for your own models in .*\. For shared models, ask an instance admin\./u,
+		);
 	});
 
 	it("averages each purse over the run count on its own, never the two summed", async () => {
@@ -96,7 +98,7 @@ describe("WorkspaceLlmUsagePage", () => {
 
 		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
 		within(byJobType).getByRole("columnheader", { name: "Avg per run" });
-		const mentorTurns = within(byJobType).getByRole("row", { name: /^Mentor turn/u });
+		const mentorTurns = within(byJobType).getByRole("row", { name: /^Heph turn/u });
 		within(mentorTurns).getByText("$0.06");
 		within(mentorTurns).getByText("shared models");
 		within(mentorTurns).getByText("$0.03");
@@ -119,22 +121,22 @@ describe("WorkspaceLlmUsagePage", () => {
 			[
 				"an unenforceable provider cap",
 				{ ownProviderPaused: true, ownProviderBudgetVerdict: "UNVERIFIABLE" },
-				"Your provider cap can't be enforced",
-				"2 runs on your models have no price, so the cap can't be checked and your provider is paused. Add a price to resume, or remove the cap.",
+				"Your provider cap cannot be enforced",
+				"2 runs on your models have no price, so the cap cannot be checked and your provider is paused. Add a price to resume, or remove the cap.",
 				"/w/acme/admin/models",
 			],
 			[
 				"an exhausted shared budget",
 				{ instancePaused: true, instanceBudgetVerdict: "EXHAUSTED", instanceTotalCostUsd: 25 },
 				"Shared-model budget reached",
-				"Paused until August 1 (UTC), or until your host raises the budget. Practice reviews and Mentor can keep running on your own models.",
+				"Paused until August 1 (UTC), or until an instance admin raises the budget. Practice reviews and Heph can keep running on your own models.",
 				"/w/acme/admin/models",
 			],
 			[
 				"an unverifiable shared budget",
 				{ instancePaused: true, instanceBudgetVerdict: "UNVERIFIABLE" },
-				"Shared-model spend can't be verified",
-				"2 shared-model runs have no price, so the budget can't be checked and shared models are paused. Only your host can price them.",
+				"Shared-model spend cannot be verified",
+				"2 shared-model runs have no price, so the budget cannot be checked and shared models are paused. Only an instance admin can price them.",
 				null,
 			],
 		])(
@@ -187,13 +189,13 @@ describe("WorkspaceLlmUsagePage", () => {
 				"warns at 80% with the date the pace reaches the cap",
 				{ ownProviderTotalCostUsd: 8.4 },
 				new Date("2026-07-10T12:00:00.000Z"),
-				"You've used 84% of your provider cap$8.40 of $10. At this pace, the cap is reached around July 12.",
+				"You’ve used 84% of your provider cap$8.40 of $10. At this pace, the cap is reached around July 12.",
 			],
 			[
 				"keeps the warning but withholds a projection the month is too young to support",
 				{ ownProviderTotalCostUsd: 8.4 },
 				new Date("2026-07-02T12:00:00.000Z"),
-				"You've used 84% of your provider cap$8.40 of $10.",
+				"You’ve used 84% of your provider cap$8.40 of $10.",
 			],
 			["stays quiet below the threshold", {}, new Date("2026-07-10T12:00:00.000Z"), null],
 			[

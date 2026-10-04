@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
+import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
@@ -47,6 +48,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
@@ -58,6 +60,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The trace view answers "why didn't anything happen to this merge request?" to a workspace admin, and to a
@@ -439,7 +443,7 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                             value,
                             Matchers.hasItem(
                                     Matchers.equalTo("Nothing connected to this workspace reports the moments this "
-                                            + "practice watches for (Merged); GitHub or GitLab would."))))
+                                            + "practice watches for (Merged). GitHub or GitLab can report them."))))
                     .jsonPath("$.practices[?(@.practiceSlug=='dormant')].watches[0].signal")
                     .isEqualTo(ScmSignals.PULL_REQUEST_MERGED.value())
                     .jsonPath("$.practices[?(@.practiceSlug=='dormant')].watches[0].displayName")
@@ -533,6 +537,102 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                     .isEqualTo(0)
                     .jsonPath("$.practices[?(@.practiceSlug=='second')].deliveredCount")
                     .isEqualTo(0);
+        }
+
+        /**
+         * A push review that asked one practice and reused the Ready review's earlier problem for another, read the
+         * way the developer's own review list reads it: named, on the own trace. The reused practice names the Ready
+         * review as its answer, keeps this review's occurrence and zero counts, and is neither unreached nor clean.
+         */
+        @Test
+        @WithUser
+        void attributesAPracticeANamedReviewReusedToTheReviewThatAnsweredIt() {
+            Practice asked = watchingReadyAndPushes(persistPractice(workspace, null, "asked", "Asked practice", null));
+            Practice reused =
+                    watchingReadyAndPushes(persistPractice(workspace, null, "reused", "Reused practice", null));
+            AgentJob ready = completedReview(READY_AT);
+            recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.TRIGGERED, null, ready.getId());
+            observe(reused, ready, ARTIFACT_ID, member, Outcome.NOT_MET, Severity.MINOR, READY_AT);
+            AgentJob push = reusing(ready, reused, asked);
+            ArtifactSignal pushed = recordSignal(
+                    workspace,
+                    ScmSignals.PULL_REQUEST_SYNCHRONIZED,
+                    SignalState.TRIGGERED,
+                    null,
+                    push.getId(),
+                    READY_AT.plusSeconds(3600));
+            observe(asked, push, ARTIFACT_ID, member, Outcome.MET, null, READY_AT.plusSeconds(3600));
+
+            get(
+                            TRACE + "/own?reviewId={reviewId}",
+                            workspace.getWorkspaceSlug(),
+                            ArtifactKinds.PULL_REQUEST.value(),
+                            ARTIFACT_ID,
+                            push.getId())
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.practices[?(@.practiceSlug=='reused')].outcome")
+                    .isEqualTo("REVIEWED")
+                    .jsonPath("$.practices[?(@.practiceSlug=='reused')].reviewId")
+                    .isEqualTo(ready.getId().toString())
+                    .jsonPath("$.practices[?(@.practiceSlug=='reused')].occasionedById")
+                    .isEqualTo(pushed.getId().toString())
+                    .jsonPath("$.practices[?(@.practiceSlug=='reused')].observationCount")
+                    .isEqualTo(0)
+                    .jsonPath("$.practices[?(@.practiceSlug=='reused')].deliveredCount")
+                    .isEqualTo(0)
+                    .jsonPath("$.practices[?(@.practiceSlug=='reused')].explanation")
+                    .value((List<String> value) -> assertThat(value)
+                            .singleElement()
+                            .satisfies(text -> assertThat(text)
+                                    .contains("did not assess it again")
+                                    .doesNotContain("nothing to report")))
+                    .jsonPath("$.practices[?(@.practiceSlug=='asked')].reviewId")
+                    .isEqualTo(push.getId().toString())
+                    .jsonPath("$.practices[?(@.practiceSlug=='asked')].observationCount")
+                    .isEqualTo(1);
+        }
+
+        /**
+         * A push review every practice of which the Ready review had already answered. The admin naming it reads the
+         * reused answer and the Ready review behind it; across every review the Ready observation still counts.
+         */
+        @Test
+        @WithMentorUser
+        void attributesEveryPracticeOfACoalescedReviewToTheReviewThatAnsweredIt() {
+            Practice reused =
+                    watchingReadyAndPushes(persistPractice(workspace, null, "reused", "Reused practice", null));
+            AgentJob ready = completedReview(READY_AT);
+            recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.TRIGGERED, null, ready.getId());
+            observe(reused, ready, ARTIFACT_ID, author, Outcome.MET, null, READY_AT);
+            AgentJob coalesced = reusing(ready, reused, null);
+            recordSignal(
+                    workspace,
+                    ScmSignals.PULL_REQUEST_SYNCHRONIZED,
+                    SignalState.TRIGGERED,
+                    null,
+                    coalesced.getId(),
+                    READY_AT.plusSeconds(3600));
+
+            getForReview(coalesced.getId())
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.practices[?(@.practiceSlug=='reused')].outcome")
+                    .isEqualTo("REVIEWED")
+                    .jsonPath("$.practices[?(@.practiceSlug=='reused')].reviewId")
+                    .isEqualTo(ready.getId().toString())
+                    .jsonPath("$.practices[?(@.practiceSlug=='reused')].observationCount")
+                    .isEqualTo(0);
+            get(TRACE, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID)
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.practices[?(@.practiceSlug=='reused')].reviewId")
+                    .isEqualTo(ready.getId().toString())
+                    .jsonPath("$.practices[?(@.practiceSlug=='reused')].observationCount")
+                    .isEqualTo(1);
         }
 
         /**
@@ -830,6 +930,53 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
 
     private Practice persistPractice(String slug, String name, PracticeAutonomy autonomy) {
         return persistPractice(slug, name, autonomy, ScmSignals.PULL_REQUEST_READY);
+    }
+
+    private Practice watchingReadyAndPushes(Practice practice) {
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_READY, ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        return practiceRepository.save(practice);
+    }
+
+    private AgentJob completedReview(Instant completedAt) {
+        AgentJob job = persistPullRequestReview(workspace, (int) ARTIFACT_ID, ARTIFACT_ID, completedAt);
+        job.setStatus(AgentJobStatus.COMPLETED);
+        return agentJobRepository.save(job);
+    }
+
+    /**
+     * A completed push review that reused {@code producer}'s answer for {@code reused}, recorded the way preparation
+     * and the executor record it, and asked {@code asked} — or, with none asked, ended as {@code COALESCED}.
+     */
+    private AgentJob reusing(AgentJob producer, Practice reused, @Nullable Practice asked) {
+        AgentJob job = completedReview(READY_AT.plusSeconds(3600));
+        ObjectNode readiness = OBJECT_MAPPER.createObjectNode();
+        ArrayNode decisions = readiness.putArray("decisions");
+        decisions.addObject().put("practiceSlug", reused.getSlug()).put("ready", true);
+        ObjectNode snapshot = ((ObjectNode) Objects.requireNonNull(job.getEvidenceSnapshot())).deepCopy();
+        snapshot.putArray("answeredPractices")
+                .addObject()
+                .put("practiceSlug", reused.getSlug())
+                .put(
+                        "revisionId",
+                        Objects.requireNonNull(reused.getCurrentRevision()).getId())
+                .put("reviewId", producer.getId().toString());
+        ObjectNode output = OBJECT_MAPPER.createObjectNode();
+        if (asked == null) {
+            output.put("outcome", "COALESCED").set("answeredPractices", snapshot.get("answeredPractices"));
+        } else {
+            decisions.addObject().put("practiceSlug", asked.getSlug()).put("ready", true);
+            output.putObject("practiceCoverage")
+                    .put("eligible", 2)
+                    .put("evaluated", 1)
+                    .putArray("outcomes")
+                    .addObject()
+                    .put("practiceSlug", asked.getSlug())
+                    .put("outcome", "EVALUATED");
+        }
+        job.setReviewReadiness(readiness);
+        job.setEvidenceSnapshot(snapshot);
+        job.setOutput(output);
+        return agentJobRepository.save(job);
     }
 
     private PracticeGroup persistGroup(String slug, String name) {

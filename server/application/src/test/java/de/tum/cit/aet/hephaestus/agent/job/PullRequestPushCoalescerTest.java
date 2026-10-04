@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
@@ -39,6 +40,7 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
     private final SignalRecorder recorder = mock(SignalRecorder.class);
     private final PullRequestSignalResubmitter submitter = mock(PullRequestSignalResubmitter.class);
     private final WorkspaceResolver workspaceResolver = mock(WorkspaceResolver.class);
+    private final AgentJobRepository jobs = mock(AgentJobRepository.class);
     private final PullRequestPushCoalescer coalescer = new PullRequestPushCoalescer(
             signals,
             pullRequests,
@@ -46,6 +48,7 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
             submitter,
             workspaceResolver,
             new PracticeReviewProperties(false, 15, 5, null, 12, 16000),
+            jobs,
             mock(TransactionTemplate.class));
 
     private final PullRequest pullRequest = pullRequest();
@@ -86,9 +89,9 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a push inside the cooldown waits for it rather than being dropped")
+    @DisplayName("a push inside the cooldown waits for it, even at the maximum wait, rather than being dropped")
     void shouldWaitOutTheCooldownRatherThanRefuse() {
-        ArtifactSignal newest = signal(NEW_HEAD, 11 * 60);
+        ArtifactSignal newest = signal(NEW_HEAD, 60 * 60);
         ArtifactSignal lastReview = signal(OLD_HEAD, 5 * 60);
         lastReview.setState(SignalState.TRIGGERED);
         when(signals.lockUnsettled(7L, 42L, SIGNAL)).thenReturn(List.of(newest));
@@ -113,6 +116,58 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
     }
 
     @Test
+    @DisplayName("a settled burst waits while another occasion's review of the same work is active")
+    void shouldWaitForAnActiveReviewOfTheSameWorkBeforeTheMaximumWait() {
+        ArtifactSignal older = signal(OLD_HEAD, 30 * 60);
+        ArtifactSignal newest = signal(NEW_HEAD, 11 * 60);
+        when(signals.lockUnsettled(7L, 42L, SIGNAL)).thenReturn(List.of(older, newest));
+        reviewOfTheSameWorkIsActive();
+
+        coalescer.drain(7L, 42L, NOW);
+
+        verifyNoInteractions(recorder, submitter);
+    }
+
+    @Test
+    @DisplayName("an active review of the same work holds the group no longer than the maximum wait")
+    void shouldReviewAtTheMaximumWaitEvenWhileAnotherReviewIsActive() {
+        ArtifactSignal older = signal(OLD_HEAD, 60 * 60);
+        ArtifactSignal newest = signal(NEW_HEAD, 11 * 60);
+        when(signals.lockUnsettled(7L, 42L, SIGNAL)).thenReturn(List.of(older, newest));
+        reviewOfTheSameWorkIsActive();
+
+        // A second short of the maximum wait the group is quiet, so only the active review holds it.
+        coalescer.drain(7L, 42L, NOW.minusSeconds(1));
+        verifyNoInteractions(recorder, submitter);
+
+        // The newest occasion changes again just before the deadline, so the group is no longer quiet: only the
+        // maximum wait, counted from the oldest, releases it.
+        newest.setOccurredAt(NOW.minusSeconds(30));
+        newest.setStateChangedAt(NOW.minusSeconds(30));
+        coalescer.drain(7L, 42L, NOW);
+
+        verify(recorder).markRefused(older.key(), SignalStateReason.COALESCED);
+        verify(submitter).resubmit(newest);
+        verifyNoMoreInteractions(submitter, recorder);
+    }
+
+    @Test
+    @DisplayName("a group past the maximum wait is reviewed even while another review is active")
+    void shouldReviewPastTheMaximumWaitEvenWhileAnotherReviewIsActive() {
+        ArtifactSignal newest = signal(NEW_HEAD, 75 * 60);
+        when(signals.lockUnsettled(7L, 42L, SIGNAL)).thenReturn(List.of(newest));
+        reviewOfTheSameWorkIsActive();
+
+        coalescer.drain(7L, 42L, NOW.minusSeconds(30 * 60));
+        verifyNoInteractions(recorder, submitter);
+
+        coalescer.drain(7L, 42L, NOW);
+
+        verify(submitter).resubmit(newest);
+        verifyNoInteractions(recorder);
+    }
+
+    @Test
     @DisplayName("a push still inside the quiet period is not reviewed yet")
     void shouldHoldAPushInsideTheQuietPeriod() {
         when(signals.lockUnsettled(7L, 42L, SIGNAL)).thenReturn(List.of(signal(NEW_HEAD, 60)));
@@ -120,6 +175,19 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
         coalescer.drain(7L, 42L, NOW);
 
         verifyNoInteractions(recorder, submitter);
+    }
+
+    private void reviewOfTheSameWorkIsActive() {
+        when(jobs.existsActivePullRequestReviewOf(
+                        7L,
+                        42L,
+                        NEW_HEAD,
+                        "Add feature",
+                        null,
+                        PullRequestPushCoalescer.SIGNALS.stream()
+                                .map(SignalName::value)
+                                .toList()))
+                .thenReturn(true);
     }
 
     private static ArtifactSignal signal(String head, int ageSeconds) {

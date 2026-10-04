@@ -18,8 +18,8 @@ class AgentJobWorkspacePurgeGuard implements WorkspacePurgeGuard {
     public void verifyQuiescent(Long workspaceId) {
         if (agentJobRepository.existsPurgeBlockingWork(workspaceId)) {
             throw new WorkspacePurgeBlockedException(
-                    "Workspace deletion is blocked while AI runs are queued, running, or awaiting feedback delivery. "
-                            + "Cancel queued or running runs, and wait for pending feedback delivery to finish, then try again.");
+                    "You cannot delete this workspace while AI runs are queued, running, or waiting for feedback delivery. "
+                            + "Cancel queued and running runs, wait for pending feedback delivery to finish, then try again.");
         }
     }
 }

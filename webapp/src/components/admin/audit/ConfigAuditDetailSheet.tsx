@@ -63,7 +63,7 @@ export function ConfigAuditDetailSheet({
 				<SheetHeader>
 					<SheetTitle>{entry ? subject?.label : "Settings change"}</SheetTitle>
 					<SheetDescription>
-						{entry ? `${actionLabel(entry.action)} — ${entityTypeLabel(entry.entityType)}` : ""}
+						{entry ? `${actionLabel(entry.action)} · ${entityTypeLabel(entry.entityType)}` : ""}
 					</SheetDescription>
 				</SheetHeader>
 

@@ -11,20 +11,22 @@ can work but are unsupported.
 
 The stack you get:
 
-| Service | What it is |
-| --- | --- |
-| `reverse-proxy` | Traefik — TLS via Let's Encrypt, routes `/`, `/api`, `/webhooks` |
-| `webapp` | React SPA served by nginx |
-| `application-server` | Spring Boot API |
-| `application-worker` | Same image, worker profile — runs the AI sandboxes; the only service given the Docker socket |
-| `webhook-server` | Same image, webhook profile — keeps receiving events while the app restarts |
-| `postgres` | PostgreSQL 18 + pg_partman (custom image — vanilla `postgres:18` is **not** a drop-in) |
-| `nats-server` | NATS JetStream event buffer |
+| Service              | What it is                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| `reverse-proxy`      | Traefik — TLS through `Let's Encrypt`, routes `/`, `/api`, `/webhooks`                       |
+| `webapp`             | React SPA served by nginx                                                                    |
+| `application-server` | Spring Boot API                                                                              |
+| `application-worker` | Same image, worker profile — runs the AI sandboxes. The only service given the Docker socket |
+| `webhook-server`     | Same image, webhook profile — keeps receiving events while the app restarts                  |
+| `postgres`           | PostgreSQL 18 + pg_partman (custom image — vanilla `postgres:18` is **not** a drop-in)       |
+| `nats-server`        | NATS JetStream event buffer                                                                  |
 
-Docker Compose on one Linux host is supported for every 1.x release. **Hephaestus 2.0 runs on
-Kubernetes only**: it ships one Helm chart, and the Compose stack described here is removed. The 2.0
-release includes a migration guide covering your database, event buffer, and secrets; nothing you
-configure today is lost. See
+Docker Compose on one Linux host supports all 1.x releases.
+**Hephaestus 2.0 runs on Kubernetes only**.
+It includes one Helm chart and removes the Compose stack described here.
+The 2.0 release includes a migration guide for your database, event buffer, and secrets.
+You lose none of your current configuration.
+See
 [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md)
 for the decision and the conditions that would reverse it.
 
@@ -32,65 +34,68 @@ for the decision and the conditions that would reverse it.
 
 ### Supported host matrix
 
-Hephaestus supports the blessed single-host stack on the following native (not emulated) hosts:
+Hephaestus supports the specified single-host stack on the following native (not emulated) hosts:
 
-| Distribution | CPU architecture |
-| --- | --- |
-| Ubuntu 24.04 LTS | x86-64 (`amd64`) |
+| Distribution     | CPU architecture       |
+| ---------------- | ---------------------- |
+| Ubuntu 24.04 LTS | x86-64 (`amd64`)       |
 | Ubuntu 24.04 LTS | ARMv8 64-bit (`arm64`) |
 
-Both require Docker Engine 28 or newer and Docker Compose 2.24.4 or newer. Docker supports these
-hosts according to its [Ubuntu installation requirements](https://docs.docker.com/engine/install/ubuntu/#os-requirements).
-Each release is qualified on both matrix cells before publication.
+Both require Docker Engine 28 or newer and Docker Compose 2.24.4 or newer.
+Docker supports these hosts according to its [Ubuntu installation requirements](https://docs.docker.com/engine/install/ubuntu/#os-requirements).
+Before publication, each release passes qualification on both matrix cells.
 
-Only the listed native hosts and the unmodified self-hosted Compose topology are supported. All other
-hosts, runtimes, and topologies are outside release qualification.
+Only the listed native hosts and the unmodified self-hosted Compose topology are supported. Other hosts, runtimes, and topologies are outside release qualification.
 
-- **4 vCPUs, 16 GB RAM, 40 GB SSD** is a conservative starting point for planning, with one
-  concurrent review sandbox; it is a budget, not a measured requirement. It covers these memory limits,
-  which are ceilings rather than reservations:
+- **4 vCPUs, 16 GB RAM, 40 GB SSD** is a conservative initial budget for one concurrent review sandbox.
+  It is not a measured requirement.
+  It covers these memory limits, which are ceilings, not reservations:
 
-  | Container | Memory limit | Setting |
-  | --- | --- | --- |
-  | `application-server` | 5 GB | `APPLICATION_SERVER_MEM_LIMIT` |
-  | `application-worker` | 3 GB | `APPLICATION_WORKER_MEM_LIMIT` |
-  | `webhook-server` | 2 GB | `WEBHOOK_SERVER_MEM_LIMIT` |
-  | each concurrent review sandbox | 4 GiB | `SANDBOX_MEMORY_BYTES`, `SANDBOX_MAX_CONCURRENT` (default 1) |
+  | Container                      | Memory limit | Setting                                                      |
+  | ------------------------------ | ------------ | ------------------------------------------------------------ |
+  | `application-server`           | 5 GB         | `APPLICATION_SERVER_MEM_LIMIT`                               |
+  | `application-worker`           | 3 GB         | `APPLICATION_WORKER_MEM_LIMIT`                               |
+  | `webhook-server`               | 2 GB         | `WEBHOOK_SERVER_MEM_LIMIT`                                   |
+  | each concurrent review sandbox | 4 GiB        | `SANDBOX_MEMORY_BYTES`, `SANDBOX_MAX_CONCURRENT` (default 1) |
 
-  PostgreSQL, NATS, Traefik and the webapp have no limit. A limit caps a container and reserves
-  nothing; each JVM sizes its heap from its own limit and can grow toward it. What the host must hold
-  is what all containers and sandboxes use at the same time, plus the operating system and some
-  headroom. When that demand exceeds the host's memory, the host swaps where swap is configured, and
-  the kernel can kill a container or a sandbox. To plan for less memory, lower the limits in `.env`
-  before the first start.
-- These are deployment limits, not a claim that every workload fits. Before raising webhook volume,
+  PostgreSQL, NATS, Traefik, and the webapp have no limit.
+  A limit caps a container but reserves nothing.
+  Each JVM sizes its heap from its own limit and can grow toward it.
+  The host must hold simultaneous use by all containers and sandboxes, plus the operating system and spare capacity.
+  If demand exceeds memory, the host swaps where swap is configured.
+  The kernel can kill a container or sandbox.
+
+  To use a smaller memory budget, lower the limits in `.env` before the first start.
+
+- These are deployment limits, not a claim that all workloads fit. Before raising webhook volume,
   mentor concurrency, or `SANDBOX_MAX_CONCURRENT`, reproduce the release's
   [Compose capacity qualification](https://github.com/hephaestus-build/Hephaestus/tree/main/load-tests) on
-  your host shape. A release baseline is valid only when it includes the raw k6 and container-resource
-  evidence described there; absent that evidence, keep the conservative defaults above.
-- **AI practice review adds real memory**: each concurrent review sandbox may use up to
-  4 GiB. The default caps it at 1 concurrent sandbox; raise
-  `SANDBOX_MAX_CONCURRENT` only with RAM to match.
-- Container defaults are 4 CPUs / 512 PIDs for the application server and the worker, and 2 CPUs /
-  256 PIDs for the webhook server. Override them with the corresponding `APPLICATION_SERVER_*`,
+  your host shape. A release baseline is valid only with the raw k6 and container-resource evidence described there.
+  Without that evidence, keep the conservative defaults above.
+- **AI practice review adds memory demand**.
+  Each concurrent review sandbox may use up to 4 GiB.
+  The default allows 1 concurrent sandbox.
+  Raise `SANDBOX_MAX_CONCURRENT` only with sufficient RAM.
+- The application server and worker each default to 4 CPUs / 512 PIDs.
+  The webhook server defaults to 2 CPUs / 256 PIDs. Override them with the corresponding `APPLICATION_SERVER_*`,
   `APPLICATION_WORKER_*` or `WEBHOOK_SERVER_*` limit variables. Keep the worker's PID limit: it is the
   role with Docker access.
 - `HIKARI_MAXIMUM_POOL_SIZE` defaults to 20. Provision at least that value multiplied by the total JVM
   replica count, plus capacity for migrations and operator access.
 - A host in the supported matrix, plus `git` and `openssl`.
-- A **DNS A record** for your hostname pointing at the host, with ports **80 and 443**
-  reachable from the internet (Let's Encrypt HTTP-01, OAuth callbacks, webhooks).
-- Outbound HTTPS to `ghcr.io` and `docker.io` for images, `github.com` and `api.github.com` for the
-  release lock, and `fulcio.sigstore.dev`, `rekor.sigstore.dev`, and `tuf-repo-cdn.sigstore.dev` for
-  keyless signature verification.
+- A **DNS A record** that points your hostname at the host.
+  Ports **80 and 443** must be reachable from the internet for `Let's Encrypt` HTTP-01, OAuth callbacks, and webhooks.
+- Outbound HTTPS for these purposes:
+  - Images: `ghcr.io` and `docker.io`.
+  - Release lock: `github.com` and `api.github.com`.
+  - Keyless signature verification: `fulcio.sigstore.dev`, `rekor.sigstore.dev`, and `tuf-repo-cdn.sigstore.dev`.
 - The [Node.js](https://nodejs.org/en/download) version pinned in `package.json#devEngines.runtime`
   and [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) for release-lock
   verification.
 
 ## 1. Get the files
 
-Check out the newest version from the
-[releases page](https://github.com/hephaestus-build/Hephaestus/releases):
+1. Check out the newest version from the [releases page](https://github.com/hephaestus-build/Hephaestus/releases):
 
 ```bash
 VERSION=0.80.0   # the release you are installing, without the leading "v"
@@ -105,126 +110,160 @@ node scripts/prepare-release-lock.ts "v$VERSION"
 cd docker/self-host
 ```
 
-`setup.sh` creates or updates `.env` with mode `0600` and generates the database password and
-the master encryption key (`HEPHAESTUS_SECURITY_ENCRYPTION_KEY`), copies it into an empty
-`HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`, and generates the OAuth state-cookie key, webhook secret,
-routing secret, the message-broker credentials, and the token the worker registers with.
-It does not replace non-empty values and never prints a secret.
-Changing either encryption key on an existing installation makes everything encrypted under the old
-one unreadable.
+`setup.sh` creates or updates `.env` with mode `0600`.
+It generates the database password and master encryption key (`HEPHAESTUS_SECURITY_ENCRYPTION_KEY`).
+It copies the master key into an empty `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`.
+It also generates these values:
+
+- OAuth state-cookie key.
+- Webhook secret.
+- Routing secret.
+- Message-broker credentials.
+- Worker registration token.
+  It does not replace non-empty values and never prints a secret.
+  Changing either encryption key on an existing installation makes everything encrypted under the old
+  one unreadable.
 
 Everything below runs from `/opt/hephaestus/docker/self-host`. After step 2 supplies the remaining
 required values, `docker compose config` renders the effective configuration. Before then it exits
 at the first missing required variable, as does every other `docker compose` subcommand in this
-directory; see [Troubleshooting](#troubleshooting).
+directory. See [Troubleshooting](#troubleshooting).
 
 ## 2. Configure `.env`
 
-Open `.env` and fill in the remaining **REQUIRED** values. `setup.sh` manages the internal secrets
-listed above; do not replace them manually.
-
-| Variable | What / how |
-| --- | --- |
-| `APP_HOSTNAME` | Your public hostname, e.g. `hephaestus.example.com` |
-| `ACME_EMAIL` | Let's Encrypt expiry notices |
-| One login provider | GitHub OAuth (`GH_OAUTH_CLIENT_ID` / `_SECRET`) or GitLab OAuth (`GITLAB_OAUTH_CLIENT_ID` / `_SECRET` and its base URL), from step 3. One is enough. |
-| `DOCKER_GROUP_ID` | Host group ID that can access `/var/run/docker.sock`; find it with `stat -c %g /var/run/docker.sock`. A wrong value prevents every sandbox start. |
-| `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` | From step 4 — set it **before** first boot |
-
-:::danger Back up both encryption keys
+:::caution CAUTION: Back up both encryption keys
 `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` protects legacy encrypted values and the JWT signing key.
-`HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` protects integration credentials. Losing either key
+`HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` protects integration credentials. Loss of either key
 makes the corresponding database values unreadable. Store both with the database backup. Rotate the
 credential key only with the [credential-key rotation procedure](./credential-key-rotation).
 :::
 
-The other generated values also have lifecycle consequences: changing the database password does not
-update an initialized PostgreSQL volume, rotating the state-cookie key invalidates OAuth flows already
-in progress, and rotating the webhook secret requires the same change at every configured provider.
-The GitLab routing secret is never entered anywhere; rotate it as the
-[production setup](./production-setup#gitlab-rollout-bundle) describes, or GitLab group hooks stop
-delivering until they are registered again.
-Back up `.env` with the database as described in [Backup & Restore](./backup-restore).
+`setup.sh` manages the internal secrets listed above.
+
+1. Open `.env`.
+2. Fill in the remaining **REQUIRED** values.
+3. Do not replace the generated internal secrets manually.
+
+   | Variable                           | What / how                                                                                                                                           |
+   | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `APP_HOSTNAME`                     | Your public hostname, for example, `hephaestus.example.com`                                                                                          |
+   | `ACME_EMAIL`                       | `Let's Encrypt` expiry notices                                                                                                                       |
+   | One login provider                 | GitHub OAuth (`GH_OAUTH_CLIENT_ID` / `_SECRET`) or GitLab OAuth (`GITLAB_OAUTH_CLIENT_ID` / `_SECRET` and its base URL), from step 3. One is enough. |
+   | `DOCKER_GROUP_ID`                  | Host group ID that can access `/var/run/docker.sock`. Use the command below. A wrong value prevents every sandbox start.                             |
+   | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` | From step 4 — set it **before** first boot                                                                                                           |
+
+4. To find `DOCKER_GROUP_ID`, run:
+
+   ```bash
+   stat -c %g /var/run/docker.sock
+   ```
+
+   Other generated values also affect the lifecycle:
+
+   - A database password change does not update an initialized PostgreSQL volume.
+   - State-cookie key rotation invalidates OAuth flows in progress.
+   - Webhook secret rotation requires the same change at each configured provider.
+     The GitLab routing secret is never entered anywhere.
+     GitLab group hooks stop delivery until registration repeats if you rotate the secret incorrectly.
+
+5. Rotate it as [production setup](./production-setup#gitlab-rollout-bundle) describes.
+6. Back up `.env` with the database as [Backup & Restore](./backup-restore) describes.
 
 ### Serving more than one hostname
 
-An instance answers on `APP_HOSTNAME`. To have it answer on further names as well — a domain you are
-migrating away from, or a `www.` variant — name every one of them in `APP_HOST_MATCH`, which the
-reverse proxy in front of the instance reads as a host matcher. It **replaces** the default rather
-than adding to it, so name `APP_HOSTNAME` in it too:
+An instance answers on `APP_HOSTNAME`.
+It can also answer on other names, such as a domain you are leaving or a `www.` variant.
+The reverse proxy reads `APP_HOST_MATCH` as a host matcher.
+It **replaces** the default rather than extending it.
 
-```ini
-APP_HOST_MATCH=Host(`hephaestus.example.com`) || Host(`old.example.com`)
-```
+1. List all required hostnames in `APP_HOST_MATCH`.
+2. Include `APP_HOSTNAME` in the matcher:
 
-Traefik takes one hostname per `Host()`, joined with `||`. ``Host(`a`,`b`)`` is rejected and the
-router does not load at all.
+   ```ini
+   APP_HOST_MATCH=Host(`hephaestus.example.com`) || Host(`old.example.com`)
+   ```
 
-Point each name at this host in DNS before you deploy: the certificate covers exactly the names in
-the matcher, and it is obtained by answering a challenge on each of them, so a name that does not yet
-resolve here holds up the whole certificate. The first name in the matcher becomes the certificate's
-subject and the rest its alternative names.
+   Traefik takes one hostname per `Host()`, joined with `||`. ``Host(`a`,`b`)`` is rejected and the
+   router does not load at all.
 
-`APP_HOSTNAME` remains the instance's single origin. The SPA, the API and the auth issuer are all
-configured for it, and **a browser that opens any other name is redirected there**, so the app is
-only ever loaded from one host and the OAuth callback URLs stay on `APP_HOSTNAME`.
+3. Before deployment, point each name at this host in DNS.
 
-The API and the webhook endpoints do answer on every name in the matcher, which is deliberate: a
-tab someone still has open, and a provider still posting to the old name, keep working through the
-move. Only what a browser loads is redirected.
+The certificate covers exactly the names in the matcher.
+Certificate issuance requires a challenge response on each name.
+A name that does not yet resolve here delays the whole certificate.
+The first name becomes the certificate's subject.
+The other names become its alternative names.
 
-One consequence is worth knowing. The login callback is built from the address the request arrived
-on, so a sign-in *started* by opening `/api/login/...` on one of the other names asks the provider to
-return to that name — and the provider refuses, because the only callback registered for it is the
-one on `APP_HOSTNAME`. Reaching the instance the normal way never hits this, since the redirect
-happens before any sign-in begins. Register callbacks for `APP_HOSTNAME` only: registering one for
-another name is what would let a session be established somewhere other than the canonical origin.
+`APP_HOSTNAME` remains the instance's single origin.
+The SPA, API, and auth issuer all use it.
+**The proxy redirects a browser that opens any other name to `APP_HOSTNAME`.**
+The app therefore loads from only one host.
+OAuth callback URLs stay on `APP_HOSTNAME`.
 
-Both the matcher and the redirect are the proxy's work. An instance fronted by a proxy that does not
-read this stack's routing configuration answers on whatever names that proxy sends it, and
-`APP_HOST_MATCH` does nothing — configure the extra names, their certificate and the redirect to
-`APP_HOSTNAME` there instead.
+The API and webhook endpoints deliberately answer on all names in the matcher.
+An open tab and a provider that still posts to the old name continue to work through the move.
+The proxy redirects only what a browser loads.
+
+The login callback uses the address where the request arrived.
+A sign-in *started* at `/api/login/...` on another name asks the provider to return to that name.
+The provider refuses because its only registered callback uses `APP_HOSTNAME`.
+Normal access avoids this problem: the proxy redirects the browser before sign-in starts.
+
+1. Register callbacks for `APP_HOSTNAME` only.
+
+A callback for another name would permit a session outside the canonical origin.
+
+The proxy controls both the matcher and the redirect.
+A proxy that does not read this stack's routing configuration can send requests for any names.
+In that setup, `APP_HOST_MATCH` has no effect.
+
+1. Configure the extra names on that proxy.
+2. Configure their certificate there.
+3. Configure its redirect to `APP_HOSTNAME`.
 
 ## 3. Configure a login provider
 
 One enabled GitHub or GitLab login provider is enough. Slack and Outline are for account linking,
-not sign-in. The steps below configure GitHub; for GitLab, use the
+not sign-in. The steps below configure GitHub. For GitLab, use the
 [GitLab rollout bundle](./production-setup#gitlab-rollout-bundle).
 
-Use the generated
-[`external-app-icon-1024.png`](/img/brand/external-app-icon-1024.png) as the application
-logo when the GitHub settings page offers an image upload.
+GitHub login needs a plain **OAuth App**.
+This is *not* the GitHub App for data access: see [GitHub integration](./github-integration).
+Without a login provider, the instance boots but shows **no sign-in button**.
 
-Without a login provider the instance boots but shows **no sign-in button**. GitHub login
-needs a plain **OAuth App** (this is *not* the same thing as the GitHub App used for data
-access — see [GitHub integration](./github-integration)):
-
-1. [github.com/settings/developers](https://github.com/settings/developers) →
-   **New OAuth App** (or under your org's settings).
-2. **Homepage URL:** `https://<APP_HOSTNAME>`
-3. **Authorization callback URL:** `https://<APP_HOSTNAME>/api/login/oauth2/code/github`
-   — exact string, including `/api`, no trailing slash.
-4. Create a client secret; put both values into `.env` as
-   `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET`.
+1. Open [github.com/settings/developers](https://github.com/settings/developers), or your organization's equivalent settings.
+2. Select **New OAuth App**.
+3. Set **Homepage URL** to `https://<APP_HOSTNAME>`.
+4. Set **Authorization callback URL** to `https://<APP_HOSTNAME>/api/login/oauth2/code/github`.
+   The string must include `/api` and have no trailing slash.
+5. If the GitHub settings page offers an image upload, use [`external-app-icon-1024.png`](/img/brand/external-app-icon-1024.png) as the application logo.
+6. Create a client secret.
+7. Put both values into `.env` as `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET`.
 
 GitLab login works the same way and can be used instead of (or next to) GitHub — see the
 [GitLab rollout bundle](./production-setup#gitlab-rollout-bundle).
 
 ## 4. First admin — before first boot
 
-The admin UI is admin-gated, so the **first instance admin must come from operator
-config**, not the UI. Set in `.env`:
+The admin UI requires admin access.
+The **first instance admin must therefore come from operator config**, not the UI.
 
-```bash
-HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS=github:@your-github-username
-```
+1. Set this value in `.env`:
 
-- Format: comma-separated `<provider>:@<username>` or `<provider>:<numeric-id>`.
-- On public github.com prefer the numeric id (`github:1234567`, from
-  `https://api.github.com/users/<login>`) — abandoned handles can be reclaimed by others.
-- Promotion happens **on sign-in**, is idempotent, and never demotes. If you forgot to set
-  it, add it and restart. For the break-glass bootstrap token, see
-  [Instance admin](./instance-admin#bootstrap-and-recovery).
+   ```bash
+   HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS=github:@your-github-username
+   ```
+
+   The format is comma-separated `<provider>:@<username>` or `<provider>:<numeric-id>`.
+   Promotion occurs **on sign-in**.
+   It is idempotent and never demotes.
+
+2. On public github.com, prefer the numeric ID (`github:1234567`, from `https://api.github.com/users/<login>`).
+   Others can reclaim abandoned handles.
+3. If you omitted the value, add it.
+4. If you omitted the value, restart after adding it.
+
+For the break-glass bootstrap token, see [Instance admin](./instance-admin#bootstrap-and-recovery).
 
 ## 5. First boot
 
@@ -233,32 +272,43 @@ docker compose --env-file .env --env-file release-lock.env up -d
 docker compose --env-file .env --env-file release-lock.env logs -f application-server
 ```
 
-First start pulls ~2 GB of images and runs all database migrations; expect a few minutes.
-Then:
+First startup pulls about 2 GB of images and runs all database migrations.
+It can take a few minutes.
 
-1. Open `https://<APP_HOSTNAME>` — the login page should offer **Sign in with GitHub**.
-2. Sign in as the bootstrap admin. You should see instance-admin navigation.
-3. Open **Instance administration → Overview** and read **Configuration readiness**. Each item under
-   **Action required** needs a change, and links to its section in
-   [Configuration readiness](./configuration-readiness). **Not configured** lists optional settings you
-   have not set, such as email or error monitoring; leave them until you want them. The page never
-   shows a setting's value.
-4. Create your first workspace and connect it to GitHub.
+1. Open `https://<APP_HOSTNAME>`.
+   The login page should offer **Continue with GitHub**.
+2. Sign in as the bootstrap admin.
+   You should see instance-admin navigation.
+3. Open **Instance administration → Overview**.
+4. Read **Configuration readiness**.
+
+   Each item under **Action required** needs a change and links to its section in [Configuration readiness](./configuration-readiness).
+   **Not configured** lists optional settings you have not set, such as email or error monitoring.
+   The page never shows a setting's value.
+
+5. Leave optional settings until you want them.
+6. Create your first workspace.
+7. Connect it to GitHub.
 
 ## 6. Connect repository data
 
-A new instance starts in **Silent Mode**. Sync and reviews can run, but outbound feedback is blocked.
-After checking the deployment and integrations, open **Instance admin → Instance settings** and turn
-Silent Mode off. Releasing it does not replay feedback withheld while it was on. See
-[Instance admin](./instance-admin#silent-mode).
+A new instance starts in **Silent mode**. Sync and reviews can run, but outbound feedback is blocked.
+Turning silent mode off does not replay feedback withheld while it was on.
+See [Instance admin](./instance-admin#silent-mode).
+
+1. Check the deployment and integrations.
+2. Open **Instance admin → Instance settings**.
+3. Turn silent mode off.
 
 For GitLab workspaces, use [Integrations](./integrations#gitlab). For GitHub:
 
-Login alone syncs nothing. Two things make data flow, both covered step-by-step in
+Login alone syncs nothing.
+Data flow requires two things.
+Both have procedures in
 [GitHub integration](./github-integration):
 
-1. **Repository access** — either a **PAT** pasted into the workspace UI (simplest) or a
-   **GitHub App** (needed for AI-review feedback posted back to GitHub, better rate limits).
+1. **Repository access** — use a **PAT** in the workspace UI for the simplest setup.
+   A **GitHub App** is necessary to post AI-review feedback to GitHub and offers better rate limits.
 2. **Webhooks** — Hephaestus does **not** auto-register GitHub webhooks (unlike GitLab).
    Configure the webhook on your GitHub App **or** create an org/repo webhook manually,
    pointing at `https://<APP_HOSTNAME>/webhooks/github` with your `WEBHOOK_SECRET`. Without
@@ -266,32 +316,47 @@ Login alone syncs nothing. Two things make data flow, both covered step-by-step 
 
 ## 7. Optional integrations
 
-All off by default. The compose file already passes their variables through — enable them
-in `.env` and `docker compose up -d`. Each has its variable reference in
-[Integrations & Reference Deployment](./production-setup):
+All optional integrations are off by default.
+The Compose file already passes their variables through.
+Each has a variable reference in [Integrations & Reference Deployment](./production-setup).
 
-| Add-on | What it gives you | Where |
-| --- | --- | --- |
-| GitLab | GitLab login, workspaces, and sync (webhooks auto-register here) | [GitLab bundle](./production-setup#gitlab-rollout-bundle) |
-| Slack | Mentor in Slack, channel ingestion | [Slack app setup](./production-setup#slack-app-configuration) |
-| Outline | Wiki as a content source for reviews | [Outline integration](./production-setup#outline-integration) |
-| AI practice review | Automated PR feedback from the coding agent | [Practice review](./practice-review#deployment) |
-| Email | Optional invitations, summaries, and connection alerts; configure `SPRING_MAIL_*` and `HEPHAESTUS_EMAIL_FROM` | [Email setup](./production-setup#email) |
-| An AI provider | The model everything AI runs on — required by the row above | [Connect an AI Provider](./ai-providers) |
+1. Enable the desired integrations in `.env`.
+2. Run:
 
-**AI practice review needs two things, not one:** the environment bundle above (`AGENT_ENABLED` and
-`GIT_CHECKOUT_ENABLED`, set together on every role that submits or claims work; the job queue itself runs
-on PostgreSQL, so this bundle needs no NATS setup), **and** a model that the workspace can actually run
-on. Setting that model up — registering a provider connection, testing it, pricing the model, sharing it,
-and binding it to the **practice reviews** purpose — is [Connect an AI Provider](./ai-providers), and
-nothing reviews anything until it is done. With the flags on but nothing bound, webhook-driven reviews are
-skipped with only a DEBUG log line, since an unbound workspace is a normal state and one line per event
-would be noise. The manual dev trigger answers with the reason, so use it to tell "unbound" apart from
-"broken".
+   ```bash
+   docker compose up -d
+   ```
+
+| Add-on             | What it gives you                                                                                             | Where                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| GitLab             | GitLab login, workspaces, and sync (webhooks auto-register here)                                              | [GitLab bundle](./production-setup#gitlab-rollout-bundle)     |
+| Slack              | Mentor in Slack, channel ingestion                                                                            | [Slack app setup](./production-setup#slack-app-configuration) |
+| Outline            | Wiki as a content source for reviews                                                                          | [Outline integration](./production-setup#outline-integration) |
+| AI practice review | Automated PR feedback from the coding agent                                                                   | [Practice review](./practice-review#deployment)               |
+| Email              | Optional invitations, summaries, and connection alerts. Configure `SPRING_MAIL_*` and `HEPHAESTUS_EMAIL_FROM` | [Email setup](./production-setup#email)                       |
+| An AI provider     | The model everything AI runs on — required by the row above                                                   | [Connect an AI Provider](./ai-providers)                      |
+
+AI practice review requires both the environment bundle above and a model that the workspace can run on.
+The bundle contains `AGENT_ENABLED` and `GIT_CHECKOUT_ENABLED`.
+
+1. Set them together on each role that submits or claims work.
+
+The job queue runs on PostgreSQL, so this bundle needs no NATS setup.
+
+[Connect an AI Provider](./ai-providers) explains model setup.
+It covers provider connection registration, tests, model prices, model shares, and a binding to the **practice reviews** purpose.
+No reviews run until setup is complete.
+
+If the flags are on but no model is bound, webhook-driven reviews skip with only a DEBUG log line.
+An unbound workspace is a normal state.
+A higher-level log line for each event would create noise.
+The manual dev trigger answers with the reason.
+
+1. Use it to tell "unbound" apart from "broken".
 
 ## 8. Legal pages (public instances)
 
-:::caution Public instances need legal pages
+:::caution CAUTION: Public instances need legal pages
 `/imprint` and `/privacy` serve a red "not configured" fallback until you provide your own.
 For operators in Germany that is a § 5 DDG / Art. 13 GDPR obligation **before** opening the
 instance to users. See [Legal Pages](./legal-pages).
@@ -299,46 +364,52 @@ instance to users. See [Legal Pages](./legal-pages).
 
 ## 9. First practice review
 
-With GitHub connected (step 6) and a model bound to practice reviews ([Connect an AI
-Provider](./ai-providers)), run one review and read its feedback before anyone else can:
+Before this procedure, GitHub must be connected (step 6).
+A model must also be bound to practice reviews ([Connect an AI
+Provider](./ai-providers)).
+The procedure runs one review and lets you read its feedback before anyone else can:
 
-1. Follow [First successful review](./practice-review#first-successful-review). On **Practices →
-   Review settings → How much**, set the **Workspace default** to **Review before sending**, so each
-   piece of feedback waits for your approval.
-2. When the review finishes, open **Practices → Practice reviews**. Its feedback is listed under
+1. Open **Practices → Review settings → How much**.
+2. Set the **Workspace default** to **Review before sending**.
+   Each piece of feedback waits for your approval.
+3. Follow [First successful review](./practice-review#first-successful-review).
+4. When the review finishes, open **Practices → Practice reviews**. Its feedback is listed under
    **Needs you**, awaiting approval. Nothing reaches the pull or merge request before you approve it.
-3. Open the feedback, read it and the observations behind it, then approve or reject it.
+5. Open the feedback.
+6. Read it.
+7. Read the observations behind it.
+8. Approve or reject the feedback.
 
-Once it reads the way you want, widen coverage or give practices more autonomy as
-[Practice review](./practice-review) describes.
+9. Once the feedback reads as you want, widen coverage or increase practice autonomy as [Practice review](./practice-review) describes.
 
 ## Upgrades
 
-Read the target release's migration instructions before starting its images. Pre-1.0 upgrades may
-require an intermediate release or manual preparation; the [Compatibility Policy](./compatibility-policy)
-defines the guarantee and support window. Existing databases crossing the PostgreSQL 18/Liquibase
-baseline transition must complete the [baseline synchronization runbook](./liquibase-baseline-runbook.md)
-first. The commands below do not perform that preparation.
+Pre-1.0 upgrades may require an intermediate release or manual preparation.
+The [Compatibility Policy](./compatibility-policy) defines the guarantee and support window.
+The commands below do not prepare existing databases for the PostgreSQL 18/Liquibase baseline transition.
 
-Complete the [runbook silent deployment checklist](./production-operations-runbook#silent-deployment-checklist)
-through backup and staging validation, then acquire the tested release:
+1. Before starting target images, read that release's migration instructions.
+2. If the database crosses the baseline transition, first complete the [baseline synchronization runbook](./liquibase-baseline-runbook.md).
+3. Complete the [runbook silent deployment checklist](./production-operations-runbook#silent-deployment-checklist) through backup and staging validation.
+4. Acquire the tested release:
 
-```bash
-(
-set -eu
-VERSION='<new-version>'
-cd /opt/hephaestus
-sudo git fetch --depth 1 origin tag "v$VERSION"
-sudo git checkout "v$VERSION"
-node scripts/prepare-release-lock.ts "v$VERSION"
-cd docker/self-host
-docker compose --env-file .env --env-file release-lock.env pull
-)
-```
+   ```bash
+   (
+   set -eu
+   VERSION='<new-version>'
+   cd /opt/hephaestus
+   sudo git fetch --depth 1 origin tag "v$VERSION"
+   sudo git checkout "v$VERSION"
+   node scripts/prepare-release-lock.ts "v$VERSION"
+   cd docker/self-host
+   docker compose --env-file .env --env-file release-lock.env pull
+   )
+   ```
 
-Before startup, compare `.env` with the release's `.env.example` and complete any manual steps in
-[`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md), especially PostgreSQL
-major-version changes. Return to **Validate then deploy** in the runbook for guarded startup.
+5. Before startup, compare `.env` with the release's `.env.example`.
+6. Complete manual steps in [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md), especially PostgreSQL major-version changes.
+7. Return to **Validate then deploy** in the runbook for guarded startup.
+
 The [compatibility policy](./compatibility-policy#upgrade-guarantee) defines skip-version support.
 
 ### Update checks
@@ -359,26 +430,34 @@ forgets the last answer. A commit channel or a local build runs no release and i
 Each check is one unauthenticated HTTPS GET to
 `https://api.github.com/repos/hephaestus-build/Hephaestus/releases/latest` with the static user agent
 `Hephaestus-release-check` and, after the first answer, its ETag. It carries no version, credential,
-workspace data or configuration; GitHub sees the source IP and the time. On an air-gapped host set
-`HEPHAESTUS_RELEASE_CHECK_ENABLED=false` in `.env` and recreate `application-server`; the overview
-then shows the identity and no check. A failed check reaches only instance administration, never
-health or readiness.
+workspace data or configuration.
+GitHub sees the source IP and the time.
+
+1. On an air-gapped host, set `HEPHAESTUS_RELEASE_CHECK_ENABLED=false` in `.env`.
+2. Recreate `application-server`.
+
+The overview then shows the identity without a check.
+A failed check reaches only instance administration, never health or readiness.
 
 ## Rollback
 
-Follow [failed-migration recovery](./production-operations-runbook#if-migration-fails) to restore the
-previous release's database, secrets and signed lock. Reverting images alone is not a rollback:
-never run an older release against a newer schema, reconstruct an old lock, or resolve mutable image tags.
+:::caution CAUTION: Images alone cannot reverse a schema change
+Reverting images alone is not a rollback.
+Never run an older release against a newer schema.
+Never reconstruct an old lock or resolve mutable image tags.
+:::
+
+1. Follow [failed-migration recovery](./production-operations-runbook#if-migration-fails) to restore the previous release's database, secrets, and signed lock.
 
 ## Troubleshooting
 
-| Symptom | Cause / fix |
-| --- | --- |
-| `application-server` exits: *ProxyTrustGuard* | `HEPHAESTUS_TRUSTED_PROXIES` is blank. The compose default is non-blank, so this means you overrode it to empty — unset your override, or set it to match `reverse-proxy`'s IP if you changed the network. |
-| Exits: encryption-key length error | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` must be exactly 32 printable, non-space ASCII characters. Restore the original key for an existing database. On a new installation, clear the invalid value and rerun `./setup.sh`. |
-| Login page has no sign-in button | No login provider configured: both `GH_OAUTH_CLIENT_ID` **and** `_SECRET` must be non-empty (a half-filled pair is skipped and logged at ERROR). |
-| OAuth redirect loop / cookie never sticks | A proxy in front of Traefik is injecting a `Domain=` attribute on cookies, which browsers reject for `__Host-` cookies. Serve the stack directly on ports 80/443. |
-| Signed in but not admin | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` didn't match. On the account's **first** login the server logs (INFO) the exact `provider subject username` it saw — copy that into the allowlist and restart. (For an account that already existed, check that log line from its first sign-in, or use the numeric id.) |
-| GitHub webhook deliveries show `401` | `WEBHOOK_SECRET` on GitHub differs from `.env` — must be byte-identical. |
-| Data appears only ~hourly | No GitHub webhook configured (see step 6). |
-| `docker compose down`/`logs` aborts with "variable is missing" | Required `.env` values are validated for every subcommand. Fill them (dummy values are fine) before teardown. |
+| Symptom                                                        | Cause / fix                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `application-server` exits: *ProxyTrustGuard*                  | `HEPHAESTUS_TRUSTED_PROXIES` is blank. The Compose default is non-blank. Your override therefore set it to empty. Unset the override. If you changed the network, you can instead set it to match `reverse-proxy`'s IP.                                                                                   |
+| Exits: encryption-key length error                             | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` must be exactly 32 printable, non-space ASCII characters. Restore the original key for an existing database. On a new installation, clear the invalid value. Then rerun `./setup.sh`.                                                                                |
+| Login page has no sign-in button                               | No login provider configured: both `GH_OAUTH_CLIENT_ID` **and** `_SECRET` must be non-empty (a half-filled pair is skipped and logged at ERROR).                                                                                                                                                          |
+| OAuth redirect loop / cookie never sticks                      | A proxy in front of Traefik is injecting a `Domain=` attribute on cookies, which browsers reject for `__Host-` cookies. Serve the stack directly on ports 80/443.                                                                                                                                         |
+| Signed in but not admin                                        | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` did not match. On the account's **first** login, the server logs (INFO) the exact `provider subject username` it saw. Copy that into the allowlist. Restart. (For an account that already existed, check that log line from its first sign-in, or use the numeric id.) |
+| GitHub webhook deliveries show `401`                           | `WEBHOOK_SECRET` on GitHub differs from `.env` — must be byte-identical.                                                                                                                                                                                                                                  |
+| Data appears only ~hourly                                      | No GitHub webhook configured (see step 6).                                                                                                                                                                                                                                                                |
+| `docker compose down`/`logs` aborts with "variable is missing" | Required `.env` values are validated for every subcommand. Fill them (dummy values are fine) before teardown.                                                                                                                                                                                             |

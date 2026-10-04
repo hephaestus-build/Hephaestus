@@ -77,12 +77,15 @@ export function AdminAuditTable({
 					<EmptyMedia variant="icon">
 						<ScrollText />
 					</EmptyMedia>
-					<EmptyTitle>Couldn&rsquo;t load the audit log</EmptyTitle>
+					<EmptyTitle>We could not load the audit log</EmptyTitle>
+					<EmptyDescription>
+						Try again in a moment. If it keeps failing, reload the page.
+					</EmptyDescription>
 				</EmptyHeader>
 				{onRetry && (
 					<EmptyContent>
 						<Button variant="outline" size="sm" onClick={onRetry}>
-							Try again
+							Retry
 						</Button>
 					</EmptyContent>
 				)}
@@ -107,7 +110,7 @@ export function AdminAuditTable({
 				{hasFilter && onResetFilters && (
 					<EmptyContent>
 						<Button variant="outline" onClick={onResetFilters}>
-							Reset filters
+							Clear filters
 						</Button>
 					</EmptyContent>
 				)}
@@ -198,13 +201,13 @@ export function AdminAuditTable({
 											type="button"
 											variant="ghost"
 											size="sm"
-											aria-label={`View details: ${eventLabel(e.eventType)}${hasText(account) ? ` — ${account}` : ""}`}
+											aria-label={`View details for ${eventLabel(e.eventType)}${hasText(account) ? `, ${account}` : ""}`}
 											onClick={() => {
 												setDetail(e);
 												setDetailOpen(true);
 											}}
 										>
-											Details
+											View details
 										</Button>
 									</TableCell>
 								</TableRow>

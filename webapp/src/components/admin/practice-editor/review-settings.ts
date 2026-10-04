@@ -140,7 +140,8 @@ export function reviewSettingsProblem(
 	for (const signal of reviewFields.signals) {
 		if (declared.size > 0 && !declared.has(signal)) {
 			return {
-				message: "One of the chosen moments does not apply to this kind of work.",
+				message:
+					"One of the chosen moments does not apply to this kind of work. Clear it to continue.",
 				focusId: occasionFieldId("signals"),
 			};
 		}
@@ -172,7 +173,7 @@ export function reviewSettingsProblem(
 		!reviewFields.evidenceRequirements.some((need) => need.stance !== "CONTEXTUAL")
 	) {
 		return {
-			message: "This review needs at least one source it cannot run without.",
+			message: "Set at least one source to Required. A review cannot run without one.",
 			focusId: occasionFieldId("evidence"),
 		};
 	}
@@ -186,7 +187,7 @@ export function reviewSettingsProblem(
 	if (exhaustiveBlocked) {
 		return {
 			message:
-				"One source can never be captured whole, so nothing this review says about what is absent from it can rest on it.",
+				"One chosen source cannot be captured whole, so this review cannot claim that anything is missing from it. Change that source to Context or Off.",
 			focusId: occasionFieldId("evidence"),
 		};
 	}

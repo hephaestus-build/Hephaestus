@@ -52,7 +52,8 @@ export function TeamCard({
 								{memberCount === 1 ? "member" : "members"}
 							</span>
 							<span>
-								{team.repositories.length} {team.repositories.length === 1 ? "repo" : "repos"}
+								{team.repositories.length}{" "}
+								{team.repositories.length === 1 ? "repository" : "repositories"}
 							</span>
 						</div>
 					</div>
@@ -61,7 +62,11 @@ export function TeamCard({
 							variant="ghost"
 							size="icon"
 							onClick={() => onToggleVisibility(!team.hidden)}
-							title={team.hidden ? "Show team" : "Hide team"}
+							title={
+								team.hidden
+									? `Show ${team.name} in workspace activity`
+									: `Hide ${team.name} from workspace activity`
+							}
 						>
 							{team.hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
 						</Button>

@@ -17,7 +17,7 @@ export function CuratedEntryBadges({ status, kind }: CuratedEntryBadgesProps) {
 	const copy = curatedEntryCopy(status, kind);
 	return (
 		<>
-			{!status.offered && <Badge variant="outline">Not offered</Badge>}
+			{!status.offered && <Badge variant="outline">Excluded</Badge>}
 			{status.state !== "FROM_HEPHAESTUS" && (
 				<Badge variant={TONE_VARIANT[copy.tone]}>{copy.label}</Badge>
 			)}

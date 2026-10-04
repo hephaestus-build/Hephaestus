@@ -80,7 +80,7 @@ function structureError(error: unknown) {
 	toast.error(
 		problemStatusOf(error) === 412
 			? "The catalog order changed before this move was saved. We reloaded the latest order."
-			: "Couldn't save the catalog order",
+			: "We could not save the catalog order",
 		{ description: problemDetailOf(error) },
 	);
 }
@@ -120,7 +120,7 @@ function AdminCuratedCatalogPage() {
 			invalidateCatalog();
 			toast.success(
 				successMessage ??
-					(offered ? "Practice offered to workspaces" : "Practice is no longer offered"),
+					(offered ? "Practice included for workspaces" : "Practice excluded from workspaces"),
 			);
 		},
 		onError: (error: unknown) => {
@@ -129,7 +129,7 @@ function AdminCuratedCatalogPage() {
 			toast.error(
 				problemStatusOf(error) === 412
 					? "The catalog changed before this action was saved. We reloaded the practice."
-					: "Couldn't update the practice",
+					: "We could not update the practice",
 				{ description: problemDetailOf(error) },
 			);
 		},
@@ -138,7 +138,7 @@ function AdminCuratedCatalogPage() {
 		onSuccess: (catalog: CuratedCatalog) => {
 			queryClient.setQueryData(adminGetCuratedCatalogQueryKey(), catalog);
 			queryClient.removeQueries({ queryKey: detailKey("group", slug), exact: true });
-			toast.success(offered ? "Group included for workspaces" : "Group is no longer included");
+			toast.success(offered ? "Group included for workspaces" : "Group excluded from workspaces");
 		},
 		onError: (error: unknown) => {
 			queryClient.removeQueries({ queryKey: detailKey("group", slug), exact: true });
@@ -146,7 +146,7 @@ function AdminCuratedCatalogPage() {
 			toast.error(
 				problemStatusOf(error) === 412
 					? "The catalog changed before this action was saved. We reloaded the group."
-					: "Couldn't update the group",
+					: "We could not update the group",
 				{ description: problemDetailOf(error) },
 			);
 		},
@@ -271,7 +271,7 @@ function AdminCuratedCatalogPage() {
 		body = (
 			<QueryErrorAlert
 				error={catalogQuery.error}
-				title="Couldn't load the practice catalog"
+				title="We could not load the practice catalog"
 				onRetry={() => {
 					void catalogQuery.refetch();
 				}}
@@ -361,7 +361,7 @@ function AdminCuratedCatalogPage() {
 			<PageHeader
 				icon={<LibraryBig />}
 				title="Practice catalog"
-				description="Choose which groups and practices workspace administrators can add. CuratedCatalog changes never rewrite existing workspace practices."
+				description="Choose which groups and practices workspace admins can add. Changes here never rewrite existing workspace practices."
 				actions={
 					<div className="flex flex-wrap gap-2">
 						{writePending ? (
