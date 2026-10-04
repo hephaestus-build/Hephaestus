@@ -133,15 +133,13 @@ export const Withheld: Story = {
 	},
 };
 
-/** More groups than a page: the table lists the first twenty and shows the rest when asked. */
+/** Many groups: the table lists every one, as the Practice profile does, with no paging. */
 export const ManyGroups: Story = {
 	args: { state: { status: "ready", overview: MANY_GROUPS_WORKSPACE } },
 	play: async ({ canvas }) => {
 		const table = groupsTable(canvas);
-		await expect(table.getAllByRole("button", { name: /^Open group /u })).toHaveLength(20);
-		await userEvent.click(table.getByRole("button", { name: "Show more practice groups" }));
 		await expect(table.getAllByRole("button", { name: /^Open group /u })).toHaveLength(26);
-		await expect(table.queryByRole("button", { name: "Show more practice groups" })).toBeNull();
+		await expect(table.queryByRole("button", { name: /^Show more/u })).toBeNull();
 	},
 };
 
@@ -172,7 +170,8 @@ export const SwitchingWindow: Story = {
 export const Empty: Story = {
 	args: { state: { status: "ready", overview: EMPTY_WORKSPACE } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No practice groups yet")).toBeVisible();
+		// The Practice profile's words for the same state.
+		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
 	},
 };
 

@@ -8,14 +8,11 @@ import { NoSuchGroup } from "@/components/practice-profile/practice-profile-bloc
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { DrawerBody } from "@/components/ui/drawer";
-import { useRevealedRows } from "@/hooks/use-revealed-rows";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import { OPEN_IN_YOUR_PROFILE, practicesHint, type SplitContext } from "./across-workspace-copy";
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 import { LevelSplit, SplitLegend } from "./WorkspaceSplitBar";
-
-/** How many practices the level lists before it offers more. */
-export const PRACTICES_PAGE_SIZE = 20;
 
 /** The open group while the page loads, when the page lists no group by its slug, or ready. */
 export type WorkspaceGroupLevelState =
@@ -81,27 +78,29 @@ export function WorkspaceGroupLevel({
 					)
 				}
 				aside={
-					state.status === "ready" ? (
+					state.status === "missing" ? undefined : (
 						<LevelSplit
-							split={state.group.split}
-							yourStanding={state.group.yourStanding}
-							context={state.context}
+							state={
+								state.status === "ready"
+									? { status: "ready", ...state.group, context: state.context }
+									: state
+							}
 						/>
-					) : undefined
+					)
 				}
 			/>
 			<DrawerBody className="flex flex-col gap-4 pt-2">
 				{state.status === "missing" ? (
 					<NoSuchGroup />
 				) : (
-					<GroupPractices key={group?.groupSlug} state={state} onGoToPractice={onGoToPractice} />
+					<GroupPractices state={state} onGoToPractice={onGoToPractice} />
 				)}
 			</DrawerBody>
 		</>
 	);
 }
 
-/** The group's practices, keyed on the group so a new group starts from its first page. */
+/** The group's practices, every one of them, as the Practice profile lists a group's practices. */
 function GroupPractices({
 	state,
 	onGoToPractice,
@@ -117,9 +116,10 @@ function GroupPractices({
 		yourStanding: practice.yourStanding,
 		split: practice.split,
 	}));
-	const { shown, ...more } = useRevealedRows(rows, PRACTICES_PAGE_SIZE);
 	return (
 		<>
+			{/* The rule's line, or a line in its place while the level loads, so nothing moves. */}
+			{state.status === "loading" && <Skeleton className="h-10 w-full max-w-2xl" />}
 			{state.status === "ready" && state.group.practices.length > 0 && (
 				<p className="max-w-2xl text-sm text-muted-foreground">
 					{practicesHint(state.context.minimumOthers)}
@@ -132,10 +132,9 @@ function GroupPractices({
 				subjectHead="Practice"
 				state={
 					state.status === "ready"
-						? { status: "ready", rows: shown, context: state.context, more }
+						? { status: "ready", rows, context: state.context }
 						: { status: "loading" }
 				}
-				noun="practices"
 				empty={{
 					title: "No practices yet",
 					description: "Once your workspace reviews a practice in this group, it appears here.",

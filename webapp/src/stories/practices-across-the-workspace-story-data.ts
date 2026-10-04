@@ -118,7 +118,7 @@ export const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
 	practice("keep-history-clean", "Keep the history readable", "STRENGTH", threeWay([6, 6, 9])),
 ];
 
-/** More practices than one page of the group's level holds, so its body has to scroll to its end. */
+/** More practices than the group's level holds, so its body has to scroll to its end. */
 export const MANY_PRACTICES: WorkspacePracticeSplit[] = Array.from({ length: 24 }, (_, index) =>
 	practice(`practice-${index + 1}`, `Practice ${index + 1}`, "MIXED", threeWay([6, 7, 8])),
 );
@@ -192,7 +192,7 @@ export const TOTAL_ONLY_WORKSPACE: PracticesAcrossWorkspace = {
 
 export const EMPTY_WORKSPACE: PracticesAcrossWorkspace = { ...ACROSS_WORKSPACE, groups: [] };
 
-/** More groups than one page holds, so the table shows its end. */
+/** Many groups, every one listed. */
 export const MANY_GROUPS_WORKSPACE: PracticesAcrossWorkspace = {
 	...ACROSS_WORKSPACE,
 	groups: Array.from({ length: 26 }, (_, index) => ({

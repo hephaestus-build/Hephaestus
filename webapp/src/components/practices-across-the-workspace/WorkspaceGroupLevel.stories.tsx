@@ -157,8 +157,8 @@ export const ReaderNotCounted: Story = {
 };
 
 /**
- * More practices than a page: the table keeps its full height and the level's body scrolls, so the
- * last rows and the way to the rest stay in reach.
+ * More practices than the panel holds: the table keeps its full height and the level's body
+ * scrolls, so the last rows stay in reach.
  */
 export const ManyPractices: Story = {
 	args: {
@@ -177,13 +177,10 @@ export const ManyPractices: Story = {
 		}
 		// The frame clips what overflows it, so it must be as tall as its rows.
 		await expect(frame.scrollHeight).toBeLessThanOrEqual(frame.clientHeight + 1);
-		const more = level.getByRole("button", { name: "Show more practices" });
-		more.scrollIntoView();
-		await userEvent.click(more);
+		// Every practice is listed, with no paging, as the Practice profile lists them.
 		await expect(
 			within(table).getAllByRole("button", { name: /^Open in your Practice profile /u }),
 		).toHaveLength(24);
-		await expect(frame.scrollHeight).toBeLessThanOrEqual(frame.clientHeight + 1);
 	},
 };
 
@@ -192,6 +189,8 @@ export const Loading: Story = {
 	play: async () => {
 		await settledDrawerPanel();
 		await expect(screen.getByRole("table")).toHaveAttribute("aria-busy", "true");
+		// The head's bar and the rule's line keep their place while the level loads.
+		await expect(document.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(3);
 	},
 };
 

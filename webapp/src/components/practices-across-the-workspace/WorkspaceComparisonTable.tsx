@@ -10,13 +10,11 @@ import {
 	type PracticeTableRowLink,
 	SubjectCell,
 } from "@/components/practice-vocabulary/PracticeTable";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TableCell, TableHead, TableRow } from "@/components/ui/table";
-import type { RevealedMore } from "@/hooks/use-revealed-rows";
+import { TableCell, TableHead } from "@/components/ui/table";
 
 import type { SplitContext } from "./across-workspace-copy";
-import { WorkspaceSplitBar } from "./WorkspaceSplitBar";
+import { WorkspaceSplitBar, WorkspaceSplitBarSkeleton } from "./WorkspaceSplitBar";
 
 /** One practice group or one practice, as the table compares it. */
 export interface ComparisonRow {
@@ -29,7 +27,7 @@ export interface ComparisonRow {
 	split: WorkspaceSplit;
 }
 
-/** The rows while they load, or the rows shown so far with what every split is a part of. */
+/** The rows while they load, or every row with what every split is a part of. */
 export type ComparisonTableState =
 	| { status: "loading" }
 	| {
@@ -37,8 +35,6 @@ export type ComparisonTableState =
 			rows: readonly ComparisonRow[];
 			/** The split's reference group and its rule, shared by every row. */
 			context: SplitContext;
-			/** The end of a list longer than one page; without it the rows are the whole list. */
-			more?: RevealedMore;
 	  };
 
 export interface WorkspaceComparisonTableProps {
@@ -53,15 +49,13 @@ export interface WorkspaceComparisonTableProps {
 	rowLink: (row: ComparisonRow) => Omit<PracticeTableRowLink, "name">;
 	/** The row whose level is open over the page, which keeps a bar on its leading edge. */
 	openKey?: string;
-	/** What the list is called at its end: "practice groups", "practices". */
-	noun: string;
 	empty: { title: string; description: string };
 }
 
 /**
  * Practice groups or practices beside how the workspace's developers with a standing split across each,
  * in the practice table frame: the subject, the split with the reader's place on it, and the row's
- * own actions, which the caller decides.
+ * own actions, which the caller decides. Every row is listed, as the Practice profile lists them.
  */
 export function WorkspaceComparisonTable({
 	"aria-label": label,
@@ -69,20 +63,18 @@ export function WorkspaceComparisonTable({
 	state,
 	rowLink,
 	openKey,
-	noun,
 	empty,
 }: WorkspaceComparisonTableProps) {
 	const ready = state.status === "ready" ? state : undefined;
-	const columns = 3;
 	return (
 		<PracticeTableFrame
 			aria-label={label}
-			columns={columns}
+			columns={3}
 			head={
 				<>
 					<TableHead className="w-96">{subjectHead}</TableHead>
 					<TableHead>Developers in this workspace</TableHead>
-					<TableHead className="w-28">
+					<TableHead className="w-32">
 						<span className="sr-only">Open</span>
 					</TableHead>
 				</>
@@ -108,26 +100,14 @@ export function WorkspaceComparisonTable({
 			loadingRow={
 				<>
 					<TableCell>
-						<Skeleton className="h-5 w-48" />
+						<Skeleton className="h-5 w-48 rounded-full" />
 					</TableCell>
-					<TableCell>
-						<Skeleton className="h-9 w-full" />
+					<TableCell className="align-top">
+						<WorkspaceSplitBarSkeleton />
 					</TableCell>
-					<TableCell>
-						<Skeleton className="ml-auto h-5 w-32" />
-					</TableCell>
+					{/* The row's link is drawn once its row is in, as the Practice profile leaves it. */}
+					<TableCell />
 				</>
-			}
-			end={
-				ready?.more?.hasMore === true && (
-					<TableRow variant="static">
-						<TableCell colSpan={columns} className="p-3">
-							<Button variant="outline" size="sm" onClick={ready.more.onShowMore}>
-								Show more {noun}
-							</Button>
-						</TableCell>
-					</TableRow>
-				)
 			}
 		/>
 	);

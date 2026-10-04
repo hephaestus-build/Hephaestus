@@ -14,6 +14,7 @@ import {
 	NONE_YET_SEGMENT,
 	standingColorClass,
 } from "@/components/practice-vocabulary/standing-counts";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import {
 	developerCount,
@@ -22,7 +23,8 @@ import {
 	splitDescription,
 } from "./across-workspace-copy";
 
-export interface WorkspaceSplitBarProps extends SplitContext {
+/** One group's or one practice's split, and where the reader is on it. */
+interface SplitOfRow {
 	split: WorkspaceSplit;
 	/**
 	 * The reader's current standing in the group or the practice: the part the You marker is on,
@@ -30,6 +32,8 @@ export interface WorkspaceSplitBarProps extends SplitContext {
 	 */
 	yourStanding: PracticeGroupStandingValue;
 }
+
+export interface WorkspaceSplitBarProps extends SplitContext, SplitOfRow {}
 
 /** One part a split can show: its words, its icon and the colour its icon and its piece of bar wear. */
 interface PartDef {
@@ -146,19 +150,43 @@ export function WorkspaceSplitBar({ split, yourStanding, ...context }: Workspace
 	);
 }
 
-/** A split beside a level's title, at the width the header's aside gives it. */
+/**
+ * A bar's shape while it loads, line for line as the bar lays it out: the marker's row, the bar,
+ * the counts under it, then the total at its end.
+ */
+export function WorkspaceSplitBarSkeleton() {
+	return (
+		<div aria-hidden className="flex w-full min-w-0 flex-col gap-1">
+			<div className="flex flex-col gap-0.5">
+				<span className="h-5" />
+				<Skeleton className="h-2 w-full rounded-sm" />
+				<Skeleton className="h-4 w-full" />
+			</div>
+			<Skeleton className="ml-auto h-4 w-24" />
+		</div>
+	);
+}
+
+/**
+ * A split beside a level's title, at the width the header's aside gives it, or its shape while the
+ * level loads.
+ */
 export function LevelSplit({
-	split,
-	yourStanding,
-	context,
+	state,
 }: {
-	split: WorkspaceSplit;
-	yourStanding: PracticeGroupStandingValue;
-	context: SplitContext;
+	state: { status: "loading" } | ({ status: "ready"; context: SplitContext } & SplitOfRow);
 }) {
 	return (
 		<div className="flex w-full sm:w-88">
-			<WorkspaceSplitBar split={split} yourStanding={yourStanding} {...context} />
+			{state.status === "ready" ? (
+				<WorkspaceSplitBar
+					split={state.split}
+					yourStanding={state.yourStanding}
+					{...state.context}
+				/>
+			) : (
+				<WorkspaceSplitBarSkeleton />
+			)}
 		</div>
 	);
 }

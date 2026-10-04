@@ -100,6 +100,16 @@ export type ReviewTimeframe = (typeof REVIEW_TIMEFRAMES)[number];
 export const ALL_PRACTICE_GROUPS = "All practice groups";
 
 /**
+ * What a list of every practice group says before the workspace reviews any practice: the same
+ * words on the Practice profile and across the workspace, since it is the same state.
+ */
+export const NO_PRACTICE_GROUPS = {
+	title: "No practices set up yet",
+	description:
+		"Practice groups appear here once a workspace admin sets up the practices this workspace reviews.",
+};
+
+/**
  * The "All practice groups" table as a level; there is one, so the id names the list rather than a
  * row.
  */

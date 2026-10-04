@@ -7,10 +7,13 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
-import { ALL_PRACTICE_GROUPS } from "@/components/practice-profile/practice-profile-search";
+import {
+	ALL_PRACTICE_GROUPS,
+	NO_PRACTICE_GROUPS,
+} from "@/components/practice-profile/practice-profile-search";
 import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { GroupName } from "@/components/practice-vocabulary/GroupName";
-import { useRevealedRows } from "@/hooks/use-revealed-rows";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import {
 	type AcrossWorkspaceWindow,
@@ -24,9 +27,6 @@ import {
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 import { SplitLegend } from "./WorkspaceSplitBar";
 import { WorkspaceTiles } from "./WorkspaceTiles";
-
-/** How many practice groups the table lists before it offers more. */
-export const GROUPS_PAGE_SIZE = 20;
 
 export interface PracticesAcrossTheWorkspacePageProps {
 	/** The splits and the open feedback, which read no window. */
@@ -98,7 +98,10 @@ export function PracticesAcrossTheWorkspacePage({
 							openFeedback={overview?.openFeedback}
 							stale={stale}
 						/>
-						{windowTiles !== undefined && (
+						{/* The rule's lines, or lines in their place while the tiles load, so nothing moves. */}
+						{windowTiles === undefined ? (
+							<Skeleton className="h-8 w-full max-w-3xl" />
+						) : (
 							<p className="text-xs text-muted-foreground">{tilesHint(windowTiles)}</p>
 						)}
 					</div>
@@ -143,7 +146,7 @@ function failureOf(
 	return undefined;
 }
 
-/** Every practice group, a page at a time, each with its split and the way to open it. */
+/** Every practice group, each with its split and the way to open it. */
 function GroupsTable({
 	overview,
 	openGroupSlug,
@@ -163,7 +166,6 @@ function GroupsTable({
 			split: group.split,
 		};
 	});
-	const { shown, ...more } = useRevealedRows(rows, GROUPS_PAGE_SIZE);
 	return (
 		<WorkspaceComparisonTable
 			aria-label={ALL_PRACTICE_GROUPS}
@@ -171,14 +173,10 @@ function GroupsTable({
 			state={
 				overview === undefined
 					? { status: "loading" }
-					: { status: "ready", rows: shown, context: splitContextOf(overview), more }
+					: { status: "ready", rows, context: splitContextOf(overview) }
 			}
 			openKey={openGroupSlug}
-			noun="practice groups"
-			empty={{
-				title: "No practice groups yet",
-				description: "Once your workspace sets up practice groups, each one appears here.",
-			}}
+			empty={NO_PRACTICE_GROUPS}
 			rowLink={(row) => ({
 				text: "Open group",
 				onOpen: () => onOpenGroup(row.key),

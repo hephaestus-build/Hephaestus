@@ -46,8 +46,7 @@ const meta = {
 		subjectHead: "Practice group",
 		state: { status: "ready", rows: ROWS, context: CONTEXT },
 		rowLink: () => ({ text: "Open group", onOpen }),
-		noun: "practice groups",
-		empty: { title: "No practice groups yet", description: "They appear once set up." },
+		empty: { title: "No practices set up yet", description: "They appear once set up." },
 	},
 	argTypes: { rowLink: { control: false } },
 } satisfies Meta<typeof WorkspaceComparisonTable>;
@@ -94,34 +93,18 @@ export const Withheld: Story = {
 	},
 };
 
+/** Each loading row in the shape of the row it stands for, its link cell left empty. */
 export const Loading: Story = {
 	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("table")).toHaveAttribute("aria-busy", "true");
+		await expect(canvas.queryAllByRole("button")).toHaveLength(0);
 	},
 };
 
 export const Empty: Story = {
 	args: { state: { status: "ready", rows: [], context: CONTEXT } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No practice groups yet")).toBeVisible();
-	},
-};
-
-const onShowMore = fn();
-
-/** A list longer than a page ends in a press that shows the next one. */
-export const ShowMore: Story = {
-	args: {
-		state: {
-			status: "ready",
-			rows: ROWS,
-			context: CONTEXT,
-			more: { hasMore: true, onShowMore },
-		},
-	},
-	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Show more practice groups" }));
-		await expect(onShowMore).toHaveBeenCalledOnce();
+		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
 	},
 };
