@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeCoverageLedger;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.AnsweredPracticesRow;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.ReviewOutcomeRow;
 import de.tum.cit.aet.hephaestus.core.UnknownVocabulary;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
@@ -18,12 +19,16 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Reads persisted review decisions used to derive practice traces. */
 @Component
 @RequiredArgsConstructor
 class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
+
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final AgentJobRepository repository;
     private final ArtifactSourceCatalogRegistry sources;
@@ -34,14 +39,18 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
         if (reviewIds.isEmpty()) {
             return Map.of();
         }
+        Map<UUID, Map<String, UUID>> answered = new HashMap<>();
+        for (AnsweredPracticesRow row : repository.findAnsweredPractices(workspaceId, reviewIds)) {
+            answered.put(row.getId(), answeredBy(row.getAnsweredPractices()));
+        }
         Map<UUID, ReviewOutcome> outcomes = new HashMap<>();
         for (ReviewOutcomeRow row : repository.findReviewOutcomes(workspaceId, reviewIds)) {
-            outcomes.put(row.getId(), toOutcome(row));
+            outcomes.put(row.getId(), toOutcome(row, answered.getOrDefault(row.getId(), Map.of())));
         }
         return Map.copyOf(outcomes);
     }
 
-    private ReviewOutcome toOutcome(ReviewOutcomeRow row) {
+    private ReviewOutcome toOutcome(ReviewOutcomeRow row, Map<String, UUID> answeredBy) {
         boolean refusedEvidence = row.getStatus() == AgentJobStatus.COMPLETED
                 && row.getOutput() != null
                 && ReviewRunOutcome.fromJobOutput(row.getOutput()) == ReviewRunOutcome.INSUFFICIENT_EVIDENCE;
@@ -50,7 +59,23 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
                 refusedEvidence,
                 row.getCompletedAt(),
                 readiness(row.getReviewReadiness()),
-                coverage(row.getOutput()));
+                coverage(row.getOutput()),
+                answeredBy);
+    }
+
+    /** The producing review by practice slug; an unreadable record answers nothing rather than guessing. */
+    static Map<String, UUID> answeredBy(String recorded) {
+        Map<String, UUID> bySlug = new HashMap<>();
+        try {
+            for (JsonNode entry : JSON.readTree(recorded)) {
+                bySlug.put(
+                        entry.path("practiceSlug").asString(),
+                        UUID.fromString(entry.path("reviewId").asString()));
+            }
+        } catch (JacksonException | IllegalArgumentException unreadable) {
+            return Map.of();
+        }
+        return Map.copyOf(bySlug);
     }
 
     private static Map<String, PracticeCoverageOutcome> coverage(@Nullable JsonNode output) {

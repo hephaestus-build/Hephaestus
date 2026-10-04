@@ -119,7 +119,7 @@ public class SlackConversationProjector implements ConversationThreadProjection 
             }
             conv.put("threadTs", key.threadTs());
             ArrayNode messages = conv.putArray("messages");
-            boolean truncated = appendThreadMessages(workspaceId, key, messages);
+            boolean truncated = appendThreadMessages(workspaceId, key, messages, null);
             conv.put("messageCount", messages.size());
             conv.put("truncated", truncated);
         }
@@ -137,9 +137,10 @@ public class SlackConversationProjector implements ConversationThreadProjection 
      * @param workspaceId the workspace to scope every query to (explicit predicate)
      * @param channelId   the thread's Slack channel id
      * @param threadTs    the thread root {@code ts} (aggregate key)
+     * @param reviewedMemberId the member the review is about; each turn states whether this member wrote it
      */
     @Override
-    public ObjectNode buildThreadPayload(long workspaceId, String channelId, String threadTs) {
+    public ObjectNode buildThreadPayload(long workspaceId, String channelId, String threadTs, long reviewedMemberId) {
         ObjectNode root = objectMapper.createObjectNode();
 
         ObjectNode meta = root.putObject("_meta");
@@ -153,7 +154,8 @@ public class SlackConversationProjector implements ConversationThreadProjection 
         root.put("threadTs", threadTs);
 
         ArrayNode messages = root.putArray("messages");
-        boolean truncated = appendThreadMessages(workspaceId, new ThreadKey(channelId, null, threadTs, 0), messages);
+        boolean truncated = appendThreadMessages(
+                workspaceId, new ThreadKey(channelId, null, threadTs, 0), messages, reviewedMemberId);
         root.put("messageCount", messages.size());
         root.put("truncated", truncated);
         return root;
@@ -211,7 +213,8 @@ public class SlackConversationProjector implements ConversationThreadProjection 
             personCopies.recordIdentity(new PersonCopyIdentity("SLACK", "https://slack.com", subject, teamId));
     }
 
-    private boolean appendThreadMessages(long workspaceId, ThreadKey key, ArrayNode messages) {
+    private boolean appendThreadMessages(
+            long workspaceId, ThreadKey key, ArrayNode messages, @Nullable Long reviewedMemberId) {
         List<SlackThreadMessageRow> rows =
                 messageRepository.findThreadMessages(workspaceId, key.channelId(), key.threadTs(), Pageable.unpaged());
         for (int index = 0; index < rows.size(); index++) {
@@ -227,6 +230,9 @@ public class SlackConversationProjector implements ConversationThreadProjection 
                 node.put("authorName", row.authorName());
             }
             node.put("text", row.text());
+            if (reviewedMemberId != null) {
+                node.put("underReview", reviewedMemberId.equals(row.authorMemberId()));
+            }
             if (row.editedAt() != null) {
                 node.put("edited", true);
             }

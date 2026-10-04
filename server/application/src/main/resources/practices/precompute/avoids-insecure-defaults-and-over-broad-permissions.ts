@@ -74,7 +74,7 @@ export default function avoidsInsecureDefaultsAndOverBroadPermissions(
 	const directions =
 		hints.length > 0
 			? [
-					`Found ${hints.length} insecure-default / secret-exposure candidate(s) on added lines — investigate each on the reachable auth/transport surface: a token in a URL path leaks into logs; a keychain write takes its accessibility from kSecAttrAccessible, WhenUnlocked when omitted, which is not a defect by itself; logging a response body or token exposes secrets; disabled TLS / wildcard CORS / world-writable perms are over-broad. Confirm whether each is real and exploitable before deciding.`,
+					`Found ${hints.length} insecure-default / secret-exposure candidate(s) on added lines — investigate each on the reachable auth/transport surface: a token in a URL path leaks into logs; a keychain write takes its accessibility from kSecAttrAccessible, WhenUnlocked when omitted, which is not a defect by itself; a logged value exposes secrets only when it can carry credential material (a token, a key, an auth header or the body of an auth exchange); disabled TLS / wildcard CORS / world-writable perms are over-broad. Confirm whether each is real and exploitable before deciding.`,
 				]
 			: [];
 	return {

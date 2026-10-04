@@ -206,6 +206,51 @@ export const DeclinedForInsufficientEvidence: Story = {
 };
 
 /**
+ * A run whose every ready practice an earlier review had already answered on the same code also completes with
+ * no observations of its own. The empty state says the answers are that review's, not that this one looked.
+ * No model ran, so the run reports no calls and no tokens; the model it was admitted on is still named.
+ */
+export const AnsweredByAnEarlierReview: Story = {
+	args: {
+		job: {
+			status: "ready",
+			job: {
+				...reviewJob(COMPLETED_RUN),
+				reviewOutcome: "COALESCED",
+				answeredPractices: [
+					{
+						practiceSlug: "errors-carry-context",
+						revisionId: 3,
+						reviewId: "cccccccc-1111-1111-1111-111111111111",
+					},
+				],
+				llmModel: undefined,
+				llmTotalCalls: 0,
+				llmTotalInputTokens: 0,
+				llmTotalOutputTokens: 0,
+				llmTotalReasoningTokens: 0,
+				generatedPaths: { patterns: [], paths: [] },
+				exitCode: undefined,
+			},
+		},
+		observations: NOTHING,
+		feedback: NOTHING,
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await waitFor(async () =>
+			expect(await panel.findAllByText("Answered by an earlier review")).toHaveLength(2),
+		);
+		await expect(panel.getByRole("link", { name: "an earlier review" })).toBeVisible();
+		await expect(panel.getByRole("link", { name: "Errors carry their context" })).toBeVisible();
+		await expect(panel.queryByText("No observations were recorded")).toBeNull();
+		await expect(panel.queryByText("Nothing was assessed")).toBeNull();
+		const calls = panel.getAllByRole("term").find((term) => term.textContent === "Model calls");
+		await expect(calls?.nextElementSibling).toHaveTextContent(/^0$/u);
+	},
+};
+
+/**
  * Nothing yet, and the reason is that the review is still going — not that it found nothing. A run in
  * flight is the one that can be stopped, so the footer offers exactly that, behind a confirmation.
  */

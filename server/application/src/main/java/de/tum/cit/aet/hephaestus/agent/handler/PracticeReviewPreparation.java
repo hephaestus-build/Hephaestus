@@ -7,7 +7,9 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewChange;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewCoalescedException;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.AnsweredPractice;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -23,9 +25,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -43,6 +48,7 @@ final class PracticeReviewPreparation {
     private final GitRepositoryManager gitRepositoryManager;
     private final JobEvidenceFiles evidenceFiles;
     private final PracticeRevisionService practiceRevisionService;
+    private final AnsweredPractices answeredPractices;
 
     PracticeReviewPreparation(
             WorkspaceContextBuilder workspaceContextBuilder,
@@ -50,13 +56,15 @@ final class PracticeReviewPreparation {
             TaskEnvelopeWriter taskEnvelopeWriter,
             GitRepositoryManager gitRepositoryManager,
             JobEvidenceFiles evidenceFiles,
-            PracticeRevisionService practiceRevisionService) {
+            PracticeRevisionService practiceRevisionService,
+            AnsweredPractices answeredPractices) {
         this.workspaceContextBuilder = workspaceContextBuilder;
         this.practiceCatalogInjector = practiceCatalogInjector;
         this.taskEnvelopeWriter = taskEnvelopeWriter;
         this.gitRepositoryManager = gitRepositoryManager;
         this.evidenceFiles = evidenceFiles;
         this.practiceRevisionService = practiceRevisionService;
+        this.answeredPractices = answeredPractices;
     }
 
     /**
@@ -65,6 +73,8 @@ final class PracticeReviewPreparation {
      * @param staging what the handler adds beside the catalog, such as the composition request
      * @throws InsufficientEvidenceException when no practice is ready; the evidence travels with it for
      *     the executor to record and release
+     * @throws ReviewCoalescedException when every ready practice was already answered on the same code; the
+     *     evidence and the answers travel with it the same way
      */
     PreparedJobInputs prepare(
             AgentJob job,
@@ -75,7 +85,7 @@ final class PracticeReviewPreparation {
         evidenceFiles.beginPersonCapture(job);
         try {
             return prepareCaptured(job, artifactKind, request, envelope, staging);
-        } catch (InsufficientEvidenceException refused) {
+        } catch (InsufficientEvidenceException | ReviewCoalescedException refused) {
             throw refused;
         } catch (RuntimeException failure) {
             evidenceFiles.abortPersonCapture(job);
@@ -115,6 +125,7 @@ final class PracticeReviewPreparation {
                         evidenceFiles.prepare(job, prepared, readiness.report()));
             }
             Map<String, byte[]> files = new LinkedHashMap<>(prepared.files());
+            byte @Nullable [] generatedPaths = null;
             if (artifactKind.equals(ArtifactKinds.PULL_REQUEST) && change != null) {
                 var metadata = Objects.requireNonNull(job.getMetadata());
                 var patterns = StreamSupport.stream(
@@ -122,13 +133,38 @@ final class PracticeReviewPreparation {
                         .map(JsonNode::asString)
                         .toList();
                 var policy = GeneratedPathReviewDTO.of(patterns, change.changedPaths());
-                files.put(GeneratedPathReviewDTO.INPUT_PATH, JSON.writeValueAsBytes(policy));
+                generatedPaths = JSON.writeValueAsBytes(policy);
+                files.put(GeneratedPathReviewDTO.INPUT_PATH, generatedPaths);
+            }
+            List<AnsweredPractice> answered = answeredPractices.answered(job, ready, manifest, generatedPaths);
+            Set<String> answeredSlugs =
+                    answered.stream().map(AnsweredPractice::practiceSlug).collect(Collectors.toSet());
+            List<Practice> asked = ready.stream()
+                    .filter(practice -> !answeredSlugs.contains(practice.getSlug()))
+                    .toList();
+            if (!answered.isEmpty()) {
+                log.info(
+                        "Not asking {} of {} ready practice(s) a completed review answered on the same code: jobId={}, answered={}",
+                        answered.size(),
+                        ready.size(),
+                        job.getId(),
+                        answered);
+            }
+            if (asked.isEmpty()) {
+                throw new ReviewCoalescedException(
+                        "Every ready practice was answered by a completed review of the same code: jobId="
+                                + job.getId(),
+                        evidenceFiles
+                                .prepare(job, prepared.withFiles(files), readiness.report())
+                                .withAnsweredPractices(answered));
             }
             files.put(SandboxLayout.TASK_ENVELOPE_FILENAME, taskEnvelopeWriter.write(envelope.get()));
-            practiceCatalogInjector.inject(files, job, artifactKind, ready);
+            practiceCatalogInjector.inject(files, job, artifactKind, asked);
             staging.accept(files);
-            return evidenceFiles.prepare(job, prepared.withFiles(files), readiness.report());
-        } catch (InsufficientEvidenceException refused) {
+            return evidenceFiles
+                    .prepare(job, prepared.withFiles(files), readiness.report())
+                    .withAnsweredPractices(answered);
+        } catch (InsufficientEvidenceException | ReviewCoalescedException refused) {
             throw refused;
         } catch (RuntimeException exception) {
             prepared.close();
