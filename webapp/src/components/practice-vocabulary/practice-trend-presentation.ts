@@ -73,13 +73,14 @@ export function explainStanding(
 
 /**
  * How a settled practice standing weighs its work: the newest counts most, the older ones less.
- * With only a review of past work, it says the standing was read from that. One piece weighs
+ * With only a requested review or a review of past work, neither of which moves a trend, it says
+ * the standing was read from them. One piece weighs
  * nothing against another, so it says nothing.
  */
 export function formatStandingBasis(support: TrendSupport): string | undefined {
 	const current = support.currentOpportunities;
 	if (current === 0) {
-		return "Read from a review of your past work, which never moves a trend.";
+		return "Read from a review that you asked for or a review of your past work. Neither moves a trend.";
 	}
 	return current === 1 ? undefined : "Your latest work counts most, and older work counts less.";
 }

@@ -309,9 +309,9 @@ public class PracticeStandingService {
      * this number, and the level above consumes the number rather than the label.
      *
      * <p>One rule over the newest {@link #STANDING_WINDOW} opportunities, weighted by recency: the unit is a
-     * piece of reviewed work, and the denominator is the opportunities it had. The opportunities are the live and
-     * requested work the trend reads; a practice only a backfill campaign judged reads the campaign's work by the
-     * same rule, so the two populations are never mixed.
+     * piece of reviewed work, and the denominator is the opportunities it had. The opportunities are the live work
+     * the trend reads; a practice only a requested review or a backfill campaign judged reads that work by the same
+     * rule, so the live and the self-selected populations are never mixed.
      *
      * <p>The share is measured against the weight of all {@link #STANDING_WINDOW} opportunities, read or not, so
      * fewer decided pieces of work than the window do not move a label: one problem on the newest piece reads
@@ -329,7 +329,7 @@ public class PracticeStandingService {
             return live.getAsDouble();
         }
         return practiceTrendService
-                .backfilledMetShare(evidence.observed(), since, STANDING_WINDOW, STANDING_DECAY)
+                .selfSelectedMetShare(evidence.observed(), since, STANDING_WINDOW, STANDING_DECAY)
                 .orElseGet(() -> evidence.problems().isEmpty() ? 1.0 : 0.0);
     }
 

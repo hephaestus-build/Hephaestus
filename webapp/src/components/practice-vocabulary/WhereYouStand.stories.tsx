@@ -98,7 +98,8 @@ export const NotObserved: Story = {
  */
 export const ReadFromPastWork: Story = {
 	args: {
-		basis: "Read from a review of your past work, which never moves a trend.",
+		basis:
+			"Read from a review that you asked for or a review of your past work. Neither moves a trend.",
 		direction: "INSUFFICIENT_EVIDENCE",
 		support: {
 			...support,
@@ -110,7 +111,9 @@ export const ReadFromPastWork: Story = {
 	},
 	play: async ({ canvas }) => {
 		const region = canvas.getByRole("region", { name: "Where you stand" });
-		await expect(region).toHaveTextContent("Read from a review of your past work");
+		await expect(region).toHaveTextContent(
+			"Read from a review that you asked for or a review of your past work",
+		);
 		await expect(region).toHaveTextContent("No new work has been reviewed yet.");
 	},
 };

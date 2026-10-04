@@ -129,6 +129,9 @@ The **door** is what a person or a provider did. `DiscoveredVia` is how we came 
   `BACKFILL` is measured-and-never-delivered. A sweep is a standing authorization to spend *and* to speak.
 
 `MANUAL` and `BACKFILL` are self-selected samples and `LIVE` is not, which is why they are held apart in every behavioral read.
+Neither moves a trend, resolves feedback, or raises a Practice profile card, and both stay visible as observations.
+A standing reads them only for a practice that no live review judged.
+
 A `BACKFILL` observation is also entitled only to `IN_APP`: the developer's own practice feedback.
 That entitlement is a ceiling, not an instruction.
 The in-app router refuses a cluster made entirely of backfilled measurements (`BACKFILL_QUIET`).
@@ -491,7 +494,7 @@ A piece of [feedback](./practice-feedback-language.md) on the Practice profile r
 
 | Term                     | Plain meaning                                                                                                                                                                                                                                                                                                                  | Do not use for this concept                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| **Resolved by the work** | Three pieces of the developer's reviewed work in a row, reviewed after the feedback was prepared, came back clean on the practice. Computed from the observations when the feedback is read and never stored. A problem starts the count over. A piece of work reviewed several times counts once, at its newest live or requested review. A Past work campaign never resolves feedback. | auto-resolved, closed by the system, streak, passed |
+| **Resolved by the work** | Three pieces of the developer's reviewed work in a row, reviewed after the feedback was prepared, came back clean on the practice. Computed from the observations when the feedback is read and never stored. A problem starts the count over. A piece of work reviewed several times counts once, at its newest live review. A review that someone asked for and a Past work campaign never resolve feedback. Their observations stay visible in the Practice profile. | auto-resolved, closed by the system, streak, passed |
 | **Marked as addressed**  | The developer answered the card with *Addressed* or *Not applicable*. Pressing the answer again takes it back and reopens the card. A dispute leaves it open. Whichever way resolved the feedback first is the one the card and the summary report.                                                                        | dismissed, acknowledged, done                       |
 | **Fell back**            | Open feedback the developer's work had started to answer, with at least one clean piece of work toward the three. A piece of work reviewed in the overview's window raised the problem again. The count went back to none. Closed feedback never falls back.                                                        | reset, regressed, reopened                          |
 

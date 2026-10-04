@@ -75,6 +75,19 @@ public final class TrendObservations {
                 .build();
     }
 
+    /** {@link #judged}, taken by a review somebody asked for by hand rather than a live review. */
+    public static Observation requested(long artifactId, String observedAt, Outcome outcome) {
+        return Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(artifactId)
+                .outcome(outcome)
+                .origin(ObservationOrigin.MANUAL)
+                .observedAt(Instant.parse(observedAt))
+                .build();
+    }
+
     private static Observation observation(
             long artifactId, UUID jobId, String observedAt, ArtifactKind kind, Outcome outcome) {
         return Observation.builder()

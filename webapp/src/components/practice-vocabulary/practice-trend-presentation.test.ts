@@ -65,7 +65,7 @@ describe("practice trend copy", () => {
 		// One piece weighs nothing against another: the early read already names it.
 		expect(formatStandingBasis(support({ currentOpportunities: 1 }))).toBeUndefined();
 		expect(formatStandingBasis(support({ currentOpportunities: 0 }))).toBe(
-			"Read from a review of your past work, which never moves a trend.",
+			"Read from a review that you asked for or a review of your past work. Neither moves a trend.",
 		);
 	});
 

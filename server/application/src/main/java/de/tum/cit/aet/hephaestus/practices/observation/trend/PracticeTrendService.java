@@ -36,11 +36,11 @@ public class PracticeTrendService {
     }
 
     /**
-     * {@link PracticeTrend#recentMetShare} over a practice's backfilled work alone, observed from {@code since}.
-     * A campaign's reading is sound on its own and never part of a live trend, so this is what a standing reads
-     * for a practice that only a campaign judged.
+     * {@link PracticeTrend#recentMetShare} over a practice's requested and backfilled work alone, observed from
+     * {@code since}. Their reading is sound on its own and never part of a live trend, so this is what a standing
+     * reads for a practice that only a requested review or a campaign judged.
      */
-    public OptionalDouble backfilledMetShare(List<Observation> evidence, Instant since, int window, double decay) {
+    public OptionalDouble selfSelectedMetShare(List<Observation> evidence, Instant since, int window, double decay) {
         return PracticeTrend.recentMetShare(
                 OpportunityBundler.opportunities(evidence, since, true).reversed(), window, decay);
     }

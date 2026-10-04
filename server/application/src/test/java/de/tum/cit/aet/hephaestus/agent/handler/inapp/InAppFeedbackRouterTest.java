@@ -159,6 +159,25 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
                 .isEqualTo(InAppRoutingDecision.UNCORROBORATED);
     }
 
+    /**
+     * A requested review is a self-selected sample: it neither raises a card on its own nor clears the live
+     * problem on the same work, however it came back.
+     */
+    @Test
+    void shouldLeaveRequestedReviewsOutOfTheEvidenceACardStandsOn() {
+        Observation live = observation(
+                1L, UUID.randomUUID(), NOW.minus(Duration.ofDays(2)), ObservationOrigin.LIVE, Outcome.NOT_MET);
+        Observation requestedClean = observation(
+                1L, UUID.randomUUID(), NOW.minus(Duration.ofDays(1)), ObservationOrigin.MANUAL, Outcome.MET);
+        Observation requestedProblem =
+                observation(2L, UUID.randomUUID(), NOW, ObservationOrigin.MANUAL, Outcome.NOT_MET);
+
+        assertThat(InAppFeedbackRouter.problemsIn(List.of(requestedProblem, requestedClean, live)))
+                .containsExactly(live);
+        assertThat(route(problems(4, ObservationOrigin.MANUAL), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, null))
+                .isEqualTo(InAppRoutingDecision.NO_EVIDENCE);
+    }
+
     /** Two pull requests that slipped and one that slipped and recovered: exactly two rows to cite. */
     @Test
     void shouldCiteOneRowPerPieceOfWorkWhenWorkWasReviewedTwice() {
