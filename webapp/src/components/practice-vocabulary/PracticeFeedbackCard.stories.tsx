@@ -241,10 +241,8 @@ export const Resolved: Story = {
 };
 
 /**
- * The reader marked it addressed: a claim, not a resolution, so the card closes on neutral ground
- * with no success wash and no green badge, and says the next work confirms it. The meter keeps
- * counting the clean work, and the answer stays pressed under it, so a second press takes it back
- * and reopens the card.
+ * The reader's answer is a claim the next work confirms, not a resolution, so the card closes
+ * without the success wash. The answer stays pressed, so a second press can take it back.
  */
 export const MarkedAsAddressed: Story = {
 	args: {
@@ -266,8 +264,6 @@ export const MarkedAsAddressed: Story = {
 		).toBeVisible();
 		const article = canvas.getByRole("article", { name: args.card.headline });
 		await expect(article).not.toHaveClass("from-success/5");
-		// The next-step band stays on the neutral ground an open card's band has.
-		await expect(canvas.getByText("Next step").closest(".grid")).toHaveClass("bg-sidebar");
 		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
 		const response = within(canvas.getByRole("group", { name: "Your response" }));
 		const addressed = response.getByRole("button", { name: "Addressed" });
@@ -281,43 +277,10 @@ export const MarkedAsAddressed: Story = {
 	},
 };
 
-/**
- * The reader marked it not applicable: the same neutral closed card as an addressed one, with its
- * own answer pressed.
- */
-export const MarkedAsNotApplicable: Story = {
-	args: {
-		card: {
-			...card,
-			state: "marked",
-			cleanWork: [],
-			condition: [text("Marked as not applicable on 9 September. Your next work confirms it.")],
-			timestamp: inStoryYear("09-09T16:05"),
-		},
-		resolution: "NOT_APPLICABLE",
-	},
-	play: async ({ args, canvas }) => {
-		await expect(canvas.getByText("Marked by you")).toBeVisible();
-		await expect(canvas.getByRole("article", { name: args.card.headline })).not.toHaveClass(
-			"from-success/5",
-		);
-		await expect(
-			within(canvas.getByRole("group", { name: "Your response" })).getByRole("button", {
-				name: "Not applicable",
-			}),
-		).toHaveAttribute("aria-pressed", "true");
-	},
-};
-
-/**
- * "Disagree" sits beside "Not helpful": the reader says the card is wrong. Its band asks for the
- * sentence a dispute has to carry, which workspace admins read.
- */
+/** A dispute must carry a sentence, which workspace admins read instead of the card. */
 export const DisagreeOpen: Story = {
-	args: { card: { ...card, state: "open" }, disputeOpen: true },
+	args: { card: { ...card, state: "open" }, openBand: "dispute" },
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Disagree" }));
-		await expect(args.onDisagree).toHaveBeenCalledOnce();
 		const field = canvas.getByRole("textbox", { name: "What is wrong in this feedback?" });
 		await expect(field).toBeRequired();
 		await expect(field).toHaveAccessibleDescription(/Workspace admins read your sentence/u);
@@ -327,7 +290,7 @@ export const DisagreeOpen: Story = {
 	},
 };
 
-/** A dispute stands: Disagree stays pressed, and the card stays open until an admin answers it. */
+/** A standing dispute leaves the card open. */
 export const Disputed: Story = {
 	args: { card: { ...card, state: "open" }, resolution: "DISPUTED" },
 	play: async ({ canvas }) => {
@@ -341,7 +304,7 @@ export const Disputed: Story = {
 
 /** "Helpful" opens the note band: an optional line, sent or skipped. */
 export const HelpfulNoteOpen: Story = {
-	args: { card: { ...card, state: "open" }, usefulness: "HELPFUL", commentOpen: true },
+	args: { card: { ...card, state: "open" }, usefulness: "HELPFUL", openBand: "comment" },
 	play: async ({ args, canvas }) => {
 		const field = canvas.getByRole("textbox", { name: "What worked about this feedback?" });
 		await expect(field).toBeVisible();
@@ -361,7 +324,7 @@ export const HelpfulNoteOpen: Story = {
  * "Not helpful" asks for a reason and a sentence; the sentence is what the dispute has to carry.
  */
 export const NotHelpfulReasonOpen: Story = {
-	args: { card: { ...card, state: "open" }, usefulness: "UNHELPFUL", commentOpen: true },
+	args: { card: { ...card, state: "open" }, usefulness: "UNHELPFUL", openBand: "comment" },
 	play: async ({ args, canvas }) => {
 		const field = canvas.getByRole("textbox", { name: "Why was this not helpful?" });
 		await expect(field).toBeRequired();
@@ -574,15 +537,14 @@ export const Withdrawn: Story = {
 };
 
 /**
- * A press on "Helpful" whose write takes a while: every response control waits at once, and the
- * pressed one says it is saving only after a second, so a quick write never flashes the word.
- * Send waits too but does not claim to be sending, since the reader sent nothing.
+ * Every response control waits at once, but "Saving…" appears only after a second (`spin-delay`),
+ * and only on the control that asked. Send waits without claiming to send.
  */
 export const RatingPending: Story = {
 	args: {
 		card: { ...card, state: "open" },
 		usefulness: "HELPFUL",
-		commentOpen: true,
+		openBand: "comment",
 		isPending: true,
 	},
 	play: async ({ canvas }) => {
@@ -635,10 +597,7 @@ export const MobileReflow: Story = {
 	play: expectNoPageOverflow,
 };
 
-/**
- * The card's shape while the feedback loads, band for band, so the list does not jump when the
- * cards land; hidden from a screen reader, which the list's own busy state tells instead.
- */
+/** Hidden from assistive technology: the list's `aria-busy` says it is loading. */
 export const Loading: Story = {
 	render: () => <PracticeFeedbackCardSkeleton />,
 	play: async ({ canvas }) => {

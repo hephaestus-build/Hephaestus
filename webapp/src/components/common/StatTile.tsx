@@ -11,7 +11,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 export const STAT_TILE_GRID = "grid grid-cols-1 gap-3 @sm:grid-cols-2 @2xl:grid-cols-4";
 
 export interface StatTileProps {
-	/** `interactive` when the whole tile is a link, `muted` when it has nothing to show. */
+	/**
+	 * `interactive` when the whole tile is a link. `muted` when it has nothing to show, which mutes
+	 * the figure too.
+	 */
 	variant?: ComponentProps<typeof Card>["variant"];
 	/** The glyph before the title, already toned by the caller. */
 	icon: ReactNode;
@@ -22,17 +25,11 @@ export interface StatTileProps {
 	qualifier?: string;
 	/** Under the figure, in the same block: a comparison with the period before. */
 	detail?: ReactNode;
-	/** The figure in the muted tone, for a tile with nothing behind it. */
-	muted?: boolean;
 	/** What the tile shows under the figure: bars, a range, chips. */
 	children?: ReactNode;
 }
 
-/**
- * One stat tile, as Activity and Practices across the workspace draw them, after the stat tiles of
- * GitHub's Pulse and Apple Health's summary: the title with its glyph, the headline figure and what
- * it counts, then whatever the page shows under it.
- */
+/** The stat tile Activity and Practices across the workspace share, after GitHub Pulse and Apple Health. */
 export function StatTile({
 	variant,
 	icon,
@@ -40,7 +37,6 @@ export function StatTile({
 	value,
 	qualifier,
 	detail,
-	muted = false,
 	children,
 }: StatTileProps) {
 	return (
@@ -57,7 +53,7 @@ export function StatTile({
 						<span
 							className={cn(
 								"text-2xl leading-none font-semibold tabular-nums",
-								muted ? "text-muted-foreground" : "text-foreground",
+								variant === "muted" ? "text-muted-foreground" : "text-foreground",
 							)}
 						>
 							{value}
@@ -74,10 +70,7 @@ export function StatTile({
 	);
 }
 
-/**
- * A tile's shape while its figure loads, line for line as `StatTile` lays it out: the title, the
- * figure, then the page's own content in the shape it will take.
- */
+/** `StatTile`'s lines while its figure loads; `children` is the page's content in its loading shape. */
 export function StatTileSkeleton({ children }: { children?: ReactNode }) {
 	return (
 		<Card size="sm" className="w-full" aria-hidden>

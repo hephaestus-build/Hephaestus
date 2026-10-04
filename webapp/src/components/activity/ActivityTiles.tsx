@@ -123,7 +123,6 @@ function ActivityTile({
 			title={def.label(providerType)}
 			value={headline}
 			qualifier={def.headline.qualifier}
-			muted={!opens}
 			detail={delta !== undefined && <p className="text-xs text-muted-foreground">{delta}</p>}
 		>
 			{opens && (

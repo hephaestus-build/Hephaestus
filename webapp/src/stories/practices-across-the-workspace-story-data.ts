@@ -58,7 +58,7 @@ const MAINTAINABLE: Group = {
 };
 
 /** The developers with a standing every story split is a part of. */
-export const STORY_WITH_A_STANDING = 28;
+const STORY_WITH_A_STANDING = 28;
 
 /** A full split: Needs attention, Mixed feedback, Going well, and the rest of the 28 none yet. */
 export const threeWay = ([needsAttention, mixedFeedback, goingWell]: [
@@ -148,7 +148,7 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	minimumOthers: 3,
 	developersWithAStanding: 28,
 	readerCounted: true,
-	openFeedback: { yours: 3, middleLow: 1, middleHigh: 4 },
+	openFeedback: { yours: 3, middle: { low: 1, high: 4 } },
 	groups: [
 		group(ACTING, "MIXED", threeWay([6, 7, 7])),
 		group(COMMUNICATION, "DEVELOPING", threeWay([7, 7, 6])),
@@ -167,9 +167,9 @@ export const ACROSS_WORKSPACE_TILES: PracticesAcrossWorkspaceTiles = {
 	minimumOthersForMiddleHalf: 6,
 	developersWithAStandingInWindow: 26,
 	yourPractices: 18,
-	reviewedWork: { yours: 17, middleLow: 11, middleHigh: 21 },
-	practicesGoingWell: { yours: 6, middleLow: 5, middleHigh: 9 },
-	practicesNeedingAttention: { yours: 4, middleLow: 2, middleHigh: 5 },
+	reviewedWork: { yours: 17, middle: { low: 11, high: 21 } },
+	practicesGoingWell: { yours: 6, middle: { low: 5, high: 9 } },
+	practicesNeedingAttention: { yours: 4, middle: { low: 2, high: 5 } },
 };
 
 /** Too few developers with a standing in the window for a middle half or their total. */
@@ -191,12 +191,6 @@ export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
 		split: WITHHELD,
 		practices: each.practices.map((one) => ({ ...one, split: WITHHELD })),
 	})),
-};
-
-/** Every group shown only as its total: a part of each split holds too few. */
-export const TOTAL_ONLY_WORKSPACE: PracticesAcrossWorkspace = {
-	...ACROSS_WORKSPACE,
-	groups: ACROSS_WORKSPACE.groups.map((each) => ({ ...each, split: TOTAL_ONLY })),
 };
 
 export const EMPTY_WORKSPACE: PracticesAcrossWorkspace = { ...ACROSS_WORKSPACE, groups: [] };

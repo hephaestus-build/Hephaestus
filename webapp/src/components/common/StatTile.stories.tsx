@@ -49,7 +49,7 @@ export const Default: Story = {
 
 /** A tile with nothing behind it: the figure drops to the muted tone, and the card with it. */
 export const Muted: Story = {
-	args: { variant: "muted", muted: true, value: 0, children: undefined },
+	args: { variant: "muted", value: 0, children: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("0")).toHaveClass("text-muted-foreground");
 		await expect(canvas.queryByText("Typical range: 11 to 21")).toBeNull();

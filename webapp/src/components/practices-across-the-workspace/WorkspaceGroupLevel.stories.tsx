@@ -7,7 +7,6 @@ import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
 import {
 	MANY_PRACTICES,
 	PACKAGING_GROUP,
-	TOTAL_ONLY,
 	WITHHELD,
 } from "@/stories/practices-across-the-workspace-story-data";
 import { expectNoPanelOverflow } from "@/stories/reflow";
@@ -15,11 +14,7 @@ import { Stateful } from "@/stories/stateful";
 
 import { WorkspaceGroupLevel } from "./WorkspaceGroupLevel";
 
-const CONTEXT = {
-	readerCounted: true,
-	developersWithAStanding: 28,
-	minimumOthers: 3,
-} as const;
+const COUNTS = { readerCounted: true, minimumOthers: 3 } as const;
 
 /**
  * A practice group's practices over Practices across the workspace. The level has no page of its
@@ -31,7 +26,7 @@ const meta = {
 	decorators: [withPageBehind],
 	args: {
 		path: { behind: [{ label: "Practices across the workspace", depth: 0 }], onClose: fn() },
-		state: { status: "ready", group: PACKAGING_GROUP, context: CONTEXT },
+		state: { status: "ready", group: PACKAGING_GROUP, ...COUNTS },
 		onGoToProfile: fn(),
 		onGoToPractice: fn(),
 	},
@@ -86,7 +81,6 @@ export const Default: Story = {
 		await expect(level.queryByRole("button", { name: "Needs attention" })).toBeNull();
 		await expect(level.queryByText(/More positive recently/u)).toBeNull();
 		await expect(level.queryByText(/^Last \d+ days$/u)).toBeNull();
-		await expect(level.queryByText(/^You:/u)).toBeNull();
 		await userEvent.click(
 			level.getByRole("button", {
 				name: "Open in your Practice profile Packaging work for review",
@@ -106,34 +100,10 @@ export const Default: Story = {
 		);
 		await expect(args.onGoToPractice).toHaveBeenCalledWith("scope-to-one-concern");
 		await expect(table.getAllByText("Split held back")).toHaveLength(2);
-		// Why a practice shows only its total more often than its group, once, over its practices.
+		// The practice-only rule, with K from the level's counts.
 		await expect(
-			level.getByText(/The parts must also single no one out beside the group’s bar\./u),
+			level.getByText(/beside its group’s bar, it would single out fewer than 3 developers\.$/u),
 		).toBeVisible();
-		// The page's legend sits above the practices it explains.
-		await expect(level.getByRole("list", { name: "What the bars show" })).toBeVisible();
-	},
-};
-
-/** A group shown only as its total: the head shows the neutral bar, the total and its label. */
-export const GroupTotalOnly: Story = {
-	args: {
-		state: {
-			status: "ready",
-			group: { ...PACKAGING_GROUP, split: TOTAL_ONLY },
-			context: CONTEXT,
-		},
-	},
-	play: async () => {
-		const level = within(await settledDrawerPanel());
-		// The head's bar and two practices', then the legend's line for it.
-		await expect(level.getAllByText("Split held back")).toHaveLength(4);
-		await expect(
-			level.getAllByRole("img", {
-				name: "28 developers with a current standing in this workspace. The split is held back so no one can be singled out.",
-			}),
-		).toHaveLength(3);
-		await expect(level.queryByText(/^You:/u)).toBeNull();
 	},
 };
 
@@ -147,39 +117,17 @@ export const GroupHeldBack: Story = {
 				split: WITHHELD,
 				practices: PACKAGING_GROUP.practices.map((one) => ({ ...one, split: WITHHELD })),
 			},
-			context: { ...CONTEXT, developersWithAStanding: undefined },
+			...COUNTS,
 		},
 	},
 	play: async () => {
 		const level = within(await settledDrawerPanel());
 		await expect(level.getAllByText("Held back so no one can be singled out.")).toHaveLength(6);
-		await expect(level.queryByText(/^You:/u)).toBeNull();
 		await expect(
 			level.getByRole("button", {
 				name: "Open in your Practice profile Packaging work for review",
 			}),
 		).toBeVisible();
-	},
-};
-
-/** A reader with no current standing is in no count, so no part carries the You marker. */
-export const ReaderNotCounted: Story = {
-	args: {
-		state: {
-			status: "ready",
-			group: PACKAGING_GROUP,
-			context: { ...CONTEXT, readerCounted: false },
-		},
-	},
-	play: async () => {
-		const level = within(await settledDrawerPanel());
-		// The head's bar comes first; a practice that splits as its group does repeats its words.
-		await expect(
-			level.getAllByRole("img", {
-				name: "28 developers with a current standing in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet.",
-			})[0],
-		).toBeVisible();
-		await expect(level.queryByText(/^You:/u)).toBeNull();
 	},
 };
 
@@ -192,7 +140,7 @@ export const ManyPractices: Story = {
 		state: {
 			status: "ready",
 			group: { ...PACKAGING_GROUP, practices: MANY_PRACTICES },
-			context: CONTEXT,
+			...COUNTS,
 		},
 	},
 	play: async () => {
@@ -223,7 +171,7 @@ export const Loading: Story = {
 
 export const NoPractices: Story = {
 	args: {
-		state: { status: "ready", group: { ...PACKAGING_GROUP, practices: [] }, context: CONTEXT },
+		state: { status: "ready", group: { ...PACKAGING_GROUP, practices: [] }, ...COUNTS },
 	},
 	play: async () => {
 		const level = within(await settledDrawerPanel());

@@ -1,6 +1,6 @@
 import { ArrowRightIcon } from "lucide-react";
 
-import type { WorkspaceGroupSplit } from "@/api/types.gen";
+import type { PracticesAcrossWorkspace, WorkspaceGroupSplit } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
@@ -10,31 +10,31 @@ import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { DrawerBody } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { barsHint, OPEN_IN_YOUR_PROFILE, type SplitContext } from "./across-workspace-copy";
+import { barsHint, OPEN_IN_YOUR_PROFILE } from "./across-workspace-copy";
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 import { LevelSplit, SplitLegend } from "./WorkspaceSplitBar";
 
-/** The open group while the page loads, when the page lists no group by its slug, or ready. */
+/** `missing` when the page lists no group by the slug in the address. */
 export type WorkspaceGroupLevelState =
 	| { status: "loading" }
 	| { status: "missing" }
-	| { status: "ready"; group: WorkspaceGroupSplit; context: SplitContext };
+	| ({ status: "ready"; group: WorkspaceGroupSplit } & Pick<
+			PracticesAcrossWorkspace,
+			"readerCounted" | "minimumOthers"
+	  >);
 
 export interface WorkspaceGroupLevelProps {
 	nested?: boolean;
 	path: LevelPath;
 	state: WorkspaceGroupLevelState;
-	/** Goes to the group in the reader's own Practice profile. */
 	onGoToProfile: () => void;
-	/** Goes to a practice of the group in the reader's own Practice profile. */
 	onGoToPractice: (practiceSlug: string) => void;
 }
 
 /**
- * One practice group over Practices across the workspace: the group's split beside the title, and
- * each practice of the group beside how the workspace splits across that practice. The reader
- * shows only as the You marker; their own standing, trend and next step are in their Practice
- * profile, which the header's link and every practice's row link go to.
+ * One practice group over Practices across the workspace: the group's split beside the title, then
+ * each practice's split. The reader shows only as the You marker. Their own standing, trend and
+ * next step stay in their Practice profile, which the header link and every row link open.
  */
 export function WorkspaceGroupLevel({
 	nested,
@@ -63,8 +63,7 @@ export function WorkspaceGroupLevel({
 						/>
 					)
 				}
-				// The way on is a link in the header's one line, not a column beside the title. As the
-				// header's description it is also the dialog's, so a screen reader reads it on opening.
+				// As the header's description it is also the dialog's, so a screen reader reads it on opening.
 				description={
 					group && (
 						<InlineLink
@@ -82,7 +81,12 @@ export function WorkspaceGroupLevel({
 						<LevelSplit
 							state={
 								state.status === "ready"
-									? { status: "ready", ...state.group, context: state.context }
+									? {
+											status: "ready",
+											split: state.group.split,
+											yourStanding: state.group.yourStanding,
+											readerCounted: state.readerCounted,
+										}
 									: state
 							}
 						/>
@@ -100,7 +104,6 @@ export function WorkspaceGroupLevel({
 	);
 }
 
-/** The group's practices, every one of them, as the Practice profile lists a group's practices. */
 function GroupPractices({
 	state,
 	onGoToPractice,
@@ -118,21 +121,20 @@ function GroupPractices({
 	}));
 	return (
 		<>
-			{/* The rule's line, or a line in its place while the level loads, so nothing moves. */}
+			{/* The skeleton holds the hint's place, so nothing moves when it arrives. */}
 			{state.status === "loading" && <Skeleton className="h-10 w-full max-w-2xl" />}
 			{state.status === "ready" && state.group.practices.length > 0 && (
 				<p className="max-w-2xl text-sm text-muted-foreground">
-					{barsHint(state.context.minimumOthers, "practice")}
+					{barsHint(state.minimumOthers, "practice")}
 				</p>
 			)}
-			{/* What the bars show, the page's own legend, above the table it explains. */}
 			<SplitLegend />
 			<WorkspaceComparisonTable
 				aria-label={group === undefined ? "Practices" : `Practices of ${group.groupName}`}
 				subjectHead="Practice"
 				state={
 					state.status === "ready"
-						? { status: "ready", rows, context: state.context }
+						? { status: "ready", rows, readerCounted: state.readerCounted }
 						: { status: "loading" }
 				}
 				empty={{

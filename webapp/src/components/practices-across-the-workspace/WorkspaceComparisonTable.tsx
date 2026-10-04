@@ -13,49 +13,38 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell, TableHead } from "@/components/ui/table";
 
-import type { SplitContext } from "./across-workspace-copy";
 import { WorkspaceSplitBar, WorkspaceSplitBarSkeleton } from "./WorkspaceSplitBar";
 
-/** One practice group or one practice, as the table compares it. */
+/** One practice group or one practice. */
 export interface ComparisonRow {
 	key: string;
-	/** What the row is, by name: the accessible names of its actions end with it. */
+	/** Ends the accessible name of the row's link, so each row's link is unique on the screen. */
 	name: string;
-	/** The name as the subject cell draws it: a group's icon and colour, a practice's words. */
+	/** The name as the subject cell draws it: a group's pill, a practice's pill. */
 	subject: ReactNode;
 	yourStanding: PracticeGroupStandingValue;
 	split: WorkspaceSplit;
 }
 
-/** The rows while they load, or every row with what every split is a part of. */
 export type ComparisonTableState =
 	| { status: "loading" }
-	| {
-			status: "ready";
-			rows: readonly ComparisonRow[];
-			/** The split's reference group and its rule, shared by every row. */
-			context: SplitContext;
-	  };
+	| { status: "ready"; rows: readonly ComparisonRow[]; readerCounted: boolean };
 
 export interface WorkspaceComparisonTableProps {
 	"aria-label": string;
 	/** "Practice group", "Practice". */
 	subjectHead: string;
 	state: ComparisonTableState;
-	/**
-	 * The row's link at its end, drawn as the reviews table draws "Open review", which a press
-	 * anywhere on the row also follows.
-	 */
+	/** The link at the row's end, which a press anywhere on the row also follows. */
 	rowLink: (row: ComparisonRow) => Omit<PracticeTableRowLink, "name">;
-	/** The row whose level is open over the page, which keeps a bar on its leading edge. */
+	/** The row whose level is open over the page. */
 	openKey?: string;
 	empty: { title: string; description: string };
 }
 
 /**
- * Practice groups or practices beside how the workspace's developers with a standing split across each,
- * in the practice table frame: the subject, the split with the reader's place on it, and the row's
- * own actions, which the caller decides. Every row is listed, as the Practice profile lists them.
+ * Practice groups or practices, each beside its split, in the practice table frame. Every row is
+ * listed with no paging, as the Practice profile lists them.
  */
 export function WorkspaceComparisonTable({
 	"aria-label": label,
@@ -89,7 +78,7 @@ export function WorkspaceComparisonTable({
 							<WorkspaceSplitBar
 								split={row.split}
 								yourStanding={row.yourStanding}
-								{...ready.context}
+								readerCounted={ready.readerCounted}
 							/>
 						)}
 					</TableCell>
@@ -105,7 +94,6 @@ export function WorkspaceComparisonTable({
 					<TableCell className="align-top">
 						<WorkspaceSplitBarSkeleton />
 					</TableCell>
-					{/* The row's link is drawn once its row is in, as the Practice profile leaves it. */}
 					<TableCell />
 				</>
 			}

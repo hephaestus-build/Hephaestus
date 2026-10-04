@@ -17,35 +17,28 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 import {
-	developerCount,
 	HELD_BACK,
 	SPLIT_HELD_BACK,
-	type SplitContext,
 	splitDescription,
+	splitTotalText,
 } from "./across-workspace-copy";
 
-/** One group's or one practice's split, and where the reader is on it. */
-interface SplitOfRow {
+export interface WorkspaceSplitBarProps {
 	split: WorkspaceSplit;
-	/**
-	 * The reader's current standing in the group or the practice: the part the You marker is on,
-	 * while the reader is counted and the split shows.
-	 */
+	/** The part the You marker is on, while the reader is counted and the split shows its parts. */
 	yourStanding: PracticeGroupStandingValue;
+	/** Whether the reader is one of the developers the split counts. */
+	readerCounted: boolean;
 }
 
-export interface WorkspaceSplitBarProps extends SplitContext, SplitOfRow {}
-
-/** One part a split can show: its words, its icon and the colour its icon and its piece of bar wear. */
 interface PartDef {
 	key: string;
 	label: string;
 	icon: ComponentType<{ className?: string }>;
-	/** A text colour; the bar paints with `currentColor`, so the part and its icon share it. */
+	/** A text colour: the bar paints with `currentColor`, so a part and its icon share it. */
 	colorClass: string;
 }
 
-/** A verdict's part, in the registry's words, icon and tone, never written here. */
 function standingPart(standing: PracticeGroupStandingValue): PartDef {
 	const def = PRACTICE_GROUP_STANDING_DEFS[standing];
 	return {
@@ -58,25 +51,18 @@ function standingPart(standing: PracticeGroupStandingValue): PartDef {
 
 const NONE_YET_PART: PartDef = { key: "none", ...NONE_YET_SEGMENT };
 
-/**
- * Every part a split can show, in the order the server sends them: the verdicts in registry order,
- * then none yet. The legend lists these; a bar draws the wire's parts with the same definitions.
- */
+/** In the server's order: the verdicts in registry order, then none yet. */
 const SPLIT_PARTS: readonly PartDef[] = [
 	...statusValues(PRACTICE_GROUP_STANDING_DEFS).filter(isSettledStanding).map(standingPart),
 	NONE_YET_PART,
 ];
 
-/** The empty track of a split held back, dashed so it is never read as a part of none yet. */
+/** Dashed, so an empty track is never read as a part of none yet. */
 const HELD_BACK_TRACK = cn("h-2 rounded-sm border border-dashed border-current", NEUTRAL_GREY);
 
-/** The one neutral bar of a split shown only as its total, in no verdict's colour. */
+/** In no verdict's colour, so a total cannot be read as one part. */
 const TOTAL_ONLY_BAR = cn("h-2 rounded-sm bg-current", NEUTRAL_GREY);
 
-/**
- * The reader's place on a bar: the word over a downward pointer. The page's one accent, as the
- * palette in `webapp/AGENTS.md` allows it.
- */
 function YouMarker() {
 	return (
 		<>
@@ -87,59 +73,54 @@ function YouMarker() {
 }
 
 /**
- * How the developers with a current standing split across one practice group or one practice, as
- * one segmented bar counted in developers: Needs attention, Mixed feedback, Going well and none
- * yet. Each part carries its count under it, with the standing's icon so the parts never rest on
- * colour alone, and the You marker sits over the reader's own part. A split shown only as its total
- * is one neutral bar of the same width with the total and a short label, and marks no one. A split
- * held back is a dashed track of the same width with its reason, and nothing more.
+ * How the developers with a current standing split across one practice group or practice, as one
+ * bar counted in developers. Each part carries its count and its standing's icon under it, so no
+ * part rests on colour alone (WCAG 2.2 SC 1.4.1). A split shown only as its total is one neutral
+ * bar and marks no one. A split held back whole is a dashed track with its reason. All three take
+ * the same width and height, so rows of mixed shapes line up.
  */
-export function WorkspaceSplitBar({ split, yourStanding, ...context }: WorkspaceSplitBarProps) {
+export function WorkspaceSplitBar({ split, yourStanding, readerCounted }: WorkspaceSplitBarProps) {
+	if (split.shape === "WITHHELD") {
+		return (
+			<div className="flex w-full min-w-0 flex-col gap-1">
+				<span aria-hidden className={cn("mt-5 w-full", HELD_BACK_TRACK)} />
+				<p className="text-xs text-muted-foreground">{HELD_BACK}.</p>
+			</div>
+		);
+	}
+	const description = splitDescription(split, yourStanding, readerCounted);
+	const total = (
+		<p aria-hidden className="text-right text-xs text-muted-foreground tabular-nums">
+			{splitTotalText(split)}
+		</p>
+	);
 	if (split.shape === "TOTAL_ONLY") {
 		return (
 			<div className="flex w-full min-w-0 flex-col gap-1">
-				<div
-					role="img"
-					aria-label={splitDescription(split, yourStanding, context)}
-					className="flex w-full min-w-0 flex-col gap-0.5"
-				>
-					{/* The bar at the split's own height and place, under the empty row of the marker. */}
+				<div role="img" aria-label={description} className="flex w-full min-w-0 flex-col gap-0.5">
+					{/* The marker's row, empty, so the bar sits where a split's bar sits. */}
 					<span aria-hidden className="h-5" />
 					<span aria-hidden className={cn("w-full", TOTAL_ONLY_BAR)} />
 					<span aria-hidden className="text-xs text-muted-foreground">
 						{SPLIT_HELD_BACK}
 					</span>
 				</div>
-				<p aria-hidden className="text-right text-xs text-muted-foreground tabular-nums">
-					{developerCount(split.developers ?? 0)}
-				</p>
+				{total}
 			</div>
 		);
 	}
-	if (split.shape === "WITHHELD") {
-		return (
-			<div className="flex w-full min-w-0 flex-col gap-1">
-				{/* The track the bar would fill, empty, at the bar's own height, place and width. */}
-				<span aria-hidden className={cn("mt-5 w-full", HELD_BACK_TRACK)} />
-				{/* The words are the cell's one accessible text, so nothing else repeats them. */}
-				<p className="text-xs text-muted-foreground">{HELD_BACK}.</p>
-			</div>
-		);
-	}
-	const description = splitDescription(split, yourStanding, context);
 	const parts = [
 		...split.parts.map((part) => ({
 			def: standingPart(part.standing),
 			count: part.developers,
-			isYours: context.readerCounted && part.standing === yourStanding,
+			isYours: readerCounted && part.standing === yourStanding,
 		})),
 		{
 			def: NONE_YET_PART,
 			count: split.noneYet ?? 0,
-			isYours: context.readerCounted && !isSettledStanding(yourStanding),
+			isYours: readerCounted && !isSettledStanding(yourStanding),
 		},
 	];
-	const total = split.developers ?? parts.reduce((sum, part) => sum + part.count, 0);
 	return (
 		<div className="flex w-full min-w-0 flex-col gap-1">
 			<div role="img" aria-label={description} className="flex w-full min-w-0 gap-0.5">
@@ -150,8 +131,8 @@ export function WorkspaceSplitBar({ split, yourStanding, ...context }: Workspace
 							key={def.key}
 							aria-hidden
 							title={`${def.label}: ${count}`}
-							// Each count sits in its own part's column, centred under the part's piece of the bar,
-							// and every column keeps room for its label, so no count shifts or meets another.
+							// Each count is centred in its own part's column, and `min-w-10` keeps room for it, so
+							// two narrow parts never print their counts over each other.
 							className="flex min-w-10 grow-(--count) basis-0 flex-col items-center gap-0.5"
 							style={{ "--count": count }}
 						>
@@ -167,19 +148,13 @@ export function WorkspaceSplitBar({ split, yourStanding, ...context }: Workspace
 					);
 				})}
 			</div>
-			{/* The whole the parts add up to, on its own line at the bar's end, so the counts stay centred
-			    under their parts and the bar keeps the column's full width. */}
-			<p aria-hidden className="text-right text-xs text-muted-foreground tabular-nums">
-				{developerCount(total)}
-			</p>
+			{/* On its own line, so the counts stay centred under their parts. */}
+			{total}
 		</div>
 	);
 }
 
-/**
- * A bar's shape while it loads, line for line as the bar lays it out: the marker's row, the bar,
- * the counts under it, then the total at its end.
- */
+/** The bar's lines while it loads: the marker's row, the bar, the counts, then the total. */
 export function WorkspaceSplitBarSkeleton() {
 	return (
 		<div aria-hidden className="flex w-full min-w-0 flex-col gap-1">
@@ -193,34 +168,22 @@ export function WorkspaceSplitBarSkeleton() {
 	);
 }
 
-/**
- * A split beside a level's title, at the width the header's aside gives it, or its shape while the
- * level loads.
- */
+/** A split at the width a level header's aside gives it. */
 export function LevelSplit({
 	state,
 }: {
-	state: { status: "loading" } | ({ status: "ready"; context: SplitContext } & SplitOfRow);
+	state: { status: "loading" } | ({ status: "ready" } & WorkspaceSplitBarProps);
 }) {
 	return (
 		<div className="flex w-full sm:w-88">
-			{state.status === "ready" ? (
-				<WorkspaceSplitBar
-					split={state.split}
-					yourStanding={state.yourStanding}
-					{...state.context}
-				/>
-			) : (
-				<WorkspaceSplitBarSkeleton />
-			)}
+			{state.status === "ready" ? <WorkspaceSplitBar {...state} /> : <WorkspaceSplitBarSkeleton />}
 		</div>
 	);
 }
 
 /**
- * What the bars' marks mean, once above each table of bars: each part's icon and swatch, the
- * reader's marker, and the neutral bar of a split shown only as its total. A track held back says
- * what it is under itself, so the legend leaves it out.
+ * Once above each table of bars. A held-back track says what it is under itself, so the legend
+ * leaves it out.
  */
 export function SplitLegend() {
 	return (

@@ -18,9 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
 	type AcrossWorkspaceWindow,
 	barsHint,
-	PAGE_PURPOSE,
 	tilesHint,
-	type SplitContext,
 	WINDOW_OPTIONS,
 	windowHeading,
 } from "./across-workspace-copy";
@@ -31,34 +29,19 @@ import { WorkspaceTiles } from "./WorkspaceTiles";
 export interface PracticesAcrossTheWorkspacePageProps {
 	/** The splits and the open feedback, which read no window. */
 	state: PanelState<{ overview: PracticesAcrossWorkspace }>;
-	/**
-	 * The window's tiles; `stale` while another window's tiles are on their way and the ones shown
-	 * are the previous window's.
-	 */
+	/** `stale` while the tiles shown are the previous window's and the chosen window's are on their way. */
 	tiles: PanelState<{ tiles: PracticesAcrossWorkspaceTiles; stale?: boolean }>;
 	window: AcrossWorkspaceWindow;
 	onWindowChange: (window: AcrossWorkspaceWindow) => void;
-	/** The group whose practices are open over the page, which its row marks. */
+	/** The group whose level is open over the page. */
 	openGroupSlug?: string;
-	/** Opens a group's practices over the page. */
 	onOpenGroup: (groupSlug: string) => void;
 }
 
-/** What every split on the page is a part of, from the overview. */
-export function splitContextOf(overview: PracticesAcrossWorkspace): SplitContext {
-	return {
-		readerCounted: overview.readerCounted,
-		developersWithAStanding: overview.developersWithAStanding,
-		minimumOthers: overview.minimumOthers,
-	};
-}
-
 /**
- * Practices across the workspace, a view of the workspace rather than the reader's profile: the
- * reader's figures beside the middle half of the workspace over the chosen window, laid out as
- * Activity lays out its range, then every practice group beside how the workspace's developers
- * split across it by their current standing, with the reader only as the You marker. A group opens
- * its practices over the page; the reader's own learning is one link away, in their profile.
+ * A view of the workspace, not the reader's profile: the reader's figures beside the workspace's
+ * typical range over the chosen window, then every practice group's split by current standing,
+ * with the reader only as the You marker. Only the tiles read the window.
  */
 export function PracticesAcrossTheWorkspacePage({
 	state,
@@ -74,7 +57,10 @@ export function PracticesAcrossTheWorkspacePage({
 	const failure = failureOf(state, tiles);
 	return (
 		<PageLayout className="space-y-8">
-			<PageHeader title="Practices across the workspace" description={PAGE_PURPOSE} />
+			<PageHeader
+				title="Practices across the workspace"
+				description="This page shows where the developers in this workspace stand in each practice group. Your next step is in your Practice profile."
+			/>
 
 			<Section
 				size="lg"
@@ -90,15 +76,13 @@ export function PracticesAcrossTheWorkspacePage({
 				}
 			>
 				{failure === undefined ? (
-					// The window applies to the tiles alone. The last window's figures are drained of
-					// colour until the new heading's own are in.
 					<div className="space-y-3">
 						<WorkspaceTiles
 							tiles={windowTiles}
 							openFeedback={overview?.openFeedback}
 							stale={stale}
 						/>
-						{/* The rule's lines, or lines in their place while the figures load, so nothing moves. */}
+						{/* The skeleton holds the hint's place, so nothing moves when it arrives. */}
 						{windowTiles === undefined || overview === undefined ? (
 							<Skeleton className="h-12 w-full max-w-3xl" />
 						) : (
@@ -121,7 +105,6 @@ export function PracticesAcrossTheWorkspacePage({
 					description={overview && barsHint(overview.minimumOthers, "group")}
 				>
 					<SplitLegend />
-					{/* The bars count the current standing, so a new window leaves them as they are. */}
 					<GroupsTable
 						overview={overview}
 						openGroupSlug={openGroupSlug}
@@ -133,10 +116,7 @@ export function PracticesAcrossTheWorkspacePage({
 	);
 }
 
-/**
- * What the tiles' section says when a read failed: the whole page's, when the bars and the open
- * feedback failed, else the window's own tiles'.
- */
+/** The overview's failure takes the whole page; the tiles' failure takes only their section. */
 function failureOf(
 	state: PracticesAcrossTheWorkspacePageProps["state"],
 	tiles: PracticesAcrossTheWorkspacePageProps["tiles"],
@@ -150,7 +130,6 @@ function failureOf(
 	return undefined;
 }
 
-/** Every practice group, each with its split and the way to open it. */
 function GroupsTable({
 	overview,
 	openGroupSlug,
@@ -177,7 +156,7 @@ function GroupsTable({
 			state={
 				overview === undefined
 					? { status: "loading" }
-					: { status: "ready", rows, context: splitContextOf(overview) }
+					: { status: "ready", rows, readerCounted: overview.readerCounted }
 			}
 			openKey={openGroupSlug}
 			empty={NO_PRACTICE_GROUPS}

@@ -7,6 +7,7 @@ import { type LoadState, queryLoadState } from "@/components/common/panel-state"
 import { toFeedbackCard } from "@/components/practice-profile/practice-feedback-cards";
 import type { FeedbackUsefulness } from "@/components/practice-vocabulary/feedback-usefulness-defs";
 import type {
+	FeedbackBand,
 	FeedbackComment,
 	FeedbackRatingProps,
 	PracticeFeedbackCardEntry,
@@ -107,10 +108,9 @@ export function withoutDispute(
 	return { usefulness: current?.usefulness, resolution: undefined, comment: undefined };
 }
 
-/** Which band is open under a card's footer: the rating's comment or the dispute's sentence. */
 interface OpenBand {
 	feedbackId: string;
-	kind: "comment" | "dispute";
+	band: FeedbackBand;
 }
 
 /**
@@ -155,7 +155,7 @@ export function useInAppFeedback({
 	const rate = (feedbackId: string, usefulness: FeedbackUsefulness) => {
 		const next = nextRating(responseOf(feedbackId), usefulness);
 		write(feedbackId, next);
-		setOpenBand(next.usefulness === undefined ? undefined : { feedbackId, kind: "comment" });
+		setOpenBand(next.usefulness === undefined ? undefined : { feedbackId, band: "comment" });
 	};
 	const resolve = (feedbackId: string, answer: ResolvingAnswer) => {
 		write(feedbackId, nextResolution(responseOf(feedbackId), answer));
@@ -171,23 +171,20 @@ export function useInAppFeedback({
 			setOpenBand(undefined);
 			return;
 		}
-		const open = openBand?.feedbackId === feedbackId && openBand.kind === "dispute";
-		setOpenBand(open ? undefined : { feedbackId, kind: "dispute" });
+		const open = openBand?.feedbackId === feedbackId && openBand.band === "dispute";
+		setOpenBand(open ? undefined : { feedbackId, band: "dispute" });
 	};
 	const sendDispute = (feedbackId: string, comment: string) => {
 		write(feedbackId, withDispute(responseOf(feedbackId), comment));
 		setOpenBand(undefined);
 	};
-	const bandOpen = (feedbackId: string, kind: OpenBand["kind"]) =>
-		openBand?.feedbackId === feedbackId && openBand.kind === kind;
 
 	return {
 		cards: feedback.map((item) => toFeedbackCard(item, groups)),
 		ratingProps: (feedbackId) => ({
 			usefulness: responseOf(feedbackId)?.usefulness,
 			resolution: responseOf(feedbackId)?.resolution,
-			commentOpen: bandOpen(feedbackId, "comment"),
-			disputeOpen: bandOpen(feedbackId, "dispute"),
+			openBand: openBand?.feedbackId === feedbackId ? openBand.band : undefined,
 			isPending: pendingResponses.has(feedbackId),
 			onRate: (usefulness) => rate(feedbackId, usefulness),
 			onSendComment: (comment) => send(feedbackId, comment),

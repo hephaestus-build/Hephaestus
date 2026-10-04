@@ -1,11 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
 
-import {
-	threeWay,
-	TOTAL_ONLY,
-	WITHHELD,
-} from "@/stories/practices-across-the-workspace-story-data";
+import { threeWay, TOTAL_ONLY } from "@/stories/practices-across-the-workspace-story-data";
 
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 
@@ -34,15 +30,10 @@ const ROWS: ComparisonRow[] = [
 const TOTAL_ONLY_NAME =
 	"28 developers with a current standing in this workspace. The split is held back so no one can be singled out.";
 
-const CONTEXT = {
-	readerCounted: true,
-	developersWithAStanding: 28,
-	minimumOthers: 3,
-} as const;
-
 /**
  * One table for practice groups and for practices: the caller decides the subject cell and the
- * actions, the table draws the split with the reader's place on it and the end of a long list.
+ * row link. Each split shape has its own stories on `WorkspaceSplitBar`; these pin what the table
+ * adds, which is that every shape fills the same column.
  */
 const meta = {
 	component: WorkspaceComparisonTable,
@@ -51,7 +42,7 @@ const meta = {
 	args: {
 		"aria-label": "All practice groups",
 		subjectHead: "Practice group",
-		state: { status: "ready", rows: ROWS, context: CONTEXT },
+		state: { status: "ready", rows: ROWS, readerCounted: true },
 		rowLink: () => ({ text: "Open group", onOpen }),
 		empty: { title: "No practices set up yet", description: "They appear once set up." },
 	},
@@ -88,41 +79,6 @@ export const Default: Story = {
 	},
 };
 
-/** Every split shown only as its total: a neutral bar, its total and a short label per row. */
-export const TotalOnly: Story = {
-	args: {
-		state: {
-			status: "ready",
-			rows: ROWS.map((each) => ({ ...each, split: TOTAL_ONLY })),
-			context: CONTEXT,
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getAllByRole("img", { name: TOTAL_ONLY_NAME })).toHaveLength(4);
-		await expect(canvas.getAllByText("Split held back")).toHaveLength(4);
-		await expect(canvas.queryByText(/You/u)).toBeNull();
-	},
-};
-
-/**
- * Every split held back, the total too, as when too few developers have a standing at all: an
- * empty track and one short reason per row, and nothing of the reader.
- */
-export const Withheld: Story = {
-	args: {
-		state: {
-			status: "ready",
-			rows: ROWS.map((each) => ({ ...each, split: WITHHELD })),
-			context: { ...CONTEXT, developersWithAStanding: undefined },
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(4);
-		await expect(canvas.queryByRole("img")).toBeNull();
-		await expect(canvas.queryByText(/You/u)).toBeNull();
-	},
-};
-
 /** Each loading row in the shape of the row it stands for, its link cell left empty. */
 export const Loading: Story = {
 	args: { state: { status: "loading" } },
@@ -133,7 +89,7 @@ export const Loading: Story = {
 };
 
 export const Empty: Story = {
-	args: { state: { status: "ready", rows: [], context: CONTEXT } },
+	args: { state: { status: "ready", rows: [], readerCounted: true } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
 	},

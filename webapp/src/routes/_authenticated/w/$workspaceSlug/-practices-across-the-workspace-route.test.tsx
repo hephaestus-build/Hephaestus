@@ -188,7 +188,7 @@ describe("Practices across the workspace", () => {
 		});
 	});
 
-	it("leaves out a level this page no longer opens", async () => {
+	it("drops a level kind this page does not open", async () => {
 		const { router } = renderRouteAtWithRouter(
 			`${PAGE}?detail=%5B%22practice-group%3Areview-ready-work%22%2C%22own-group%3Areview-ready-work%22%2C%22practice%3Ascope-to-one-concern%22%5D`,
 		);
@@ -209,7 +209,7 @@ describe("Practices across the workspace", () => {
 		expect(screen.queryByRole("table", { name: "All practice groups" })).toBeNull();
 	});
 
-	it("keeps the group open when the tiles of a new window fail", async () => {
+	it("keeps the group open when the tiles fail", async () => {
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/practices/workspace-overview/tiles", () =>
 				HttpResponse.json({ title: "Internal Server Error" }, { status: 500 }),

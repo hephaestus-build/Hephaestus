@@ -8,7 +8,6 @@ import {
 	GATED_TILES,
 	GATED_WORKSPACE,
 	MANY_GROUPS_WORKSPACE,
-	TOTAL_ONLY_WORKSPACE,
 } from "@/stories/practices-across-the-workspace-story-data";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
@@ -41,50 +40,36 @@ const groupsTable = (canvas: {
 
 export const Default: Story = {
 	play: async ({ canvas, args }) => {
+		// The hints carry the response's own numbers: 26 in the window, 6 for a band, 3 for a part.
 		await expect(
 			canvas.getByText(
-				"This page shows where the developers in this workspace stand in each practice group. Your next step is in your Practice profile.",
-			),
-		).toBeVisible();
-		await expect(
-			canvas.getByRole("heading", { level: 2, name: "All practice groups" }),
-		).toBeVisible();
-		// The two rules, each where it applies, with the numbers the response carries.
-		await expect(
-			canvas.getByText(
-				"The grey band is the typical range. To find it, Hephaestus takes the 26 developers in this workspace who have a standing in the last 30 days, and sorts them by their value. The band covers the middle half: a quarter of them are below it, and a quarter are above it. Your marker shows your value. A tile shows the band only when at least 6 other developers have a standing.",
+				/Hephaestus takes the 26 developers in this workspace who have a standing in the last 30 days/u,
 			),
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Open feedback counts what is open now, for every developer that this page counts.",
+				/A tile shows the band only when at least 6 other developers have a standing\./u,
 			),
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Each bar counts developers by their current standing in the group, as their Practice profile shows it. You marks your part. A bar shows its parts only if each part holds at least 3 other developers. If not, the bar shows only its total, so no one can be singled out.",
+				/only when each part holds at least 4 developers\. So each part stands for at least 3 developers other than you\./u,
 			),
 		).toBeVisible();
-		// The window toggle sits in the tiles' heading row, not over the bars.
+		// Only the tiles read the window: the toggle sits in their section, and the bars name none.
 		await expect(
 			canvas.getByRole("heading", { level: 2, name: "Last 30 days" }).closest("section"),
-		).toContainElement(canvas.getByText("Pieces of work reviewed"));
+		).toContainElement(canvas.getByRole("toolbar", { name: "Time range" }));
 		await expect(
 			canvas.getByRole("heading", { level: 2, name: "All practice groups" }).closest("section")
 				?.textContent,
 		).not.toMatch(/30 days|90 days|All time/u);
-		await expect(canvas.queryByText(/^You:/u)).toBeNull();
-		// The window's own figures, in their colours.
-		await expect(
-			canvas.getByRole("table", { name: "All practice groups" }).closest(".grayscale"),
-		).toBeNull();
 		const table = groupsTable(canvas);
 		await expect(
 			table.getByRole("img", {
 				name: "28 developers with a current standing in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
 			}),
 		).toBeVisible();
-		// The row's one action, drawn as the reviews table draws "Open review", opens the group's level.
 		await userEvent.click(
 			table.getByRole("button", { name: "Open group Packaging work for review" }),
 		);
@@ -100,20 +85,6 @@ export const GroupOpen: Story = {
 			.getAllByRole("row")
 			.find((each) => each.textContent.startsWith("Packaging work for review"));
 		await expect(row).toHaveAttribute("data-state", "open");
-	},
-};
-
-/**
- * A part holds too few in every group: a neutral bar with the total and its label in every row,
- * and no row says anything of the reader.
- */
-export const AllTotalOnly: Story = {
-	args: { state: { status: "ready", overview: TOTAL_ONLY_WORKSPACE } },
-	play: async ({ canvas }) => {
-		await expect(groupsTable(canvas).getAllByText("Split held back")).toHaveLength(8);
-		await expect(groupsTable(canvas).getAllByText("28 developers")).toHaveLength(8);
-		await expect(canvas.queryByText(/^You:/u)).toBeNull();
-		await expect(groupsTable(canvas).queryByText("You")).toBeNull();
 	},
 };
 

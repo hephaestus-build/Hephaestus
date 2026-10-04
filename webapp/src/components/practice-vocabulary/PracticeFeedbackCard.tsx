@@ -51,9 +51,11 @@ export type FeedbackComment = ResponseComment<NotHelpfulReason>;
 
 /**
  * An answer that resolves the feedback, the card's own way to close it beside the work coming back
- * clean. A dispute is the third answer, but it leaves the feedback open, so it has its own Disagree
- * button beside the ratings rather than one among these.
+ * clean. A dispute leaves the feedback open, so it has its own Disagree button.
  */
+/** The band under a card's footer: the rating's comment, or the sentence a dispute carries. */
+export type FeedbackBand = "comment" | "dispute";
+
 export type ResolvingAnswer = Exclude<FeedbackResolution, "DISPUTED">;
 
 const RESOLVING_ANSWERS: ResolvingAnswer[] = ["ADDRESSED", "NOT_APPLICABLE"];
@@ -144,15 +146,10 @@ export interface FeedbackRatingProps {
 	 */
 	resolution?: FeedbackResolution;
 	/**
-	 * Whether the comment band under the footer is open; a rating press opens it, Send and Skip
-	 * close it.
+	 * The band open under the footer, at most one: a rating press opens `comment`, a press on
+	 * Disagree opens `dispute`, and Send and Skip close either.
 	 */
-	commentOpen?: boolean;
-	/**
-	 * Whether the band that asks why the reader disagrees is open; a press on Disagree opens it,
-	 * Send and Skip close it.
-	 */
-	disputeOpen?: boolean;
+	openBand?: FeedbackBand;
 	/**
 	 * A response is being written: the button just pressed, if it is still the chosen one, says it is
 	 * saving, and every other response control waits for it.
@@ -167,13 +164,8 @@ export interface FeedbackRatingProps {
 	onSendComment?: (comment: FeedbackComment) => void;
 	/** Skip in either band: the comment's or the dispute's. */
 	onSkipComment?: () => void;
-	/**
-	 * A press on Disagree, the reader's dispute of the card, the pressed one included: the caller
-	 * decides that a press opens the band that asks why, and that a press on a standing dispute
-	 * takes it back. Without it the card has no Disagree button.
-	 */
+	/** Without it the card has no Disagree button. The caller decides what a press on a standing dispute does. */
 	onDisagree?: () => void;
-	/** Send in the dispute's band, with the sentence a dispute has to carry. */
 	onSendDispute?: (comment: string) => void;
 	/**
 	 * A press on Addressed or Not applicable, the chosen one included: the caller decides that a
@@ -210,7 +202,6 @@ function formatTimestamp(date: Date, state: FeedbackState, today: Date): string 
 		: `${def.stamp ?? def.label} ${formatDay(date)}`;
 }
 
-/** The dispute's button: the reader says the card is wrong, beside saying it did not help. */
 const DISAGREE = "Disagree";
 
 /**
@@ -236,8 +227,7 @@ export function PracticeFeedbackCard({
 	},
 	usefulness,
 	resolution,
-	commentOpen = false,
-	disputeOpen = false,
+	openBand,
 	isPending = false,
 	onRate,
 	onSendComment,
@@ -253,35 +243,32 @@ export function PracticeFeedbackCard({
 }: PracticeFeedbackCardProps) {
 	const headingId = useId();
 	const responseId = useId();
-	// Which control the reader pressed last, so a write in flight says so on the control that asked
-	// for it: not on a pressed button in the other row, and not on Send when a rating is saving.
-	const [lastPressed, setLastPressed] = useState<
-		"rating" | "answer" | "comment" | "dispute" | "disagree"
-	>("rating");
+	// Which control asked for the write in flight, so "Saving…" lands on it and not on a pressed
+	// button in another row. The mutation cannot say: its variables are the whole response, and
+	// "Not accurate" and the dispute band both write DISPUTED with a comment. "send" needs no band
+	// name, as `openBand` holds at most one.
+	const [lastPressed, setLastPressed] = useState<"rating" | "answer" | "send" | "disagree">(
+		"rating",
+	);
 	const shownTimestamp = formatTimestamp(timestamp, state, new Date(useNow()));
-	// The write is optimistic, so a quick one says nothing: the controls wait at once, and the
-	// pressed button says "Saving…" only once the write outlasts a second. `ssr` off, since its
-	// default shows the word at once on a card that mounts with a write in flight.
+	// `ssr: false`: its default shows "Saving…" at once on a card that mounts with a write in flight.
 	const showSaving = useSpinDelay(isPending, { delay: 1000, minDuration: 500, ssr: false });
 	const sendComment =
 		onSendComment &&
 		((comment: FeedbackComment) => {
-			setLastPressed("comment");
+			setLastPressed("send");
 			onSendComment(comment);
 		});
 	const sendDispute =
 		onSendDispute &&
 		(({ comment }: ResponseComment) => {
-			setLastPressed("dispute");
+			setLastPressed("send");
 			onSendDispute(comment);
 		});
-	// Only the work resolves a card, so only its resolution wears the success wash; the reader's own
-	// answer closes the card on neutral ground until the work confirms it.
 	const resolved = state === "resolved";
 	// No work can tick a closed card, so it draws no count towards the threshold.
 	const closed = state === "closed";
-	// Only the reader's own answer is theirs to take back, so only then does a closed card keep its
-	// response buttons.
+	// Only the reader's own answer is theirs to take back.
 	const answerable = isOpenFeedback(state) || state === "marked";
 	const BandIcon = FEEDBACK_STATE_DEFS[isOpenFeedback(state) ? "open" : state].icon;
 	const GroupIcon = group?.icon ?? PackageIcon;
@@ -527,7 +514,7 @@ export function PracticeFeedbackCard({
 				)}
 			</div>
 
-			{disputeOpen && (
+			{openBand === "dispute" && (
 				<ResponseCommentBand
 					key="dispute"
 					name="Why you disagree"
@@ -538,25 +525,24 @@ export function PracticeFeedbackCard({
 						"Workspace admins read your sentence, not the card, and can correct its observations or withdraw it. The card stays open until then."
 					}
 					isPending={isPending}
-					sending={showSaving && lastPressed === "dispute"}
+					sending={showSaving && lastPressed === "send"}
 					onSend={sendDispute}
 					onSkip={onSkipComment}
 				/>
 			)}
-			{!disputeOpen && commentOpen && usefulness === "HELPFUL" && (
+			{openBand === "comment" && usefulness === "HELPFUL" && (
 				<ResponseCommentBand
 					key={usefulness}
 					name="What was helpful"
 					label="What worked about this feedback?"
 					placeholder="Optional: what helped, or what you did"
 					isPending={isPending}
-					sending={showSaving && lastPressed === "comment"}
+					sending={showSaving && lastPressed === "send"}
 					onSend={sendComment}
 					onSkip={onSkipComment}
 				/>
 			)}
-			{!disputeOpen &&
-				commentOpen &&
+			{openBand === "comment" &&
 				usefulness === "UNHELPFUL" && (
 					// A reason and a sentence: the sentence is what the dispute has to carry.
 					<ResponseCommentBand
@@ -572,7 +558,7 @@ export function PracticeFeedbackCard({
 								: undefined
 						}
 						isPending={isPending}
-						sending={showSaving && lastPressed === "comment"}
+						sending={showSaving && lastPressed === "send"}
 						onSend={sendComment}
 						onSkip={onSkipComment}
 					/>
@@ -581,10 +567,7 @@ export function PracticeFeedbackCard({
 	);
 }
 
-/**
- * The card's shape while the feedback loads, band for band: the pills, headline, body and strip,
- * the next step with its meter, and the footer's time, ratings and link.
- */
+/** The card's three bands while the feedback loads. */
 export function PracticeFeedbackCardSkeleton() {
 	return (
 		<div aria-hidden className="flex flex-col overflow-hidden rounded-xl border bg-background">
@@ -627,10 +610,6 @@ export function PracticeFeedbackCardSkeleton() {
 	);
 }
 
-/**
- * The reader's dispute beside the ratings: pressed while a dispute stands, and saying it is saving
- * only while the press it answers is in flight.
- */
 function DisagreeButton({
 	disputed,
 	isPending,

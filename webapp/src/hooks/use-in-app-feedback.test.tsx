@@ -168,7 +168,7 @@ describe("useInAppFeedback", () => {
 		expect(written).toHaveLength(1);
 		expect(result.current.ratingProps(feedbackId)).toMatchObject({
 			usefulness: "HELPFUL",
-			commentOpen: true,
+			openBand: "comment",
 			isPending: true,
 		});
 		reread.resolve();
@@ -290,7 +290,7 @@ describe("useInAppFeedback", () => {
 		act(() => {
 			result.current.ratingProps(feedbackId).onDisagree?.();
 		});
-		expect(result.current.ratingProps(feedbackId).disputeOpen).toBe(true);
+		expect(result.current.ratingProps(feedbackId).openBand).toBe("dispute");
 		expect(written).toHaveLength(0);
 
 		act(() => {
@@ -302,7 +302,7 @@ describe("useInAppFeedback", () => {
 			method: "PUT",
 			body: { usefulness: "HELPFUL", resolution: "DISPUTED", comment: "#17 already split it" },
 		});
-		expect(result.current.ratingProps(feedbackId).disputeOpen).toBe(false);
+		expect(result.current.ratingProps(feedbackId).openBand).toBeUndefined();
 	});
 
 	it("takes a standing dispute back on Disagree, keeping the rating", async () => {

@@ -2,6 +2,7 @@ import type { PracticesAcrossWorkspaceTiles, WorkspaceSplit, WorkspaceTile } fro
 import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "@/components/activity/activity-range";
 import type { FilterOption } from "@/components/common/FilterToggle";
 import { statusValues } from "@/components/common/status-def";
+import { count } from "@/components/practice-vocabulary/feedback-text";
 import {
 	isSettledStanding,
 	PRACTICE_GROUP_STANDING_DEFS,
@@ -13,24 +14,20 @@ import { NONE_YET_SEGMENT } from "@/components/practice-vocabulary/standing-coun
 export type AcrossWorkspaceWindow = PracticesAcrossWorkspaceTiles["window"];
 
 interface WindowDef {
-	/** The toggle's label and the section's heading. */
 	label: string;
-	/** The toggle's label where the row is short of room. */
 	shortLabel: string;
 	/** The window as the tail of a sentence: "with a standing so far". */
 	phrase: string;
 }
 
-/** A window that Activity offers too, in Activity's words for it. */
 function activityWindow(range: ActivityRange): WindowDef {
 	const def = ACTIVITY_RANGE_DEFS[range];
 	return { label: def.label, shortLabel: def.shortLabel, phrase: `in ${def.inSentence}` };
 }
 
 /**
- * Every window the page reads, shortest first as Apple Health orders its ranges, named as Activity
- * names the same span. A window the server adds fails to compile here rather than falling back
- * unseen.
+ * Shortest first, as Apple Health orders its ranges, and in Activity's words for the same span. A
+ * total `Record`, so a window the server adds fails to compile instead of rendering blank.
  */
 const WINDOW_DEFS: Record<AcrossWorkspaceWindow, WindowDef> = {
 	DAYS_30: activityWindow("30d"),
@@ -38,10 +35,8 @@ const WINDOW_DEFS: Record<AcrossWorkspaceWindow, WindowDef> = {
 	ALL_TIME: { label: "All time", shortLabel: "All time", phrase: "so far" },
 };
 
-/** Every window, in the toggle's order, for the route's search schema. */
 export const WINDOW_VALUES = statusValues(WINDOW_DEFS);
 
-/** The window toggle's options. */
 export const WINDOW_OPTIONS: readonly FilterOption<AcrossWorkspaceWindow>[] = WINDOW_VALUES.map(
 	(value) => ({
 		value,
@@ -50,43 +45,26 @@ export const WINDOW_OPTIONS: readonly FilterOption<AcrossWorkspaceWindow>[] = WI
 	}),
 );
 
-/** The window the page opens on. */
 export const DEFAULT_WINDOW: AcrossWorkspaceWindow = "DAYS_30";
 
-/** The window as the tail of a sentence: "with a standing so far". */
 export const windowPhrase = (window: AcrossWorkspaceWindow): string => WINDOW_DEFS[window].phrase;
 
-/** The window as the tiles' heading. */
 export const windowHeading = (window: AcrossWorkspaceWindow): string => WINDOW_DEFS[window].label;
 
-/** The page's short name: its entry in the sidebar and the first crumb of its levels' path. */
+/** The page's short name: its sidebar entry and the first crumb of its levels. */
 export const ACROSS_THE_WORKSPACE = "Across the workspace";
 
-/**
- * What the page is for, under its title. The page is a view of the workspace, not the reader's
- * profile, so it sends the reader to the profile for their own next step.
- */
-export const PAGE_PURPOSE =
-	"This page shows where the developers in this workspace stand in each practice group. Your next step is in your Practice profile.";
-
-/**
- * The link from a group's level, and the row link from each of its practices, to the same group or
- * practice in the reader's own Practice profile. One action, so one label.
- */
+/** One action from the group's header and from each practice row, so one label. */
 export const OPEN_IN_YOUR_PROFILE = "Open in your Practice profile";
 
-/** "6 other developers", "1 other developer": who a threshold counts. */
-function otherDevelopers(count: number): string {
-	return count === 1 ? "1 other developer" : `${count} other developers`;
-}
+/** Digits always: a count of developers sits beside other figures, never in running prose. */
+const developers = (n: number) => count(n, "developer", "developers", true);
+const otherDevelopers = (n: number) => count(n, "other developer", "other developers", true);
 
 /**
- * The lines under the tiles on how the typical range comes about and when it shows, built from the
- * responses alone so they hold for every reply: the count and window of the developers sorted, or
- * no count where the server held the total back, the threshold the server reads a middle half
- * from, and whether open feedback, which reads every developer the page counts and no window, has
- * a band of its own. The tiles are the only figures the window changes, so only these lines name
- * it. One paragraph for the band, one for open feedback.
+ * The lines under the tiles. Built only from the response, so they hold for every reply: no count
+ * where the server held the total back, the server's threshold, and a line on whether open
+ * feedback, which reads no window, has a band of its own. One paragraph for each.
  */
 export function tilesHint(
 	{
@@ -99,100 +77,77 @@ export function tilesHint(
 	>,
 	openFeedback: WorkspaceTile,
 ): readonly [string, string] {
-	// No count where the server held the total back: a small total is a count of its own.
 	const sorted =
 		developersWithAStandingInWindow === undefined
 			? "the developers"
-			: `the ${developerCount(developersWithAStandingInWindow)}`;
+			: `the ${developers(developersWithAStandingInWindow)}`;
 	const threshold = otherDevelopers(minimumOthersForMiddleHalf);
-	const has = minimumOthersForMiddleHalf === 1 ? "has" : "have";
 	const band = [
 		"The grey band is the typical range.",
 		`To find it, Hephaestus takes ${sorted} in this workspace who ${developersWithAStandingInWindow === 1 ? "has" : "have"} a standing ${windowPhrase(window)}, and sorts them by their value.`,
 		"The band covers the middle half: a quarter of them are below it, and a quarter are above it.",
 		"Your marker shows your value.",
-		`A tile shows the band only when at least ${threshold} ${has} a standing.`,
+		`A tile shows the band only when at least ${threshold} ${minimumOthersForMiddleHalf === 1 ? "has" : "have"} a standing.`,
 	].join(" ");
 	const open = "Open feedback counts what is open now, for every developer that this page counts.";
 	return [
 		band,
-		openFeedback.middleLow === undefined
+		openFeedback.middle === undefined
 			? `${open} Its band shows only when this page counts at least ${threshold}.`
 			: open,
 	];
 }
 
 /**
- * The line over a table of bars on what a bar counts and when a part is not shown: a part shows
- * from K + 1 developers, the reader counted, so it stands for K others whoever reads it. A bar
- * counts the current standing, the one each developer's Practice profile shows. A practice's bar
- * shows by the same rule as its group's, and only while it singles no one out beside the group's.
+ * The line over a table of bars, in the words of `docs/user/practice-profile.mdx` § The bars. The
+ * server shows a part only when it holds more than `minimumOthers` developers with the reader
+ * counted, so the hint names that floor and the others it leaves whoever reads the bar.
  */
 export function barsHint(minimumOthers: number, scope: StandingScope): string {
-	const rule = `Each bar counts developers by their current standing in the ${scope}, as their Practice profile shows it. You marks your part. A bar shows its parts only if each part holds at least ${minimumOthers} other developers.`;
-	return scope === "group"
-		? `${rule} If not, the bar shows only its total, so no one can be singled out.`
-		: `${rule} The parts must also single no one out beside the group’s bar. If not, the bar shows only its total.`;
-}
-
-/** What the bar and its text alternative need besides the split itself. */
-export interface SplitContext {
-	/** Whether the reader is inside the counts; without it no part carries the You marker. */
-	readerCounted: boolean;
-	/**
-	 * The workspace's total of developers with a current standing, the reference group every split
-	 * is a part of; absent while the server holds it back.
-	 */
-	developersWithAStanding?: number;
-	/** K: the fewest developers other than the reader a shown count stands for. */
-	minimumOthers: number;
-}
-
-/** "24 developers", "1 developer". */
-export function developerCount(count: number): string {
-	return `${count} ${count === 1 ? "developer" : "developers"}`;
+	const others = `${developers(minimumOthers)} other than you`;
+	const rule = [
+		`Each bar counts developers by their current standing in the ${scope}, as their Practice profile shows it.`,
+		"The You marker shows your part.",
+		`A bar shows its parts only when each part holds at least ${developers(minimumOthers + 1)}.`,
+		`So each part stands for at least ${others}.`,
+		"If a part would hold fewer, the bar shows only its number of developers.",
+	];
+	if (scope === "practice") {
+		rule.push(
+			`A practice’s bar also shows only its number if, beside its group’s bar, it would single out fewer than ${developers(minimumOthers)}.`,
+		);
+	}
+	return rule.join(" ");
 }
 
 /**
- * What a split held back says under its empty track: the privacy rule holds back its total too,
- * because too few developers have a standing at all.
+ * Under the empty track of a split held back whole. It promises nothing about later: more data does
+ * not lift every reason the privacy rule holds a split back.
  */
 export const HELD_BACK = "Held back so no one can be singled out";
 
-/**
- * What a split shown only as its total says under its neutral bar, the same in every row and for
- * every reason the privacy rule holds the parts back: a part too small, or a practice too close to its
- * group. More data does not lift the second, so the words promise nothing about later.
- */
+/** Under the neutral bar of a split shown only as its total, for every reason the parts are held back. */
 export const SPLIT_HELD_BACK = "Split held back";
 
-/** The reference group a split is a part of: "24 developers with a current standing in this workspace". */
-function referenceGroup(context: SplitContext): string {
-	const who =
-		context.developersWithAStanding === undefined
-			? "Developers"
-			: developerCount(context.developersWithAStanding);
-	return `${who} with a current standing in this workspace`;
-}
+/** A shown split's total as the bar prints it: "24 developers". The server sets it for every shape but `WITHHELD`. */
+export const splitTotalText = (split: WorkspaceSplit): string => developers(split.developers ?? 0);
 
 /**
- * The bar's text alternative: the named reference group, every count, and the part the You marker
- * is on, as the bar shows it. A split shown as its total says the total and why it holds the
- * parts back. A split held back says only why, as its track does.
+ * The bar's text alternative: the reference group, every count in the registry's words and the
+ * server's order, and the part the You marker is on, so the bar's text says what its legend says.
  */
 export function splitDescription(
 	split: WorkspaceSplit,
 	yourStanding: PracticeGroupStandingValue,
-	context: SplitContext,
+	readerCounted: boolean,
 ): string {
 	if (split.shape === "WITHHELD") {
 		return `${HELD_BACK}.`;
 	}
+	const whole = `${splitTotalText(split)} with a current standing in this workspace`;
 	if (split.shape === "TOTAL_ONLY") {
-		return `${developerCount(split.developers ?? 0)} with a current standing in this workspace. The split is held back so no one can be singled out.`;
+		return `${whole}. The split is held back so no one can be singled out.`;
 	}
-	// Each part in the registry's own words and the server's order, so the bar's text says what its
-	// legend says.
 	const parts = split.parts.map(
 		(part) => `${part.developers} ${PRACTICE_GROUP_STANDING_DEFS[part.standing].label}`,
 	);
@@ -200,6 +155,6 @@ export function splitDescription(
 	const yourPart = isSettledStanding(yourStanding)
 		? PRACTICE_GROUP_STANDING_DEFS[yourStanding].label
 		: NONE_YET_SEGMENT.inSentence;
-	const marker = context.readerCounted ? ` The You marker is on ${yourPart}.` : "";
-	return `${referenceGroup(context)}: ${[...parts, noneYet].join(", ")}.${marker}`;
+	const marker = readerCounted ? ` The You marker is on ${yourPart}.` : "";
+	return `${whole}: ${[...parts, noneYet].join(", ")}.${marker}`;
 }
