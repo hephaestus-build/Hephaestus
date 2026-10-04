@@ -101,6 +101,7 @@ public class PracticeStandingService {
         Map<UUID, String> deliveredGuidance = deliveredGuidanceByObservation(
                 workspaceId, observations.stream().map(Observation::getId).collect(Collectors.toSet()));
         Eligibility eligibility = eligibility(workspaceId);
+        Instant horizon = practiceTrendService.horizon();
 
         return edges.stream()
                 .map(edge -> snapshot(
@@ -111,7 +112,8 @@ public class PracticeStandingService {
                                         .toList(),
                                 visible),
                         eligibility,
-                        deliveredGuidance))
+                        deliveredGuidance,
+                        horizon))
                 .toList();
     }
 
@@ -121,7 +123,9 @@ public class PracticeStandingService {
      * evidence in the span gets the snapshot of someone nothing reached: every eligible practice silent.
      *
      * <p>The same classification as {@link #getStandingSnapshots}, minus the delivered guidance: a reader of the
-     * workspace as a whole sees counts, never what anyone was told.
+     * workspace as a whole sees counts, never what anyone was told. The standing and the trend read every
+     * opportunity from {@code since}, so a span longer than the trend horizon is read by the same rule as a
+     * shorter one.
      */
     public Map<Long, StandingSnapshot> getWorkspaceStandingSnapshots(
             Long workspaceId, Set<Long> developerIds, Instant since, Instant until) {
@@ -149,7 +153,8 @@ public class PracticeStandingService {
                                     .filter(observation -> visible.contains(observation.getId()))
                                     .toList(),
                             eligibility,
-                            Map.of()));
+                            Map.of(),
+                            since));
         }
         return snapshots;
     }
@@ -193,7 +198,10 @@ public class PracticeStandingService {
      * feedback was raised and delivered, and switching a practice off does not un-say it.
      */
     private StandingSnapshot snapshot(
-            List<Observation> observations, Eligibility eligibility, Map<UUID, String> deliveredGuidance) {
+            List<Observation> observations,
+            Eligibility eligibility,
+            Map<UUID, String> deliveredGuidance,
+            Instant since) {
         Map<String, List<Observation>> byPractice = new LinkedHashMap<>();
         for (Observation observation : observations) {
             byPractice
@@ -211,8 +219,8 @@ public class PracticeStandingService {
             List<Observation> group = byPractice.getOrDefault(slug, List.of());
             PracticeEvidence evidence = group.isEmpty() ? null : PracticeEvidence.classify(group);
             List<Observation> observed = evidence == null ? List.of() : evidence.observed();
-            PracticeTrend trend = practiceTrendService.calculatePractice(slug, observed);
-            Double share = evidence != null && evidence.hasStanding() ? standingShare(evidence, trend) : null;
+            PracticeTrend trend = practiceTrendService.calculatePractice(slug, observed, since);
+            Double share = evidence != null && evidence.hasStanding() ? standingShare(evidence, trend, since) : null;
             PracticeStandingDTO dto = evidence != null && share != null
                     ? toStanding(evidence, trend, deliveredGuidance, share)
                     : silentStanding(subject.getValue(), evidence);
@@ -286,18 +294,18 @@ public class PracticeStandingService {
      * requested work the trend reads; a practice only a backfill campaign judged reads the campaign's work by the
      * same rule, so the two populations are never mixed.
      *
-     * <p>The fallback is reached only when every verdict of the practice is older than the trend horizon. The
-     * profile never reaches it while its look-back of {@link #LOOKBACK_DAYS} days is the horizon. Across the
-     * workspace, All time reads evidence older than that, and a practice whose verdicts all lie before the horizon
-     * falls back to this binary share.
+     * <p>Every opportunity is read from {@code since}, where the caller's evidence starts, so the binary fallback
+     * is reached only when every verdict lies before it. The profile reads from the trend horizon over a look-back
+     * of {@link #LOOKBACK_DAYS} days, and never reaches it while the two are equal, as they are by default. Across
+     * the workspace the window is the start, All time included, so the page never reaches it.
      */
-    private double standingShare(PracticeEvidence evidence, PracticeTrend trend) {
+    private double standingShare(PracticeEvidence evidence, PracticeTrend trend, Instant since) {
         OptionalDouble live = trend.recentMetShare(STANDING_WINDOW, STANDING_DECAY);
         if (live.isPresent()) {
             return live.getAsDouble();
         }
         return practiceTrendService
-                .backfilledMetShare(evidence.observed(), STANDING_WINDOW, STANDING_DECAY)
+                .backfilledMetShare(evidence.observed(), since, STANDING_WINDOW, STANDING_DECAY)
                 .orElseGet(() -> evidence.problems().isEmpty() ? 1.0 : 0.0);
     }
 

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.observation.trend;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.dto.PracticeGroupTrendDTO;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.List;
@@ -17,21 +18,27 @@ public class PracticeTrendService {
     private final TrendProperties properties;
     private final Clock clock;
 
-    /** One practice's trend over its evidence inside today's horizon; insufficient over none. */
-    public PracticeTrend calculatePractice(String practiceSlug, List<Observation> evidence) {
-        var cutoff = clock.instant().minus(properties.getHorizonDays(), ChronoUnit.DAYS);
-        return PracticeTrendCalculator.calculatePractice(practiceSlug, evidence, cutoff, properties);
+    /** The start of today's trend horizon: the oldest evidence the practice profile's trends read. */
+    public Instant horizon() {
+        return clock.instant().minus(properties.getHorizonDays(), ChronoUnit.DAYS);
     }
 
     /**
-     * {@link PracticeTrend#recentMetShare} over a practice's backfilled work alone, inside today's horizon. A
-     * campaign's reading is sound on its own and never part of a live trend, so this is what a standing reads
+     * One practice's trend over its evidence observed from {@code since}; insufficient over none. The caller says
+     * where its evidence starts, so a reader of a span longer than the {@link #horizon()} reads all of it.
+     */
+    public PracticeTrend calculatePractice(String practiceSlug, List<Observation> evidence, Instant since) {
+        return PracticeTrendCalculator.calculatePractice(practiceSlug, evidence, since, properties);
+    }
+
+    /**
+     * {@link PracticeTrend#recentMetShare} over a practice's backfilled work alone, observed from {@code since}.
+     * A campaign's reading is sound on its own and never part of a live trend, so this is what a standing reads
      * for a practice that only a campaign judged.
      */
-    public OptionalDouble backfilledMetShare(List<Observation> evidence, int window, double decay) {
-        var cutoff = clock.instant().minus(properties.getHorizonDays(), ChronoUnit.DAYS);
+    public OptionalDouble backfilledMetShare(List<Observation> evidence, Instant since, int window, double decay) {
         return PracticeTrend.recentMetShare(
-                OpportunityBundler.opportunities(evidence, cutoff, true).reversed(), window, decay);
+                OpportunityBundler.opportunities(evidence, since, true).reversed(), window, decay);
     }
 
     public PracticeTrend calculateGroup(

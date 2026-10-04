@@ -26,10 +26,14 @@ import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvide
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -73,7 +77,7 @@ class PracticeStandingServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        when(clock.instant()).thenReturn(NOW);
+        lenient().when(clock.instant()).thenReturn(NOW);
         lenient().when(visibilityPolicy.permitsAll(anyLong(), any(), any())).thenAnswer(invocation -> {
             Collection<Observation> observations = invocation.getArgument(1);
             return observations.stream().map(Observation::getId).collect(Collectors.toSet());
@@ -127,6 +131,22 @@ class PracticeStandingServiceTest extends BaseUnitTest {
                 .observedAt(observedAtOf(artifactId))
                 .summary("a strength")
                 .outcome(Outcome.MET)
+                .build();
+    }
+
+    /** The same review about the developer, a hundred days further back: older than the trend horizon. */
+    private static Observation aged(Observation observation) {
+        return Observation.builder()
+                .id(observation.getId())
+                .practice(observation.getPractice())
+                .aboutUserId(USER_ID)
+                .artifactKind(observation.getArtifactKind())
+                .artifactId(observation.getArtifactId())
+                .agentJobId(observation.getAgentJobId())
+                .observedAt(observation.getObservedAt().minus(Duration.ofDays(100)))
+                .summary(observation.getSummary())
+                .outcome(observation.getOutcome())
+                .severity(observation.getSeverity())
                 .build();
     }
 
@@ -386,6 +406,30 @@ class PracticeStandingServiceTest extends BaseUnitTest {
         List<PracticeStandingDTO> standings = practiceStandingService.getStandings(WORKSPACE_ID);
 
         assertThat(standings.get(0).standing()).isEqualTo(PracticeStandingDTO.Standing.DEVELOPING);
+    }
+
+    @Test
+    @DisplayName("all time reads evidence older than the trend horizon by the same recency rule, never a binary share")
+    void shouldReadOldEvidenceByRecencyWhenTheWorkspaceSpanStartsBeforeTheHorizon() {
+        Practice practice = practice("robust-error-handling");
+        List<Observation> old = new ArrayList<>();
+        old.add(aged(bad(practice, Severity.MAJOR, 30L)));
+        for (long artifactId = 31L; artifactId <= 39L; artifactId++) {
+            old.add(aged(good(practice, artifactId)));
+        }
+        when(observationRepository.findByWorkspaceBetween(eq(WORKSPACE_ID), any(), eq(Instant.EPOCH), eq(NOW)))
+                .thenReturn(old);
+
+        StandingSnapshot snapshot = Objects.requireNonNull(practiceStandingService
+                .getWorkspaceStandingSnapshots(WORKSPACE_ID, Set.of(USER_ID), Instant.EPOCH, NOW)
+                .get(USER_ID));
+
+        // Nine clean pieces of work after one slip, all a hundred days back: going well, as it would be if recent.
+        assertThat(snapshot.dtos().get(0).standing()).isEqualTo(PracticeStandingDTO.Standing.STRENGTH);
+        assertThat(snapshot.practices().values())
+                .singleElement()
+                .extracting(StandingSnapshot.PracticeStanding::share)
+                .isEqualTo(1.0);
     }
 
     @Test

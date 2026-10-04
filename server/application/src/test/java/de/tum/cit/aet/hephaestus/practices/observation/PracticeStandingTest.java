@@ -68,8 +68,8 @@ class PracticeStandingTest {
         List<Observation> observations = IntStream.range(0, cleanOldestFirst.length)
                 .mapToObj(index -> observation(index, cleanOldestFirst[index]))
                 .toList();
-        return new PracticeTrendService(new TrendProperties(), Clock.fixed(NOW, ZoneOffset.UTC))
-                .calculatePractice(SLUG, observations);
+        PracticeTrendService trends = new PracticeTrendService(new TrendProperties(), Clock.fixed(NOW, ZoneOffset.UTC));
+        return trends.calculatePractice(SLUG, observations, trends.horizon());
     }
 
     private static Observation observation(int index, boolean isClean) {
