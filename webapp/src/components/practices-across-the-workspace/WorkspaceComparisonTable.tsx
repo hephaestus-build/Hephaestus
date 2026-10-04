@@ -59,7 +59,7 @@ export interface WorkspaceComparisonTableProps {
 }
 
 /**
- * Practice groups or practices beside how the workspace's observed developers split across each,
+ * Practice groups or practices beside how the workspace's developers with a standing split across each,
  * in the practice table frame: the subject, the split with the reader's place on it, and the row's
  * own actions, which the caller decides.
  */

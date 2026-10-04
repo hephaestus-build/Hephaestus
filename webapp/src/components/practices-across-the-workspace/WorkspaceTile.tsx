@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 export interface WorkspaceTileProps {
 	title: string;
 	icon: ReactNode;
-	/** The reader's own value and the middle half of the observed developers, when it may show. */
+	/** The reader's own value and the middle half of the developers with a standing, when it may show. */
 	figure: WorkspaceTileFigure;
 	/** What the value counts: "so far", "of your 18 practices". */
 	qualifier: string;

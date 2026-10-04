@@ -33,7 +33,7 @@ export const Default: Story = {
 			canvas.getByRole("img", { name: "You: 17. Typical range here: 11 to 21." }),
 		).toBeVisible();
 		// Who the band is of is said once, under the tiles, not on every tile.
-		await expect(canvas.queryByText(/developers observed/u)).toBeNull();
+		await expect(canvas.queryByText(/developers with a standing/u)).toBeNull();
 	},
 };
 

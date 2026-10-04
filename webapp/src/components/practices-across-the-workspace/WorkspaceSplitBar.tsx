@@ -96,7 +96,7 @@ function partsOf(
 }
 
 /**
- * How the observed developers split across one practice group or one practice, as one segmented
+ * How the developers with a standing split across one practice group or one practice, as one segmented
  * bar counted in developers: Needs attention, Mixed feedback, Going well and none yet. Each part
  * carries its count under it, with the standing's icon so the parts never rest on colour alone,
  * and the You marker sits over the reader's own part. A split held back is a dashed track of the

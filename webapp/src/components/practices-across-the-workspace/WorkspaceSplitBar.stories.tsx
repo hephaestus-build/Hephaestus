@@ -37,7 +37,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("img")).toHaveAccessibleName(
-			"28 developers observed in this workspace in the last 30 days: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet. You: Mixed feedback.",
+			"28 developers with a standing in this workspace in the last 30 days: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet. You: Mixed feedback.",
 		);
 		await expect(canvas.getByText("You")).toBeVisible();
 		// The marker carries the word, so no caption repeats it.
@@ -74,7 +74,7 @@ export const Withheld: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("img")).toBeNull();
 		await expect(canvas.getByText("Held back so no one can be singled out.")).toBeVisible();
-		await expect(canvas.queryByText(/developers observed/u)).toBeNull();
+		await expect(canvas.queryByText(/developers with a standing/u)).toBeNull();
 		await expect(canvas.getByText("None yet (Not observed yet)")).toBeVisible();
 	},
 };

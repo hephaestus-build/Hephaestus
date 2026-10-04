@@ -13,7 +13,7 @@ interface WindowDef {
 	label: string;
 	/** The toggle's label where the row is short of room. */
 	shortLabel: string;
-	/** The window as the tail of a sentence: "observed here so far". */
+	/** The window as the tail of a sentence: "with a standing so far". */
 	phrase: string;
 }
 
@@ -42,7 +42,7 @@ export const WINDOW_OPTIONS: readonly FilterOption<AcrossWorkspaceWindow>[] = WI
 /** The window the page opens on. */
 export const DEFAULT_WINDOW: AcrossWorkspaceWindow = "DAYS_30";
 
-/** The window as the tail of a sentence: "observed here so far". */
+/** The window as the tail of a sentence: "with a standing so far". */
 export const windowPhrase = (window: AcrossWorkspaceWindow): string => WINDOW_DEFS[window].phrase;
 
 /** The window as a section heading. */
@@ -71,8 +71,8 @@ export function tilesHint(
 	const of =
 		developersWithAStanding === undefined
 			? "the developers here"
-			: `${developerCount(developersWithAStanding)} observed ${windowPhrase(window)}`;
-	return `The typical range is the middle half of ${of}; your marker shows you. A tile compares you once at least ${2 * minimumOthers} other developers have reviewed work in this window; until then it shows only your own value.`;
+			: `${developerCount(developersWithAStanding)} with a standing ${windowPhrase(window)}`;
+	return `The typical range is the middle half of ${of}; your marker shows you. A tile compares you once at least ${2 * minimumOthers} other developers have a standing in this window; until then it shows only your own value.`;
 }
 
 /**
@@ -148,13 +148,13 @@ export function developerCount(count: number): string {
  */
 export const HELD_BACK = "Held back so no one can be singled out";
 
-/** The reference group a split is a part of: "24 developers observed in this workspace so far". */
+/** The reference group a split is a part of: "24 developers with a standing in this workspace so far". */
 function referenceGroup(context: SplitContext): string {
-	const observed =
+	const who =
 		context.developersWithAStanding === undefined
 			? "Developers"
 			: developerCount(context.developersWithAStanding);
-	return `${observed} observed in this workspace ${windowPhrase(context.window)}`;
+	return `${who} with a standing in this workspace ${windowPhrase(context.window)}`;
 }
 
 /** The bar's text alternative: the named reference group, every count, and the reader's own word. */

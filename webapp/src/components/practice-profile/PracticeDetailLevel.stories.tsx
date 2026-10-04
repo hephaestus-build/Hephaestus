@@ -350,7 +350,7 @@ export const BesideTheWorkspace: Story = {
 	play: async () => {
 		await expectSettledVisible(
 			await screen.findByRole("img", {
-				name: "28 developers observed in this workspace in the last 30 days: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You: Going well.",
+				name: "28 developers with a standing in this workspace in the last 30 days: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You: Going well.",
 			}),
 		);
 		await expect(screen.getByText("Last 90 days")).toBeVisible();

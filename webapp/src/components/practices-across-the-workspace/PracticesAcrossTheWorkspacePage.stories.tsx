@@ -14,7 +14,7 @@ import { PracticesAcrossTheWorkspacePage } from "./PracticesAcrossTheWorkspacePa
 
 /**
  * The reader's figures beside the workspace's middle half, then every practice group beside how the
- * workspace's observed developers split across it. The reader's own standing is the You marker on a
+ * workspace's developers with a standing split across it. The reader's own standing is the You marker on a
  * split, or a word where the marker cannot say it, so a split held back says nothing the word does
  * not.
  */
@@ -50,7 +50,7 @@ export const Default: Story = {
 		// The two rules, each where it applies, with the numbers the response carries.
 		await expect(
 			canvas.getByText(
-				"The typical range is the middle half of 28 developers observed in the last 30 days; your marker shows you. A tile compares you once at least 6 other developers have reviewed work in this window; until then it shows only your own value.",
+				"The typical range is the middle half of 28 developers with a standing in the last 30 days; your marker shows you. A tile compares you once at least 6 other developers have a standing in this window; until then it shows only your own value.",
 			),
 		).toBeVisible();
 		await expect(
@@ -65,7 +65,7 @@ export const Default: Story = {
 		const table = groupsTable(canvas);
 		await expect(
 			table.getByRole("img", {
-				name: "28 developers observed in this workspace in the last 30 days: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You: Needs attention.",
+				name: "28 developers with a standing in this workspace in the last 30 days: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You: Needs attention.",
 			}),
 		).toBeVisible();
 		// The row's one action, drawn as the reviews table draws "Open review", opens the group's level.
@@ -96,18 +96,20 @@ export const AllHeldBack: Story = {
 };
 
 /**
- * Too few developers observed: every middle half, every split and the observed total are held back
+ * Too few developers with a standing: every middle half, every split and their total are held back
  * by the server, and the page says only how many pieces of the reader's own work were reviewed.
  */
 export const Withheld: Story = {
 	args: { state: { status: "ready", overview: GATED_WORKSPACE } },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText(/developers\s+observed,/u)).toBeNull();
+		await expect(canvas.queryByText(/developers\s+with a standing/u)).toBeNull();
 		await expect(
 			canvas.getAllByText("Needs more data before the workspace shows here."),
 		).toHaveLength(4);
 		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(8);
-		await expect(canvas.queryAllByRole("img", { name: /developers observed/u })).toHaveLength(0);
+		await expect(
+			canvas.queryAllByRole("img", { name: /developers with a standing/u }),
+		).toHaveLength(0);
 	},
 };
 

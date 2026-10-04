@@ -41,7 +41,7 @@ export const Default: Story = {
 	},
 };
 
-/** Too few developers observed: the reader's own figures stand, the workspace's say why they do not. */
+/** Too few developers with a standing: the reader's own figures stand, the workspace's say why they do not. */
 export const NeedsMoreData: Story = {
 	args: { overview: GATED_WORKSPACE },
 	play: async ({ canvas }) => {

@@ -221,7 +221,7 @@ describe("Practices across the workspace", () => {
 		level.getByText("Last 90 days");
 		level.getByText("Last 30 days");
 		level.getByRole("img", {
-			name: /^28 developers observed in this workspace in the last 30 days: .* You: Needs attention\.$/u,
+			name: /^28 developers with a standing in this workspace in the last 30 days: .* You: Needs attention\.$/u,
 		});
 	});
 

@@ -56,8 +56,8 @@ const MAINTAINABLE: Group = {
 	groupColor: "emerald",
 };
 
-/** The observed developers every story split is a part of. */
-export const STORY_OBSERVED = 28;
+/** The developers with a standing every story split is a part of. */
+export const STORY_WITH_A_STANDING = 28;
 
 /** A full split: Needs attention, Mixed feedback, Going well, and the rest of the 28 none yet. */
 export const threeWay = ([needsAttention, mixedFeedback, goingWell]: [
@@ -69,7 +69,7 @@ export const threeWay = ([needsAttention, mixedFeedback, goingWell]: [
 	needsAttention,
 	mixedFeedback,
 	goingWell,
-	noneYet: STORY_OBSERVED - needsAttention - mixedFeedback - goingWell,
+	noneYet: STORY_WITH_A_STANDING - needsAttention - mixedFeedback - goingWell,
 });
 
 export const WITHHELD: WorkspaceSplit = { shape: "WITHHELD" };
@@ -90,7 +90,7 @@ const group = (
 
 /**
  * Packaging's five practices: three split and two held back.
- * Every part shown holds more than K of the 28 observed developers, as CohortPrivacyPolicy requires.
+ * Every part shown holds more than K of the 28 developers with a standing, as CohortPrivacyPolicy requires.
  */
 export const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
 	practice(
@@ -141,7 +141,7 @@ export const PACKAGING_GROUP: WorkspaceGroupSplit = {
 };
 
 /**
- * Eight practice groups over 28 observed developers. Every part shown, none yet included, holds
+ * Eight practice groups over 28 developers with a standing. Every part shown, none yet included, holds
  * more than K developers, as CohortPrivacyPolicy requires, so it stands for K besides any reader.
  */
 export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
@@ -166,7 +166,7 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	],
 };
 
-/** Four other developers observed: too few for any figure about the workspace, even a total. */
+/** Four other developers with a standing: too few for any figure about the workspace, even a total. */
 export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
 	...ACROSS_WORKSPACE,
 	developersWithAStanding: undefined,

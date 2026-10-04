@@ -57,7 +57,7 @@ export function splitContextOf(overview: PracticesAcrossWorkspace): SplitContext
 /**
  * Practices across the workspace, in the Practice profile's frame: the reader's figures beside the
  * middle half of the workspace, laid out as Activity lays out its range, then every practice group
- * beside how the workspace's observed developers split across it. A group opens its practices over
+ * beside how the workspace's developers with a standing split across it. A group opens its practices over
  * the page, and the reader's own group and practices open over it as the profile's levels.
  */
 export function PracticesAcrossTheWorkspacePage({
