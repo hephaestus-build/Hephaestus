@@ -4,11 +4,11 @@ title: Compatibility Policy
 description: What a Hephaestus version number promises — the public contract, upgrade guarantees, and support statement.
 ---
 
-Hephaestus follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html). This page defines what
-that version number promises to you as an operator: which surfaces are covered, what an upgrade commits you
-to, and which versions we support. Release contents are documented in the
-[CHANGELOG](https://github.com/hephaestus-build/Hephaestus/blob/main/CHANGELOG.md) and on
-[GitHub Releases](https://github.com/hephaestus-build/Hephaestus/releases).
+Hephaestus follows [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
+This page defines what a version number promises to operators.
+It covers the public contract, required upgrade actions, and supported versions.
+The [CHANGELOG](https://github.com/hephaestus-build/Hephaestus/blob/main/CHANGELOG.md) and
+[GitHub Releases](https://github.com/hephaestus-build/Hephaestus/releases) describe release contents.
 
 ## The public contract
 
@@ -16,44 +16,56 @@ Semantic versioning applies to the surfaces an operator or API consumer depends 
 
 | Surface | What is covered |
 | --- | --- |
-| **Database migration chain** | Each startup applies any not-yet-applied Liquibase changesets in changelog order, so a newer release builds on the previous release's schema. Migrations run automatically when the application server starts. |
+| **Database migration chain** | Startup applies pending Liquibase changesets in changelog order. Thus, a newer release builds on the previous release's schema. Migrations run automatically when the application server starts. |
 | **Runtime prerequisites** | The minimum PostgreSQL major version, the required outbound network destinations, and any required external services. Adding one is a breaking change. |
 | **Configuration keys** | Environment variables and `hephaestus.*` properties documented in the [Install](./install.mdx) guide (base install) and [Integrations & Reference Deployment](./production-setup.mdx) (per-integration bundles). Renames and removals are breaking changes. |
-| **Docker Compose interface** | Service names, image names, the signed release-lock contract, and required environment variables of the published compose files — the self-hosted stack (`docker/self-host/compose.yaml`, see the [Install guide](./install.mdx)) and the reference deployment (`docker/compose.app.yaml`, `docker/compose.core.yaml`, `docker/compose.proxy.yaml`). |
+| **Docker Compose interface** | Service names, image names, the signed release-lock contract, and required environment variables of the published Compose files. This includes the self-hosted stack (`docker/self-host/compose.yaml`, see the [Install guide](./install.mdx)). It also includes the reference deployment (`docker/compose.app.yaml`, `docker/compose.core.yaml`, `docker/compose.proxy.yaml`). |
 | **REST API** | The endpoints described by the published [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml). |
 
-Everything else — Java and TypeScript internals, the database schema itself (as opposed to the migration
-chain), undocumented endpoints, UI layout — may change in any release without notice.
+Other surfaces can change in any release without notice:
+
+- Java and TypeScript internals.
+- The database schema itself, as distinct from the migration chain.
+- Undocumented endpoints.
+- UI layout.
 
 ## Version numbers
 
 | Bump | Meaning |
 | --- | --- |
-| **Major** (`X`.y.z) | You must act before or during the upgrade — a required new config key, a removed or renamed one, a manual or destructive migration, or a dropped API. The release notes say what to do; [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) has the details. |
-| **Minor** (x.`Y`.z) | New functionality; upgrade needs no action. May include new *optional* config keys. |
-| **Patch** (x.y.`Z`) | Bug and security fixes; upgrade needs no action. |
+| **Major** (`X`.y.z) | You must act before or during the upgrade. Causes include required new, removed, or renamed configuration keys, manual or destructive migrations, and removed APIs. The release notes say what to do. [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) has the details. |
+| **Minor** (x.`Y`.z) | New functionality. The upgrade needs no action. It can include new *optional* configuration keys. |
+| **Patch** (x.y.`Z`) | Bug and security fixes. The upgrade needs no action. |
 
 Any release may include database migrations that run automatically on startup — the release notes flag
 them with a "back up before upgrading" banner.
 
-:::caution Pre-1.0
-While the version is below 1.0.0 the **Minor** row above does not hold: there are no major releases yet, so
-breaking changes ride in minor releases (`0.x.0` → `0.y.0`), per
-[SemVer item 4](https://semver.org/#spec-item-4). A pre-1.0 minor may require action — the release notes say
-so when it does. Always read them and test in staging first. This caveat ends with the 1.0.0 release.
+:::caution CAUTION: Pre-1.0
+Below 1.0.0, the **Minor** row above does not apply.
+There are no major releases yet.
+Breaking changes occur in minor releases (`0.x.0` → `0.y.0`), per
+[SemVer item 4](https://semver.org/#spec-item-4).
+A pre-1.0 minor release can require action.
+The release notes state the required action.
+This exception ends with the 1.0.0 release.
+
+1. Read the release notes.
+2. Test the upgrade in staging first.
 :::
 
 ## Upgrade guarantee
 
 **From 1.0 onward, any 1.x can be upgraded to any later 1.y without intermediate releases.** Use the
-target release's Compose files and images; startup applies the pending migrations for its supported
+target release's Compose files and images. Startup applies the pending migrations for its supported
 database baseline.
 
 **Before 1.0, do not assume an arbitrary older release can upgrade directly.** Read the target release's
 migration instructions first: they may require an intermediate release or manual preparation. Existing
-databases crossing the PostgreSQL 18/Liquibase baseline transition must reach the v0.77.4 schema
-cut-point and complete the [baseline synchronization runbook](./liquibase-baseline-runbook.md) before
-the new application starts. The target release refuses an unsynchronized existing schema; it does not replay archived migrations.
+databases that cross the PostgreSQL 18/Liquibase baseline transition must reach the v0.77.4 schema cut-point.
+Before the new application starts, complete the [baseline synchronization runbook](./liquibase-baseline-runbook.md).
+The target release refuses an unsynchronized existing schema.
+It does not replay archived migrations.
+
 Fresh databases initialize automatically.
 
 ### Upgrade paths to 1.0
@@ -62,26 +74,27 @@ Fresh databases initialize automatically.
 | --- | --- |
 | ≤ v0.77.3 | Install v0.77.4 and start it once → [baseline synchronization runbook](./liquibase-baseline-runbook.md) → 1.0 |
 | v0.77.4 | [Baseline synchronization runbook](./liquibase-baseline-runbook.md) → 1.0 |
-| ≥ v0.78.0 | Upgrade directly to 1.0; the baseline is already synchronized |
+| ≥ v0.78.0 | Upgrade directly to 1.0. The baseline is already synchronized |
 
 The database history, not the image tag alone, determines whether it has reached the cut-point.
 Startup and the runbook's synchronization command refuse nonempty migration history without the
 v0.77.4 final migration or the baseline tag. The refusal names v0.77.4 as the release to install first.
 Do not use synchronization to skip missing migrations. A fresh database needs no intermediate release.
 
-Released migrations remain immutable. CI checks fresh initialization and selected upgrade fixtures;
-it does not prove that every migration is safe for every existing production dataset. Data-affecting
+Released migrations remain immutable. CI checks fresh initialization and selected upgrade fixtures.
+It does not prove that every migration is safe for every existing production dataset. Data-affecting
 migrations still require review and a rehearsal against a restored backup. Take a database backup
 before upgrading. Downgrades are not supported.
 
 ## Deprecation policy
 
-Functionality slated for removal is announced in the release notes at least one minor release before it is
-removed, and keeps working until its removal release. After 1.0.0, removals only happen in major releases.
+The release notes announce functionality to remove at least one minor release before its removal.
+That functionality continues to work until the removal release.
+After 1.0.0, removals occur only in major releases.
 
 ## Support statement
 
-**We support the latest release only.** Fixes ship as new releases on top of the current version; there are
+**We support the latest release only.** Fixes ship as new releases on top of the current version. There are
 no backport branches. If you hit a bug on an older version, upgrade to the latest release before reporting
 it. This mirrors comparable self-hosted products — for example, [Sentry](https://develop.sentry.dev/self-hosted/support/)
 provides no dedicated self-hosted support and expects operators to upgrade regularly.
@@ -93,7 +106,7 @@ All images (`webapp`, `application-server`, `agent-pi`, `postgres`) under
 
 | Tag | Meaning | Stability |
 | --- | --- | --- |
-| `X.Y.Z` | Exact release | Human-readable label; production consumes the signed digest lock |
+| `X.Y.Z` | Exact release | Human-readable label. Production uses the signed digest lock |
 | `X.Y` | Latest patch of a minor release | Moves on every patch release |
 | `latest` | Latest release | Moves on every release |
 | `main`, `<sha>` | Unreleased development builds | **Unsupported** — never deploy these |
