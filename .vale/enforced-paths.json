@@ -33,5 +33,18 @@
 	"docs/admin/threat-model.mdx",
 	"docs/admin/webhook-ingestion-operations.mdx",
 	"docs/admin/writing-practices.mdx",
-	"docs/contributor/simplified-technical-english.md"
+	"docs/contributor/simplified-technical-english.md",
+	"docs/user/accessibility.mdx",
+	"docs/user/activity.mdx",
+	"docs/user/ai-code-review.mdx",
+	"docs/user/ai-mentor.mdx",
+	"docs/user/browser-extension-privacy.mdx",
+	"docs/user/browser-extension.mdx",
+	"docs/user/getting-started.mdx",
+	"docs/user/overview.mdx",
+	"docs/user/practice-profile.mdx",
+	"docs/user/privacy.mdx",
+	"docs/user/product-feedback.mdx",
+	"docs/user/user-settings.mdx",
+	"docs/user/workspace.mdx"
 ]
