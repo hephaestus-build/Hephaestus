@@ -455,6 +455,10 @@
 					],
 					"evidenceRequirements": [
 						{
+							"sourceKind": "scm.pull-request.core",
+							"stance": "CONTEXTUAL"
+						},
+						{
 							"sourceKind": "scm.pull-request.diff",
 							"stance": "EXHAUSTIVE"
 						},
@@ -479,6 +483,10 @@
 						"scm.pull_request.synchronized"
 					],
 					"evidenceRequirements": [
+						{
+							"sourceKind": "scm.pull-request.core",
+							"stance": "CONTEXTUAL"
+						},
 						{
 							"sourceKind": "scm.pull-request.diff",
 							"stance": "EXHAUSTIVE"
@@ -932,6 +940,10 @@
 						"scm.pull_request.synchronized"
 					],
 					"evidenceRequirements": [
+						{
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
 						{
 							"sourceKind": "scm.pull-request.diff",
 							"stance": "EXHAUSTIVE"

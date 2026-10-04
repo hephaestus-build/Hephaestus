@@ -304,6 +304,10 @@ export type AgentBindingRequest = {
  */
 export type AgentJob = {
   /**
+   * Ready practices this review did not ask because a completed review had already answered them on the same code; available on review detail after evidence capture. Empty when every ready practice was asked.
+   */
+  answeredPractices?: Array<AnsweredPractice>;
+  /**
    * When this job becomes eligible to be claimed. In the future while the job is waiting — on a retry backoff, or on a hold. Read together with holdReason: a QUEUED job with availableAt in the future is waiting, not starved for workers.
    */
   availableAt: string;
@@ -400,9 +404,9 @@ export type AgentJob = {
    */
   retryCount: number;
   /**
-   * Why a COMPLETED run produced the observations it did. INSUFFICIENT_EVIDENCE means no model ran because required evidence was missing, unreadable, stale, or unauthorized — so no observations means nothing was assessed, not that nothing was wrong. REVIEWED means the model ran against sufficient evidence.
+   * Why a COMPLETED run produced the observations it did. INSUFFICIENT_EVIDENCE means no model ran because required evidence was missing, unreadable, stale, or unauthorized — so no observations means nothing was assessed, not that nothing was wrong. COALESCED means no model ran because a completed review had already answered every ready practice on exactly the same code — its answers are listed in answeredPractices, and this run assessed nothing anew. REVIEWED means the model ran against sufficient evidence.
    */
-  reviewOutcome: 'REVIEWED' | 'INSUFFICIENT_EVIDENCE';
+  reviewOutcome: 'REVIEWED' | 'INSUFFICIENT_EVIDENCE' | 'COALESCED';
   /**
    * Timestamp when the job started running
    */
@@ -425,6 +429,24 @@ export type Answer = {
   questionId: string;
   rating?: number;
   text?: string;
+};
+
+/**
+ * A ready practice this review did not ask, because a completed review had already answered it on exactly the same code. Its observation belongs to that review; this review recorded none for it.
+ */
+export type AnsweredPractice = {
+  /**
+   * The practice left out
+   */
+  practiceSlug: string;
+  /**
+   * The completed review whose observation answers it
+   */
+  reviewId: string;
+  /**
+   * The practice revision the earlier answer was made under
+   */
+  revisionId: number;
 };
 
 /**

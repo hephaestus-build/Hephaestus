@@ -97,6 +97,25 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     List<ReviewOutcomeRow> findReviewOutcomes(
             @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
+    /**
+     * The practices each of these runs left to an earlier review's answer, as preparation recorded them. Only that
+     * key is returned; runs that recorded none yield no row.
+     */
+    @Query(value = """
+        SELECT j.id AS "id", CAST(j.evidence_snapshot -> 'answeredPractices' AS text) AS "answeredPractices"
+        FROM agent_job j
+        WHERE j.id IN :ids AND j.workspace_id = :workspaceId
+          AND j.evidence_snapshot -> 'answeredPractices' IS NOT NULL
+        """, nativeQuery = true)
+    List<AnsweredPracticesRow> findAnsweredPractices(
+            @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    interface AnsweredPracticesRow {
+        UUID getId();
+
+        String getAnsweredPractices();
+    }
+
     /** What these runs wrote about themselves: the composed next steps live in {@code output}. */
     List<ReviewRunNarrativeRow> findReviewRunNarrativesByWorkspaceIdAndIdIn(Long workspaceId, Collection<UUID> ids);
 
@@ -396,21 +415,53 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             @Param("descriptionPath") String descriptionPath,
             @Param("changePath") String changePath);
 
-    /** The staged identity and source contract for material repair admission. */
+    /**
+     * The staged identity and source contract for material repair admission, and the generated-path policy the run
+     * staged. Source states outlive the retired artifact inventories, so they stay readable after admission.
+     */
     @Query(value = """
-        SELECT j.id AS "id", j.retry_count AS "attempt", CAST(j.evidence_snapshot -> 'reviewedWork' AS text) AS "reviewedWork",
+        SELECT j.id AS "id", j.retry_count AS "attempt", j.status AS "status",
+               CAST(j.evidence_snapshot -> 'reviewedWork' AS text) AS "reviewedWork",
                jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'contractVersion') AS "contractVersion",
-               CAST(j.evidence_snapshot -> 'manifest' AS text) AS "manifest"
+               CAST(j.evidence_snapshot -> 'manifest' AS text) AS "manifest",
+               CAST(j.evidence_snapshot -> 'generatedPaths' AS text) AS "generatedPaths"
         FROM agent_job j
         WHERE j.id IN :ids AND j.workspace_id = :workspaceId
         """, nativeQuery = true)
     List<CapturedReviewedWorkRow> findCapturedReviewedWork(
             @Param("workspaceId") long workspaceId, @Param("ids") Collection<UUID> ids);
 
+    /**
+     * Whether a review of this pull request submitted at exactly this head, title and description, under an occasion
+     * other than {@code excludedSignals}, is still queued or running in the workspace.
+     */
+    @Query(value = """
+        SELECT EXISTS (
+            SELECT 1 FROM agent_job j
+            WHERE j.workspace_id = :workspaceId
+              AND j.job_type = 'PULL_REQUEST_REVIEW'
+              AND j.status IN ('QUEUED', 'RUNNING')
+              AND j.metadata -> 'pull_request_id' = to_jsonb(CAST(:pullRequestId AS bigint))
+              AND j.metadata ->> 'commit_sha' = :head
+              AND j.metadata ->> 'title' IS NOT DISTINCT FROM CAST(:title AS text)
+              AND j.metadata ->> 'body' IS NOT DISTINCT FROM CAST(:body AS text)
+              AND COALESCE(j.metadata ->> 'signal', '') NOT IN (:excludedSignals)
+        )
+        """, nativeQuery = true)
+    boolean existsActivePullRequestReviewOf(
+            @Param("workspaceId") long workspaceId,
+            @Param("pullRequestId") long pullRequestId,
+            @Param("head") String head,
+            @Param("title") @Nullable String title,
+            @Param("body") @Nullable String body,
+            @Param("excludedSignals") Collection<String> excludedSignals);
+
     public interface CapturedReviewedWorkRow {
         UUID getId();
 
         int getAttempt();
+
+        AgentJobStatus getStatus();
 
         @Nullable
         String getContractVersion();
@@ -420,6 +471,9 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
         @Nullable
         String getManifest();
+
+        @Nullable
+        String getGeneratedPaths();
     }
 
     interface ReviewedWorkRow {

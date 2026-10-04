@@ -133,6 +133,7 @@ export function ReviewRunLevel({
 			<DrawerBody className="flex flex-col gap-8 pt-2">
 				<ReviewRunNotices
 					job={run}
+					practices={practices}
 					outputMayBeIncomplete={reviewEndedEarly && !endedWithoutOutput}
 				/>
 				{endedWithoutOutput ? (

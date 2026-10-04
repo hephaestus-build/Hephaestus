@@ -27,9 +27,14 @@ import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.LinkedWorkItemContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.RepositoryTreeContentSource;
+import de.tum.cit.aet.hephaestus.agent.handler.AnsweredPractices;
 import de.tum.cit.aet.hephaestus.agent.handler.CitationVerification;
+import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.AnsweredPractice;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
@@ -41,6 +46,13 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
+import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
+import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -104,6 +116,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -144,6 +157,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     private static final String REPO = "org/repair-repo";
     private static final String HEAD = "1".repeat(40);
     private static final String NEXT_HEAD = "2".repeat(40);
+    private static final String TREE = "3".repeat(40);
+    private static final byte[] GENERATED_PATHS = "{\"patterns\":[],\"paths\":[]}".getBytes(StandardCharsets.UTF_8);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Autowired
@@ -233,6 +248,9 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     @Autowired
     private SignalLedgerProperties ledgerProperties;
 
+    @Autowired
+    private AnsweredPractices answeredPractices;
+
     private Workspace workspace;
     private User developer;
     private Repository repository;
@@ -270,6 +288,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 resubmitter,
                 workspaceResolver,
                 reviewProperties,
+                agentJobRepository,
                 transactions);
     }
 
@@ -1091,6 +1110,120 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         assertThat(jobsOf(workspace)).containsExactlyInAnyOrder(ready.getId(), editReview.getId());
     }
 
+    /**
+     * A push made while the merge request was a draft, marked Ready before the push settled: the push waits while the
+     * Ready review of the same work runs, and its review then leaves out only the code practice that review answered on
+     * the same change and tree. A practice that also reads the description, and one only the push binds, are asked.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldAskAPushMadeWhileDraftOnlyWhatTheReadyReviewOfTheSameCodeLeftOpen(boolean gitLab) {
+        provider(gitLab);
+        Practice tests = codePractice(
+                "ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED, ScmSignals.PULL_REQUEST_READY);
+        Practice describe =
+                practice("describe-what-and-why", ScmSignals.PULL_REQUEST_SYNCHRONIZED, ScmSignals.PULL_REQUEST_READY);
+        Practice small = codePractice("keeps-functions-small", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        PullRequest pr = pullRequest(true, HEAD, "Adds the thing");
+        draftPush(NEXT_HEAD);
+        SignalKey pushed = currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        AgentJob ready = markReady(pr);
+
+        settle(pr);
+
+        assertThat(rowOf(pushed).getState()).isEqualTo(SignalState.DEFERRED);
+        assertThat(jobsOf(workspace)).containsExactly(ready.getId());
+
+        finish(ready, AgentJobStatus.COMPLETED, tests, describe);
+        settle(pr);
+
+        AgentJob push = jobOf(rowOf(pushed));
+        assertThat(signalOf(push)).isEqualTo(ScmSignals.PULL_REQUEST_SYNCHRONIZED.value());
+        assertThat(answeredPractices.answered(
+                        push,
+                        List.of(tests, describe, small),
+                        currentCode(ReviewedWorkFixtures.BASE, NEXT_HEAD, TREE),
+                        GENERATED_PATHS))
+                .containsExactly(new AnsweredPractice(
+                        tests.getSlug(),
+                        Objects.requireNonNull(Objects.requireNonNull(tests.getCurrentRevision())
+                                .getId()),
+                        ready.getId()));
+    }
+
+    /** Nothing short of the producing run's own completed record of the same code, at the pinned revision, answers. */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "changed diff base",
+                "changed tree",
+                "changed generated-path policy",
+                "unknown retained identity",
+                "newer failed run",
+                "changed practice revision",
+                "invalidated observation",
+                "failed Ready review"
+            })
+    void shouldAskAgainWhatTheReadyReviewDidNotProveAnswered(String gap) {
+        Practice tests = codePractice(
+                "ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED, ScmSignals.PULL_REQUEST_READY);
+        PullRequest pr = pullRequest(true, HEAD, "Adds the thing");
+        draftPush(NEXT_HEAD);
+        SignalKey pushed = currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        AgentJob ready = markReady(pr);
+        finish(ready, gap.equals("failed Ready review") ? AgentJobStatus.FAILED : AgentJobStatus.COMPLETED, tests);
+        String base = ReviewedWorkFixtures.BASE;
+        String tree = TREE;
+        byte[] generatedPaths = GENERATED_PATHS;
+        switch (gap) {
+            case "changed diff base" -> base = "4".repeat(40);
+            case "changed tree" -> tree = "5".repeat(40);
+            case "changed generated-path policy" ->
+                generatedPaths = "{\"patterns\":[\"generated/**\"],\"paths\":[]}".getBytes(StandardCharsets.UTF_8);
+            case "unknown retained identity" -> {
+                AgentJob stored = agentJobRepository.findById(ready.getId()).orElseThrow();
+                ObjectNode snapshot = (ObjectNode)
+                        Objects.requireNonNull(stored.getEvidenceSnapshot()).deepCopy();
+                for (JsonNode source : snapshot.path("manifest").path("sources")) {
+                    ((ObjectNode) source.path("state").path("facts")).remove("immutableIdentity");
+                }
+                stored.setEvidenceSnapshot(snapshot);
+                agentJobRepository.saveAndFlush(stored);
+            }
+            case "newer failed run" -> {
+                AgentJob newer = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), null);
+                newer.setStatus(AgentJobStatus.FAILED);
+                observe(
+                        tests,
+                        agentJobRepository.saveAndFlush(newer),
+                        pr.getId(),
+                        developer,
+                        Outcome.MET,
+                        null,
+                        NOW.plusSeconds(60));
+            }
+            case "changed practice revision" -> {
+                tests.setCriteria("Changed review criteria");
+                tests.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(tests, 3)));
+                tests = practiceRepository.saveAndFlush(tests);
+            }
+            case "invalidated observation" ->
+                standing(pr)
+                        .forEach(id -> invalidationRepository.save(new ObservationInvalidation(
+                                observationRepository.findById(id).orElseThrow(),
+                                1L,
+                                "Wrong when made",
+                                NOW.plusSeconds(90))));
+            default -> {}
+        }
+
+        settle(pr);
+
+        assertThat(answeredPractices.answered(
+                        jobOf(rowOf(pushed)), List.of(tests), currentCode(base, NEXT_HEAD, tree), generatedPaths))
+                .isEmpty();
+    }
+
     @Test
     void shouldRecheckOnlyTheNegativeWhoseOwnCaptureChanged() {
         Practice olderProblem = practice("states-how-to-verify-the-change", ScmSignals.PULL_REQUEST_OPENED);
@@ -1267,13 +1400,13 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         bindingRepository.save(binding);
     }
 
-    private Practice practice(String slug, SignalName occasion) {
-        return practice(workspace, slug, occasion);
+    private Practice practice(String slug, SignalName... occasions) {
+        return practice(workspace, slug, occasions);
     }
 
-    private Practice practice(Workspace workspace, String slug, SignalName occasion) {
+    private Practice practice(Workspace workspace, String slug, SignalName... occasions) {
         Practice practice = persistPractice(workspace, null, slug, slug, null);
-        PracticeTestEvidence.configure(practice, occasion);
+        PracticeTestEvidence.configure(practice, occasions);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         return practiceRepository.saveAndFlush(practice);
     }
@@ -1340,6 +1473,88 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         var event = new ScmDomainEvent.PullRequestSynchronized(
                 ScmEventPayload.PullRequestData.from(reload()), liveContext());
         transactions.executeWithoutResult(status -> listener.onPullRequestSynchronized(event));
+    }
+
+    private void draftPush(String head) {
+        upsert(true, head, Objects.requireNonNull(reload().getBody()));
+        var event = new ScmDomainEvent.PullRequestSynchronized(
+                ScmEventPayload.PullRequestData.from(reload()), liveContext());
+        transactions.executeWithoutResult(status -> listener.onPullRequestSynchronized(event));
+    }
+
+    /** Marks the draft Ready and returns the review that occasion submitted. */
+    private AgentJob markReady(PullRequest pr) {
+        PullRequest draft = reload();
+        upsert(false, Objects.requireNonNull(draft.getHeadRefOid()), Objects.requireNonNull(draft.getBody()));
+        var event = new ScmDomainEvent.PullRequestReady(ScmEventPayload.PullRequestData.from(reload()), liveContext());
+        transactions.executeWithoutResult(status -> listener.onPullRequestReady(event));
+        return jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_READY)));
+    }
+
+    /**
+     * The review as it ends, recorded the way admission leaves it: the change, tree and description it staged with
+     * their artifact inventories retired, the generated-path policy, how it ended, and the practices it answered.
+     */
+    private void finish(AgentJob review, AgentJobStatus status, Practice... answered) {
+        PullRequest pr = reload();
+        String head = Objects.requireNonNull(pr.getHeadRefOid());
+        ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(MAPPER);
+        EvidenceSnapshotFixtures.availableSource(
+                snapshot, PullRequestContentSource.DIFF.value(), ReviewedWorkFixtures.BASE + ":" + head);
+        EvidenceSnapshotFixtures.availableSource(snapshot, RepositoryTreeContentSource.KIND.value(), head + ":" + TREE);
+        EvidenceSnapshotFixtures.availableSource(snapshot, PullRequestContentSource.CORE.value(), null);
+        snapshot.set("generatedPaths", MAPPER.readTree(GENERATED_PATHS));
+        review.setEvidenceSnapshot(snapshot);
+        review.setStatus(status);
+        AgentJob ended = agentJobRepository.saveAndFlush(review);
+        for (Practice practice : answered) {
+            observe(practice, ended, pr.getId(), developer, Outcome.MET, null, NOW);
+        }
+    }
+
+    /** A practice that reads only the change and the repository tree. */
+    private Practice codePractice(String slug, SignalName... occasions) {
+        Practice practice = practice(slug, occasions);
+        practice.setEvidenceRequirements(List.of(
+                new PracticeEvidenceRequirement(PullRequestContentSource.DIFF, EvidenceStance.REQUIRED),
+                new PracticeEvidenceRequirement(RepositoryTreeContentSource.KIND, EvidenceStance.REQUIRED)));
+        practice.setSubject(ActorRole.AUTHOR);
+        practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));
+        return practiceRepository.saveAndFlush(practice);
+    }
+
+    /**
+     * What the capture of a pending push would stage now, as the capture types serialize it: the change pinned at
+     * {@code base:head} and the tree at {@code head:tree}, each with the artifact inventory a live capture carries.
+     */
+    private static JobFolderIndex currentCode(String base, String head, String tree) {
+        Instant now = Instant.now();
+        return new JobFolderIndex(
+                ArtifactSourceCatalogRegistry.CURRENT_VERSION,
+                "0".repeat(64),
+                ArtifactKinds.PULL_REQUEST.value(),
+                now,
+                List.of(
+                        code(
+                                PullRequestContentSource.DIFF,
+                                base + ":" + head,
+                                PullRequestContentSource.CHANGE_FILE,
+                                now),
+                        code(
+                                RepositoryTreeContentSource.KIND,
+                                head + ":" + tree,
+                                SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD",
+                                now)));
+    }
+
+    private static SourceCapture code(SourceKind kind, String identity, String path, Instant capturedAt) {
+        return new SourceCapture(
+                kind,
+                new SourceCaptureState.Available(
+                        SourceContentState.NON_EMPTY,
+                        SourceCompleteness.COMPLETE,
+                        new SourceCaptureFacts(capturedAt, null, null, identity)),
+                List.of(new SourceArtifact(path, "text/plain", "c".repeat(64), 1)));
     }
 
     private EventContext liveContext() {
