@@ -226,7 +226,7 @@ export const WithResearchProgramme: Story = {
 		const dialog = within(await screen.findByRole("dialog", { name: "Acting on feedback" }));
 		await expectSettledVisible(dialog.getByText("Research"));
 		await expect(
-			dialog.getByText(/study run by Technical University of Munich, which you agreed to join/u),
+			dialog.getByText(/research run by Technical University of Munich, which you allowed/u),
 		).toBeVisible();
 		await expect(dialog.getByRole("link", { name: "User settings" })).toBeVisible();
 	},

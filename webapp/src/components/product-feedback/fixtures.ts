@@ -52,7 +52,7 @@ export const researchInvitation = {
 	id: "55555555-5555-5555-5555-555555555555",
 	title: "How developers act on automated feedback",
 	description:
-		"Three questions about what you did after your last piece of feedback. Part of the study on mentoring at scale.",
+		"Three questions about what you did after your last piece of feedback. Part of the research on mentoring at scale.",
 	purpose: "RESEARCH",
 	researchOrganization: "Technical University of Munich",
 	questions: [

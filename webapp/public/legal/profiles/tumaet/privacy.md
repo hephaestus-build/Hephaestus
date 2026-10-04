@@ -1,6 +1,6 @@
 Privacy Statement for Hephaestus in accordance with Art. 13 and 14 GDPR.
 
-_Last updated: 2026-09-27._
+_Last updated: 2026-10-04._
 
 The Technical University of Munich (TUM), through the Research Group for Applied Education Technologies (AET), operates Hephaestus at https://hephaestus.build, which is also reachable at https://hephaestus.aet.cit.tum.de. This statement explains what personal data the platform processes, why, on what legal basis, who receives it, how long it is kept, and the rights you have. Personal data is processed under the GDPR, the Bavarian Data Protection Act (BayDSG), the Bavarian Higher Education Innovation Act (BayHIG), and the German Telecommunications Digital Services Data Protection Act (TDDDG).
 
@@ -42,7 +42,7 @@ The platform synchronises activity authored in connected repositories, whether o
 | **Identity at sign-in** — federated user identifier (GitHub user ID, or `sub` from LRZ-GitLab), username, email, display name, avatar URL — federated by the Hephaestus application server (Spring Security) and stored in the application database                                                                       | Authenticate and authorise the user; let them link their workspaces and preferences                                                   | TUM members: Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG. Voluntary sign-in by non-TUM contributors: Art. 6(1)(b) GDPR                                                                                                                                            | Account deletion revokes access immediately; after a default 48-hour cooldown, scheduled cleanup clears account contact details and removes linked identities and account-bound records. Wider person erasure is separate; see section 7                                                                                                                                                                                                                                                                       |
 | **Repository activity authored by you** in repositories a workspace administrator has connected (pull/merge requests, issues, reviews, review comments, commit metadata, author username, avatar, profile URL) | Detect engineering practices and produce feedback for the contributor | TUM-operated workspaces: Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG. Workspaces opened by external administrators rely on the basis available to them — typically Art. 6(1)(a) consent or, for private bodies, Art. 6(1)(f). For voluntary sign-in: Art. 6(1)(b) | The active mirror is retained while at least one workspace tracks the source repository and is removed when the last workspace stops monitoring it or on verified erasure. Already-buffered GitHub or GitLab webhook payloads can remain in the transport broker for up to 180 days and cannot be selectively erased. Derived review copies follow the automated practice-review retention below. |
 | **Account preferences** — notification preferences, UI options, and the **Comments and Slack reminders** practice-feedback delivery setting                                                                                                                                                                               | Personalised feedback surfaces; remember whether new practice-feedback comments and related Slack reminders should be delivered       | Art. 6(1)(e) i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG                                                                                                                                                                                                                            | Retained with the mirrored contributor profile until that profile is removed or on verified erasure. Deleting the sign-in account alone does not remove contributor-linked preferences; see section 7                                                                                                                                                                                             |
-| **Optional academic-research participation** — your grant, refusal or withdrawal; the version and digest of the archived first-layer notice; and, only while consent is current, Hephaestus usage, feedback interactions and optional survey responses | Conduct academic research into software-engineering feedback and invite consenting users to occasional surveys | Art. 6(1)(a) GDPR (consent). This is separate from the terms and platform-operation basis. It is off until you opt in and is never required to use Hephaestus | Research processing stops when you withdraw in account settings; withdrawal does not switch the processing to another legal basis. Account erasure removes the link between you and each ledger event. The non-account-linked event and archived notice remain as evidence of how consent was managed |
+| **Optional research participation** — your yes, no or withdrawal, and the version of the first-layer wording you saw. While consent is current, it also covers the research data in the subsection below. That is your work, observations and feedback about it, your responses, your use of Hephaestus, and research survey answers | Research into how AI mentoring and practice feedback affect software engineering work and learning, including building and running benchmarks and evaluation datasets. Invite consenting users to research surveys | Art. 6(1)(a) GDPR (consent) with the safeguards of Art. 89(1) GDPR. This is separate from the terms and platform-operation basis. It is off until you opt in and is never required to use Hephaestus (Art. 7(4) GDPR) | `[retention of pseudonymized research data: proposed at most 10 years after collection, in line with DFG Guideline 17, legal owner to confirm]`. Research use stops when you withdraw in User settings. Withdrawal does not switch the processing to another legal basis. Anonymized datasets are outside the GDPR and cannot be withdrawn once published. Account erasure removes the link between you and each ledger event. The non-account-linked event remains as evidence of how consent was managed, and the first-layer wording of each version stays in the published release |
 | **Workspace memberships** — workspace membership | Provide workspace access | Art. 6(1)(e) i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG                                                                                                                                                                                                                            | Retained with the relevant workspace records; removed when those records or the workspace are purged, or on verified erasure                                                                                                                                                                                                                                                                      |
 | **Activity** — counts and lists of the pull/merge requests, reviews, issues and comments you authored in the workspace's repositories; the open pull/merge requests and issues that await you, including review requests addressed to you and each reviewer's review state (for example approved or changes requested); and your team memberships synchronised from GitHub teams and LRZ-GitLab subgroups | Show members of the same workspace what each member worked on and what awaits them, listed by name and never scored or ranked; let members narrow this view to one team; on GitHub, show you the review requests addressed to one of your teams | Art. 6(1)(e) i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG                                                                                                                                                                                                                            | Follows the repository-activity mirror above: retained while at least one workspace tracks the source repository and removed when the last workspace stops monitoring it or on verified erasure. Synchronised team and subgroup memberships are removed with the organisation's or group's mirror once no workspace is connected to it, or on verified erasure |
 | **Product feedback and surveys** — feedback type and message, page path and browser identification you choose to attach, receiving release, survey invitations, answers or dismissal, account, and workspace where applicable | Improve this Hephaestus instance and avoid showing a dismissed or completed survey again | Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben), Art. 4(1) BayDSG | Stored in this instance's database until account deletion or verified erasure; workspace-scoped records are also removed when the workspace is purged. Product-feedback and product-survey responses are not reused for research. |
@@ -63,14 +63,54 @@ The platform produces no automated decisions within the meaning of Art. 22 GDPR.
 
 **Source of data (Art. 14(2)(f)).** Identity data comes from the federated identity provider you sign in with (GitHub OAuth, LRZ-GitLab OIDC, Slack OIDC when you link Slack, or Outline OAuth when you link an Outline identity). Repository activity comes from GitHub or gitlab.lrz.de via the workspace's GitHub App installation, access token, or webhook. Slack data comes from the Slack workspace after the app is installed and, for channel messages, only after the administrator activates a monitored channel and Hephaestus posts its announcement. Outline project context comes only from collections explicitly selected on the connected Outline workspace. Preferences, AI-assistant messages, product feedback, and survey answers come from you.
 
+### Research participation
+
+Research is optional. If you say yes, the research organization named on the setup screen,
+`[research organization as configured in HEPHAESTUS_RESEARCH_ORGANIZATION; legal owner to confirm]`,
+may use your data for research. The research looks at how AI mentoring and practice feedback affect
+software engineering work and learning. It includes building and running benchmarks and evaluation
+datasets that measure and improve such systems. This is a broad consent to an area of research, not
+to one study (Recital 33 GDPR).
+
+**Data.** The data covers your work in the tools your project connects, such as pull requests, issues,
+reviews and chat. It covers Hephaestus's observations and feedback about that work, and your
+responses to that feedback. It also covers how you use Hephaestus, including your conversations with
+Heph and your answers to research surveys.
+
+**Excluded data.** Sign-in credentials and access tokens are never used. Your
+Slack message choices still apply. The research does not use data about health, beliefs or other
+special categories of personal data.
+
+**Who works with it.** The research organization and the researchers who work for it use the data,
+only for research in this area. Only the research team and its AI model providers (see section 5) work with data in pseudonymized form.
+
+**Protection.** Before analysis, your name, username and contact details are replaced by a code
+(pseudonymization). The key that links the code to you is stored apart from the data. Only the
+research team can reach it. Text can still name people, so researchers screen for names and remove
+what they find.
+
+**Oversight.** These safeguards follow Art. 89(1) GDPR. The research has ethics board approval `[ethics approval reference]`.
+`[confirm that the research team is separate from grading and line management]`.
+
+**Datasets and benchmarks.** A dataset or benchmark leaves the research team only if it is
+anonymized, so that nobody can identify you from it. If the team cannot anonymize a dataset, it
+stays inside the team. Running a benchmark can mean running AI models on the data. Model providers
+see only pseudonymized data, under a data processing agreement. Your AI choice applies to these runs.
+
+**Information.** Current research projects and released datasets are listed at
+`[research information page address]`.
+
+**Your choice.** Saying no, or withdrawing later, has no disadvantage. You keep the same access,
+features and feedback. How to withdraw, and what withdrawal does and does not change, is in section 7.
+
 ### Email notifications
 
 When email is configured, Hephaestus uses your provider-verified contact address for account-security
 and deletion notices. Optional notifications start off and can be chosen separately in User settings:
 product or research survey invitations, workspace connection alerts for administrators, and product
-feedback alerts or end-of-survey summaries for instance administrators. Research invitation email
-also requires current research participation; changing the email choice does not grant or withdraw
-participation. Optional email includes an unsubscribe link that works without signing in.
+feedback alerts or end-of-survey summaries for instance administrators. Research survey invitations
+also require that you allow research use. Turning them off stops the emails. It does not grant or
+withdraw research participation. Optional email includes an unsubscribe link that works without signing in.
 
 When email is enabled for this TUM deployment, the TUM/LRZ mail service receives your address,
 notification type and links, but not product-feedback text or survey answers. Subscriptions and their disable-only unsubscribe links remain until account
@@ -122,7 +162,7 @@ The extension's use of information adheres to the
 [Chrome Web Store User Data Policy, including its Limited Use requirements](https://developer.chrome.com/docs/webstore/program-policies/limited-use).
 Extension data is used only to provide and secure its disclosed review-context functionality, not
 for advertising, sale, creditworthiness or lending decisions, or unrelated profiling or research.
-Academic-research participation does not authorise reuse of extension browsing activity for research.
+Research participation does not authorise reuse of extension browsing activity for research.
 The extension includes no analytics or third-party error-reporting service. Its full data flow and
 controls are described in [Chrome extension privacy](https://docs.hephaestus.build/user/browser-extension-privacy).
 The controller, recipients and rights contacts in this statement apply when you use this instance.
@@ -150,6 +190,9 @@ External processors engaged under data-processing agreements (Auftragsverarbeitu
 - **GitHub, Inc.** (USA) — identity provider for GitHub sign-in; source-system API for connected GitHub repositories.
 - **The LLM provider configured by your workspace administrator** for AI-assisted feedback. Any OpenAI-API-compatible HTTPS endpoint (base URL, API token, model name) can be configured. The TUM-operated deployment uses **the Microsoft Azure OpenAI Service in an EU region** under enterprise no-training terms by default; an administrator may instead point a workspace at a different endpoint (for example, OpenAI OpCo, LLC with OpenAI Ireland Ltd. as the EEA contracting party, an institution-level enterprise gateway, or a self-hosted model). When the credentials come from a non-TUM institution, that institution maintains the AVV with the chosen provider.
 - **Salesforce, Inc. / Slack Technologies, LLC** (USA) — Slack app delivery, identity linking, App Home privacy controls, Hephaestus DM mentor messages, and monitored-channel message delivery when your workspace administrator has enabled Slack.
+- **AI model providers used for research benchmark runs** — only if you allow research use. They act as processors under data processing agreements and see only pseudonymized data. `[providers, regions and transfer safeguards for research benchmark runs]`.
+
+Research data reaches the research organization and its researchers (the research team) only if you allow research use. A dataset leaves the research team only if it is anonymized, and an anonymized dataset may be published. A published anonymized dataset has no recipient list, because nobody can identify you from it.
 
 An Outline connection has no default vendor or origin. Before TUM/AET enables an Outline origin, it records the
 operator, hosting region, transfer basis, retention terms, and whether that operator is TUM-controlled infrastructure,
@@ -171,7 +214,7 @@ Core platform infrastructure (application server, PostgreSQL) runs on AET-admini
 
 ## 7. Your rights
 
-Under the GDPR you have the right of access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction (Art. 18), data portability (Art. 20), and to object to processing carried out on the basis of Art. 6(1)(e) (Art. 21). To exercise any of these rights, contact [ls1.admin@in.tum.de](mailto:ls1.admin@in.tum.de) or the TUM Data Protection Officer. We respond within the timeframe set out in Art. 12(3) GDPR (one month from receipt, extendable by two further months for complex or numerous requests, with notice to you).
+Under the GDPR you have the right of access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction (Art. 18), data portability (Art. 20), to object to processing carried out on the basis of Art. 6(1)(e) (Art. 21), and, where processing rests on your consent, to withdraw that consent at any time (Art. 7(3)). To exercise any of these rights, contact [ls1.admin@in.tum.de](mailto:ls1.admin@in.tum.de) or the TUM Data Protection Officer. We respond within the timeframe set out in Art. 12(3) GDPR (one month from receipt, extendable by two further months for complex or numerous requests, with notice to you).
 
 **Access and portability (Art. 15, Art. 20).** Open **User settings → Danger Zone → Export my data →
 Request export** and select **Download** when ready. The JSON contains account and linked identity
@@ -190,6 +233,8 @@ people's rights and freedoms under Art. 15(4); justified limits apply to the aff
 whole request. Art. 20 portability applies where its consent/contract and automated-processing
 conditions are met; providing JSON does not make every public-task record portable under Art. 20.
 Original work on connected platforms needs their separate export process.
+
+**Research participation (Art. 7(3), Art. 17, Art. 89(2)).** Withdraw with one switch, **Allow research use of my data**, in **User settings → Research participation**. This is as easy as giving consent. After you withdraw, your data is not used for new research and research survey invitations stop. The research organization removes your data from datasets that are not yet anonymized within `[removal time limit]`. Research done before you withdrew stays lawful. Anonymized data that is already in a published result or dataset cannot be traced back to you, so erasure of it is not possible. Ordinary practice reviews continue, and withdrawal does not erase other stored data by itself. Account erasure is a separate request (see below). Art. 17(3)(d) GDPR may limit erasure where it would seriously impair the research, and Art. 89(2) GDPR allows Union or national law to limit some rights for research. Any such limit applies only where the law allows it. Saying no or withdrawing has no disadvantage.
 
 **Account deletion.** Open **User settings → Danger Zone → Delete account** and confirm. Access on all
 devices is revoked immediately. After the default 48-hour cooldown, scheduled cleanup removes linked
@@ -270,7 +315,7 @@ No AI stops new practice reviews about you, new Heph requests and new feedback d
 stored records or requests already sent. Your work can still appear in shared repository context
 for reviews about other developers. Your AI choice does not remove that content or change their choices or model routes.
 Person-scoped observation and feedback history is checked separately against your AI choice. Linking an account, accepting terms, research participation
-and the AI choice are separate. The choice does not establish the lawful basis for processing.
+and the AI choice are separate. Your AI choice also applies to AI model runs for research benchmarks. The choice does not establish the lawful basis for processing.
 Slack App Home shows when Heph is off or unavailable for your choice and keeps privacy controls
 available; a failed refresh can leave an older Home view visible.
 

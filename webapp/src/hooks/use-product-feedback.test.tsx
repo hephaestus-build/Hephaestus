@@ -169,7 +169,7 @@ describe("product feedback wire contract", () => {
 		);
 	});
 
-	it("thanks a respondent for the study a research survey belongs to, and a sender by kind", async () => {
+	it("thanks a respondent for the research a research survey belongs to, and a sender by kind", async () => {
 		server.use(
 			http.get("*/workspaces/acme/product-feedback/surveys", () =>
 				HttpResponse.json([surveyInvitation, researchInvitation]),
@@ -191,7 +191,7 @@ describe("product feedback wire contract", () => {
 			await expect(surveys.result.current.submit(researchInvitation, [])).resolves.toBe(true);
 		});
 		await screen.findByText(
-			"Thanks. Your answers were recorded for a study run by Technical University of Munich.",
+			"Thanks. Your answers were recorded for research run by Technical University of Munich.",
 		);
 		await act(async () => {
 			await expect(surveys.result.current.submit(surveyInvitation, [])).resolves.toBe(true);

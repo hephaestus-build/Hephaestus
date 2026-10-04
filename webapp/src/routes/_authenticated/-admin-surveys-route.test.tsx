@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Survey, SurveySummary } from "@/api/types.gen";
+import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import type { Wire } from "@/lib/dates";
 import { isRecord } from "@/lib/is-record";
 import { server } from "@/mocks/server";
@@ -354,7 +355,7 @@ describe("instance surveys route", () => {
 			http.get("*/user/consent", () =>
 				HttpResponse.json({
 					completed: true,
-					noticeVersion: "2026-09-11",
+					noticeVersion: WORDING_VERSION,
 					participateInResearch: true,
 					researchOrganization: "Technical University of Munich",
 				}),

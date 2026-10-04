@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import type { FirstLoginConsent } from "@/api/types.gen";
-import { WORDING_VERSION } from "@/components/auth/ConsentPage";
+import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
@@ -36,8 +36,8 @@ describe("first-login consent route", () => {
 		await screen.findByRole("heading", { name: "Get set up" }, ROUTE_RENDER_WAIT);
 
 		await userEvent.click(screen.getByRole("checkbox", { name: /terms of use/iu }));
-		await userEvent.click(screen.getByRole("radio", { name: /don't take part/u }));
-		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+		await userEvent.click(screen.getByRole("radio", { name: /keep my data out of research/u }));
+		fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
 
 		await waitFor(() =>
 			expect(submitted).toStrictEqual({
@@ -59,8 +59,8 @@ describe("first-login consent route", () => {
 
 		await screen.findByRole("heading", { name: "Get set up" }, ROUTE_RENDER_WAIT);
 		await userEvent.click(screen.getByRole("checkbox", { name: /terms of use/iu }));
-		await userEvent.click(screen.getByRole("radio", { name: /Yes, take part/u }));
-		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+		await userEvent.click(screen.getByRole("radio", { name: /Yes, allow research use/u }));
+		fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
 
 		await waitFor(() =>
 			expect(submitted).toStrictEqual({
@@ -109,8 +109,8 @@ describe("consent recovery", () => {
 		await userEvent.click(
 			await screen.findByRole("checkbox", { name: /terms of use/iu }, ROUTE_RENDER_WAIT),
 		);
-		await userEvent.click(screen.getByRole("radio", { name: /don't take part/u }));
-		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+		await userEvent.click(screen.getByRole("radio", { name: /keep my data out of research/u }));
+		fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
 		await screen.findByRole("alert");
 
 		// A failed write is the server's problem, not the reader's: nothing they chose is undone, and
@@ -119,12 +119,14 @@ describe("consent recovery", () => {
 			screen.getByRole("checkbox", { name: /terms of use/iu }).getAttribute("aria-checked"),
 		).toBe("true");
 		expect(
-			screen.getByRole("radio", { name: /don't take part/u }).getAttribute("aria-checked"),
+			screen
+				.getByRole("radio", { name: /keep my data out of research/u })
+				.getAttribute("aria-checked"),
 		).toBe("true");
 		await waitFor(() =>
-			expect(screen.getByRole<HTMLButtonElement>("button", { name: "Continue" }).disabled).toBe(
-				false,
-			),
+			expect(
+				screen.getByRole<HTMLButtonElement>("button", { name: "Save and continue" }).disabled,
+			).toBe(false),
 		);
 	});
 
@@ -141,13 +143,13 @@ describe("consent recovery", () => {
 		await userEvent.click(
 			await screen.findByRole("checkbox", { name: /terms of use/iu }, ROUTE_RENDER_WAIT),
 		);
-		await userEvent.click(screen.getByRole("radio", { name: /Yes, take part/u }));
-		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+		await userEvent.click(screen.getByRole("radio", { name: /Yes, allow research use/u }));
+		fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
 
 		// The wording is in this bundle, so once the server has moved on there is nothing here the
 		// account could truthfully accept: only a document load can bring the new words in.
 		await screen.findByRole("button", { name: "Reload" });
-		expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+		expect(screen.queryByRole("button", { name: "Save and continue" })).toBeNull();
 		expect(screen.queryByRole("checkbox", { name: /terms of use/iu })).toBeNull();
 	});
 
@@ -166,16 +168,18 @@ describe("consent recovery", () => {
 		await userEvent.click(
 			await screen.findByRole("checkbox", { name: /terms of use/iu }, ROUTE_RENDER_WAIT),
 		);
-		await userEvent.click(screen.getByRole("radio", { name: /Yes, take part/u }));
-		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+		await userEvent.click(screen.getByRole("radio", { name: /Yes, allow research use/u }));
+		fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
 
 		// The question named someone else now, so neither the acceptance nor the answer may stand.
-		await screen.findByText(/Another lab/u);
+		await screen.findByText(/Another lab, may use your data for research/u);
 		// Base UI renders a radio as a button, so its state is the ARIA attribute, not `checked`.
 		expect(
-			screen.getByRole("radio", { name: /Yes, take part/u }).getAttribute("aria-checked"),
+			screen.getByRole("radio", { name: /Yes, allow research use/u }).getAttribute("aria-checked"),
 		).toBe("false");
-		expect(screen.getByRole<HTMLButtonElement>("button", { name: "Continue" }).disabled).toBe(true);
+		expect(
+			screen.getByRole<HTMLButtonElement>("button", { name: "Save and continue" }).disabled,
+		).toBe(true);
 	});
 
 	it("omits the research answer when the instance names no research organisation", async () => {
@@ -193,7 +197,7 @@ describe("consent recovery", () => {
 			await screen.findByRole("checkbox", { name: /terms of use/iu }, ROUTE_RENDER_WAIT),
 		);
 		expect(screen.queryByRole("radiogroup")).toBeNull();
-		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+		fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
 
 		await waitFor(() =>
 			expect(submitted).toStrictEqual({ noticeVersion: WORDING_VERSION, termsAccepted: true }),

@@ -54,7 +54,7 @@ const choices = [
 		key: "researchSurveys",
 		label: "Research survey invitations",
 		description:
-			"Get academic research survey invitations by email if you also take part in the research. Turning this off stops the emails. It does not end your research participation.",
+			"Get research survey invitations by email if you also take part in research. Turning this off stops the emails. It does not end your research participation.",
 	},
 	{
 		key: "productFeedback",

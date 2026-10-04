@@ -1,9 +1,10 @@
+import { ResearchDetails, ResearchSummary } from "@/components/auth/consent-wording";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 
 export interface ResearchParticipationSectionProps {
-	/** The organisation running the study, named on the first-login screen this answer came from. */
+	/** The organization running the study, named beside the control so the reader knows whom the answer is for. */
 	organization: string;
 	participateInResearch: boolean;
 	onToggleResearch: (checked: boolean) => void;
@@ -26,48 +27,42 @@ export function ResearchParticipationSection({
 		<section className="space-y-4" aria-labelledby="research-heading">
 			<div className="space-y-1">
 				<h2 id="research-heading" className="text-xl font-semibold">
-					Academic research participation
+					Research participation
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					This optional choice does not affect access to Hephaestus.
+					This is optional. Hephaestus works the same whichever you choose.
 				</p>
 			</div>
 
 			{isError ? (
 				<QueryErrorAlert
-					title="We could not load your research participation choice"
+					title="We could not load your research choice"
 					error={error}
 					onRetry={onRetry}
 				/>
 			) : (
-				<Field orientation="horizontal">
-					<FieldContent>
-						<FieldLabel htmlFor="research-participation">
-							Participate in academic research
-						</FieldLabel>
-						<FieldDescription>
-							When this is on, {organization} may use your Hephaestus usage and your interactions
-							with practice feedback for the academic research described in the{" "}
-							<a
-								href="/privacy"
-								target="_blank"
-								rel="noreferrer"
-								className="underline underline-offset-4"
-							>
-								privacy notice (opens in a new tab)
-							</a>
-							. {organization} may also invite you to occasional surveys. Turning this off records
-							your withdrawal, with the date and the version of the notice you were shown.
-						</FieldDescription>
-					</FieldContent>
-					<Switch
-						id="research-participation"
-						checked={participateInResearch}
-						onCheckedChange={onToggleResearch}
-						disabled={isLoading}
-						aria-busy={isLoading}
-					/>
-				</Field>
+				<>
+					<ResearchSummary organization={organization} />
+					<ResearchDetails organization={organization} />
+					<Field orientation="horizontal">
+						<FieldContent>
+							<FieldLabel htmlFor="research-participation">
+								Allow research use of my data
+							</FieldLabel>
+							<FieldDescription>
+								Turn this off to withdraw. Hephaestus records your answer with the date and the
+								version of the text you saw.
+							</FieldDescription>
+						</FieldContent>
+						<Switch
+							id="research-participation"
+							checked={participateInResearch}
+							onCheckedChange={onToggleResearch}
+							disabled={isLoading}
+							aria-busy={isLoading}
+						/>
+					</Field>
+				</>
 			)}
 		</section>
 	);

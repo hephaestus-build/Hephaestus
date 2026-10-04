@@ -20,15 +20,15 @@ export function isResearch<T extends Pick<SurveyInvitation, "purpose" | "researc
 	return survey.researchOrganization !== undefined;
 }
 
-/** "a study run by X", naming the organisation a research survey was published for. */
-export function studyOf(survey: Pick<ResearchSurvey, "researchOrganization">): string {
-	return `a study run by ${survey.researchOrganization}`;
+/** "research run by X", naming the organisation a research survey was published for. */
+export function researchOf(survey: Pick<ResearchSurvey, "researchOrganization">): string {
+	return `research run by ${survey.researchOrganization}`;
 }
 
 /**
  * Why a survey asks, which decides who is invited and who reads the answers. A research survey
- * reaches only accounts that agreed to the study this instance names, and its answers are that
- * study's data, not product feedback.
+ * reaches only accounts that allowed research use for the organisation this instance names, and its
+ * answers are research data, not product feedback.
  */
 export const SURVEY_PURPOSE_DEFS: StatusDefs<Survey["purpose"]> = {
 	PRODUCT: {
@@ -42,6 +42,6 @@ export const SURVEY_PURPOSE_DEFS: StatusDefs<Survey["purpose"]> = {
 		icon: FlaskConical,
 		badgeVariant: "default",
 		description:
-			"Offered only to members who take part in the research program, and labeled as research. The answers are that study’s data, not product feedback.",
+			"Offered only to members who allow research use, and labeled as research. The answers are research data, not product feedback.",
 	},
 };

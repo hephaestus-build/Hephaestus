@@ -91,7 +91,7 @@ export const Research: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("Research"));
 		await expect(
-			screen.getByText(/belong to the study run by Technical University of Munich/u),
+			screen.getByText(/belong to the research run by Technical University of Munich/u),
 		).toBeVisible();
 	},
 };

@@ -1,18 +1,18 @@
-import {
-	ActivityIcon,
-	ClockIcon,
-	FileTextIcon,
-	EyeIcon,
-	FlaskConicalIcon,
-	ShieldCheckIcon,
-	TrendingUpIcon,
-	TriangleAlertIcon,
-} from "lucide-react";
+import { FileTextIcon, FlaskConicalIcon } from "lucide-react";
 import { type ReactNode, type SubmitEvent, useId, useState } from "react";
 
 import type { ConsentStatus } from "@/api/types.gen";
-import { type Fact, FactList } from "@/components/auth/FactList";
-import { LegalLink, LegalLinks } from "@/components/auth/LegalLinks";
+import {
+	ResearchDetails,
+	ResearchSummary,
+	TERMS_FACTS,
+	TERMS_LABEL,
+	TERMS_OBLIGATIONS,
+	WORDING_VERSION,
+	researchAnswers,
+} from "@/components/auth/consent-wording";
+import { FactList } from "@/components/auth/FactList";
+import { LegalLinks } from "@/components/auth/LegalLinks";
 import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -33,16 +33,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-
-/**
- * The version of the wording below. This bundle is the archive: what an account accepted is whichever
- * release published these words, and `ConsentService.WORDING_VERSION` holds the same string.
- *
- * The page refuses to render the form when the server reports a different one, because the words on
- * screen would then be a version nobody could truthfully accept. Change any string in `TERMS` or
- * `RESEARCH` and this moves, in the same commit as the server's.
- */
-export const WORDING_VERSION = "2026-09-11";
 
 export interface ConsentChoice {
 	noticeVersion: string;
@@ -68,81 +58,7 @@ export interface ConsentPageProps {
 		  };
 }
 
-/**
- * What the reader needs before accepting, and nothing else. It names no operator: who runs this
- * instance is the privacy notice and the imprint, which every operator configures and this page links
- * to, so the same words are true on every deployment.
- *
- * Most people reading this are developers who were added to a workspace. They do not choose which
- * repositories are connected, so an obligation about connecting them is addressed to the wrong
- * audience; that one belongs to the admin who connects a source, and the admin docs carry it.
- */
-const TERMS: readonly Fact[] = [
-	{
-		icon: EyeIcon,
-		term: "What it reads",
-		detail:
-			"The work in the tools your project connects, such as pull requests, issues, reviews and chat.",
-	},
-	{
-		icon: TriangleAlertIcon,
-		term: "Feedback can be wrong",
-		// Not "never the only basis for a grading decision": as a promise it is the operator's to make
-		// and not this screen's, and as a warning it tells a developer their work is being graded here.
-		detail:
-			"It is written by an AI model. Check it against the work it links to before you act on it.",
-	},
-	{
-		icon: ShieldCheckIcon,
-		term: "Your data",
-		detail: (
-			<>
-				Who runs this instance, what it stores and for how long is in the{" "}
-				<LegalLink to="/privacy">privacy notice</LegalLink>.
-			</>
-		),
-	},
-];
-
-/**
- * Everything that argues for taking part lives out here rather than inside the "yes" answer. An
- * answer carrying more reasons than its opposite is the asymmetry EDPB 03/2022 calls deceptive.
- */
-const RESEARCH: readonly Fact[] = [
-	{
-		icon: TrendingUpIcon,
-		term: "Why it matters",
-		detail: "What we learn from real projects is what makes the feedback better.",
-	},
-	{
-		icon: ActivityIcon,
-		term: "What you share",
-		detail: "How you use Hephaestus, and how you respond to its feedback.",
-	},
-	{
-		icon: ClockIcon,
-		term: "What it asks of you",
-		detail: "Nothing extra to do. Occasionally, an optional survey.",
-	},
-];
-
-/** No icons here. A glyph on one answer and not the other is the thumb on the scale. */
-const ANSWERS = [
-	{
-		value: "yes",
-		title: "Yes, take part",
-		detail: "Use my usage and feedback for the research.",
-	},
-	{
-		value: "no",
-		// Consent wording: a change moves `WORDING_VERSION`, so the rule stays off for this string.
-		// oxlint-disable-next-line hephaestus/ui-text-voice
-		title: "No, don't take part",
-		detail: "Keep my usage and feedback out of the research.",
-	},
-] as const;
-
-type Answer = (typeof ANSWERS)[number]["value"];
+type Answer = "yes" | "no";
 
 /**
  * Heph carries the page, so `--mentor` is its accent throughout: the bubble it speaks from, and the
@@ -167,13 +83,13 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 	const ready = state.status === "ready" && !stale && termsAccepted && answered;
 
 	// Heph narrates, and only Heph is a live region. The footer hint says the same thing factually
-	// and reaches the button through `aria-describedby`, so focusing Continue does not replay it.
+	// and reaches the button through `aria-describedby`, so focusing the button does not replay it.
 	function narrate() {
 		if (state.status === "loading") {
-			return "Give me a moment. Hephaestus is fetching your setup.";
+			return "One moment while I fetch your setup.";
 		}
 		if (state.status === "error") {
-			return "Hephaestus could not fetch your setup just now.";
+			return "I could not fetch your setup.";
 		}
 		if (stale) {
 			return "Hephaestus was updated while this page was open.";
@@ -182,15 +98,15 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 			return "That is everything. You can get to work.";
 		}
 		if (!asksAboutResearch) {
-			return "The rules first.";
+			return "Read the terms, then accept them to continue.";
 		}
 		if (termsAccepted) {
-			return "Thanks. One question to go, and either answer is fine.";
+			return "Thanks. One question left, and either answer is fine.";
 		}
 		if (answer === undefined) {
-			return "Two things first. Accept the rules, then say if you want to take part in the research.";
+			return "Two things first: accept the terms, then answer the research question. Either answer is fine.";
 		}
-		return "Noted. Just the terms left.";
+		return "Noted. Only the terms are left.";
 	}
 
 	function footerHint() {
@@ -206,7 +122,9 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 		if (!answered) {
 			return "Answer the research question to continue.";
 		}
-		return asksAboutResearch ? "You can change your answer later in settings." : undefined;
+		return asksAboutResearch
+			? "You can change your research answer later in User settings."
+			: undefined;
 	}
 
 	const narration = narrate();
@@ -255,7 +173,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 								</span>
 							}
 						>
-							<FactList facts={TERMS} />
+							<FactList facts={TERMS_FACTS} />
 							<Field orientation="horizontal">
 								<Checkbox
 									id={`${id}-terms`}
@@ -264,16 +182,8 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 									onCheckedChange={setTermsAccepted}
 								/>
 								<FieldContent>
-									<FieldLabel htmlFor={`${id}-terms`}>I accept the terms of use</FieldLabel>
-									{/* The obligations sit with the box that accepts them. The points above are
-										    what the reader needs in order to decide, not things anyone agrees to. */}
-									{/* Consent wording: a change moves `WORDING_VERSION`, so the rule stays off here. */}
-									{/* oxlint-disable hephaestus/ui-text-voice */}
-									<FieldDescription>
-										Keep to the work you are entitled to see, and treat feedback as guidance for the
-										person it is addressed to rather than an assessment to pass on.
-									</FieldDescription>
-									{/* oxlint-enable hephaestus/ui-text-voice */}
+									<FieldLabel htmlFor={`${id}-terms`}>{TERMS_LABEL}</FieldLabel>
+									<FieldDescription>{TERMS_OBLIGATIONS}</FieldDescription>
 								</FieldContent>
 							</Field>
 						</Section>
@@ -287,12 +197,13 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 									title={
 										<span className="flex items-start gap-3">
 											<StepMarker icon={FlaskConicalIcon} done={answer !== undefined} />
-											<span className="min-w-0">Take part in the research?</span>
+											<span className="min-w-0">Allow research use of your data?</span>
 										</span>
 									}
-									description={`Optional, and Hephaestus works the same either way. The research is run by ${researchOrganization}.`}
+									description="Studying this needs real project work, so the research asks developers to take part. It is optional, and Hephaestus works the same either way."
 								>
-									<FactList facts={RESEARCH} />
+									<ResearchSummary organization={researchOrganization} />
+									<ResearchDetails organization={researchOrganization} />
 
 									<RadioGroup
 										value={answer ?? null}
@@ -302,7 +213,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 										aria-describedby={`${id}-research-description`}
 										className="grid gap-3 sm:grid-cols-2"
 									>
-										{ANSWERS.map(({ value, title, detail }) => (
+										{researchAnswers(researchOrganization).map(({ value, title, detail }) => (
 											<FieldLabel key={value} htmlFor={`${id}-${value}`}>
 												<Field orientation="horizontal">
 													<FieldContent>
@@ -335,7 +246,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 
 					<Separator />
 
-					{/* Sign out sits at the far edge from Continue: only one of the two is recoverable. */}
+					{/* Sign out sits at the far edge from the submit button: only one of the two is recoverable. */}
 					<footer className="flex flex-col gap-4 sm:flex-row-reverse sm:items-center sm:justify-between">
 						<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
 							{hint && (
@@ -350,7 +261,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 									aria-describedby={hint ? `${id}-hint` : undefined}
 								>
 									{submitting && <Spinner />}
-									{submitting ? "Saving…" : "Continue"}
+									{submitting ? "Saving…" : "Save and continue"}
 								</Button>
 							)}
 						</div>
