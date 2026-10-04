@@ -79,6 +79,16 @@ export const Withheld: Story = {
 	},
 };
 
+/** Held back beside a standing badge: the badge says the reader's standing, so the bar does not. */
+export const WithheldBesideABadge: Story = {
+	args: { split: WITHHELD, yourStanding: "DEVELOPING", showYourWord: false },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Held back so no one can be singled out.")).toBeVisible();
+		await expect(canvas.queryByText("You:")).toBeNull();
+		await expect(canvas.queryByText("Needs attention")).toBeNull();
+	},
+};
+
 /**
  * A reader with nothing to report is counted in none yet: the marker sits over that part, and the
  * text names it in the legend's words with the profile's reason after them.

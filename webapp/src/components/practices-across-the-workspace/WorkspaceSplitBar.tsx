@@ -115,9 +115,12 @@ export function WorkspaceSplitBar({
 				<span aria-hidden className={cn("mt-5 w-full", HELD_BACK_TRACK)} />
 				{/* The words are the cell's one accessible text, so nothing else repeats them. */}
 				<p className="text-xs text-muted-foreground">{HELD_BACK}.</p>
-				<p className="text-xs text-muted-foreground">
-					<YourWord standing={yourStanding} spoken />
-				</p>
+				{/* A level that shows the reader's badge beside the bar leaves the word out here too. */}
+				{showYourWord && (
+					<p className="text-xs text-muted-foreground">
+						<YourWord standing={yourStanding} spoken />
+					</p>
+				)}
 			</div>
 		);
 	}
