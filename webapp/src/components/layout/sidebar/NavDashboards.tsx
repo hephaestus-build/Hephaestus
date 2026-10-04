@@ -16,7 +16,7 @@ import {
 	useSidebar,
 } from "@/components/ui/sidebar";
 
-import { useSectionOpen } from "./NavSection";
+import { useSectionOpen } from "./use-section-open";
 
 export function NavDashboards({
 	workspaceSlug,
@@ -59,35 +59,42 @@ export function NavDashboards({
 					>
 						<SidebarMenuButton
 							tooltip="Practice profile"
-							isActive={onPracticeProfile || (onAcrossTheWorkspace && !practicesOpen)}
+							// One active item in every mode: the view's own entry when it is in sight, else its parent.
+							isActive={onPracticeProfile || (onAcrossTheWorkspace && !practicesOpen && !iconOnly)}
 							render={<Link to="/w/$workspaceSlug/practice-profile" params={{ workspaceSlug }} />}
 						>
 							<Compass />
 							<span>Practice profile</span>
 						</SidebarMenuButton>
-						<CollapsibleTrigger
-							render={
-								<SidebarMenuAction
-									aria-label="Practice profile pages"
-									className="aria-expanded:rotate-90"
-								/>
-							}
-						>
-							<ChevronRight aria-hidden />
-						</CollapsibleTrigger>
-						<CollapsibleContent>
-							<SidebarMenuSub aria-label="Practice profile">
-								<SidebarMenuSubItem>
-									<SidebarMenuSubButton isActive={onAcrossTheWorkspace} render={acrossLink}>
-										<ChartNoAxesGantt aria-hidden />
-										<span>{ACROSS_THE_WORKSPACE}</span>
-									</SidebarMenuSubButton>
-								</SidebarMenuSubItem>
-							</SidebarMenuSub>
-						</CollapsibleContent>
+						{/* Icon-only, nothing can unfold, so the view gets its own icon below instead. */}
+						{!iconOnly && (
+							<>
+								<CollapsibleTrigger
+									render={
+										// `size-6`, `top-1`: a 24px target (WCAG 2.2 SC 2.5.8) centred on the 32px row,
+										// since the primitive's 20px box drops its larger hit area from `md` up.
+										<SidebarMenuAction
+											aria-label="Pages under Practice profile"
+											className="top-1 size-6 peer-data-[size=default]/menu-button:top-1 aria-expanded:rotate-90"
+										/>
+									}
+								>
+									<ChevronRight aria-hidden />
+								</CollapsibleTrigger>
+								<CollapsibleContent>
+									<SidebarMenuSub aria-label="Practice profile">
+										<SidebarMenuSubItem>
+											<SidebarMenuSubButton isActive={onAcrossTheWorkspace} render={acrossLink}>
+												<ChartNoAxesGantt aria-hidden />
+												<span>{ACROSS_THE_WORKSPACE}</span>
+											</SidebarMenuSubButton>
+										</SidebarMenuSubItem>
+									</SidebarMenuSub>
+								</CollapsibleContent>
+							</>
+						)}
 					</Collapsible>
 				)}
-				{/* The icon-only sidebar hides the chevron and the sub list, so the view gets its own icon. */}
 				{practicesEnabled && iconOnly && (
 					<SidebarMenuItem>
 						<SidebarMenuButton

@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import { type ReactElement, type ReactNode, useState } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -10,40 +10,21 @@ import {
 	useSidebar,
 } from "@/components/ui/sidebar";
 
-/**
- * Forced open when the reader navigates into the section, freely collapsible otherwise. Adjusted
- * during render, not in an effect, so arriving on a page never paints its section collapsed first.
- */
-export function useSectionOpen(onSection: boolean) {
-	const [open, setOpen] = useState(onSection);
-	const [wasOnSection, setWasOnSection] = useState(onSection);
+import { useSectionOpen } from "./use-section-open";
 
-	if (onSection !== wasOnSection) {
-		setWasOnSection(onSection);
-		if (onSection) {
-			setOpen(true);
-		}
-	}
-
-	return [open, setOpen] as const;
-}
-
-interface NavSectionBaseProps {
+export interface NavSectionProps {
 	label: string;
 	icon: ReactNode;
 	/** The current page is in the section. */
 	active: boolean;
 	/** Shown on the section while its entries are out of sight. */
 	badge?: { count: number; phrase: string };
-	children: ReactNode;
-}
-
-/**
- * In the icon-only sidebar nothing can unfold, so the section is a link to a landing page that
- * reaches its entries.
- */
-export interface NavSectionProps extends NavSectionBaseProps {
+	/**
+	 * In the icon-only sidebar nothing can unfold, so the section is a link to a landing page that
+	 * reaches its entries.
+	 */
 	landingLink: ReactElement;
+	children: ReactNode;
 }
 
 /**

@@ -42,6 +42,7 @@ const NO_HEADS: readonly PracticeTableHead[] = [];
 
 interface PracticeTableBody<TRow> {
 	"aria-label": string;
+	"aria-describedby"?: string;
 	rows: readonly TRow[];
 	rowKey: (row: TRow) => string;
 	renderRow: (row: TRow) => ReactNode;
@@ -70,6 +71,7 @@ export interface PracticeTableFrameProps<TRow> extends PracticeTableBody<TRow> {
  */
 export function PracticeTableFrame<TRow>({
 	"aria-label": label,
+	"aria-describedby": describedBy,
 	head,
 	columns,
 	rows,
@@ -111,7 +113,12 @@ export function PracticeTableFrame<TRow>({
 		// `shrink-0`: an `overflow-hidden` flex item has no automatic minimum size, so a level's column
 		// would squash the frame and clip its last rows.
 		<div className="shrink-0 overflow-hidden rounded-xl border bg-background">
-			<Table aria-label={label} aria-busy={isLoading || undefined} className="min-w-152">
+			<Table
+				aria-label={label}
+				aria-describedby={describedBy}
+				aria-busy={isLoading || undefined}
+				className="min-w-152"
+			>
 				<TableHeader>
 					<TableRow>{head}</TableRow>
 				</TableHeader>
