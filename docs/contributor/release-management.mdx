@@ -94,11 +94,11 @@ Thus, landing the fix completes recovery.
 The next successful `main` CI run recuts that version from the fixed commit.
 
 Alternatively, merge the next Version PR.
-A release follows the latest _published_ release, not the version its parent commit carried.
+A release follows the latest *published* release, not the version its parent commit carried.
 Thus, an unpublished version is skipped.
 An ordinary merge carries an already-published version, the sole no-op.
 
-The resume path covers failures _after_ draft creation: seeded-upgrade, supported-host, or publication failures.
+The resume path covers failures *after* draft creation: seeded-upgrade, supported-host, or publication failures.
 A workflow rerun at the same commit reuses the draft, regenerates evidence, and replaces assets.
 A draft pins its version to its commit.
 A later commit refuses to recut over it.
@@ -259,7 +259,7 @@ A changeset summary becomes the `CHANGELOG.md` entry **verbatim** — write it i
   Use `**Operators:** …` plus a `.migration/<changeset-slug>.md` fragment.
 - **Bump = the operator's upgrade cost**, not code semantics:
   - `patch` — upgrade needs no action (bug fix, internal change, additive auto-applied migration).
-  - `minor` — new capability, still zero-action. Note any new _optional_ env var / flag in the summary.
+  - `minor` — new capability, still zero-action. Note any new *optional* env var / flag in the summary.
   - `major` — operator must act first (required new env var, removed/renamed config, destructive/manual
     migration, dropped API). State the action and add a `.migration` fragment.
 

@@ -66,7 +66,7 @@ Each role has a Spring profile YAML that turns off the other two flags and remov
   It enables sync NATS and disables the agent job queue.
   Webhook pods never claim jobs.
 - No `application-server.yml` exists.
-  The monolith default _is_ the server profile.
+  The monolith default *is* the server profile.
 
 The worker gateway's connector-specific security chain accepts only job-token-authenticated sandbox capabilities.
 Other paths on that port return an empty `404`.
@@ -161,7 +161,7 @@ The `webhook` overlay has no such exclusion.
 It uses only the role gate.
 
 No `hephaestus.sandbox.enabled` exists, and an architecture test forbids one.
-The Docker sandbox _is_ the worker capability, controlled by `hephaestus.runtime.worker.enabled`.
+The Docker sandbox *is* the worker capability, controlled by `hephaestus.runtime.worker.enabled`.
 A server pod that keeps the worker role, such as a monolith, opens the sandbox gateway on the same port.
 It needs the same firewall controls as a separate worker.
 The webhook role turns off the worker role and opens no gateway.
@@ -318,7 +318,7 @@ A higher review capacity there has no effect until you also raise the sandbox li
 
 1. Raise the sandbox limit only with sufficient RAM, as the [Install guide](./install) describes.
 
-The app pod signs worker tokens from a key _ring_, not a single value:
+The app pod signs worker tokens from a key *ring*, not a single value:
 `hephaestus.worker.hub.token.keys[0].kid` + `.private-key` and
 `hephaestus.worker.hub.token.active-kid`. Indexed list binding has no single env-var form, so
 configure it through a mounted YAML/config-tree rather than a flat variable. Unset, the app logs a

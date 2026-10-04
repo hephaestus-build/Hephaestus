@@ -75,7 +75,7 @@ Only `displayName`, `baseUrl`, and `apiProtocol` are required.
 | **Slug**                       | no       | Internal identifier, ≤ 63 characters. Derived from the display name if omitted. **Immutable after create.**                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 **Three fields are immutable on purpose.**
-Base URL, API shape, and authentication mode form the connection's _routing identity_.
+Base URL, API shape, and authentication mode form the connection's *routing identity*.
 Every job preserves that identity in its provenance snapshot.
 An in-place edit would silently point historical runs at an endpoint they never used.
 The form's exact explanation is:
@@ -175,8 +175,8 @@ The probe uses the credential for that call only and never persists it.
 Workspace admins have no draft probe.
 They can test only a connection already saved.
 
-On edit, the exact button label is _Test saved connection_ until you enter a new key.
-Then it is _Test changes_.
+On edit, the exact button label is *Test saved connection* until you enter a new key.
+Then it is *Test changes*.
 The first uses the stored credential, and the second uses the key on screen.
 A change to the base URL, authentication mode, or key discards a result in progress.
 A name change does not.
@@ -238,7 +238,7 @@ A model marked as supporting reasoning before this field existed keeps its previ
 ## 4. Pricing a model
 
 **Hephaestus never infers a price.**
-OpenAI-compatible responses report token _counts_, not your account's dollar charge.
+OpenAI-compatible responses report token *counts*, not your account's dollar charge.
 Rates differ by contract, region, and commitment.
 Every model therefore needs a cost declaration.
 
@@ -298,7 +298,7 @@ The workspace owns both model and provider account.
 There is no cross-party record to preserve.
 
 **An omitted rate can make the whole call unpriced.**
-If a run reports tokens in a bucket with a `null` rate, the _entire event_ is unpriced.
+If a run reports tokens in a bucket with a `null` rate, the *entire event* is unpriced.
 For example, this happens with cache-read tokens if you priced only input and output.
 The ledger does not charge only the priced buckets.
 A partial charge would falsely present a confirmed total below the real amount.
@@ -336,8 +336,8 @@ Two further limits apply:
   Six-decimal rounding would make it zero.
   The ledger stores **$0.000001** instead to distinguish a paid call from a free call.
   The excess charge is less than a millionth of a dollar per call.
-- **The UI rounds differently from the ledger.** Published _rates_ show up to four decimals (`$0.075 / 1M`) for price-list checks.
-  _Spend_ appears as cents, with `<$0.01` for a non-zero amount below one cent.
+- **The UI rounds differently from the ledger.** Published *rates* show up to four decimals (`$0.075 / 1M`) for price-list checks.
+  *Spend* appears as cents, with `<$0.01` for a non-zero amount below one cent.
   Neither display is the stored number.
 
 Set `HEPHAESTUS_LLM_DISPLAY_CURRENCY=EUR` to show a converted amount **alongside** USD.
@@ -375,12 +375,12 @@ The UI shows the title.
 | 409    | `llm-model-slug-conflict`        | The model slug is taken on this connection.                                                                                                                                                                      |
 | 409    | `llm-model-upstream-id-conflict` | Two catalog entries would use the same upstream id on one connection. This is refused because price selection would be nondeterministic. A `NO_CHARGE` copy could silently replace a `PRICED` model for billing. |
 | 409    | `agent-binding-slot-mismatch`    | A model's declared tier does not match the assignment row. The body's `declaredTier` names the model tier, which the UI uses to explain the refusal. An undeclared model has no `declaredTier`, only the detail. |
-| 404    | _Resource not found_             | Unknown connection or model id.                                                                                                                                                                                  |
+| 404    | *Resource not found*             | Unknown connection or model id.                                                                                                                                                                                  |
 
 ## Next
 
 - **Budgets, caps, and what a cap pauses:** [Workspace budgets and alerting](./production-setup#workspace-budgets-and-alerting).
-- **The environment variables that _are_ deploy-time facts:** [Instance-wide LLM settings](./production-setup#instance-wide-llm-settings).
+- **The environment variables that *are* deploy-time facts:** [Instance-wide LLM settings](./production-setup#instance-wide-llm-settings).
 - **Nothing is being reviewed:** [When a workspace goes quiet](./practice-review#when-a-workspace-goes-quiet).
 
 ## Data handling and members' AI choices

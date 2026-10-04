@@ -90,7 +90,7 @@ The Liquibase changelog chain **is** the upgrade path: every production and self
 instance upgrades by replaying exactly these files, in `master.xml` order. That works only
 if history never changes underneath an instance that already ran part of it.
 
-1. **Released changesets are never edited.** A changeset is _released_ once it reaches
+1. **Released changesets are never edited.** A changeset is *released* once it reaches
    `main` — from that moment it may already be applied to a production database. An edit causes checksum errors at boot on upgraded instances.
    Fresh installs silently get a different schema. Fix mistakes **forward** with a new changelog file. Liquibase [excludes preconditions, contexts and labels from checksums](https://www.liquibase.com/blog/what-affects-changeset-checksums).
    It ignores deleted changesets.
@@ -101,8 +101,8 @@ if history never changes underneath an instance that already ran part of it.
    both startup and `changeLogSyncToTag` without changing checksums or include order.
 3. **Destructive changes follow deprecate-then-remove across two releases.** Renaming or
    dropping a released table or column happens in two steps.
-   Release _N_ stops reads and writes, and migrates data if necessary.
-   Release _N+1_ drops it. A single
+   Release *N* stops reads and writes, and migrates data if necessary.
+   Release *N+1* drops it. A single
    release must stay bootable against the schema left behind by the previous one.
 
 CI enforces 1 and 2 mechanically (see below). 3 is a review responsibility. The sole archival
@@ -126,12 +126,12 @@ changeset that drops the object also removes its exclusion.
 
 ## CI validation
 
-1. **Migration-chain replay, schema drift and ERD** — Build workflow, job _App Server: Generated
-   artifacts_. `vp run db:check-drift` applies the full `master.xml` chain to an empty database from the repository's PostgreSQL image (`docker/postgres`).
+1. **Migration-chain replay, schema drift and ERD** — Build workflow, job *App Server: Generated
+   artifacts*. `vp run db:check-drift` applies the full `master.xml` chain to an empty database from the repository's PostgreSQL image (`docker/postgres`).
    It compares the result with the JPA entities. A changelog that does not parse or apply fails here. `vp run db:generate-erd-docs`
    then has to leave `docs/contributor/erd/schema.mmd` unchanged.
-2. **Changelog immutability** — Security workflow, job _Dependencies, secrets, and policy_, step
-   _Changelog immutability guard_. A git diff from the PR base commit checks two conditions.
+2. **Changelog immutability** — Security workflow, job *Dependencies, secrets, and policy*, step
+   *Changelog immutability guard*. A git diff from the PR base commit checks two conditions.
    No file under `db/changelog/` can have a modification, rename, or deletion.
    No existing `<include>` in `master.xml` can have a removal, order change, or attribute change.
    Either prohibited change fails the check. The v0.77.4 transition also requires the

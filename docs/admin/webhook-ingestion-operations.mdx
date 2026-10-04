@@ -256,7 +256,7 @@ The container therefore remains in that state indefinitely.
    ```
 
 2. **Free space.** Remove other content from that volume.
-   JetStream will _not_ recover alone after it fails to write its metadata.
+   JetStream will *not* recover alone after it fails to write its metadata.
    The errors therefore continue.
 
 3. **Restart the broker**, which is the step that clears the wedge:
@@ -299,7 +299,7 @@ The receiver accepts webhooks up to 26214400 bytes but this NATS server caps a m
 ## Consumers that outlive their deployment
 
 Only JetStream removes a durable consumer.
-A stack that is _deleted_, rather than shut down, never removes its consumers.
+A stack that is *deleted*, rather than shut down, never removes its consumers.
 On a shared broker, each former stack therefore leaves a generation of durables whose backlogs never drain.
 
 `HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD` (default `30d`) lets JetStream remove them.
@@ -317,7 +317,7 @@ It skips messages that arrived while the deployment was gone.
    This includes preview environments and temporary test stacks.
 2. If an offline deployment must resume after the threshold exactly where it stopped, set `0s` to disable removal.
 
-`0s` preserves the consumer's _position_, not its _messages_.
+`0s` preserves the consumer's *position*, not its *messages*.
 Messages still expire under the stream's retention.
 A deployment offline past the stream's byte or age bound returns to a cursor that points at messages no longer present.
 Those messages are not delivered.

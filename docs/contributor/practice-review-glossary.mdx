@@ -71,7 +71,7 @@ Whichever side meets a value it has no words for shows these, never the identifi
 
 | Value                                         | Words shown                                    |
 | --------------------------------------------- | ---------------------------------------------- |
-| An artifact kind nothing declares             | **Other work** (mid-sentence, _piece of work_) |
+| An artifact kind nothing declares             | **Other work** (mid-sentence, *piece of work*) |
 | No artifact kind sent at all                  | **Reviewed work**                              |
 | A signal its artifact kind no longer declares | **A moment this version no longer offers**     |
 | A source kind the webapp has no name for      | **Another source**                             |
@@ -98,7 +98,7 @@ It would also need a record of the reviewer and their relationship to the author
 
 Human reviews can use different rubrics and evidence.
 Disagreement between two is two provenance-bearing reviews, not a contradiction to resolve into one ground truth.
-A statement that a person _could_ observe something must never let Hephaestus attempt an automated review.
+A statement that a person *could* observe something must never let Hephaestus attempt an automated review.
 
 ## How a review was occasioned
 
@@ -110,7 +110,7 @@ The **door** is what a person or a provider did. `DiscoveredVia` is how we came 
 | A provider event on connected work              | `EVENT`                       | Live event                 | `LIVE`             | yes                                  |
 | Reconciling with the provider                   | `SYNC`                        | Noticed during a sync      | `LIVE`             | **no**, for pull requests and issues |
 | `/hephaestus review` in a merge request comment | `MANUAL`                      | Requested by hand          | `MANUAL`           | yes                                  |
-| The _Request review_ button                     | `MANUAL`                      | Requested by hand          | `MANUAL`           | yes                                  |
+| The *Request review* button                     | `MANUAL`                      | Requested by hand          | `MANUAL`           | yes                                  |
 | A confirmed campaign over past work             | `BACKFILL`                    | Backfill of past work      | `BACKFILL`         | yes                                  |
 | A recurring sweep schedule                      | `SWEEP`                       | Found by a recurring check | `LIVE`             | yes                                  |
 
@@ -123,10 +123,10 @@ The **door** is what a person or a provider did. `DiscoveredVia` is how we came 
   Thus, there is nothing for a practice to opt into.
   `PracticeDefinitionValidator` refuses a practice that names a manual-request signal. Do not present it as
   a moment an author can tick.
-- **A recurring sweep is `LIVE`, not `BACKFILL`.** `SWEEP` records how the work was _found_, and the work
+- **A recurring sweep is `LIVE`, not `BACKFILL`.** `SWEEP` records how the work was *found*, and the work
   it finds is current work that never raised an event. Its observations therefore compose and deliver
   exactly like an event-triggered review. Only a confirmed past-work campaign carries `BACKFILL`, and only
-  `BACKFILL` is measured-and-never-delivered. A sweep is a standing authorization to spend _and_ to speak.
+  `BACKFILL` is measured-and-never-delivered. A sweep is a standing authorization to spend *and* to speak.
 
 `MANUAL` and `BACKFILL` are self-selected samples and `LIVE` is not, which is why they are held apart in every behavioral read.
 A `BACKFILL` observation is also entitled only to `IN_APP`: the developer's own practice feedback.
@@ -304,7 +304,7 @@ A closed pull request is the least useful explanation for feedback that policy w
 
 The same list runs at each `DeliveryPolicyStage` — `COMPOSITION`, `AUTOMATIC`, `APPROVED`, `EGRESS` — and two checks read the stage:
 
-- **`PRACTICE_AUTHORITY`** asks whether _every_ contributing practice sits at the autonomy this stage needs.
+- **`PRACTICE_AUTHORITY`** asks whether *every* contributing practice sits at the autonomy this stage needs.
   This is `AUTOMATIC` when the system releases on its own.
   It is `HUMAN_APPROVAL` when a person's approval is honored. There is deliberately no separate `HUMAN_APPROVAL` check.
   It could only report `PASSED` or `NOT_APPLICABLE`.
@@ -349,8 +349,8 @@ The seam is [ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/
 | **Composition**            | The second LLM turn in the review's existing agent session. It starts only after Java has admitted the final measurements.                                                                                                                                                 | the composer's turn as part of the review, second pass     |
 | **Composed feedback unit** | One intervention the composition turn proposes for one channel and one practice, before any server gate has admitted it. Once admitted it is [feedback](./practice-feedback-language.md) in the ledger, with its channel, delivery state and the observations it rests on. | feedback row, draft feedback                               |
 | **Withhold**               | The composer's own decision that a lane is not worth writing on, recorded with a reason.                                                                                                                                                                                   | suppress, skip, drop                                       |
-| **Suppress**               | The _server's_ refusal to deliver feedback it was given, recorded as `FeedbackSuppressionReason`.                                                                                                                                                                          | withhold, silence                                          |
-| **Notes**                  | What is composed for the mentor conversation: `situation`, `capability`, `evidenceSummary`, and `inConversationSignal`. Notes _to_ the mentor, never a sentence for it to say — it writes the turn from the live conversation and admitted evidence.                       | move, opener, conversation message, prepared reply, script |
+| **Suppress**               | The *server's* refusal to deliver feedback it was given, recorded as `FeedbackSuppressionReason`.                                                                                                                                                                          | withhold, silence                                          |
+| **Notes**                  | What is composed for the mentor conversation: `situation`, `capability`, `evidenceSummary`, and `inConversationSignal`. Notes *to* the mentor, never a sentence for it to say — it writes the turn from the live conversation and admitted evidence.                       | move, opener, conversation message, prepared reply, script |
 | **Placement**              | Where in-context feedback belongs: `DIFF` names an admitted observation and citation for server-resolved coordinates. `ARTIFACT` stays at summary level.                                                                                                                   | model-authored path, model-authored line number            |
 | **Thread key**             | The identity of one continuing conversation about one thing with one person on one channel.                                                                                                                                                                                | correlation key, idempotency key                           |
 | **Supersession**           | Replacing feedback with newer feedback on the same thread: prepared, still-unread feedback on the conversation lane, and the still-open card on the Practice profile.                                                                                                      | edit, update, delete                                       |
@@ -375,12 +375,12 @@ There is no `level` column.
 A stored copy would be a second truth that can disagree.
 
 Two exact names are close enough to be tempting and are still wrong. [**Activity**](./practice-feedback-language.md) is the member-readable page of counted work at `/w/{workspaceSlug}/activity`, not `IN_APP`.
-And `chat.conversation_thread` is a kind of work Hephaestus _reviews_, not the place `IN_CHAT` delivers to.
+And `chat.conversation_thread` is a kind of work Hephaestus *reviews*, not the place `IN_CHAT` delivers to.
 
 ### Thread key and supersession
 
 A **thread** is a chain of feedback about one thing to one person on one channel, identified by a hash (`FeedbackThreadKey`) rather than by prose.
-The longitudinal channels key on the _practice_, because a claim about a way of working is about the practice and not about one merge request.
+The longitudinal channels key on the *practice*, because a claim about a way of working is about the practice and not about one merge request.
 The in-context channel keys on the artifact. `thread_key` groups related feedback.
 It does not enforce a unique `PREPARED` item.
 
@@ -450,7 +450,7 @@ While one is in force:
 
 Restoring makes the observation count again from then on and removes the notice it added.
 Feedback the invalidation stopped stays stopped.
-Say **invalidated** or **marked incorrect**, never _deleted_, _retracted_ or _superseded_: superseded is the word for [feedback replaced on its thread](#thread-key-and-supersession).
+Say **invalidated** or **marked incorrect**, never *deleted*, *retracted* or *superseded*: superseded is the word for [feedback replaced on its thread](#thread-key-and-supersession).
 
 ### Withdrawn feedback
 
@@ -479,7 +479,7 @@ While one is open:
 
 A read already in flight when the withdrawal commits may still show and deliver the card.
 Restoring reopens the ordinary read, subject to observation visibility and consent, and never re-sends.
-Say **withdrawn**, never _deleted_, _retracted_ or _invalidated_: invalidated is the word for an [observation that was wrong](#invalidated-observations).
+Say **withdrawn**, never *deleted*, *retracted* or *invalidated*: invalidated is the word for an [observation that was wrong](#invalidated-observations).
 
 ### How feedback resolves
 
@@ -488,7 +488,7 @@ A piece of [feedback](./practice-feedback-language.md) on the Practice profile r
 | Term                     | Plain meaning                                                                                                                                                                                                                                                                                                                | Do not use for this concept                         |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | **Resolved by the work** | Three pieces of the developer's reviewed work in a row, reviewed after the feedback was prepared, came back clean on the practice. Computed from the observations when the feedback is read and never stored. A problem starts the count over, and a piece of work reviewed several times counts once, at its newest review. | auto-resolved, closed by the system, streak, passed |
-| **Marked as addressed**  | The developer answered the card with _Addressed_ or _Not applicable_. Pressing the answer again takes it back and reopens the card. A dispute leaves it open. Whichever way resolved the feedback first is the one the card and the summary report.                                                                          | dismissed, acknowledged, done                       |
+| **Marked as addressed**  | The developer answered the card with *Addressed* or *Not applicable*. Pressing the answer again takes it back and reopens the card. A dispute leaves it open. Whichever way resolved the feedback first is the one the card and the summary report.                                                                          | dismissed, acknowledged, done                       |
 | **Fell back**            | Open feedback the developer's work had started to answer, with at least one clean piece of work toward the three. A piece of work reviewed in the overview's window raised the problem again. The count went back to none. Closed feedback never falls back.                                                                 | reset, regressed, reopened                          |
 
 A run of three that completed once stays a resolution: a later slip is new feedback's business.
@@ -611,7 +611,7 @@ Author-facing UI combines the implementation fields into one mentoring choice:
 Availability, content, completeness, and collection outcome are four separate facts about one capture, never one field.
 The [artifact-source contract](./artifact-source-contract.mdx#capture-state) defines them and the states each may take.
 Write about a capture in its words.
-Do not write that a capture is _stale_.
+Do not write that a capture is *stale*.
 There is no such state, and the contract says why.
 
 ## Outcome states

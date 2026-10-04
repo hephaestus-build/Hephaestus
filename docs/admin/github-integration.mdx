@@ -9,7 +9,7 @@ Hephaestus uses three GitHub mechanisms:
 | Mechanism                   | Purpose                                                    | Required?                                                                                           |
 | --------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | **OAuth App**               | "Continue with GitHub"                                     | Yes, unless you use only GitLab login                                                               |
-| **PAT** _or_ **GitHub App** | Repository data access and feedback delivery per workspace | One of the two                                                                                      |
+| **PAT** *or* **GitHub App** | Repository data access and feedback delivery per workspace | One of the two                                                                                      |
 | **Webhook**                 | Live events: PRs, reviews, pushes, and others              | Strongly recommended. Without it, updates wait for scheduled sync, hourly by default in production. |
 
 Configure login with the [OAuth App setup](./install#3-configure-a-login-provider).
@@ -33,7 +33,7 @@ The database stores tokens encrypted with AES-256-GCM per workspace.
 
 A **classic PAT** needs `repo`, `read:org`, and `read:project` scopes.
 `repo` includes pull request and issue write access and the check state.
-A **fine-grained PAT** needs the organization as its _resource owner_ and the permissions below.
+A **fine-grained PAT** needs the organization as its *resource owner* and the permissions below.
 PAT connections need no GitHub App credentials.
 Authentication uses each workspace connection's mode.
 
@@ -184,7 +184,7 @@ The tables explain each grant.
 | Secret scanning alerts (`secret_scanning_alerts`) | Repository | Read  | Leaked-credential response timing: [#1675](https://github.com/hephaestus-build/Hephaestus/issues/1675)                                                                                                         |
 | Code scanning alerts (`security_events`)          | Repository | Read  | Static-analysis triage practices: [#1675](https://github.com/hephaestus-build/Hephaestus/issues/1675)                                                                                                          |
 
-A provisioned permission grants _access_, not a subscription.
+A provisioned permission grants *access*, not a subscription.
 Its events stay [unsubscribed](#deliberately-not-subscribed) until a feature reads them.
 Security-alert event payloads are sensitive even before a consumer exists.
 If you subscribe regardless:
@@ -217,7 +217,7 @@ For example, `workflow_job` alone can outnumber `pull_request` a hundredfold.
 
 Those deliveries then wait for hourly production reconciliation to fetch them again.
 See [webhook ingestion operations](./webhook-ingestion-operations).
-Provision the _permission_ now, because permission increases need an approval round.
+Provision the *permission* now, because permission increases need an approval round.
 Add the subscription in the release with the feature that reads it.
 
 | Event                         | Rationale                                                   |
@@ -281,59 +281,59 @@ Hephaestus does not implement GitHub's manifest registration flow.
 
 ```json
 {
-	"name": "your-hephaestus",
-	"url": "https://<APP_HOSTNAME>",
-	"description": "Reads repository and organization data, including CI, deployment, merge-queue and security-alert signals. Can write pull-request reviews and issue/PR comments for practice feedback. Never modifies your code.",
-	"public": true,
-	"hook_attributes": {
-		"url": "https://<APP_HOSTNAME>/webhooks/github",
-		"active": true
-	},
-	"callback_urls": ["https://<APP_HOSTNAME>/oauth/callback/github"],
-	"request_oauth_on_install": true,
-	"default_permissions": {
-		"metadata": "read",
-		"contents": "read",
-		"pull_requests": "write",
-		"issues": "write",
-		"discussions": "read",
-		"members": "read",
-		"organization_projects": "read",
-		"issue_types": "read",
-		"checks": "read",
-		"statuses": "read",
-		"actions": "read",
-		"deployments": "read",
-		"merge_queues": "read",
-		"vulnerability_alerts": "read",
-		"secret_scanning_alerts": "read",
-		"security_events": "read"
-	},
-	"default_events": [
-		"push",
-		"pull_request",
-		"pull_request_review",
-		"pull_request_review_comment",
-		"pull_request_review_thread",
-		"check_suite",
-		"status",
-		"issues",
-		"issue_comment",
-		"label",
-		"milestone",
-		"member",
-		"repository",
-		"discussion",
-		"discussion_comment",
-		"sub_issues",
-		"issue_dependencies",
-		"organization",
-		"team",
-		"membership",
-		"projects_v2",
-		"projects_v2_item",
-		"projects_v2_status_update"
-	]
+ "name": "your-hephaestus",
+ "url": "https://<APP_HOSTNAME>",
+ "description": "Reads repository and organization data, including CI, deployment, merge-queue and security-alert signals. Can write pull-request reviews and issue/PR comments for practice feedback. Never modifies your code.",
+ "public": true,
+ "hook_attributes": {
+  "url": "https://<APP_HOSTNAME>/webhooks/github",
+  "active": true
+ },
+ "callback_urls": ["https://<APP_HOSTNAME>/oauth/callback/github"],
+ "request_oauth_on_install": true,
+ "default_permissions": {
+  "metadata": "read",
+  "contents": "read",
+  "pull_requests": "write",
+  "issues": "write",
+  "discussions": "read",
+  "members": "read",
+  "organization_projects": "read",
+  "issue_types": "read",
+  "checks": "read",
+  "statuses": "read",
+  "actions": "read",
+  "deployments": "read",
+  "merge_queues": "read",
+  "vulnerability_alerts": "read",
+  "secret_scanning_alerts": "read",
+  "security_events": "read"
+ },
+ "default_events": [
+  "push",
+  "pull_request",
+  "pull_request_review",
+  "pull_request_review_comment",
+  "pull_request_review_thread",
+  "check_suite",
+  "status",
+  "issues",
+  "issue_comment",
+  "label",
+  "milestone",
+  "member",
+  "repository",
+  "discussion",
+  "discussion_comment",
+  "sub_issues",
+  "issue_dependencies",
+  "organization",
+  "team",
+  "membership",
+  "projects_v2",
+  "projects_v2_item",
+  "projects_v2_status_update"
+ ]
 }
 ```
 

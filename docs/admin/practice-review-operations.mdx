@@ -229,7 +229,7 @@ These behaviors matter independently of configured capacity:
 - **Retryable occurrences eventually lapse.**
   A misconfigured workspace can accumulate retries and then become quiet when their deadline passes.
 - **Nothing is ever deleted from the occurrence ledger**, in any state, including retired rows.
-  It records what was _not_ done and only grows.
+  It records what was *not* done and only grows.
   A busy instance needs storage sized for that growth.
 - **Repository capture includes every regular and executable file at the reviewed commit**.
   This includes binary content and large files.
@@ -258,7 +258,7 @@ These behaviors matter independently of configured capacity:
   Pages whose commits were all previously captured do not count.
   The next sync cycle resumes from captured commits.
 - **Linked Outline documents are retrieval-limited, and the mentor and review paths do not agree.**
-  A review first resolves documents _linked from_ the work, then adds a small number by search.
+  A review first resolves documents *linked from* the work, then adds a small number by search.
   The mentor searches the whole corpus and truncates each document.
   Neither path can report that it found everything.
   Neither substitutes for the other in diagnosis of missing context.

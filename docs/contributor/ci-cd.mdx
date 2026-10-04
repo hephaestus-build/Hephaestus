@@ -460,7 +460,7 @@ gh api -X DELETE "repos/hephaestus-build/Hephaestus/environments/preview%2Fpr-<n
 Automating it would mean giving a scheduled workflow an administration-scoped credential, which is a
 larger grant than tidy settings are worth.
 
-Deployments are serialized, never parallel, and each one deploys the pull request's _current_ head.
+Deployments are serialized, never parallel, and each one deploys the pull request's *current* head.
 A burst of pushes therefore produces one deployment of the newest commit rather than one per commit.
 If you push while a deployment is in flight, that run stands down rather than deploying a commit that
 is no longer the head. The new push starts the next deployment and nothing needs relabeling.
@@ -738,7 +738,7 @@ Thus, a scan-only rerun scans that build's artifact.
 
 `ci-contract.test.ts` asserts the whole contract.
 The build must publish every consumer-resolved tag for that consumer's event.
-No job resolves an image by the run that built it. A run-scoped tag names the attempt rather than the artifact, and GitHub's _re-run failed jobs_
+No job resolves an image by the run that built it. A run-scoped tag names the attempt rather than the artifact, and GitHub's *re-run failed jobs*
 gives the retried job a new attempt number.
 
 ## Build once

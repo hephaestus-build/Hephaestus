@@ -205,7 +205,7 @@ An open tab and a provider that still posts to the old name continue to work thr
 The proxy redirects only what a browser loads.
 
 The login callback uses the address where the request arrived.
-A sign-in _started_ at `/api/login/...` on another name asks the provider to return to that name.
+A sign-in *started* at `/api/login/...` on another name asks the provider to return to that name.
 The provider refuses because its only registered callback uses `APP_HOSTNAME`.
 Normal access avoids this problem: the proxy redirects the browser before sign-in starts.
 
@@ -228,7 +228,7 @@ not sign-in. The steps below configure GitHub. For GitLab, use the
 [GitLab rollout bundle](./production-setup#gitlab-rollout-bundle).
 
 GitHub login needs a plain **OAuth App**.
-This is _not_ the GitHub App for data access: see [GitHub integration](./github-integration).
+This is *not* the GitHub App for data access: see [GitHub integration](./github-integration).
 Without a login provider, the instance boots but shows **no sign-in button**.
 
 1. Open [github.com/settings/developers](https://github.com/settings/developers), or your organization's equivalent settings.
@@ -453,7 +453,7 @@ Never reconstruct an old lock or resolve mutable image tags.
 
 | Symptom                                                        | Cause / fix                                                                                                                                                                                                                                                                                               |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `application-server` exits: _ProxyTrustGuard_                  | `HEPHAESTUS_TRUSTED_PROXIES` is blank. The Compose default is non-blank. Your override therefore set it to empty. Unset the override. If you changed the network, you can instead set it to match `reverse-proxy`'s IP.                                                                                   |
+| `application-server` exits: *ProxyTrustGuard*                  | `HEPHAESTUS_TRUSTED_PROXIES` is blank. The Compose default is non-blank. Your override therefore set it to empty. Unset the override. If you changed the network, you can instead set it to match `reverse-proxy`'s IP.                                                                                   |
 | Exits: encryption-key length error                             | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` must be exactly 32 printable, non-space ASCII characters. Restore the original key for an existing database. On a new installation, clear the invalid value. Then rerun `./setup.sh`.                                                                                |
 | Login page has no sign-in button                               | No login provider configured: both `GH_OAUTH_CLIENT_ID` **and** `_SECRET` must be non-empty (a half-filled pair is skipped and logged at ERROR).                                                                                                                                                          |
 | OAuth redirect loop / cookie never sticks                      | A proxy in front of Traefik is injecting a `Domain=` attribute on cookies, which browsers reject for `__Host-` cookies. Serve the stack directly on ports 80/443.                                                                                                                                         |

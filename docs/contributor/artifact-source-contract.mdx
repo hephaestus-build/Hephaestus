@@ -32,7 +32,7 @@ The contract separates three identities:
 
 1. **Source catalog:** logical source kinds and their authority, identity anchoring, completeness, required
    capture quality, privacy, and absence-state semantics.
-2. **Practice definition:** the occasion a review runs on and the evidence that review _requires_ before it may
+2. **Practice definition:** the occasion a review runs on and the evidence that review *requires* before it may
    run at all. A source declares the artifact kinds it applies to, so the catalog constrains which sources a
    practice may name.
 3. **Folder index:** the state, provenance facts, and materialized artifacts for one invocation.
@@ -181,7 +181,7 @@ Source absence is separate from quality so the folder index does not collapse un
 - `REDACTED`: the entire source was withheld for privacy or security.
 - `COLLECTION_ERROR`: an attempted collection failed.
 
-A non-available source contains no artifacts or source identifiers, and carries a typed `SourceAbsenceReason` saying _why_ — `GOVERNANCE_NOT_EFFECTIVE`, `NO_PROVIDER`, `NO_WORKING_COPY`, `CONSENT_NOT_ACTIVE`, and the rest.
+A non-available source contains no artifacts or source identifiers, and carries a typed `SourceAbsenceReason` saying *why* — `GOVERNANCE_NOT_EFFECTIVE`, `NO_PROVIDER`, `NO_WORKING_COPY`, `CONSENT_NOT_ACTIVE`, and the rest.
 Safe, typed reason codes may be role-filtered.
 Free-form exception text must not enter the folder index.
 
@@ -205,8 +205,8 @@ Field-level redaction remains an available, usually partial source.
 Whole-source redaction uses `REDACTED`.
 
 There is no staleness verdict, and there is deliberately no age-based mode.
-An age threshold needs a watermark recording when a copy was last _verified_ against upstream.
-The mirror records only when a row was last _written_.
+An age threshold needs a watermark recording when a copy was last *verified* against upstream.
+The mirror records only when a row was last *written*.
 An age derived from it measures time since the last upstream change.
 It reports a correctly mirrored quiet record as stale and a record modified moments ago as current.
 Adding one therefore has a prerequisite: a reconciliation pass that advances a verified-as-of watermark after confirming a record is unchanged.
@@ -216,7 +216,7 @@ Until that watermark exists, the system cannot substantiate a currentness guaran
 
 A readiness report names the contract version and the catalog digest used to interpret it.
 It names the artifact kind, the folder index's capture time, and one decision per practice.
-A folder index captured under a contract version the runtime no longer ships is _unreplayable_, not invalid.
+A folder index captured under a contract version the runtime no longer ships is *unreplayable*, not invalid.
 The recorded result stands.
 Only the ability to re-derive it is unavailable.
 
@@ -247,7 +247,7 @@ Each entry in `evidenceRequirements` names a source and the stance the practice 
 | Stance       | Meaning                                                                                                                                                                       |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `REQUIRED`   | The claim reads this source. If it could not be captured to the quality its contract demands, the review is refused rather than run.                                          |
-| `EXHAUSTIVE` | The claim reads this source and asserts something is _not_ in it. Required, and also not satisfiable by a partial capture whatever the source contract's floor happens to be. |
+| `EXHAUSTIVE` | The claim reads this source and asserts something is *not* in it. Required, and also not satisfiable by a partial capture whatever the source contract's floor happens to be. |
 | `CONTEXTUAL` | Used when present, noted when absent, never a reason to refuse.                                                                                                               |
 
 `EXHAUSTIVE` exists because an absence is the one claim a fragment cannot support.
@@ -258,28 +258,28 @@ Where the corpus was not whole, the honest answer is `INSUFFICIENT_EVIDENCE`, ne
 
 ```json
 {
-	"signals": ["scm.pull_request.opened", "scm.pull_request.ready"],
-	"evidenceRequirements": [
-		{ "sourceKind": "scm.pull-request.core", "stance": "REQUIRED" },
-		{ "sourceKind": "scm.pull-request.diff", "stance": "REQUIRED" },
-		{ "sourceKind": "scm.repository.tree", "stance": "CONTEXTUAL" }
-	],
-	"reviewWhen": { "draftStatus": ["NOT_DRAFT"] },
-	"subject": "AUTHOR",
-	"automatedReviewPolicy": {
-		"sourceContractVersion": "1.3.0",
-		"automatedReview": {
-			"mode": "LANGUAGE_MODEL",
-			"evidenceSufficiency": "SUFFICIENT_WHEN_REQUIREMENTS_MET"
-		},
-		"whenEvidenceIsInsufficient": "SKIP_AUTOMATED_REVIEW",
-		"knownLimitations": [
-			{
-				"code": "RUNTIME_BEHAVIOR_NOT_OBSERVED",
-				"description": "Repository evidence does not establish behavior in a deployed runtime."
-			}
-		]
-	}
+ "signals": ["scm.pull_request.opened", "scm.pull_request.ready"],
+ "evidenceRequirements": [
+  { "sourceKind": "scm.pull-request.core", "stance": "REQUIRED" },
+  { "sourceKind": "scm.pull-request.diff", "stance": "REQUIRED" },
+  { "sourceKind": "scm.repository.tree", "stance": "CONTEXTUAL" }
+ ],
+ "reviewWhen": { "draftStatus": ["NOT_DRAFT"] },
+ "subject": "AUTHOR",
+ "automatedReviewPolicy": {
+  "sourceContractVersion": "1.3.0",
+  "automatedReview": {
+   "mode": "LANGUAGE_MODEL",
+   "evidenceSufficiency": "SUFFICIENT_WHEN_REQUIREMENTS_MET"
+  },
+  "whenEvidenceIsInsufficient": "SKIP_AUTOMATED_REVIEW",
+  "knownLimitations": [
+   {
+    "code": "RUNTIME_BEHAVIOR_NOT_OBSERVED",
+    "description": "Repository evidence does not establish behavior in a deployed runtime."
+   }
+  ]
+ }
 }
 ```
 

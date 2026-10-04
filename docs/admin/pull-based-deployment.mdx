@@ -13,8 +13,8 @@ For a release deployment, the host verifies two signatures:
 
 | Artifact                                    | Signed by              | Answers                                                  |
 | ------------------------------------------- | ---------------------- | -------------------------------------------------------- |
-| The channel (`channels/<env>.json`)         | the promotion workflow | _may this host move, and who said so_                    |
-| The release lock (`release-<version>.json`) | the release workflow   | _which source commit and image digests are this release_ |
+| The channel (`channels/<env>.json`)         | the promotion workflow | *may this host move, and who said so*                    |
+| The release lock (`release-<version>.json`) | the release workflow   | *which source commit and image digests are this release* |
 
 The host rejects a new channel commit that does not descend from its last accepted channel commit.
 It also rejects lower release versions and older commits unless `allowRollback` is set. These checks

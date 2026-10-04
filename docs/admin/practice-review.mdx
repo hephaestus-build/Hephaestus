@@ -30,7 +30,7 @@ Use this path before changes to coverage, campaigns, or per-practice overrides.
 5. Open **Practices → Review settings → When and where**.
 6. Turn on **Start practice reviews**.
 7. Under **How reviews start**, enable **Start from work activity**, **Start requested reviews**, or both.
-   The screen says _"Nothing can start a review"_ if both are off.
+   The screen says *"Nothing can start a review"* if both are off.
 8. Open **Practices → Review settings → How much**.
 9. Keep **Workspace default** at **Review before sending**, its default.
 10. Return to **When and where**.
@@ -446,8 +446,8 @@ A review can make many model calls.
 These controls limit admission and spend:
 
 - **The monthly AI budget** has two separate caps, which are never added together.
-  The _instance_ budget caps shared-model spend for models you registered.
-  The _workspace's own_ budget caps its connected-provider spend.
+  The *instance* budget caps shared-model spend for models you registered.
+  The *workspace's own* budget caps its connected-provider spend.
   Each pauses only the work it funds.
   Exactly `0` stops that budget's spend mid-month.
   An empty field removes the cap.
@@ -479,7 +479,7 @@ A recurring check is ongoing authorization.
 **Past work** is under **Administration → Practices → Review settings → Past work**.
 The recurring check is on **When and where**, beside other review triggers.
 
-**A campaign — _Past work_.** A campaign is bounded, priced, named, and ends.
+**A campaign — *Past work*.** A campaign is bounded, priced, named, and ends.
 No review starts until confirmation.
 
 1. Choose a kind of work and a lookback window.
@@ -487,7 +487,7 @@ No review starts until confirmation.
 3. Review the work count and estimated cost.
 4. Confirm the campaign.
 
-:::caution CAUTION: A recurring check authorizes spending _and_ speaking
+:::caution CAUTION: A recurring check authorizes spending *and* speaking
 A schedule starts every campaign **directly in a running state** under its creator's authority.
 Each run has a cost estimate, but nobody approves it.
 There is no sweep-specific cap.
@@ -508,7 +508,7 @@ Windows intentionally overlap so previously missed work gets another opportunity
 Previously reviewed work does not incur a second review charge.
 :::
 
-**A schedule — _Keep checking new work_.** The schedule reviews work that raised no notification and would otherwise silently remain unreviewed.
+**A schedule — *Keep checking new work*.** The schedule reviews work that raised no notification and would otherwise silently remain unreviewed.
 
 1. Choose a kind of work.
 2. Choose a cadence.
@@ -537,7 +537,7 @@ If several workspaces became quiet simultaneously, start with steps 8–10.
 2. Read what was recorded.
 
 The list includes all recorded work, reviewed or not.
-Names follow the provider, such as _Pull request #1423_ on GitHub or _Merge request !1423_ on GitLab.
+Names follow the provider, such as *Pull request #1423* on GitHub or *Merge request !1423* on GitLab.
 Each row counts the recorded moments that started a review.
 The work view includes:
 
@@ -579,19 +579,19 @@ They run automatically after its return, or are dropped if it stays absent for a
 5. **Check whether anything can start a review.**
    On the same screen, inspect **How reviews start**.
    If **Start from work activity** and **Start requested reviews** are both off, the enabled workspace receives no reviews.
-   The screen says _"Nothing can start a review"_.
+   The screen says *"Nothing can start a review"*.
 6. **Check work coverage.**
    On the same screen, inspect **What gets reviewed**.
    Both counts must be nonzero, and the author must be a covered person.
    **What we noticed** distinguishes an unknown author from excluded work:
 
-   - _“The author is unknown or not yet a member of this workspace”_.
+   - *“The author is unknown or not yet a member of this workspace”*.
      The repository and base branch are covered.
      The author is not a member on the connected instance, or has no known account.
      Check **Members**, and for GitLab the group's list with inherited members shown.
      Work waits for membership sync to admit the author.
      It then runs without another request if admission occurs within `SIGNAL_LEDGER_PENDING_LAPSE_AFTER` (default seven days).
-   - _“The author, repository, or base branch is outside this workspace’s review scope”_.
+   - *“The author, repository, or base branch is outside this workspace’s review scope”*.
      The repository or base branch is unselected, or the people selection excludes the member.
      This decision is final for the work.
      Broader coverage affects later work.
