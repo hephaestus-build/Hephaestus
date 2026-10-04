@@ -3,6 +3,8 @@ import { expect } from "storybook/test";
 
 import {
 	ACROSS_WORKSPACE,
+	ACROSS_WORKSPACE_TILES,
+	GATED_TILES,
 	GATED_WORKSPACE,
 } from "@/stories/practices-across-the-workspace-story-data";
 
@@ -12,7 +14,7 @@ const meta = {
 	component: WorkspaceTiles,
 	tags: ["autodocs"],
 	parameters: { layout: "padded" },
-	args: { overview: ACROSS_WORKSPACE },
+	args: { tiles: ACROSS_WORKSPACE_TILES, openFeedback: ACROSS_WORKSPACE.openFeedback },
 } satisfies Meta<typeof WorkspaceTiles>;
 
 export default meta;
@@ -37,7 +39,7 @@ export const Default: Story = {
 
 /** Too few developers with a standing: the reader's own figures stand, the workspace's say why they do not. */
 export const NeedsMoreData: Story = {
-	args: { overview: GATED_WORKSPACE },
+	args: { tiles: GATED_TILES, openFeedback: GATED_WORKSPACE.openFeedback },
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getAllByText("Needs more data before the workspace shows here."),
@@ -49,9 +51,7 @@ export const NeedsMoreData: Story = {
 
 /** Nobody here has feedback open: one sentence in place of a band and pin at nought. */
 export const NoOpenFeedbackHere: Story = {
-	args: {
-		overview: { ...ACROSS_WORKSPACE, openFeedback: { yours: 0, middleLow: 0, middleHigh: 0 } },
-	},
+	args: { openFeedback: { yours: 0, middleLow: 0, middleHigh: 0 } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Most developers here have no open feedback.")).toBeVisible();
 		await expect(canvas.getAllByText(/^Typical range:/u)).toHaveLength(3);
@@ -59,8 +59,27 @@ export const NoOpenFeedbackHere: Story = {
 };
 
 export const Loading: Story = {
-	args: { overview: undefined },
+	args: { tiles: undefined, openFeedback: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Loading the figures")).toHaveClass("sr-only");
+		await expect(canvas.getByRole("list")).toHaveAttribute("aria-busy", "true");
+	},
+};
+
+/** The open feedback is in before the window's tiles: it shows, the other three keep their shape. */
+export const WindowLoading: Story = {
+	args: { tiles: undefined },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Open feedback")).toBeVisible();
+		await expect(canvas.queryByText("Pieces of work reviewed")).toBeNull();
+	},
+};
+
+/** Another window on its way: its three tiles are drained, the open feedback, which reads none, is not. */
+export const Stale: Story = {
+	args: { stale: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Pieces of work reviewed").closest(".grayscale")).not.toBeNull();
+		await expect(canvas.getByText("Open feedback").closest(".grayscale")).toBeNull();
 	},
 };

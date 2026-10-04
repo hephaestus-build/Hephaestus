@@ -1,8 +1,6 @@
 // The palette this page shares with the practice profile is `webapp/AGENTS.md` § Practice surfaces palette.
 
-import { cn } from "cn";
-import type { PracticesAcrossWorkspace } from "@/api/types.gen";
-import { STALE } from "@/components/activity/activity-tones";
+import type { PracticesAcrossWorkspace, PracticesAcrossWorkspaceTiles } from "@/api/types.gen";
 import { RangeControls } from "@/components/activity/RangeControls";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -31,11 +29,13 @@ import { WorkspaceTiles } from "./WorkspaceTiles";
 export const GROUPS_PAGE_SIZE = 20;
 
 export interface PracticesAcrossTheWorkspacePageProps {
+	/** The splits and the open feedback, which read no window. */
+	state: PanelState<{ overview: PracticesAcrossWorkspace }>;
 	/**
-	 * The overview; `stale` while another window's tiles are on their way and the ones shown are the
-	 * previous window's.
+	 * The window's tiles; `stale` while another window's tiles are on their way and the ones shown
+	 * are the previous window's.
 	 */
-	state: PanelState<{ overview: PracticesAcrossWorkspace; stale?: boolean }>;
+	tiles: PanelState<{ tiles: PracticesAcrossWorkspaceTiles; stale?: boolean }>;
 	window: AcrossWorkspaceWindow;
 	onWindowChange: (window: AcrossWorkspaceWindow) => void;
 	/** The group whose practices are open over the page, which its row marks. */
@@ -62,13 +62,16 @@ export function splitContextOf(overview: PracticesAcrossWorkspace): SplitContext
  */
 export function PracticesAcrossTheWorkspacePage({
 	state,
+	tiles,
 	window,
 	onWindowChange,
 	openGroupSlug,
 	onOpenGroup,
 }: PracticesAcrossTheWorkspacePageProps) {
 	const overview = state.status === "ready" ? state.overview : undefined;
-	const stale = state.status === "ready" && state.stale === true;
+	const windowTiles = tiles.status === "ready" ? tiles.tiles : undefined;
+	const stale = tiles.status === "ready" && tiles.stale === true;
+	const failure = failureOf(state, tiles);
 	return (
 		<PageLayout className="space-y-8">
 			<PageHeader title="Practices across the workspace" description={PAGE_PURPOSE} />
@@ -86,27 +89,21 @@ export function PracticesAcrossTheWorkspacePage({
 					/>
 				}
 			>
-				{state.status === "error" ? (
-					<QueryErrorAlert
-						error={state.error}
-						title="Could not load the workspace"
-						onRetry={state.onRetry}
-					/>
-				) : (
+				{failure === undefined ? (
 					// The window applies to the tiles alone. The last window's figures are drained of
 					// colour until the new heading's own are in.
-					<div className={cn("space-y-3", stale && STALE)}>
-						<WorkspaceTiles overview={overview} />
-						{overview !== undefined && (
-							<p className="text-xs text-muted-foreground">
-								{tilesHint(
-									overview.minimumOthers,
-									overview.window,
-									overview.developersWithAStandingInWindow,
-								)}
-							</p>
+					<div className="space-y-3">
+						<WorkspaceTiles
+							tiles={windowTiles}
+							openFeedback={overview?.openFeedback}
+							stale={stale}
+						/>
+						{windowTiles !== undefined && (
+							<p className="text-xs text-muted-foreground">{tilesHint(windowTiles)}</p>
 						)}
 					</div>
+				) : (
+					<QueryErrorAlert {...failure} />
 				)}
 			</Section>
 
@@ -127,6 +124,23 @@ export function PracticesAcrossTheWorkspacePage({
 			)}
 		</PageLayout>
 	);
+}
+
+/**
+ * What the tiles' section says when a read failed: the whole page's, when the bars and the open
+ * feedback failed, else the window's own tiles'.
+ */
+function failureOf(
+	state: PracticesAcrossTheWorkspacePageProps["state"],
+	tiles: PracticesAcrossTheWorkspacePageProps["tiles"],
+): { error: unknown; title: string; onRetry: () => void } | undefined {
+	if (state.status === "error") {
+		return { error: state.error, title: "We could not load the workspace", onRetry: state.onRetry };
+	}
+	if (tiles.status === "error") {
+		return { error: tiles.error, title: "We could not load the figures", onRetry: tiles.onRetry };
+	}
+	return undefined;
 }
 
 /** Every practice group, a page at a time, each with its split and the way to open it. */

@@ -420,11 +420,12 @@ class PracticeStandingServiceTest extends BaseUnitTest {
         for (long artifactId = 31L; artifactId <= 39L; artifactId++) {
             old.add(aged(good(practice, artifactId)));
         }
-        when(observationRepository.findByWorkspaceBetween(eq(WORKSPACE_ID), any(), eq(Instant.EPOCH), eq(NOW)))
+        when(observationRepository.findLatestRunsByWorkspaceSince(eq(WORKSPACE_ID), any(), eq(Instant.EPOCH)))
                 .thenReturn(old);
 
         StandingSnapshot snapshot = Objects.requireNonNull(practiceStandingService
-                .getWorkspaceStandingSnapshots(WORKSPACE_ID, Set.of(USER_ID), Instant.EPOCH, NOW)
+                .getWorkspaceStandingSnapshots(WORKSPACE_ID, Set.of(USER_ID), Instant.EPOCH)
+                .byDeveloper()
                 .get(USER_ID));
 
         // Nine clean pieces of work after one slip, all a hundred days back: going well, as it would be if recent.

@@ -4201,17 +4201,13 @@ export type PracticeWorkTypeDefinitionOptions = {
 };
 
 /**
- * How the workspace's developers with a standing split across the practice groups, counted in developers and never naming one, with the reader's own figures beside the workspace's
+ * How the workspace's developers with a current standing split across the practice groups, counted in developers and never naming one, and the open feedback beside the reader's own. Nothing here reads a window; the tiles that do are read on their own
  */
 export type PracticesAcrossWorkspace = {
   /**
    * Eligible developers with a current standing in a practice group shown, the developers every split counts; absent while fewer than minimumOthers of them are other than the reader
    */
   developersWithAStanding?: number;
-  /**
-   * Eligible developers with a standing in a practice group shown in the window, the developers the tiles compare; absent while fewer than minimumOthers of them are other than the reader
-   */
-  developersWithAStandingInWindow?: number;
   /**
    * One row per practice group shown on the practice pages, in catalog order
    */
@@ -4221,9 +4217,27 @@ export type PracticesAcrossWorkspace = {
    */
   minimumOthers: number;
   /**
-   * The reader's open feedback, counted by the rule the practice profile shows it open by, beside the middle half of every eligible developer's: both open now, whatever the window
+   * The reader's open feedback, counted by the rule the practice profile shows it open by, beside the middle half of every eligible developer's: both open now
    */
   openFeedback: WorkspaceTile;
+  /**
+   * Whether the reader is one of the developers with a current standing and so inside the splits
+   */
+  readerCounted: boolean;
+};
+
+/**
+ * The reader's figures over one window beside the middle half of the developers with a standing in it; each window is checked on its own
+ */
+export type PracticesAcrossWorkspaceTiles = {
+  /**
+   * Eligible developers with a standing in a practice group shown in the window, the developers the tiles compare; absent while fewer than the fewest a shown count stands for are other than the reader
+   */
+  developersWithAStandingInWindow?: number;
+  /**
+   * The fewest developers other than the reader a middle half is read over; below it a tile shows only the reader's own value
+   */
+  minimumOthersForMiddleHalf: number;
   /**
    * The reader's practices going well
    */
@@ -4233,15 +4247,11 @@ export type PracticesAcrossWorkspace = {
    */
   practicesNeedingAttention: WorkspaceTile;
   /**
-   * Whether the reader is one of the developers with a current standing and so inside the splits
-   */
-  readerCounted: boolean;
-  /**
    * Pieces of the reader's work reviewed in the window
    */
   reviewedWork: WorkspaceTile;
   /**
-   * The window the tiles read evidence over; the splits read every developer's current standing, whatever the window
+   * The window the tiles read evidence over
    */
   window: 'ALL_TIME' | 'DAYS_30' | 'DAYS_90';
   /**
@@ -13617,9 +13627,7 @@ export type GetPracticesAcrossWorkspaceData = {
      */
     workspaceSlug: string;
   };
-  query?: {
-    window?: 'ALL_TIME' | 'DAYS_30' | 'DAYS_90';
-  };
+  query?: never;
   url: '/workspaces/{workspaceSlug}/practices/workspace-overview';
 };
 
@@ -13631,6 +13639,29 @@ export type GetPracticesAcrossWorkspaceResponses = {
 };
 
 export type GetPracticesAcrossWorkspaceResponse = GetPracticesAcrossWorkspaceResponses[keyof GetPracticesAcrossWorkspaceResponses];
+
+export type GetPracticesAcrossWorkspaceTilesData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query: {
+    window: 'ALL_TIME' | 'DAYS_30' | 'DAYS_90';
+  };
+  url: '/workspaces/{workspaceSlug}/practices/workspace-overview/tiles';
+};
+
+export type GetPracticesAcrossWorkspaceTilesResponses = {
+  /**
+   * The tiles for the window returned
+   */
+  200: PracticesAcrossWorkspaceTiles;
+};
+
+export type GetPracticesAcrossWorkspaceTilesResponse = GetPracticesAcrossWorkspaceTilesResponses[keyof GetPracticesAcrossWorkspaceTilesResponses];
 
 export type DeletePracticeData = {
   body?: never;

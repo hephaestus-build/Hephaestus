@@ -2,8 +2,11 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Navigate, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { getPracticesAcrossWorkspaceOptions } from "@/api/@tanstack/react-query.gen";
-import type { PracticesAcrossWorkspace } from "@/api/types.gen";
+import {
+	getPracticesAcrossWorkspaceOptions,
+	getPracticesAcrossWorkspaceTilesOptions,
+} from "@/api/@tanstack/react-query.gen";
+import type { PracticesAcrossWorkspace, PracticesAcrossWorkspaceTiles } from "@/api/types.gen";
 import {
 	combinePanelStates,
 	type LoadState,
@@ -69,11 +72,18 @@ function PracticesAcrossTheWorkspace() {
 	const { window, detail } = Route.useSearch();
 	const navigate = useNavigate();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
-	// Read only where this workspace reviews practices, and only the window shown: each window is
-	// its own request, checked against CohortPrivacyPolicy on its own.
+	// Read only where this workspace reviews practices. The splits and the open feedback read no
+	// window, so a new window leaves their read alone.
+	const enabled = featureState.practicesEnabled === true;
 	const query = useQuery({
-		...getPracticesAcrossWorkspaceOptions({ path: { workspaceSlug }, query: { window } }),
-		enabled: featureState.practicesEnabled === true,
+		...getPracticesAcrossWorkspaceOptions({ path: { workspaceSlug } }),
+		enabled,
+	});
+	// Only the window shown: each window is its own request, checked against CohortPrivacyPolicy on
+	// its own.
+	const tilesQuery = useQuery({
+		...getPracticesAcrossWorkspaceTilesOptions({ path: { workspaceSlug }, query: { window } }),
+		enabled,
 		// A new window keeps the last one's figures on screen, marked busy, until its own are in.
 		placeholderData: keepPreviousData,
 	});
@@ -96,14 +106,17 @@ function PracticesAcrossTheWorkspace() {
 		return <Navigate to="/w/$workspaceSlug" params={{ workspaceSlug }} replace />;
 	}
 
-	const loadState = combinePanelStates([
-		queryLoadState({ ...featureState, isPending: featureState.isLoading }),
-		queryLoadState(query),
-	]);
-	const state: PanelState<{ overview: PracticesAcrossWorkspace; stale: boolean }> =
+	const featureLoad = queryLoadState({ ...featureState, isPending: featureState.isLoading });
+	const loadState = combinePanelStates([featureLoad, queryLoadState(query)]);
+	const state: PanelState<{ overview: PracticesAcrossWorkspace }> =
 		loadState.status === "ready" && query.data !== undefined
-			? { status: "ready", overview: query.data, stale: query.isPlaceholderData }
+			? { status: "ready", overview: query.data }
 			: settling(loadState);
+	const tilesLoad = combinePanelStates([featureLoad, queryLoadState(tilesQuery)]);
+	const tiles: PanelState<{ tiles: PracticesAcrossWorkspaceTiles; stale: boolean }> =
+		tilesLoad.status === "ready" && tilesQuery.data !== undefined
+			? { status: "ready", tiles: tilesQuery.data, stale: tilesQuery.isPlaceholderData }
+			: settling(tilesLoad);
 	const overview = state.status === "ready" ? state.overview : undefined;
 	const group = overview?.groups.find((each) => each.groupSlug === openGroupSlug);
 	const pathAt = levelPathAt(stack, {
@@ -116,13 +129,14 @@ function PracticesAcrossTheWorkspace() {
 		<>
 			<PracticesAcrossTheWorkspacePage
 				state={state}
+				tiles={tiles}
 				window={window}
 				onWindowChange={(next) => setView({ window: next })}
 				openGroupSlug={openGroupSlug}
 				onOpenGroup={(groupSlug) => stackControls.open({ kind: "practice-group", id: groupSlug })}
 			/>
-			{/* A failed read leaves no level to show; the page says why. The bars come in the same read
-			    as the tiles, so a failed change of range closes the panel too. */}
+			{/* A failed read of the bars leaves no level to show; the page says why. The range moves only
+			    the tiles, so a failed change of range leaves the panel open. */}
 			<DetailDrawerStack
 				stack={state.status === "error" ? [] : stack}
 				size="detailWide"

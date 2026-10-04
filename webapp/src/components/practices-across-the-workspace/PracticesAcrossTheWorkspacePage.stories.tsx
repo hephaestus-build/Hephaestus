@@ -3,7 +3,9 @@ import { expect, fn, userEvent, within } from "storybook/test";
 
 import {
 	ACROSS_WORKSPACE,
+	ACROSS_WORKSPACE_TILES,
 	EMPTY_WORKSPACE,
+	GATED_TILES,
 	GATED_WORKSPACE,
 	MANY_GROUPS_WORKSPACE,
 	TOTAL_ONLY_WORKSPACE,
@@ -23,6 +25,7 @@ const meta = {
 	parameters: { layout: "fullscreen" },
 	args: {
 		state: { status: "ready", overview: ACROSS_WORKSPACE },
+		tiles: { status: "ready", tiles: ACROSS_WORKSPACE_TILES },
 		window: "DAYS_30",
 		onWindowChange: fn(),
 		onOpenGroup: fn(),
@@ -113,7 +116,10 @@ export const AllHeldBack: Story = {
  * by the server, and the page says only how many pieces of the reader's own work were reviewed.
  */
 export const Withheld: Story = {
-	args: { state: { status: "ready", overview: GATED_WORKSPACE } },
+	args: {
+		state: { status: "ready", overview: GATED_WORKSPACE },
+		tiles: { status: "ready", tiles: GATED_TILES },
+	},
 	play: async ({ canvas }) => {
 		// No count of them, where the server held the total back.
 		await expect(canvas.queryByText(/\d+ developers\s+with a standing/u)).toBeNull();
@@ -145,7 +151,10 @@ export const ManyGroups: Story = {
  * the window leaves them as they are.
  */
 export const SwitchingWindow: Story = {
-	args: { state: { status: "ready", overview: ACROSS_WORKSPACE, stale: true }, window: "DAYS_90" },
+	args: {
+		tiles: { status: "ready", tiles: ACROSS_WORKSPACE_TILES, stale: true },
+		window: "DAYS_90",
+	},
 	play: async ({ canvas }) => {
 		const table = canvas.getByRole("table", { name: "All practice groups" });
 		await expect(table).toBeVisible();
@@ -168,7 +177,7 @@ export const Empty: Story = {
 };
 
 export const Loading: Story = {
-	args: { state: { status: "loading" } },
+	args: { state: { status: "loading" }, tiles: { status: "loading" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Loading the figures")).toHaveClass("sr-only");
 		await expect(canvas.getByRole("table", { name: "All practice groups" })).toHaveAttribute(
@@ -181,8 +190,17 @@ export const Loading: Story = {
 export const LoadError: Story = {
 	args: { state: { status: "error", error: new Error("Network down"), onRetry: fn() } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Could not load the workspace")).toBeVisible();
+		await expect(canvas.getByText("We could not load the workspace")).toBeVisible();
 		await expect(canvas.queryByRole("table", { name: "All practice groups" })).toBeNull();
+	},
+};
+
+/** The window's tiles failed: their section says so, and the bars, which read no window, stay. */
+export const TilesLoadError: Story = {
+	args: { tiles: { status: "error", error: new Error("Network down"), onRetry: fn() } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("We could not load the figures")).toBeVisible();
+		await expect(canvas.getByRole("table", { name: "All practice groups" })).toBeVisible();
 	},
 };
 

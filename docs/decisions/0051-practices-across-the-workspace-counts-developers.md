@@ -60,7 +60,8 @@ whoever only has observations that did not apply or stayed undetermined is not o
 - **The window applies to the tiles alone.** Its toggle sits in the tiles' heading row. Each window
   (the last 30 days, the last 90 days, all time) is checked on its own. *All time* reads every
   observation, with no lower bound, and reads every standing over all of it by the same rule as the
-  shorter windows. The page opens on the last 30 days.
+  shorter windows. The page opens on the last 30 days. The tiles are a read of their own: the bars
+  and the open feedback come in a read that takes no window, so a new window reads them no second time.
 - The total of developers with a standing shows only while it holds three others: the bars' total
   of developers with a current standing, and the tiles' total in the window, each on its own.
 - A group's practices are the ones review is admitted for, in catalog order, the same list for every

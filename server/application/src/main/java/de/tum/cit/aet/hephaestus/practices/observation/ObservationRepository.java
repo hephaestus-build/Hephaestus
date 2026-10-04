@@ -837,9 +837,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * {@link #findByDeveloperAndWorkspaceBetween} for several developers of the workspace at once, under the same
      * guards. One scan of {@code idx_observation_workspace_observed} that the caller partitions by
      * {@code about_user_id}, so a read over the whole workspace costs one query rather than one per developer. Read
-     * by the page that shows the workspace as a whole, through
-     * {@link PracticeStandingService#getWorkspaceStandingSnapshots}, and by the open feedback it counts for each
-     * developer. The caller passes at least one developer.
+     * by the open feedback the page that shows the workspace as a whole counts for each developer. The caller passes
+     * at least one developer.
      */
     @Query(value = """
                     SELECT f.* FROM observation f
@@ -856,6 +855,29 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("developerIds") Collection<Long> developerIds,
             @Param("since") Instant since,
             @Param("until") Instant until);
+
+    /**
+     * Each claim's latest run ({@link #LATEST_RUN_OF_CLAIM}) for several developers of the workspace, observed from
+     * {@code since} on, under the guards of {@link #findByWorkspaceBetween}: the rows {@link LatestRun#perClaim} would
+     * keep, chosen in the database, so a span over the whole history loads only the rows a standing reads. Read
+     * through {@link PracticeStandingService#getWorkspaceStandingSnapshots}. The caller passes at least one developer.
+     */
+    @Query(
+            value = """
+                    SELECT f.* FROM observation f
+                    WHERE f.workspace_id = :workspaceId
+                      AND f.about_user_id IN (:developerIds)
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
+              AND f.superseded_at IS NULL
+              AND f.observed_at >= :since
+              AND f.agent_job_id =""" + LATEST_RUN_OF_CLAIM + """
+            ORDER BY f.observed_at DESC
+            """,
+            nativeQuery = true)
+    List<Observation> findLatestRunsByWorkspaceSince(
+            @Param("workspaceId") Long workspaceId,
+            @Param("developerIds") Collection<Long> developerIds,
+            @Param("since") Instant since);
 
     /**
      * The developer's review runs, newest first: one row per agent job that recorded an observation about

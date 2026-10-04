@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.G
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Row;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceTilesDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspacePracticeSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitDTO;
@@ -17,13 +18,13 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService.StandingSnapshot;
+import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService.WorkspaceStandings;
 import de.tum.cit.aet.hephaestus.practices.observation.ReviewedWorkKey;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -41,16 +42,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Composes Practices across the workspace from the standings that already exist, read off one scan of the workspace
- * per basis and rolled up to practice groups by the same classifier the practice profile uses, then counted under
- * {@link CohortPrivacyPolicy}. The group and practice splits count every eligible developer by their current
- * standing, the one their practice profile shows, so the reader's marker is their profile's standing; only the tiles
- * read the window.
+ * per read and rolled up to practice groups by the same classifier the practice profile uses, then counted under
+ * {@link CohortPrivacyPolicy}. The group and practice splits and the open feedback count every eligible developer as
+ * they stand now, so the reader's marker is their profile's standing and a new window reads none of it again; only
+ * the tiles read a window, in a read of their own.
  */
 @Service
 @RequiredArgsConstructor
 public class PracticesAcrossWorkspaceService {
-
-    private static final StandingSnapshot NOTHING_READ = new StandingSnapshot(Map.of(), Map.of());
 
     private final PracticeStandingService practiceStandingService;
     private final PracticeGroupStandingService practiceGroupStandingService;
@@ -60,45 +59,22 @@ public class PracticesAcrossWorkspaceService {
     private final InAppFeedbackService inAppFeedbackService;
     private final Clock clock;
 
+    /** The splits by the current standing and the open feedback, whatever window the tiles read. */
     @Transactional(readOnly = true)
-    public PracticesAcrossWorkspaceDTO read(WorkspaceContext context, PracticesAcrossWorkspaceWindow window) {
+    public PracticesAcrossWorkspaceDTO read(WorkspaceContext context) {
         Long workspaceId = context.id();
-        Instant now = clock.instant();
-        @Nullable Instant since = window.since(now);
-
-        // Hidden members are left out of every workspace total, so they are left out of these counts too.
-        Set<Long> eligible = new LinkedHashSet<>(membershipService.practiceReviewEligibleUserIds(workspaceId));
-        eligible.removeAll(membershipService.getHiddenMemberIds(workspaceId));
-        @Nullable Long reader = currentDeveloperLookup.currentDeveloperId().orElse(null);
-        Set<Long> read = new LinkedHashSet<>(eligible);
-        if (reader != null) {
-            read.add(reader);
-        }
+        Members members = members(workspaceId);
         List<PracticeGroup> groups = practiceGroupService.listGroups(context, true);
-        // The bars: every developer as their practice profile shows them now, whatever the window.
-        Cohort current = cohort(
-                groups,
-                eligible,
-                reader,
-                practiceStandingService.getCurrentWorkspaceStandingSnapshots(workspaceId, read));
-        // The tiles: the evidence in the window alone. Over the profile's own look-back that is the read above.
-        Cohort inWindow = window.isProfileLookBack()
-                ? current
-                : cohort(
-                        groups,
-                        eligible,
-                        reader,
-                        practiceStandingService.getWorkspaceStandingSnapshots(
-                                workspaceId, read, since == null ? Instant.EPOCH : since, now));
-        boolean readerEligible = reader != null && eligible.contains(reader);
+        WorkspaceStandings standings =
+                practiceStandingService.getCurrentWorkspaceStandingSnapshots(workspaceId, members.read());
+        Cohort current = cohort(groups, members, standings.byDeveloper());
 
-        // The practices every reader sees, whatever their own evidence says.
-        Map<String, List<Practice>> eligiblePractices = practiceStandingService.eligiblePracticesByGroup(workspaceId);
-        Map<String, PracticeGroupStandingDTO> yourGroups = current.groupStandingsOf(reader);
-        StandingSnapshot yoursNow = current.snapshotOf(reader);
+        Map<String, PracticeGroupStandingDTO> yourGroups = current.groupStandingsOf(members.reader());
+        StandingSnapshot yours = current.snapshotOf(members.reader());
         List<WorkspaceGroupSplitDTO> rows = new ArrayList<>();
         for (PracticeGroup group : groups) {
-            List<Practice> practices = eligiblePractices.getOrDefault(group.getSlug(), List.of());
+            // The practices every reader sees, whatever their own evidence says.
+            List<Practice> practices = standings.eligiblePracticesByGroup().getOrDefault(group.getSlug(), List.of());
             Function<Long, Row> rowOf = developer -> new Row(
                     Bucket.of(Objects.requireNonNull(
                                     current.groupStandingsOf(developer).get(group.getSlug()))
@@ -114,7 +90,7 @@ public class PracticesAcrossWorkspaceService {
                 practiceSplits.add(new WorkspacePracticeSplitDTO(
                         practice.getSlug(),
                         practice.getName(),
-                        yourStanding(yoursNow, practice.getSlug()),
+                        yourStanding(yours, practice.getSlug()),
                         WorkspaceSplitDTO.from(release.practices().get(index))));
             }
             rows.add(new WorkspaceGroupSplitDTO(
@@ -127,41 +103,83 @@ public class PracticesAcrossWorkspaceService {
                     practiceSplits));
         }
 
-        StandingSnapshot yours = inWindow.snapshotOf(reader);
-        List<StandingSnapshot> snapshotsWithAStanding =
-                inWindow.withAStanding().stream().map(inWindow::snapshotOf).toList();
-        int others = inWindow.others();
         // Open now, for the reader and the workspace alike, so the tile sets one moment beside one moment: every
-        // eligible developer, whatever the window, counted by the profile's own rule in one pass.
-        Map<Long, Integer> openFeedback = inAppFeedbackService.countOpen(workspaceId, read);
+        // eligible developer, counted by the profile's own rule in one pass.
+        Map<Long, Integer> openFeedback = inAppFeedbackService.countOpen(workspaceId, members.read());
+        @Nullable Long reader = members.reader();
         MiddleHalf openMiddle = CohortPrivacyPolicy.middleHalf(
-                eligible.stream()
+                members.eligible().stream()
                         .map(developer -> openFeedback.getOrDefault(developer, 0))
                         .toList(),
-                eligible.size() - (readerEligible ? 1 : 0));
+                members.eligible().size() - (members.readerEligible() ? 1 : 0));
         return new PracticesAcrossWorkspaceDTO(
-                window,
                 CohortPrivacyPolicy.MINIMUM_OTHERS,
                 CohortPrivacyPolicy.totalWithAStanding(current.others(), current.readerCounted()),
                 current.readerCounted(),
-                CohortPrivacyPolicy.totalWithAStanding(others, inWindow.readerCounted()),
-                yours.practices().size(),
-                tile(yours, snapshotsWithAStanding, others, PracticesAcrossWorkspaceService::reviewedWork),
-                tile(
-                        yours,
-                        snapshotsWithAStanding,
-                        others,
-                        snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.STRENGTH)),
-                tile(
-                        yours,
-                        snapshotsWithAStanding,
-                        others,
-                        snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.DEVELOPING)),
                 new WorkspaceTileDTO(
                         reader == null ? 0 : openFeedback.getOrDefault(reader, 0),
                         openMiddle == null ? null : openMiddle.low(),
                         openMiddle == null ? null : openMiddle.high()),
                 rows);
+    }
+
+    /** The reader's figures over the window beside the middle half of the developers with a standing in it. */
+    @Transactional(readOnly = true)
+    public PracticesAcrossWorkspaceTilesDTO readTiles(WorkspaceContext context, PracticesAcrossWorkspaceWindow window) {
+        Long workspaceId = context.id();
+        Members members = members(workspaceId);
+        Cohort inWindow = cohort(
+                practiceGroupService.listGroups(context, true),
+                members,
+                practiceStandingService
+                        .getWorkspaceStandingSnapshots(workspaceId, members.read(), window.since(clock.instant()))
+                        .byDeveloper());
+        StandingSnapshot yours = inWindow.snapshotOf(members.reader());
+        List<StandingSnapshot> withAStanding =
+                inWindow.withAStanding().stream().map(inWindow::snapshotOf).toList();
+        int others = inWindow.others();
+        return new PracticesAcrossWorkspaceTilesDTO(
+                window,
+                CohortPrivacyPolicy.MINIMUM_OTHERS_FOR_MIDDLE_HALF,
+                CohortPrivacyPolicy.totalWithAStanding(others, inWindow.readerCounted()),
+                yours.practices().size(),
+                tile(yours, withAStanding, others, PracticesAcrossWorkspaceService::reviewedWork),
+                tile(
+                        yours,
+                        withAStanding,
+                        others,
+                        snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.STRENGTH)),
+                tile(
+                        yours,
+                        withAStanding,
+                        others,
+                        snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.DEVELOPING)));
+    }
+
+    /**
+     * The developers the page counts, without the hidden members every workspace total leaves out, and the reader,
+     * who need not be one of them.
+     */
+    private record Members(Set<Long> eligible, @Nullable Long reader) {
+
+        /** Every developer a read covers: the eligible ones and the reader. */
+        Set<Long> read() {
+            Set<Long> read = new LinkedHashSet<>(eligible);
+            if (reader != null) {
+                read.add(reader);
+            }
+            return read;
+        }
+
+        boolean readerEligible() {
+            return reader != null && eligible.contains(reader);
+        }
+    }
+
+    private Members members(Long workspaceId) {
+        Set<Long> eligible = new LinkedHashSet<>(membershipService.practiceReviewEligibleUserIds(workspaceId));
+        eligible.removeAll(membershipService.getHiddenMemberIds(workspaceId));
+        return new Members(eligible, currentDeveloperLookup.currentDeveloperId().orElse(null));
     }
 
     /**
@@ -177,7 +195,9 @@ public class PracticesAcrossWorkspaceService {
 
         /** The developer's snapshot, or that of someone nothing reached when nothing was read for them. */
         StandingSnapshot snapshotOf(@Nullable Long developer) {
-            return developer == null ? NOTHING_READ : snapshots.getOrDefault(developer, NOTHING_READ);
+            return developer == null
+                    ? StandingSnapshot.EMPTY
+                    : snapshots.getOrDefault(developer, StandingSnapshot.EMPTY);
         }
 
         Map<String, PracticeGroupStandingDTO> groupStandingsOf(@Nullable Long developer) {
@@ -190,24 +210,20 @@ public class PracticesAcrossWorkspaceService {
         }
     }
 
-    private Cohort cohort(
-            List<PracticeGroup> groups,
-            Set<Long> eligible,
-            @Nullable Long reader,
-            Map<Long, StandingSnapshot> snapshots) {
+    private Cohort cohort(List<PracticeGroup> groups, Members members, Map<Long, StandingSnapshot> snapshots) {
         Map<Long, Map<String, PracticeGroupStandingDTO>> groupStandings = new HashMap<>();
         snapshots.forEach((developer, snapshot) -> groupStandings.put(developer, groupStandings(groups, snapshot)));
         // With a standing: a verdict in a group the page shows, the same verdicts the group standings are read off.
-        List<Long> withAStanding = eligible.stream()
+        List<Long> withAStanding = members.eligible().stream()
                 .filter(developer -> groupStandings.getOrDefault(developer, Map.of()).values().stream()
                         .anyMatch(group -> PracticeGroupStandingDTO.isVerdict(group.standing())))
                 .toList();
         return new Cohort(
                 snapshots,
                 groupStandings,
-                groupStandings(groups, NOTHING_READ),
+                groupStandings(groups, StandingSnapshot.EMPTY),
                 withAStanding,
-                reader != null && withAStanding.contains(reader));
+                members.reader() != null && withAStanding.contains(members.reader()));
     }
 
     /** The reader's own standing in a practice, or not observed when nothing of theirs was read. */

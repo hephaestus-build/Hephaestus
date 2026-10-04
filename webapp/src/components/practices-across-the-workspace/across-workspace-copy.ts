@@ -1,4 +1,4 @@
-import type { PracticesAcrossWorkspace, WorkspaceSplit } from "@/api/types.gen";
+import type { PracticesAcrossWorkspaceTiles, WorkspaceSplit } from "@/api/types.gen";
 import type { FilterOption } from "@/components/common/FilterToggle";
 import { statusValues } from "@/components/common/status-def";
 import {
@@ -6,7 +6,7 @@ import {
 	type PracticeGroupStandingValue,
 } from "@/components/practice-vocabulary/practice-group-standing-defs";
 
-export type AcrossWorkspaceWindow = PracticesAcrossWorkspace["window"];
+export type AcrossWorkspaceWindow = PracticesAcrossWorkspaceTiles["window"];
 
 interface WindowDef {
 	/** The toggle's label and the section's heading. */
@@ -62,22 +62,25 @@ export const PAGE_PURPOSE =
 export const OPEN_IN_YOUR_PROFILE = "Open in your Practice profile";
 
 /**
- * The line under the tiles on when the three tiles read over the range compare: a middle half shows
- * from twice K other developers, so neither quarter outside it can be one developer's value. Open
- * feedback reads every developer the page counts, reviewed or not, so the line names its group too.
- * The tiles are the only figures the window changes, so only this line names it.
+ * The line under the tiles on when the three tiles read over the range compare, from the fewest
+ * other developers the server reads a middle half over. Open feedback reads every developer the
+ * page counts, reviewed or not, so the line names its group too. The tiles are the only figures
+ * the window changes, so only this line names it.
  */
-export function tilesHint(
-	minimumOthers: number,
-	window: AcrossWorkspaceWindow,
-	developersWithAStandingInWindow?: number,
-): string {
+export function tilesHint({
+	minimumOthersForMiddleHalf,
+	window,
+	developersWithAStandingInWindow,
+}: Pick<
+	PracticesAcrossWorkspaceTiles,
+	"minimumOthersForMiddleHalf" | "window" | "developersWithAStandingInWindow"
+>): string {
 	// No count where the server held the total back: a small total is a count of its own.
 	const of =
 		developersWithAStandingInWindow === undefined
 			? "the developers with a standing here"
 			: `${developerCount(developersWithAStandingInWindow)} with a standing ${windowPhrase(window)}`;
-	return `Except for open feedback, the typical range is the middle half of ${of}. Your marker shows you. These tiles compare you when at least ${2 * minimumOthers} other developers have a standing in this range. Until then, they show only your own value. Open feedback counts what is open now, for all developers that this page counts.`;
+	return `Except for open feedback, the typical range is the middle half of ${of}. Your marker shows you. These tiles compare you when at least ${minimumOthersForMiddleHalf} other developers have a standing in this range. Until then, they show only your own value. Open feedback counts what is open now, for all developers that this page counts.`;
 }
 
 /**

@@ -7969,9 +7969,32 @@ paths:
       description: "Counts developers, never names them: a count is shown only when\
         \ it holds at least 3 developers other than the reader, a group's or a practice's\
         \ split shows all four parts or is withheld. The splits count every developer's\
-        \ current standing; the window applies to the tiles only, and each window\
-        \ is checked on its own."
+        \ current standing and take no window."
       operationId: getPracticesAcrossWorkspace
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticesAcrossWorkspace"
+          description: Practices across the workspace returned
+      summary: "How the workspace's developers split across practice groups and practices,\
+        \ the reader marked"
+      tags:
+      - Practices Across The Workspace
+  /workspaces/{workspaceSlug}/practices/workspace-overview/tiles:
+    get:
+      description: A middle half shows only when at least 6 developers other than
+        the reader have a standing in the window; each window is checked on its own.
+      operationId: getPracticesAcrossWorkspaceTiles
       parameters:
       - description: Workspace slug
         in: path
@@ -7982,10 +8005,9 @@ paths:
           pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
       - in: query
         name: window
-        required: false
+        required: true
         schema:
           type: string
-          default: DAYS_30
           enum:
           - ALL_TIME
           - DAYS_30
@@ -7995,10 +8017,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PracticesAcrossWorkspace"
-          description: Practices across the workspace returned
-      summary: "How the workspace's developers split across practice groups and practices,\
-        \ the reader marked"
+                $ref: "#/components/schemas/PracticesAcrossWorkspaceTiles"
+          description: The tiles for the window returned
+      summary: The reader's figures over one window beside the workspace's middle
+        half
       tags:
       - Practices Across The Workspace
   /workspaces/{workspaceSlug}/practices/{practiceSlug}:
@@ -16006,9 +16028,10 @@ components:
       - supportedAutomatedReviewModes
     PracticesAcrossWorkspace:
       type: object
-      description: "How the workspace's developers with a standing split across the\
-        \ practice groups, counted in developers and never naming one, with the reader's\
-        \ own figures beside the workspace's"
+      description: "How the workspace's developers with a current standing split across\
+        \ the practice groups, counted in developers and never naming one, and the\
+        \ open feedback beside the reader's own. Nothing here reads a window; the\
+        \ tiles that do are read on their own"
       properties:
         developersWithAStanding:
           type: integer
@@ -16016,12 +16039,6 @@ components:
           description: "Eligible developers with a current standing in a practice\
             \ group shown, the developers every split counts; absent while fewer than\
             \ minimumOthers of them are other than the reader"
-        developersWithAStandingInWindow:
-          type: integer
-          format: int32
-          description: "Eligible developers with a standing in a practice group shown\
-            \ in the window, the developers the tiles compare; absent while fewer\
-            \ than minimumOthers of them are other than the reader"
         groups:
           type: array
           description: "One row per practice group shown on the practice pages, in\
@@ -16037,24 +16054,44 @@ components:
           $ref: "#/components/schemas/WorkspaceTile"
           description: "The reader's open feedback, counted by the rule the practice\
             \ profile shows it open by, beside the middle half of every eligible developer's:\
-            \ both open now, whatever the window"
+            \ both open now"
+        readerCounted:
+          type: boolean
+          description: Whether the reader is one of the developers with a current
+            standing and so inside the splits
+      required:
+      - groups
+      - minimumOthers
+      - openFeedback
+      - readerCounted
+    PracticesAcrossWorkspaceTiles:
+      type: object
+      description: The reader's figures over one window beside the middle half of
+        the developers with a standing in it; each window is checked on its own
+      properties:
+        developersWithAStandingInWindow:
+          type: integer
+          format: int32
+          description: "Eligible developers with a standing in a practice group shown\
+            \ in the window, the developers the tiles compare; absent while fewer\
+            \ than the fewest a shown count stands for are other than the reader"
+        minimumOthersForMiddleHalf:
+          type: integer
+          format: int32
+          description: The fewest developers other than the reader a middle half is
+            read over; below it a tile shows only the reader's own value
         practicesGoingWell:
           $ref: "#/components/schemas/WorkspaceTile"
           description: The reader's practices going well
         practicesNeedingAttention:
           $ref: "#/components/schemas/WorkspaceTile"
           description: The reader's practices needing attention
-        readerCounted:
-          type: boolean
-          description: Whether the reader is one of the developers with a current
-            standing and so inside the splits
         reviewedWork:
           $ref: "#/components/schemas/WorkspaceTile"
           description: Pieces of the reader's work reviewed in the window
         window:
           type: string
-          description: "The window the tiles read evidence over; the splits read every\
-            \ developer's current standing, whatever the window"
+          description: The window the tiles read evidence over
           enum:
           - ALL_TIME
           - DAYS_30
@@ -16065,12 +16102,9 @@ components:
           description: "The practices the reader's profile lists, the denominator\
             \ of the practice tiles"
       required:
-      - groups
-      - minimumOthers
-      - openFeedback
+      - minimumOthersForMiddleHalf
       - practicesGoingWell
       - practicesNeedingAttention
-      - readerCounted
       - reviewedWork
       - window
       - yourPractices

@@ -34,7 +34,6 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -130,18 +129,13 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @WithUser
     @DisplayName("an even group splits with the reader counted; a bare or nearly full one is withheld")
     void shouldSplitAndWithholdByTheCountsOfDevelopersWithAStanding() {
-        read("ALL_TIME")
-                .jsonPath("$.window")
-                .isEqualTo("ALL_TIME")
-                .jsonPath("$.minimumOthers")
+        read().jsonPath("$.minimumOthers")
                 .isEqualTo(3)
                 // The owner, the reader and twenty six developers are eligible, and every one of them was reviewed.
                 .jsonPath("$.developersWithAStanding")
                 .isEqualTo(28)
                 .jsonPath("$.readerCounted")
                 .isEqualTo(true)
-                .jsonPath("$.developersWithAStandingInWindow")
-                .isEqualTo(28)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
                 .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourStanding")
@@ -173,8 +167,15 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.goingWell")
                 .doesNotExist()
                 .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.noneYet")
-                .doesNotExist()
-                // The reader's own figures, then the middle half of all twenty eight.
+                .doesNotExist();
+        // The reader's own figures, then the middle half of all twenty eight.
+        tiles("ALL_TIME")
+                .jsonPath("$.window")
+                .isEqualTo("ALL_TIME")
+                .jsonPath("$.minimumOthersForMiddleHalf")
+                .isEqualTo(6)
+                .jsonPath("$.developersWithAStandingInWindow")
+                .isEqualTo(28)
                 .jsonPath("$.reviewedWork.yours")
                 .isEqualTo(1)
                 .jsonPath("$.practicesGoingWell.yours")
@@ -196,8 +197,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
             standing(small, developer("across-dev-" + index), index);
         }
 
-        read("ALL_TIME")
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices.length()")
+        read().jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices.length()")
                 .isEqualTo(2)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'explain')]"
                         + ".yourStanding")
@@ -262,8 +262,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
             standing(small, developer("across-dev-" + index), index);
         }
 
-        read("ALL_TIME")
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
+        read().jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
                 .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'explain')]"
                         + ".split.shape")
@@ -300,8 +299,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         bind(addressed, slip);
         markAddressed(addressed, reader, NEWEST.plus(Duration.ofHours(1)));
 
-        read("ALL_TIME")
-                .jsonPath("$.openFeedback.yours")
+        read().jsonPath("$.openFeedback.yours")
                 .isEqualTo(1)
                 // Nobody else has feedback, so the middle half of every eligible developer is none, now.
                 .jsonPath("$.openFeedback.middleLow")
@@ -315,7 +313,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Test
     @WithUser
-    @DisplayName("each window moves only the tiles; the splits count the current standing whatever the window")
+    @DisplayName("each window moves only the tiles; the splits count the current standing")
     void shouldCountTheSplitsByTheCurrentStandingWhenTheWindowChanges() {
         // Testing and issue standings move forty days back, in order, before the last 30 days but inside the
         // profile's ninety; packaging and craft stay inside both.
@@ -326,23 +324,20 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 testing.getId(),
                 issues.getId());
 
-        read("DAYS_30")
+        tiles("DAYS_30")
                 .jsonPath("$.window")
                 .isEqualTo("DAYS_30")
                 // The owner's only standing moved out of the window, which the tiles count by.
                 .jsonPath("$.developersWithAStandingInWindow")
-                .isEqualTo(27)
-                // The splits still count the owner, whose profile still shows the standing.
-                .jsonPath("$.developersWithAStanding")
+                .isEqualTo(27);
+        tiles("DAYS_90").jsonPath("$.developersWithAStandingInWindow").isEqualTo(28);
+        // The splits still count the owner, whose profile still shows the standing.
+        read().jsonPath("$.developersWithAStanding")
                 .isEqualTo(28)
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.shape")
                 .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
                 .isEqualTo("SPLIT");
-        // Every count of every bar, the reader's marker on each, and the total the bars share, in each window.
-        assertThat(bars(readAs(reader, PracticesAcrossWorkspaceWindow.DAYS_30)))
-                .isEqualTo(bars(readAs(reader, PracticesAcrossWorkspaceWindow.DAYS_90)))
-                .isEqualTo(bars(readAs(reader, PracticesAcrossWorkspaceWindow.ALL_TIME)));
     }
 
     @Test
@@ -355,11 +350,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 "UPDATE observation SET observed_at = observed_at - interval '100 days' WHERE workspace_id = ?",
                 workspace.getId());
 
-        read("DAYS_90").jsonPath("$.developersWithAStandingInWindow").doesNotExist();
-        read("ALL_TIME")
-                .jsonPath("$.developersWithAStandingInWindow")
-                .isEqualTo(28)
-                .jsonPath("$.developersWithAStanding")
+        tiles("DAYS_90").jsonPath("$.developersWithAStandingInWindow").doesNotExist();
+        tiles("ALL_TIME").jsonPath("$.developersWithAStandingInWindow").isEqualTo(28);
+        read().jsonPath("$.developersWithAStanding")
                 .doesNotExist()
                 .jsonPath("$.readerCounted")
                 .isEqualTo(false)
@@ -368,12 +361,12 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     }
 
     @Test
-    @DisplayName("the reader's marker is the standing their practice profile shows, whatever the window")
+    @DisplayName("the reader's marker is the standing their practice profile shows")
     void shouldMarkTheReaderByTheirProfileStandingWhenTheWindowIsShorterThanTheProfile() {
         // A slip sixty days back: inside the profile's ninety days, outside the last 30 days.
         problem(craft, reader, NOW.minus(Duration.ofDays(60)));
 
-        PracticesAcrossWorkspaceDTO page = readAs(reader, PracticesAcrossWorkspaceWindow.DAYS_30);
+        PracticesAcrossWorkspaceDTO page = readAs(reader);
         CurrentScmIdentityHolder.set(reader.getId(), reader.getLogin(), Set.of(reader.getId()));
         Map<String, PracticeGroupStandingDTO.Standing> profileGroups;
         Map<String, PracticeStandingDTO.Standing> profilePractices;
@@ -415,17 +408,17 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                     ('across-dev-0', 'across-dev-1'))
                 """, workspace.getId());
 
-        read("ALL_TIME")
-                .jsonPath("$.developersWithAStanding")
+        read().jsonPath("$.developersWithAStanding")
                 .doesNotExist()
+                .jsonPath("$.groups[?(@.split.shape != 'WITHHELD')]")
+                .isEmpty();
+        tiles("ALL_TIME")
                 .jsonPath("$.reviewedWork.yours")
                 .isEqualTo(1)
                 .jsonPath("$.reviewedWork.middleLow")
                 .doesNotExist()
                 .jsonPath("$.practicesGoingWell.middleHigh")
-                .doesNotExist()
-                .jsonPath("$.groups[?(@.split.shape != 'WITHHELD')]")
-                .isEmpty();
+                .doesNotExist();
     }
 
     @Test
@@ -447,8 +440,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
             observe(elsewherePractice, run, nextNumber++, developer, NOT_MET, Severity.MAJOR, NEWEST);
         }
 
-        read("ALL_TIME")
-                .jsonPath("$.developersWithAStanding")
+        read().jsonPath("$.developersWithAStanding")
                 .isEqualTo(26)
                 // Two of the six at Needs attention are hidden, which leaves four there: still a part of its own.
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
@@ -484,10 +476,23 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .expectBody(Void.class);
     }
 
-    private WebTestClient.BodyContentSpec read(String window) {
+    private WebTestClient.BodyContentSpec read() {
         return webTestClient
                 .get()
-                .uri(builder -> builder.path(URI).queryParam("window", window).build(workspace.getWorkspaceSlug()))
+                .uri(URI, workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody();
+    }
+
+    private WebTestClient.BodyContentSpec tiles(String window) {
+        return webTestClient
+                .get()
+                .uri(builder -> builder.path(URI + "/tiles")
+                        .queryParam("window", window)
+                        .build(workspace.getWorkspaceSlug()))
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
@@ -497,23 +502,14 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     /** The page as the service composes it for {@code developer}, or for a caller who is no developer when null. */
     private PracticesAcrossWorkspaceDTO readAs(@Nullable User developer) {
-        return readAs(developer, PracticesAcrossWorkspaceWindow.ALL_TIME);
-    }
-
-    private PracticesAcrossWorkspaceDTO readAs(@Nullable User developer, PracticesAcrossWorkspaceWindow window) {
         if (developer != null) {
             CurrentScmIdentityHolder.set(developer.getId(), developer.getLogin(), Set.of(developer.getId()));
         }
         try {
-            return acrossWorkspaceService.read(WorkspaceContext.fromWorkspace(workspace, null, null), window);
+            return acrossWorkspaceService.read(WorkspaceContext.fromWorkspace(workspace, null, null));
         } finally {
             CurrentScmIdentityHolder.clear();
         }
-    }
-
-    /** What the window must not move: every group and practice row whole, the shared total, and the marker's use. */
-    private static List<Object> bars(PracticesAcrossWorkspaceDTO page) {
-        return Arrays.asList(page.groups(), page.developersWithAStanding(), page.readerCounted());
     }
 
     /** Every group's split and its practices' names and splits: what reads the same whoever reads it. */

@@ -118,8 +118,8 @@ public class PracticeStandingService {
     }
 
     /**
-     * Every given developer's standings as they stood at {@code until}, over the evidence observed from
-     * {@code since}, read off one scan of the workspace rather than one query per developer. A developer with no
+     * Every given developer's standings now, over the evidence observed from {@code since}, read off one scan of the
+     * workspace rather than one query per developer, with the practices review is admitted for. A developer with no
      * evidence in the span gets the snapshot of someone nothing reached: every eligible practice silent.
      *
      * <p>The same classification as {@link #getStandingSnapshots}, minus the delivered guidance: a reader of the
@@ -127,46 +127,42 @@ public class PracticeStandingService {
      * opportunity from {@code since}, so a span longer than the trend horizon is read by the same rule as a
      * shorter one.
      */
-    public Map<Long, StandingSnapshot> getWorkspaceStandingSnapshots(
-            Long workspaceId, Set<Long> developerIds, Instant since, Instant until) {
+    public WorkspaceStandings getWorkspaceStandingSnapshots(Long workspaceId, Set<Long> developerIds, Instant since) {
         // First, so the practices every observation points at are already loaded when the gate reads them.
         Eligibility eligibility = eligibility(workspaceId);
-        List<Observation> window = developerIds.isEmpty()
+        // Each claim narrowed to its latest run in the query, so the gate reads only the rows a snapshot can use.
+        List<Observation> latest = developerIds.isEmpty()
                 ? List.of()
-                : observationRepository.findByWorkspaceBetween(workspaceId, developerIds, since, until);
-        // Each claim narrowed to its latest run first, so the gate reads only the rows a snapshot can use.
-        Map<Long, List<Observation>> latestByDeveloper = new LinkedHashMap<>();
-        window.stream()
-                .collect(Collectors.groupingBy(Observation::getAboutUserId))
-                .forEach((developerId, observations) ->
-                        latestByDeveloper.put(developerId, LatestRun.perClaim(observations)));
-        Set<UUID> visible = visibilityPolicy.permitsAll(
-                workspaceId,
-                latestByDeveloper.values().stream().flatMap(List::stream).toList(),
-                SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+                : observationRepository.findLatestRunsByWorkspaceSince(workspaceId, developerIds, since);
+        Set<UUID> visible =
+                visibilityPolicy.permitsAll(workspaceId, latest, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        Map<Long, List<Observation>> visibleByDeveloper = latest.stream()
+                .filter(observation -> visible.contains(observation.getId()))
+                .collect(Collectors.groupingBy(Observation::getAboutUserId));
         Map<Long, StandingSnapshot> snapshots = new LinkedHashMap<>();
         for (Long developerId : developerIds) {
             snapshots.put(
                     developerId,
-                    snapshot(
-                            latestByDeveloper.getOrDefault(developerId, List.of()).stream()
-                                    .filter(observation -> visible.contains(observation.getId()))
-                                    .toList(),
-                            eligibility,
-                            Map.of(),
-                            since));
+                    snapshot(visibleByDeveloper.getOrDefault(developerId, List.of()), eligibility, Map.of(), since));
         }
-        return snapshots;
+        return new WorkspaceStandings(snapshots, catalogOrder(eligibility));
     }
 
     /**
      * Every given developer's standings as their practice profile shows them now: read over the profile's own
      * look-back, from the trend horizon, so a developer's standing here is the one their profile shows.
      */
-    public Map<Long, StandingSnapshot> getCurrentWorkspaceStandingSnapshots(Long workspaceId, Set<Long> developerIds) {
-        return getWorkspaceStandingSnapshots(
-                workspaceId, developerIds, practiceTrendService.horizon(), clock.instant());
+    public WorkspaceStandings getCurrentWorkspaceStandingSnapshots(Long workspaceId, Set<Long> developerIds) {
+        return getWorkspaceStandingSnapshots(workspaceId, developerIds, practiceTrendService.horizon());
     }
+
+    /**
+     * Several developers' snapshots, and the practices review is admitted for in the workspace today per group slug,
+     * each group's in catalog order: the same list whoever asks, so a reader's own evidence never adds a practice or
+     * reorders one.
+     */
+    public record WorkspaceStandings(
+            Map<Long, StandingSnapshot> byDeveloper, Map<String, List<Practice>> eligiblePracticesByGroup) {}
 
     /** One developer's latest run per claim, then only what the visibility policy lets the reader see. */
     private static List<Observation> latestVisible(List<Observation> observations, Set<UUID> visible) {
@@ -175,13 +171,9 @@ public class PracticeStandingService {
                 .toList();
     }
 
-    /**
-     * The practices review is admitted for in the workspace today, per group slug, each group's in catalog order:
-     * the same list whoever asks, so a reader's own evidence never adds a practice or reorders one.
-     */
-    public Map<String, List<Practice>> eligiblePracticesByGroup(Long workspaceId) {
+    private static Map<String, List<Practice>> catalogOrder(Eligibility eligibility) {
         Map<String, List<Practice>> byGroup = new LinkedHashMap<>();
-        eligibility(workspaceId).practices().stream()
+        eligibility.practices().stream()
                 .sorted(Comparator.comparingInt(Practice::getDisplayOrder).thenComparing(Practice::getName))
                 .forEach(practice -> {
                     PracticeGroup group = practice.getGroup();
@@ -400,7 +392,8 @@ public class PracticeStandingService {
      */
     public record StandingSnapshot(
             Map<String, PracticeStanding> practices, Map<String, List<String>> eligiblePracticesByGroup) {
-        static final StandingSnapshot EMPTY = new StandingSnapshot(Map.of(), Map.of());
+        /** The snapshot of someone nothing was read for: no practice at all. */
+        public static final StandingSnapshot EMPTY = new StandingSnapshot(Map.of(), Map.of());
 
         /**
          * One practice as the snapshot read it.

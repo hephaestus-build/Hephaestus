@@ -1,5 +1,6 @@
 import type {
 	PracticesAcrossWorkspace,
+	PracticesAcrossWorkspaceTiles,
 	WorkspaceGroupSplit,
 	WorkspacePracticeSplit,
 	WorkspaceSplit,
@@ -133,15 +134,9 @@ export const PACKAGING_GROUP: WorkspaceGroupSplit = group(
  * more than K developers, as CohortPrivacyPolicy requires, so it stands for K besides any reader.
  */
 export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
-	window: "DAYS_30",
 	minimumOthers: 3,
 	developersWithAStanding: 28,
 	readerCounted: true,
-	developersWithAStandingInWindow: 26,
-	yourPractices: 18,
-	reviewedWork: { yours: 17, middleLow: 11, middleHigh: 21 },
-	practicesGoingWell: { yours: 6, middleLow: 5, middleHigh: 9 },
-	practicesNeedingAttention: { yours: 4, middleLow: 2, middleHigh: 5 },
 	openFeedback: { yours: 3, middleLow: 1, middleHigh: 4 },
 	groups: [
 		group(ACTING, "MIXED", threeWay([6, 7, 7])),
@@ -155,14 +150,30 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	],
 };
 
-/** Four other developers with a standing: too few for any figure about the workspace, even a total. */
-export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
-	...ACROSS_WORKSPACE,
-	developersWithAStanding: undefined,
+/** The reader's figures over the last 30 days beside the middle half of 26 developers with a standing. */
+export const ACROSS_WORKSPACE_TILES: PracticesAcrossWorkspaceTiles = {
+	window: "DAYS_30",
+	minimumOthersForMiddleHalf: 6,
+	developersWithAStandingInWindow: 26,
+	yourPractices: 18,
+	reviewedWork: { yours: 17, middleLow: 11, middleHigh: 21 },
+	practicesGoingWell: { yours: 6, middleLow: 5, middleHigh: 9 },
+	practicesNeedingAttention: { yours: 4, middleLow: 2, middleHigh: 5 },
+};
+
+/** Too few developers with a standing in the window for a middle half or their total. */
+export const GATED_TILES: PracticesAcrossWorkspaceTiles = {
+	...ACROSS_WORKSPACE_TILES,
 	developersWithAStandingInWindow: undefined,
 	reviewedWork: { yours: 17 },
 	practicesGoingWell: { yours: 6 },
 	practicesNeedingAttention: { yours: 4 },
+};
+
+/** Four other developers with a standing: too few for any figure about the workspace, even a total. */
+export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
+	...ACROSS_WORKSPACE,
+	developersWithAStanding: undefined,
 	openFeedback: { yours: 3 },
 	groups: ACROSS_WORKSPACE.groups.map((each) => ({
 		...each,

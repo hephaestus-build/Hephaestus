@@ -39,6 +39,12 @@ public final class CohortPrivacyPolicy {
     /** K: the fewest developers other than the reader a shown count may stand for. */
     public static final int MINIMUM_OTHERS = 3;
 
+    /**
+     * The fewest developers other than the reader a middle half may be read over: twice K, so neither quarter
+     * outside the middle half can be one developer's value.
+     */
+    public static final int MINIMUM_OTHERS_FOR_MIDDLE_HALF = 2 * MINIMUM_OTHERS;
+
     private CohortPrivacyPolicy() {}
 
     /** Where one developer falls in a split: one of the three standings, or none yet. */
@@ -185,7 +191,7 @@ public final class CohortPrivacyPolicy {
 
     /**
      * The middle half of one figure across the developers counted, the reader's own value among them, or null when
-     * fewer than twice {@link #MINIMUM_OTHERS} others are counted. Only the quartiles leave, each interpolated
+     * fewer than {@link #MINIMUM_OTHERS_FOR_MIDDLE_HALF} others are counted. Only the quartiles leave, each interpolated
      * between the two values around it and rounded, so a quartile falls on one developer's value only where the
      * values around it agree: a minimum, a maximum or a count of developers at one value would single someone out.
      *
@@ -193,7 +199,7 @@ public final class CohortPrivacyPolicy {
      * @param others how many of {@code values} are other developers'
      */
     public static @Nullable MiddleHalf middleHalf(List<Integer> values, int others) {
-        if (others < 2 * MINIMUM_OTHERS) {
+        if (others < MINIMUM_OTHERS_FOR_MIDDLE_HALF) {
             return null;
         }
         List<Integer> sorted = values.stream().sorted().toList();

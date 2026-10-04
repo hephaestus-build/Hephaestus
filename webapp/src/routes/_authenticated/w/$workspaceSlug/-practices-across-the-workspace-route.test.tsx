@@ -3,10 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PracticesAcrossWorkspace } from "@/api/types.gen";
+import type { PracticesAcrossWorkspaceTiles } from "@/api/types.gen";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
-import { ACROSS_WORKSPACE } from "@/stories/practices-across-the-workspace-story-data";
+import {
+	ACROSS_WORKSPACE,
+	ACROSS_WORKSPACE_TILES,
+} from "@/stories/practices-across-the-workspace-story-data";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole app shell and its lazy modules.
@@ -16,8 +19,10 @@ const PAGE = "/w/acme/practices-across-the-workspace";
 const PROFILE = "/w/acme/practice-profile";
 const GROUP_OPEN = `${PAGE}?detail=%5B%22practice-group%3Areview-ready-work%22%5D`;
 
-const wire = (window: PracticesAcrossWorkspace["window"]): PracticesAcrossWorkspace => ({
-	...ACROSS_WORKSPACE,
+const tilesOf = (
+	window: PracticesAcrossWorkspaceTiles["window"],
+): PracticesAcrossWorkspaceTiles => ({
+	...ACROSS_WORKSPACE_TILES,
 	window,
 });
 
@@ -36,9 +41,12 @@ beforeEach(() => {
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json({ role: "MEMBER", userId: 1, userLogin: "ada", userName: "Ada" }),
 		),
-		http.get("*/workspaces/:workspaceSlug/practices/workspace-overview", ({ request }) => {
+		http.get("*/workspaces/:workspaceSlug/practices/workspace-overview", () =>
+			HttpResponse.json(ACROSS_WORKSPACE),
+		),
+		http.get("*/workspaces/:workspaceSlug/practices/workspace-overview/tiles", ({ request }) => {
 			const window = new URL(request.url).searchParams.get("window");
-			return HttpResponse.json(wire(window === "ALL_TIME" ? "ALL_TIME" : "DAYS_30"));
+			return HttpResponse.json(tilesOf(window === "ALL_TIME" ? "ALL_TIME" : "DAYS_30"));
 		}),
 	);
 });
@@ -49,6 +57,11 @@ afterEach(() => {
 
 const overviewReads = () =>
 	requests.filter((request) => request.url.pathname.endsWith("/practices/workspace-overview"));
+
+const tilesReads = () =>
+	requests.filter((request) =>
+		request.url.pathname.endsWith("/practices/workspace-overview/tiles"),
+	);
 
 /** The reader's own profile reads, which this page never makes: the profile makes them. */
 const profileReads = () =>
@@ -80,20 +93,24 @@ async function renderPage(path = PAGE) {
 describe("Practices across the workspace", () => {
 	it("reads the last 30 days by default and each other window as a request of its own", async () => {
 		const router = await renderPage();
-		expect(overviewReads().map((read) => read.url.searchParams.get("window"))).toStrictEqual([
-			"DAYS_30",
-		]);
+		await waitFor(() => {
+			expect(tilesReads().map((read) => read.url.searchParams.get("window"))).toStrictEqual([
+				"DAYS_30",
+			]);
+		});
 
 		const toolbar = screen.getByRole("toolbar", { name: "Time range" });
 		await userEvent.click(within(toolbar).getByRole("button", { name: "All time" }));
 
 		await waitFor(() => {
-			expect(overviewReads().map((read) => read.url.searchParams.get("window"))).toStrictEqual([
+			expect(tilesReads().map((read) => read.url.searchParams.get("window"))).toStrictEqual([
 				"DAYS_30",
 				"ALL_TIME",
 			]);
 		});
 		expect(router.state.location.search).toMatchObject({ window: "ALL_TIME" });
+		// The bars read no window, so a new window reads them no second time.
+		expect(overviewReads()).toHaveLength(1);
 	});
 
 	it("opens a group over the page with the group's bar and no standing of the reader's own", async () => {
@@ -188,7 +205,19 @@ describe("Practices across the workspace", () => {
 		);
 		renderRouteAtWithRouter(PAGE);
 
-		await screen.findByText("Could not load the workspace", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("We could not load the workspace", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("table", { name: "All practice groups" })).toBeNull();
+	});
+
+	it("keeps the group open when the tiles of a new window fail", async () => {
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practices/workspace-overview/tiles", () =>
+				HttpResponse.json({ title: "Internal Server Error" }, { status: 500 }),
+			),
+		);
+		renderRouteAtWithRouter(GROUP_OPEN);
+
+		await screen.findByText("We could not load the figures", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByRole("dialog", { name: "Packaging work for review" }, ROUTE_RENDER_WAIT);
 	});
 });
