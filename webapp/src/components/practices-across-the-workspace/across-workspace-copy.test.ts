@@ -65,13 +65,13 @@ describe("a split held back", () => {
 describe("the hints", () => {
 	it("names who the band is of once, with the count and window the response gives", () => {
 		expect(tilesHint(3, "DAYS_90", 41)).toBe(
-			"The typical range is the middle half of 41 developers with a standing in the last 90 days; your marker shows you. A tile compares you once at least 6 other developers have a standing in this window; until then it shows only your own value.",
+			"Except for open feedback, the typical range is the middle half of 41 developers with a standing in the last 90 days. Your marker shows you. These tiles compare you when at least 6 other developers have a standing in this range. Until then, they show only your own value.",
 		);
 	});
 
 	it("names no count the server held back", () => {
 		expect(tilesHint(3, "DAYS_30")).toMatch(
-			/^The typical range is the middle half of the developers here; /u,
+			/^Except for open feedback, the typical range is the middle half of the developers with a standing here\. /u,
 		);
 	});
 

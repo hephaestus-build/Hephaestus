@@ -33,7 +33,7 @@ export const Default: Story = {
 		// Where a figure comes from sits behind an info icon, so every tile keeps one height.
 		await expect(
 			canvas.getByRole("button", {
-				name: "About Open feedback: Feedback your Practice profile shows open right now, whatever the range.",
+				name: "About Open feedback: Feedback your Practice profile shows open right now, whatever the range; its typical range is the middle half of every developer in this workspace, reviewed or not.",
 			}),
 		).toBeVisible();
 		// Every tile explains itself the same way, so all four keep one height.

@@ -50,7 +50,7 @@ export const Default: Story = {
 		// The two rules, each where it applies, with the numbers the response carries.
 		await expect(
 			canvas.getByText(
-				"The typical range is the middle half of 28 developers with a standing in the last 30 days; your marker shows you. A tile compares you once at least 6 other developers have a standing in this window; until then it shows only your own value.",
+				"Except for open feedback, the typical range is the middle half of 28 developers with a standing in the last 30 days. Your marker shows you. These tiles compare you when at least 6 other developers have a standing in this range. Until then, they show only your own value.",
 			),
 		).toBeVisible();
 		await expect(
@@ -102,7 +102,8 @@ export const AllHeldBack: Story = {
 export const Withheld: Story = {
 	args: { state: { status: "ready", overview: GATED_WORKSPACE } },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText(/developers\s+with a standing/u)).toBeNull();
+		// No count of them, where the server held the total back.
+		await expect(canvas.queryByText(/\d+ developers\s+with a standing/u)).toBeNull();
 		await expect(
 			canvas.getAllByText("Needs more data before the workspace shows here."),
 		).toHaveLength(4);

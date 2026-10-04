@@ -59,8 +59,9 @@ export const PAGE_PURPOSE =
 	"See where your practices stand among the developers in this workspace, so you can choose what to work on next. Standings move with your next pieces of reviewed work; open a group to see your next step.";
 
 /**
- * The line under the tiles on when a tile compares: a middle half shows from twice K other
- * developers, so neither quarter outside it can be one developer's value.
+ * The line under the tiles on when the three tiles read over the range compare: a middle half shows
+ * from twice K other developers, so neither quarter outside it can be one developer's value. Open
+ * feedback counts every developer in the workspace now, so its own note names its reference group.
  */
 export function tilesHint(
 	minimumOthers: number,
@@ -70,9 +71,9 @@ export function tilesHint(
 	// No count where the server held the total back: a small total is a count of its own.
 	const of =
 		developersWithAStanding === undefined
-			? "the developers here"
+			? "the developers with a standing here"
 			: `${developerCount(developersWithAStanding)} with a standing ${windowPhrase(window)}`;
-	return `The typical range is the middle half of ${of}; your marker shows you. A tile compares you once at least ${2 * minimumOthers} other developers have a standing in this window; until then it shows only your own value.`;
+	return `Except for open feedback, the typical range is the middle half of ${of}. Your marker shows you. These tiles compare you when at least ${2 * minimumOthers} other developers have a standing in this range. Until then, they show only your own value.`;
 }
 
 /**
