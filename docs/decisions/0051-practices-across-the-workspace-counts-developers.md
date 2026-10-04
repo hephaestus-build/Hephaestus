@@ -64,10 +64,11 @@ whoever only has observations that did not apply or stayed undetermined is not o
   shown add up to one or two more developers with a standing than the group has. A practice therefore
   is withheld more often than its group.
 - The reviewed work, going well and needing attention tiles show the reader's own figure and the
-  middle half of the developers with a standing, the 25th to the 75th percentile interpolated and rounded, never a minimum, maximum, average or count at one
-  value, and only from six others, twice K. The open feedback tile counts per developer what their Practice
-  profile shows open now, by the profile's own rule, for the reader and for every eligible developer
-  alike whatever the window, so it never sets one moment beside a span; read in one pass.
+  middle half of the developers with a standing, the 25th to the 75th percentile interpolated and
+  rounded, never a minimum, maximum, average or count at one value, and only from six others, twice
+  K. The open feedback tile counts per developer what their Practice profile shows open now, by the
+  profile's own rule, for the reader and for every eligible developer alike whatever the window, so
+  it never sets one moment beside a span; read in one pass.
 - The page asks for no estimate first. Every group shows at once. A group opens over the page with
   its practices; the reader's own group and a practice open over it as the profile's own levels, so
   nothing on the page leaves for the Practice profile. The page reads the reader's standing over the

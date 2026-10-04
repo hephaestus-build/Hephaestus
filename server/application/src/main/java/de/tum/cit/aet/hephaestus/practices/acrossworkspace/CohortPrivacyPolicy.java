@@ -20,7 +20,8 @@ import org.jspecify.annotations.Nullable;
  * {@link Bucket}, read off their group standing or their practice standing. A split shows Needs attention, Mixed
  * feedback, Going well and none yet only when every one of the four holds enough; otherwise the whole split is
  * withheld, never a part of it, since the page states how many developers have a standing and a missing part would
- * be that total less the rest. Omit rather than show a zero. The reader's own standing is shown in every case, since it is theirs.
+ * be that total less the rest. Omit rather than show a zero. The reader's own standing is shown in every case,
+ * since it is theirs.
  *
  * <p>A group's standing is read off its practices, so its developers with a standing are everyone with a standing
  * in any of them, and its split and its practices' splits can be subtracted from each other: two practices of
