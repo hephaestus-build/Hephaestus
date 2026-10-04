@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -338,9 +339,10 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
                 .isEqualTo("SPLIT");
-        assertThat(shapes(readAs(reader, PracticesAcrossWorkspaceWindow.DAYS_30)))
-                .isEqualTo(shapes(readAs(reader, PracticesAcrossWorkspaceWindow.DAYS_90)))
-                .isEqualTo(shapes(readAs(reader, PracticesAcrossWorkspaceWindow.ALL_TIME)));
+        // Every count of every bar, the reader's marker on each, and the total the bars share, in each window.
+        assertThat(bars(readAs(reader, PracticesAcrossWorkspaceWindow.DAYS_30)))
+                .isEqualTo(bars(readAs(reader, PracticesAcrossWorkspaceWindow.DAYS_90)))
+                .isEqualTo(bars(readAs(reader, PracticesAcrossWorkspaceWindow.ALL_TIME)));
     }
 
     @Test
@@ -507,6 +509,11 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         } finally {
             CurrentScmIdentityHolder.clear();
         }
+    }
+
+    /** What the window must not move: every group and practice row whole, the shared total, and the marker's use. */
+    private static List<Object> bars(PracticesAcrossWorkspaceDTO page) {
+        return Arrays.asList(page.groups(), page.developersWithAStanding(), page.readerCounted());
     }
 
     /** Every group's split and its practices' names and splits: what reads the same whoever reads it. */
