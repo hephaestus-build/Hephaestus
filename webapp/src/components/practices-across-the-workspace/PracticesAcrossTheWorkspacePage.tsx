@@ -98,11 +98,15 @@ export function PracticesAcrossTheWorkspacePage({
 							openFeedback={overview?.openFeedback}
 							stale={stale}
 						/>
-						{/* The rule's lines, or lines in their place while the tiles load, so nothing moves. */}
-						{windowTiles === undefined ? (
-							<Skeleton className="h-8 w-full max-w-3xl" />
+						{/* The rule's lines, or lines in their place while the figures load, so nothing moves. */}
+						{windowTiles === undefined || overview === undefined ? (
+							<Skeleton className="h-12 w-full max-w-3xl" />
 						) : (
-							<p className="text-xs text-muted-foreground">{tilesHint(windowTiles)}</p>
+							<div className="max-w-3xl space-y-1 text-xs text-muted-foreground">
+								{tilesHint(windowTiles, overview.openFeedback).map((line) => (
+									<p key={line}>{line}</p>
+								))}
+							</div>
 						)}
 					</div>
 				) : (

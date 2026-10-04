@@ -1,4 +1,4 @@
-import type { PracticesAcrossWorkspaceTiles, WorkspaceSplit } from "@/api/types.gen";
+import type { PracticesAcrossWorkspaceTiles, WorkspaceSplit, WorkspaceTile } from "@/api/types.gen";
 import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "@/components/activity/activity-range";
 import type { FilterOption } from "@/components/common/FilterToggle";
 import { statusValues } from "@/components/common/status-def";
@@ -75,26 +75,51 @@ export const PAGE_PURPOSE =
  */
 export const OPEN_IN_YOUR_PROFILE = "Open in your Practice profile";
 
+/** "6 other developers", "1 other developer": who a threshold counts. */
+function otherDevelopers(count: number): string {
+	return count === 1 ? "1 other developer" : `${count} other developers`;
+}
+
 /**
- * The line under the tiles on when the three tiles read over the range compare, from the fewest
- * other developers the server reads a middle half over. Open feedback reads every developer the
- * page counts, reviewed or not, so the line names its group too. The tiles are the only figures
- * the window changes, so only this line names it.
+ * The lines under the tiles on how the typical range comes about and when it shows, built from the
+ * responses alone so they hold for every reply: the count and window of the developers sorted, or
+ * no count where the server held the total back, the threshold the server reads a middle half
+ * from, and whether open feedback, which reads every developer the page counts and no window, has
+ * a band of its own. The tiles are the only figures the window changes, so only these lines name
+ * it. One paragraph for the band, one for open feedback.
  */
-export function tilesHint({
-	minimumOthersForMiddleHalf,
-	window,
-	developersWithAStandingInWindow,
-}: Pick<
-	PracticesAcrossWorkspaceTiles,
-	"minimumOthersForMiddleHalf" | "window" | "developersWithAStandingInWindow"
->): string {
+export function tilesHint(
+	{
+		minimumOthersForMiddleHalf,
+		window,
+		developersWithAStandingInWindow,
+	}: Pick<
+		PracticesAcrossWorkspaceTiles,
+		"minimumOthersForMiddleHalf" | "window" | "developersWithAStandingInWindow"
+	>,
+	openFeedback: WorkspaceTile,
+): readonly [string, string] {
 	// No count where the server held the total back: a small total is a count of its own.
-	const of =
+	const sorted =
 		developersWithAStandingInWindow === undefined
-			? "the developers with a standing here"
-			: `${developerCount(developersWithAStandingInWindow)} with a standing ${windowPhrase(window)}`;
-	return `Except for open feedback, the typical range is the middle half of ${of}. Your marker shows you. These tiles compare you when at least ${minimumOthersForMiddleHalf} other developers have a standing in this range. Until then, they show only your own value. Open feedback counts what is open now, for all developers that this page counts.`;
+			? "the developers"
+			: `the ${developerCount(developersWithAStandingInWindow)}`;
+	const threshold = otherDevelopers(minimumOthersForMiddleHalf);
+	const has = minimumOthersForMiddleHalf === 1 ? "has" : "have";
+	const band = [
+		"The grey band is the typical range.",
+		`To find it, Hephaestus sorts ${sorted} with a standing ${windowPhrase(window)} by their value.`,
+		"The band covers the middle half: a quarter of them are below it, and a quarter are above it.",
+		"Your marker shows your value.",
+		`A tile shows the band only when at least ${threshold} ${has} a standing.`,
+	].join(" ");
+	const open = "Open feedback counts what is open now, for every developer that this page counts.";
+	return [
+		band,
+		openFeedback.middleLow === undefined
+			? `${open} Its band shows only when this page counts at least ${threshold}.`
+			: open,
+	];
 }
 
 /**

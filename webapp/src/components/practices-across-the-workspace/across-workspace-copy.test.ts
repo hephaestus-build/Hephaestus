@@ -87,22 +87,31 @@ describe("a split held back", () => {
 });
 
 describe("the hints", () => {
-	it("names who the band is of once, with the count and window the response gives", () => {
+	it("says how the typical range comes about, with the count and window the response gives", () => {
 		expect(
-			tilesHint({
-				minimumOthersForMiddleHalf: 6,
-				window: "DAYS_90",
-				developersWithAStandingInWindow: 41,
-			}),
-		).toBe(
-			"Except for open feedback, the typical range is the middle half of 41 developers with a standing in the last 90 days. Your marker shows you. These tiles compare you when at least 6 other developers have a standing in this range. Until then, they show only your own value. Open feedback counts what is open now, for all developers that this page counts.",
-		);
+			tilesHint(
+				{
+					minimumOthersForMiddleHalf: 6,
+					window: "DAYS_30",
+					developersWithAStandingInWindow: 41,
+				},
+				{ yours: 3, middleLow: 1, middleHigh: 4 },
+			),
+		).toStrictEqual([
+			"The grey band is the typical range. To find it, Hephaestus sorts the 41 developers with a standing in the last 30 days by their value. The band covers the middle half: a quarter of them are below it, and a quarter are above it. Your marker shows your value. A tile shows the band only when at least 6 other developers have a standing.",
+			"Open feedback counts what is open now, for every developer that this page counts.",
+		]);
 	});
 
 	it("names no count the server held back", () => {
-		expect(tilesHint({ minimumOthersForMiddleHalf: 6, window: "DAYS_30" })).toMatch(
-			/^Except for open feedback, the typical range is the middle half of the developers with a standing here\. /u,
+		const [band] = tilesHint(
+			{ minimumOthersForMiddleHalf: 6, window: "DAYS_30" },
+			{ yours: 3, middleLow: 1, middleHigh: 4 },
 		);
+		expect(band).toContain(
+			"To find it, Hephaestus sorts the developers with a standing in the last 30 days by their value.",
+		);
+		expect(band).not.toMatch(/\d+ developers? with a standing/u);
 	});
 
 	it("takes the part size from K", () => {

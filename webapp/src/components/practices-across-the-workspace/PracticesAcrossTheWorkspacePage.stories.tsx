@@ -52,7 +52,12 @@ export const Default: Story = {
 		// The two rules, each where it applies, with the numbers the response carries.
 		await expect(
 			canvas.getByText(
-				"Except for open feedback, the typical range is the middle half of 26 developers with a standing in the last 30 days. Your marker shows you. These tiles compare you when at least 6 other developers have a standing in this range. Until then, they show only your own value. Open feedback counts what is open now, for all developers that this page counts.",
+				"The grey band is the typical range. To find it, Hephaestus sorts the 26 developers with a standing in the last 30 days by their value. The band covers the middle half: a quarter of them are below it, and a quarter are above it. Your marker shows your value. A tile shows the band only when at least 6 other developers have a standing.",
+			),
+		).toBeVisible();
+		await expect(
+			canvas.getByText(
+				"Open feedback counts what is open now, for every developer that this page counts.",
 			),
 		).toBeVisible();
 		await expect(
