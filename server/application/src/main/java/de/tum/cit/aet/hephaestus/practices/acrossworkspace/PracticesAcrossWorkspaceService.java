@@ -81,13 +81,15 @@ public class PracticesAcrossWorkspaceService {
                 eligible,
                 reader,
                 practiceStandingService.getCurrentWorkspaceStandingSnapshots(workspaceId, read));
-        // The tiles: the evidence in the window alone.
-        Cohort inWindow = cohort(
-                groups,
-                eligible,
-                reader,
-                practiceStandingService.getWorkspaceStandingSnapshots(
-                        workspaceId, read, since == null ? Instant.EPOCH : since, now));
+        // The tiles: the evidence in the window alone. Over the profile's own look-back that is the read above.
+        Cohort inWindow = window.isProfileLookBack()
+                ? current
+                : cohort(
+                        groups,
+                        eligible,
+                        reader,
+                        practiceStandingService.getWorkspaceStandingSnapshots(
+                                workspaceId, read, since == null ? Instant.EPOCH : since, now));
         boolean readerEligible = reader != null && eligible.contains(reader);
 
         // The practices every reader sees, whatever their own evidence says.

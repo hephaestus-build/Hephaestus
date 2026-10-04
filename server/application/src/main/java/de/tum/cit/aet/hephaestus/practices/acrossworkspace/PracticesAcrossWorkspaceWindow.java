@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
+import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import org.jspecify.annotations.Nullable;
@@ -18,6 +19,11 @@ public enum PracticesAcrossWorkspaceWindow {
 
     PracticesAcrossWorkspaceWindow(@Nullable Integer days) {
         this.days = days;
+    }
+
+    /** Whether the window is the Practice profile's own look-back, the span the splits read already. */
+    public boolean isProfileLookBack() {
+        return days != null && days == PracticeStandingService.LOOKBACK_DAYS;
     }
 
     /** Where the window starts when it ends at {@code until}; null for {@link #ALL_TIME}, which has no start. */
