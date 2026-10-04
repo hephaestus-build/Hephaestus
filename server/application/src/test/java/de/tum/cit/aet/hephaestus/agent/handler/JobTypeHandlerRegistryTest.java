@@ -74,8 +74,7 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 mock(FeedbackResponseSuppressionFilter.class),
                 InContextDeliveryGateFixtures.gate(
                         practiceRepository, mock(ObservationRepository.class), mock(FeedbackLedgerRecorder.class)),
-                mock(ObservationRepository.class),
-                InContextDeliveryGateFixtures.noRecurrence());
+                mock(ObservationRepository.class));
     }
 
     private JobTypeHandler issueReviewHandler() {
@@ -97,8 +96,7 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 mock(FeedbackResponseSuppressionFilter.class),
                 mock(ObservationRepository.class),
                 mock(PracticeFeedbackDispatchService.class),
-                mock(FeedbackDeliveryService.class),
-                InContextDeliveryGateFixtures.noRecurrence());
+                mock(FeedbackDeliveryService.class));
     }
 
     private JobTypeHandler conversationReviewHandler() {

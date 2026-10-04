@@ -138,8 +138,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                         mock(FeedbackLedgerRecorder.class)),
                 InContextDeliveryGateFixtures.gate(
                         practiceRepository, mock(ObservationRepository.class), mock(FeedbackLedgerRecorder.class)),
-                observationRepository,
-                InContextDeliveryGateFixtures.noRecurrence());
+                observationRepository);
     }
 
     @Test
