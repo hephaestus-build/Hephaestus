@@ -39,7 +39,7 @@ public class FeedbackWithdrawalService {
                 .orElseThrow(() -> new EntityNotFoundException("Feedback", feedbackId.toString()));
         if (feedback.getChannel() != FeedbackChannel.IN_APP) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "You can withdraw only feedback on a developer's practice page.");
+                    HttpStatus.CONFLICT, "You can withdraw only feedback on a developer’s practice page.");
         }
         var active = withdrawalRepository.findActive(workspaceId, feedbackId);
         if (!withdrawn) {

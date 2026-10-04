@@ -122,40 +122,37 @@ public enum SignalStateReason {
      */
     public String describe() {
         return switch (this) {
-            case GATE_SKIPPED -> "The review settings of this workspace did not allow a review of this work.";
-            case COOLDOWN_ACTIVE -> "This work already had a review within the cooldown period of this workspace.";
+            case GATE_SKIPPED -> "This workspace’s review settings did not allow a review of this work.";
+            case COOLDOWN_ACTIVE -> "This work already had a review within this workspace’s cooldown period.";
             case REQUEST_COOLDOWN_ACTIVE -> "A review of this work was already requested a short time ago.";
             case REQUESTER_QUOTA_EXHAUSTED ->
-                "The person who asked used all of their review requests for this hour. The allowance fills again later.";
+                "The person who asked used all of their review requests for this hour. The allowance refills later.";
             case CONCURRENT_DUPLICATE -> "The same review was already running.";
             case COALESCED -> "A later change to this work replaced this update before a review started.";
             case OUT_OF_REVIEW_SCOPE ->
-                "The author, repository, or base branch is not in the review scope of this workspace.";
-            case BOT_AUTHOR ->
-                "The review skipped this work because the author is a bot. Practice reviews only judge people.";
-            case BOT_REVIEWER ->
-                "The review skipped this work because the reviewer is a bot. Practice reviews only judge people.";
+                "The author, repository, or base branch is outside this workspace’s review scope.";
+            case BOT_AUTHOR -> "The author is a bot, and practice reviews only judge people.";
+            case BOT_REVIEWER -> "The reviewer is a bot, and practice reviews only judge people.";
             case STALE_ROLLOUT_REVISION ->
-                "The review settings of this workspace changed before this review could start, so the review did not run.";
-            case WORKSPACE_INACTIVE ->
-                "The workspace was not active. The review tries again when the workspace is active.";
+                "This workspace’s review settings changed before the review could start, so it did not run.";
+            case WORKSPACE_INACTIVE -> "The workspace was not active. Hephaestus tries again when it is active.";
             case PRACTICES_DISABLED ->
-                "Practice reviews are turned off for this workspace. The review tries again when practice reviews are turned on.";
+                "Practice reviews are turned off for this workspace. Hephaestus tries again when they are turned on.";
             case NO_ACTIVE_PRACTICE -> "No practice was watching for this when it happened.";
             case PERSON_DATA_ERASED -> "A request to erase personal data blocks this review.";
             case MEMBER_AI_DECLINED -> "The developer has not allowed AI practice reviews of their work.";
             case REVIEW_MODEL_UNBOUND -> "No AI model is set up to run practice reviews in this workspace.";
             case PRACTICE_AUTONOMY_OFF -> "Every practice watching for this is turned off.";
             case BUDGET_EXHAUSTED ->
-                "The workspace used all of its AI budget. The review tries again when the budget refills.";
+                "The workspace used all of its AI budget. Hephaestus tries again when the budget refills.";
             case SUBJECT_UNLINKED ->
-                "The author is unknown or is not yet a member of this workspace. The review tries again when the author is a member.";
-            case MERGE_ACTOR_UNAVAILABLE -> "The review waits because it does not yet know who merged this work.";
+                "The author is unknown or not yet a member of this workspace. Hephaestus tries again when the author becomes a member.";
+            case MERGE_ACTOR_UNAVAILABLE -> "The review waits until Hephaestus knows who merged this work.";
             case MODEL_UNAVAILABLE -> "The AI model set up for practice reviews is no longer available.";
             case ARTIFACT_NOT_VISIBLE ->
-                "The provider does not show this work now. The review tries again if the provider shows it again.";
+                "The provider is not showing this work right now. Hephaestus tries again if it reappears.";
             case PENDING_DEADLINE_EXCEEDED -> "This work waited too long for a review to start.";
-            case ARTIFACT_GONE -> "This work no longer exists, or a review cannot cover it now.";
+            case ARTIFACT_GONE -> "This work no longer exists or can no longer be reviewed.";
         };
     }
 }

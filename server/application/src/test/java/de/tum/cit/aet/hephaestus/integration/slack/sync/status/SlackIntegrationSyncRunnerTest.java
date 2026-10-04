@@ -94,9 +94,7 @@ class SlackIntegrationSyncRunnerTest extends BaseUnitTest {
         assertThat(detail.unitsCompleted()).isEqualTo(3);
         assertThat(detail.unitsTotal()).isEqualTo(3);
         assertThat(detail.currentStep())
-                .isEqualTo("Hephaestus synced 1 of 3 channels. Hephaestus ingested 7 messages."
-                        + " The sync skipped 2 channels. The sync failed for 2 channels."
-                        + " The request budget ran out.");
+                .isEqualTo("Synced 1 of 3 channels · 7 messages · 2 skipped · 2 failed · request budget used up");
     }
 
     @Test
@@ -105,8 +103,6 @@ class SlackIntegrationSyncRunnerTest extends BaseUnitTest {
 
         SyncProgress detail = SlackIntegrationSyncRunner.progressDetail(summary);
 
-        assertThat(detail.currentStep())
-                .isEqualTo("Hephaestus synced 0 of 1 channel. Hephaestus ingested 1 message."
-                        + " The sync skipped 1 channel. The sync failed for 1 channel.");
+        assertThat(detail.currentStep()).isEqualTo("Synced 0 of 1 channel · 1 message · 1 skipped · 1 failed");
     }
 }

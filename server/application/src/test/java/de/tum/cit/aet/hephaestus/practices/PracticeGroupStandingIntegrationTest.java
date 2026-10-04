@@ -270,7 +270,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("DEVELOPING")
                     .jsonPath("$[0].guidance")
                     .isEqualTo(
-                            "Your recent feedback suggests that “PR Description Quality” is the next practice to work on.")
+                            "Your recent feedback points to “PR Description Quality” as the next practice to focus on.")
                     .jsonPath("$[0].guidanceSource")
                     .isEqualTo("RULE_BASED")
                     .jsonPath("$[0].direction")
@@ -351,7 +351,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("STRENGTH")
                     .jsonPath("$[0].guidance")
                     .isEqualTo(
-                            "Your recent feedback shows a strength in “PR Description Quality”. Continue to build on it.")
+                            "Your recent feedback shows a strength in “PR Description Quality”. Keep building on it.")
                     .jsonPath("$[0].direction")
                     .isEqualTo("INSUFFICIENT_EVIDENCE")
                     .jsonPath("$[0].observations.length()")
@@ -496,7 +496,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("MIXED")
                     .jsonPath("$[0].guidance")
                     .isEqualTo("Your recent feedback shows a strength in “Actionable Review Comments”. "
-                            + "Next, work on “PR Description Quality”.")
+                            + "Next, focus on “PR Description Quality”.")
                     .jsonPath("$[0].observations.length()")
                     .isEqualTo(2)
                     .jsonPath("$[0].observations[0].title")
@@ -575,7 +575,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .value(
                             String.class,
                             value -> MatcherAssert.assertThat(
-                                    value, Matchers.containsString("It shows both strengths and areas to improve.")));
+                                    value, Matchers.containsString("with both strengths and room to grow.")));
         }
 
         @Test

@@ -65,7 +65,7 @@ public class WorkspaceAlertEmailListener {
                     case CREDENTIAL_EXPIRING ->
                         "The GitLab token expires soon and Hephaestus could not rotate it. Replace it in workspace settings before it expires.";
                     case CREDENTIAL_REVOKED ->
-                        "The provider revoked this integration's credentials. Reconnect it in workspace settings.";
+                        "The provider revoked this integration’s credentials. Reconnect it in workspace settings.";
                     case PROVIDER_SUSPENDED ->
                         "The provider suspended this integration. Restore it at the provider to start the sync again.";
                 };

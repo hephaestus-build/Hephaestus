@@ -175,7 +175,7 @@ public class GitLabHistoricalBackfillService {
                             tally.itemsTotal(),
                             SyncProgress.ofResource(
                                     SyncPhase.REPOSITORIES,
-                                    "Backfilled " + target.repositoryNameWithOwner() + " — " + reposDone + " of "
+                                    "Backfilled " + target.repositoryNameWithOwner() + ": " + reposDone + " of "
                                             + reposTotal,
                                     target.repositoryNameWithOwner(),
                                     reposDone,

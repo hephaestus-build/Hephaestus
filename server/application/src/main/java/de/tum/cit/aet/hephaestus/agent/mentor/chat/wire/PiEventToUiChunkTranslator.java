@@ -23,7 +23,7 @@ public class PiEventToUiChunkTranslator {
     private static final Logger log = LoggerFactory.getLogger(PiEventToUiChunkTranslator.class);
 
     public static final String REPLY_LOST_IN_TRANSIT =
-            "Part of Heph's reply was lost before it reached you. Try again.";
+            "Part of Heph’s reply was lost before it reached you. Try again.";
 
     public List<UIMessageChunk> translate(JsonNode piEvent, TranslatorState state) {
         if (piEvent == null || !piEvent.path("type").isString()) {

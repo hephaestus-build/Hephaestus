@@ -242,7 +242,7 @@ public class GitHubDeletionSweepService {
                     handle,
                     done,
                     total,
-                    "Check of " + repository.getNameWithOwner() + " for deleted items",
+                    "Checking " + repository.getNameWithOwner() + " for deleted items",
                     repository.getNameWithOwner());
 
             SweepOutcome outcome;
@@ -283,11 +283,10 @@ public class GitHubDeletionSweepService {
     static String sweepSummary(SweepOutcome outcome) {
         if (outcome.total() == 0) {
             return outcome.skipped()
-                    ? "Checked for deleted items. Hephaestus could not verify some repositories."
-                    : "Checked for deleted items. Hephaestus found none.";
+                    ? "Checked for deleted items: some repositories could not be verified"
+                    : "Checked for deleted items: none found";
         }
-        return "Retired " + outcome.total()
-                + (outcome.total() == 1 ? " item that was deleted upstream." : " items that were deleted upstream.");
+        return "Retired " + outcome.total() + " item" + (outcome.total() == 1 ? "" : "s") + " deleted upstream";
     }
 
     private static void report(

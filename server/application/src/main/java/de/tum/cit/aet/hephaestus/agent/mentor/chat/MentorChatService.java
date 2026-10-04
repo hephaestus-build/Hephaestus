@@ -145,7 +145,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         } catch (RejectedExecutionException rejected) {
             log.warn("Mentor turn rejected by executor (probably shutting down): {}", rejected.getMessage());
             metrics.recordCompleted(MentorChatMetrics.Outcome.REJECTED);
-            channel.completeWithError("The mentor service is stopping. Try again in a moment.");
+            channel.completeWithError("Heph is not available because the server is stopping. Try again in a moment.");
         }
     }
 
@@ -179,7 +179,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         } catch (RejectedExecutionException rejected) {
             log.warn("Slack mentor turn rejected by executor: {}", rejected.getMessage());
             metrics.recordCompleted(MentorChatMetrics.Outcome.REJECTED);
-            channel.completeWithError("The mentor service is stopping. Try again in a moment.");
+            channel.completeWithError("Heph is not available because the server is stopping. Try again in a moment.");
         }
     }
 
@@ -883,7 +883,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             return PiEventToUiChunkTranslator.REPLY_LOST_IN_TRANSIT;
         }
         if (e instanceof LlmBudgetExhaustedException budget) {
-            return Objects.requireNonNullElse(budget.getMessage(), "The mentor budget is used up.");
+            return Objects.requireNonNullElse(budget.getMessage(), "The budget for Heph is used up.");
         }
         if (e instanceof LlmUnpricedUsageBlockedException unpriced) {
             return Objects.requireNonNullElse(
