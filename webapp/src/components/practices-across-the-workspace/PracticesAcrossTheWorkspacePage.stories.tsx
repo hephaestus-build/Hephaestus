@@ -52,7 +52,7 @@ export const Default: Story = {
 		// The two rules, each where it applies, with the numbers the response carries.
 		await expect(
 			canvas.getByText(
-				"The grey band is the typical range. To find it, Hephaestus sorts the 26 developers with a standing in the last 30 days by their value. The band covers the middle half: a quarter of them are below it, and a quarter are above it. Your marker shows your value. A tile shows the band only when at least 6 other developers have a standing.",
+				"The grey band is the typical range. To find it, Hephaestus takes the 26 developers in this workspace who have a standing in the last 30 days, and sorts them by their value. The band covers the middle half: a quarter of them are below it, and a quarter are above it. Your marker shows your value. A tile shows the band only when at least 6 other developers have a standing.",
 			),
 		).toBeVisible();
 		await expect(
@@ -131,7 +131,7 @@ export const Withheld: Story = {
 		await expect(canvas.queryByText(/\d+ developers\s+with a standing/u)).toBeNull();
 		await expect(
 			canvas.getByText(
-				/^The grey band is the typical range\. To find it, Hephaestus sorts the developers/u,
+				/^The grey band is the typical range\. To find it, Hephaestus takes the developers in this workspace/u,
 			),
 		).toBeVisible();
 		// Open feedback has no band either, and its line says when it would.

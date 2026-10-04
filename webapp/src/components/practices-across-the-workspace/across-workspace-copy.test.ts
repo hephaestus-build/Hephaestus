@@ -97,21 +97,31 @@ describe("the tiles' hint holds for every response", () => {
 
 	it("counts one developer in the singular", () => {
 		const [band] = tilesHint({ ...tiles, developersWithAStandingInWindow: 1 }, OPEN_WITH_A_BAND);
-		expect(band).toContain("Hephaestus sorts the 1 developer with a standing in the last 30 days");
+		expect(band).toContain(
+			"Hephaestus takes the 1 developer in this workspace who has a standing in the last 30 days",
+		);
 	});
 
 	it("names no count where the server held the total back, in every window", () => {
 		for (const window of ["DAYS_30", "DAYS_90", "ALL_TIME"] as const) {
 			const [band] = tilesHint({ minimumOthersForMiddleHalf: 6, window }, OPEN_WITH_A_BAND);
-			expect(band).toMatch(/Hephaestus sorts the developers with a standing /u);
+			expect(band).toMatch(
+				/Hephaestus takes the developers in this workspace who have a standing /u,
+			);
 			expect(band).not.toMatch(/\d+ developers? with a standing/u);
 		}
 	});
 
 	it.each([
-		["DAYS_30", "the 41 developers with a standing in the last 30 days by their value"],
-		["DAYS_90", "the 41 developers with a standing in the last 90 days by their value"],
-		["ALL_TIME", "the 41 developers with a standing so far by their value"],
+		[
+			"DAYS_30",
+			"the 41 developers in this workspace who have a standing in the last 30 days, and sorts them",
+		],
+		[
+			"DAYS_90",
+			"the 41 developers in this workspace who have a standing in the last 90 days, and sorts them",
+		],
+		["ALL_TIME", "the 41 developers in this workspace who have a standing so far, and sorts them"],
 	] as const)("names the %s window as the toggle does", (window, phrase) => {
 		const [band] = tilesHint({ ...tiles, window }, OPEN_WITH_A_BAND);
 		expect(band).toContain(phrase);
@@ -158,7 +168,7 @@ describe("the hints", () => {
 				{ yours: 3, middleLow: 1, middleHigh: 4 },
 			),
 		).toStrictEqual([
-			"The grey band is the typical range. To find it, Hephaestus sorts the 41 developers with a standing in the last 30 days by their value. The band covers the middle half: a quarter of them are below it, and a quarter are above it. Your marker shows your value. A tile shows the band only when at least 6 other developers have a standing.",
+			"The grey band is the typical range. To find it, Hephaestus takes the 41 developers in this workspace who have a standing in the last 30 days, and sorts them by their value. The band covers the middle half: a quarter of them are below it, and a quarter are above it. Your marker shows your value. A tile shows the band only when at least 6 other developers have a standing.",
 			"Open feedback counts what is open now, for every developer that this page counts.",
 		]);
 	});
@@ -169,7 +179,7 @@ describe("the hints", () => {
 			{ yours: 3, middleLow: 1, middleHigh: 4 },
 		);
 		expect(band).toContain(
-			"To find it, Hephaestus sorts the developers with a standing in the last 30 days by their value.",
+			"To find it, Hephaestus takes the developers in this workspace who have a standing in the last 30 days, and sorts them by their value.",
 		);
 		expect(band).not.toMatch(/\d+ developers? with a standing/u);
 	});

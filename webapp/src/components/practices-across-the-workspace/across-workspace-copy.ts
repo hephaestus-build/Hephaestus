@@ -108,7 +108,7 @@ export function tilesHint(
 	const has = minimumOthersForMiddleHalf === 1 ? "has" : "have";
 	const band = [
 		"The grey band is the typical range.",
-		`To find it, Hephaestus sorts ${sorted} with a standing ${windowPhrase(window)} by their value.`,
+		`To find it, Hephaestus takes ${sorted} in this workspace who ${developersWithAStandingInWindow === 1 ? "has" : "have"} a standing ${windowPhrase(window)}, and sorts them by their value.`,
 		"The band covers the middle half: a quarter of them are below it, and a quarter are above it.",
 		"Your marker shows your value.",
 		`A tile shows the band only when at least ${threshold} ${has} a standing.`,
