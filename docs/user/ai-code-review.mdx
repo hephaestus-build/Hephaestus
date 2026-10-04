@@ -4,8 +4,8 @@ title: Practice feedback
 description: How Hephaestus reviews pull requests, merge requests, and issues for engineering practices.
 ---
 
-Practice feedback concerns an observable way of working.
-Examples include changes that are easy to review, explanations of why they are necessary, and useful responses to reviewers.
+Use this guide to read practice feedback, respond to it, or request another review.
+Feedback can concern the scope of a change, its explanation, or your response to reviewers.
 
 When practice reviews are on, Hephaestus uses AI to review eligible work against your workspace practices.
 This work includes pull requests, merge requests, and issues. It records observations first, then
@@ -36,13 +36,19 @@ If the admin restores the observation, it counts again and Hephaestus removes an
 
 ## Answer or dispute feedback
 
-Hephaestus does not read reactions or replies on its comments. Every comment ends with **Answer or dispute it in Hephaestus**.
+Reactions and replies on GitHub or GitLab do not record your feedback response in Hephaestus. Every comment ends with **Answer or dispute it in Hephaestus**.
 This link opens your own reviews of that pull request, merge request, or issue. You can mark each observation behind the comment as **Addressed**, **Not applicable**, or **Disputed** there. Other people who follow the link see only their own reviews, with no information about you.
 
-1. Dispute an observation that you think is wrong.
-2. Explain why, for the workspace admins who read your explanation on the observation.
+1. Follow **Answer or dispute it in Hephaestus** on the comment.
+2. Open the observation you want to answer.
+3. Select **Addressed**, **Not applicable**, or **Disputed**.
+4. If you dispute it, explain why.
 
-While the dispute stands, a later review of the same work does not repeat the same point about the same place.
+For example, name the description section that contains information the review said was missing.
+Workspace admins can read your dispute explanation.
+
+While the dispute stands, later reviews withhold feedback about the same claim on the same work.
+**Not applicable** also withholds feedback about that claim.
 If you withdraw the dispute, a review can raise that point again. A dispute
 does not change the observation or your standing by itself.
 
@@ -57,15 +63,16 @@ Inline comments and earlier words from Heph stay unchanged.
 
 ## Pull requests and merge requests
 
-In this guide, **change request** means a GitHub pull request or a GitLab merge request.
+The sections below apply to GitHub pull requests and GitLab merge requests.
+For brevity, **change request** means either kind of work here.
 
 ### What happens
 
-1. You open an eligible change request.
-2. Hephaestus reads the change, its description, commits, and relevant discussion.
-3. It checks the work against the practices enabled for the workspace.
-4. It records observations for each applicable practice.
-5. It decides whether feedback would help.
+An eligible event, such as new work or a manual request, can start a review.
+Each practice determines which events it reviews.
+Hephaestus reads the change, its description, commits, and relevant discussion.
+It checks the work against workspace practices and records observations when the evidence supports an assessment.
+It then decides whether feedback would help.
 
 Useful feedback can become a summary or inline comment.
 A review can also stay private or deliberately send no feedback.
@@ -176,7 +183,7 @@ apply. Undetermined means the review read enough evidence but could not settle a
 Missing or failed required evidence stops assessment before the review creates an observation.
 This failure is never a claim about your work.
 
-A review of past work is quieter still: those never produce comments at all, by design.
+Catch-up reviews of past work never produce comments.
 
 ### What code is reviewed
 
@@ -207,10 +214,9 @@ They may have completed or attached sub-issues, or reopened and closed the issue
 The catalog practice that checks completion of checklists and sub-issues at closure therefore requires human review.
 Hephaestus does not review a workspace copy recorded as adopted from the catalog.
 
-A copy without that record counts as the workspace's own practice.
+If that practice still reviews your issues, ask a workspace admin to switch it off.
+A separately created workspace practice may not carry the catalog restriction.
 Earlier results stay unchanged.
-
-1. For a copy without that record, ask your workspace admin to switch it off.
 
 ## Practices and urgency
 
@@ -247,6 +253,8 @@ The workspace needs a Slack connection, your linked account, and Heph available 
 This setting controls delivery only. Reviews can still run.
 Their observations stay stored and may be visible to workspace admins.
 This setting does not delete earlier comments or observations.
+
+1. To allow new comments and reminders again, turn on **Comments and Slack reminders**.
 
 Each practice determines whether it reviews drafts.
 There is no single workspace switch.

@@ -4,6 +4,8 @@ title: Getting started
 description: Sign in, choose a workspace, and find the features available to you.
 ---
 
+Use this guide to sign in, complete first-visit setup, and choose your first task.
+
 ## Before you start
 
 You need:
@@ -20,16 +22,25 @@ The public TUM deployment is available at [hephaestus.build](https://hephaestus.
 2. Select **Sign in**.
 3. Choose an available provider.
 4. Complete its sign-in process.
-5. The first time you sign in, read the data notice.
-6. On your first sign-in, accept the terms.
-7. If a research question appears, answer it.
-8. On your first sign-in, select **Continue**.
-9. Select a workspace from the workspace switcher.
-10. If asked, choose which AI may handle your work: **In-house**, **Cloud**, or **No AI**.
-11. Connect the accounts that the workspace requires.
+
+If the sign-in setup page appears:
+
+1. Read **Terms and privacy**.
+2. To continue, select the box to accept the terms.
+3. If a research question appears, choose whether to take part.
+4. Select **Continue**.
+
+To enter your workspace:
+
+1. Select a workspace from the workspace switcher.
+2. If workspace setup appears, choose **In-house**, **Cloud**, or **No AI** when asked.
+3. On that setup page, connect the required accounts that are available.
+4. If you completed the setup page, select **Continue**.
+
+The workspace opens your **Practice profile** if practice reviews are on, or **Activity** otherwise.
 
 See [Your data in Hephaestus](./privacy#signing-in-and-choosing-research-participation) for the sign-in notice.
-You answer the AI question once. Your answer applies in all your workspaces.
+Your saved AI answer applies in all your workspaces on this deployment.
 **Your AI choice** in the sidebar or **User settings** lets you change it.
 After **Skip for now**, **Your AI choice** in the sidebar opens the setup page again.
 
@@ -55,8 +66,10 @@ The navigation changes with what is set up in your workspace.
 | **Administration** | Configure the workspace if you are a workspace admin. |
 | **User settings** | Manage [your AI choice, linked accounts, notifications, sessions, and account data](./user-settings). |
 
-Features without workspace setup do not appear in the navigation. See
-[Activity](./activity) for the two activity pages. On your Practice profile, the chip beside the title
+**Practice profile** appears only when practice reviews are on.
+**Heph** appears for workspace members even if its model is not set up yet.
+Its page explains why it cannot answer.
+[Activity](./activity) explains the two activity pages. On your Practice profile, the chip beside the title
 opens [the reviews that recorded something about your work](./practice-profile#reviews-of-your-work).
 
 ## Try the core workflows
@@ -65,20 +78,25 @@ opens [the reviews that recorded something about your work](./practice-profile#r
 
 When practice reviews are on, Hephaestus reviews eligible pull requests, merge requests, and issues in connected repositories.
 Feedback explains the practice, points to evidence, and suggests a next step. Feedback on the work waits for a workspace admin's approval by default. A completed review does not always produce a public comment.
-Workspace admins find the workspace-wide history under **Administration → Practices → Practice reviews → Work**.
-There is no separate Review activity page for members.
+
+1. Open **Practice profile**.
+2. If a review appears beside the title, select it to open reviews of your work.
+3. Open a review to read its observations.
+
+Before your first recorded result, the chip says **No review yet** and does not open a list.
 
 See [Practice feedback](./ai-code-review) for triggers, comment structure, and the personal comment-delivery setting.
 
 ### Chat with Heph
 
 1. Open **Heph**.
-2. Start a new chat.
-3. Ask about a piece of feedback or recent work.
+2. Enter a question, such as "What feedback did I get on my latest pull request?"
+3. Press Enter to send it.
 
 Heph can use your recent issues, pull or merge requests, and feedback as context.
 
-See [Chat with Heph](./ai-mentor) for examples and privacy notes.
+See [Chat with Heph](./ai-mentor) for examples and privacy limits.
+If you chose **No AI**, you can still use Activity and read existing feedback.
 
 ### Switch workspaces
 

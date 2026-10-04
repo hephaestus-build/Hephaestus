@@ -4,12 +4,9 @@ title: Chat with Heph
 description: Ask Heph about practice feedback and recent work in the web app or Slack.
 ---
 
-Heph is the conversational AI mentor in Hephaestus.
-It can use your recent work and practice feedback as context.
-You do not need to repeat all the details before you ask a question.
-
-Heph is one part of the Hephaestus platform.
-[Practice feedback](./ai-code-review) describes automated practice feedback on pull requests, merge requests, and issues.
+Ask Heph about your work, discuss feedback, or decide what to try on your next review.
+It can use permitted recent work and practice feedback as context.
+[Practice feedback](./ai-code-review) explains how that feedback is prepared.
 
 ## Who can use Heph
 
@@ -33,10 +30,14 @@ In the refusal cases above, it replies with the same reason and starts no conver
 ## Start a chat
 
 1. Open **Heph**.
-2. Enter a question or describe what you want to think about.
+2. Enter a specific question, such as "What feedback did I get on my latest pull request?"
 3. Press Enter to send it.
-4. Continue the conversation.
-5. To start a separate thread, select **New chat**.
+4. Ask a follow-up question if you need more detail.
+
+To discuss different work:
+
+1. Select **New chat**.
+2. Enter your question.
 
 Shift+Enter starts a new line.
 Heph's first reply after a quiet period can take longer while it starts up.
@@ -45,9 +46,50 @@ Previous chats appear in the Heph sidebar.
 
 1. To continue a previous chat, select its thread.
 
+## Questions to try
+
+- "What feedback did I get on my latest pull request?"
+- "I disagree with this comment. Can we work through it?"
+- "Which recent change would be useful to reflect on?"
+- "What could I try differently on my next review?"
+- "Summarize what we decided in this conversation."
+
+For example, ask why a review raised a concern before you decide whether to change the work.
+If the evidence is wrong, use the response controls in Hephaestus to dispute the observation.
+A chat alone does not record a formal dispute.
+
+## Check the answer
+
+Heph can misunderstand your work or repeat an incorrect practice observation.
+Its answers are suggestions, not decisions.
+
+If an answer does not match the work:
+
+1. State what looks wrong.
+2. Point Heph to the relevant comment, line, or explanation.
+3. Ask it to reconsider with that evidence.
+
+The developer and human reviewers stay responsible for decisions about the work.
+
+## Use Heph in Slack
+
+To chat in Slack, your workspace needs a Slack connection and your linked Slack account.
+
+1. Open a direct message to Heph in that Slack workspace.
+2. Send a question about your work or feedback.
+
+Slack direct messages and web-app chats have separate conversation histories.
+
+Workspace admins can separately enable monitored channels as context.
+Monitoring starts only after Hephaestus posts a visible announcement.
+Individual privacy controls apply.
+[Your data in Hephaestus](./privacy.mdx#your-choices-and-right-to-object) explains the Slack privacy controls and what they do not erase.
+
 ## What Heph can use as context
 
-Heph's context depends on your workspace configuration.
+Heph does not have a complete or live view of your project.
+Check current status on GitHub or GitLab before you act on its answer.
+Its context depends on your workspace configuration.
 It can include the sources below.
 
 ### Recent work
@@ -134,39 +176,3 @@ It can show relevant feedback as a separate part of its reply.
 That feedback counts as delivered only when Heph shows it.
 A completed turn without confirmation of display leaves delivery unconfirmed.
 That feedback does not count as delivered, and Hephaestus does not prepare it again.
-
-## Questions to try
-
-- "What feedback did I get on my latest pull request?"
-- "I disagree with this comment. Can we work through it?"
-- "Which recent change would be useful to reflect on?"
-- "What could I try differently on my next review?"
-- "Summarize what we decided in this conversation."
-
-You do not need a template or a fixed session.
-
-1. Ask one specific question.
-2. Continue the conversation where it is useful.
-
-## Check the answer
-
-Heph can misunderstand your work or repeat an incorrect practice observation.
-Its answers are suggestions, not decisions.
-
-If an answer does not match the work:
-
-1. State what looks wrong.
-2. Point Heph to the relevant comment, line, or explanation.
-3. Ask it to reconsider with that evidence.
-
-The developer and human reviewers stay responsible for decisions about the work.
-
-## Use Heph in Slack
-
-When a workspace admin connects Slack, you can send Heph a direct message.
-Slack direct messages and web-app chats have separate conversation histories.
-
-Workspace admins can separately enable monitored channels as context.
-Monitoring starts only after Hephaestus posts a visible announcement.
-Individual privacy controls apply.
-[Your data in Hephaestus](./privacy.mdx#your-choices-and-right-to-object) explains the Slack privacy controls and what they do not erase.

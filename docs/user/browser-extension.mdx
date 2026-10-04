@@ -4,11 +4,11 @@ title: Chrome extension
 description: See practice reviews in the GitHub or GitLab page for the pull request, merge request, or issue you view.
 ---
 
-The Hephaestus Chrome extension puts a **practice review** in the pull request, merge request, or issue page open in your tab.
-It appears after the description.
-It shows comments Hephaestus posted there for you, links to them, the review time, and conclusions about your work.
+Use the Chrome extension to check practice reviews without leaving a GitHub or GitLab work page.
+It shows links to comments posted for you, your observations, and the latest review time.
+It does not show feedback text.
 
-**Your feedback on this work** opens the same records in the app, with each earlier review of the work.
+**Open in Hephaestus** opens your records in the app, including earlier reviews of the work.
 Workspace admins can also reach everyone's records in **Practice reviews**.
 The extension supplies context, not another feedback destination.
 Feedback still appears on the work, on your [Practice profile](./practice-profile), and in Heph.
@@ -32,11 +32,20 @@ The package method requires Chrome developer mode.
 
 1. If you cannot see the Hephaestus icon, pin it from Chrome's puzzle-piece menu.
 2. Select the Hephaestus toolbar icon to open extension settings.
-3. For the hosted service at `hephaestus.build`, select **Continue with Hephaestus**.
-4. For the hosted service, allow Chrome's request for extension access to that address.
-5. For your organization's own Hephaestus instead, open **Use a self-hosted instance**.
-6. For a self-hosted instance, enter its HTTPS address.
-7. Choose your usual sign-in provider.
+
+For `hephaestus.build`:
+
+1. Select **Continue with Hephaestus**.
+2. Allow Chrome's request for extension access to that address.
+3. Choose your usual sign-in provider.
+
+For your organization's own instance:
+
+1. Open **Use a self-hosted instance**.
+2. Enter its HTTPS address.
+3. Select **Connect**.
+4. Allow Chrome's request for access to that address.
+5. Choose your usual sign-in provider.
 
 If the settings page reports an incomplete account step:
 
@@ -102,9 +111,9 @@ It follows the page's appearance between light and dark modes, including GitHub'
 
 ### What the report shows
 
-The expanded report is one flat list, with no further expansion controls:
+The expanded report shows:
 
-- **Your comments.** Each row represents a comment Hephaestus posted for you on this work. The summary comment or file and lines link to the comment on the page. You read, answer, and resolve it there. The report never repeats the text. Below the link, it shows practices and delivery time.
+- **Your comments.** Each row represents a comment Hephaestus posted for you on this work. The summary comment or file and lines link to the comment on the page. You read the comment there. To answer or dispute its observations, follow its Hephaestus link. The report never repeats the text. Below the link, it shows practices and delivery time.
 - **Your observations** show review conclusions about your work, one row per observation. Each names the practice, outcome, severity for not met, and a one-sentence summary. Outcomes are met, not met, not applicable, or undetermined. Observations from before a practice or work change say they are no longer current. The first five appear, with the rest on request.
 - **When and where the rest is.** The report shows the exact latest review time and commit, if known. **Open in Hephaestus** opens your feedback and observations on the work.
 
@@ -144,7 +153,7 @@ The same button, or a list filter or page change, closes it.
 
 ## Acting on what you see
 
-You read in the report.
+You can read observations and open comment links in the report.
 A review request is the only change available from the page.
 It always requires confirmation in a separate small Hephaestus window that the page cannot cover or access.
 

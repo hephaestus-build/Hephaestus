@@ -4,47 +4,42 @@ title: User settings
 description: Manage your AI choice, connected accounts, notifications, sessions, and account data.
 ---
 
-1. Open **User settings** at the bottom of the sidebar.
+Use User settings to change your AI choice, connect accounts, control notifications, or sign out another device.
+These settings apply to your account, not to one workspace.
 
-These settings belong to your account.
-Workspace administration is separate.
+1. Select **User settings** at the bottom of the sidebar.
+2. Open the section for the task you want to complete.
 
 ## Your AI choice
 
-A workspace can require setup on your first visit, after you already have membership.
-The setup page has two parts: your AI choice and any Slack or Outline accounts the workspace requires.
-Setup neither approves nor creates membership.
+Your AI choice sets which models may handle your work and Heph requests across this instance.
+It does not select a specific model or grant workspace membership.
+A new workspace can still ask you to connect accounts that it requires.
+**Cloud** permits In-house models too.
+**In-house** does not permit Cloud models.
+Hephaestus never changes your answer to allow more AI processing.
 
-You answer the AI question once across all workspaces on this Hephaestus deployment.
-Another workspace never asks it again.
-Its setup page appears only if it requires an account you have not connected.
-Your answer is a boundary, not a model selection.
-Anything stricter also qualifies, and nothing switches you to a less strict answer.
+Choose the boundary that applies to your work:
 
-The cards compare three answers on the same four rows:
+| Answer | What it allows |
+| --- | --- |
+| **In-house** | Only models declared as operated by your organization |
+| **Cloud** | In-house models and models declared as operated by a provider |
+| **No AI** | No new practice reviews about you, Heph requests, or feedback delivery |
 
-| | **In-house** | **Cloud** | **No AI** |
-| --- | --- | --- | --- |
-| **AI help** | Feedback and Heph | Feedback and Heph | No new feedback or Heph replies |
-| **Models** | Only models your organization runs, usually smaller models | In-house models plus cloud models, usually the strongest available | None |
-| **Speed** | Your organization's capacity can make replies slower | More capacity, usually faster | Not applicable |
-| **Sent to** | Only systems your organization runs | Also a cloud provider your organization configured. Its agreement sets retention and access. | Nowhere. Sync and stored work continue. |
+**No AI** does not stop source sync or remove stored work.
+The cards also show model and speed information, but these are not guarantees.
 
-Each workspace sets up its own models within these answers.
 If no model meets an answer in the current workspace, its card says *not set up here yet*.
-Nothing runs for you for that purpose in that workspace.
-Hephaestus never switches you to another answer.
+No AI request starts for that purpose in that workspace.
 
-1. Wait for a workspace owner to add a model, or change your answer.
+You can keep that answer while a workspace owner adds a model.
+You do not need to permit Cloud processing to complete setup.
 
-"Set up" describes configuration, not service health or a speed guarantee.
-In-house models depend on your organization's capacity and storage policies.
-Cloud permission does not guarantee better models or faster replies.
+"Set up" describes configuration, not service health.
+Model size, speed, retention, and access depend on the service your organization uses.
 A model mark names its maker, not its operator.
 For example, a private endpoint does not automatically make an OpenAI model served by Azure in-house.
-
-The Logos mark names the Logos service, not its operator.
-An organization can run Logos itself or use a provider-operated deployment.
 
 1. Ask a workspace owner who operates the deployment and what terms apply to your work.
 
@@ -52,25 +47,19 @@ In a workspace, each answer's card shows the first model for a new request, its 
 If more models are ready, the card shows their count.
 Below the cards, a list names each model for your selected answer with its declared data use.
 User settings cards show no model or service.
-Your answer applies to each workspace, and each can use a different service.
 
-On the first visit:
-
-1. Choose an answer.
-2. Connect any required accounts that are available.
-3. Select **Continue**.
-
-No answer starts selected.
-On a return visit, the button reads **Save**.
-You can choose any answer, including one no workspace has set up yet.
-Model additions, removals, or new declarations never require another answer.
-Your answer stays in force, and Hephaestus checks it on each request.
-
-To change your answer at any time:
+To change your answer:
 
 1. Open **Your AI choice** in a workspace sidebar or **User settings**.
+2. Select **In-house**, **Cloud**, or **No AI**.
+3. Select **Save**.
 
-The workspace page also shows its account links and whether a model there meets your answer.
+On your first workspace setup, connect any required accounts that are available before you select **Continue**.
+
+No answer starts selected on your first visit.
+You can choose any answer, including one no workspace has set up yet.
+Hephaestus checks your saved answer on each request, even if workspace models change.
+
 Existing feedback and earlier Heph conversations stay readable.
 With **No AI**, no new practice reviews about you, Heph requests, or feedback delivery start.
 Hephaestus cannot recall requests already sent.
@@ -112,7 +101,10 @@ It helps Hephaestus identify your work on that service.
 It grants neither workspace membership nor AI permission.
 You cannot unlink your last sign-in account.
 
-1. Link the sign-in and project accounts you use.
+1. Under **Connected Accounts**, choose the service you want to link.
+2. Complete that service's sign-in process.
+
+For example, link the Slack account from the workspace where you want to send Heph direct messages.
 
 ## Slack
 
@@ -129,11 +121,19 @@ It does not remove your messages from Slack.
 
 This stops new collection and deletes already collected channel-message data.
 
+1. To allow new collection again, turn on **Use my new channel messages**.
+
+This does not restore deleted data.
+
 ## Practice feedback
 
 **Comments and Slack reminders** controls new feedback comments on work you author and reminders about feedback prepared for Heph conversations.
 Disabling it does not stop reviews or remove existing feedback.
 Your Practice profile stays available.
+
+1. To stop new comments and reminders, turn off **Comments and Slack reminders**.
+2. To allow them again, turn it on.
+
 A Slack reminder is a direct message, at most once in 24 hours.
 It requires a connected Slack workspace and linked Slack account.
 It contains no feedback text.
@@ -159,7 +159,10 @@ AI choices and account links do not change this answer.
 Essential sign-in storage remains necessary.
 [Your data in Hephaestus](./privacy) gives the data notice and retention policy.
 
-1. Choose whether to allow optional browser analytics and error monitoring.
+1. Select **Change cookie choices**.
+2. Choose whether to allow optional browser error reports.
+
+This section appears only if the instance offers optional error reports.
 
 ## Active Sessions
 
@@ -186,10 +189,12 @@ To export account data:
 1. Under **Export my data**, select **Request export**.
 2. If preparation fails, select **Retry export**.
 3. Wait until the export is ready.
-4. Download the JSON file.
+4. Select **Download** to save the JSON file.
 5. Keep the downloaded file private.
 
-An export contains personal data, not an instance backup.
+The download expires 48 hours after preparation.
+The export contains account data, not all records about your work.
+[Your data in Hephaestus](./privacy#get-a-copy-of-your-data) explains how to request additional records.
 
 **CAUTION:** **Delete account** disables your account and leads to permanent deletion after a cooldown of about 48 hours.
 You cannot undo the request here.
