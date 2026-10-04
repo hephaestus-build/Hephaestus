@@ -96,6 +96,8 @@ function PracticesAcrossTheWorkspace() {
 	});
 	const stack = parseDetailStack(detail, LEVEL_KINDS);
 	const stackControls = useDetailStack(stack, { levelParams: LEVEL_PARAMS });
+	// Typed by this page's search, so a misspelt key does not compile.
+	const setView = (view: Partial<z.infer<typeof searchSchema>>) => stackControls.setView(view);
 	const openGroupSlug = stack.find((entry) => entry.kind === "practice-group")?.id;
 	const ownGroupSlug = stack.find((entry) => entry.kind === "own-group")?.id;
 	const openPracticeSlug = stack.find((entry) => entry.kind === "practice")?.id;
@@ -166,7 +168,7 @@ function PracticesAcrossTheWorkspace() {
 			<PracticesAcrossTheWorkspacePage
 				state={state}
 				window={window}
-				onWindowChange={(next) => stackControls.setView({ window: next })}
+				onWindowChange={(next) => setView({ window: next })}
 				openGroupSlug={openGroupSlug}
 				onOpenGroup={(groupSlug) => stackControls.open({ kind: "practice-group", id: groupSlug })}
 			/>
@@ -191,7 +193,7 @@ function PracticesAcrossTheWorkspace() {
 								skeletonRows={REVIEW_RUN_PAGE_SIZE}
 								onOpenGroup={group && (() => stackControls.close(level.depth))}
 								tab={practiceTab}
-								onTabChange={(tab) => stackControls.setView({ practiceTab: tab })}
+								onTabChange={(tab) => setView({ practiceTab: tab })}
 								observations={{
 									onRespond: readOnly ? undefined : practiceDetail.respond,
 									pendingResponses: practiceDetail.pendingResponses,
