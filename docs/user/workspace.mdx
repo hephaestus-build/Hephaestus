@@ -4,9 +4,10 @@ title: Workspace basics
 description: Understand how workspaces separate repositories, members, practices, integrations, and settings.
 ---
 
-A workspace contains repositories, members, teams, a practice catalog, integrations, and settings for one group.
-A Hephaestus deployment can host multiple workspaces.
-A person can belong to several.
+Use this guide to switch workspaces or resolve missing workspace content.
+A workspace contains one team's repositories, members, practices, integrations, and settings.
+You can belong to several workspaces on one instance.
+Creation and connection tasks below require the applicable administrator permissions.
 
 1. Use the workspace switcher at the top of the sidebar to select an accessible workspace.
 
@@ -104,11 +105,12 @@ For a missing repository:
 
 1. Check the GitHub App installation or monitored repository list, as applicable to the connection.
 
-For a repository or Slack channel sync error:
+For a sync error, ask a workspace admin to check the affected connection.
+If you are a workspace admin:
 
-1. For a repository, open **Administration → Integrations → GitHub/GitLab → Manage repositories**.
-2. For a Slack channel, open **Administration → Integrations → Slack**.
-3. Check the affected resource's last error.
+1. For repository errors, open **Administration → Integrations → GitHub/GitLab → Manage repositories**.
+2. For Slack errors instead, open **Administration → Integrations → Slack**.
+3. Read the affected resource's last error.
 4. Check its access in the connected service.
 5. Run a new sync.
 
@@ -128,7 +130,8 @@ For a missing Practice profile:
 
 ## Your AI choice
 
-Your choice applies across all your workspaces.
+Your AI choice applies across all your workspaces on this instance.
+Workspace model settings do not change your answer.
 [User settings](./user-settings#your-ai-choice) explains **In-house**, **Cloud**, **No AI**, and the account links required during first-visit setup.
 
 ## GitLab token alerts
@@ -139,7 +142,7 @@ The connection page shows the expiry date or **no expiry**.
 1. If rotation fails or GitLab refuses the token, replace it in workspace integration settings.
 
 Your repositories and synced work stay.
-Owners and administrators can enable **Workspace alerts** email in notification settings.
+Owners and administrators can enable **Workspace connection alerts** email in notification settings.
 It reports tokens that need replacement and recovery after rotation or replacement.
 Repeated checks of the same problem do not send duplicate alerts.
 GitHub App tokens renew automatically.

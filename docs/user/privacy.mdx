@@ -8,8 +8,15 @@ Hephaestus reads connected project work to give you practice feedback and help y
 **Hephaestus can process your work even if you have never signed in.**
 
 **Privacy** in the app footer gives your instance's responsible organization, privacy contact, legal bases, providers, and data locations.
-This guide explains the product.
-That notice covers your deployment.
+This page explains product behavior and your controls.
+Your instance's notice gives the legal and provider details for your deployment.
+
+For a specific task:
+
+- [Change your AI choice](#your-ai-choice).
+- [Stop comments or control Slack messages](#your-choices-and-right-to-object).
+- [Get a copy of your data](#get-a-copy-of-your-data).
+- [Delete your account or request wider erasure](#delete-your-account-or-request-wider-erasure).
 
 1. Open **Privacy** in the app footer.
 2. If the notice or contact is missing, ask the organization that runs your instance.
@@ -106,8 +113,9 @@ Your choice does not remove that content or change their choices or model routes
 Hephaestus checks observation and feedback history scoped to you separately against your AI choice.
 
 You answer once, across all your workspaces on this deployment.
-Anything stricter than your answer also qualifies.
-Nothing switches you to a less strict answer.
+**Cloud** permits In-house models too.
+**In-house** does not permit Cloud models.
+Hephaestus never changes your answer to allow more AI processing.
 New workspace models do not require another answer.
 This choice is separate from research participation and account links.
 
@@ -199,7 +207,8 @@ Your instance's notice also explains how to complain to a supervisory authority.
 3. Give a reason for workspace admins to read.
 
 The page shows your own reviews of that work.
-A standing dispute withholds the same point in later reviews of the same work, except for a committed secret.
+A standing dispute withholds feedback about the same claim in later reviews of the same work.
+**Not applicable** also withholds feedback about that claim.
 Withdrawal of the dispute allows that point again.
 Reactions or replies on GitHub or GitLab do not enter this process.
 
@@ -247,6 +256,10 @@ You do not need a Hephaestus account for this procedure.
 
 ## Delete your account or request wider erasure
 
+**CAUTION:** Account deletion disables your account immediately and leads to permanent cleanup after the cooldown.
+There is no self-service undo.
+Do not delete your account to leave one workspace or sign out a device.
+
 1. Open **User settings → Danger Zone → Delete account**.
 2. Select **Delete**.
 3. Follow the confirmation prompt.
@@ -277,11 +290,10 @@ The operator must verify which records belong to you.
 Names, logins, and email addresses are not matching keys.
 Correction or removal of posted feedback requires a separate operator request, with no guarantee of success.
 
-The operator previews exact rows and provider locations, then runs an erasure job with a completion record.
-A change of scope requires a new preview.
-The job stops affected reviews, waits for worker evidence removal, and clears affected hidden Heph memory.
-A failed step or offline worker requires a resume.
-It is not completed erasure.
+The operator confirms the scope before erasure.
+Hephaestus records completion.
+Erasure stops affected reviews and removes their working evidence and affected hidden Heph memory.
+If a step fails or a worker is offline, the request stays incomplete until the operator resumes it.
 
 Minimal exact native identity keys stay to prevent renewed product processing.
 Source sync may still mirror upstream records.
@@ -324,6 +336,6 @@ The sections above describe account and export timing.
 - **Logs, support bundles, and backups:** container logs rotate by size, not age. The operator controls support-bundle and backup retention. These copies do not support immediate selective erasure. The operator can explain expiry and treatment of erased data after a restore.
 - **AI-provider copies and posted feedback:** provider policies apply. Completed AI requests cannot be recalled. Posted feedback follows the separate removal process above.
 
-The person-data upgrade resets hidden Heph runtime memory once because old copies cannot be safely attributed.
-Visible conversations, titles, and times stay, but you may need to repeat context.
-This reset is separate from an erasure request.
+The upgrade that introduced person-data controls reset hidden Heph memory once.
+Visible conversations, titles, and times stayed, but you may need to repeat context from before that upgrade.
+This historical reset is separate from an erasure request.

@@ -4,7 +4,7 @@ title: Chrome extension privacy
 description: What the Hephaestus Chrome extension reads, sends, and stores, and how to control it.
 ---
 
-The Hephaestus Chrome extension shows the practice review of the GitHub or GitLab work open in your tab, in its page.
+This page explains what the Chrome extension sends to Hephaestus and how to control that access.
 You choose the Hephaestus instance that receives requests and each provider site where the extension may run.
 
 The default instance is [hephaestus.build](https://hephaestus.build).
@@ -13,6 +13,7 @@ If you connect to another instance, its operator receives requests instead.
 This page describes extension behavior across instances.
 
 1. Before you connect to an instance, read its Privacy notice.
+2. Follow [Connect it to your Hephaestus](./browser-extension#connect-it-to-your-hephaestus) to set up the extension.
 
 ## What it reads and sends
 
@@ -77,7 +78,9 @@ Optional academic research participation does not authorize collection or reuse 
 
 ## Your controls and privacy requests
 
-Each provider site's access can be removed in extension settings.
+1. To stop the extension on a provider site, remove that site's access in extension settings.
+2. To end the extension session, select **Sign out** in extension settings.
+
 Sign-out clears credentials and open review views and asks the instance to revoke the session.
 If the instance is unreachable, local sign-out still completes.
 
