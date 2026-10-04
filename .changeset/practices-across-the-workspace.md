@@ -2,7 +2,7 @@
 "hephaestus": minor
 ---
 
-Developers can open **Across the workspace** under **Practice profile** in the sidebar. The page shows where the developers in the workspace stand in each practice group. It counts developers and never names one. **You** marks your own part of each bar.
+Developers can open **Across the workspace** under **Practice profile** in the sidebar. The page shows where the developers in the workspace stand in each practice group. It counts developers and never names one. **You** marks your own part of each bar that shows its parts.
 
 Each bar counts every developer by the standing that their Practice profile shows now. Thus, your marker always agrees with your profile. A bar shows its parts only when each part holds at least four developers. Thus, each part stands for at least three other developers, whoever reads it, and every reader sees the same bars. A bar is also held back if a comparison with its group, or of the groups together, would single out one to three developers. A held back bar shows at most how many developers it counts, with **Split held back** under it.
 
