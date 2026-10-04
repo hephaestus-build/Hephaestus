@@ -10,12 +10,7 @@ import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { DrawerBody } from "@/components/ui/drawer";
 import { useRevealedRows } from "@/hooks/use-revealed-rows";
 
-import {
-	GO_TO_YOUR_PROFILE,
-	practicesHint,
-	type SplitContext,
-	VIEW_IN_YOUR_PROFILE,
-} from "./across-workspace-copy";
+import { OPEN_IN_YOUR_PROFILE, practicesHint, type SplitContext } from "./across-workspace-copy";
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 import { LevelSplit, SplitLegend } from "./WorkspaceSplitBar";
 
@@ -77,10 +72,10 @@ export function WorkspaceGroupLevel({
 					group && (
 						<InlineLink
 							onClick={onGoToProfile}
-							aria-label={`${GO_TO_YOUR_PROFILE}: ${group.groupName}`}
+							aria-label={`${OPEN_IN_YOUR_PROFILE} ${group.groupName}`}
 							className="inline-flex items-center gap-1 self-start font-medium"
 						>
-							{GO_TO_YOUR_PROFILE}
+							{OPEN_IN_YOUR_PROFILE}
 							<ArrowRightIcon className="size-3.5 shrink-0" aria-hidden />
 						</InlineLink>
 					)
@@ -146,7 +141,7 @@ function GroupPractices({
 					description: "Once your workspace reviews a practice in this group, it appears here.",
 				}}
 				rowLink={(row) => ({
-					text: VIEW_IN_YOUR_PROFILE,
+					text: OPEN_IN_YOUR_PROFILE,
 					onOpen: () => onGoToPractice(row.key),
 				})}
 			/>

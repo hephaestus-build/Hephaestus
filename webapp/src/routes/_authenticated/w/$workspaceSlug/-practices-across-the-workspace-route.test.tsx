@@ -140,7 +140,7 @@ describe("Practices across the workspace", () => {
 		await userEvent.click(
 			await screen.findByRole(
 				"button",
-				{ name: "Go to your profile: Packaging work for review" },
+				{ name: "Open in your Practice profile Packaging work for review" },
 				ROUTE_RENDER_WAIT,
 			),
 		);
@@ -158,7 +158,7 @@ describe("Practices across the workspace", () => {
 		await userEvent.click(
 			await screen.findByRole(
 				"button",
-				{ name: "View in your profile Scope the change to one concern" },
+				{ name: "Open in your Practice profile Scope the change to one concern" },
 				ROUTE_RENDER_WAIT,
 			),
 		);

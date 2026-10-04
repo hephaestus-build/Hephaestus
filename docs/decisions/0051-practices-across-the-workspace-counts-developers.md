@@ -82,8 +82,8 @@ whoever only has observations that did not apply or stayed undetermined is not o
   badge, no trend, no window. A held back bar shows its dashed track and the reason, and says nothing
   of the reader.
 - **The reader's own learning stays in the Practice profile.** The group's panel links to the same
-  group in the profile (**Go to your profile**), and each practice row links to the same practice
-  there (**View in your profile**). The page reads none of the profile's own data.
+  group in the profile, and each practice row links to the same practice there. Both links say
+  **Open in your Practice profile**. The page reads none of the profile's own data.
 - Workspace admins read nothing new. Instance administrators read the page through **View as user**,
   as they read every other practice page.
 

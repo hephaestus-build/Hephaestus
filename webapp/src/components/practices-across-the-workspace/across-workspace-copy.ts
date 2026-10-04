@@ -55,11 +55,11 @@ export const windowHeading = (window: AcrossWorkspaceWindow): string => WINDOW_D
 export const PAGE_PURPOSE =
 	"This page shows where the developers in this workspace stand in each practice group. Your next step is in your Practice profile.";
 
-/** The link from a group's level to the same group in the reader's own Practice profile. */
-export const GO_TO_YOUR_PROFILE = "Go to your profile";
-
-/** The row link from a practice to the same practice in the reader's own Practice profile. */
-export const VIEW_IN_YOUR_PROFILE = "View in your profile";
+/**
+ * The link from a group's level, and the row link from each of its practices, to the same group or
+ * practice in the reader's own Practice profile. One action, so one label.
+ */
+export const OPEN_IN_YOUR_PROFILE = "Open in your Practice profile";
 
 /**
  * The line under the tiles on when the three tiles read over the range compare: a middle half shows

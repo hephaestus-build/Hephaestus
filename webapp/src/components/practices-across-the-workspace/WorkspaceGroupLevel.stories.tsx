@@ -87,15 +87,21 @@ export const Default: Story = {
 		await expect(level.queryByText(/^Last \d+ days$/u)).toBeNull();
 		await expect(level.queryByText(/^You:/u)).toBeNull();
 		await userEvent.click(
-			level.getByRole("button", { name: "Go to your profile: Packaging work for review" }),
+			level.getByRole("button", {
+				name: "Open in your Practice profile Packaging work for review",
+			}),
 		);
 		await expect(args.onGoToProfile).toHaveBeenCalledOnce();
 		const table = within(
 			level.getByRole("table", { name: "Practices of Packaging work for review" }),
 		);
-		await expect(table.getAllByRole("button", { name: /^View in your profile /u })).toHaveLength(5);
+		await expect(
+			table.getAllByRole("button", { name: /^Open in your Practice profile /u }),
+		).toHaveLength(5);
 		await userEvent.click(
-			table.getByRole("button", { name: "View in your profile Scope the change to one concern" }),
+			table.getByRole("button", {
+				name: "Open in your Practice profile Scope the change to one concern",
+			}),
 		);
 		await expect(args.onGoToPractice).toHaveBeenCalledWith("scope-to-one-concern");
 		await expect(table.getAllByText("Held back so no one can be singled out.")).toHaveLength(2);
@@ -122,7 +128,9 @@ export const GroupHeldBack: Story = {
 		await expect(level.getAllByText("Held back so no one can be singled out.")).toHaveLength(3);
 		await expect(level.queryByText(/^You:/u)).toBeNull();
 		await expect(
-			level.getByRole("button", { name: "Go to your profile: Packaging work for review" }),
+			level.getByRole("button", {
+				name: "Open in your Practice profile Packaging work for review",
+			}),
 		).toBeVisible();
 	},
 };
@@ -173,7 +181,7 @@ export const ManyPractices: Story = {
 		more.scrollIntoView();
 		await userEvent.click(more);
 		await expect(
-			within(table).getAllByRole("button", { name: /^View in your profile /u }),
+			within(table).getAllByRole("button", { name: /^Open in your Practice profile /u }),
 		).toHaveLength(24);
 		await expect(frame.scrollHeight).toBeLessThanOrEqual(frame.clientHeight + 1);
 	},
