@@ -4,39 +4,45 @@ title: Writing effective practices
 description: Define evidence-bounded review criteria and check them against realistic cases before adoption.
 ---
 
-A useful practice helps a developer make a specific decision about their work. Its review criteria
-must explain **when the expectation matters, what can be observed, and what would justify feedback**.
-A memorable name or a long checklist is not enough.
+A useful practice helps a developer make a specific decision about their work.
+Its review criteria must explain **when the expectation matters, what can be observed, and what would justify feedback**.
+A memorable name or a long checklist is not sufficient.
 
-Use this guide when creating a custom practice or adapting a catalog entry. The
-[Practice Catalog guide](./practice-catalog) explains adoption and updates.
+Use this guide to create a custom practice or adapt a catalog entry.
+The [Practice Catalog guide](./practice-catalog) explains adoption and updates.
 
 ## Start with one expectation
 
-Choose an observable way of working, such as explaining a consequential design decision. Avoid
-personality judgments such as “is careful” or whole-system promises such as “writes correct software.”
-State who the expectation concerns and what work is being reviewed. An author's reply is not a
-reviewer's comment; a plan in an issue is not proof that a change shipped.
+The review schedule is separate from whether an expectation applies.
+A merge event can start a review without every practice applying to that change.
+An author's reply is not a reviewer's comment.
+A plan in an issue does not prove that a change shipped.
 
-When a review runs is separate from whether an expectation applies. A merge event can start a review
-without making every practice relevant to that change.
+1. Choose an observable way of working, such as an explanation of a consequential design decision.
+2. Avoid personality judgments such as “is careful.”
+3. Avoid whole-system promises such as “writes correct software.”
+4. State whom the expectation concerns and which work the review covers.
+5. Separate the fields in the editor.
 
-Separate the fields in the editor:
+The fields have different purposes:
 
-- **What to look for** contains every rule needed to make the judgment: applicability, evidence,
-  sufficient and insufficient behavior, uncertainty and severity.
-- **Why it matters** explains the practical benefit without claiming a guaranteed outcome.
-- **What good looks like** gives a realistic example. If an example introduces a requirement, also
-  state that requirement in **What to look for**; explanatory guidance does not change review rules.
+- **What to look for** contains every criterion needed for the judgment.
+  This includes applicability, evidence, sufficient and insufficient behavior, uncertainty, and severity.
+- **Why it matters** explains the practical benefit without a guaranteed outcome.
+- **What good looks like** gives a realistic example.
+  If an example introduces a requirement, also state it in **What to look for**.
+  Explanatory guidance does not change review criteria.
 
-**Person this practice judges** is the relation to the reviewed work, not the person who wrote the
-criteria. A practice about a reviewer's comments must select **reviewer**; leaving **author** selected
-would attribute that conduct to the pull-request author. The available relations depend on the kind of
-work.
+**Person this practice judges** is the relation to the reviewed work, not the person who wrote the criteria.
+Available relations depend on the kind of work.
 
-**Only review when** is an optional mechanical gate, separate from the review criteria. An empty gate
-means the practice applies to all work of the selected kind. To gate a practice to changed Swift files,
-enter:
+1. For a practice about a reviewer's comments, select **reviewer**.
+   If **author** stays selected, the practice attributes that conduct to the pull-request author.
+
+**Only review when** is an optional mechanical gate, separate from review criteria.
+An empty gate applies the practice to all work of the selected kind.
+
+1. To apply a practice only to changed Swift files, enter:
 
 ```json
 {
@@ -45,34 +51,39 @@ enter:
 }
 ```
 
-`anyOf` is a list of alternatives. Each clause uses exactly one of `changedPathMatches`, `diffContains`,
-or `evidenceHasItems`. The explanation in `skipReason` appears when complete evidence proves that none
-of the alternatives is present. Clear the field only when the practice must apply to all work. Saving a
-name or wording change leaves both the gate and the person judged unchanged.
+`anyOf` is a list of alternatives.
+Each clause uses exactly one of `changedPathMatches`, `diffContains`, or `evidenceHasItems`.
+The explanation in `skipReason` appears when complete evidence proves that no alternative is present.
+A saved name or text change leaves the gate and the person judged unchanged.
 
-A gate must be a necessary condition for the practice to apply. A keyword list that misses unfamiliar
-APIs or file names cannot establish that no relevant behavior exists. Leave such a gate empty and let
-the review criteria decide applicability from the complete captured evidence.
+1. Clear the field only when the practice must apply to all work.
+
+A gate must be a necessary condition for applicability.
+A keyword list that misses unfamiliar APIs or file names cannot establish the absence of relevant behavior.
+
+1. Leave such a gate empty.
+2. Let the review criteria determine applicability from the complete captured evidence.
 
 ## Write the review criteria
 
-Use these questions as a drafting outline, not as mandatory headings or a word-count target.
+Use these questions to organize a draft.
+They are not mandatory headings or a word-count target.
 
 | Decision | What the author must make clear |
 | --- | --- |
-| Applicability | What fact in the work makes this expectation relevant? What ordinary cases need no observation? |
+| Applicability | What fact makes this expectation relevant? What ordinary cases need no observation? |
 | Standard | What observable requirements must the reviewed work meet? |
-| Evidence | Which captured sources may establish each claim? Who authored them, and at what point in the work? |
+| Evidence | Which captured sources can establish each claim? Who authored them, and when? |
 | Conformance | What evidence establishes the complete standard or a material shortfall? |
-| Absence | What complete, bounded search would justify saying the needed behavior is missing or a harmful behavior is absent? |
-| Uncertainty | What unresolved question would prevent a judgment, even with the required evidence captured? |
-| Consequence | Why does a not-met observation matter, and what consequence justifies its severity? |
+| Absence | What complete, bounded search justifies a claim of missing required behavior or absence of harmful behavior? |
+| Uncertainty | What unresolved question prevents a judgment, even with the required evidence captured? |
+| Consequence | Why does a not-met observation matter? What consequence justifies its severity? |
 | Feedback | What specific change could the developer make? When would no corrective feedback be useful? |
 
-Prefer “identify a material decision whose rationale the reviewer needs” to a keyword test for
-“because.” Prefer the consequence of a missing check to a rule that every missing heading is MAJOR.
-If a threshold represents a team policy, identify that policy and its exceptions. Do not present a
-convenient number as a universal engineering standard.
+1. Prefer “identify a material decision whose rationale the reviewer needs” to a keyword test for “because.”
+2. Prefer the consequence of a missing check to a criterion that makes every missing heading MAJOR.
+3. If a threshold represents a team policy, identify that policy and its exceptions.
+4. Do not present a convenient number as a universal engineering standard.
 
 ### One outcome against the standard
 
@@ -80,101 +91,129 @@ Use one outcome for conformance within the recorded evidence boundary:
 
 | Outcome | Example for verification guidance on a persistence change |
 | --- | --- |
-| `MET` | Complete instructions save a setting, restart the app, and check the saved value without destroying it. |
+| `MET` | Complete instructions save a setting, restart the app, and check the saved value without destruction of that value. |
 | `NOT_MET` | A required restart check is missing, or the instructions claim an in-memory preview proves persistence. |
-| `NOT_APPLICABLE` | The work has no material behavior requiring this verification. |
+| `NOT_APPLICABLE` | The work has no material behavior that requires this verification. |
 | `UNDETERMINED` | Adequate captured evidence contains an unresolved conflict about the required behavior. |
 
-A useful instruction alone does not establish conformance to the complete standard. Absence claims
-need a complete bounded search. An optional improvement being missing is not a shortfall. Required
-capture failing creates no observation; it is not uncertainty about the developer's work.
+One useful instruction alone does not establish conformance to the complete standard.
+Absence claims need a complete bounded search.
+A missing optional improvement is not a shortfall.
+If required capture fails, the review creates no observation.
+This is not uncertainty about the developer's work.
 
-Do not count inadequate instructions and their missing part as separate shortfalls when both request
-the same correction. Severity applies only to `NOT_MET`. Delivery is a separate decision.
+1. Do not count inadequate instructions and their missing part as separate shortfalls when both need the same correction.
+
+Severity applies only to `NOT_MET`.
+Delivery is a separate decision.
 
 ### Evidence is more than a matching quotation
 
-A quotation proves that text exists, not that the conclusion follows. Relate instructions to the
-actual changed behavior. An authored preview can provide an entry point; implementation text alone
-need not communicate the intended result. An uninspected screenshot supplies no established visual
-facts. A template issue number is not automatically an adopted requirement.
+A quotation proves that text exists, not that the conclusion follows.
+An authored preview can provide an entry point.
+Implementation text alone need not communicate the intended result.
+An uninspected screenshot supplies no established visual facts.
+A template issue number is not automatically an adopted requirement.
 
-Required evidence that is missing, failed or truncated stops assessment: record the collection gap,
-not an observation about the developer. With qualified evidence, use UNDETERMINED for a material
-question that remains unresolved. Inability to find a quotation does not itself prove absence.
-A previous observation records an earlier judgment; it is not independent proof that judgment was right.
+Required evidence that is missing, failed, or truncated stops assessment.
 
-Separate recorded facts from the events they approximate. A commit timestamp records a commit, not
-the moment development began. A pull request creation time records a handoff, not an earlier start
-time. Do not replace an unknown deciding timestamp with a different event merely to produce a verdict.
+1. Relate instructions to the actual changed behavior.
+2. If required evidence is missing, failed, or truncated, record the collection gap, not an observation about the developer.
+3. With qualified evidence, use UNDETERMINED for a material question that remains unresolved.
+
+Failure to find a quotation does not itself prove absence.
+A previous observation records an earlier judgment.
+It is not independent proof that the judgment was correct.
+
+1. Separate recorded facts from the events they approximate.
+2. Do not replace an unknown deciding timestamp with a different event merely to produce a verdict.
+
+A commit timestamp records a commit, not the moment development began.
+A pull request creation time records a handoff, not an earlier start time.
 
 ## Write the criteria as a decision procedure
 
-The bundled catalog uses the following order. It is also a useful template for custom practices;
-the questions above remain the basis for deciding what belongs in each section.
+The bundled catalog uses this order.
+It is also a useful template for custom practices.
+The questions above remain the basis for each section's content.
 
 1. **REVIEW FOCUS** — name the observable standard.
-2. **The standard** — define what doing that behavior well means.
+2. **The standard** — define what good conformance to that behavior means.
 3. **Occasion** — identify work where the expectation does not apply.
 4. **Sources** — state which captured sources can support each claim and their limits.
-5. **Judge** — state when the complete standard is MET and what evidenced shortfall makes it
-   NOT_MET. Define the exclusion that supports NOT_APPLICABLE and the unresolved question that
-   supports UNDETERMINED. Make these conditions distinct, and state the order of checks where it
-   matters. Include an example that looks like a lapse but meets the standard.
-6. **Severity** — tie NOT_MET outcomes to consequences.
-7. **Grounding** — state the evidence needed to support each claim.
-8. **Defer** — identify expectations owned by other practices.
+5. **Judge** — state when the complete standard is MET.
+6. State what evidenced shortfall makes it NOT_MET.
+7. Define the exclusion that supports NOT_APPLICABLE.
+8. Define the unresolved question that supports UNDETERMINED.
+9. Make these conditions distinct.
+10. Where check order matters, state that order.
+11. Include an example that looks like a lapse but meets the standard.
+12. **Severity** — tie NOT_MET outcomes to consequences.
+13. **Grounding** — state the evidence needed to support each claim.
+14. **Defer** — identify expectations that other practices own.
 
-Keep each requirement in one place. Use the four outcome terms consistently. The bundled catalog has
-a criteria length limit; meeting that limit does not establish that the criteria are clear or correct.
+15. Keep each requirement in one place.
+16. Use the four outcome terms consistently.
 
-The recording tool checks the outcome and its required evidence fields. It does not establish that
-an assessment meets the practice criteria. Criteria must state the standard and the evidence needed
-to judge it; do not encode excluded presence or desirability combinations.
+The bundled catalog has a criteria length limit.
+Conformance to that limit does not establish that the criteria are clear or correct.
+The recording tool checks the outcome and its required evidence fields.
+It does not establish that an assessment meets the practice criteria.
 
-To see the template in use, open **State how to verify the change** in the practice editor.
-Adapt its structure, not its applicability rules: each practice needs evidence and consequences
-that match its own expectation and the sources your workspace can capture.
+Criteria must state the standard and the evidence needed to judge it.
+Do not encode excluded presence or desirability combinations.
+Each practice needs evidence and consequences that match its expectation and the sources your workspace can capture.
+
+1. To see the template, open **State how to verify the change** in the practice editor.
+2. Adapt its structure, not its applicability criteria.
 
 ## Feedback delivery
 
 The editor's **Feedback delivery** section separates delivery from what the practice measures.
-Choose summary-only delivery when feedback must stay in the summary rather than on a changed line.
 **Overlap group** groups practices whose feedback can cover the same concern.
-**Preferred practice slug** identifies the practice to prefer in that overlap group. Use an existing
-practice slug, not its display name. These settings do not alter observation outcomes or authorize
-automatic sending. Check the preview's **How feedback is delivered** section before saving.
+**Preferred practice slug** identifies the practice to prefer in that overlap group.
+These settings do not change observation outcomes or authorize automatic sending.
+
+1. If feedback must stay in the summary rather than on a changed line, select summary-only delivery.
+2. Use an existing practice slug, not its display name.
+3. Before you save, check the preview's **How feedback is delivered** section.
 
 ## Challenge the draft before adopting it
 
-Prepare a small set of real or clearly identified synthetic cases. Record the expected behavior,
-judgment, decisive evidence and appropriate feedback **before** running the review. Include:
+1. Prepare a small set of real cases or clearly identified synthetic cases.
+2. Before the review runs, record the expected behavior, judgment, decisive evidence, and appropriate feedback.
+3. Include these cases:
 
-- a clearly useful example, a misleading example and a genuinely missing necessary behavior;
-- a harmless omission or excluded occasion, and a case with missing required capture;
-- sufficient context spread across permitted sources, plus an irrelevant or unadopted linked source;
-- an ambiguous case with a precise settling question;
-- a near-identical pair where one decisive fact changes, and a cosmetic rewrite that should not
-  change the judgment;
-- source text that attempts to instruct the reviewer, which must remain evidence rather than authority.
+   - A clearly useful example, a misleading example, and genuinely missing necessary behavior.
+   - A harmless omission or excluded occasion, and a case with missing required capture.
+   - Sufficient context across permitted sources, and an irrelevant or unadopted linked source.
+   - An ambiguous case with a precise question that would resolve it.
+   - A near-identical pair where one decisive fact changes.
+   - A cosmetic rewrite that should not change the judgment.
+   - Source text that attempts to instruct the reviewer. This must stay evidence, not authority.
 
-Have another reviewer use the criteria without seeing your expected judgments. Compare the named
-behaviors and rationales as well as labels: matching outcomes can conceal different claims. Revise
-ambiguous instructions, then evaluate on additional cases that were not used to write the revision.
-Agreement measures consistency; it does not establish correctness or human independence.
+4. Have another reviewer use the criteria without your expected judgments.
+5. Compare the named behaviors and rationales, not only labels.
+6. Revise ambiguous instructions.
+7. Evaluate additional cases that you did not use to write the revision.
 
-Keep **Review before sending** while evaluating. Check unsupported corrections, missed material
-concerns, exclusions and uncertainty separately; a single positive rate hides these differences.
-Record the definition and evidence used for each evaluation. Changing criteria requires renewed
-validation, and neither a successful run nor valid citations authorizes automatic sending.
+Matching outcomes can conceal different claims.
+Agreement measures consistency.
+It does not establish correctness or human independence.
+
+1. Keep **Review before sending** during evaluation.
+2. Check unsupported corrections, missed material concerns, exclusions, and uncertainty separately.
+3. Record the definition and evidence used for each evaluation.
+4. After a criteria change, validate the criteria again.
+
+One positive rate hides differences between these checks.
+Neither a successful run nor valid citations authorizes automatic sending.
 
 ## Basis for these guidelines
 
-[Google's code-review guidance](https://google.github.io/eng-practices/review/reviewer/looking-for.html)
-supports checking real functionality, justified complexity, useful tests and explanatory comments.
-[Its guidance on small changes](https://google.github.io/eng-practices/review/developer/small-cls.html)
-uses review burden and context rather than a universal line or file limit.
-[Artstein and Poesio's survey](https://aclanthology.org/J08-4004/) explains agreement measures and their
-assumptions. [Datasheets for Datasets](https://doi.org/10.1145/3458723) motivates recording composition,
-collection and limitations. These sources inform review and evaluation design; they do not prove
-that a particular practice or model is accurate.
+[Google's code-review guidance](https://google.github.io/eng-practices/review/reviewer/looking-for.html) supports checks of real functionality, justified complexity, useful tests, and explanatory comments.
+[Its guidance on small changes](https://google.github.io/eng-practices/review/developer/small-cls.html) uses review burden and context, not a universal line or file limit.
+[Artstein and Poesio's survey](https://aclanthology.org/J08-4004/) explains agreement measures and their assumptions.
+[Datasheets for Datasets](https://doi.org/10.1145/3458723) supports records of composition, collection, and limitations.
+These sources inform review and evaluation design.
+They do not prove that a particular practice or model is accurate.
