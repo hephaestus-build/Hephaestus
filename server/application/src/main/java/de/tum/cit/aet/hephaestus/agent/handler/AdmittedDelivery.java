@@ -30,12 +30,11 @@ sealed interface AdmittedDelivery {
             ArtifactKind artifact,
             Map<String, String> whyBySlug,
             List<ComposedFeedbackUnit> units,
-            @Nullable String lead,
-            Set<String> recurringSlugs) {
+            @Nullable String lead) {
 
         @Nullable
         DeliveryContent compose(List<ValidatedObservation> observations, @Nullable String withLead) {
-            return DeliveryComposer.composeAdmitted(observations, artifact, whyBySlug, units, withLead, recurringSlugs);
+            return DeliveryComposer.composeAdmitted(observations, artifact, whyBySlug, units, withLead);
         }
     }
 

@@ -57,7 +57,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     private final FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter;
     private final InContextDeliveryGate inContextDeliveryGate;
     private final ObservationRepository observationRepository;
-    private final RecurringLapses recurringLapses;
 
     PullRequestReviewHandler(
             JsonMapper objectMapper,
@@ -69,8 +68,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             FeedbackDeliveryService feedbackService,
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter,
             InContextDeliveryGate inContextDeliveryGate,
-            ObservationRepository observationRepository,
-            RecurringLapses recurringLapses) {
+            ObservationRepository observationRepository) {
         this.objectMapper = objectMapper;
         this.practiceCatalogInjector = practiceCatalogInjector;
         this.preparation = preparation;
@@ -81,7 +79,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         this.feedbackResponseSuppressionFilter = feedbackResponseSuppressionFilter;
         this.inContextDeliveryGate = inContextDeliveryGate;
         this.observationRepository = observationRepository;
-        this.recurringLapses = recurringLapses;
     }
 
     @Override
@@ -240,7 +237,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 })
                 .toList();
         if (scopedObservations.isEmpty()) throw new JobDeliveryException("Admitted observation set is empty");
-        Set<String> recurring = recurringLapses.recurringSlugs(persisted);
         if (feedbackService.recoverAutomaticPackageIfPresent(job)) return;
         List<ReviewResultParser.ValidatedObservation> eligible = feedbackResponseSuppressionFilter
                 .evaluate(job, scopedObservations)
@@ -250,7 +246,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         List<ComposedFeedbackUnit> units = compositionResultParser.parse(job.getOutput(), FeedbackChannel.IN_CONTEXT);
         String lead = compositionResultParser.lead(job.getOutput());
         Map<String, String> why = practiceCatalogInjector.whyBySlug(job.getWorkspace(), ArtifactKinds.PULL_REQUEST);
-        var composition = new AdmittedDelivery.Composition(ArtifactKinds.PULL_REQUEST, why, units, lead, recurring);
+        var composition = new AdmittedDelivery.Composition(ArtifactKinds.PULL_REQUEST, why, units, lead);
         switch (AdmittedDelivery.decide(job.getOutput(), scopedObservations, proposals, loudEnough, composition)) {
             case AdmittedDelivery.Withheld withheld -> {
                 log.info(

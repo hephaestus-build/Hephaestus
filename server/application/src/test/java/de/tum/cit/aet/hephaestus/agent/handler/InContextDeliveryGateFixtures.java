@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -13,7 +12,6 @@ import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvide
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.Optional;
-import java.util.Set;
 
 final class InContextDeliveryGateFixtures {
 
@@ -50,12 +48,5 @@ final class InContextDeliveryGateFixtures {
         WorkspaceRepository repository = mock(WorkspaceRepository.class);
         lenient().when(repository.findById(anyLong())).thenReturn(Optional.empty());
         return repository;
-    }
-
-    /** A developer with no recurring lapse on record: every practice is explained in full. */
-    static RecurringLapses noRecurrence() {
-        var lapses = mock(RecurringLapses.class);
-        lenient().when(lapses.recurringSlugs(any())).thenReturn(Set.of());
-        return lapses;
     }
 }
