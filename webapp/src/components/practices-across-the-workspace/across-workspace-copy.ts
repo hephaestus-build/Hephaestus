@@ -56,7 +56,7 @@ export const PROFILE_SPAN = windowHeading("DAYS_90");
 
 /** What the page is for and how a standing moves, under its title. */
 export const PAGE_PURPOSE =
-	"See where your practices stand among the developers in this workspace, so you can choose what to work on next. Standings move with your next pieces of reviewed work; open a group to see your next step.";
+	"See where your practices stand among the developers in this workspace. Use it to choose what to work on next. Your next pieces of reviewed work move your standings. To see your next step, open a group, then your own group.";
 
 /**
  * The line under the tiles on when the three tiles read over the range compare: a middle half shows

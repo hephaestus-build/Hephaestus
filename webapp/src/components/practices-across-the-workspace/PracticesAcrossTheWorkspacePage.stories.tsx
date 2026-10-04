@@ -41,7 +41,7 @@ export const Default: Story = {
 	play: async ({ canvas, args }) => {
 		await expect(
 			canvas.getByText(
-				"See where your practices stand among the developers in this workspace, so you can choose what to work on next. Standings move with your next pieces of reviewed work; open a group to see your next step.",
+				"See where your practices stand among the developers in this workspace. Use it to choose what to work on next. Your next pieces of reviewed work move your standings. To see your next step, open a group, then your own group.",
 			),
 		).toBeVisible();
 		await expect(
