@@ -19,19 +19,15 @@ import {
 	type SplitContext,
 	type SplitStanding,
 	splitDescription,
-	windowHeading,
-	yourStandingWord,
 } from "./across-workspace-copy";
 
 export interface WorkspaceSplitBarProps extends SplitContext {
 	split: WorkspaceSplit;
-	/** The reader's own standing in the group or the practice, shown in every shape. */
-	yourStanding: PracticeGroupStandingValue;
 	/**
-	 * Whether the reader's standing is written where the bar cannot point at it; off where a badge
-	 * beside the bar already says it.
+	 * The reader's current standing in the group or the practice: the part the You marker is on,
+	 * while the reader is counted and the split shows.
 	 */
-	showYourWord?: boolean;
+	yourStanding: PracticeGroupStandingValue;
 }
 
 interface Part {
@@ -96,19 +92,13 @@ function partsOf(
 }
 
 /**
- * How the developers with a standing split across one practice group or one practice, as one segmented
- * bar counted in developers: Needs attention, Mixed feedback, Going well and none yet. Each part
- * carries its count under it, with the standing's icon so the parts never rest on colour alone,
- * and the You marker sits over the reader's own part. A split held back is a dashed track of the
- * same width. Where the bar cannot point at the reader, the word stands under it instead.
+ * How the developers with a current standing split across one practice group or one practice, as
+ * one segmented bar counted in developers: Needs attention, Mixed feedback, Going well and none
+ * yet. Each part carries its count under it, with the standing's icon so the parts never rest on
+ * colour alone, and the You marker sits over the reader's own part. A split held back is a dashed
+ * track of the same width with its reason, and nothing more.
  */
-export function WorkspaceSplitBar({
-	split,
-	yourStanding,
-	showYourWord = true,
-	...context
-}: WorkspaceSplitBarProps) {
-	const description = splitDescription(split, yourStanding, context);
+export function WorkspaceSplitBar({ split, yourStanding, ...context }: WorkspaceSplitBarProps) {
 	if (split.shape === "WITHHELD") {
 		return (
 			<div className="flex w-full min-w-0 flex-col gap-1">
@@ -116,17 +106,11 @@ export function WorkspaceSplitBar({
 				<span aria-hidden className={cn("mt-5 w-full", HELD_BACK_TRACK)} />
 				{/* The words are the cell's one accessible text, so nothing else repeats them. */}
 				<p className="text-xs text-muted-foreground">{HELD_BACK}.</p>
-				{/* A level that shows the reader's badge beside the bar leaves the word out here too. */}
-				{showYourWord && (
-					<p className="text-xs text-muted-foreground">
-						<YourWord standing={yourStanding} spoken />
-					</p>
-				)}
 			</div>
 		);
 	}
+	const description = splitDescription(split, yourStanding, context);
 	const parts = partsOf(split, yourStanding, context.readerCounted);
-	const marked = parts.some((part) => part.isYours);
 	const total = parts.reduce((sum, part) => sum + part.count, 0);
 	return (
 		<div className="flex w-full min-w-0 flex-col gap-1">
@@ -165,21 +149,11 @@ export function WorkspaceSplitBar({
 			<p aria-hidden className="text-right text-xs text-muted-foreground tabular-nums">
 				{developerCount(total)}
 			</p>
-			{/* A reader outside the counts has no part to point at, so the word says it; a level that shows
-			    the reader's badge beside the bar leaves it out. */}
-			{showYourWord && !marked && (
-				<p className="text-xs text-muted-foreground">
-					<YourWord standing={yourStanding} />
-				</p>
-			)}
 		</div>
 	);
 }
 
-/**
- * A split beside a level's title, under the window it counts. The reader's own standing beside it
- * may be read over another span, so the window is named where the marker points at the reader.
- */
+/** A split beside a level's title, at the width the header's aside gives it. */
 export function LevelSplit({
 	split,
 	yourStanding,
@@ -190,40 +164,9 @@ export function LevelSplit({
 	context: SplitContext;
 }) {
 	return (
-		<div className="flex w-full flex-col gap-1 sm:w-88">
-			<p className="text-xs text-muted-foreground">{windowHeading(context.window)}</p>
-			<WorkspaceSplitBar
-				split={split}
-				yourStanding={yourStanding}
-				showYourWord={false}
-				{...context}
-			/>
+		<div className="flex w-full sm:w-88">
+			<WorkspaceSplitBar split={split} yourStanding={yourStanding} {...context} />
 		</div>
-	);
-}
-
-/** The reader's own standing as a word, where the marker on the bar cannot say it. */
-function YourWord({
-	standing,
-	spoken = false,
-}: {
-	standing: PracticeGroupStandingValue;
-	/** Whether a screen reader hears it: where the bar's own label already says it, it does not. */
-	spoken?: boolean;
-}) {
-	// The icon the reader's part carries under the bar: their standing's, or none yet's.
-	const Icon = isSplitStanding(standing)
-		? PRACTICE_GROUP_STANDING_DEFS[standing].icon
-		: NONE_YET_ICON;
-	const tone = isSplitStanding(standing)
-		? statusToneClass(PRACTICE_GROUP_STANDING_DEFS[standing].badgeVariant)
-		: GREY;
-	return (
-		<span aria-hidden={spoken ? undefined : true} className="inline-flex items-center gap-1">
-			<span className="font-semibold text-mentor">You:</span>
-			<Icon className={cn("size-3 shrink-0", tone)} />
-			<span className="text-foreground">{yourStandingWord(standing)}</span>
-		</span>
 	);
 }
 
@@ -263,8 +206,8 @@ export function SplitLegend() {
 			})}
 			<li className="inline-flex items-center gap-1 text-mentor">
 				<TriangleIcon aria-hidden className="size-2.5 rotate-180 fill-current" />
-				<span className="font-semibold">You:</span>
-				<span className="text-muted-foreground">your standing</span>
+				<span className="font-semibold">You</span>
+				<span className="text-muted-foreground">marks your part</span>
 			</li>
 			<li className="inline-flex items-center gap-1.5">
 				<span aria-hidden className={cn("w-4", HELD_BACK_TRACK)} />

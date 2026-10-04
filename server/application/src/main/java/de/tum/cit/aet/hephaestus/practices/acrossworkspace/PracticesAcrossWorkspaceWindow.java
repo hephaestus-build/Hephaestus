@@ -4,7 +4,10 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import org.jspecify.annotations.Nullable;
 
-/** The span the page reads evidence over. Each window is checked against {@link CohortPrivacyPolicy} on its own. */
+/**
+ * The span the page's tiles read evidence over. Each window is checked against {@link CohortPrivacyPolicy} on its
+ * own; the splits read the current standing and take no window.
+ */
 public enum PracticesAcrossWorkspaceWindow {
     /** Every observation recorded, with no lower bound. */
     ALL_TIME(null),

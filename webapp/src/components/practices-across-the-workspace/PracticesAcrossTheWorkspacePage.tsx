@@ -32,8 +32,8 @@ export const GROUPS_PAGE_SIZE = 20;
 
 export interface PracticesAcrossTheWorkspacePageProps {
 	/**
-	 * The overview; `stale` while another window's figures are on their way and the ones shown are
-	 * the previous window's.
+	 * The overview; `stale` while another window's tiles are on their way and the ones shown are the
+	 * previous window's.
 	 */
 	state: PanelState<{ overview: PracticesAcrossWorkspace; stale?: boolean }>;
 	window: AcrossWorkspaceWindow;
@@ -47,7 +47,6 @@ export interface PracticesAcrossTheWorkspacePageProps {
 /** What every split on the page is a part of, from the overview. */
 export function splitContextOf(overview: PracticesAcrossWorkspace): SplitContext {
 	return {
-		window: overview.window,
 		readerCounted: overview.readerCounted,
 		developersWithAStanding: overview.developersWithAStanding,
 		minimumOthers: overview.minimumOthers,
@@ -55,10 +54,11 @@ export function splitContextOf(overview: PracticesAcrossWorkspace): SplitContext
 }
 
 /**
- * Practices across the workspace, in the Practice profile's frame: the reader's figures beside the
- * middle half of the workspace, laid out as Activity lays out its range, then every practice group
- * beside how the workspace's developers with a standing split across it. A group opens its practices over
- * the page, and the reader's own group and practices open over it as the profile's levels.
+ * Practices across the workspace, a view of the workspace rather than the reader's profile: the
+ * reader's figures beside the middle half of the workspace over the chosen window, laid out as
+ * Activity lays out its range, then every practice group beside how the workspace's developers
+ * split across it by their current standing, with the reader only as the You marker. A group opens
+ * its practices over the page; the reader's own learning is one link away, in their profile.
  */
 export function PracticesAcrossTheWorkspacePage({
 	state,
@@ -93,7 +93,8 @@ export function PracticesAcrossTheWorkspacePage({
 						onRetry={state.onRetry}
 					/>
 				) : (
-					// The last window's figures, drained of colour until the new heading's own are in.
+					// The window applies to the tiles alone. The last window's figures are drained of
+					// colour until the new heading's own are in.
 					<div className={cn("space-y-3", stale && STALE)}>
 						<WorkspaceTiles overview={overview} />
 						{overview !== undefined && (
@@ -101,7 +102,7 @@ export function PracticesAcrossTheWorkspacePage({
 								{tilesHint(
 									overview.minimumOthers,
 									overview.window,
-									overview.developersWithAStanding,
+									overview.developersWithAStandingInWindow,
 								)}
 							</p>
 						)}
@@ -114,17 +115,14 @@ export function PracticesAcrossTheWorkspacePage({
 					size="lg"
 					title={ALL_PRACTICE_GROUPS}
 					description={overview && groupsHint(overview.minimumOthers)}
-					aria-busy={stale || undefined}
 				>
 					<SplitLegend />
-					<div className={cn(stale && STALE)}>
-						<GroupsTable
-							key={overview?.window}
-							overview={overview}
-							openGroupSlug={openGroupSlug}
-							onOpenGroup={onOpenGroup}
-						/>
-					</div>
+					{/* The bars count the current standing, so a new window leaves them as they are. */}
+					<GroupsTable
+						overview={overview}
+						openGroupSlug={openGroupSlug}
+						onOpenGroup={onOpenGroup}
+					/>
 				</Section>
 			)}
 		</PageLayout>
@@ -165,8 +163,7 @@ function GroupsTable({
 			noun="practice groups"
 			empty={{
 				title: "No practice groups yet",
-				description:
-					"Once your workspace sets up practice groups, each one appears here with your standing in it.",
+				description: "Once your workspace sets up practice groups, each one appears here.",
 			}}
 			rowLink={(row) => ({
 				text: "Open group",

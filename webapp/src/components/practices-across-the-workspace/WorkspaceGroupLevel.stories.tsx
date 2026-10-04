@@ -14,7 +14,6 @@ import { Stateful } from "@/stories/stateful";
 import { WorkspaceGroupLevel } from "./WorkspaceGroupLevel";
 
 const CONTEXT = {
-	window: "DAYS_30",
 	readerCounted: true,
 	developersWithAStanding: 28,
 	minimumOthers: 3,

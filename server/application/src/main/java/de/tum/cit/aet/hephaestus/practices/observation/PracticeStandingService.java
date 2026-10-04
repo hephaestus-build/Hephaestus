@@ -159,6 +159,15 @@ public class PracticeStandingService {
         return snapshots;
     }
 
+    /**
+     * Every given developer's standings as their practice profile shows them now: read over the profile's own
+     * look-back, from the trend horizon, so a developer's standing here is the one their profile shows.
+     */
+    public Map<Long, StandingSnapshot> getCurrentWorkspaceStandingSnapshots(Long workspaceId, Set<Long> developerIds) {
+        return getWorkspaceStandingSnapshots(
+                workspaceId, developerIds, practiceTrendService.horizon(), clock.instant());
+    }
+
     /** One developer's latest run per claim, then only what the visibility policy lets the reader see. */
     private static List<Observation> latestVisible(List<Observation> observations, Set<UUID> visible) {
         return LatestRun.perClaim(observations).stream()

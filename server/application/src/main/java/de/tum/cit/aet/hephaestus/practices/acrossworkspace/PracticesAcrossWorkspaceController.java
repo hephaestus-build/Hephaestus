@@ -14,13 +14,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
- * Practices across the workspace, read by the calling developer: their own standings by name, everyone else only
- * inside a count. Like the practice profile there is no user parameter on this route.
+ * Practices across the workspace, read by the calling developer: everyone, the caller included, inside a count, and
+ * the caller's own figures beside the workspace's. Like the practice profile there is no user parameter on this
+ * route.
  */
 @WorkspaceScopedController
 @PreAuthorize("@workspaceSecure.isMember()")
 @RequestMapping("/practices/workspace-overview")
-@Tag(name = "Practices Across The Workspace", description = "The reader's standings beside the workspace's split")
+@Tag(name = "Practices Across The Workspace", description = "How the workspace's developers split, the reader marked")
 @RequiredArgsConstructor
 public class PracticesAcrossWorkspaceController {
 
@@ -29,11 +30,12 @@ public class PracticesAcrossWorkspaceController {
     @GetMapping
     @Operation(
             operationId = "getPracticesAcrossWorkspace",
-            summary = "The reader's practice group and practice standings beside how the workspace's developers split",
+            summary = "How the workspace's developers split across practice groups and practices, the reader marked",
             description = "Counts developers, never names them: a count is shown only when it holds at least "
                     + CohortPrivacyPolicy.MINIMUM_OTHERS
                     + " developers other than the reader, a group's or a practice's split shows all four parts or"
-                    + " is withheld, and each window is checked on its own.")
+                    + " is withheld. The splits count every developer's current standing; the window applies to the"
+                    + " tiles only, and each window is checked on its own.")
     @ApiResponse(responseCode = "200", description = "Practices across the workspace returned")
     public ResponseEntity<PracticesAcrossWorkspaceDTO> getPracticesAcrossWorkspace(
             WorkspaceContext context, @RequestParam(defaultValue = "DAYS_30") PracticesAcrossWorkspaceWindow window) {

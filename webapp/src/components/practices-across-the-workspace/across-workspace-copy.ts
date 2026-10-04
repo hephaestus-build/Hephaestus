@@ -45,7 +45,7 @@ export const DEFAULT_WINDOW: AcrossWorkspaceWindow = "DAYS_30";
 /** The window as the tail of a sentence: "with a standing so far". */
 export const windowPhrase = (window: AcrossWorkspaceWindow): string => WINDOW_DEFS[window].phrase;
 
-/** The window as a section heading. */
+/** The window as the tiles' heading. */
 export const windowHeading = (window: AcrossWorkspaceWindow): string => WINDOW_DEFS[window].label;
 
 /**
@@ -54,34 +54,45 @@ export const windowHeading = (window: AcrossWorkspaceWindow): string => WINDOW_D
  */
 export const PROFILE_SPAN = windowHeading("DAYS_90");
 
-/** What the page is for and how a standing moves, under its title. */
+/**
+ * What the page is for, under its title. The page is a view of the workspace, not the reader's
+ * profile, so it sends the reader to the profile for their own next step.
+ */
 export const PAGE_PURPOSE =
-	"See where your practices stand among the developers in this workspace. Use it to choose what to work on next. Your next pieces of reviewed work move your standings. To see your next step, open a group, then your own group.";
+	"This page shows where the developers in this workspace stand in each practice group. Your next step is in your Practice profile.";
+
+/** The link from a group's level to the same group in the reader's own Practice profile. */
+export const GO_TO_YOUR_PROFILE = "Go to your profile";
+
+/** The row link from a practice to the same practice in the reader's own Practice profile. */
+export const VIEW_IN_YOUR_PROFILE = "View in your profile";
 
 /**
  * The line under the tiles on when the three tiles read over the range compare: a middle half shows
  * from twice K other developers, so neither quarter outside it can be one developer's value. Open
  * feedback reads every developer the page counts, reviewed or not, so the line names its group too.
+ * The tiles are the only figures the window changes, so only this line names it.
  */
 export function tilesHint(
 	minimumOthers: number,
 	window: AcrossWorkspaceWindow,
-	developersWithAStanding?: number,
+	developersWithAStandingInWindow?: number,
 ): string {
 	// No count where the server held the total back: a small total is a count of its own.
 	const of =
-		developersWithAStanding === undefined
+		developersWithAStandingInWindow === undefined
 			? "the developers with a standing here"
-			: `${developerCount(developersWithAStanding)} with a standing ${windowPhrase(window)}`;
+			: `${developerCount(developersWithAStandingInWindow)} with a standing ${windowPhrase(window)}`;
 	return `Except for open feedback, the typical range is the middle half of ${of}. Your marker shows you. These tiles compare you when at least ${2 * minimumOthers} other developers have a standing in this range. Until then, they show only your own value. Open feedback counts what is open now, for all developers that this page counts.`;
 }
 
 /**
  * The line under All practice groups on what a bar counts and when a part is not shown: a part
- * shows from K + 1 developers, the reader counted, so it stands for K others whoever reads it.
+ * shows from K + 1 developers, the reader counted, so it stands for K others whoever reads it. A bar
+ * counts the current standing, the one each developer's Practice profile shows, whatever the window.
  */
 export function groupsHint(minimumOthers: number): string {
-	return `Each bar counts developers by their standing in the group. You marks your standing. A bar shows only if each of its parts holds at least ${minimumOthers} other developers. If not, the whole bar is held back, so no one can be singled out.`;
+	return `Each bar counts developers by their current standing in the group, as their Practice profile shows it. You marks your part. A bar shows only if each of its parts holds at least ${minimumOthers} other developers. If not, the whole bar is held back, so no one can be singled out.`;
 }
 
 /**
@@ -89,7 +100,7 @@ export function groupsHint(minimumOthers: number): string {
  * only while a practice's bar set against its group's singles no one out.
  */
 export function practicesHint(minimumOthers: number): string {
-	return `Each bar counts developers by their standing in the practice. You marks your standing. A bar shows only if each of its parts holds at least ${minimumOthers} other developers. The bar must also single no one out beside the group's bar. If not, it is held back.`;
+	return `Each bar counts developers by their current standing in the practice, as their Practice profile shows it. You marks your part. A bar shows only if each of its parts holds at least ${minimumOthers} other developers. The bar must also single no one out beside the group's bar. If not, it is held back.`;
 }
 
 export const standingLabel = (standing: PracticeGroupStandingValue): string =>
@@ -113,24 +124,13 @@ export function isSplitStanding(standing: PracticeGroupStandingValue): standing 
 /** The part of a split that counts the developers with no standing yet, whatever the reason. */
 export const NONE_YET = "None yet";
 
-/**
- * The reader's own standing in the split's words: one of its standings, or none yet with the
- * profile's own reason after it, so the word matches the part the legend names.
- */
-export function yourStandingWord(standing: PracticeGroupStandingValue): string {
-	return isSplitStanding(standing)
-		? standingLabel(standing)
-		: `${NONE_YET} (${standingLabel(standing)})`;
-}
-
 /** What the bar and its text alternative need besides the split itself. */
 export interface SplitContext {
-	window: AcrossWorkspaceWindow;
 	/** Whether the reader is inside the counts; without it no part carries the You marker. */
 	readerCounted: boolean;
 	/**
-	 * The workspace's total of developers with a standing, the reference group every split is a part
-	 * of; absent while the server holds it back.
+	 * The workspace's total of developers with a current standing, the reference group every split
+	 * is a part of; absent while the server holds it back.
 	 */
 	developersWithAStanding?: number;
 	/** K: the fewest developers other than the reader a shown count stands for. */
@@ -149,31 +149,33 @@ export function developerCount(count: number): string {
  */
 export const HELD_BACK = "Held back so no one can be singled out";
 
-/** The reference group a split is a part of: "24 developers with a standing in this workspace so far". */
+/** The reference group a split is a part of: "24 developers with a current standing in this workspace". */
 function referenceGroup(context: SplitContext): string {
 	const who =
 		context.developersWithAStanding === undefined
 			? "Developers"
 			: developerCount(context.developersWithAStanding);
-	return `${who} with a standing in this workspace ${windowPhrase(context.window)}`;
+	return `${who} with a current standing in this workspace`;
 }
 
-/** The bar's text alternative: the named reference group, every count, and the reader's own word. */
+/**
+ * The bar's text alternative: the named reference group, every count, and the part the You marker
+ * is on, as the bar shows it. A split held back says only why, as its track does.
+ */
 export function splitDescription(
 	split: WorkspaceSplit,
 	yourStanding: PracticeGroupStandingValue,
 	context: SplitContext,
 ): string {
-	const you = `You: ${yourStandingWord(yourStanding)}`;
-	const reference = referenceGroup(context);
 	if (split.shape === "WITHHELD") {
-		return `${HELD_BACK}. ${you}.`;
+		return `${HELD_BACK}.`;
 	}
 	// Each standing in the registry's own words, so the bar's text says what its legend says.
 	const standings = SPLIT_STANDINGS.map(
 		(standing) => `${split[SPLIT_FIELDS[standing]] ?? 0} ${standingLabel(standing)}`,
 	);
 	const noneYet = split.noneYet ?? 0;
-	const counted = context.readerCounted;
-	return `${reference}: ${standings.join(", ")}, ${noneYet} none yet. ${you}${counted ? "" : ", not counted in the split"}.`;
+	const yourPart = isSplitStanding(yourStanding) ? standingLabel(yourStanding) : "none yet";
+	const marker = context.readerCounted ? ` The You marker is on ${yourPart}.` : "";
+	return `${referenceGroup(context)}: ${standings.join(", ")}, ${noneYet} none yet.${marker}`;
 }

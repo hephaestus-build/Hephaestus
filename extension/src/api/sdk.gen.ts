@@ -2611,9 +2611,9 @@ export const getOwnArtifactTrace = <ThrowOnError extends boolean = false>(option
 });
 
 /**
- * The reader's practice group and practice standings beside how the workspace's developers split
+ * How the workspace's developers split across practice groups and practices, the reader marked
  *
- * Counts developers, never names them: a count is shown only when it holds at least 3 developers other than the reader, a group's or a practice's split shows all four parts or is withheld, and each window is checked on its own.
+ * Counts developers, never names them: a count is shown only when it holds at least 3 developers other than the reader, a group's or a practice's split shows all four parts or is withheld. The splits count every developer's current standing; the window applies to the tiles only, and each window is checked on its own.
  */
 export const getPracticesAcrossWorkspace = <ThrowOnError extends boolean = false>(options: Options<GetPracticesAcrossWorkspaceData, ThrowOnError>): RequestResult<GetPracticesAcrossWorkspaceResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetPracticesAcrossWorkspaceResponses, unknown, ThrowOnError>({
   security: [{ scheme: 'bearer', type: 'http' }],

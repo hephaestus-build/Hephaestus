@@ -120,25 +120,13 @@ export const MANY_PRACTICES: WorkspacePracticeSplit[] = Array.from({ length: 24 
 	practice(`practice-${index + 1}`, `Practice ${index + 1}`, "MIXED", threeWay([6, 7, 8])),
 );
 
-const TREND = {
-	yourDirection: "IMPROVING",
-	yourTrendSupport: {
-		currentOpportunities: 6,
-		previousOpportunities: 5,
-		opportunities: 11,
-		opportunitiesUntilComparable: 0,
-		calendarSpanDays: 12,
-		bundleSize: 4,
-		ropeHalfWidth: 0.15,
-		credibilityThreshold: 0.9,
-	},
-} as const satisfies Pick<WorkspaceGroupSplit, "yourDirection" | "yourTrendSupport">;
-
-/** The group the slide in stories open: its practices and the reader's trend in it. */
-export const PACKAGING_GROUP: WorkspaceGroupSplit = {
-	...group(PACKAGING, "DEVELOPING", threeWay([7, 6, 8]), PACKAGING_PRACTICES),
-	...TREND,
-};
+/** The group the slide in stories open, with its practices. */
+export const PACKAGING_GROUP: WorkspaceGroupSplit = group(
+	PACKAGING,
+	"DEVELOPING",
+	threeWay([7, 6, 8]),
+	PACKAGING_PRACTICES,
+);
 
 /**
  * Eight practice groups over 28 developers with a standing. Every part shown, none yet included, holds
@@ -149,6 +137,7 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	minimumOthers: 3,
 	developersWithAStanding: 28,
 	readerCounted: true,
+	developersWithAStandingInWindow: 26,
 	yourPractices: 18,
 	reviewedWork: { yours: 17, middleLow: 11, middleHigh: 21 },
 	practicesGoingWell: { yours: 6, middleLow: 5, middleHigh: 9 },
@@ -170,6 +159,7 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
 	...ACROSS_WORKSPACE,
 	developersWithAStanding: undefined,
+	developersWithAStandingInWindow: undefined,
 	reviewedWork: { yours: 17 },
 	practicesGoingWell: { yours: 6 },
 	practicesNeedingAttention: { yours: 4 },

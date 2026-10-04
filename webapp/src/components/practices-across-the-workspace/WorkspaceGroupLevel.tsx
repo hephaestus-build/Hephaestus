@@ -7,7 +7,7 @@ import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { NoSuchGroup } from "@/components/practice-profile/practice-profile-blocks";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
-import { StandingBadge, TrendNote } from "@/components/practice-vocabulary/StandingBadge";
+import { StandingBadge } from "@/components/practice-vocabulary/StandingBadge";
 import { DrawerBody } from "@/components/ui/drawer";
 import { useRevealedRows } from "@/hooks/use-revealed-rows";
 
@@ -67,19 +67,7 @@ export function WorkspaceGroupLevel({
 						/>
 					)
 				}
-				// Side by side, as the profile's own group level shows them.
-				chips={
-					group && (
-						<>
-							<StandingBadge standing={group.yourStanding} scope="group" />
-							<TrendNote
-								direction={group.yourDirection}
-								support={group.yourTrendSupport}
-								scope="group"
-							/>
-						</>
-					)
-				}
+				chips={group && <StandingBadge standing={group.yourStanding} scope="group" />}
 				// The way on is a link in the header's one line, not a column beside the title. As the
 				// header's description it is also the dialog's, so a screen reader reads it on opening.
 				description={

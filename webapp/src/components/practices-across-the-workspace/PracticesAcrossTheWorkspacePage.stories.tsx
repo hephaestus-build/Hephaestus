@@ -13,10 +13,9 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 import { PracticesAcrossTheWorkspacePage } from "./PracticesAcrossTheWorkspacePage";
 
 /**
- * The reader's figures beside the workspace's middle half, then every practice group beside how the
- * workspace's developers with a standing split across it. The reader's own standing is the You marker on a
- * split, or a word where the marker cannot say it, so a split held back says nothing the word does
- * not.
+ * The reader's figures beside the workspace's middle half over the window, then every practice
+ * group beside how the workspace's developers split across it by their current standing. The
+ * reader shows only as the You marker on a split; a split held back marks no one.
  */
 const meta = {
 	component: PracticesAcrossTheWorkspacePage,
@@ -41,7 +40,7 @@ export const Default: Story = {
 	play: async ({ canvas, args }) => {
 		await expect(
 			canvas.getByText(
-				"See where your practices stand among the developers in this workspace. Use it to choose what to work on next. Your next pieces of reviewed work move your standings. To see your next step, open a group, then your own group.",
+				"This page shows where the developers in this workspace stand in each practice group. Your next step is in your Practice profile.",
 			),
 		).toBeVisible();
 		await expect(
@@ -50,14 +49,23 @@ export const Default: Story = {
 		// The two rules, each where it applies, with the numbers the response carries.
 		await expect(
 			canvas.getByText(
-				"Except for open feedback, the typical range is the middle half of 28 developers with a standing in the last 30 days. Your marker shows you. These tiles compare you when at least 6 other developers have a standing in this range. Until then, they show only your own value. Open feedback counts what is open now, for all developers that this page counts.",
+				"Except for open feedback, the typical range is the middle half of 26 developers with a standing in the last 30 days. Your marker shows you. These tiles compare you when at least 6 other developers have a standing in this range. Until then, they show only your own value. Open feedback counts what is open now, for all developers that this page counts.",
 			),
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Each bar counts developers by their standing in the group. You marks your standing. A bar shows only if each of its parts holds at least 3 other developers. If not, the whole bar is held back, so no one can be singled out.",
+				"Each bar counts developers by their current standing in the group, as their Practice profile shows it. You marks your part. A bar shows only if each of its parts holds at least 3 other developers. If not, the whole bar is held back, so no one can be singled out.",
 			),
 		).toBeVisible();
+		// The window toggle sits in the tiles' heading row, not over the bars.
+		await expect(
+			canvas.getByRole("heading", { level: 2, name: "Last 30 days" }).closest("section"),
+		).toContainElement(canvas.getByText("Pieces of work reviewed"));
+		await expect(
+			canvas.getByRole("heading", { level: 2, name: "All practice groups" }).closest("section")
+				?.textContent,
+		).not.toMatch(/30 days|90 days|All time/u);
+		await expect(canvas.queryByText(/^You:/u)).toBeNull();
 		// The window's own figures, in their colours.
 		await expect(
 			canvas.getByRole("table", { name: "All practice groups" }).closest(".grayscale"),
@@ -65,7 +73,7 @@ export const Default: Story = {
 		const table = groupsTable(canvas);
 		await expect(
 			table.getByRole("img", {
-				name: "28 developers with a standing in this workspace in the last 30 days: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You: Needs attention.",
+				name: "28 developers with a current standing in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
 			}),
 		).toBeVisible();
 		// The row's one action, drawn as the reviews table draws "Open review", opens the group's level.
@@ -87,11 +95,16 @@ export const GroupOpen: Story = {
 	},
 };
 
-/** A part holds too few in every group: a dashed track in every row, the total said once. */
+/**
+ * A part holds too few in every group: a dashed track and its reason in every row, the total said
+ * once, and no row says anything of the reader.
+ */
 export const AllHeldBack: Story = {
 	args: { state: { status: "ready", overview: TOTAL_ONLY_WORKSPACE } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(8);
+		await expect(canvas.queryByText(/^You:/u)).toBeNull();
+		await expect(groupsTable(canvas).queryByText("You")).toBeNull();
 	},
 };
 
@@ -127,8 +140,9 @@ export const ManyGroups: Story = {
 };
 
 /**
- * Another window's figures on their way: the last ones stay, drained of their colours under the new
- * heading, and both sections say they are busy.
+ * Another window's figures on their way: the last tiles stay, drained of their colours under the
+ * new heading, and only their section says it is busy. The bars count the current standing, so
+ * the window leaves them as they are.
  */
 export const SwitchingWindow: Story = {
 	args: { state: { status: "ready", overview: ACROSS_WORKSPACE, stale: true }, window: "DAYS_90" },
@@ -136,9 +150,12 @@ export const SwitchingWindow: Story = {
 		const table = canvas.getByRole("table", { name: "All practice groups" });
 		await expect(table).toBeVisible();
 		await expect(
-			canvas.getByRole("heading", { level: 2, name: "All practice groups" }).closest("section"),
+			canvas.getByRole("heading", { level: 2, name: "Last 90 days" }).closest("section"),
 		).toHaveAttribute("aria-busy", "true");
-		await expect(table.closest(".grayscale")).not.toBeNull();
+		await expect(
+			canvas.getByRole("heading", { level: 2, name: "All practice groups" }).closest("section"),
+		).not.toHaveAttribute("aria-busy");
+		await expect(table.closest(".grayscale")).toBeNull();
 		await expect(canvas.getByText("Pieces of work reviewed").closest(".grayscale")).not.toBeNull();
 	},
 };

@@ -10,8 +10,11 @@ import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspacePracticeSplitDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
@@ -19,6 +22,8 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import de.tum.cit.aet.hephaestus.practices.observation.PracticeGroupStandingService;
+import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
@@ -30,8 +35,10 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,6 +71,15 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private PracticesAcrossWorkspaceService acrossWorkspaceService;
+
+    @Autowired
+    private PracticeGroupStandingService practiceGroupStandingService;
+
+    @Autowired
+    private PracticeStandingService practiceStandingService;
+
+    @Autowired
+    private PracticeGroupService practiceGroupService;
 
     private Workspace workspace;
     private User reader;
@@ -123,6 +139,8 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo(28)
                 .jsonPath("$.readerCounted")
                 .isEqualTo(true)
+                .jsonPath("$.developersWithAStandingInWindow")
+                .isEqualTo(28)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
                 .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourStanding")
@@ -198,8 +216,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 // A group with one practice names it, split as the group is.
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].practices[0].split.shape")
                 .isEqualTo("WITHHELD")
+                // The reader's own learning stays in their profile: the page carries no trend of theirs.
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourDirection")
-                .exists();
+                .doesNotExist();
     }
 
     @Test
@@ -295,10 +314,10 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Test
     @WithUser
-    @DisplayName("each window counts only its own evidence, and a window with too few developers shows no split")
-    void shouldCheckEachWindowOnItsOwn() {
-        // Testing and issue standings move forty days back, in order, before the last 30 days; packaging and craft
-        // stay inside it.
+    @DisplayName("each window moves only the tiles; the splits count the current standing whatever the window")
+    void shouldCountTheSplitsByTheCurrentStandingWhenTheWindowChanges() {
+        // Testing and issue standings move forty days back, in order, before the last 30 days but inside the
+        // profile's ninety; packaging and craft stay inside both.
         jdbc.update(
                 "UPDATE observation SET observed_at = observed_at - interval '40 days'"
                         + " WHERE workspace_id = ? AND practice_id IN (?, ?)",
@@ -309,33 +328,79 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         read("DAYS_30")
                 .jsonPath("$.window")
                 .isEqualTo("DAYS_30")
-                // The owner's only standing moved out of the window.
-                .jsonPath("$.developersWithAStanding")
+                // The owner's only standing moved out of the window, which the tiles count by.
+                .jsonPath("$.developersWithAStandingInWindow")
                 .isEqualTo(27)
+                // The splits still count the owner, whose profile still shows the standing.
+                .jsonPath("$.developersWithAStanding")
+                .isEqualTo(28)
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.shape")
-                .isEqualTo("WITHHELD")
+                .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
                 .isEqualTo("SPLIT");
-        read("DAYS_90")
-                .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.shape")
-                .isEqualTo("SPLIT");
+        assertThat(shapes(readAs(reader, PracticesAcrossWorkspaceWindow.DAYS_30)))
+                .isEqualTo(shapes(readAs(reader, PracticesAcrossWorkspaceWindow.DAYS_90)))
+                .isEqualTo(shapes(readAs(reader, PracticesAcrossWorkspaceWindow.ALL_TIME)));
     }
 
     @Test
     @WithUser
-    @DisplayName("all time reads evidence older than ninety days, which the ninety day window leaves out")
-    void shouldReadEveryObservationWhenTheWindowIsAllTime() {
-        // Every review moves a hundred days back, in order: the ninety day window reads nobody, all time everyone.
+    @DisplayName("evidence older than ninety days counts in the all time tiles but in no split")
+    void shouldLeaveEvidenceOlderThanTheProfileOutOfTheSplitsWhenTheWindowIsAllTime() {
+        // Every review moves a hundred days back, in order: the ninety day window reads nobody, all time everyone, and
+        // no profile shows a standing any more.
         jdbc.update(
                 "UPDATE observation SET observed_at = observed_at - interval '100 days' WHERE workspace_id = ?",
                 workspace.getId());
 
-        read("DAYS_90").jsonPath("$.developersWithAStanding").doesNotExist();
+        read("DAYS_90").jsonPath("$.developersWithAStandingInWindow").doesNotExist();
         read("ALL_TIME")
-                .jsonPath("$.developersWithAStanding")
+                .jsonPath("$.developersWithAStandingInWindow")
                 .isEqualTo(28)
-                .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.shape")
-                .isEqualTo("WITHHELD");
+                .jsonPath("$.developersWithAStanding")
+                .doesNotExist()
+                .jsonPath("$.readerCounted")
+                .isEqualTo(false)
+                .jsonPath("$.groups[?(@.split.shape != 'WITHHELD')]")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the reader's marker is the standing their practice profile shows, whatever the window")
+    void shouldMarkTheReaderByTheirProfileStandingWhenTheWindowIsShorterThanTheProfile() {
+        // A slip sixty days back: inside the profile's ninety days, outside the last 30 days.
+        problem(craft, reader, NOW.minus(Duration.ofDays(60)));
+
+        PracticesAcrossWorkspaceDTO page = readAs(reader, PracticesAcrossWorkspaceWindow.DAYS_30);
+        CurrentScmIdentityHolder.set(reader.getId(), reader.getLogin(), Set.of(reader.getId()));
+        Map<String, PracticeGroupStandingDTO.Standing> profileGroups;
+        Map<String, PracticeStandingDTO.Standing> profilePractices;
+        try {
+            profileGroups = practiceGroupStandingService
+                    .getGroupStandings(
+                            workspace.getId(),
+                            practiceGroupService.listGroups(
+                                    WorkspaceContext.fromWorkspace(workspace, null, null), true))
+                    .stream()
+                    .collect(Collectors.toMap(PracticeGroupStandingDTO::groupSlug, PracticeGroupStandingDTO::standing));
+            profilePractices = practiceStandingService.getStandings(workspace.getId()).stream()
+                    .collect(Collectors.toMap(PracticeStandingDTO::slug, PracticeStandingDTO::standing));
+        } finally {
+            CurrentScmIdentityHolder.clear();
+        }
+
+        assertThat(page.groups()).allSatisfy(group -> {
+            assertThat(group.yourStanding()).isEqualTo(profileGroups.get(group.groupSlug()));
+            assertThat(group.practices())
+                    .allSatisfy(practice -> assertThat(practice.yourStanding())
+                            .isEqualTo(profilePractices.get(practice.practiceSlug())));
+        });
+        // Read over the last 30 days alone the slip would be missing; the profile and the marker both show it.
+        assertThat(page.groups())
+                .filteredOn(group -> group.groupSlug().equals("code-craftsmanship"))
+                .singleElement()
+                .extracting(WorkspaceGroupSplitDTO::yourStanding)
+                .isEqualTo(PracticeGroupStandingDTO.Standing.DEVELOPING);
     }
 
     @Test
@@ -430,12 +495,15 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     /** The page as the service composes it for {@code developer}, or for a caller who is no developer when null. */
     private PracticesAcrossWorkspaceDTO readAs(@Nullable User developer) {
+        return readAs(developer, PracticesAcrossWorkspaceWindow.ALL_TIME);
+    }
+
+    private PracticesAcrossWorkspaceDTO readAs(@Nullable User developer, PracticesAcrossWorkspaceWindow window) {
         if (developer != null) {
             CurrentScmIdentityHolder.set(developer.getId(), developer.getLogin(), Set.of(developer.getId()));
         }
         try {
-            return acrossWorkspaceService.read(
-                    WorkspaceContext.fromWorkspace(workspace, null, null), PracticesAcrossWorkspaceWindow.ALL_TIME);
+            return acrossWorkspaceService.read(WorkspaceContext.fromWorkspace(workspace, null, null), window);
         } finally {
             CurrentScmIdentityHolder.clear();
         }

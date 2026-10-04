@@ -5043,9 +5043,9 @@ export const getOwnArtifactTraceOptions = (options: Options<GetOwnArtifactTraceD
 export const getPracticesAcrossWorkspaceQueryKey = (options: Options<GetPracticesAcrossWorkspaceData>) => createQueryKey('getPracticesAcrossWorkspace', options, false, ['Practices Across The Workspace']);
 
 /**
- * The reader's practice group and practice standings beside how the workspace's developers split
+ * How the workspace's developers split across practice groups and practices, the reader marked
  *
- * Counts developers, never names them: a count is shown only when it holds at least 3 developers other than the reader, a group's or a practice's split shows all four parts or is withheld, and each window is checked on its own.
+ * Counts developers, never names them: a count is shown only when it holds at least 3 developers other than the reader, a group's or a practice's split shows all four parts or is withheld. The splits count every developer's current standing; the window applies to the tiles only, and each window is checked on its own.
  */
 export const getPracticesAcrossWorkspaceOptions = (options: Options<GetPracticesAcrossWorkspaceData>) => queryOptions<GetPracticesAcrossWorkspaceResponse, DefaultError, GetPracticesAcrossWorkspaceResponse, ReturnType<typeof getPracticesAcrossWorkspaceQueryKey>>({
   queryFn: async ({ queryKey, signal }) => {

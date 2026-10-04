@@ -20,8 +20,8 @@ import org.jspecify.annotations.Nullable;
  * {@link Bucket}, read off their group standing or their practice standing. A split shows Needs attention, Mixed
  * feedback, Going well and none yet only when every one of the four holds enough; otherwise the whole split is
  * withheld, never a part of it, since the page states how many developers have a standing and a missing part would
- * be that total less the rest. Omit rather than show a zero. The reader's own standing is shown in every case,
- * since it is theirs.
+ * be that total less the rest. Omit rather than show a zero. The reader's own standing shows only as the marker on
+ * their part of a split, and a split withheld marks no one.
  *
  * <p>A group's standing is read off its practices, so its developers with a standing are everyone with a standing
  * in any of them, and its split and its practices' splits can be subtracted from each other: two practices of
@@ -30,8 +30,9 @@ import org.jspecify.annotations.Nullable;
  * practices show only while the overlap they add up to beyond the group is none or at least
  * {@link #MINIMUM_OTHERS} ({@link #group}).
  *
- * <p>Each window is checked on its own and the figures are live, so two windows, or two reads at different times,
- * can still be subtracted from each other; ADR 0051 records that limit.
+ * <p>The splits count the current standing and take no window, so two windows of one split never exist to subtract.
+ * The tiles' middle halves are checked per window, and the figures are live, so two windows of a tile, or two reads
+ * at different times, can still be subtracted from each other; ADR 0051 records that limit.
  */
 public final class CohortPrivacyPolicy {
 

@@ -338,7 +338,6 @@ export const BesideTheWorkspace: Story = {
 				split={threeWay([7, 6, 8])}
 				yourStanding="STRENGTH"
 				context={{
-					window: "DAYS_30",
 					readerCounted: true,
 					developersWithAStanding: 28,
 					minimumOthers: 3,

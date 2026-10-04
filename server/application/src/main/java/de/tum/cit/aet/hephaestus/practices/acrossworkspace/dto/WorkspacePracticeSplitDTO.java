@@ -4,14 +4,15 @@ import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO.S
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
 
-@Schema(description = "One practice of a group: the reader's own standing and how the developers with a standing split")
+@Schema(description = "One practice of a group: how the developers with a standing split, and where the reader is")
 public record WorkspacePracticeSplitDTO(
         @NonNull @Schema(description = "Practice slug") String practiceSlug,
         @NonNull @Schema(description = "Practice name") String practiceName,
 
         @NonNull
         @Schema(
-                description = "The reader's own standing in the practice",
+                description = "The reader's current standing in the practice, the one their practice profile shows:"
+                        + " the part of the split the reader is marked in",
                 allowableValues = {"DEVELOPING", "STRENGTH", "MIXED", "NOT_OBSERVED", "NO_OPPORTUNITY"})
         Standing yourStanding,
 

@@ -24,7 +24,6 @@ const meta = {
 	args: {
 		split: threeWay([6, 7, 7]),
 		yourStanding: "MIXED",
-		window: "DAYS_30",
 		readerCounted: true,
 		developersWithAStanding: 28,
 		minimumOthers: 3,
@@ -37,69 +36,57 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("img")).toHaveAccessibleName(
-			"28 developers with a standing in this workspace in the last 30 days: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet. You: Mixed feedback.",
+			"28 developers with a current standing in this workspace: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet. The You marker is on Mixed feedback.",
 		);
 		await expect(canvas.getByText("You")).toBeVisible();
-		// The marker carries the word, so no caption repeats it.
-		await expect(canvas.queryByText("You:")).toBeNull();
+		await expect(canvas.queryByText(/^You:/u)).toBeNull();
 	},
 };
 
-/** A reader outside the counts gets no marker; their word stands under the bar. */
+/** A reader with no current standing is in no count: no part carries the marker, and no word says it. */
 export const ReaderNotCounted: Story = {
-	args: { readerCounted: false, window: "DAYS_30" },
+	args: { readerCounted: false },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("You")).toBeNull();
-		await expect(canvas.getByText("You:")).toBeVisible();
+		await expect(canvas.queryByText(/^You:/u)).toBeNull();
 		await expect(canvas.getByRole("img")).toHaveAccessibleName(
-			/in the last 30 days: .* You: Mixed feedback, not counted in the split\.$/u,
+			"28 developers with a current standing in this workspace: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet.",
 		);
-	},
-};
-
-/** Beside a standing badge, as in a level's head, the bar leaves the reader's word out. */
-export const BesideABadge: Story = {
-	args: { readerCounted: false, showYourWord: false },
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByText("You:")).toBeNull();
 	},
 };
 
 /**
- * Held back: an empty track where the bar would be, one short reason and the reader's word. The
- * total is said once above the table, never on the row.
+ * Held back: an empty track where the bar would be and one short reason, nothing more. The total
+ * is said once above the table, never on the row, and the reader is not marked.
  */
 export const Withheld: Story = {
 	args: { split: WITHHELD, yourStanding: "NOT_OBSERVED" },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("img")).toBeNull();
 		await expect(canvas.getByText("Held back so no one can be singled out.")).toBeVisible();
-		await expect(canvas.queryByText(/developers with a standing/u)).toBeNull();
-		await expect(canvas.getByText("None yet (Not observed yet)")).toBeVisible();
+		await expect(canvas.queryByText(/developers with a/u)).toBeNull();
+		await expect(canvas.queryByText(/You/u)).toBeNull();
+		await expect(canvas.queryByText(/None yet/u)).toBeNull();
 	},
 };
 
-/** Held back beside a standing badge: the badge says the reader's standing, so the bar does not. */
-export const WithheldBesideABadge: Story = {
-	args: { split: WITHHELD, yourStanding: "DEVELOPING", showYourWord: false },
+/** The server held the total back: the bar names its reference group without a count. */
+export const TotalHeldBack: Story = {
+	args: { developersWithAStanding: undefined },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Held back so no one can be singled out.")).toBeVisible();
-		await expect(canvas.queryByText("You:")).toBeNull();
-		await expect(canvas.queryByText("Needs attention")).toBeNull();
+		await expect(canvas.getByRole("img")).toHaveAccessibleName(
+			/^Developers with a current standing in this workspace: /u,
+		);
 	},
 };
 
-/**
- * A reader with nothing to report is counted in none yet: the marker sits over that part, and the
- * text names it in the legend's words with the profile's reason after them.
- */
+/** A reader with nothing to report is counted in none yet: the marker sits over that part. */
 export const ReaderInNoneYet: Story = {
 	args: { yourStanding: "NO_OPPORTUNITY" },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("You")).toBeVisible();
-		await expect(canvas.queryByText("You:")).toBeNull();
 		await expect(canvas.getByRole("img")).toHaveAccessibleName(
-			/, 8 none yet\. You: None yet \(Nothing to report yet\)\.$/u,
+			/, 8 none yet\. The You marker is on none yet\.$/u,
 		);
 	},
 };

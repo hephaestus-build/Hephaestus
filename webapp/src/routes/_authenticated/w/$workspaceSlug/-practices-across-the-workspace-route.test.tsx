@@ -20,23 +20,9 @@ vi.setConfig({ testTimeout: ROUTE_RENDER_WAIT.timeout });
 
 const PAGE = "/w/acme/practices-across-the-workspace";
 
-const FIRST_OPPORTUNITY = "2026-08-01T09:00:00Z";
-const LAST_OPPORTUNITY = "2026-09-20T09:00:00Z";
-
 const wire = (window: PracticesAcrossWorkspace["window"]): Wire<PracticesAcrossWorkspace> => ({
 	...ACROSS_WORKSPACE,
 	window,
-	// The trend's support carries its dates as the server sends them, so the transformer is proven.
-	groups: ACROSS_WORKSPACE.groups.map(({ yourTrendSupport, ...group }) => ({
-		...group,
-		...(yourTrendSupport && {
-			yourTrendSupport: {
-				...yourTrendSupport,
-				firstOpportunityAt: FIRST_OPPORTUNITY,
-				lastOpportunityAt: LAST_OPPORTUNITY,
-			},
-		}),
-	})),
 });
 
 /** The reader's own standing on the practice the level opens. */

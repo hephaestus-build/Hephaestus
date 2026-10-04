@@ -4201,13 +4201,17 @@ export type PracticeWorkTypeDefinitionOptions = {
 };
 
 /**
- * The reader's own practice group standings beside how the workspace's developers with a standing split across the same groups, counted in developers and never naming one
+ * How the workspace's developers with a standing split across the practice groups, counted in developers and never naming one, with the reader's own figures beside the workspace's
  */
 export type PracticesAcrossWorkspace = {
   /**
-   * Eligible developers with a standing in a practice group shown in the window; absent while fewer than minimumOthers of them are other than the reader
+   * Eligible developers with a current standing in a practice group shown, the developers every split counts; absent while fewer than minimumOthers of them are other than the reader
    */
   developersWithAStanding?: number;
+  /**
+   * Eligible developers with a standing in a practice group shown in the window, the developers the tiles compare; absent while fewer than minimumOthers of them are other than the reader
+   */
+  developersWithAStandingInWindow?: number;
   /**
    * One row per practice group shown on the practice pages, in catalog order
    */
@@ -4229,7 +4233,7 @@ export type PracticesAcrossWorkspace = {
    */
   practicesNeedingAttention: WorkspaceTile;
   /**
-   * Whether the reader is one of the developers with a standing and so inside the counts
+   * Whether the reader is one of the developers with a current standing and so inside the splits
    */
   readerCounted: boolean;
   /**
@@ -4237,7 +4241,7 @@ export type PracticesAcrossWorkspace = {
    */
   reviewedWork: WorkspaceTile;
   /**
-   * The window the evidence was read over
+   * The window the tiles read evidence over; the splits read every developer's current standing, whatever the window
    */
   window: 'ALL_TIME' | 'DAYS_30' | 'DAYS_90';
   /**
@@ -6767,7 +6771,7 @@ export type WorkspaceAiOption = {
 };
 
 /**
- * One practice group: the reader's own standing and how the developers with a standing split across it
+ * One practice group: how the developers with a standing split across it, and where the reader is
  */
 export type WorkspaceGroupSplit = {
   /**
@@ -6795,17 +6799,9 @@ export type WorkspaceGroupSplit = {
    */
   split: WorkspaceSplit;
   /**
-   * The direction of the reader's own standing in the group, read over the window
-   */
-  yourDirection?: 'IMPROVING' | 'DECLINING' | 'UNCERTAIN' | 'INSUFFICIENT_EVIDENCE';
-  /**
-   * The reader's own standing in the group, shown in every shape
+   * The reader's current standing in the group, the one their practice profile shows: the part of the split the reader is marked in
    */
   yourStanding: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
-  /**
-   * Evidence support and provenance for the reader's direction
-   */
-  yourTrendSupport?: TrendSupport;
 };
 
 /**
@@ -7150,7 +7146,7 @@ export type WorkspaceOnboardingSettings = {
 };
 
 /**
- * One practice of a group: the reader's own standing and how the developers with a standing split
+ * One practice of a group: how the developers with a standing split, and where the reader is
  */
 export type WorkspacePracticeSplit = {
   /**
@@ -7166,7 +7162,7 @@ export type WorkspacePracticeSplit = {
    */
   split: WorkspaceSplit;
   /**
-   * The reader's own standing in the practice
+   * The reader's current standing in the practice, the one their practice profile shows: the part of the split the reader is marked in
    */
   yourStanding: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
 };

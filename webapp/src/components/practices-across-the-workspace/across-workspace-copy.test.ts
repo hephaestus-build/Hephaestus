@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	groupsHint,
+	PAGE_PURPOSE,
 	practicesHint,
 	type SplitContext,
 	splitDescription,
@@ -9,14 +10,13 @@ import {
 } from "./across-workspace-copy";
 
 const context: SplitContext = {
-	window: "ALL_TIME",
 	readerCounted: true,
 	developersWithAStanding: 28,
 	minimumOthers: 3,
 };
 
 describe("splitDescription", () => {
-	it("names the reference group and every count the bar shows, and nothing it does not", () => {
+	it("names the reference group, every count the bar shows, and the part the marker is on", () => {
 		expect(
 			splitDescription(
 				{ shape: "SPLIT", needsAttention: 6, mixedFeedback: 7, goingWell: 7, noneYet: 8 },
@@ -24,27 +24,45 @@ describe("splitDescription", () => {
 				context,
 			),
 		).toBe(
-			"28 developers with a standing in this workspace so far: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet. You: Mixed feedback.",
+			"28 developers with a current standing in this workspace: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet. The You marker is on Mixed feedback.",
 		);
 	});
 
-	it("says the reader is not counted when they are not among the developers with a standing", () => {
+	it("names no window: a bar counts the current standing whatever the tiles read", () => {
+		expect(
+			splitDescription(
+				{ shape: "SPLIT", needsAttention: 6, mixedFeedback: 7, goingWell: 7, noneYet: 8 },
+				"MIXED",
+				context,
+			),
+		).not.toMatch(/days|so far|All time/u);
+	});
+
+	it("marks none yet for a reader counted with no standing in the subject", () => {
 		expect(
 			splitDescription(
 				{ shape: "SPLIT", needsAttention: 6, mixedFeedback: 7, goingWell: 7, noneYet: 8 },
 				"NOT_OBSERVED",
-				{ ...context, window: "DAYS_30", readerCounted: false },
+				context,
 			),
-		).toMatch(
-			/in the last 30 days: .*, 8 none yet\. You: None yet \(Not observed yet\), not counted in the split\.$/u,
-		);
+		).toMatch(/, 8 none yet\. The You marker is on none yet\.$/u);
+	});
+
+	it("says nothing of a reader who is not among the developers with a standing", () => {
+		expect(
+			splitDescription(
+				{ shape: "SPLIT", needsAttention: 6, mixedFeedback: 7, goingWell: 7, noneYet: 8 },
+				"NOT_OBSERVED",
+				{ ...context, readerCounted: false },
+			),
+		).toMatch(/, 8 none yet\.$/u);
 	});
 });
 
 describe("a split held back", () => {
-	it("gives one short reason and the reader's word, never the total", () => {
+	it("gives one short reason and nothing of the reader, never the total", () => {
 		expect(splitDescription({ shape: "WITHHELD" }, "MIXED", context)).toBe(
-			"Held back so no one can be singled out. You: Mixed feedback.",
+			"Held back so no one can be singled out.",
 		);
 	});
 
@@ -58,7 +76,7 @@ describe("a split held back", () => {
 					developersWithAStanding: undefined,
 				},
 			),
-		).toMatch(/^Developers with a standing in this workspace so far: /u);
+		).toMatch(/^Developers with a current standing in this workspace: /u);
 	});
 });
 
@@ -79,6 +97,18 @@ describe("the hints", () => {
 		expect(groupsHint(3)).toContain(
 			"A bar shows only if each of its parts holds at least 3 other developers",
 		);
+	});
+
+	it("says a bar counts the current standing, as the profile shows it, and names no window", () => {
+		for (const hint of [groupsHint(3), practicesHint(3)]) {
+			expect(hint).toContain("current standing");
+			expect(hint).toContain("as their Practice profile shows it");
+			expect(hint).not.toMatch(/days|All time/u);
+		}
+	});
+
+	it("sends the reader to their profile for their next step", () => {
+		expect(PAGE_PURPOSE).toContain("Your next step is in your Practice profile.");
 	});
 
 	it("says a practice's bar is also held back beside its group's, with no promise about later", () => {

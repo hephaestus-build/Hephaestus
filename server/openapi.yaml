@@ -50,6 +50,8 @@ tags:
   name: Admin
 - description: Current user's Slack privacy preferences
   name: Slack User Preferences
+- description: "How the workspace's developers split, the reader marked"
+  name: Practices Across The Workspace
 - description: Per-workspace Outline collection mirroring control plane
   name: Outline collections
 - description: The starting catalog copied into new workspaces
@@ -69,8 +71,6 @@ tags:
   name: User view
 - description: Workspace integration connection management
   name: Connections
-- description: The reader's standings beside the workspace's split
-  name: Practices Across The Workspace
 - description: Up/down votes on mentor assistant messages
   name: Mentor Votes
 - description: "Workspace-admin access to review runs, observations, and feedback\
@@ -7968,8 +7968,9 @@ paths:
     get:
       description: "Counts developers, never names them: a count is shown only when\
         \ it holds at least 3 developers other than the reader, a group's or a practice's\
-        \ split shows all four parts or is withheld, and each window is checked on\
-        \ its own."
+        \ split shows all four parts or is withheld. The splits count every developer's\
+        \ current standing; the window applies to the tiles only, and each window\
+        \ is checked on its own."
       operationId: getPracticesAcrossWorkspace
       parameters:
       - description: Workspace slug
@@ -7996,8 +7997,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticesAcrossWorkspace"
           description: Practices across the workspace returned
-      summary: The reader's practice group and practice standings beside how the workspace's
-        developers split
+      summary: "How the workspace's developers split across practice groups and practices,\
+        \ the reader marked"
       tags:
       - Practices Across The Workspace
   /workspaces/{workspaceSlug}/practices/{practiceSlug}:
@@ -16005,16 +16006,22 @@ components:
       - supportedAutomatedReviewModes
     PracticesAcrossWorkspace:
       type: object
-      description: "The reader's own practice group standings beside how the workspace's\
-        \ developers with a standing split across the same groups, counted in developers\
-        \ and never naming one"
+      description: "How the workspace's developers with a standing split across the\
+        \ practice groups, counted in developers and never naming one, with the reader's\
+        \ own figures beside the workspace's"
       properties:
         developersWithAStanding:
           type: integer
           format: int32
-          description: Eligible developers with a standing in a practice group shown
-            in the window; absent while fewer than minimumOthers of them are other
-            than the reader
+          description: "Eligible developers with a current standing in a practice\
+            \ group shown, the developers every split counts; absent while fewer than\
+            \ minimumOthers of them are other than the reader"
+        developersWithAStandingInWindow:
+          type: integer
+          format: int32
+          description: "Eligible developers with a standing in a practice group shown\
+            \ in the window, the developers the tiles compare; absent while fewer\
+            \ than minimumOthers of them are other than the reader"
         groups:
           type: array
           description: "One row per practice group shown on the practice pages, in\
@@ -16039,14 +16046,15 @@ components:
           description: The reader's practices needing attention
         readerCounted:
           type: boolean
-          description: Whether the reader is one of the developers with a standing
-            and so inside the counts
+          description: Whether the reader is one of the developers with a current
+            standing and so inside the splits
         reviewedWork:
           $ref: "#/components/schemas/WorkspaceTile"
           description: Pieces of the reader's work reviewed in the window
         window:
           type: string
-          description: The window the evidence was read over
+          description: "The window the tiles read evidence over; the splits read every\
+            \ developer's current standing, whatever the window"
           enum:
           - ALL_TIME
           - DAYS_30
@@ -19974,8 +19982,8 @@ components:
       - practiceReviewsReady
     WorkspaceGroupSplit:
       type: object
-      description: "One practice group: the reader's own standing and how the developers\
-        \ with a standing split across it"
+      description: "One practice group: how the developers with a standing split across\
+        \ it, and where the reader is"
       properties:
         groupColor:
           type: string
@@ -19998,27 +20006,16 @@ components:
         split:
           $ref: "#/components/schemas/WorkspaceSplit"
           description: How the developers with a standing split across the group
-        yourDirection:
-          type: string
-          description: "The direction of the reader's own standing in the group, read\
-            \ over the window"
-          enum:
-          - IMPROVING
-          - DECLINING
-          - UNCERTAIN
-          - INSUFFICIENT_EVIDENCE
         yourStanding:
           type: string
-          description: "The reader's own standing in the group, shown in every shape"
+          description: "The reader's current standing in the group, the one their\
+            \ practice profile shows: the part of the split the reader is marked in"
           enum:
           - DEVELOPING
           - STRENGTH
           - MIXED
           - NOT_OBSERVED
           - NO_OPPORTUNITY
-        yourTrendSupport:
-          $ref: "#/components/schemas/TrendSupport"
-          description: Evidence support and provenance for the reader's direction
       required:
       - groupName
       - groupSlug
@@ -20522,8 +20519,8 @@ components:
       - revision
     WorkspacePracticeSplit:
       type: object
-      description: "One practice of a group: the reader's own standing and how the\
-        \ developers with a standing split"
+      description: "One practice of a group: how the developers with a standing split,\
+        \ and where the reader is"
       properties:
         practiceName:
           type: string
@@ -20536,7 +20533,8 @@ components:
           description: How the developers with a standing split across the practice
         yourStanding:
           type: string
-          description: The reader's own standing in the practice
+          description: "The reader's current standing in the practice, the one their\
+            \ practice profile shows: the part of the split the reader is marked in"
           enum:
           - DEVELOPING
           - STRENGTH

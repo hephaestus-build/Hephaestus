@@ -28,7 +28,6 @@ const ROWS: ComparisonRow[] = [
 ];
 
 const CONTEXT = {
-	window: "DAYS_30",
 	readerCounted: true,
 	developersWithAStanding: 28,
 	minimumOthers: 3,
@@ -56,7 +55,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Both shapes in one table: split and held back, with a reader not counted. */
+/** Both shapes in one table: split and held back, the reader marked only on a split. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("table", { name: "All practice groups" })).toBeVisible();
@@ -79,7 +78,7 @@ export const Default: Story = {
 	},
 };
 
-/** Every split held back: an empty track and one short reason per row, the reader's word beside it. */
+/** Every split held back: an empty track and one short reason per row, and nothing of the reader. */
 export const Withheld: Story = {
 	args: {
 		state: {
@@ -91,6 +90,7 @@ export const Withheld: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(4);
 		await expect(canvas.queryByRole("img")).toBeNull();
+		await expect(canvas.queryByText(/You/u)).toBeNull();
 	},
 };
 
