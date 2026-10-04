@@ -4,130 +4,168 @@ title: Practice profile
 description: See how your work stands across practice groups, what held and what changed, and the feedback behind it.
 ---
 
-Your Practice profile shows where your recent work stands on the practices your workspace cares about,
-what held and what changed since the review before the latest one, and the feedback written from it.
-Other developers cannot see it; [Your data in Hephaestus](./privacy.mdx#ai-processing-and-visibility)
-lists who else can. It rests on practice feedback about your own pull requests, merge requests,
-issues, conversations and documents, never on comparisons with other developers.
+Your Practice profile shows where your recent work stands on the practices that matter to your workspace.
+It shows what held, what changed since the review before the latest one, and the feedback from that work.
+Other developers cannot see it.
+[Your data in Hephaestus](./privacy.mdx#ai-processing-and-visibility) lists who else can.
+
+The profile uses practice feedback about your own pull requests, merge requests, issues, conversations, and documents.
+It never compares you with other developers.
 
 ## Opening it
 
-Sign in and select a workspace: a workspace that reviews practices opens on your Practice profile. It
-is also the first entry in the sidebar under Dashboards. A workspace that does not review practices
-has no Practice profile and opens on [Activity](./activity.mdx) instead.
+1. Sign in.
+2. Select a workspace.
+
+A workspace that reviews practices opens on your Practice profile.
+It is also the first entry under **Dashboards** in the sidebar.
+A workspace that does not review practices has no Practice profile and opens on [Activity](./activity.mdx).
 
 ## Reading the top of the page
 
-The header says what Hephaestus reviews and how a piece of feedback resolves. The chip beside the
-title reads **Latest review** with the date of the latest review of your work and the work it
-reviewed, or says that it stopped before it finished. When that review is still running, the chip reads
-**Review running** and names the work instead. Either way, it opens
-[Reviews of your work](#reviews-of-your-work). A review counts here only once it records something
-about your work, so one that has not yet does not show on the chip or in the list. Before your first
-review, it reads **No review yet**.
-A ring counts your practices by standing — going well, mixed feedback, needs attention, nothing to
-report yet, or not observed yet — and **See all practice groups** opens the table of every practice
-group.
+The header explains what Hephaestus reviews and how feedback resolves.
+The chip beside the title reads **Latest review** with the latest review's date and reviewed work.
+It can instead say that the review stopped before completion.
+While that review runs, the chip reads **Review running** and names the work.
+Both states open [Reviews of your work](#reviews-of-your-work).
 
-Under the header, Heph sums up what happened since the review before the latest one:
+A review counts here only after it records a result about your work.
+Until then, it appears neither on the chip nor in the list.
+Before your first review, the chip reads **No review yet**.
 
-- **What is holding up well** — the practices you kept showing, each with how many pieces of work it
-  held across, and any feedback your work resolved.
-- **What needs your attention** — at most two practices you can do something about today: feedback
-  your work had started to answer and a newer review raised again, and feedback that is new. Each
-  row says what happened and on which piece of work, and **Read the feedback** takes you straight to
-  that card below.
-- **What changed** — a practice or group that moved to another standing, one seen for the first
-  time, a trend that turned. The paragraph names the most important moves and counts the rest;
-  **Show the changes** unfolds them.
-- The work the latest review looked at, listed by kind.
+A ring counts your practices by standing:
 
-The summary describes recent evidence, not your ability. There are no scores, no percentages and no
-ranking.
+- Going well.
+- Mixed feedback.
+- Needs attention.
+- Nothing to report yet.
+- Not observed yet.
+
+**See all practice groups** opens the table of each practice group.
+Under the header, Heph summarizes changes since the review before the latest one:
+
+- **What is holding up well** lists practices that your work continued to meet. Each shows how many pieces of work met it and any feedback your work resolved.
+- **What needs your attention** lists at most two practices you can act on today. These include new feedback and feedback that your work started to answer but a newer review raised again. Each row names the event and the work. **Read the feedback** opens that card below.
+- **What changed** lists changes in practice or group standing, first observations, and changes in trends. The paragraph names the most important changes and counts the rest. **Show the changes** expands them.
+- The latest reviewed work appears by kind.
+
+The summary describes recent evidence, not your ability.
+It has no scores, percentages, or ranking.
 
 ## Reviews of your work
 
-The chip beside the title opens the reviews that recorded something about your work, newest first and
-grouped by day. A review appears here once it records something about your work, so one that is still
-running may not be listed yet. The newest review is tagged **Latest**, and one somebody asked for is
-tagged **Requested**. Each row names the work, linked to the original, and leads with the practices
-the review found to improve: the first two by name, then how many more. Where it found none, the row
-says *Nothing to improve*, or that the review stopped early or is still running. Under that, it counts
-practices, each once: those that held, those that did not apply to the work and those it left
-undecided. It then says how many practices the review reached, which also counts the practices where
-it recorded nothing about you. Where the review left feedback for you on GitLab, **Read the feedback
-on the merge request** opens the comment itself; elsewhere the row says how many pieces of feedback
-reached you.
+The title chip opens reviews with recorded results about your work, newest first and grouped by day.
+A review appears only after it records a result about your work.
+A review that still runs may therefore not appear yet.
+The newest review has the **Latest** tag.
+A review that someone requested has the **Requested** tag.
 
-**Show** narrows the list to one kind of work, and **Timeframe** to the last 7, 30 or 90 days or
-**All time**, where it starts. While either narrows the list, no row is tagged **Latest**, since the
-newest review it keeps need not be your latest. **View earlier reviews** at the end of the list loads
-the reviews before them. Once the whole list is loaded and nothing narrows it, a later review of the
-same work says which one it is, such as *2nd review*. Where you may ask for another review of the
-work — as its author or assignee, or as a workspace admin — **Review this now** sits beside the row.
+Each row names the work with a link to the original.
+It starts with practices to improve: the first two by name, then a count of the rest.
+If there are none, it says *Nothing to improve*, or states that the review stopped early or still runs.
+Below, it counts each practice once: met, not applicable, or undetermined.
+It then counts the practices the review reached, including those with no recorded result about you.
 
-**Open review** opens one review: the work, linked to the original, the review's date, how many of
-its practices it reached, and **Review this now** where you may ask. Two tabs follow.
-**Every practice** lists the practices behind this review: for each, what it saw in your work, one
-line per observation, or why it stayed quiet; while the review is still running, practices appear
-as it reaches them. **Group** narrows it to one practice group,
-**Reviews when** to the practices that review on one moment, such as new commits pushed, and
-**Practice** to the names you type. **What we noticed** lists in order everything recorded about the
-work: what happened, how it was noticed, and whether a review started.
+For feedback on GitLab, **Read the feedback on the merge request** opens the comment.
+Elsewhere, the row counts the pieces of feedback that reached you.
+**Show** filters the list by kind of work.
+**Timeframe** filters it to the last 7, 30, or 90 days, or **All time**, the initial value.
+Neither filter shows the **Latest** tag, because the newest included review might not be your latest.
+
+**View earlier reviews** loads older reviews.
+After the whole list loads without filters, later reviews of the same work show their sequence, such as *2nd review*.
+**Review this now** appears beside a row when you may request another review as author, assignee, or workspace admin.
+
+**Open review** opens a review with the original work link, date, and number of practices reached.
+It also shows **Review this now** when you may request a review.
+Two tabs follow:
+
+- **Every practice** lists the practices behind the review. Each shows one line per observation or explains why it sent no feedback. During a review, practices appear as it reaches them.
+- **What we noticed** lists all recorded events about the work in order. It shows what happened, how the review noticed it, and whether a review started.
+
+In **Every practice**, these filters apply:
+
+- **Group** selects one practice group.
+- **Reviews when** selects a review occasion, such as new commits pushed.
+- **Practice** filters names by the text you enter.
 
 ## Your feedback
 
-Each card is one pattern that recurred across your work: what was seen, on which pieces of work and
-when, and one next step to try. The tabs above the cards split them, newest first: **Newest** shows
-the two newest open cards, **Open** every open card, **Resolved and closed** every card that resolved
-or closed, and **All** every card, withdrawn ones included.
+Each card describes one repeated pattern in your work.
+It states what reviews observed, on which work, when, and one next step to try.
+The tabs show cards newest first:
+
+- **Newest** shows the two newest open cards.
+- **Open** shows each open card.
+- **Resolved and closed** shows each resolved or closed card.
+- **All** shows each card, including withdrawn cards.
 
 A card resolves in one of two ways:
 
-- **By your work.** Once three pieces of your work in a row come back clean on the practice, the card
-  reads *Resolved by the work* and names the pieces of work that did it. A piece of work that shows the
-  problem again starts the count over; the line under the next step keeps the count.
-- **By you.** Under **Your response**, choose **Addressed** or **Not applicable** on the card; it then
-  reads *Marked as addressed* or *Marked as not applicable* with the day you did. Press it again to
-  take it back, and the card opens again.
+- **By your work.** Three consecutive pieces of reviewed work with no problem on the practice resolve the card. It reads *Resolved by the work* and names that work. Work that shows the problem again resets the count. The line under the next step shows the count.
+- **By you.** Your response can mark the card *Marked as addressed* or *Marked as not applicable*, with the date.
 
-If your workspace changes a practice after a card about it was written, the card closes without
-resolving: it reads *Closed*, gives the day and the reason, and stops counting clean work. A closed
-card stays on the page for 30 days after it closed. A newer card about the same practice replaces the
-open one, so you never have two open cards about one practice.
+To record or undo your response:
 
-A workspace admin can withdraw a card whose words were wrong. If you had already seen it, a recent
-withdrawal shows under **All** as a short notice that it was withdrawn, without what it said; one you had not
-seen yet simply never appears. A withdrawn card takes no new answer. It resolved nothing and says nothing about how
-your work stands, and what the reviews observed is unchanged. What it said is left out of the feedback given
-to later reviews and Heph. If the admin restores it, it comes back as it was.
+1. Under **Your response**, select **Addressed** or **Not applicable**.
+2. To undo your response, select it again.
 
-Rate a card **Helpful** or **Not helpful**. Helpful opens an optional note; Not helpful asks for a reason
-and a sentence on what was off, so the feedback can improve. Choosing **Not accurate** as the reason
-disputes the card: the workspace admins read your sentence on the observations behind it, and they can
-mark an observation incorrect or withdraw the card. The card's own text stays private to you. Your other
-notes are not shown to anyone.
+The card opens again when you undo the response.
+If your workspace changes a practice after a review wrote its card, the card closes without resolution.
+It reads *Closed*, gives the date and reason, and stops counting work that shows no problem on the practice.
+A closed card stays on the page for 30 days after closure.
+A newer card for the same practice replaces the open card, so each practice has at most one open card.
+
+A workspace admin can withdraw a card with incorrect words.
+If you already saw it, a recent withdrawal appears under **All** as a short notice, without its text.
+A card you had not seen never appears.
+A withdrawn card accepts no new response.
+It resolved nothing and says nothing about your standing.
+The observations stay unchanged.
+
+Later reviews and Heph do not receive the withdrawn text.
+If the admin restores the card, it returns as it was.
+
+To rate a card:
+
+1. Select **Helpful** or **Not helpful**.
+2. For **Helpful**, enter an optional note if necessary.
+3. For **Not helpful**, choose a reason.
+4. For **Not helpful**, enter a sentence about what was wrong, to help improve feedback.
+
+**Not accurate** disputes the card.
+Workspace admins read your sentence on the observations behind it.
+They can mark an observation incorrect or withdraw the card.
+The card text stays private to you.
+Nobody else sees your other notes.
 
 ## The practice group table
 
-**See all practice groups** opens the **All practice groups** panel, which lists every practice group in your
-workspace as a row: its standing, a ring that splits the group's practices by standing, and a sentence
-on what changed in it since the review before.
-The rows are ordered by standing, the groups that need attention first; press the **Standing** heading
-to reverse the order.
+**See all practice groups** opens the **All practice groups** panel.
+Each row shows a workspace practice group, its standing, and a ring that splits its practices by standing.
+A sentence describes changes since the previous review.
+The rows appear by standing, with groups that need attention first.
+
+1. To reverse the order, select the **Standing** heading.
 
 ## Opening a group and a practice
 
-Select a row to open the group: what the group is about, what held and what changed in it, your next
-step from its newest open feedback, and its practices with their standing and trend. Select a
-practice to go one level deeper: the observations behind it, review by review, which you can respond
-to; its feedback; and why it matters and what doing it well looks like.
+1. Select a group row.
+2. To see more detail, select a practice.
 
-Each panel opens over the one before it, and the page stays visible behind. The short path above a
-panel's title says where you are, from the page down to this panel; select a step in it to go back
-there, or use Back to return one level.
+The group panel describes the group, what held, and what changed.
+It shows the next step from its newest open feedback and each practice's standing and trend.
+The practice panel shows observations by review, with response controls, and feedback.
+It also explains why the practice matters and what work that meets it looks like.
+
+Each panel opens over the previous panel, with the page visible behind it.
+The short path above the title shows your position from the page to the panel.
+
+1. To return to a position, select it in the path.
+2. To return one level, select **Back**.
 
 ## When nothing has been reviewed yet
 
-Before the first review of your work, every practice counts as not observed yet, the summary is empty
-and there is no feedback to show. The first review fills the page in.
+Before the first review, each practice counts as not observed yet.
+The summary is empty and no feedback appears.
+The first review supplies the page content.

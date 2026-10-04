@@ -30,5 +30,18 @@
 	"docs/contributor/security-mutation-testing.md",
 	"docs/contributor/simplified-technical-english.md",
 	"docs/contributor/structured-logging.mdx",
-	"docs/contributor/system-design.mdx"
+	"docs/contributor/system-design.mdx",
+	"docs/user/accessibility.mdx",
+	"docs/user/activity.mdx",
+	"docs/user/ai-code-review.mdx",
+	"docs/user/ai-mentor.mdx",
+	"docs/user/browser-extension-privacy.mdx",
+	"docs/user/browser-extension.mdx",
+	"docs/user/getting-started.mdx",
+	"docs/user/overview.mdx",
+	"docs/user/practice-profile.mdx",
+	"docs/user/privacy.mdx",
+	"docs/user/product-feedback.mdx",
+	"docs/user/user-settings.mdx",
+	"docs/user/workspace.mdx"
 ]
