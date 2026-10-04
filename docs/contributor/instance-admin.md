@@ -118,7 +118,7 @@ membership ([auth glossary](https://github.com/hephaestus-build/Hephaestus/blob/
 The browser keeps the selected workspace, user ID, and reason in the tab's session storage.
 When a view starts or exits, the app reloads so cached results cannot cross identities.
 When it loads the current account, it drops a stored view opened by another account.
-`applyUserViewHeaders` adds `X-User-View-Workspace`, `X-User-View-User`, and the reason header to requests.
+`applyUserViewHeaders` adds `X-User-View-Workspace`, `X-User-View-User`, and the reason header to every request.
 It excludes the administrator's own sign-in, account, consent, feature-flag, and identity reads.
 
 During a view, the administrator's feature flags do not apply.
