@@ -2129,7 +2129,7 @@ export type GroupAutonomyRollup = {
 };
 
 /**
- * A practice the developer keeps holding
+ * A practice the developer's newest work keeps meeting
  */
 export type HeldPractice = {
   /**
@@ -3751,7 +3751,7 @@ export type PracticePreconditionClause = {
 };
 
 /**
- * What held, what changed and which work was reviewed over a window of the developer's reviews
+ * What was met, what changed and which work was reviewed over a window of the developer's reviews
  */
 export type PracticeProfileOverview = {
   /**

@@ -434,15 +434,15 @@ describe("composeOverview held rows", () => {
 			statement: "Every reviewer comment gets a visible answer",
 		});
 		// No provider on the held work, so the noun is the glossary's for either.
-		expect(plain(composed.holdingUp[1]?.note)).toBe("held across nine pull or merge requests");
-		expect(composed.holdingUpNote).toBe("Another practice held too.");
+		expect(plain(composed.holdingUp[1]?.note)).toBe("met across nine pull or merge requests");
+		expect(composed.holdingUpNote).toBe("Another practice was met too.");
 	});
 
 	it("names held work by the provider's noun", () => {
 		const composed = composeOverview(
 			overview({ holdingUp: [{ ...held("a", "A", 3), workProvider: "GITLAB" }] }),
 		);
-		expect(plain(composed.holdingUp[0]?.note)).toBe("held across three merge requests");
+		expect(plain(composed.holdingUp[0]?.note)).toBe("met across three merge requests");
 	});
 
 	it("says a piece of feedback the work resolved was resolved by the work, naming it", () => {
@@ -490,7 +490,7 @@ describe("composeOverview held rows", () => {
 		expect(composed.holdingUp[0]).toStrictEqual({
 			practiceSlug: "own",
 			practiceName: "A practice of our own",
-			note: [{ type: "text", text: "Held across four merge requests" }],
+			note: [{ type: "text", text: "Met across four merge requests" }],
 		});
 		expect(composed.holdingUp[1]).toStrictEqual({
 			practiceSlug: "quiet",
@@ -499,7 +499,7 @@ describe("composeOverview held rows", () => {
 		});
 	});
 
-	it("counts the rows it hid by kind: resolved feedback is not a practice that held", () => {
+	it("counts the rows it hid by kind: resolved feedback is not a practice that was met", () => {
 		const composed = composeOverview(
 			overview({
 				changes: Array.from({ length: 4 }, (_, index) =>
@@ -525,7 +525,7 @@ describe("composeOverview held rows", () => {
 			}),
 		);
 		expect(composed.holdingUpNote).toBe(
-			"Another piece of feedback resolved and two practices held too.",
+			"Another piece of feedback resolved and two practices were met too.",
 		);
 	});
 

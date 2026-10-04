@@ -2138,9 +2138,9 @@ export const getPracticeGroupTrend = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
- * What held, what changed and which work was reviewed since the run before the latest one
+ * What was met, what changed and which work was reviewed since the run before the latest one
  *
- * Returns the practices holding as a strength, every change to a standing, trend, group or piece of feedback inside the window, and the work reviewed inside it, as structured events. The window opens at the run before the latest one and closes now; with no such run it spans the standing's look-back of 90 days.
+ * Returns the practices met as a strength, every change to a standing, trend, group or piece of feedback inside the window, and the work reviewed inside it, as structured events. The window opens at the run before the latest one and closes now; with no such run it spans the standing's look-back of 90 days.
  */
 export const getPracticeProfileOverview = <ThrowOnError extends boolean = false>(options: Options<GetPracticeProfileOverviewData, ThrowOnError>): RequestResult<GetPracticeProfileOverviewResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetPracticeProfileOverviewResponses, unknown, ThrowOnError>({
   responseTransformer: getPracticeProfileOverviewResponseTransformer,

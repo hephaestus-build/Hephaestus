@@ -27,7 +27,7 @@ const meta = {
 				practiceSlug: "ready-and-traceable-handoff",
 				practiceName: "Mark the change ready and link its issue",
 				statement: "Every merge request names its issue,",
-				note: [text("held across nine pull requests.")],
+				note: [text("met across nine pull requests.")],
 			},
 			{
 				practiceSlug: "describe-what-and-why",
@@ -37,7 +37,7 @@ const meta = {
 				resolved: true,
 			},
 		],
-		holdingUpNote: "Another two practices held too.",
+		holdingUpNote: "Another two practices were met too.",
 		reviewedWork: [
 			{ kind: ARTIFACT_KIND.pullRequest, provider: "GITHUB", items: [20, 21, 22].map(pullRequest) },
 			{ kind: ARTIFACT_KIND.issue, items: [{ id: "13", kind: ARTIFACT_KIND.issue, label: "#13" }] },
@@ -150,7 +150,7 @@ export const HeldWithoutASentence: Story = {
 			{
 				practiceSlug: "own-practice",
 				practiceName: "A practice of our own",
-				note: [text("Held across four pull requests")],
+				note: [text("Met across four pull requests")],
 			},
 		],
 		holdingUpNote: undefined,
@@ -162,7 +162,7 @@ export const HeldWithoutASentence: Story = {
 			throw new Error("Every held row is a list item");
 		}
 		await expect(within(row).getByRole("button", { name: "Going well" })).toBeVisible();
-		await expect(row).toHaveTextContent(/^A practice of our ownHeld across four pull requests$/u);
+		await expect(row).toHaveTextContent(/^A practice of our ownMet across four pull requests$/u);
 	},
 };
 

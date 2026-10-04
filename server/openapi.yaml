@@ -5752,11 +5752,11 @@ paths:
       - Practice Group Detail
   /workspaces/{workspaceSlug}/practice-profile/overview:
     get:
-      description: "Returns the practices holding as a strength, every change to a\
-        \ standing, trend, group or piece of feedback inside the window, and the work\
-        \ reviewed inside it, as structured events. The window opens at the run before\
-        \ the latest one and closes now; with no such run it spans the standing's\
-        \ look-back of 90 days."
+      description: "Returns the practices met as a strength, every change to a standing,\
+        \ trend, group or piece of feedback inside the window, and the work reviewed\
+        \ inside it, as structured events. The window opens at the run before the\
+        \ latest one and closes now; with no such run it spans the standing's look-back\
+        \ of 90 days."
       operationId: getPracticeProfileOverview
       parameters:
       - description: Workspace slug
@@ -5773,7 +5773,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeProfileOverview"
           description: Practice profile overview returned
-      summary: "What held, what changed and which work was reviewed since the run\
+      summary: "What was met, what changed and which work was reviewed since the run\
         \ before the latest one"
       tags:
       - Practice Profile
@@ -12893,7 +12893,7 @@ components:
       - overriddenCount
     HeldPractice:
       type: object
-      description: A practice the developer keeps holding
+      description: A practice the developer's newest work keeps meeting
       properties:
         cleanWork:
           type: integer
@@ -15262,8 +15262,8 @@ components:
           - scm.general-review-comments
     PracticeProfileOverview:
       type: object
-      description: "What held, what changed and which work was reviewed over a window\
-        \ of the developer's reviews"
+      description: "What was met, what changed and which work was reviewed over a\
+        \ window of the developer's reviews"
       properties:
         changes:
           type: array

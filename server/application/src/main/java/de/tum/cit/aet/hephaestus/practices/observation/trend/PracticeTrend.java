@@ -112,7 +112,7 @@ public final class PracticeTrend {
      * How many of the newest decided opportunities came back with no problem at all, and what they were.
      *
      * <p>Counted from the newest backwards and stopped at the first opportunity that raised a problem, so
-     * the number reads as "held across N pieces of work". An opportunity that produced no verdict is skipped
+     * the number reads as "met across N pieces of work". An opportunity that produced no verdict is skipped
      * rather than counted as either side, exactly as the standing skips it. Counted over the opportunities
      * the trend keeps, so a very long run of clean work reads as that trail's length rather than the whole history.
      * {@link WorkResolution} counts the same clean opportunities forwards from a piece of feedback.

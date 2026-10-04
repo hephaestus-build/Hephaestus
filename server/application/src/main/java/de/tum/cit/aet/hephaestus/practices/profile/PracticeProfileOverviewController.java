@@ -29,8 +29,8 @@ public class PracticeProfileOverviewController {
     @GetMapping("/overview")
     @Operation(
             operationId = "getPracticeProfileOverview",
-            summary = "What held, what changed and which work was reviewed since the run before the latest one",
-            description = "Returns the practices holding as a strength, every change to a standing, trend, group or"
+            summary = "What was met, what changed and which work was reviewed since the run before the latest one",
+            description = "Returns the practices met as a strength, every change to a standing, trend, group or"
                     + " piece of feedback inside the window, and the work reviewed inside it, as structured"
                     + " events. The window opens at the run before the latest one and closes now; with no such"
                     + " run it spans the standing's look-back of " + PracticeStandingService.LOOKBACK_DAYS

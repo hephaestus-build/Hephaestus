@@ -3854,9 +3854,9 @@ export const getPracticeGroupTrendOptions = (options: Options<GetPracticeGroupTr
 export const getPracticeProfileOverviewQueryKey = (options: Options<GetPracticeProfileOverviewData>) => createQueryKey('getPracticeProfileOverview', options, false, ['Practice Profile']);
 
 /**
- * What held, what changed and which work was reviewed since the run before the latest one
+ * What was met, what changed and which work was reviewed since the run before the latest one
  *
- * Returns the practices holding as a strength, every change to a standing, trend, group or piece of feedback inside the window, and the work reviewed inside it, as structured events. The window opens at the run before the latest one and closes now; with no such run it spans the standing's look-back of 90 days.
+ * Returns the practices met as a strength, every change to a standing, trend, group or piece of feedback inside the window, and the work reviewed inside it, as structured events. The window opens at the run before the latest one and closes now; with no such run it spans the standing's look-back of 90 days.
  */
 export const getPracticeProfileOverviewOptions = (options: Options<GetPracticeProfileOverviewData>) => queryOptions<GetPracticeProfileOverviewResponse, DefaultError, GetPracticeProfileOverviewResponse, ReturnType<typeof getPracticeProfileOverviewQueryKey>>({
   queryFn: async ({ queryKey, signal }) => {

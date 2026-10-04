@@ -78,7 +78,7 @@ export interface ComposedOverview {
 	latestRun?: ReviewRunRef;
 	/** Resolved feedback first, then the practices that held longest; at most three. */
 	holdingUp: HeldPracticeRow[];
-	/** "Another two practices held too." when the rows could not show every row they composed. */
+	/** "Another two practices were met too." when the rows could not show every row they composed. */
 	holdingUpNote?: string;
 	/**
 	 * What needs the developer next — feedback the work fell back on, then new feedback, at most
@@ -513,7 +513,7 @@ function aloneSentence(event: ChangeEvent): FeedbackTextSegment[] {
 	return sentence(alone(event), onWork(event, seenOn));
 }
 
-/** Resolved feedback first, newest first, then the practices that held across the most work. */
+/** Resolved feedback first, newest first, then the practices met across the most work. */
 function composeHeldRows(deduped: ProfileEvent[]): {
 	rows: HeldPracticeRow[];
 	note?: string;
@@ -533,26 +533,26 @@ function composeHeldRows(deduped: ProfileEvent[]): {
 		// The statement is the catalog's own sentence for the practice; a practice the catalog does
 		// not ship has none, and the row says only what the work showed.
 		...held.map<HeldPracticeRow>((event) => {
-			const heldAcross =
+			const metAcross =
 				event.cleanWork > 0
-					? `held across ${countedWork(event.workKind, event.cleanWork, event.workProvider)}`
+					? `met across ${countedWork(event.workKind, event.cleanWork, event.workProvider)}`
 					: "";
 			return event.holdsAs === undefined
 				? {
 						practiceSlug: event.slug,
 						practiceName: event.name,
-						note: heldAcross ? sentence(heldAcross) : [],
+						note: metAcross ? sentence(metAcross) : [],
 					}
 				: {
 						practiceSlug: event.slug,
 						practiceName: event.name,
 						statement: capitalise(event.holdsAs),
-						note: heldAcross ? [text(heldAcross)] : [],
+						note: metAcross ? [text(metAcross)] : [],
 					};
 		}),
 	];
 	// The rows are one list under one limit, but the note counts what it hid by kind: resolved
-	// feedback and a practice that held are different news, and a note naming the wrong one claims
+	// feedback and a practice that was met are different news, and a note naming the wrong one claims
 	// something that did not happen.
 	const resolvedShown = Math.min(resolved.length, HELD_ROW_LIMIT);
 	const note = heldRowsNote(
@@ -565,7 +565,7 @@ function composeHeldRows(deduped: ProfileEvent[]): {
 /**
  * The sentence under the rows: what the limit left out, counted by kind and said in one sentence.
  * Feedback is uncountable, so it is counted in pieces. The first count of one is named rather than
- * numbered — "Another practice held too.", never "another one practice".
+ * numbered — "Another practice was met too.", never "another one practice".
  */
 function heldRowsNote(resolvedHidden: number, heldHidden: number): string | undefined {
 	const [feedbackClause, practiceClause] = countsTogether([
@@ -578,10 +578,11 @@ function heldRowsNote(resolvedHidden: number, heldHidden: number): string | unde
 	} else if (resolvedHidden > 1 && feedbackClause !== undefined) {
 		clauses.push(`${feedbackClause} resolved`);
 	}
+	const met = heldHidden === 1 ? "was met" : "were met";
 	if (heldHidden === 1 && clauses.length === 0) {
-		clauses.push("practice held");
+		clauses.push(`practice ${met}`);
 	} else if (heldHidden > 0 && practiceClause !== undefined) {
-		clauses.push(`${practiceClause} held`);
+		clauses.push(`${practiceClause} ${met}`);
 	}
 	return clauses.length === 0 ? undefined : capitalise(`another ${clauses.join(" and ")} too.`);
 }
