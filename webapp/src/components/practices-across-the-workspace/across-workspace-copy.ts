@@ -1,4 +1,5 @@
 import type { PracticesAcrossWorkspaceTiles, WorkspaceSplit } from "@/api/types.gen";
+import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "@/components/activity/activity-range";
 import type { FilterOption } from "@/components/common/FilterToggle";
 import { statusValues } from "@/components/common/status-def";
 import {
@@ -19,13 +20,20 @@ interface WindowDef {
 	phrase: string;
 }
 
+/** A window that Activity offers too, in Activity's words for it. */
+function activityWindow(range: ActivityRange): WindowDef {
+	const def = ACTIVITY_RANGE_DEFS[range];
+	return { label: def.label, shortLabel: def.shortLabel, phrase: `in ${def.inSentence}` };
+}
+
 /**
- * Every window the page reads, the one home of its words, shortest first as Apple Health orders
- * its ranges. A window the server adds fails to compile here rather than falling back unseen.
+ * Every window the page reads, shortest first as Apple Health orders its ranges, named as Activity
+ * names the same span. A window the server adds fails to compile here rather than falling back
+ * unseen.
  */
 const WINDOW_DEFS: Record<AcrossWorkspaceWindow, WindowDef> = {
-	DAYS_30: { label: "Last 30 days", shortLabel: "30 days", phrase: "in the last 30 days" },
-	DAYS_90: { label: "Last 90 days", shortLabel: "90 days", phrase: "in the last 90 days" },
+	DAYS_30: activityWindow("30d"),
+	DAYS_90: activityWindow("90d"),
 	ALL_TIME: { label: "All time", shortLabel: "All time", phrase: "so far" },
 };
 
