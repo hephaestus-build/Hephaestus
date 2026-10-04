@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
+import {
+	createAgentSession,
+	createCodemodeExtension,
+	DefaultResourceLoader,
+	ModelRuntime,
+	SessionManager,
+	SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 
 import {
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
@@ -49,4 +56,56 @@ void test("the sandbox resource-loader options turn off the SDK's own AGENTS.md 
 	const on = new DefaultResourceLoader({ cwd: CWD, agentDir: AGENT_DIR, settingsManager });
 	await on.reload();
 	assert.equal(discoveredFixture(on), true);
+});
+
+void test("the review tool list excludes write and edit from direct and nested calls", async () => {
+	const settingsManager = SettingsManager.create(CWD, AGENT_DIR, SANDBOX_SETTINGS_MANAGER_OPTIONS);
+	const systemPrompt = "Review the evidence. Do not write or edit workspace files.";
+	const resourceLoader = new DefaultResourceLoader({
+		cwd: CWD,
+		agentDir: AGENT_DIR,
+		settingsManager,
+		...SANDBOX_RESOURCE_LOADER_OPTIONS,
+		systemPrompt,
+		agentsFilesOverride: () => ({ agentsFiles: [] }),
+		extensionFactories: [createCodemodeExtension({ mode: "on", models: false })],
+	});
+	await resourceLoader.reload();
+	assert.deepEqual(resourceLoader.getExtensions().errors, []);
+	const modelRuntime = await ModelRuntime.create({
+		authPath: path.join(AGENT_DIR, "auth.json"),
+		modelsPath: path.join(AGENT_DIR, "models.json"),
+	});
+	const { session } = await createAgentSession({
+		cwd: CWD,
+		agentDir: AGENT_DIR,
+		tools: ["read", "grep", "find", "ls", "bash", "codemode"],
+		resourceLoader,
+		settingsManager,
+		modelRuntime,
+		sessionManager: SessionManager.inMemory(CWD),
+	});
+	try {
+		assert.deepEqual(session.getActiveToolNames().toSorted(), [
+			"bash",
+			"codemode",
+			"find",
+			"grep",
+			"ls",
+			"read",
+		]);
+		assert.deepEqual(session.getCallableToolNames().toSorted(), [
+			"bash",
+			"find",
+			"grep",
+			"ls",
+			"read",
+		]);
+		session.setActiveToolsByName(["write", "edit"]);
+		assert.deepEqual(session.getActiveToolNames(), []);
+		assert.ok(session.systemPrompt.startsWith(systemPrompt));
+		assert.doesNotMatch(session.systemPrompt, /coding assistant|edit tool|write tool|ignore me/u);
+	} finally {
+		session.dispose();
+	}
 });
