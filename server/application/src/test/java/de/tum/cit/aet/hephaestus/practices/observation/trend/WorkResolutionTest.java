@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
+import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.backfilled;
 import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.clean;
 import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.noVerdict;
 import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.problem;
@@ -7,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -79,6 +81,16 @@ class WorkResolutionTest {
     }
 
     /** The path the cards and the profile take: bundle the practice's work once, then read one piece of feedback. */
+    @Test
+    void shouldNotResolveFeedbackWhenOnlyABackfillCampaignCameBackClean() {
+        WorkResolution resolution = resolve(List.of(
+                backfilled(11L, "2026-05-02T09:00:00Z", Outcome.MET),
+                backfilled(12L, "2026-05-03T09:00:00Z", Outcome.MET),
+                backfilled(13L, "2026-05-04T09:00:00Z", Outcome.MET)));
+
+        assertThat(resolution).isEqualTo(WorkResolution.NONE);
+    }
+
     private static WorkResolution resolve(List<Observation> observations) {
         return WorkResolution.Opportunities.of(observations, Instant.EPOCH).resolve(PREPARED_AT);
     }

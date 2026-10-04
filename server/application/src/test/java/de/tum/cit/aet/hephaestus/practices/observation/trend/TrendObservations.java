@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.observation.trend;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import java.time.Instant;
 import java.util.UUID;
@@ -59,6 +60,19 @@ public final class TrendObservations {
     /** {@link #noVerdict} on a named run. */
     public static Observation noVerdict(long artifactId, UUID jobId, String observedAt) {
         return observation(artifactId, jobId, observedAt, ArtifactKinds.PULL_REQUEST, Outcome.NOT_APPLICABLE);
+    }
+
+    /** {@link #judged}, taken by a backfill campaign rather than a live review. */
+    public static Observation backfilled(long artifactId, String observedAt, Outcome outcome) {
+        return Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(artifactId)
+                .outcome(outcome)
+                .origin(ObservationOrigin.BACKFILL)
+                .observedAt(Instant.parse(observedAt))
+                .build();
     }
 
     private static Observation observation(

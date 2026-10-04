@@ -87,6 +87,11 @@ public final class PracticeTrend {
      * @param decay per-opportunity weight factor in {@code (0,1]}; 1.0 is an unweighted mean
      */
     public OptionalDouble recentMetShare(int window, double decay) {
+        return recentMetShare(opportunities, window, decay);
+    }
+
+    /** {@link #recentMetShare(int, double)} over any opportunities, oldest first. */
+    static OptionalDouble recentMetShare(List<EvidenceOpportunity> opportunities, int window, double decay) {
         List<EvidenceOpportunity> decided =
                 opportunities.stream().filter(EvidenceOpportunity::decided).toList();
         if (decided.isEmpty()) {

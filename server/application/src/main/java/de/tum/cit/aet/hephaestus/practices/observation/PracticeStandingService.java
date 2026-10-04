@@ -28,6 +28,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -281,15 +282,22 @@ public class PracticeStandingService {
      * this number, and the level above consumes the number rather than the label.
      *
      * <p>One rule over the newest {@link #STANDING_WINDOW} opportunities, weighted by recency: the unit is a
-     * piece of reviewed work, and the denominator is the opportunities it had.
+     * piece of reviewed work, and the denominator is the opportunities it had. The opportunities are the live and
+     * requested work the trend reads; a practice only a backfill campaign judged reads the campaign's work by the
+     * same rule, so the two populations are never mixed.
      *
      * <p>The fallback is reached only when every verdict of the practice is older than the trend horizon. The
      * profile never reaches it while its look-back of {@link #LOOKBACK_DAYS} days is the horizon. Across the
      * workspace, All time reads evidence older than that, and a practice whose verdicts all lie before the horizon
      * falls back to this binary share.
      */
-    private static double standingShare(PracticeEvidence evidence, PracticeTrend trend) {
-        return trend.recentMetShare(STANDING_WINDOW, STANDING_DECAY)
+    private double standingShare(PracticeEvidence evidence, PracticeTrend trend) {
+        OptionalDouble live = trend.recentMetShare(STANDING_WINDOW, STANDING_DECAY);
+        if (live.isPresent()) {
+            return live.getAsDouble();
+        }
+        return practiceTrendService
+                .backfilledMetShare(evidence.observed(), STANDING_WINDOW, STANDING_DECAY)
                 .orElseGet(() -> evidence.problems().isEmpty() ? 1.0 : 0.0);
     }
 

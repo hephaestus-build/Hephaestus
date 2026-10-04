@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import de.tum.cit.aet.hephaestus.practices.observation.ReviewedWorkKey;
 import java.time.Instant;
@@ -36,12 +37,20 @@ final class OpportunityBundler {
     }
 
     /**
-     * One opportunity per piece of reviewed work observed at or after {@code cutoff}, read off its latest run,
-     * newest first.
+     * One opportunity per piece of reviewed work observed at or after {@code cutoff}, read off its latest live or
+     * requested run, newest first. A backfilled run is no opportunity: a campaign over work that already existed is
+     * a population of its own ({@link ObservationOrigin}), and a campaign that ran later must not speak for work a
+     * live review already judged.
      */
     static List<EvidenceOpportunity> opportunities(List<Observation> observations, Instant cutoff) {
+        return opportunities(observations, cutoff, false);
+    }
+
+    /** {@link #opportunities} over one origin class: the backfilled runs alone, or every other run. */
+    static List<EvidenceOpportunity> opportunities(List<Observation> observations, Instant cutoff, boolean backfilled) {
         Map<ReviewedWorkKey, List<Observation>> byArtifact = new LinkedHashMap<>();
         observations.stream()
+                .filter(observation -> (observation.getOrigin() == ObservationOrigin.BACKFILL) == backfilled)
                 .filter(observation -> !observation.getObservedAt().isBefore(cutoff))
                 .forEach(observation -> byArtifact
                         .computeIfAbsent(ReviewedWorkKey.of(observation), ignored -> new ArrayList<>())

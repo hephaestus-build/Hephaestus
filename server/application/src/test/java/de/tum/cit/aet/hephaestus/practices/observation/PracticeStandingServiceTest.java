@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -126,6 +127,27 @@ class PracticeStandingServiceTest extends BaseUnitTest {
                 .observedAt(observedAtOf(artifactId))
                 .summary("a strength")
                 .outcome(Outcome.MET)
+                .build();
+    }
+
+    /** The same review, taken by a backfill campaign rather than a live review. */
+    private static Observation backfilled(Observation observation) {
+        return backfilled(observation, observation.getArtifactId());
+    }
+
+    /** {@link #backfilled(Observation)}, moved onto another piece of work at the campaign's own, later time. */
+    private static Observation backfilled(Observation observation, long artifactId) {
+        return Observation.builder()
+                .id(observation.getId())
+                .practice(observation.getPractice())
+                .artifactKind(observation.getArtifactKind())
+                .artifactId(artifactId)
+                .agentJobId(observation.getAgentJobId())
+                .observedAt(observation.getObservedAt())
+                .summary(observation.getSummary())
+                .outcome(observation.getOutcome())
+                .severity(observation.getSeverity())
+                .origin(ObservationOrigin.BACKFILL)
                 .build();
     }
 
@@ -323,6 +345,47 @@ class PracticeStandingServiceTest extends BaseUnitTest {
         assertThat(standings).hasSize(1);
         assertThat(standings.get(0).toWorkOn().stream().map(PracticeStandingObservationDTO::observationId))
                 .containsExactlyInAnyOrder(locusA.getId(), locusB.getId());
+    }
+
+    @Test
+    @DisplayName("a practice only a backfill campaign judged reads the campaign's work by the same recency rule")
+    void shouldReadTheCampaignByRecencyWhenNoLiveReviewJudgedThePractice() {
+        theCurrentDeveloper();
+        Practice practice = practice("robust-error-handling");
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
+                .thenReturn(List.of(
+                        backfilled(bad(practice, Severity.MAJOR, 41L)),
+                        backfilled(good(practice, 42L)),
+                        backfilled(good(practice, 43L))));
+        when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
+                .thenReturn(List.of());
+
+        List<PracticeStandingDTO> standings = practiceStandingService.getStandings(WORKSPACE_ID);
+
+        // Two clean pieces of work after the slip, as with live work, not "any problem means needs attention".
+        assertThat(standings.get(0).standing()).isEqualTo(PracticeStandingDTO.Standing.STRENGTH);
+        assertThat(standings.get(0).toWorkOn()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("a later backfill campaign does not speak for work a live review judged")
+    void shouldKeepTheLiveVerdictWhenACampaignReviewedTheSameWorkLater() {
+        theCurrentDeveloper();
+        Practice practice = practice("robust-error-handling");
+        when(observationRepository.findByDeveloperAndWorkspaceBetween(
+                        eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))
+                .thenReturn(List.of(
+                        bad(practice, Severity.MAJOR, 41L),
+                        bad(practice, Severity.MAJOR, 42L),
+                        backfilled(good(practice, 43L), 41L),
+                        backfilled(good(practice, 44L), 42L)));
+        when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
+                .thenReturn(List.of());
+
+        List<PracticeStandingDTO> standings = practiceStandingService.getStandings(WORKSPACE_ID);
+
+        assertThat(standings.get(0).standing()).isEqualTo(PracticeStandingDTO.Standing.DEVELOPING);
     }
 
     @Test
