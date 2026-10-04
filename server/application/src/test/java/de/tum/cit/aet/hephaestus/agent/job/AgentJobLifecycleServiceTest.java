@@ -394,7 +394,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> service.retryDelivery(WORKSPACE_ID, jobId))
                     .isInstanceOf(AgentJobStateConflictException.class)
-                    .hasMessageContaining("delivery status FAILED");
+                    .hasMessageContaining("whose delivery failed");
 
             verify(handler, never()).deliver(any());
         }
