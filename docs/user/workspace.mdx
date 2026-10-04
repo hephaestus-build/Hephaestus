@@ -4,22 +4,22 @@ title: Workspace basics
 description: Understand how workspaces separate repositories, members, practices, integrations, and settings.
 ---
 
-Use this guide to switch workspaces or resolve missing workspace content.
-A workspace contains one team's repositories, members, practices, integrations, and settings.
+Use this guide to switch workspaces or fix missing workspace content.
+A workspace holds one team’s repositories, members, practices, integrations, and settings.
 You can belong to several workspaces on one instance.
-Creation and connection tasks below require the applicable administrator permissions.
+The tasks below for creating a workspace and connecting repositories need admin permissions.
 
 1. Use the workspace switcher at the top of the sidebar to select an accessible workspace.
 
-Hephaestus keeps the same kind of page if it applies to both workspaces.
-From a page for a specific person, conversation, practice, or other workspace item, a switch opens the workspace home instead.
-This is your Practice profile, or Activity if the workspace does not review practices.
+When you switch, Hephaestus keeps you on the same kind of page if the new workspace has it.
+If you were on a page for a specific person, conversation, practice, or other workspace item, the switch opens the new workspace’s home instead.
+The home is your Practice profile, or Activity if the workspace does not review practices.
 Options that name resources in the previous workspace, such as team filters, clear.
 Most other options reset too, but Activity pages keep their time range.
 
-If a linked workspace is no longer accessible, Hephaestus opens another accessible workspace's home page.
-If none is accessible, it states that you are not in a workspace yet.
-Sign-in opens the first accessible workspace.
+If a link points to a workspace you can no longer access, Hephaestus opens the home page of another workspace you can access.
+If there is none, the page says **No workspace** and that you are not a member of any workspace yet.
+Signing in opens the first workspace you can access.
 
 ## Create a workspace
 
@@ -34,7 +34,7 @@ Hephaestus creates the workspace from the installation.
 
 For GitLab, when creation is available:
 
-1. Link your account on the GitLab instance your deployment uses.
+1. Connect your account on the GitLab instance your deployment uses.
 2. Enter an access token for that account.
 3. Choose a group.
 4. Complete the creation wizard.
@@ -45,9 +45,9 @@ The workspace belongs to that GitLab account.
 
 ## Repositories
 
-The connection determines repository access management.
-For a **GitHub App** workspace, Hephaestus mirrors repositories granted to the app.
-For a **token-managed** workspace, a workspace admin manages monitored repositories.
+How you manage repository access depends on the connection.
+For a **GitHub App** workspace, Hephaestus mirrors the repositories that you grant to the app.
+For a **token-managed** workspace, a workspace admin manages the monitored repositories.
 
 For a GitHub App workspace:
 
@@ -62,7 +62,7 @@ For a token-managed workspace, as a workspace admin:
 To keep that data, do not remove the repository monitor.
 The upstream repository does not change.
 
-Initial sync time depends on the connected repositories' size and history.
+The first sync takes longer for large repositories and long histories.
 Webhooks and scheduled reconciliation collect later changes.
 
 ## Members and teams
@@ -83,7 +83,7 @@ If source-managed membership is incorrect:
 Workspace admins choose:
 
 - The active engineering practices.
-- Each practice's feedback setting: **Off**, **Review before sending** (the default), or **Send automatically**.
+- Each practice’s feedback setting: **Off**, **Review before sending** (the default), or **Send automatically**.
 - Whether practice reviews run automatically or permit manual requests.
 - The connected AI model for practice reviews and Heph.
 - The monthly AI spending cap.
@@ -99,7 +99,7 @@ That guide explains how to hide members or teams from workspace activity.
 
 For a missing workspace:
 
-1. Confirm that your sign-in identity links to a workspace member.
+1. Confirm that your sign-in identity is linked to a workspace member.
 
 For a missing repository:
 
@@ -110,7 +110,7 @@ If you are a workspace admin:
 
 1. For repository errors, open **Administration → Integrations → GitHub/GitLab → Manage repositories**.
 2. For Slack errors instead, open **Administration → Integrations → Slack**.
-3. Read the affected resource's last error.
+3. Read the affected resource’s last error.
 4. Check its access in the connected service.
 5. Run a new sync.
 
@@ -137,13 +137,13 @@ Workspace model settings do not change your answer.
 ## GitLab token alerts
 
 Hephaestus checks GitLab tokens daily and rotates them before expiry when GitLab permits it.
-The connection page shows the expiry date or **no expiry**.
+The connection page shows the expiry date, or says that the token has no expiry.
 
 1. If rotation fails or GitLab refuses the token, replace it in workspace integration settings.
 
 Your repositories and synced work stay.
-Owners and administrators can enable **Workspace connection alerts** email in notification settings.
-It reports tokens that need replacement and recovery after rotation or replacement.
+Workspace admins can turn on **Workspace connection alerts** in **User settings → Email notifications**.
+These emails report tokens that need replacement, and recovery after rotation or replacement.
 Repeated checks of the same problem do not send duplicate alerts.
 GitHub App tokens renew automatically.
 Hephaestus does not track GitHub personal access token expiry.
@@ -155,7 +155,7 @@ This does not prove deletion.
 The name may have changed, or the connection may have lost access.
 Hephaestus keeps the monitor and stored work.
 
-After two consecutive unavailable responses, Hephaestus checks at most once each 24 hours.
+After two consecutive unavailable responses, Hephaestus checks at most once every 24 hours.
 Recent sync and backfill wait while the repository is unavailable.
 A successful check clears the error and automatically resumes sync.
 Connection authentication errors, rate limits, and network errors keep their normal retry behavior.
