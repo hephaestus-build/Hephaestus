@@ -121,7 +121,8 @@ function PracticesAcrossTheWorkspace() {
 				openGroupSlug={openGroupSlug}
 				onOpenGroup={(groupSlug) => stackControls.open({ kind: "practice-group", id: groupSlug })}
 			/>
-			{/* A failed read leaves no level to show; the page says why. */}
+			{/* A failed read leaves no level to show; the page says why. The bars come in the same read
+			    as the tiles, so a failed change of range closes the panel too. */}
 			<DetailDrawerStack
 				stack={state.status === "error" ? [] : stack}
 				size="detailWide"
