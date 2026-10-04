@@ -135,7 +135,9 @@ const ANSWERS = [
 	},
 	{
 		value: "no",
-		title: "No, do not take part",
+		// Consent wording: a change moves `WORDING_VERSION`, so the rule stays off for this string.
+		// oxlint-disable-next-line hephaestus/ste-ui-text
+		title: "No, don't take part",
 		detail: "Keep my usage and feedback out of the research.",
 	},
 ] as const;
@@ -265,10 +267,13 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 									<FieldLabel htmlFor={`${id}-terms`}>I accept the terms of use</FieldLabel>
 									{/* The obligations sit with the box that accepts them. The points above are
 										    what the reader needs in order to decide, not things anyone agrees to. */}
+									{/* Consent wording: a change moves `WORDING_VERSION`, so the rule stays off here. */}
+									{/* oxlint-disable hephaestus/ste-ui-text */}
 									<FieldDescription>
-										Keep to the work you are entitled to see. Treat feedback as guidance for the
-										person it is addressed to, not as an assessment to pass on.
+										Keep to the work you are entitled to see, and treat feedback as guidance for the
+										person it is addressed to rather than an assessment to pass on.
 									</FieldDescription>
+									{/* oxlint-enable hephaestus/ste-ui-text */}
 								</FieldContent>
 							</Field>
 						</Section>

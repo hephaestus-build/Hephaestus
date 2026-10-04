@@ -60,7 +60,7 @@ export async function loginAsDevAdmin(page: Page, username = "e2e"): Promise<voi
 	if (await terms.isVisible()) {
 		await terms.check();
 		// The research question is only asked where an organisation is configured to run one.
-		const decline = page.getByRole("radio", { name: /do not take part/u });
+		const decline = page.getByRole("radio", { name: /don't take part/u });
 		if (await decline.isVisible()) {
 			await decline.click();
 		}

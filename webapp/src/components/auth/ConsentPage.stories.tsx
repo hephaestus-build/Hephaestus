@@ -74,7 +74,7 @@ export const Default: Story = {
 	play: async () => {
 		await expectGenuinelyDisabled(await screen.findByRole("button", { name: "Continue" }));
 		await expect(screen.getByRole("radio", { name: /Yes, take part/u })).not.toBeChecked();
-		await expect(screen.getByRole("radio", { name: /do not take part/u })).not.toBeChecked();
+		await expect(screen.getByRole("radio", { name: /don't take part/u })).not.toBeChecked();
 		await expect(screen.getByText(/Two things first/u)).toBeVisible();
 		// Facts are grouped: the sentence sits under its term, indented past the chip.
 		const term = screen.getByText("What it reads");
@@ -147,7 +147,7 @@ export const SubmitFailed: Story = {
 	render: (args) => <AfterSubmit {...args} outcome={{ status: "error" }} />,
 	play: async () => {
 		await acceptTerms();
-		await answer(/do not take part/u);
+		await answer(/don't take part/u);
 		await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await expect(screen.getByRole("alert")).toHaveTextContent(/were not saved/iu);
 		await expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();

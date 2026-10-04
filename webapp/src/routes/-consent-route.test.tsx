@@ -36,7 +36,7 @@ describe("first-login consent route", () => {
 		await screen.findByRole("heading", { name: "Get set up" }, ROUTE_RENDER_WAIT);
 
 		await userEvent.click(screen.getByRole("checkbox", { name: /terms of use/iu }));
-		await userEvent.click(screen.getByRole("radio", { name: /do not take part/u }));
+		await userEvent.click(screen.getByRole("radio", { name: /don't take part/u }));
 		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
 		await waitFor(() =>
@@ -109,7 +109,7 @@ describe("consent recovery", () => {
 		await userEvent.click(
 			await screen.findByRole("checkbox", { name: /terms of use/iu }, ROUTE_RENDER_WAIT),
 		);
-		await userEvent.click(screen.getByRole("radio", { name: /do not take part/u }));
+		await userEvent.click(screen.getByRole("radio", { name: /don't take part/u }));
 		fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 		await screen.findByRole("alert");
 
@@ -119,7 +119,7 @@ describe("consent recovery", () => {
 			screen.getByRole("checkbox", { name: /terms of use/iu }).getAttribute("aria-checked"),
 		).toBe("true");
 		expect(
-			screen.getByRole("radio", { name: /do not take part/u }).getAttribute("aria-checked"),
+			screen.getByRole("radio", { name: /don't take part/u }).getAttribute("aria-checked"),
 		).toBe("true");
 		await waitFor(() =>
 			expect(screen.getByRole<HTMLButtonElement>("button", { name: "Continue" }).disabled).toBe(

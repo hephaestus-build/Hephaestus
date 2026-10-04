@@ -164,7 +164,6 @@ export const steUiText = defineRule({
 				}
 			},
 			CallExpression(node) {
-				// The `description` option of a toast is an object property, which its own visitor checks.
 				const [message] = node.arguments;
 				if (message !== undefined && isToastCall(node.callee)) {
 					for (const text of literalText(message)) {
