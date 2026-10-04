@@ -10,14 +10,9 @@ import {
 import type { StatusDef } from "@/components/common/status-def";
 
 /**
- * Where one piece of practice feedback on the Practice profile stands: not yet read, open,
- * resolved by the work, marked by the reader as addressed or not applicable, closed without a
- * resolution because the practice's review rules changed after it was written, or withdrawn by a
- * workspace admin because what it said was wrong. Only the work resolves a card: the reader's own
- * answer is a claim the next work confirms, so it reads apart from a resolution everywhere. The
- * server records when it was read, when and by what it closed, and when it was withdrawn;
- * `practice-feedback-cards.ts` reads that into one of these six, and this registry is the words for
- * it.
+ * Where one piece of practice feedback stands. Only the work resolves a card: the reader's own
+ * answer is a claim the next work confirms, so `marked` never reads as `resolved`.
+ * `practice-feedback-cards.ts` maps the wire's timestamps onto these.
  */
 export type FeedbackState = "new" | "open" | "resolved" | "marked" | "closed" | "withdrawn";
 
@@ -32,7 +27,7 @@ export interface FeedbackStateDef extends StatusDef {
 	 * (`webapp/AGENTS.md` § Practice surfaces palette).
 	 */
 	className?: string;
-	/** The word before the day in the card's footer, where the label reads badly there. */
+	/** The word before the day in the card's footer, where the label does not fit there. */
 	stamp?: string;
 }
 

@@ -28,33 +28,21 @@ export function shownTrendDirection(
 	return direction !== undefined && support !== undefined ? direction : "INSUFFICIENT_EVIDENCE";
 }
 
-/**
- * Below this many decided pieces of work a settled standing is an early read: its label can change
- * with the next piece, so its sentence says how little it rests on rather than describing a
- * pattern of reviews.
- */
+/** Below this many decided pieces of work, a settled standing is an early read (product vocabulary). */
 export const EARLY_READ_BELOW = 3;
 
-/**
- * The decided pieces of work a settled standing is read from: the newest stretch the trend
- * compares, the server's own count. None where only a review of past work judged it, or where no
- * count came with it.
- */
+/** The server's count of decided pieces a standing is read from; none when no live review counted. */
 export function standingWork(support: TrendSupport | undefined): number | undefined {
 	const current = support?.currentOpportunities;
 	return current !== undefined && current > 0 ? current : undefined;
 }
 
-/** "from 3 pieces of work": how much a settled standing rests on, beside its badge. */
+/** "from 3 pieces of work". */
 export function formatStandingWork(work: number): string {
 	return `from ${counted(work, "piece", "pieces", true)} of work`;
 }
 
-/**
- * What a standing says about itself: the registry's sentence, or, while fewer than
- * {@link EARLY_READ_BELOW} pieces of work back a settled standing, that it is an early read from
- * them. From that many on, the sentence names the count after the registry's.
- */
+/** The registry's sentence with its count, or the early-read sentence below {@link EARLY_READ_BELOW}. */
 export function explainStanding(
 	standing: PracticeGroupStandingValue,
 	scope: StandingScope,
@@ -72,10 +60,8 @@ export function explainStanding(
 }
 
 /**
- * How a settled practice standing weighs its work: the newest counts most, the older ones less.
- * With only a requested review or a review of past work, neither of which moves a trend, it says
- * the standing was read from them. One piece weighs
- * nothing against another, so it says nothing.
+ * How a settled practice standing weighs its work. Nothing for one piece, which has nothing to
+ * weigh against.
  */
 export function formatStandingBasis(support: TrendSupport): string | undefined {
 	const current = support.currentOpportunities;

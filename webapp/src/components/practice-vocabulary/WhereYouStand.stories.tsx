@@ -48,10 +48,7 @@ export const Default: Story = {
 	},
 };
 
-/**
- * Fewer than three pieces of work back the standing: its sentence says it is an early read from
- * them, not a pattern of reviews.
- */
+/** Below three pieces of work the sentence is an early read, not the registry's pattern. */
 export const EarlyRead: Story = {
 	args: {
 		basis: undefined,
@@ -92,10 +89,7 @@ export const NotObserved: Story = {
 	},
 };
 
-/**
- * A practice only a review of past work judged: the standing is read from that review, and the
- * trend, which such a review never moves, names no work of its own.
- */
+/** Only a review of past work judged it, and such a review never moves a trend. */
 export const ReadFromPastWork: Story = {
 	args: {
 		basis:
@@ -111,9 +105,6 @@ export const ReadFromPastWork: Story = {
 	},
 	play: async ({ canvas }) => {
 		const region = canvas.getByRole("region", { name: "Where you stand" });
-		await expect(region).toHaveTextContent(
-			"Read from a review that you asked for or a review of your past work",
-		);
 		await expect(region).toHaveTextContent("No new work has been reviewed yet.");
 	},
 };

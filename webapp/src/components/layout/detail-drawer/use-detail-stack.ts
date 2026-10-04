@@ -17,9 +17,8 @@ export interface DetailStackControls<TParam extends string = never> {
 	push: (entries: DetailStackEntry[], levelSearch?: LevelSearch<TParam>) => Promise<void>;
 	close: (depth: number) => void;
 	/**
-	 * Rewrites what the page or its open levels show, a tab, a sort, a range, in place: a view of
-	 * what is open, not a place. It keeps the history entry's state, the stamp `close` reads to
-	 * dismiss a level by going back.
+	 * Replaces search state that is a view, not a place (a tab, a sort, a range). It keeps the
+	 * history entry's state, which `close` reads to dismiss a level by going back.
 	 */
 	setView: (view: Record<string, unknown>) => void;
 }

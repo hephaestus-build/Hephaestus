@@ -39,10 +39,8 @@ export interface ReviewRunFeedProps extends Pick<
 }
 
 /**
- * One practice surface's review-run feed: the runs as a timeline, the earlier ones loaded as its
- * end scrolls into view,
- * and the error, loading and empty states around them, in one home so the rail cannot end one way
- * on one surface and another way on the next.
+ * One practice surface's review-run feed with its error, loading and empty states, in one home so
+ * the rail cannot end one way on one surface and another way on the next.
  */
 export function ReviewRunFeed({
 	feed,
@@ -109,14 +107,9 @@ export function ReviewRunFeed({
 	);
 }
 
-/** One run card's shape, for the feed's skeleton and for the page that loads after it. */
 const RUN_CARD_SKELETON = <Skeleton className="h-24 w-full" />;
 
-/**
- * The pages before these, in the words every review feed uses: they load as the end of the list
- * scrolls into view, and a press asks for them too. A failed load keeps what was already read and
- * says so beside the press that asks again.
- */
+/** The earlier pages, in the words every review feed uses. */
 export function EarlierReviews({ loadingRow, ...more }: MorePages & { loadingRow: ReactNode }) {
 	return (
 		<InfiniteListEnd

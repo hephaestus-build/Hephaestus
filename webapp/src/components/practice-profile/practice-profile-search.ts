@@ -99,10 +99,7 @@ export type ReviewTimeframe = (typeof REVIEW_TIMEFRAMES)[number];
 /** What the level with every practice group is called, wherever it is named. */
 export const ALL_PRACTICE_GROUPS = "All practice groups";
 
-/**
- * What a list of every practice group says before the workspace reviews any practice: the same
- * words on the Practice profile and across the workspace, since it is the same state.
- */
+/** Shared by the Practice profile and Practices across the workspace: it is one state. */
 export const NO_PRACTICE_GROUPS = {
 	title: "No practices set up yet",
 	description:

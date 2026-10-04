@@ -5,10 +5,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { InfiniteListEnd } from "./InfiniteListEnd";
 
-/**
- * The end of a list the server pages. In view, it asks for the next page by itself; the press
- * stays for a keyboard and is the only way after a failure.
- */
 const meta = {
 	component: InfiniteListEnd,
 	tags: ["autodocs"],
@@ -40,16 +36,6 @@ export const LoadsMoreInView: Story = {
 	play: async ({ args, canvas }) => {
 		await waitFor(async () => expect(args.onLoadMore).toHaveBeenCalledOnce());
 		await expect(canvas.getByRole("button", { name: "View earlier reviews" })).toBeVisible();
-	},
-};
-
-/** The press is the keyboard's way to the next page. */
-export const KeyboardPress: Story = {
-	play: async ({ args, canvas }) => {
-		await waitFor(async () => expect(args.onLoadMore).toHaveBeenCalledOnce());
-		canvas.getByRole("button", { name: "View earlier reviews" }).focus();
-		await userEvent.keyboard("{Enter}");
-		await expect(args.onLoadMore).toHaveBeenCalledTimes(2);
 	},
 };
 

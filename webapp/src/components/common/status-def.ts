@@ -47,8 +47,8 @@ export function statusToneClass(variant: BadgeVariant): string {
 
 /**
  * The registry's values in declaration order, typed as a non-empty tuple: a registry with no values
- * is a programming error, and the throw below is what backs that type up at runtime. Any registry
- * keyed by its values will do, so a route's `z.enum` can take every value a registry defines.
+ * is a programming error, and the throw below is what backs that type up at runtime. It takes any
+ * record keyed by the values, so a route's `z.enum` can read a non-badge registry too.
  */
 export function statusValues<TValue extends string>(
 	defs: Record<TValue, unknown>,

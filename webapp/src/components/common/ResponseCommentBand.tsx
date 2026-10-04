@@ -37,9 +37,9 @@ export interface ResponseCommentBandProps<TReason extends string = string> {
 	 * nothing when only the reader and Heph do.
 	 */
 	audience?: (reason: TReason | undefined) => string | undefined;
-	/** A write is in flight, whichever control asked for it: every control waits. */
+	/** Any write is in flight, so every control waits. */
 	isPending?: boolean;
-	/** The write in flight is this band's comment, so Send says it is sending. */
+	/** The write in flight is this band's, so Send says "Sending…". */
 	sending?: boolean;
 	onSend?: (comment: ResponseComment<TReason>) => void;
 	onSkip?: () => void;

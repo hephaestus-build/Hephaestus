@@ -317,7 +317,7 @@ export const LoadFailed: Story = {
 	},
 };
 
-/** A group by a slug the profile does not list: the same empty state as the group across the workspace. */
+/** A slug the profile does not list, such as a stale address. */
 export const Missing: Story = {
 	args: { group: undefined, standing: undefined, practices: undefined },
 	play: async () => {

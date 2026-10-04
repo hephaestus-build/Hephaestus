@@ -18,7 +18,7 @@ import {
 import type { IntegrationCatalogEntry } from "@/api/types.gen";
 import { GitHubIcon, GitLabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import { ADMIN_NAV_LABELS } from "@/components/layout/sidebar/admin-nav-labels";
-import { NavSection, useSectionOpen } from "@/components/layout/sidebar/NavSection";
+import { NavSection } from "@/components/layout/sidebar/NavSection";
 import {
 	SidebarGroup,
 	SidebarGroupLabel,
@@ -82,8 +82,6 @@ export function NavAdmin({
 	const onModels = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/models", fuzzy: true }));
 	const onUsage = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/usage", fuzzy: true }));
 	const onAudit = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/audit", fuzzy: true }));
-	const [practicesOpen, setPracticesOpen] = useSectionOpen(onSection);
-	const [integrationsOpen, setIntegrationsOpen] = useSectionOpen(onIntegrationsSection);
 	const ScmIcon = scmProviderType === "GITLAB" ? GitLabIcon : GitHubIcon;
 	const scmLabel = scmProviderType === "GITLAB" ? "GitLab" : "GitHub";
 	const scmKind = scmProviderType === "GITLAB" ? "GITLAB" : "GITHUB";
@@ -145,8 +143,6 @@ export function NavAdmin({
 					label="Practices"
 					icon={<ClipboardCheck />}
 					active={onSection}
-					open={practicesOpen}
-					onOpenChange={setPracticesOpen}
 					badge={awaiting}
 					// The section opens on what the reviews need from the admin; setup is the occasional visit.
 					landingLink={
@@ -214,8 +210,6 @@ export function NavAdmin({
 					label="Integrations"
 					icon={<PlugZapIcon />}
 					active={onIntegrationsSection}
-					open={integrationsOpen}
-					onOpenChange={setIntegrationsOpen}
 					landingLink={
 						<Link
 							to="/w/$workspaceSlug/admin/integrations"

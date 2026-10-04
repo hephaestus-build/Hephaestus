@@ -13,7 +13,7 @@ import {
 	SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 
-import { NavSection, useSectionOpen } from "./NavSection";
+import { NavSection } from "./NavSection";
 
 export function NavDashboards({
 	workspaceSlug,
@@ -35,8 +35,7 @@ export function NavDashboards({
 	);
 	const onTeams = Boolean(matchRoute({ to: "/w/$workspaceSlug/teams", fuzzy: true }));
 	const onPracticePages = onPracticeProfile || onAcrossTheWorkspace;
-	const [practicesOpen, setPracticesOpen] = useSectionOpen(onPracticePages);
-	// The profile links nowhere else, so down to icons the section offers both pages as a menu.
+	// The profile links nowhere else, so the icon-only sidebar offers both pages as a menu.
 	const practicePages = [
 		{
 			to: "/w/$workspaceSlug/practice-profile",
@@ -61,8 +60,6 @@ export function NavDashboards({
 						label="Practice profile"
 						icon={<Compass />}
 						active={onPracticePages}
-						open={practicesOpen}
-						onOpenChange={setPracticesOpen}
 						menu={practicePages.map((page) => (
 							<DropdownMenuItem
 								key={page.to}

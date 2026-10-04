@@ -38,10 +38,7 @@ export function FeedbackEmpty({
 	);
 }
 
-/**
- * A level opened for a practice group its page does not list, a stale or hand typed address, in
- * the one shape every practice level says it in.
- */
+/** A level opened for a group its page does not list, such as a stale address. */
 export function NoSuchGroup() {
 	return (
 		<Empty variant="outlined">

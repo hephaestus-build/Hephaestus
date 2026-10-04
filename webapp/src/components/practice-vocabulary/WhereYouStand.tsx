@@ -33,7 +33,7 @@ export interface WhereYouStandProps {
 
 /**
  * The standing and the trend a level's header shows as a badge and a chip, each followed by the
- * registry's sentence for it, or an early read's, and what it rests on — printed beside them, so here neither is a
+ * registry's sentence for it (or an early read's) and what it rests on — printed beside them, so here neither is a
  * tooltip's trigger. The two lines sit in one box on the `bg-sidebar` ground the card's action
  * band uses, under the label, so the reader's own standing is told from the catalog's words
  * below it. A standing no review has settled says so and has no trend: a direction over no

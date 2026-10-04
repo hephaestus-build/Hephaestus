@@ -18,11 +18,10 @@ import {
 } from "@/components/ui/sidebar";
 
 /**
- * Open state for a nav section, forced open when the user navigates into it and freely collapsible
- * the rest of the time. Adjusted during render, not in an effect, so arriving at a page in it
- * never paints the section collapsed first.
+ * Forced open when the reader navigates into the section, freely collapsible otherwise. Adjusted
+ * during render, not in an effect, so arriving on a page never paints its section collapsed first.
  */
-export function useSectionOpen(onSection: boolean) {
+function useSectionOpen(onSection: boolean) {
 	const [open, setOpen] = useState(onSection);
 	const [wasOnSection, setWasOnSection] = useState(onSection);
 
@@ -39,20 +38,16 @@ export function useSectionOpen(onSection: boolean) {
 interface NavSectionBaseProps {
 	label: string;
 	icon: ReactNode;
+	/** The current page is in the section. */
 	active: boolean;
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	/**
-	 * A count owed somewhere in the section, shown on the section itself while its entries are out of
-	 * sight — closed, or the sidebar down to icons — so it is seen however the sidebar is folded.
-	 */
+	/** Shown on the section while its entries are out of sight. */
 	badge?: { count: number; phrase: string };
 	children: ReactNode;
 }
 
 /**
- * What the section offers while the sidebar is down to icons: a link to its landing page, which
- * reaches its other entries, or, where the landing page links nowhere else, its entries as a menu.
+ * In the icon-only sidebar nothing can unfold, so the section is a link to a landing page that
+ * reaches its entries, or, where no page does, a menu of the entries.
  */
 export type NavSectionProps = NavSectionBaseProps &
 	(
@@ -65,22 +60,20 @@ export type NavSectionProps = NavSectionBaseProps &
 	);
 
 /**
- * A sidebar entry that opens into sub entries: a trigger while the sidebar is expanded, and while it
- * is down to icons, where nothing can unfold, a link to the section's landing page or a menu of its
- * entries beside the icon.
+ * A collapsible sidebar entry, composed from the `Collapsible` and `SidebarMenu*` primitives as
+ * shadcn's collapsible sidebar does. The kit has no section component of its own.
  */
 export function NavSection({
 	label,
 	icon,
 	active,
-	open,
-	onOpenChange,
 	badge,
 	landingLink,
 	menu,
 	children,
 }: NavSectionProps) {
-	// Down to icons on a wide screen; on a phone the sidebar is a sheet with its full labels.
+	const [open, setOpen] = useSectionOpen(active);
+	// On a phone the sidebar is a sheet with full labels, never icon-only.
 	const { isMobile, state } = useSidebar();
 	const collapsed = !isMobile && state === "collapsed";
 	const shown = collapsed || !open ? badge : undefined;
@@ -90,7 +83,7 @@ export function NavSection({
 			{shown && <span className="sr-only"> ({shown.phrase})</span>}
 		</span>
 	);
-	// The badge hides itself in the icon-only sidebar, where the tooltip says the count instead.
+	// `SidebarMenuBadge` hides itself in the icon-only sidebar, so the tooltip carries the count.
 	const tooltip = shown ? `${label} (${shown.phrase})` : label;
 	let button: ReactNode;
 	if (!collapsed) {
@@ -130,17 +123,16 @@ export function NavSection({
 		);
 	}
 	return (
-		<Collapsible open={open} onOpenChange={onOpenChange} render={<SidebarMenuItem />}>
+		<Collapsible open={open} onOpenChange={setOpen} render={<SidebarMenuItem />}>
 			{button}
 			{shown && (
-				// The button names the count for a screen reader; this is its picture, clear of the chevron.
+				// The button's name carries the count; `right-7` clears the chevron.
 				<SidebarMenuBadge aria-hidden className="right-7">
 					{shown.count}
 				</SidebarMenuBadge>
 			)}
 			<CollapsibleContent>
-				{/* The list carries the section's name: a screen reader jumping by list otherwise
-				    announces "list, 3 items" with nothing saying which section it landed in. */}
+				{/* Named, so a screen reader jumping by list hears which section it landed in. */}
 				<SidebarMenuSub aria-label={label}>{children}</SidebarMenuSub>
 			</CollapsibleContent>
 		</Collapsible>

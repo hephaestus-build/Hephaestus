@@ -5,20 +5,19 @@ import { Button } from "@/components/ui/button";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 
 export interface InfiniteListEndProps extends MorePages {
-	/** What a press loads, in the list's own words: "View earlier reviews". */
+	/** "View earlier reviews". */
 	moreLabel: string;
-	/** What the list says when the next page failed: "We could not load earlier reviews." */
+	/** "We could not load earlier reviews." */
 	failedLabel: string;
-	/** What stands for the next page while it loads, in the shape of the list's own row. */
+	/** A skeleton in the shape of the list's own row. */
 	loadingRow: ReactNode;
 }
 
 /**
- * The end of a list the server pages: the next page loads by itself once this end scrolls into
- * view, a loading row stands in for it while it comes, and a failure says so beside the press that
- * asks again. The press stays the whole time, as the way a keyboard asks for the next page and the
- * only way after a failure, so a list never loads again and again on its own after one failed. A
- * list with nothing left to load ends here with nothing.
+ * The end of a paged list: it asks for the next page when it scrolls into view. The button stays,
+ * because a keyboard needs it, and it is the only retry after a failure, so a failed page never
+ * loads again on its own. TanStack Query has no sentinel and the repo had none, so this pairs
+ * `useInfiniteQuery`'s `fetchNextPage` (through `MorePages`) with motion's `useInView`.
  */
 export function InfiniteListEnd({
 	hasMore,
@@ -30,12 +29,13 @@ export function InfiniteListEnd({
 	loadingRow,
 }: InfiniteListEndProps) {
 	const end = useRef<HTMLDivElement>(null);
-	// A margin under the viewport, so the next page is on its way before the reader reaches the end.
+	// Start the next page before the reader reaches the end.
 	const inView = useInView(end, { margin: "0px 0px 240px 0px" });
 	const failed = loadMoreError != null;
 	const loadsByItself = inView && hasMore && !isLoadingMore && !failed;
 	const loadMore = useEffectEvent(() => onLoadMore());
-	// Asks again after each page while the end stays in view, so a short page fills the viewport.
+	// The effect syncs with the viewport, an external system. It reruns after each page while the end
+	// stays in view, so a short page still fills the viewport.
 	useEffect(() => {
 		if (loadsByItself) {
 			loadMore();
@@ -73,7 +73,6 @@ export function InfiniteListEnd({
 	);
 }
 
-/** The press in the list's words, or what it is doing instead. */
 function pressLabel(isLoadingMore: boolean, failed: boolean, moreLabel: string): string {
 	if (isLoadingMore) {
 		return "Loading…";

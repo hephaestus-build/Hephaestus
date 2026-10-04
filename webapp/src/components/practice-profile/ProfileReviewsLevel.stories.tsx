@@ -159,7 +159,6 @@ export const ManyReviews: Story = {
 			throw new Error("Expected the table to stand in its own frame.");
 		}
 		await expect(frame.scrollHeight).toBeLessThanOrEqual(frame.clientHeight + 1);
-		// The end of the list loads the next page once it is in view; the press asks for it too.
 		await userEvent.click(screen.getByRole("button", { name: "View earlier reviews" }));
 		await expect(onLoadMoreOf(args.feed)).toHaveBeenCalled();
 	},

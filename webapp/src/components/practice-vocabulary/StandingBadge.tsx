@@ -19,18 +19,13 @@ export interface StandingBadgeProps {
 	standing: PracticeStanding["standing"];
 	/** Whose standing this is; the sentence behind the badge is worded for it. */
 	scope: StandingScope;
-	/**
-	 * The evidence the standing rests on. With it, a settled standing names how many pieces of work
-	 * it is read from beside the badge, and its sentence says so.
-	 */
+	/** With it, a settled standing names the pieces of work it is read from. */
 	support?: TrendSupport;
 }
 
 /**
- * A standing as the registry's badge with its sentence behind it, and how many pieces of work a
- * settled standing is read from beside it. A button, so a keyboard reaches the sentence too; it
- * answers nothing of its own and says so with `data-tooltip-only`, so a row that is itself a
- * control takes a pointer's press on it (`PracticeTableRow`).
+ * A button, so a keyboard reaches the tooltip's sentence. `data-tooltip-only` lets a row that is
+ * itself a control take a pointer's press on it (`PracticeTableRow`).
  */
 export function StandingBadge({ standing, scope, support }: StandingBadgeProps) {
 	const registryDef = standingDefs(scope)[standing];

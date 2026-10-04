@@ -5,7 +5,6 @@ import { cn } from "cn";
 import { rendersContent } from "@/lib/react-node";
 
 export interface PageHeaderProps {
-	/** The glyph before the title; a page whose spec names none leaves it out. */
 	icon?: ReactNode;
 	title: string;
 	description?: ReactNode;

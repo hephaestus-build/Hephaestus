@@ -40,12 +40,10 @@ const FIXED_COLUMNS = 3;
 
 const NO_HEADS: readonly PracticeTableHead[] = [];
 
-/** What every table in the practice frame has: its rows, and what it says without any. */
 interface PracticeTableBody<TRow> {
 	"aria-label": string;
 	rows: readonly TRow[];
 	rowKey: (row: TRow) => string;
-	/** One row per row, drawing every cell the head names. */
 	renderRow: (row: TRow) => ReactNode;
 	/**
 	 * What the table says when there are none, in the shape every practice surface says it in:
@@ -61,18 +59,16 @@ interface PracticeTableBody<TRow> {
 }
 
 export interface PracticeTableFrameProps<TRow> extends PracticeTableBody<TRow> {
-	/** The header row's cells. */
 	head: ReactNode;
-	/** How many columns the head spans, which the empty state spans too. */
+	/** The empty state spans this many columns. */
 	columns: number;
-	/** One row after the rows once they are in: the end of a list that loads more as it is read. */
+	/** A row after the loaded rows, such as an `InfiniteListEnd`. */
 	end?: ReactNode;
 }
 
 /**
- * The hairline frame every practice table is drawn in, with its head row, its loading rows and its
- * empty state; the caller names the columns. The box scrolls sideways below its columns' width
- * rather than widening the page.
+ * The hairline frame every practice table is drawn in. It scrolls sideways below its columns'
+ * width instead of widening the page.
  */
 export function PracticeTableFrame<TRow>({
 	"aria-label": label,
@@ -157,10 +153,7 @@ export interface PracticeTableProps<TRow> extends PracticeTableBody<TRow> {
 	renderRow: (row: TRow) => ReactNode;
 }
 
-/**
- * A table of practices or practice groups by standing, in the practice frame: the sortable
- * Standing column first, the subject and its sentence, and the row's own "Open …" link last.
- */
+/** Practices or practice groups by standing: Standing, the subject, then the row's link. */
 export function PracticeTable<TRow>({
 	sort,
 	onSortChange,

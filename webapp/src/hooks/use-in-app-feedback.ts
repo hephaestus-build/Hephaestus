@@ -87,10 +87,7 @@ export function withComment(
 	};
 }
 
-/**
- * The response Send writes in the dispute's band: a dispute with the sentence it has to carry, in
- * place of any answer before it, keeping the rating. The server leaves the card open.
- */
+/** Send in the dispute band: the dispute replaces any earlier answer and keeps the rating. */
 export function withDispute(
 	current: FeedbackResponseRequest | undefined,
 	comment: string,
@@ -98,10 +95,7 @@ export function withDispute(
 	return { usefulness: current?.usefulness, resolution: "DISPUTED", comment: comment.trim() };
 }
 
-/**
- * The response a press on a standing dispute writes: the dispute taken back with the sentence that
- * carried it, the rating kept.
- */
+/** Disagree on a standing dispute: takes it back with its sentence and keeps the rating. */
 export function withoutDispute(
 	current: FeedbackResponseRequest | undefined,
 ): FeedbackResponseRequest {

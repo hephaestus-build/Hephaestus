@@ -39,10 +39,7 @@ export const Default: Story = {
 	},
 };
 
-/**
- * Earlier runs exist: the feed asks for them by itself once its end scrolls into view, and the
- * press asks for them too.
- */
+/** Earlier runs exist, so the timeline continues past the last card. */
 export const LoadMore: Story = {
 	args: { feed: { ...readyFeed, hasMore: true } },
 	play: async ({ canvas, userEvent }) => {
@@ -55,10 +52,7 @@ export const LoadMore: Story = {
 	},
 };
 
-/**
- * While the earlier runs are on their way a run card's shape stands in for them, and the button
- * says so and takes no second press.
- */
+/** A run card's skeleton stands in for the next page. */
 export const LoadingMore: Story = {
 	args: { feed: { ...readyFeed, hasMore: true, isLoadingMore: true } },
 	play: async ({ canvas }) => {
@@ -67,10 +61,7 @@ export const LoadingMore: Story = {
 	},
 };
 
-/**
- * A page that did not arrive keeps the runs already read, asks for nothing by itself, and offers
- * the press back.
- */
+/** A failed page keeps the runs already read. */
 export const LoadMoreFailed: Story = {
 	args: { feed: { ...readyFeed, hasMore: true, loadMoreError: new Error("network") } },
 	play: async ({ canvas, userEvent }) => {
