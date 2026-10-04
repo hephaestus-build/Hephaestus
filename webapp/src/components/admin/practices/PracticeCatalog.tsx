@@ -185,7 +185,7 @@ export function PracticeCatalog({
 				<Section
 					size="sm"
 					title="Instance catalog"
-					description="Practices this instance includes. Adding one gives you a copy you own. Later catalog changes do not edit it unless you accept them."
+					description="Practices this instance includes. Adding one gives you a copy you own. Later catalog changes do not change your copy unless you accept them."
 					// Arrives rather than appears: the toggle is above it, so a section that simply exists
 					// on the next frame gives no clue where it came from. Short, and off under
 					// `prefers-reduced-motion`, where the arrival is the information and the travel is not.

@@ -25,7 +25,7 @@ public class KeywordSlackMentorInputGuard implements SlackMentorInputGuard {
 
     static final String SELF_HARM_RESPONSE =
             "It sounds like you may be going through something really hard, and I’m not the right kind of help for "
-                    + "this. I’m just a coding-practice mentor. Reach out to someone who can support you right now. In "
+                    + "this. I’m just a coding-practice mentor. Please reach out to someone who can support you right now. In "
                     + "many countries you can call or text a crisis line (for example 988 in the US/Canada), or contact your "
                     + "local emergency services. You deserve real support, and it’s okay to ask for it.";
 

@@ -76,7 +76,7 @@ Write the way a helpful colleague speaks: direct and specific.
 - Put the point first. Put a condition before the action that depends on it.
 - Use short, common words. The Home Office [recommends](https://design.homeoffice.gov.uk/accessibility/written-content/readability) a reading age of 9, even for expert readers.
 - Write no more than 25 words per sentence. This project limit follows [GOV.UK](https://insidegovuk.blog.gov.uk/2014/08/04/sentence-length-why-25-words-is-our-limit/).
-- Do not joke. Do not use exclamation marks, "please", "sorry", "oops", or marketing words.
+- Do not joke. Do not use exclamation marks, "please", "sorry", "oops", or marketing words. A safety message, such as a crisis reply, may say "please": warmth outweighs brevity there.
 - Do not blame the reader. Say what the system could not do.
 
 ### Voice for each situation
