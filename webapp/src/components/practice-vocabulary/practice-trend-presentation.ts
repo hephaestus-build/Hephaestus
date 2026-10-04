@@ -23,13 +23,14 @@ export function shownTrendDirection(
 }
 
 /**
- * What a practice's standing rests on: the newest stretch of reviewed work the trend compares,
- * which is the window the standing is read from. Nothing to name when no work reached it.
+ * What a settled practice standing rests on: the newest stretch of reviewed work the trend
+ * compares, which is the window the standing is read from. With none of that work, only a review
+ * of past work judged the practice, and the standing was read from it.
  */
-export function formatStandingBasis(support: TrendSupport): string | undefined {
+export function formatStandingBasis(support: TrendSupport): string {
 	const current = support.currentOpportunities;
 	if (current === 0) {
-		return undefined;
+		return "Read from a review of your past work, which never moves a trend.";
 	}
 	return current === 1
 		? "Based on your latest piece of reviewed work."
@@ -66,7 +67,7 @@ export function formatTrendProvenance(
 	// wire already counts it once.
 	const { opportunities } = support;
 	if (opportunities === 0) {
-		return "No reviewed work is available yet.";
+		return "No new work has been reviewed yet.";
 	}
 
 	const span = support.calendarSpanDays;

@@ -36,7 +36,7 @@ describe("practice trend copy", () => {
 				"INSUFFICIENT_EVIDENCE",
 				"practice",
 			),
-		).toBe("No reviewed work is available yet.");
+		).toBe("No new work has been reviewed yet.");
 	});
 
 	it("claims no comparison when the server formed none", () => {
@@ -52,14 +52,16 @@ describe("practice trend copy", () => {
 		);
 	});
 
-	it("names the newest stretch a standing is read from, and nothing when no work reached it", () => {
+	it("names the newest stretch a standing is read from, or the review of past work it rests on", () => {
 		expect(formatStandingBasis(support())).toBe(
 			"Based on your latest four pieces of reviewed work.",
 		);
 		expect(formatStandingBasis(support({ currentOpportunities: 1 }))).toBe(
 			"Based on your latest piece of reviewed work.",
 		);
-		expect(formatStandingBasis(support({ currentOpportunities: 0 }))).toBeUndefined();
+		expect(formatStandingBasis(support({ currentOpportunities: 0 }))).toBe(
+			"Read from a review of your past work, which never moves a trend.",
+		);
 	});
 
 	it("counts a group's practices by standing as one sentence, in the registry's order", () => {

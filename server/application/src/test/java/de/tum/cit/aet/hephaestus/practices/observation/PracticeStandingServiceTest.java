@@ -386,6 +386,9 @@ class PracticeStandingServiceTest extends BaseUnitTest {
         // Two clean pieces of work after the slip, as with live work, not "any problem means needs attention".
         assertThat(standings.get(0).standing()).isEqualTo(PracticeStandingDTO.Standing.STRENGTH);
         assertThat(standings.get(0).toWorkOn()).hasSize(1);
+        // The campaign never moves the trend, so the standing rests on no work the trend counts.
+        assertThat(Objects.requireNonNull(standings.get(0).trendSupport()).opportunities())
+                .isZero();
     }
 
     @Test
