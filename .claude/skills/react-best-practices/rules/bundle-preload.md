@@ -7,7 +7,7 @@ tags: bundle, preload, user-intent, hover
 
 ## Preload Based on User Intent
 
-Preload heavy bundles before they're needed to reduce perceived latency.
+Preload heavy bundles before they are needed to reduce perceived latency.
 
 **Example (preload on hover/focus):**
 

@@ -2,13 +2,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        Search [existing ideas](https://github.com/hephaestus-build/Hephaestus/discussions/categories/ideas) before starting a discussion.
+        Before you start a discussion, search [existing ideas](https://github.com/hephaestus-build/Hephaestus/discussions/categories/ideas).
 
   - type: textarea
     id: problem
     attributes:
       label: What problem would this solve?
-      description: Explain who encounters the problem, what they are trying to accomplish, and why the current experience falls short.
+      description: Explain who has the problem. State what they want to do. Explain why the current experience does not meet their needs.
     validations:
       required: true
   - type: textarea

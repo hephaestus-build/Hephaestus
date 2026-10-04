@@ -8,7 +8,9 @@ description: Evidence template for the WCAG 2.2 AA web application audit.
 Create a dated record for each audit, named `accessibility-audit-record-<date>.md`, and retain it with
 the release evidence. Publish only public-safe information required by the accessibility statement.
 
-Copy this file, fill every cell, and delete no section. A blank cell is a result nobody recorded, so
+Copy this file.
+Fill every cell.
+Do not delete a section. A blank cell is a result nobody recorded, so
 write `Not tested` instead.
 
 ## Results
@@ -22,9 +24,10 @@ Every result cell holds one of these four words.
 | `Not tested` | Nobody ran the check. Give the reason. It counts against a conformance claim. |
 | `Not applicable` | The surface has no such content or step. Explain why. |
 
-`Not tested` and `Not applicable` are different answers. The first says the evidence is missing; the
-second says there is nothing to gather. A check that could not be run, because the tester, the
-assistive technology or the test data was missing, is `Not tested`.
+`Not tested` and `Not applicable` are different answers.
+The first says the evidence is missing.
+The second says there is nothing to gather.
+If the tester, assistive technology, or test data was missing, record a check that could not run as `Not tested`.
 
 When a result differs between environments, or ran in only some of them, name the environment in the
 cell, for example `Fail (E2)` or `Pass (E1)`.

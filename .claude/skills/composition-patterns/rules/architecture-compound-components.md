@@ -8,7 +8,7 @@ tags: composition, compound-components, architecture
 ## Use Compound Components
 
 Structure complex components as compound components with a shared context. Each
-subcomponent accesses shared state via context, not props. Consumers compose the
+subcomponent accesses shared state through context, not props. Consumers compose the
 pieces they need.
 
 **Incorrect (monolithic component with render props):**

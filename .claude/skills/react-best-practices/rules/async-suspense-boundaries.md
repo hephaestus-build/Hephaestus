@@ -93,7 +93,7 @@ Both components share the same promise, so only one fetch occurs. Layout renders
 
 - Critical data needed for layout decisions (affects positioning)
 - SEO-critical content above the fold
-- Small, fast queries where suspense overhead isn't worth it
+- Small, fast queries where suspense overhead is not worth it
 - When you want to avoid layout shift (loading → content jump)
 
 **Trade-off:** Faster initial paint vs potential layout shift. Choose based on your UX priorities.

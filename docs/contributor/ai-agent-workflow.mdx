@@ -1,7 +1,7 @@
 ---
 id: ai-agent-workflow
 title: Coding agents
-description: The coding agents this repository is set up for, how work moves through them, and how to extend what they read.
+description: The configured coding agents, their workflow, and how to extend their instructions.
 ---
 
 # Coding agents
@@ -10,10 +10,15 @@ Three are configured here: **Claude Code**, **opencode** and **Codex**. All thre
 `AGENTS.md` files, so which one you use is your preference. CodeRabbit reviews pull requests as a
 GitHub App and needs nothing in the tree.
 
-Install any of them from its own documentation ([Claude Code](https://code.claude.com/docs),
-[opencode](https://opencode.ai/docs), [Codex](https://developers.openai.com/codex)) and sign in with
-your own account — nothing in this repository carries a credential, and none of them needs
-configuring beyond that to pick up everything below.
+Install the tool from its own documentation:
+
+- [Claude Code](https://code.claude.com/docs)
+- [opencode](https://opencode.ai/docs)
+- [Codex](https://developers.openai.com/codex)
+
+Sign in with your own account.
+Nothing in this repository carries a credential.
+No further configuration is necessary for these tools to read everything below.
 
 ## How work moves
 
@@ -35,40 +40,55 @@ flowchart TD
     J -->|Approved| L[Merge]
 ```
 
-**Agents do not stage, commit or push** until you run `/land-pr`; `/fix-ci` and `/resolve-review`
-push their own fixes afterwards, which is why neither loops back through it. Reading the diff
-yourself is the review that matters — the gates prove the tree is consistent, not that the change is
-right.
+**Agents do not stage, commit, or push** until you run `/land-pr`.
+Afterwards, `/fix-ci` and `/resolve-review` push their own fixes.
+Thus, neither loops back through `/land-pr`.
 
-`vp run format && vp run check` is the floor, not the whole ask. Name the thing your change could
-actually break: the test file that covers it rather than "run the tests", a request against the
-endpoint you added, a query confirming the row was written, the logs after the change.
+Read the diff yourself.
+This is the review that matters.
+The gates prove that the tree is consistent, not that the change is correct.
+
+`vp run format && vp run check` is the minimum, not the full requirement.
+Name the behavior that your change could break.
+Use specific evidence, such as:
+
+- The test file that covers it, instead of "run the tests".
+- A request against the endpoint that you added.
+- A query that confirms the stored row.
+- The logs after the change.
 
 ## Parallel delivery protocol
 
 Parallel work stays parallel only when contributors avoid manufacturing shared diffs:
 
-1. **Reserve hot-file lanes at assignment time.** Only one in-flight PR may write each lane:
-   `.github/workflows/**` and `.github/actions/**`; `vite.config.ts` with
-   `scripts/ci-contract.test.ts`, which the task graph and its contract keep in step; root
-   `package.json` with `pnpm-lock.yaml`; `CHANGELOG.md` and `MIGRATION.md` (release automation
-   only); `webapp/src/api/**` with `extension/src/api/**`; and
-   `server/application/src/main/resources/db/master.xml`. Migration fragments remove `MIGRATION.md`
-   from feature work, but release automation still owns it exclusively. Dependent changes use
-   `/gh-stack`; otherwise, do not make one PR wait for another.
+1. **Reserve hot-file lanes at assignment time.** Only one in-flight PR can write each lane:
+   - `.github/workflows/**` and `.github/actions/**`.
+   - `vite.config.ts` with `scripts/ci-contract.test.ts`.
+     The task graph and its contract keep these in step.
+   - Root `package.json` with `pnpm-lock.yaml`.
+   - `CHANGELOG.md` and `MIGRATION.md`, for release automation only.
+   - `webapp/src/api/**` with `extension/src/api/**`.
+   - `server/application/src/main/resources/db/master.xml`.
+
+   Migration fragments remove `MIGRATION.md` from feature work.
+   Only release automation owns it.
+   Use `/gh-stack` for dependent changes.
+   Otherwise, do not make one PR wait for another.
 2. **Commit only regeneration caused by the change.** If OpenAPI, ERD, route-tree, or another generator
    produces unrelated drift, stop and report it. One dedicated PR or the owning automation lands that
-   drift; feature branches do not each carry a copy.
-3. **Repair broken `main` once.** One queue-jumping hotfix owns the repair; feature branches neither
-   duplicate it nor absorb it.
-4. **Let the merge queue integrate.** Branch from a freshly fetched `origin/main`, rebase immediately
-   before requesting merge, then use `gh pr merge --squash --auto`. Do not repeatedly rebase behind
-   unrelated PRs or bypass the queue's final integration. A genuine dependency is a stack, not an
-   informal waiting chain.
+   drift.
+   Feature branches do not each carry a copy.
+3. **Repair broken `main` once.** One queue-jumping hotfix owns the repair.
+   Feature branches neither duplicate it nor absorb it.
+4. **Let the merge queue integrate.** Branch from a freshly fetched `origin/main`.
+   Immediately before you request merge, rebase.
+   Then use `gh pr merge --squash --auto`.
+   Do not repeatedly rebase behind unrelated PRs or bypass the queue's final integration.
+   A genuine dependency is a stack, not an informal waiting chain.
 
-The assignee for a hot-file lane releases it when the PR merges or abandons the edit. If two tasks
-discover they need the same lane, split or sequence that part explicitly rather than resolving the
-same predictable conflict later.
+The assignee releases a hot-file lane when the PR merges or the assignee abandons the edit.
+If two tasks need the same lane, explicitly split or sequence that part.
+Do not leave the predictable conflict for later.
 
 ## Slash commands
 
@@ -78,27 +98,35 @@ same predictable conflict later.
 | `/fix-ci` | Read every failing check in one pass, fix in dependency order, push once |
 | `/resolve-review` | Fetch review threads, decide each, reply and resolve |
 
-Each lives in `.claude/skills/<name>/SKILL.md`. opencode
-[reads `.claude/skills/` alongside its own](https://opencode.ai/docs/skills/) — `opencode debug
-skill` prints every skill with the path it resolved from — so no skill needs a second copy for it.
-A *typed* `/name` is the exception: opencode resolves that from `.opencode/commands/` only, so each
-of these three has a file there whose entire body is `@.claude/skills/<name>/SKILL.md`. opencode
-[inlines a referenced file into the prompt](https://opencode.ai/docs/commands/), which is what makes
-a pointer enough.
+Each lives in `.claude/skills/<name>/SKILL.md`.
+opencode [reads `.claude/skills/` alongside its own](https://opencode.ai/docs/skills/).
+`opencode debug skill` prints every skill with its resolved path.
+Thus, no skill needs a second copy for opencode.
 
-Codex shares no directory with the other two: it
-[scans `.agents/skills/`](https://developers.openai.com/codex/skills) and never `.claude/skills/`,
-and it has no repo-level slash commands at all —
-[`~/.codex/prompts/` is personal and uncommitted](https://developers.openai.com/codex/custom-prompts),
-and OpenAI's own guidance for sharing one is to make it a skill. So the four skills that drive a
-contribution — these three and `/gh-stack` — are copied to `.agents/skills/<name>/`, and
-`gate:instructions` fails if a half goes missing or the two drift. `CODEX_SKILLS` in that script is
-the list; add a name and the copy when Codex should have another.
+A *typed* `/name` is the exception.
+opencode resolves it only from `.opencode/commands/`.
+Each of these three commands has a file there whose entire body is `@.claude/skills/<name>/SKILL.md`.
+opencode [inlines a referenced file into the prompt](https://opencode.ai/docs/commands/).
+Thus, a pointer is sufficient.
 
-The knowledge packs are deliberately not mirrored: `react-best-practices` alone is fifty files, and a
-Codex session that needs them is working in `webapp/`, whose `AGENTS.md` names them by path. The
-mirror also costs one `duplicate skill name` warning per skill in opencode's log, since opencode
-reads both directories and sees the same name twice.
+Codex shares no directory with the other two tools.
+It [scans `.agents/skills/`](https://developers.openai.com/codex/skills), never `.claude/skills/`.
+It has no repository-level slash commands.
+[`~/.codex/prompts/` is personal and uncommitted](https://developers.openai.com/codex/custom-prompts).
+OpenAI's guidance is to make a shared command a skill.
+
+Thus, the four contribution skills have copies in `.agents/skills/<name>/`.
+These are the three above and `/gh-stack`.
+`gate:instructions` fails if a copy is missing or differs.
+`CODEX_SKILLS` in that script lists them.
+If Codex should have another skill, add its name and copy.
+
+The knowledge packs intentionally have no mirrors.
+`react-best-practices` alone has fifty files.
+A Codex session that needs them works in `webapp/`, whose `AGENTS.md` names them by path.
+
+A mirror also causes one `duplicate skill name` warning per skill in opencode's log.
+opencode reads both directories and sees the same name twice.
 
 `disable-model-invocation` makes these three typed-only in Claude Code. opencode and Codex both
 ignore the field, so there they are ordinary skills the model can reach on its own.
@@ -111,37 +139,54 @@ ignore the field, so there they are ordinary skills the model can reach on its o
 | `webapp/AGENTS.md` | The SPA — component conventions, linting traps, drawers, motion, vocabulary |
 | `server/AGENTS.md` | The Spring Boot server — build traps, the four test tiers, API and security conventions |
 
-The two tools reach them differently, and neither difference is visible from the file:
+The tools read them differently.
+The file itself does not show these differences:
 
-- **opencode** reads `AGENTS.md` natively and takes the nested ones from the `instructions` globs in
-  `opencode.json`. Those load unconditionally, so an opencode session carries all three.
-- **Codex** reads `AGENTS.md` from the repository root down to the directory you launched it in, and
-  stops there. Start it in `webapp/` to get the SPA guide; started at the root it has only the root
-  file.
+- **opencode** reads `AGENTS.md` natively.
+  It reads the nested files through the `instructions` globs in `opencode.json`.
+  These load unconditionally, so an opencode session carries all three.
+- **Codex** reads `AGENTS.md` from the repository root down to its launch directory.
+  It stops there.
+  Start it in `webapp/` to get the SPA guide.
+  If you start it at the root, it has only the root file.
 - **Claude Code** reads `CLAUDE.md` and
-  [never `AGENTS.md`](https://code.claude.com/docs/en/memory#agents-md). Each `AGENTS.md` therefore
-  has a `CLAUDE.md` beside it holding one line — `@AGENTS.md` — which imports it. An import resolves
-  against the file holding it, so the same line means a different file in each directory, and Claude
-  loads a nested one the first time it reads a file anywhere in that tree. That is what keeps the
-  webapp guide out of a server-only session.
+  [never `AGENTS.md`](https://code.claude.com/docs/en/memory#agents-md).
+  Thus, each `AGENTS.md` has a `CLAUDE.md` beside it with one import line: `@AGENTS.md`.
+  An import resolves against the file that holds it.
+  The same line therefore means a different file in each directory.
+  Claude loads a nested file the first time it reads a file anywhere in that tree.
 
-`vp run gate:instructions` fails on an `AGENTS.md` no `CLAUDE.md` imports, an `@` reference
-resolving to nothing, an `instructions` entry matching no file, a typed-only skill with no opencode
-command, a Codex mirror that has drifted, two agent files with one body, and any committed symlink
-among them. Each failure explains itself. Bodies are compared exactly, so a copy is caught when it is
-made rather than after it drifts.
+  Thus, a server-only session does not load the webapp guide.
+
+`vp run gate:instructions` fails in these cases:
+
+- No `CLAUDE.md` imports an `AGENTS.md`.
+- An `@` reference resolves to nothing.
+- An `instructions` entry matches no file.
+- A typed-only skill has no opencode command.
+- A Codex mirror differs from its source.
+- Two agent files have the same body.
+- Any of these files is a committed symlink.
+
+Each failure explains itself.
+The gate compares bodies exactly.
+Thus, it detects a copy when someone makes it, not after the copies differ.
 
 ### Adding a tree, or a skill
 
-Write `<dir>/AGENTS.md`, add `<dir>/CLAUDE.md` containing `@AGENTS.md`, and give it its own
-`opencode.json` `instructions` entry unless `*/AGENTS.md` already matches. Then run the gate. A skill
-is a directory under `.claude/skills/`; it needs a file in `.opencode/commands/` only if you mark it
-`disable-model-invocation`.
+1. Write `<dir>/AGENTS.md`.
+2. Add `<dir>/CLAUDE.md` with `@AGENTS.md`.
+3. Unless `*/AGENTS.md` already matches, add its own `opencode.json` `instructions` entry.
+4. Run the gate.
 
-To confirm a file actually loaded, `/context` in Claude Code lists it under **Memory files** once you
-have opened a file in that tree. The other two have no equivalent view — `opencode debug config`
-echoes the patterns you configured rather than the files they matched — so there the gate is the
-check.
+A skill is a directory under `.claude/skills/`.
+It needs a file in `.opencode/commands/` only if you mark it `disable-model-invocation`.
+
+After you open a file in a tree, use `/context` in Claude Code to confirm that its instructions loaded.
+It lists them under **Memory files**.
+The other two tools have no equivalent view.
+`opencode debug config` shows configured patterns, not their matched files.
+Thus, use the gate as the check for those tools.
 
 ### When an agent ignores an instruction
 

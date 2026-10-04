@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "organization": "Engineering",
   "date": "January 2026",
-  "abstract": "Composition patterns for building flexible, maintainable React components. Avoid boolean prop proliferation by using compound components, lifting state, and composing internals. These patterns make codebases easier for both humans and AI agents to work with as they scale.",
+  "abstract": "Composition patterns for flexible, maintainable React components. Avoid too many boolean props. Use compound components, lift state, and compose internals. These patterns help humans and AI agents work with codebases as they grow.",
   "references": [
     "https://react.dev",
     "https://react.dev/learn/passing-data-deeply-with-context",

@@ -7,7 +7,9 @@ tags: rendering, ssr, hydration, localStorage, flicker
 
 ## Prevent Hydration Mismatch Without Flickering
 
-When rendering content that depends on client-side storage (localStorage, cookies), avoid both SSR breakage and post-hydration flickering by injecting a synchronous script that updates the DOM before React hydrates.
+If content depends on client-side storage such as localStorage or cookies, inject a synchronous script.
+The script updates the DOM before React hydrates.
+This prevents SSR breakage and post-hydration flickering.
 
 **Incorrect (breaks SSR):**
 
