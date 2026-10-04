@@ -165,7 +165,7 @@ export function WorkspaceSplitBar({ split: wire, yourStanding }: WorkspaceSplitB
  * split is held back draws it alone and says the reason once.
  */
 export function HeldBackTrack() {
-	return <span aria-hidden className={cn("mt-5 w-full", HELD_BACK_TRACK)} />;
+	return <div aria-hidden className={cn("mt-5 w-full", HELD_BACK_TRACK)} />;
 }
 
 /** The bar's lines while it loads: the marker's row, the bar, the counts, then the total. */
