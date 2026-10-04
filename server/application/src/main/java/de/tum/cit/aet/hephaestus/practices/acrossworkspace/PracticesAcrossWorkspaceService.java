@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Developer;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.GroupRelease;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.PageRelease;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Split;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Standings;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
@@ -74,7 +73,7 @@ public class PracticesAcrossWorkspaceService {
         List<List<Practice>> practices = groups.stream()
                 .map(group -> standings.eligiblePracticesByGroup().getOrDefault(group.getSlug(), List.of()))
                 .toList();
-        PageRelease release = CohortPrivacyPolicy.page(
+        List<GroupRelease> release = CohortPrivacyPolicy.page(
                 current.withAStanding().stream()
                         .map(developer -> developerOf(current, developer, groups, practices))
                         .toList(),
@@ -84,7 +83,7 @@ public class PracticesAcrossWorkspaceService {
         List<WorkspaceGroupSplitDTO> rows = new ArrayList<>();
         for (int groupIndex = 0; groupIndex < groups.size(); groupIndex++) {
             PracticeGroup group = groups.get(groupIndex);
-            GroupRelease groupRelease = release.groups().get(groupIndex);
+            GroupRelease groupRelease = release.get(groupIndex);
             List<WorkspacePracticeSplitDTO> practiceSplits = new ArrayList<>();
             for (int index = 0; index < practices.get(groupIndex).size(); index++) {
                 Practice practice = practices.get(groupIndex).get(index);
@@ -117,8 +116,6 @@ public class PracticesAcrossWorkspaceService {
                 .toList());
         return new PracticesAcrossWorkspaceDTO(
                 CohortPrivacyPolicy.MINIMUM_OTHERS,
-                release.developersWithAStanding(),
-                current.readerCounted(),
                 WorkspaceTileDTO.of(reader == null ? 0 : openFeedback.getOrDefault(reader, 0), openMiddle),
                 rows);
     }

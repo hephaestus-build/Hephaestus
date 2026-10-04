@@ -4205,10 +4205,6 @@ export type PracticeWorkTypeDefinitionOptions = {
  */
 export type PracticesAcrossWorkspace = {
   /**
-   * Eligible developers with a current standing in a practice group shown, the developers every split counts; absent while too few to show
-   */
-  developersWithAStanding?: number;
-  /**
    * One row per practice group shown on the practice pages, in catalog order
    */
   groups: Array<WorkspaceGroupSplit>;
@@ -4220,10 +4216,6 @@ export type PracticesAcrossWorkspace = {
    * The reader's open feedback, counted by the rule the practice profile shows it open by, beside the middle half of every eligible developer's: both open now
    */
   openFeedback: WorkspaceTile;
-  /**
-   * Whether the reader is one of the developers with a current standing and so inside the splits
-   */
-  readerCounted: boolean;
 };
 
 /**

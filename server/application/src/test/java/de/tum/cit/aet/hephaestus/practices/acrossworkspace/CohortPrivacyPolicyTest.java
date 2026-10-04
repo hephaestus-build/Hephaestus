@@ -10,7 +10,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Developer;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.GroupRelease;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.PageRelease;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Part;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Shape;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Split;
@@ -24,6 +23,7 @@ import java.util.Random;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -186,10 +186,9 @@ class CohortPrivacyPolicyTest {
                 .containsExactly(
                         new Part(Verdict.DEVELOPING, 4), new Part(Verdict.MIXED, 4), new Part(Verdict.STRENGTH, 4));
 
-        PageRelease release = CohortPrivacyPolicy.page(withAStanding, List.of(1, 1));
+        List<GroupRelease> release = CohortPrivacyPolicy.page(withAStanding, List.of(1, 1));
 
-        assertThat(release.developersWithAStanding()).isEqualTo(23);
-        assertThat(release.groups())
+        assertThat(release)
                 .containsExactly(
                         new GroupRelease(totalOnly(23), List.of(totalOnly(23))),
                         new GroupRelease(totalOnly(23), List.of(totalOnly(23))));
@@ -211,9 +210,9 @@ class CohortPrivacyPolicyTest {
         }
         withAStanding.add(developer(STRENGTH, STRENGTH));
 
-        PageRelease release = CohortPrivacyPolicy.page(withAStanding, List.of(1, 1));
+        List<GroupRelease> release = CohortPrivacyPolicy.page(withAStanding, List.of(1, 1));
 
-        assertThat(release.groups())
+        assertThat(release)
                 .containsExactly(
                         new GroupRelease(totalOnly(23), List.of(totalOnly(23))),
                         new GroupRelease(totalOnly(23), List.of(totalOnly(23))));
@@ -222,11 +221,9 @@ class CohortPrivacyPolicyTest {
     @Test
     @DisplayName("a window nobody has a standing in withholds every split it names")
     void shouldWithholdEverySplitWhenNobodyHasAStanding() {
-        PageRelease release = CohortPrivacyPolicy.page(List.of(), List.of(2));
+        List<GroupRelease> release = CohortPrivacyPolicy.page(List.of(), List.of(2));
 
-        assertThat(release.developersWithAStanding()).isNull();
-        assertThat(release.groups())
-                .containsExactly(new GroupRelease(Split.WITHHELD, List.of(Split.WITHHELD, Split.WITHHELD)));
+        assertThat(release).containsExactly(new GroupRelease(Split.WITHHELD, List.of(Split.WITHHELD, Split.WITHHELD)));
     }
 
     @Test
@@ -257,7 +254,7 @@ class CohortPrivacyPolicyTest {
                     .toList();
             List<Developer> withAStanding = randomCohort(random, practicesPerGroup);
 
-            PageRelease release = CohortPrivacyPolicy.page(withAStanding, practicesPerGroup);
+            List<GroupRelease> release = CohortPrivacyPolicy.page(withAStanding, practicesPerGroup);
 
             checkAgainstTheDevelopers(cohort, withAStanding, practicesPerGroup, release, checks);
             List<Developer> readerFirst = new ArrayList<>(withAStanding);
@@ -282,16 +279,23 @@ class CohortPrivacyPolicyTest {
             int cohort,
             List<Developer> developers,
             List<Integer> practicesPerGroup,
-            PageRelease release,
+            List<GroupRelease> release,
             Checks checks) {
         int total = developers.size();
-        assertThat(release.developersWithAStanding())
-                .as("cohort %d total", cohort)
-                .isEqualTo(total >= FOUR ? total : null);
+        // Every split that shows a total shows the same one, every developer with a standing, and only from four.
+        assertThat(release.stream()
+                        .flatMap(group -> Stream.concat(Stream.of(group.group()), group.practices().stream()))
+                        .filter(split -> split.shape() != Shape.WITHHELD)
+                        .map(Split::developers))
+                .as("cohort %d totals", cohort)
+                .allSatisfy(shown -> {
+                    assertThat(shown).isEqualTo(total);
+                    assertThat(total).isGreaterThanOrEqualTo(FOUR);
+                });
         List<Integer> shownGroupSizes = new ArrayList<>();
         for (int group = 0; group < practicesPerGroup.size(); group++) {
             int g = group;
-            GroupRelease released = release.groups().get(group);
+            GroupRelease released = release.get(group);
             Predicate<Developer> inGroup =
                     developer -> isVerdict(developer.groups().get(g).group());
             checkSplit(

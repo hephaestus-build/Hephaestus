@@ -146,8 +146,6 @@ export const PACKAGING_GROUP: WorkspaceGroupSplit = group(
  */
 export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	minimumOthers: 3,
-	developersWithAStanding: 28,
-	readerCounted: true,
 	openFeedback: { yours: 3, middle: { low: 1, high: 4 } },
 	groups: [
 		group(ACTING, "MIXED", threeWay([6, 7, 7])),
@@ -184,7 +182,6 @@ export const GATED_TILES: PracticesAcrossWorkspaceTiles = {
 /** Four other developers with a standing: too few for any figure about the workspace, even a total. */
 export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
 	...ACROSS_WORKSPACE,
-	developersWithAStanding: undefined,
 	openFeedback: { yours: 3 },
 	groups: ACROSS_WORKSPACE.groups.map((each) => ({
 		...each,

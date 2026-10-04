@@ -87,20 +87,17 @@ public final class CohortPrivacyPolicy {
     /** A practice group's split and its practices' splits, in the order the page lists them. */
     public record GroupRelease(Split group, List<Split> practices) {}
 
-    /** The page as it may be shown: the total of developers with a standing, and each group's splits. */
-    public record PageRelease(@Nullable Integer developersWithAStanding, List<GroupRelease> groups) {}
-
     /**
      * Every split of the page. Each split is decided on its own, then held back where a difference between shown
      * splits would count 1 to K developers: a practice against its group, a group's shown practices against the
-     * group, and the groups whose size a reader knows against the page total. A reader knows a group's size from its
+     * group, and the groups whose size a reader knows against the developers with a standing. A reader knows a group's size from its
      * own split, or from its one practice's split, since a group verdict exists exactly where a verdict on one of its
      * listed practices does.
      *
      * @param withAStanding every developer with a standing in a group the page shows
      * @param practicesPerGroup how many practices each group lists, which no developer says when nobody has a standing
      */
-    public static PageRelease page(List<Developer> withAStanding, List<Integer> practicesPerGroup) {
+    public static List<GroupRelease> page(List<Developer> withAStanding, List<Integer> practicesPerGroup) {
         int total = withAStanding.size();
         List<GroupRelease> groups = IntStream.range(0, practicesPerGroup.size())
                 .mapToObj(index -> group(
@@ -129,7 +126,7 @@ public final class CohortPrivacyPolicy {
                             group.practices().stream().map(practice -> heldBack).toList()))
                     .toList();
         }
-        return new PageRelease(count(total), groups);
+        return groups;
     }
 
     /** One group's splits, with its practices held back where they and the group would count 1 to K developers. */

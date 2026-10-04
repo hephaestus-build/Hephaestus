@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { FeedbackResponse, InAppFeedback } from "@/api/types.gen";
 import { nextRating, nextResolution, useInAppFeedback } from "@/hooks/use-in-app-feedback";
@@ -173,6 +173,37 @@ describe("useInAppFeedback", () => {
 		});
 		reread.resolve();
 		await waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(false));
+	});
+
+	it("names the control that wrote only once the write outlasts the delay, and clears it when it settles", async () => {
+		// Only the timeouts are faked, and they also move with real time, so the reads and waits
+		// still run; the test jumps them past the delay that keeps a quick write silent.
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
+		try {
+			const reread = deferred();
+			const { result } = renderFeedback(undefined, true, reread.promise);
+			await vi.waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+			act(() => {
+				result.current.ratingProps(feedbackId).onResolve?.("ADDRESSED");
+			});
+			await vi.waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(true));
+			expect(result.current.ratingProps(feedbackId).saving).toBeUndefined();
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(1000);
+			});
+			expect(result.current.ratingProps(feedbackId).saving).toBe("answer");
+
+			reread.resolve();
+			await vi.waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(false));
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(500);
+			});
+			expect(result.current.ratingProps(feedbackId).saving).toBeUndefined();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("writes the answer over a dispute and shows it until the cards have been read again", async () => {

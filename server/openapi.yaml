@@ -16033,12 +16033,6 @@ components:
         \ open feedback beside the reader's own. Nothing here reads a window; the\
         \ tiles that do are read on their own"
       properties:
-        developersWithAStanding:
-          type: integer
-          format: int32
-          description: "Eligible developers with a current standing in a practice\
-            \ group shown, the developers every split counts; absent while too few\
-            \ to show"
         groups:
           type: array
           description: "One row per practice group shown on the practice pages, in\
@@ -16055,15 +16049,10 @@ components:
           description: "The reader's open feedback, counted by the rule the practice\
             \ profile shows it open by, beside the middle half of every eligible developer's:\
             \ both open now"
-        readerCounted:
-          type: boolean
-          description: Whether the reader is one of the developers with a current
-            standing and so inside the splits
       required:
       - groups
       - minimumOthers
       - openFeedback
-      - readerCounted
     PracticesAcrossWorkspaceTiles:
       type: object
       description: The reader's figures over one window beside the middle half of

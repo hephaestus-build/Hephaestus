@@ -159,10 +159,8 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         read().jsonPath("$.minimumOthers")
                 .isEqualTo(3)
                 // The owner, the reader and twenty six developers are eligible, and every one of them was reviewed.
-                .jsonPath("$.developersWithAStanding")
+                .jsonPath("$.groups[0].split.developers")
                 .isEqualTo(28)
-                .jsonPath("$.readerCounted")
-                .isEqualTo(true)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
                 .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourStanding")
@@ -366,7 +364,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo(27);
         tiles("DAYS_90").jsonPath("$.developersWithAStandingInWindow").isEqualTo(28);
         // The splits still count the owner, whose profile still shows the standing.
-        read().jsonPath("$.developersWithAStanding")
+        read().jsonPath("$.groups[0].split.developers")
                 .isEqualTo(28)
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.shape")
                 .isEqualTo("SPLIT")
@@ -386,11 +384,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
         tiles("DAYS_90").jsonPath("$.developersWithAStandingInWindow").doesNotExist();
         tiles("ALL_TIME").jsonPath("$.developersWithAStandingInWindow").isEqualTo(28);
-        read().jsonPath("$.developersWithAStanding")
-                .doesNotExist()
-                .jsonPath("$.readerCounted")
-                .isEqualTo(false)
-                .jsonPath("$.groups[?(@.split.shape != 'WITHHELD')]")
+        read().jsonPath("$.groups[?(@.split.shape != 'WITHHELD')]")
+                .isEmpty()
+                .jsonPath("$.groups[*].yourStanding")
                 .isEmpty();
     }
 
@@ -446,10 +442,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                     ('across-dev-0', 'across-dev-1'))
                 """, workspace.getId());
 
-        read().jsonPath("$.developersWithAStanding")
-                .doesNotExist()
-                .jsonPath("$.groups[?(@.split.shape != 'WITHHELD')]")
-                .isEmpty();
+        read().jsonPath("$.groups[?(@.split.shape != 'WITHHELD')]").isEmpty();
         tiles("ALL_TIME")
                 .jsonPath("$.reviewedWork.yours")
                 .isEqualTo(1)
@@ -478,7 +471,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
             observe(elsewherePractice, run, nextNumber++, developer, NOT_MET, Severity.MAJOR, NEWEST);
         }
 
-        read().jsonPath("$.developersWithAStanding")
+        read().jsonPath("$.groups[0].split.developers")
                 .isEqualTo(26)
                 // Two of the six at Needs attention are hidden, which leaves four there: still a part of its own.
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
@@ -493,8 +486,6 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @DisplayName("an instance administrator viewing as the developer reads the developer's own page")
     void shouldReadTheViewedDevelopersPageWhenAnAdministratorViewsIt() {
         readAsUserView(URI, workspace, reader)
-                .jsonPath("$.readerCounted")
-                .isEqualTo(true)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourStanding")
                 .isEqualTo("STRENGTH");
     }
@@ -551,7 +542,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         strength(craft, alsoVisible, NEWEST);
 
         // The twenty eight seeded, and the developer with a standing outside the hidden repository.
-        read().jsonPath("$.developersWithAStanding").isEqualTo(29);
+        read().jsonPath("$.groups[0].split.developers").isEqualTo(29);
     }
 
     /** A pull request in a repository the workspace hides from contributions. */
