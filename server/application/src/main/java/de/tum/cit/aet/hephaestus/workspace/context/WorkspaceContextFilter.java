@@ -383,12 +383,12 @@ public class WorkspaceContextFilter implements Filter {
     private void sendWorkspaceSlugValidationError(HttpServletResponse response, String slug) throws IOException {
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
         problem.setTitle("Validation failed");
-        problem.setDetail("Invalid workspace slug: " + slug);
+        problem.setDetail("The workspace slug is not valid: " + slug);
         problem.setProperty(
                 "errors",
                 Map.of(
                         "workspaceSlug",
-                        "Slug must be 3-51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens"));
+                        "Slug must be 3 to 51 characters, start with a lowercase letter or digit, and contain only lowercase letters, digits, or hyphens"));
         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(problem));

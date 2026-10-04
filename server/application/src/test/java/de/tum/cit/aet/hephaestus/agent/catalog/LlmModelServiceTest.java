@@ -217,7 +217,7 @@ class LlmModelServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> modelService.updatePrice(7L, request))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("first disable the model");
+                    .hasMessageContaining("Disable the model before you change its price");
 
             verifyNoInteractions(priceRepository);
         }
@@ -357,8 +357,7 @@ class LlmModelServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> modelService.update(7L, request))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage(
-                            "Before you activate the model, activate the connection. Also set a price for the model.");
+                    .hasMessage("Activate the connection and set a price before you activate the model.");
             verify(modelRepository, never()).saveAndFlush(any());
         }
 
@@ -466,7 +465,7 @@ class LlmModelServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> modelService.create(3L, active))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("Create the model as disabled. Set its price. Then activate the model.");
+                    .hasMessageContaining("Create the model disabled, set its price, then activate it.");
 
             verify(connectionRepository, never()).findById(any());
             verify(modelRepository, never()).saveAndFlush(any());

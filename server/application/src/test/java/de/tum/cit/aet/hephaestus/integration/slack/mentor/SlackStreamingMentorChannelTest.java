@@ -252,7 +252,7 @@ class SlackStreamingMentorChannelTest extends BaseUnitTest {
 
         channel.completeWithConflict();
 
-        verify(slack).setStatus(eq(WS), eq(CH), eq(THREAD), eq("Still working on the previous message..."));
+        verify(slack).setStatus(eq(WS), eq(CH), eq(THREAD), eq("Still working on the previous message…"));
         verify(slack, never()).startStream(anyLong(), anyString(), anyString(), anyString());
         verify(slack, never()).stopStream(anyLong(), anyString(), anyString(), any());
     }

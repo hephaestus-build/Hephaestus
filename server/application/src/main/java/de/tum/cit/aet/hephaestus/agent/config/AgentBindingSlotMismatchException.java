@@ -28,8 +28,8 @@ public class AgentBindingSlotMismatchException extends RuntimeException {
 
     public static AgentBindingSlotMismatchException undeclared() {
         return new AgentBindingSlotMismatchException(
-                "The data handling of this model is not declared yet. "
-                        + "Declare it first, or assign the model to Members who have not chosen.",
+                "This model’s data handling is not declared yet. "
+                        + "Declare it first, or assign it to Members who have not chosen.",
                 null);
     }
 

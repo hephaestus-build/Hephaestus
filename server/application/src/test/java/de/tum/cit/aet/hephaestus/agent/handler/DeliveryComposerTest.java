@@ -1264,7 +1264,7 @@ class DeliveryComposerTest extends BaseUnitTest {
 
         assertThat(result).isNotNull();
         String mrNote = note(result);
-        assertThat(mrNote.indexOf("This feedback does not show 3 more minor suggestions"))
+        assertThat(mrNote.indexOf("3 more minor suggestions are not shown"))
                 .as("the disclosure describes the list, so it follows it")
                 .isGreaterThan(mrNote.indexOf("Minor nudge 3"));
         assertThat(result.diffNotes()).hasSize(3);
@@ -1288,7 +1288,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         assertThat(reachedTheDeveloper(result))
                 .as("every blocker survives the cap")
                 .contains("Secret 1", "Secret 2", "Crash 1", "Crash 2", "Crash 3");
-        assertThat(reachedTheDeveloper(result)).contains("This feedback does not show 1 more minor suggestion");
+        assertThat(reachedTheDeveloper(result)).contains("1 more minor suggestion is not shown");
         assertThat(result.diffNotes()).hasSize(8);
     }
 
@@ -1336,7 +1336,7 @@ class DeliveryComposerTest extends BaseUnitTest {
 
         assertThat(result).isNotNull();
         String mrNote = result.mrNote();
-        assertThat(reachedTheDeveloper(result)).contains("This feedback does not show 2 more minor suggestions");
+        assertThat(reachedTheDeveloper(result)).contains("2 more minor suggestions are not shown");
         assertThat(reachedTheDeveloper(result)).contains("Minor one");
         assertThat(reachedTheDeveloper(result)).contains("Minor two");
         assertThat(reachedTheDeveloper(result)).contains("Minor three");
@@ -1536,7 +1536,7 @@ class DeliveryComposerTest extends BaseUnitTest {
                 List.of(artifactInContextUnit(focused, "One concern", COMPOSED_NEXT_STEP)),
                 null));
 
-        assertThat(note).contains("What works well here");
+        assertThat(note).contains("What’s working well here");
         assertThat(note).doesNotContain("_Why this matters:_");
     }
 

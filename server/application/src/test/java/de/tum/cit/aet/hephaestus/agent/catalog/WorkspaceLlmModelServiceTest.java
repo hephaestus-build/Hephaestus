@@ -214,8 +214,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> modelService.create(workspaceContext, 50L, enabledUnpricedCreateRequest()))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage(
-                            "Before you activate the model, activate the connection. Also set a price for the model.");
+                    .hasMessage("Activate the connection and set a price before you activate the model.");
             verify(modelRepository, never()).saveAndFlush(any());
             verifyNoInteractions(configAudit);
         }
@@ -249,8 +248,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> modelService.create(workspaceContext, 50L, pricedButOffline))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage(
-                            "Before you activate the model, activate the connection. Also set a price for the model.");
+                    .hasMessage("Activate the connection and set a price before you activate the model.");
             verify(modelRepository, never()).saveAndFlush(any());
         }
     }

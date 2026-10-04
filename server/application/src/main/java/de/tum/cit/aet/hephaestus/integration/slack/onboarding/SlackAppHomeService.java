@@ -152,9 +152,9 @@ public class SlackAppHomeService {
                                         ? "Allowed, " + activeChannelText
                                         : "Not allowed"))))),
                 section(s -> s.text(markdownText(
-                        "*Context and privacy.* Hephaestus can use your linked project work and the new messages "
-                                + "that you send in monitored channels. It does not read the history of a channel from "
-                                + "before Hephaestus became active there. It does not mentor in channels."))));
+                        "*Context and privacy.* Hephaestus can use your linked project work and new messages "
+                                + "you send in monitored channels. It does not read channel history from before the "
+                                + "channel was activated. It does not mentor in channels."))));
     }
 
     record HomeOverviewState(

@@ -217,8 +217,8 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .jsonPath("$.declaredTier")
                 .doesNotExist()
                 .jsonPath("$.detail")
-                .isEqualTo("The data handling of this model is not declared yet. "
-                        + "Declare it first, or assign the model to Members who have not chosen.");
+                .isEqualTo("This model’s data handling is not declared yet. "
+                        + "Declare it first, or assign it to Members who have not chosen.");
     }
 
     @Test

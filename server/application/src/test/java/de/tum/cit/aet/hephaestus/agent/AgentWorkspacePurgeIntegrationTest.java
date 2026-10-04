@@ -132,8 +132,8 @@ class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(() -> lifecycleService.purgeWorkspace(workspace.getWorkspaceSlug()))
                 .isInstanceOf(WorkspacePurgeBlockedException.class)
                 .hasMessage(
-                        "The server cannot delete this workspace while AI runs are queued, running or waiting for feedback delivery. "
-                                + "Cancel queued and running runs. Wait until pending feedback delivery finishes. Then try again.");
+                        "You cannot delete this workspace while AI runs are queued, running, or waiting for feedback delivery. "
+                                + "Cancel queued and running runs, wait for pending feedback delivery to finish, then try again.");
     }
 
     private AgentData seedAgentData(Workspace workspace, String suffix) {

@@ -431,7 +431,7 @@ class ConnectionServiceTest extends BaseUnitTest {
                 .isInstanceOf(ConnectionBusyException.class)
                 // The 409 names the job and promises a retry, because the fence already asked it to stop.
                 .hasMessageContaining("active sync job 99")
-                .hasMessageContaining("Retry the disconnect");
+                .hasMessageContaining("Disconnect again");
 
         verifyNoInteractions(strategy);
         assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);

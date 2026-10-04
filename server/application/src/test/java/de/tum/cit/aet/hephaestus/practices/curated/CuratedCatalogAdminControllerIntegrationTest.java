@@ -378,7 +378,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .isEqualTo(412)
                 .expectBody()
                 .jsonPath("$.detail")
-                .isEqualTo("Catalog practice '" + PRACTICE + "' changed after you loaded it.");
+                .isEqualTo("Catalog practice '" + PRACTICE + "' changed after you loaded it. Reload and try again.");
     }
 
     @Test
@@ -540,7 +540,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .isEqualTo(412)
                 .expectBody()
                 .jsonPath("$.detail")
-                .isEqualTo("Practice catalog changed after you loaded it.");
+                .isEqualTo("Practice catalog changed after you loaded it. Reload and try again.");
 
         CuratedCatalogDTO ownedDefaultOrder = webTestClient
                 .patch()

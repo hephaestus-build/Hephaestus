@@ -399,7 +399,7 @@ class DeliveryComposer {
             bullets.append("\n");
         }
         // The review's own opening already introduces the list; a second header would say it again, worse.
-        String header = opening.isEmpty() ? "What works well here, and how to build on it:\n\n" : "";
+        String header = opening.isEmpty() ? "What’s working well here, and how to keep building on it:\n\n" : "";
         return opening + header + bullets + "\n";
     }
 
@@ -461,10 +461,9 @@ class DeliveryComposer {
         appendExpanded(sb, summarised, rendering, false);
 
         if (improvementOverflow > 0) {
-            sb.append("This feedback does not show ")
-                    .append(improvementOverflow)
-                    .append(improvementOverflow == 1 ? " more minor suggestion" : " more minor suggestions")
-                    .append(".\n\n");
+            sb.append(improvementOverflow)
+                    .append(improvementOverflow == 1 ? " more minor suggestion is" : " more minor suggestions are")
+                    .append(" not shown.\n\n");
         }
 
         return sb.toString();
@@ -478,7 +477,7 @@ class DeliveryComposer {
                     clampToSentenceBudget(sanitizeStudentText(f.summary()).strip(), RECURRING_BUDGET);
             sb.append("- ").append(sentence).append("\n");
         }
-        sb.append("\nThese appeared in several of your recent changes, so this feedback only names them.\n\n");
+        sb.append("\nThese came up on several of your recent changes, so they are only named here.\n\n");
     }
 
     private static void appendExpanded(

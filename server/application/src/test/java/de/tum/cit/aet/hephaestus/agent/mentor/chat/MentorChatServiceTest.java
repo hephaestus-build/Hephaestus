@@ -896,8 +896,8 @@ class MentorChatServiceTest extends BaseUnitTest {
         runTurnSync();
 
         String wire = String.join("", emitter.rawData);
-        assertThat(wire).contains("could not start the mentor runtime", "[DONE]");
-        assertThat(wire.indexOf("could not start the mentor runtime")).isLessThan(wire.indexOf("[DONE]"));
+        assertThat(wire).contains("Heph could not start", "[DONE]");
+        assertThat(wire.indexOf("Heph could not start")).isLessThan(wire.indexOf("[DONE]"));
         assertThat(emitter.recordedTypes()).doesNotContain("finish");
     }
 
@@ -1596,8 +1596,8 @@ class MentorChatServiceTest extends BaseUnitTest {
         verify(interactiveSandboxService, times(2)).attach(any());
         assertThat(emitter.recordedTypes()).contains("error");
         assertThat(String.join("\n", emitter.rawData))
-                .contains("I could not start the mentor runtime. Try again in a moment.")
-                .doesNotContain("The mentor turn failed unexpectedly");
+                .contains("Heph could not start. Try again in a moment.")
+                .doesNotContain("Heph could not finish this reply");
         verify(persistence).interrupt(any(), any(), any(Throwable.class));
         assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
     }

@@ -125,7 +125,7 @@ public class AccountService {
         if (active.size() <= 1) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "You cannot unlink your only sign-in method. Link another provider first or delete your account.");
+                    "You cannot unlink your only sign-in method. Link another provider first, or delete your account.");
         }
         Long gitProviderId = target.getProviderId();
         if (identityLinkRepository.deleteByIdAndAccountId(identityLinkId, accountId) == 0) {
@@ -180,7 +180,7 @@ public class AccountService {
                 if (activeAdmins <= 1) {
                     throw new ResponseStatusException(
                             HttpStatus.CONFLICT,
-                            "You cannot revoke the last admin. First, grant admin to another account.");
+                            "You cannot revoke the last admin. Grant admin to another account first.");
                 }
             }
             Account.AppRole previousRole = account.getAppRole();

@@ -78,7 +78,7 @@ public class ReviewBackfillService {
         // not enumerable from a repository the way pull requests and issues are. Refused by name rather
         // than silently producing an empty scope, which would read as "nothing to review".
         throw new IllegalArgumentException(
-                "You can review past work only for a pull or merge request or an issue. You cannot review past work of this kind.");
+                "Hephaestus reviews past work only for pull requests, merge requests, and issues.");
     }
 
     private static String statusWords(ReviewBackfillStatus status) {
@@ -113,11 +113,11 @@ public class ReviewBackfillService {
             throw new IllegalArgumentException("The backfill window covers " + window.toDays()
                     + " days. The limit is "
                     + properties.maxWindow().toDays()
-                    + " days.");
+                    + " days. Shorten the window.");
         }
         if (runRepository.existsByWorkspaceIdAndStatusIn(context.id(), UNDER_WAY)) {
             throw new ReviewBackfillConflictException(
-                    "A backfill is already active for this workspace. To start another backfill, first cancel the active backfill.");
+                    "A backfill is already active for this workspace. Cancel it before you start another.");
         }
         supersedeUnconfirmed(context.id());
 

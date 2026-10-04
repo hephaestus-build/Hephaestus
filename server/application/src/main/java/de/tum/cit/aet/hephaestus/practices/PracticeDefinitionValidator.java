@@ -34,8 +34,7 @@ public final class PracticeDefinitionValidator {
         validateSignals(definition);
         validateReviewWhenAndPrecondition(definition);
         if (!canRunAutomatedReview && definition.precomputeScript() != null) {
-            throw new IllegalArgumentException(
-                    "A practice that Hephaestus cannot review cannot have a precompute script.");
+            throw new IllegalArgumentException("A precompute script needs a practice that Hephaestus can review.");
         }
         rejectReviewResultLabels("Why it matters", definition.whyItMatters());
         rejectReviewResultLabels("What good looks like", definition.whatGoodLooksLike());
@@ -65,9 +64,8 @@ public final class PracticeDefinitionValidator {
         ArtifactKind artifactKind = definition.artifactKind();
         Set<SignalName> declared = signalOptions.eligibleFor(artifactKind);
         if (declared.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Hephaestus does not review the kind of work that the chosen moments belong to. "
-                            + "Choose a kind of work, then choose its moments.");
+            throw new IllegalArgumentException("The chosen moments do not belong to a kind of work Hephaestus reviews. "
+                    + "Choose a kind of work, then the moments it offers.");
         }
         Set<ActorRole> roles = signalOptions.rolesFor(artifactKind);
         // An occasion may only be about a relation this kind of work can actually identify a person
@@ -75,20 +73,20 @@ public final class PracticeDefinitionValidator {
         // nobody — or, worse, one filed against whichever person the kind happens to name.
         if (!roles.contains(definition.subject())) {
             throw new IllegalArgumentException("This kind of work does not record “" + roleLabel(definition.subject())
-                    + "”. A review of it cannot be about that person. Choose from the people in the list “Person "
+                    + "”, so a review of it cannot be about them. Choose from the people listed under “Person "
                     + "this practice judges”.");
         }
         for (SignalName signal : definition.signals()) {
             if (signalOptions.isManualRequest(signal)) {
                 throw new IllegalArgumentException("Remove “" + signalOptions.displayNameOf(signal)
-                        + "”. A review that a person asks for by hand covers every practice on this work type "
-                        + "in any state of the work. Do not choose it as a moment.");
+                        + "”. A review someone asks for by hand already covers every practice on this work type, "
+                        + "whatever state the work is in. It is not a moment to choose.");
             }
             if (!declared.contains(signal)) {
                 // Every declared signal but the hand-asked one is bindable, so this one is undeclared and
                 // has no words to name it by.
                 throw new IllegalArgumentException("This kind of work does not offer one of the chosen moments. "
-                        + "Choose from the moments that this kind of work offers.");
+                        + "Choose from the moments it offers.");
             }
         }
     }
@@ -107,7 +105,7 @@ public final class PracticeDefinitionValidator {
      */
     private static String unknownSource(SourceKind source) {
         return source.value()
-                + " is not an evidence source that Hephaestus knows. Choose a source from the list “Reads” "
+                + " is not an evidence source Hephaestus knows. Choose from the sources listed under “Reads” "
                 + "in “When this practice is reviewed”.";
     }
 
@@ -186,7 +184,7 @@ public final class PracticeDefinitionValidator {
                     && !contract.completenessPolicy().supportsComplete()) {
                 throw new IllegalArgumentException("A capture of “" + contract.displayName()
                         + "” is never complete, so a review cannot claim that something is absent "
-                        + "from it. Clear the option “May claim something is absent” for this source.");
+                        + "from it. Clear the checkbox “May claim something is absent” for this source.");
             }
         }
     }

@@ -87,7 +87,7 @@ public class SlackMentorService {
                     channelId,
                     threadTs,
                     onboardingService.linkCtaBlocks(),
-                    "To use the mentor, check your Hephaestus account status, your Slack link, and your workspace membership.");
+                    "Heph cannot reply yet. Check that your Hephaestus account is active, linked to Slack, and a member of this workspace.");
             return;
         }
         long developerId = devOpt.get();
@@ -100,7 +100,7 @@ public class SlackMentorService {
         // Link the thread transactionally before starting remote Slack I/O.
         UUID threadId =
                 threadLinker.findOrCreateThread(workspaceId, teamId, channelId, threadTs, slackUserId, developerId);
-        slackMessageService.setStatus(workspaceId, channelId, threadTs, "Reviewing recent feedback...");
+        slackMessageService.setStatus(workspaceId, channelId, threadTs, "Reviewing recent feedback…");
         SlackStreamingMentorChannel channel =
                 new SlackStreamingMentorChannel(slackMessageService, workspaceId, channelId, threadTs);
         mentorTurnRunner.run(

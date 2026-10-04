@@ -196,8 +196,8 @@ class AgentBindingServiceTest extends BaseUnitTest {
         assertThatThrownBy(
                         () -> service.upsertBinding(context(), AgentPurpose.MENTOR, DataHandlingTier.IN_HOUSE, request))
                 .isInstanceOf(AgentBindingSlotMismatchException.class)
-                .hasMessage("The data handling of this model is not declared yet. "
-                        + "Declare it first, or assign the model to Members who have not chosen.")
+                .hasMessage("This model’s data handling is not declared yet. "
+                        + "Declare it first, or assign it to Members who have not chosen.")
                 .extracting("declaredTier")
                 .isNull();
         verify(bindingRepository, never()).save(any());

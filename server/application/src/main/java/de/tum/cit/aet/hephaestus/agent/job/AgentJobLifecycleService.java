@@ -80,7 +80,7 @@ public class AgentJobLifecycleService {
 
         if (updated == 0) {
             throw new AgentJobStateConflictException(
-                    "Cannot retry delivery. The job must have status COMPLETED and delivery status FAILED.");
+                    "You can retry delivery only for a completed review whose delivery failed.");
         }
 
         // Reload after the CAS commit so the entity is not stale.

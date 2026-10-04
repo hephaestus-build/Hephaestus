@@ -107,9 +107,9 @@ public class GitHubConnectionStrategy implements ConnectionStrategy {
         }
         String code = callbackParams.get(CALLBACK_PARAM_CODE);
         if (code == null || code.isBlank()) {
-            return new ConnectFinalization.Failed("GitHub did not confirm who installed the app."
-                    + " Because of this, Hephaestus cannot connect the installation."
-                    + " The GitHub App must request user authorization during installation.");
+            return new ConnectFinalization.Failed(
+                    "GitHub did not confirm who installed the app, so Hephaestus cannot connect the installation."
+                            + " The GitHub App must request user authorization during installation.");
         }
         try {
             return verify(ref, installationId.get(), code);

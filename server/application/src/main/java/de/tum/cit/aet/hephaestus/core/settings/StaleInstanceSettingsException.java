@@ -13,6 +13,6 @@ final class StaleInstanceSettingsException extends RuntimeException {
     }
 
     StaleInstanceSettingsException(@Nullable Throwable cause) {
-        super("The instance settings changed after you loaded them.", cause);
+        super("The instance settings changed after you loaded them. Reload and try again.", cause);
     }
 }

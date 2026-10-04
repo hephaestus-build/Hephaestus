@@ -8,6 +8,6 @@ public class StaleCuratedEntryException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     public StaleCuratedEntryException(String subject) {
-        super(subject + " changed after you loaded it.");
+        super(subject + " changed after you loaded it. Reload and try again.");
     }
 }

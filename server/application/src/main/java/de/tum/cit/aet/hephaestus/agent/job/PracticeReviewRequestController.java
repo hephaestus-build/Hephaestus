@@ -126,7 +126,7 @@ public class PracticeReviewRequestController {
         // A kind that exists but has no front door here: a chat thread or document is reviewed on the
         // occasion its source produces, with nothing for a person to point at and ask about.
         throw new IllegalArgumentException(
-                "You can request a review only for a pull or merge request or an issue. You cannot request a review for this kind of work.");
+                "You can request a review only for pull requests, merge requests, and issues.");
     }
 
     private static ArtifactKind parseKind(String raw) {

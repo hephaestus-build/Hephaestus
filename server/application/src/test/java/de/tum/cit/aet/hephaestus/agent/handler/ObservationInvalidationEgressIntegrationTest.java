@@ -952,7 +952,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
 
         assertThat(provider.comments.get("summary-1"))
                 .startsWith("> **Correction:** a workspace admin marked what this review says about "
-                        + "**Closes linked issues** as incorrect. Ignore that part.\n\nCloses #1 already.");
+                        + "**Closes linked issues** as incorrect. Do not rely on that part.\n\nCloses #1 already.");
         assertThat(latest().getProviderCopy()).isEqualTo(ProviderCopy.INLINE_REMAINS);
 
         invalidationService.setValidity(workspace.getId(), observation, ADMIN_ACCOUNT, true, "It was right");

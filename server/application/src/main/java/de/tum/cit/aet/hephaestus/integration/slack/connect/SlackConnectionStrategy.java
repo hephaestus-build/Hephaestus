@@ -111,7 +111,7 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
             r = oauthClient.exchangeCode(code, redirectUri());
         } catch (SlackOAuthException e) {
             log.warn("Slack OAuth exchange failed: workspaceId={}, error={}", ref.workspaceId(), e.getMessage());
-            return new ConnectFinalization.Failed("The Slack OAuth exchange failed: " + e.getMessage());
+            return new ConnectFinalization.Failed("Hephaestus could not finish connecting to Slack: " + e.getMessage());
         }
         if (r.expiresIn() != null || r.refreshToken() != null) {
             return new ConnectFinalization.Failed("Hephaestus does not support token rotation yet.");
