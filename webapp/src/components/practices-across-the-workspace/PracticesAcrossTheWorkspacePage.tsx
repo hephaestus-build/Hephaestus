@@ -1,6 +1,8 @@
 // The palette this page shares with the practice profile is `webapp/AGENTS.md` § Practice surfaces palette.
 
+import { cn } from "cn";
 import type { PracticesAcrossWorkspace } from "@/api/types.gen";
+import { STALE } from "@/components/activity/activity-tones";
 import { RangeControls } from "@/components/activity/RangeControls";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -91,7 +93,8 @@ export function PracticesAcrossTheWorkspacePage({
 						onRetry={state.onRetry}
 					/>
 				) : (
-					<>
+					// The last window's figures, drained of colour until the new heading's own are in.
+					<div className={cn("space-y-3", stale && STALE)}>
 						<WorkspaceTiles overview={overview} />
 						{overview !== undefined && (
 							<p className="text-xs text-muted-foreground">
@@ -102,7 +105,7 @@ export function PracticesAcrossTheWorkspacePage({
 								)}
 							</p>
 						)}
-					</>
+					</div>
 				)}
 			</Section>
 
@@ -114,12 +117,14 @@ export function PracticesAcrossTheWorkspacePage({
 					aria-busy={stale || undefined}
 				>
 					<SplitLegend />
-					<GroupsTable
-						key={overview?.window}
-						overview={overview}
-						openGroupSlug={openGroupSlug}
-						onOpenGroup={onOpenGroup}
-					/>
+					<div className={cn(stale && STALE)}>
+						<GroupsTable
+							key={overview?.window}
+							overview={overview}
+							openGroupSlug={openGroupSlug}
+							onOpenGroup={onOpenGroup}
+						/>
+					</div>
 				</Section>
 			)}
 		</PageLayout>

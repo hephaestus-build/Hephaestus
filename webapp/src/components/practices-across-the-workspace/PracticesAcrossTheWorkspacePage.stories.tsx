@@ -58,6 +58,10 @@ export const Default: Story = {
 				"Each bar counts developers by their standing in the group. You marks your standing. A bar shows only if each of its parts holds at least 3 other developers. If not, the whole bar is held back, so no one can be singled out.",
 			),
 		).toBeVisible();
+		// The window's own figures, in their colours.
+		await expect(
+			canvas.getByRole("table", { name: "All practice groups" }).closest(".grayscale"),
+		).toBeNull();
 		const table = groupsTable(canvas);
 		await expect(
 			table.getByRole("img", {
@@ -119,14 +123,20 @@ export const ManyGroups: Story = {
 	},
 };
 
-/** Another window's figures on their way: the last ones stay, and both sections say they are busy. */
+/**
+ * Another window's figures on their way: the last ones stay, drained of their colours under the new
+ * heading, and both sections say they are busy.
+ */
 export const SwitchingWindow: Story = {
 	args: { state: { status: "ready", overview: ACROSS_WORKSPACE, stale: true }, window: "DAYS_90" },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("table", { name: "All practice groups" })).toBeVisible();
+		const table = canvas.getByRole("table", { name: "All practice groups" });
+		await expect(table).toBeVisible();
 		await expect(
 			canvas.getByRole("heading", { level: 2, name: "All practice groups" }).closest("section"),
 		).toHaveAttribute("aria-busy", "true");
+		await expect(table.closest(".grayscale")).not.toBeNull();
+		await expect(canvas.getByText("Pieces of work reviewed").closest(".grayscale")).not.toBeNull();
 	},
 };
 
