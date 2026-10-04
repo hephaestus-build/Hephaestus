@@ -27,7 +27,7 @@ export const Default: Story = {
 		await expect(canvas.getByText("pieces open now")).toBeVisible();
 		await expect(
 			canvas.getByRole("img", {
-				name: "You: 3. Typical range here: 1 to 4.",
+				name: "Your value: 3. Typical range here: 1 to 4.",
 			}),
 		).toBeVisible();
 		// No tile carries an info icon; the line under the tiles explains them all.
@@ -43,7 +43,7 @@ export const NeedsMoreData: Story = {
 			canvas.getAllByText("Needs more data before the workspace shows here."),
 		).toHaveLength(4);
 		// Each tile keeps its axis, with only the reader's own pin on it.
-		await expect(canvas.getAllByRole("img", { name: /^You: \d+\.$/u })).toHaveLength(4);
+		await expect(canvas.getAllByRole("img", { name: /^Your value: \d+\.$/u })).toHaveLength(4);
 	},
 };
 
