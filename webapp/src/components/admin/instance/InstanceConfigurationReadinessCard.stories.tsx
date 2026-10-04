@@ -55,7 +55,7 @@ const emailNotConfigured = fact("notification.email", "spring.mail.host", "email
 	requirement: "OPTIONAL",
 	status: "NOT_CONFIGURED",
 	explanation:
-		"Email is optional; with a relay host set, hephaestus.email.from must name the sender address.",
+		"Email is optional. If you set a relay host, hephaestus.email.from must name the sender address.",
 });
 
 const workerRuntime = fact(
@@ -66,7 +66,7 @@ const workerRuntime = fact(
 		roles: ["WORKER"],
 		requirement: "RECOMMENDED",
 		status: "ACTION_REQUIRED",
-		explanation: "gVisor (runsc) is recommended for stronger agent sandbox isolation.",
+		explanation: "Use gVisor (runsc) for stronger agent sandbox isolation.",
 	},
 );
 

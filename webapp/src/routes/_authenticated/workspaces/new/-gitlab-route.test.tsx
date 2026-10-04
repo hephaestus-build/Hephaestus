@@ -213,7 +213,7 @@ describe("GitLab workspace wizard", () => {
 		const user = userEvent.setup();
 		serveGitLab();
 		const detail =
-			"Link your GitLab account on https://gitlab.lrz.de before creating a workspace there. Go to Settings → Linked Accounts.";
+			"Link your GitLab account on https://gitlab.lrz.de before you create a workspace there. Go to Settings → Linked Accounts.";
 		server.use(
 			http.post("*/workspaces", () =>
 				HttpResponse.json(

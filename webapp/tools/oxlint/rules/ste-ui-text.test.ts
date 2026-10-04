@@ -85,7 +85,7 @@ ruleTester.run("ste-ui-text", steUiText, {
 			options,
 			errors: [{ messageId: "word" }, { messageId: "semicolon" }],
 		},
-		{ code: "toast.warning(`Utilize ${name}`);", options, errors: [{ messageId: "word" }] },
+		{ code: `toast.warning(\`Utilize \${name}\`);`, options, errors: [{ messageId: "word" }] },
 		{ code: 'const group = { label: "Don\'t stop" };', options, errors: [{ messageId: "word" }] },
 		{
 			code: 'const group = { description: "Stop; go." };',

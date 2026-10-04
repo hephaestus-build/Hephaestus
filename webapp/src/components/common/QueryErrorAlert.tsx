@@ -71,7 +71,7 @@ function classifyError(status: number | undefined): ErrorClass {
 	if (status >= 500) {
 		return {
 			icon: <AlertCircleIcon />,
-			guidance: "Something went wrong on our side. Trying again usually helps.",
+			guidance: "Something went wrong on our side. Try again. This usually helps.",
 			variant: "destructive",
 			retryable: true,
 		};

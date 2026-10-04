@@ -19,7 +19,7 @@ export function RouteError({ error }: ErrorComponentProps) {
 			<section className="max-w-md space-y-4 text-center" role="alert">
 				<h1 className="text-2xl font-semibold">Something went wrong</h1>
 				<p className="text-muted-foreground">
-					An unexpected error stopped this page from loading. Trying again usually helps.
+					An unexpected error stopped this page from loading. Try again. This usually helps.
 				</p>
 				<div className="flex justify-center gap-2">
 					<Button

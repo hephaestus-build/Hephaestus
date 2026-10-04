@@ -43,7 +43,7 @@ describe("problemDetailOf", () => {
 			"Could not save the model",
 		);
 		expect(problemDetailOf({ message: "boom" })).toBe(
-			"An unexpected error occurred. Please try again.",
+			"An unexpected error occurred. Try again later.",
 		);
 	});
 
@@ -58,12 +58,10 @@ describe("problemDetailOf", () => {
 	});
 
 	it("falls back to a generic message for unhandled shapes", () => {
-		expect(problemDetailOf(null)).toBe("An unexpected error occurred. Please try again.");
-		expect(problemDetailOf(undefined)).toBe("An unexpected error occurred. Please try again.");
-		expect(problemDetailOf({ status: 500 })).toBe(
-			"An unexpected error occurred. Please try again.",
-		);
-		expect(problemDetailOf(42)).toBe("An unexpected error occurred. Please try again.");
+		expect(problemDetailOf(null)).toBe("An unexpected error occurred. Try again later.");
+		expect(problemDetailOf(undefined)).toBe("An unexpected error occurred. Try again later.");
+		expect(problemDetailOf({ status: 500 })).toBe("An unexpected error occurred. Try again later.");
+		expect(problemDetailOf(42)).toBe("An unexpected error occurred. Try again later.");
 	});
 });
 

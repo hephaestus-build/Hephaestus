@@ -86,7 +86,7 @@ describe("instance users route", () => {
 				HttpResponse.json(
 					{
 						status: 409,
-						detail: "You cannot revoke the last admin. Grant admin to another account first.",
+						detail: "You cannot revoke the last admin. First, grant admin to another account.",
 					},
 					{ status: 409 },
 				),
@@ -99,7 +99,7 @@ describe("instance users route", () => {
 
 		const refusal = await screen.findByRole("alert");
 		expect(refusal.textContent).toBe(
-			"You cannot revoke the last admin. Grant admin to another account first.",
+			"You cannot revoke the last admin. First, grant admin to another account.",
 		);
 		expect(screen.queryByRole("dialog", { name: "Confirm access" })).toBeNull();
 	});

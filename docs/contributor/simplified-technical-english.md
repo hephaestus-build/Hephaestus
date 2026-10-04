@@ -151,6 +151,7 @@ It includes static branches, template text, and text concatenation, but does not
 It does not check class names, routes, query keys, or other machine strings.
 The UI gate checks replacements, contractions, semicolons, and the 25-word limit.
 It cannot prove paragraph structure across components.
+
 The webapp lint configuration runs it as an error on all of `webapp/src`, except tests and mock data.
 
 Vocabulary, passive voice, and noun or adjective `-ing` checks give suggestions, not errors.

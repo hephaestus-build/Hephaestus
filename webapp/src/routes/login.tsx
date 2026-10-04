@@ -42,7 +42,7 @@ function LoginRoute() {
 			if (sessionStorage.getItem(ACCOUNT_DELETED_NOTICE_KEY) === "1") {
 				sessionStorage.removeItem(ACCOUNT_DELETED_NOTICE_KEY);
 				toast.success(
-					"Your account is scheduled for deletion and you have been signed out everywhere. Permanent removal completes after about 48 hours.",
+					"Hephaestus will delete your account. It signed you out on all devices. Permanent removal completes after about 48 hours.",
 				);
 			}
 		} catch {
