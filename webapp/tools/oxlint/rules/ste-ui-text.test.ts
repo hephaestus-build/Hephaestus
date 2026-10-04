@@ -69,7 +69,7 @@ ruleTester.run("ste-ui-text", steUiText, {
 		},
 		{ code: 'toast.error("Couldn\'t save the group.");', errors: [{ messageId: "word" }] },
 		{ code: 'toast("Utilize it");', errors: [{ messageId: "word" }] },
-		{ code: "toast.warning(`Utilize ${name}`);", errors: [{ messageId: "word" }] },
+		{ code: `toast.warning(\`Utilize \${name}\`);`, errors: [{ messageId: "word" }] },
 		{
 			code: 'toast.success("Saved", { description: "Don\'t stop; go." });',
 			errors: [{ messageId: "word" }, { messageId: "semicolon" }],

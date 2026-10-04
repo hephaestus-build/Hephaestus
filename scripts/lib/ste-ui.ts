@@ -7,7 +7,7 @@ import { asArray, asRecord, asString, parseJson } from "./json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
 import { steRoot } from "./ste-words.ts";
 
-const uiIgnorePatterns = ["**/api/**", "**/routeTree.gen.ts", "**/*.test.*", "**/mocks/**"];
+export const uiIgnorePatterns = ["**/api/**", "**/routeTree.gen.ts", "**/*.test.*", "**/mocks/**"];
 
 /** Use oxlint's AST and the registered rule, not a second JSX parser for reports. */
 export async function uiAlerts(files: string[], vocabulary = false) {
@@ -26,7 +26,7 @@ export async function uiAlerts(files: string[], vocabulary = false) {
 				categories: { correctness: "off" },
 				ignorePatterns: uiIgnorePatterns,
 				rules: {
-					"hephaestus/ste-ui-text": [vocabulary ? "warn" : "error", { vocabulary }],
+					"hephaestus/ste-ui-text": [vocabulary ? "warn" : "error", { allPaths: true, vocabulary }],
 				},
 			}),
 		);

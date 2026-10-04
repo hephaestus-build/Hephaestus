@@ -7,7 +7,14 @@ import path from "node:path";
 import { test } from "node:test";
 import { zipSync } from "fflate";
 
-import { assertGrowth, parsePaths, checkRatchet } from "./check-prose.ts";
+import {
+	assertGrowth,
+	parsePaths,
+	checkRatchet,
+	issueFormProse,
+	skillMetadataAlerts,
+	issueFormAlerts,
+} from "./check-prose.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { uiAlerts } from "./lib/ste-ui.ts";
 import {
@@ -28,6 +35,10 @@ import {
 
 await test("STE paths are explicit, unique, and grow only", () => {
 	assert.deepEqual(parsePaths('["docs/user/test.mdx"]'), ["docs/user/test.mdx"]);
+	assert.deepEqual(
+		parsePaths('[".github/ISSUE_TEMPLATE/bug.yml", ".github/ISSUE_TEMPLATE/config.yaml"]'),
+		[".github/ISSUE_TEMPLATE/bug.yml", ".github/ISSUE_TEMPLATE/config.yaml"],
+	);
 	for (const source of [
 		"[]",
 		'["../test.md"]',
@@ -35,10 +46,23 @@ await test("STE paths are explicit, unique, and grow only", () => {
 		'["docs/**"]',
 		'["a.md", "a.md"]',
 		'["server/data.json"]',
-		'["webapp/src/components/Test.tsx"]',
+		'["server/application.yml"]',
+		'[".github/workflows/check.yml"]',
+		'[".github/ISSUE_TEMPLATE/nested/form.yml"]',
+		'["webapp/src/api/client.ts"]',
+		'["webapp/src/routeTree.gen.ts"]',
+		'["webapp/src/components/test.test.tsx"]',
+		'["webapp/src/mocks/data.ts"]',
 	]) {
 		assert.throws(() => parsePaths(source));
 	}
+	assert.deepEqual(
+		parsePaths(
+			'[".github/DISCUSSION_TEMPLATE/ideas.yml", ".claude/skills/composition-patterns/metadata.json"]',
+		),
+		[".github/DISCUSSION_TEMPLATE/ideas.yml", ".claude/skills/composition-patterns/metadata.json"],
+	);
+	assert.throws(() => parsePaths('[".claude/skills/composition-patterns/other.json"]'));
 	assert.doesNotThrow(() => assertGrowth(["a.md"], ["a.md", "b.md"]));
 	assert.throws(() => assertGrowth(["a.md"], ["b.md"]), /Restore them/u);
 });
@@ -193,5 +217,112 @@ await test("the UI report uses the registered oxlint rule and skips machine prop
 		await assert.rejects(uiAlerts([file]));
 	} finally {
 		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+await test("issue forms select prose fields and ignore configuration values", async () => {
+	const fields = issueFormProse(await readFile(".vale/fixtures/issue-form-prose-good.yml", "utf8"));
+	assert.deepEqual(
+		fields.map(({ field }) => field),
+		[
+			"name",
+			"description",
+			"body[0].attributes.value",
+			"body[1].attributes.label",
+			"body[1].attributes.description",
+			"body[1].attributes.placeholder",
+			"body[2].attributes.options[0].label",
+			"contact_links[0].name",
+		],
+	);
+	assert.deepEqual(issueFormProse("blank_issues_enabled: false"), []);
+	assert.equal(fields[2]?.text, "Check the issue list.\nDo not include private data.\n");
+	assert.throws(() => issueFormProse("name: Use it.\nname: Use it."), /unique/u);
+	for (const source of [
+		"- name: Use it.",
+		"name: 123",
+		"description: null",
+		"body: wrong",
+		"body: [123]",
+		"body: [{attributes: 123}]",
+		"body: [{type: checkboxes, attributes: {options: wrong}}]",
+		"body: [{type: checkboxes, attributes: {options: [123]}}]",
+		"body: [{type: checkboxes, attributes: {options: [{label: 123}]}}]",
+		"contact_links: wrong",
+	]) {
+		assert.throws(() => issueFormProse(source));
+	}
+	assert.deepEqual(issueFormProse("name: &label Use it.\ndescription: *label"), [
+		{ field: "name", text: "Use it." },
+		{ field: "description", text: "Use it." },
+	]);
+});
+
+await test("issue-form fixtures check each prose field through Vale", async () => {
+	const vale = await prepareVale();
+	try {
+		assert.deepEqual(issueFormAlerts(vale.binary, ".vale/fixtures/issue-form-prose-good.yml"), []);
+		const alerts = issueFormAlerts(vale.binary, ".vale/fixtures/issue-form-prose-bad.yml");
+		assert.equal(alerts.length, 8);
+		assert.ok(
+			alerts.every(({ alert }) => alert.Check === "STE.Words" && alert.Severity === "error"),
+		);
+		assert.deepEqual(
+			alerts.map(({ field }) => field),
+			[
+				"name",
+				"description",
+				"body[0].attributes.value",
+				"body[1].attributes.label",
+				"body[1].attributes.description",
+				"body[1].attributes.placeholder",
+				"body[2].attributes.options[0].label",
+				"contact_links[0].name",
+			],
+		);
+		assert.equal(alerts.find(({ field }) => field === "body[0].attributes.value")?.alert.Line, 2);
+	} finally {
+		await vale.dispose();
+	}
+});
+
+await test("skill metadata checks its abstract and ignores machine fields", async () => {
+	const directory = await mkdtemp(path.join(tmpdir(), "ste-skill-metadata-"));
+	const vale = await prepareVale();
+	try {
+		const file = path.join(directory, "metadata.json");
+		await writeFile(
+			file,
+			JSON.stringify({
+				abstract: "Use it.",
+				version: "utilize; don't",
+				references: ["utilize; don't"],
+			}),
+		);
+		assert.deepEqual(skillMetadataAlerts(vale.binary, file), []);
+		await writeFile(file, JSON.stringify({ abstract: "Utilize it." }));
+		const alerts = skillMetadataAlerts(vale.binary, file);
+		assert.equal(alerts.length, 1);
+		assert.equal(alerts[0]?.field, "abstract");
+		assert.equal(alerts[0].alert.Check, "STE.Words");
+		await writeFile(file, JSON.stringify({ abstract: 123 }));
+		assert.throws(() => skillMetadataAlerts(vale.binary, file), /abstract/u);
+	} finally {
+		await vale.dispose();
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+await test("an exact-source exception affects only its named rule and span", async () => {
+	const vale = await prepareVale();
+	try {
+		const alerts = valeAlerts(vale.binary, [".vale/fixtures/quoted-source-scope.md"], "error");
+		const list = [...alerts.values()].flat();
+		assert.equal(list.filter(({ Check }) => Check === "STE.Contractions").length, 1);
+		assert.equal(list.find(({ Check }) => Check === "STE.Contractions")?.Line, 11);
+		assert.equal(list.filter(({ Check }) => Check === "STE.Words").length, 1);
+		assert.equal(list.find(({ Check }) => Check === "STE.Words")?.Line, 7);
+	} finally {
+		await vale.dispose();
 	}
 });
