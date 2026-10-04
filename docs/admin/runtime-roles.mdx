@@ -5,7 +5,10 @@ description: The three roles one Hephaestus image boots into, and why the webhoo
 
 # Runtime Roles
 
-Hephaestus ships **one JAR** that boots in any of three runtime roles. The same artifact runs as the application server, as a worker pod, as a webhook receiver, or as all three together (monolith). Roles are gated by three boolean properties:
+Hephaestus ships **one JAR** that boots in any of three runtime roles.
+The same artifact can run as an application server, worker pod, or webhook receiver.
+It can also run all three together as a monolith.
+Three boolean properties control the roles:
 
 | Role | Property | Default |
 | --- | --- | --- |
@@ -13,18 +16,18 @@ Hephaestus ships **one JAR** that boots in any of three runtime roles. The same 
 | Worker | `hephaestus.runtime.worker.enabled` | `true` |
 | Webhook | `hephaestus.runtime.webhook.enabled` | `true` |
 
-All three default-on boots the monolith role set. Heph also requires a connected worker control channel, even when server and worker roles share that JVM; it has no direct Docker fallback.
+All three properties default to on, which starts the monolith role set. Heph also requires a connected worker control channel, even when server and worker roles share that JVM. It has no direct Docker fallback.
 
 ## Boot log
 
-On startup the JVM logs which roles wired:
+On startup, the JVM logs the enabled roles:
 
 ```text
 INFO  RuntimeRoleStartupLogger : Runtime roles enabled: [SERVER, WORKER, WEBHOOK]
 ```
 
 Under `prod`, disabling all roles prevents startup. Disabling NATS for a server or webhook role
-also prevents startup; a worker-only process must disable NATS. The warning for a JVM with no roles
+also prevents startup. A worker-only process must disable NATS. The warning for a JVM with no roles
 is a non-production diagnostic, not a production recovery mode. The startup event also records
 `event.name=runtime.roles.configured` and the three `runtime.*.enabled` booleans.
 
@@ -32,37 +35,62 @@ is a non-production diagnostic, not a production recovery mode. The startup even
 
 Use the monolith when:
 
-- You're a single contributor running locally.
+- You are a single contributor who runs locally.
 - You have one app server and no horizontal scale yet.
-- Your worker is bottlenecked on the LLM, not on Docker capacity.
+- LLM capacity limits your worker, not Docker capacity.
 
 Split the worker out when:
 
 - LLM reviews and HTTP traffic compete for the same JVM heap / sandbox quota.
 - You want to scale practice-review throughput independently of webhook ingestion.
 
-The shipped Compose stacks, the reference deployment and the single-host install alike, are split:
-`application-server` turns the worker role off and has no Docker socket, and `application-worker` runs
-every sandbox and is the only container given the socket. The `gate:env` check fails a container that
-mounts the socket without the worker role.
+The shipped Compose stacks use separate containers in both the reference deployment and the single-host install.
+`application-server` turns off the worker role and has no Docker socket.
+`application-worker` runs all sandboxes and is the only container with the socket.
+The `gate:env` check fails a container that mounts the socket without the worker role.
 
 Split the webhook receiver out when:
 
-- You want to deploy app-server changes without dropping inbound GitHub/GitLab events. The webhook pod runs the JetStream publisher in isolation; redeploys of the app pod don't touch the inbound HTTP surface.
+- You want to deploy app-server changes without dropping inbound GitHub/GitLab events. The webhook pod runs the JetStream publisher in isolation. Redeploys of the app pod do not touch the inbound HTTP surface.
 
 ## Per-role overlays
 
-Each role ships with a Spring profile YAML that flips the other two flags off and prunes the bean graph:
+Each role has a Spring profile YAML that turns off the other two flags and removes their beans:
 
-- `application-worker.yml` — `runtime.server=false`, `runtime.webhook=false`, OAuth2 autoconfigure excluded, JPA still enabled. Its HTTP connector, which also serves the management endpoints, binds to loopback for in-container health checks. A separate sandbox gateway listens on `SANDBOX_API_PORT` (default `8081`); its connector-specific security chain accepts only job-token-authenticated sandbox capabilities, and every other path on that port answers an empty `404`. A capability call over `SANDBOX_API_MAX_REQUEST_BYTES` is refused with `413`, one that declares no body length with `411`, and one past `SANDBOX_API_REQUESTS_PER_MINUTE` with `429` and a `Retry-After`. If the gateway cannot reach the store its rate limiter counts against, it serves the call unlimited and counts that under `sandbox.gateway.limiter.errors`, so a review is never stopped by the limiter's own outage. Traefik never routes to this port.
-- `application-webhook.yml` — `runtime.server=false`, `runtime.worker=false`, sync NATS enabled, agent job queue disabled (webhook pods never claim jobs).
-- No `application-server.yml` — the monolith default *is* the server profile.
+- `application-worker.yml`: `runtime.server=false` and `runtime.webhook=false`.
+  It excludes OAuth2 autoconfigure but keeps JPA enabled.
+  Its HTTP connector also serves management endpoints.
+  It binds to loopback for in-container health checks.
+  A separate sandbox gateway listens on `SANDBOX_API_PORT` (default `8081`).
+- `application-webhook.yml`: `runtime.server=false` and `runtime.worker=false`.
+  It enables sync NATS and disables the agent job queue.
+  Webhook pods never claim jobs.
+- No `application-server.yml` exists.
+  The monolith default *is* the server profile.
 
-To deploy a worker pod set `SPRING_PROFILES_ACTIVE=prod,worker` and point `HEPHAESTUS_HUB_URL` at the app pod's WSS endpoint. See `docker/compose.app.yaml` for a working compose template.
+The worker gateway's connector-specific security chain accepts only job-token-authenticated sandbox capabilities.
+Other paths on that port return an empty `404`.
+Capability calls receive these responses:
+
+- Over `SANDBOX_API_MAX_REQUEST_BYTES`: `413`.
+- No declared body length: `411`.
+- Past `SANDBOX_API_REQUESTS_PER_MINUTE`: `429` with a `Retry-After`.
+
+If the gateway cannot reach the store for rate-limit counts, it serves the call without a limit.
+It counts that failure under `sandbox.gateway.limiter.errors`.
+Thus, a limiter outage never stops a review.
+Traefik never routes to this port.
+
+To deploy a worker pod:
+
+1. Set `SPRING_PROFILES_ACTIVE=prod,worker`.
+2. Point `HEPHAESTUS_HUB_URL` at the app pod's WSS endpoint.
+
+`docker/compose.app.yaml` contains a functional Compose template.
 
 ## Build-only profiles
 
-`specs` and `cds-training` generate artifacts; they are not deployment modes. They load the
+`specs` and `cds-training` generate artifacts. They are not deployment modes. They load the
 application contract without runtime bootstrap, container-image validation or image pulls. They
 supply no shared placeholder secrets. If an authentication component needs a key to initialize,
 the build uses the existing non-production ephemeral-key behavior, without a runtime warning.
@@ -74,8 +102,9 @@ profile group requires the same keys as selecting `prod` directly.
 
 ## Configuration cheatsheet
 
-Each cell is the value a pod boots with when the operator sets **no** env var for it — the profile
-overlay's value where the overlay pins one, otherwise the base default.
+Each cell shows the value a pod uses when the operator sets **no** environment variable for it.
+It uses the profile overlay's value if the overlay specifies one.
+Otherwise, it uses the base default.
 
 | Property | Server | Worker | Webhook | Set by |
 | --- | --- | --- | --- | --- |
@@ -92,38 +121,60 @@ overlay's value where the overlay pins one, otherwise the base default.
 | `hephaestus.sandbox.gateway.max-request-bytes` | 4194304 | 4194304 | — | env default (`SANDBOX_API_MAX_REQUEST_BYTES`) |
 | Needs user-auth wiring | yes | no | no | role gating |
 
-Bolded cells are pinned by that role's profile overlay and are not the base default. Reading the
-three `runtime.*` rows down a column gives that pod's role set: the `worker` overlay turns the server
-and webhook roles off, the `webhook` overlay turns server and worker off, and the monolith (no
-overlay) runs all three.
+Bold cells show values that the role's profile overlay specifies, not the base defaults.
+The three `runtime.*` rows in a column show the pod's role set:
 
-Outline origin approval is enforced independently by all three roles: the server controls connections and sync,
-the worker projects evidence, and the webhook role accepts change events. Supply the same allowlist to every role
-and restart all three after a change; the reference Compose files wire this automatically.
+- The `worker` overlay turns off the server and webhook roles.
+- The `webhook` overlay turns off the server and worker roles.
+- The monolith, with no overlay, runs all three.
 
-The rows that read identically across all three columns are **not** role-differentiated — they are
-instance-wide defaults, shown per role only because operators ask per role: `init-default` is `false`
-in the `prod` profile for every role, and `git.enabled` (`GIT_CHECKOUT_ENABLED`), `agent.enabled`
-(`AGENT_ENABLED`) and `integration.outline.allowed-origins` are unaffected by which overlay is
-active. The two env-var flags in particular default `false` on **every** role until the operator sets
-the variable — no profile turns work on for you.
+All three roles independently enforce Outline origin approval.
+The server controls connections and sync.
+The worker projects evidence.
+The webhook role accepts change events.
 
-`Needs user-auth wiring` is **not** in that group — its cells read `yes | no | no` because it really
-does differ by role. User authentication exists only with the server role, so setting
-`hephaestus.runtime.server.enabled=false` drops it; the `worker` overlay additionally excludes
-Spring's OAuth2 resource-server autoconfiguration outright, so a worker-only pod never depends on
-user-auth wiring at boot. The `webhook` overlay does not carry that exclusion and relies on the role
-gate alone.
+1. Supply the same allowlist to all roles.
+2. After a change, restart all three roles.
 
-There is no `hephaestus.sandbox.enabled`, and an arch test forbids introducing one: the Docker
-sandbox *is* the worker capability, so it follows `hephaestus.runtime.worker.enabled`. Reading the
-worker row down the **Server** column: a server pod that keeps the worker role, as a monolith does,
-opens the sandbox gateway on the same port and needs the same firewall treatment as a split-out worker. The
-webhook role turns the worker role off, so it opens no gateway — the three `sandbox.gateway` rows
-read `—` in that column. Git needs no such row: it runs in-process through JGit in whichever role
-does the work, against that container's own mirrors under `hephaestus.fabric.root`. Commit ingestion
-runs on the server role, review preparation on the worker role, and a server pod whose worker role is
-enabled uses its one root for both; the webhook role has no Git at all.
+The reference Compose files supply the allowlist automatically.
+
+Identical rows across the columns are **not** role-specific.
+They are instance-wide defaults, shown per role because operators ask per role.
+`init-default` is `false` in the `prod` profile for all roles.
+These properties do not change with the active overlay:
+
+- `git.enabled` (`GIT_CHECKOUT_ENABLED`).
+- `agent.enabled` (`AGENT_ENABLED`).
+- `integration.outline.allowed-origins`.
+
+The two environment-variable flags default to `false` on **all** roles until the operator sets them.
+No profile turns on work automatically.
+
+`Needs user-auth wiring` is **not** in that group.
+Its cells show `yes | no | no` because it differs by role.
+User authentication exists only with the server role.
+`hephaestus.runtime.server.enabled=false` removes it.
+The `worker` overlay also excludes Spring's OAuth2 resource-server autoconfiguration.
+A worker-only pod therefore never depends on user-auth wiring at boot.
+
+The `webhook` overlay has no such exclusion.
+It uses only the role gate.
+
+No `hephaestus.sandbox.enabled` exists, and an architecture test forbids one.
+The Docker sandbox *is* the worker capability, controlled by `hephaestus.runtime.worker.enabled`.
+A server pod that keeps the worker role, such as a monolith, opens the sandbox gateway on the same port.
+It needs the same firewall controls as a separate worker.
+The webhook role turns off the worker role and opens no gateway.
+Its three `sandbox.gateway` cells therefore show `—`.
+
+Git needs no such row.
+It runs in-process through JGit in the role that does the work.
+It uses that container's mirrors under `hephaestus.fabric.root`.
+The server role handles commit ingestion.
+The worker role handles review preparation.
+A server pod with the worker role enabled uses one root for both.
+
+The webhook role has no Git.
 
 Sandbox maintenance follows the worker role in both split-out and single-container deployments.
 Idle mentor sessions and orphaned resources are cleaned periodically without enabling server-wide
@@ -132,7 +183,7 @@ cannot delay their timeout. API-contract generation and CDS training do not run 
 startup sync-job recovery.
 
 The worker application HTTP endpoint binds to loopback. Every role has a separate private
-management listener on port **9090**, including a single-JVM topology; management does not run on
+management listener on port **9090**, including a single-JVM topology. Management does not run on
 `SERVER_PORT`. See [Observability](./observability#scrape-metrics) for network restrictions.
 
 One row reads differently from what a bare `docker compose up` produces, because the shipped compose
@@ -141,60 +192,88 @@ file sets the env var the base default leaves off:
 - `sync.nats.enabled` is `${NATS_ENABLED:false}` in `application-prod.yml`, but `docker/compose.app.yaml`
   passes `NATS_ENABLED: ${NATS_ENABLED:-true}` to `application-server` — so the compose server pod runs
   with NATS **on**. The `webhook` overlay pins it `true` regardless (it needs the shared `Connection`
-  bean); the `worker` overlay pins it `false` (the job queue is PostgreSQL, ADR 0025).
+  bean). The `worker` overlay pins it `false` (the job queue is PostgreSQL, ADR 0025).
 
 `hephaestus.agent.enabled` (`AGENT_ENABLED`) gates three things that must agree, or a split
 deployment silently does half its job. They do **not** share a gate:
 
 - **Submission** (turning pull request, issue and bot-command events into queued jobs) needs
-  this flag **and** the server role. A worker-only container executes jobs; it does not submit these reviews.
-- **Orphan recovery** (reclaiming a dead worker's stuck jobs) needs this flag **and** the server
-  role, so it does not double-run on a dedicated worker pod.
+  this flag **and** the server role. A worker-only container executes jobs. It does not submit these reviews.
+- **Orphan recovery** reclaims a dead worker's stuck jobs.
+  It needs this flag **and** the server role.
+  It therefore does not run twice on a dedicated worker pod.
 - **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.
 
-`AGENT_ENABLED` is `false` on every role until you set it, however the pod is started. Set it to
-`true` on **every** pod that needs any of the three — in the split-pod topology that is both
-`application-server` (submission + recovery) and `application-worker` (execution). A pod you never set
-it on claims nothing and spends nothing.
+`AGENT_ENABLED` is `false` on all roles until you set it, regardless of how the pod starts.
+
+1. Set it to `true` on **each** pod that needs submission, orphan recovery, or execution.
+
+In a split-pod topology, both pods need it:
+
+- `application-server`: submission and recovery.
+- `application-worker`: execution.
+
+A pod without this setting claims nothing and spends nothing.
 
 ## Interactive mentor turns
 
-Interactive mentor turns run their sandboxes on **connected workers**, for both web chat and Slack
-DMs. The application server keeps HTTP/SSE, Slack delivery, admission, budget checks, thread
-persistence and `fetch_context`. It needs no Docker client when
-`hephaestus.runtime.worker.enabled=false`. A worker with spare mentor capacity owns each live
-session; there is no in-process fallback. `AGENT_ENABLED` gates queued practice reviews, not Heph.
-The authenticated worker hub relays session commands and runner frames. A session's proxy route and
-turn billing binding are sent to its worker; provider keys are resolved there, never sent to the
-sandbox. PostgreSQL remains the billing record.
+Interactive mentor turns run their sandboxes on **connected workers**, for both web chat and Slack DMs.
+The application server keeps these functions:
+
+- HTTP/SSE and Slack delivery.
+- Admission and budget checks.
+- Thread persistence and `fetch_context`.
+
+It needs no Docker client when `hephaestus.runtime.worker.enabled=false`.
+A worker with spare mentor capacity owns each live session.
+No in-process fallback exists.
+`AGENT_ENABLED` controls queued practice reviews, not Heph.
+The authenticated worker hub relays session commands and runner frames.
+
+The server sends a session's proxy route and turn billing binding to its worker.
+The worker resolves provider keys and never sends them to the sandbox.
+PostgreSQL remains the billing record.
 
 When no worker can admit a new session, Heph says **“Heph is busy. Please try again.”** A drain rejects
 new sessions and ends existing streams. After idle eviction, a drain or a worker restart, the next
 turn opens a session on an available worker and restores the saved `session_jsonl`. Sticky server
-affinity retains the live placement; changing the model, route, image, runtime inputs or limits
+affinity retains the live placement. Changing the model, route, image, runtime inputs or limits
 replaces the session instead of reusing an incompatible runtime.
 
-Each developer has at most one live Heph sandbox per workspace on its selected worker. Starting one is several
-seconds of work — a job network, volumes, the workspace initializer, the runtime container, and the
-runner loading its SDK — so it is started **before** the first message where Hephaestus can see one
-coming:
+Each developer has at most one live Heph sandbox per workspace on its selected worker.
+Startup takes several seconds because it requires these resources and actions:
+
+- A job network and volumes.
+- The workspace initializer.
+- The runtime container.
+- The runner's SDK load.
+
+Where Hephaestus can anticipate a message, it starts the sandbox **before** the first message:
 
 - **Opening Heph** in the webapp, or coming back to its browser tab, calls
   `POST /api/workspaces/{slug}/mentor/sandbox`. The server answers `202` at once and starts the sandbox
-  in the background; it sends no prompt, calls no model and writes no thread.
+  in the background. It sends no prompt, calls no model and writes no thread.
 - **Opening the Hephaestus app in Slack** (`app_home_opened`, either tab) does the same for a linked
   developer.
 
-Preparing does nothing when the sandbox is already warm, when a turn is using it, when the developer
-has no Heph model or their budget is spent, or when `hephaestus.mentor.max-sessions-per-user` or
-`hephaestus.mentor.max-sessions-total` is reached. A turn that arrives while a prepare is still
-starting the sandbox waits for it rather than starting a second one.
+Preparation has no effect in these cases:
+
+- The sandbox is already warm.
+- A turn uses the sandbox.
+- The developer has no Heph model.
+- The developer's budget is spent.
+- `hephaestus.mentor.max-sessions-per-user` or `hephaestus.mentor.max-sessions-total` has been reached.
+
+A turn that arrives during preparation waits for that sandbox instead of starting another.
 
 A sandbox stays warm for `hephaestus.mentor.idle-ttl-seconds` (default `900`) after its last frame.
-Each idle runner holds about 165 MB, so a longer TTL keeps more memory in use between messages; the
+Each idle runner holds about 165 MB, so a longer TTL keeps more memory in use between messages. The
 session caps, not the TTL, bound the total. The Traefik sticky cookie's `maxAge` in
-`docker/compose.app.yaml` follows the TTL — change both together. A worker restart or deploy ends its
-Heph sessions; the next message restores the saved thread on an available worker.
+`docker/compose.app.yaml` follows the TTL.
+Change both together.
+
+A worker restart or deploy ends its
+Heph sessions. The next message restores the saved thread on an available worker.
 `mentor_turn_first_token_seconds{sandbox="cold"}` counts the turns that waited
 ([Observability](./observability.mdx#heph-turn-metrics)).
 
@@ -217,42 +296,48 @@ AGENT_ENABLED=true
 Without the last line, the worker boots and registers but claims no practice-review jobs.
 It can still serve Heph: `AGENT_ENABLED` does not gate interactive sessions.
 
-No LLM env vars are needed: the LLM proxy runs in-process on this pod (it follows the worker/sandbox
-capability, not `AGENT_ENABLED`) and reads providers
-from the same instance/workspace catalog as the app pod. Register providers at runtime under
-Instance admin → AI models, or per-workspace under that workspace's own AI models page — never via
-env var.
+No LLM environment variables are necessary.
+The LLM proxy runs in-process on this pod.
+It follows the worker/sandbox capability, not `AGENT_ENABLED`.
+It reads providers from the same instance/workspace catalog as the app pod.
+
+1. Register providers at runtime under Instance admin → AI models, or under the workspace's AI models page.
+2. Never register providers through an environment variable.
 
 Capacity defaults to `auto` and auto-sizes from `Runtime.availableProcessors()`. Override only if the
 host is noisy — and mind the name: the JVM binds
 `HEPHAESTUS_WORKER_CAPACITY_REVIEW_MAX` / `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`. The shorter
 `HEPHAESTUS_WORKER_REVIEW_MAX` / `_MENTOR_MAX` are **compose-file aliases only**
-(`docker/compose.app.yaml` translates them); set them on a K8s or systemd deployment and they are
+(`docker/compose.app.yaml` translates them). Set them on a K8s or systemd deployment and they are
 silently ignored.
 
-Review capacity is also capped by `SANDBOX_MAX_CONCURRENT`: a worker never claims more reviews at
-once than the host lets it start sandboxes for. The single-host self-hosted Compose file sets that to
-1, so raising review capacity there changes nothing until you raise the sandbox limit too — with the
-RAM to match (see the [Install guide](./install)).
+`SANDBOX_MAX_CONCURRENT` also caps review capacity.
+A worker never claims more concurrent reviews than the host permits concurrent sandboxes.
+The single-host self-hosted Compose file sets this limit to 1.
+A higher review capacity there has no effect until you also raise the sandbox limit.
+
+1. Raise the sandbox limit only with sufficient RAM, as the [Install guide](./install) describes.
 
 The app pod signs worker tokens from a key *ring*, not a single value:
 `hephaestus.worker.hub.token.keys[0].kid` + `.private-key` and
 `hephaestus.worker.hub.token.active-kid`. Indexed list binding has no single env-var form, so
-configure it through a mounted YAML/config-tree rather than a flat variable; unset, the app logs a
+configure it through a mounted YAML/config-tree rather than a flat variable. Unset, the app logs a
 warning and generates an ephemeral key that invalidates every worker token on restart.
 
 ## Graceful drain
 
-On SIGTERM the worker:
+On SIGTERM, the worker does these actions in order:
 
-1. Sends `Heartbeat{draining=true}` to the hub so the dispatcher stops claiming new jobs for it.
-2. Waits up to `hephaestus.worker.drain.timeout` (default 5 min) for in-flight jobs to finish.
-3. Stops the containers of whatever is still running and hands each job back to the queue — a
-   worker-fenced requeue (`RUNNING → QUEUED`, retry-capped), not a plain cancel, so another worker's
-   poll picks it back up, bounded by `AGENT_MAX_RETRIES`. Only a job that has already exhausted its
-   retry budget (or lost the fence to a concurrent user-cancel) ends up terminally
-   cancelled/failed instead. `timeout=0` (immediate drain) skips step 2 and applies this same
-   requeue-first behaviour right away.
+1. It sends `Heartbeat{draining=true}` to the hub.
+   The dispatcher stops claiming new jobs for it.
+2. It waits up to `hephaestus.worker.drain.timeout` (default 5 min) for active jobs to finish.
+3. It stops containers that still run.
+4. It returns each job to the queue with a worker-fenced requeue (`RUNNING → QUEUED`, retry-capped).
+
+This is not a plain cancel.
+Another worker's poll claims the job again, within `AGENT_MAX_RETRIES`.
+Only jobs with an exhausted retry budget or a lost fence to concurrent user-cancel become terminally cancelled/failed instead.
+`timeout=0` skips step 2 and immediately applies the same requeue-first behavior.
 
 The compose template pins `stop_grace_period: 6m` to give the JVM 60s of headroom before Docker SIGKILLs.
 
