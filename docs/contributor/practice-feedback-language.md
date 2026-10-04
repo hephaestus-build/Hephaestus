@@ -214,7 +214,7 @@ The member-facing name for the account-wide answer is **your AI choice**.
 **Member onboarding** names the workspace owner's configuration page.
 Do not call either one a *workspace preference* or a *workspace default*.
 
-An admin declares a model's **Operated by** fact as **Your organisation** or **A provider**.
+An admin declares a model's **Operated by** fact as **Your organization** or **A provider**.
 Hephaestus derives **In-house** (`IN_HOUSE`) or **Cloud** (`CLOUD`) from that declaration.
 Without it, the model is **Not declared** (`UNDECLARED`).
 The declaration does not verify a provider's location, retention, or training terms.
@@ -237,7 +237,7 @@ A workspace can add or remove models without asking the member again.
 The admin label for that row is this exact interface literal:
 
 {/*<!-- vale STE.Contractions = NO -->*/}
-**Members who haven't chosen**
+**Members who have not chosen**
 {/*<!-- vale STE.Contractions = YES -->*/}
 
 See `UNCHOSEN_ROW_TITLE` in [AgentBindingsPage.tsx](https://github.com/hephaestus-build/Hephaestus/blob/main/webapp/src/components/admin/workspace-llm/AgentBindingsPage.tsx).
