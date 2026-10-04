@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
+import { levelsOpenedBy } from "@/test/detail-stack";
+
 import { reviewJob } from "./fixtures";
 import { ReviewRunNotices } from "./ReviewRunNotices";
 
@@ -75,15 +77,15 @@ export const HeldForAnUnknownReason: Story = {
 };
 
 /**
- * A push review that asked fewer practices than were ready, because the Ready review of the same code
+ * A push review that asked fewer practices than were ready, because earlier reviews of the same code
  * had already answered the rest. Each answered practice links to the review that answered it,
- * so the gap between ready and asked reads as reuse, not as practices the review skipped.
+ * so the gap between ready and asked reads as reuse, not as practices the review skipped. A practice
+ * whose name has not loaded is named by its slug, so two of them never read alike.
  */
 export const AnsweredByAnEarlierReview: Story = {
 	args: {
 		practices: [
 			{ slug: "removes-duplication-instead-of-copy-pasting", name: "Remove duplication" },
-			{ slug: "handles-errors-instead-of-swallowing-them", name: "Handle errors" },
 		],
 		job: {
 			...completed,
@@ -96,15 +98,23 @@ export const AnsweredByAnEarlierReview: Story = {
 				{
 					practiceSlug: "handles-errors-instead-of-swallowing-them",
 					revisionId: 1838,
-					reviewId: "aaaaaaaa-1111-1111-1111-111111111111",
+					reviewId: "cccccccc-1111-1111-1111-111111111111",
 				},
 			],
 		},
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText("2 practices were answered by an earlier review");
-		await expect(canvas.getAllByRole("link", { name: "an earlier review" })).toHaveLength(2);
 		await expect(canvas.getByRole("link", { name: "Remove duplication" })).toBeVisible();
+		await expect(
+			canvas.getByRole("link", { name: "handles-errors-instead-of-swallowing-them" }),
+		).toBeVisible();
+		const [first, second] = canvas.getAllByRole("link", { name: "an earlier review" });
+		if (first === undefined || second === undefined) {
+			throw new Error("Each answered practice links to the review that answered it.");
+		}
+		await expect(levelsOpenedBy(first)).toContain("review:aaaaaaaa-1111-1111-1111-111111111111");
+		await expect(levelsOpenedBy(second)).toContain("review:cccccccc-1111-1111-1111-111111111111");
 	},
 };
 

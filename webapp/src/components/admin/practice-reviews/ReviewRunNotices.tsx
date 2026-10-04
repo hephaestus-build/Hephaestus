@@ -51,7 +51,7 @@ export function ReviewRunNotices({ job, practices, outputMayBeIncomplete }: Revi
 										render={<DetailStackLink entry={practiceLevel(practice.practiceSlug)} />}
 									>
 										{practices?.find((item) => item.slug === practice.practiceSlug)?.name ??
-											"Practice"}
+											practice.practiceSlug}
 									</InlineLink>
 									, answered in{" "}
 									<InlineLink render={<DetailStackLink entry={reviewLevel(practice.reviewId)} />}>

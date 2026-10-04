@@ -220,8 +220,11 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
             // The work as it stands is queued outside this group; its own deadline decides.
             return;
         }
+        Instant deadline = now.minus(MAX_WAIT);
         if (!mergedRepair
                 && pr.getHeadRefOid() != null
+                && settling.stream()
+                        .allMatch(signal -> signal.getStateChangedAt().isAfter(deadline))
                 && jobs.existsActivePullRequestReviewOf(
                         workspaceId,
                         pullRequestId,
@@ -230,7 +233,8 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
                         pr.getBody(),
                         SIGNALS.stream().map(SignalName::value).toList())) {
             // Another occasion's review of the work as it stands may answer this group's practices; the gate can
-            // tell only from what it records, so the group waits for it to finish.
+            // tell only from what it records, so the group waits for it to finish, but no longer than MAX_WAIT from
+            // its first member: a review held back for budget may not finish in time.
             return;
         }
         SignalKey current = currentKeys.stream()
