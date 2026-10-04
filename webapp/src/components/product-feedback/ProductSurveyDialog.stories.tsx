@@ -78,8 +78,8 @@ export const SkipsAnOptionalQuestionAndSends: Story = {
 };
 
 /**
- * A research survey names the organisation whose study the answers join, says the answers are
- * not product feedback, and points to where the member can leave the study.
+ * A research survey names the organisation whose research the answers join, says the answers are
+ * not product feedback, and points to where the member can withdraw.
  */
 export const Research: Story = {
 	args: { survey: researchInvitation },
@@ -87,13 +87,13 @@ export const Research: Story = {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(dialog.getByText("Research"));
 		await expect(
-			dialog.getByText(/study run by Technical University of Munich, which you agreed to join/u),
+			dialog.getByText(/research run by Technical University of Munich, which you allowed/u),
 		).toBeVisible();
 		await expect(dialog.getByRole("link", { name: "User settings" })).toHaveAttribute(
 			"href",
 			"/settings",
 		);
-		await expect(dialog.getByText(/Answers already sent stay with the study/u)).toBeVisible();
+		await expect(dialog.getByText(/Answers already sent stay with the research/u)).toBeVisible();
 		await expect(dialog.getByRole("group", { name: /\(optional\)/u })).toBeVisible();
 	},
 };

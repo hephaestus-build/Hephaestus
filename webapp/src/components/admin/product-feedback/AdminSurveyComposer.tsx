@@ -337,7 +337,7 @@ export function AdminSurveyComposer({
 															<FieldDescription id={fieldId(`purpose-${purpose}-detail`)}>
 																{SURVEY_PURPOSE_DEFS[purpose].description}
 																{purpose === "RESEARCH" &&
-																	` Run by ${researchOrganization}. Hephaestus stops asking members who leave the study.`}
+																	` Run by ${researchOrganization}. Hephaestus stops asking members who withdraw from the research.`}
 															</FieldDescription>
 														</FieldContent>
 														<RadioGroupItem

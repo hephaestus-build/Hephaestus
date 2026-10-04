@@ -13,7 +13,7 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type { Answer, FeedbackRequest, SurveyInvitation } from "@/api/types.gen";
 import { READERS } from "@/components/product-feedback/feedback-copy";
-import { isResearch, studyOf } from "@/components/product-feedback/survey-purpose-defs";
+import { isResearch, researchOf } from "@/components/product-feedback/survey-purpose-defs";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 
@@ -62,7 +62,7 @@ type SurveyIdentity = Pick<SurveyInvitation, "id" | "purpose" | "researchOrganiz
 
 function surveyAcknowledgement(survey: SurveyIdentity): string {
 	return isResearch(survey)
-		? `Thanks. Your answers were recorded for ${studyOf(survey)}.`
+		? `Thanks. Your answers were recorded for ${researchOf(survey)}.`
 		: `Thanks. Your answers are on their way to ${READERS}.`;
 }
 

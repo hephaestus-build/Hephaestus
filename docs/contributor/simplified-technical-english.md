@@ -29,7 +29,6 @@ The following content is not prose that we can rewrite:
 - Generated or third-party content, license notices, and historical release records.
 - Accepted ADRs are historical decision records and remain unchanged during a prose-only rewrite.
 - User content received or stored by the application.
-- Consent wording. It carries `WORDING_VERSION`, and a change needs a new version.
 
 Keep exact external text unchanged.
 Mark it as a quote or code, and explain it in the correct profile when necessary.
@@ -61,6 +60,9 @@ Add a term to the product vocabulary only when it names a real software concept 
 The readers are developers who use Hephaestus.
 They read between other tasks, often on a small screen.
 They need to know what happened, what it means for them, and what to do next.
+
+The consent wording follows the same voice as other UI text.
+Any change to it still needs a new `WORDING_VERSION`.
 
 [ASD](https://www.asd-europe.org/standards-specifications/simplified-technical-english/) scopes STE to maintenance manuals and other safety-critical publications.
 Its strict form makes interface text stiff.

@@ -24,6 +24,8 @@ defines the governance decision that permits collection, retention, processing, 
    If no approved consumer remains, remove the source from the next contract version.
 4. **Separate purposes.** Product feedback, mentoring, operator quality assurance, and research evaluation require
    separate decisions. Product use does not authorize evaluation retention or ablation.
+   Research use requires the participant's current research grant and a recorded controller decision for the purpose.
+   Product use does not authorize it.
 5. **Separate responsibilities.** Workspace administrators connect integrations and enable practices within the
    shipped, operator-approved envelope. They do not approve sources, legal bases, processors, transfers, DPIA
    outcomes, or new data categories.
