@@ -173,8 +173,8 @@ export function AdminSurveyResults({
 						<FlaskConical />
 						<AlertTitle>Research data, not product feedback</AlertTitle>
 						<AlertDescription>
-							These answers belong to the study run by {survey.researchOrganization}, given under
-							the consent members recorded for it. Handle them by that study’s protocol.
+							These answers belong to the research run by {survey.researchOrganization}, given under
+							the consent members recorded for it. Handle them as research data.
 						</AlertDescription>
 					</Alert>
 				)}

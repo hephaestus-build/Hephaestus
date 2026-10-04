@@ -27,9 +27,9 @@ On a deployment that still serves the placeholder, the first-login screen links 
 
 1. Configure both pages before the first user signs in.
 
-When the account holder submits the screen, the ledger records two facts against the notice version shown:
+When the account holder selects **Save and continue**, the ledger records two facts against the notice version shown:
 
-- The account accepted the terms.
+- The account accepted the terms with **I accept the terms of use**.
 - The screen presented this text, which links to the privacy notice.
 
 Both facts come from one checkbox.
@@ -38,13 +38,17 @@ It does not establish that anybody opened the link.
 
 Where the screen asks the research question below, it records the research answer as a third, separate decision.
 Either answer completes setup.
-Hephaestus records nothing until the account holder submits.
+Hephaestus records nothing until the account holder selects **Save and continue**.
 [Your data in Hephaestus](/user/privacy#signing-in-and-choosing-research-participation) describes the same screen for the person who answers it.
 
 ## The optional research question
 
-`HEPHAESTUS_RESEARCH_ORGANIZATION` names the organization that runs a study on this deployment.
+`HEPHAESTUS_RESEARCH_ORGANIZATION` names the organization that runs research on this deployment.
 Its presence determines whether the research question appears.
+[Production Setup](./production-setup) lists the setting with the other deployment settings.
+The organization does not need to be academic.
+Choose a name that reads correctly in the sentence "If you say yes, the organization may use your data for research."
+
 Consent must be informed.
 This includes the controller's identity ([EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) § 3.3).
 Thus, the configured name appears beside the choice on the first-login screen and in account settings, not only in a link.
@@ -59,19 +63,57 @@ First-login setup contains only the terms.
 The account-settings switch is hidden.
 `PUT /user/consent/research` returns 404.
 
-**A change to this value is a new question. Hephaestus treats it as one.**
+### What the question asks
+
+The screen asks **Allow research use of your data?** with two answers: **Yes, allow research use** and **No, keep my data out of research**.
+The legal basis is consent under Art. 6(1)(a) GDPR.
+It is a broad consent to an area of research, not to one research project.
+
+[Recital 33 GDPR](https://gdpr-info.eu/recitals/no-33/) allows this when the purpose of the research cannot be fully specified at collection.
+[EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 153 to 163 set the conditions.
+The obligations below follow from those conditions.
+
+The area of research is how developers work and learn, and how AI systems can review and support that work.
+It includes building and running benchmarks and evaluation datasets for such AI systems.
+The data it may use is:
+
+- The participant's work in the tools that the project connects.
+- Hephaestus observations and feedback about that work.
+- The participant's responses to that feedback.
+- How the participant uses Hephaestus, including conversations with Heph and answers to research surveys.
+
+Sign-in credentials and access tokens are never used.
+Slack messages that a participant stops Hephaestus from using stay out of research too.
+
+The consent is optional and separate from the terms.
+Saying no or withdrawing has no disadvantage ([Art. 7(4) GDPR](https://gdpr-info.eu/art-7-gdpr/)).
+
+Research that falls outside this area is not covered by this consent.
+For such research, change the wording with a new `WORDING_VERSION` after legal review.
+
+### A change is a new question
+
+**A change to the organization name is a new question. Hephaestus treats it as one.**
 Every research decision records the organization that the question named in `consent_decision.research_organization`.
-Consent to a study is consent to the organization that runs it.
+Consent to research is consent to the organization that runs it.
 After a rename, no other record identifies the organization that the account saw in the question.
 
 If the setting has a different name, no account's grant to the previous one authorizes anything.
 `participatesInResearch` reports false.
-Setup asks the question again.
+Setup asks the research question again.
 Earlier decisions stay in the ledger as a record of the questions and answers at that time.
 Terms acceptance stays unchanged because the terms did not change.
 
+**A change to the wording is a new question for every account.**
+A new `WORDING_VERSION` is a new notice version.
+Every account sees the setup screen once more, with the terms and, where an organization is named, the research question.
+An earlier yes is not carried over to a broader scope.
+Only a decision on the current version and the current organization authorizes anything.
+
+Until an account answers, `participatesInResearch` reports false and research survey invitations stop.
+
 Even a cosmetic rename gives every account one more setup screen.
-Make that change deliberately.
+Make a change to the name or the wording deliberately.
 
 Both the setup screen and the settings switch return the organization that they displayed.
 If a submission names an organization that this instance no longer runs, Hephaestus refuses it with `409`.
@@ -79,9 +121,69 @@ A tab left open across a change cannot record a decision about an organization t
 
 Research-purpose surveys and their email invitations require a current grant for the configured
 organization. Withdrawal stops new research survey participation and invitation delivery. It does not
-stop ordinary practice reviews or automatically erase already stored study data. The Slack App Home
-links to account settings rather than maintaining a separate research decision. Operators must also apply the authoritative consent record to research exports and analyses.
-They must handle withdrawal and erasure requests for data already shared with the study.
+stop ordinary practice reviews or erase rows in the instance database. The research team removes the data from its datasets that are not yet anonymized. The Slack App Home
+links to account settings rather than maintaining a separate research decision.
+
+### Withdrawal
+
+A participant withdraws with one switch, **Allow research use of my data**, in **User settings → Research participation**.
+This is as easy as giving consent ([Art. 7(3) GDPR](https://gdpr-info.eu/art-7-gdpr/)).
+New research use stops, and research survey invitations stop.
+The research organization removes the participant's data from datasets that are not yet anonymized.
+Research done before the withdrawal stays lawful.
+
+Anonymized data in a published result or dataset cannot be traced back and cannot be removed.
+
+Withdrawal does not erase other stored data by itself.
+Account erasure is a separate request.
+
+### No separate consent for datasets
+
+The consent has no second choice for sharing or publishing datasets.
+Only anonymized data leaves the research team.
+Anonymous data is outside the GDPR ([Recital 26](https://gdpr-info.eu/recitals/no-26/)).
+Paragraph 47 of [EDPB Guidelines 1/2026](https://www.edpb.europa.eu/system/files/2026-05/edpb_guidelines_202601_scientificresearch_en.pdf) (draft, adopted 15 April 2026) lets a broad consent cover the provision of data within the research area.
+
+A release needs a separate choice and a new wording version when it would do any of the following:
+
+- Contain data that is not anonymized.
+- Serve a purpose outside the stated area of research.
+- Go to a third country without adequate safeguards.
+
+### What operators must do
+
+The broad consent is valid only if the operator meets these obligations.
+Meet all of them before you set `HEPHAESTUS_RESEARCH_ORGANIZATION`, and keep to them while the research runs.
+
+1. Before any research export, analysis, or benchmark run, apply the latest `RESEARCH_PARTICIPATION` decision of each account.
+   Use only a grant for the current notice version and the current organization.
+2. Remove the data of withdrawn accounts from datasets that are not yet anonymized within `[removal time limit]`.
+   Treat an erasure request for data in such a dataset the same way.
+   Treat a Slack message-use opt-out the same way for the affected messages.
+3. Keep a research information page.
+   List the current research projects and the released datasets on it.
+   See [EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 161 and 162.
+   See also [EDPB 1/2026](https://www.edpb.europa.eu/system/files/2026-05/edpb_guidelines_202601_scientificresearch_en.pdf) paragraphs 48 and 49.
+4. Hold an ethics board approval: `[ethics approval reference]`.
+5. Keep the research team separate from grading and line management.
+   A power imbalance can weaken the free choice of a participant.
+   See [EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 16 to 24 and 46 to 48.
+   See also [Recital 43](https://gdpr-info.eu/recitals/no-43/).
+   Instance admins can read research survey answers, so give the admin role only to people who meet this rule.
+6. Test a dataset for re-identification before you call it anonymous.
+   Release it only if the test passes.
+   Free text and code are hard to anonymize ([EDPB 1/2026](https://www.edpb.europa.eu/system/files/2026-05/edpb_guidelines_202601_scientificresearch_en.pdf) paragraph 164).
+7. Honor the AI choice of each participant in benchmark runs.
+   Model providers may see only pseudonymized data, under a data processing agreement.
+8. Do not use the consent for browsing activity from the browser extension.
+   The privacy notice already says so.
+9. Keep each safeguard that the consent text states.
+   The research team replaces identifiers with a code, stores the key apart, and screens text for names.
+   It restricts access to the team and its processors.
+   It sends model providers only pseudonymized data, under a data processing agreement.
+
+Publish the retention and recipient details of the research in your privacy notice.
+The bundled TUM notice shows the expected shape, with placeholders where the legal owner must decide.
 
 `ConsentService.WORDING_VERSION` identifies the text that an account accepted.
 That text is the first-login screen, published in a signed release and immutable in git.
@@ -90,6 +192,8 @@ It submits its own constant.
 Thus, a browser tab that predates a deployment cannot record acceptance of text it never rendered.
 
 A fork that changes the text must change both constants in the same commit.
+Such a change gives every account one more setup screen.
+Make it on purpose.
 
 ## Operator obligations
 

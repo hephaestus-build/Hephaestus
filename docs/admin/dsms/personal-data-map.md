@@ -59,6 +59,7 @@ The self-service account export and cooldown remain separate, narrower operation
 | PostgreSQL notification outbox — `event_publication` | The Spring Modulith event publication registry has one row per pending or failed notification listener. It holds the serialized event and its delivery attempts. The event holds source and recipient ids, bounded lifecycle information and timestamps, never an address or report text. Instance-admin person export | Instance-scoped: workspace purge does not directly reach it. Delivery rechecks source and membership | The row holds ids only. The listener resolves the address at send time from `account.primary_email`. Account purge clears that field. A resubmitted notification for a purged account therefore has no recipient and completes as withheld | Completed publications are deleted. Account-deletion confirmations expire at the purge deadline. Other kinds use their bounded lifecycle window (at most seven days). Source erasure, opt-out or lost eligibility completes queued mail without sending on the next attempt. `server/application/src/main/java/de/tum/cit/aet/hephaestus/notification/NotificationRedeliveryJob.java`, `server/application/src/main/java/de/tum/cit/aet/hephaestus/notification/AccountDeletionEmailListener.java`. |
 | NATS JetStream | Buffered webhook, message and document payloads. Not directly included in self-service export | No selective deletion | No selective deletion | Slack/Outline expire after 72 hours. GitHub/GitLab expire after 180 days. Byte ceilings can shorten both. Stream configuration tests enforce these bounds. |
 | Worker-local repository mirrors and attempt folders | Person export lists exact-linked repository history and safe mounted-copy facts, not raw Git objects or other profiles | Mirror sweep follows repository monitoring. Workspace purge durably queues attempt-folder removal before deleting job rows, and the mounted worker confirms removal after commit | Person erasure cancels affected attempts and waits for mounted-store acknowledgement through `EvidenceFolderPersonDataCatalog`. Repository owners erase Git authorship at the source, not by rewriting Hephaestus mirrors | Attempt-input lifetime follows [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion). [`artifact-source-governance.md`](./artifact-source-governance.md) owns erasure requirements. Offline mounts retain a removal receipt until acknowledgement. |
+| Research datasets outside the instance database, held by the research team at `[location]` | Pseudonymized copies of data that a participant allowed for research, and the key that links codes to people, stored apart from the data | Workspace purge does not reach them | The person-erasure job does not reach them. The operator removes the account's data from datasets that are not yet anonymized | Kept while the research continues, then deleted or anonymized. Anonymized datasets cannot be reached and can remain. See "Research use of existing stores". |
 | Configured LLM provider | Prompts and responses for enabled purposes. Provider/operator access process | A completed request cannot be retracted | Provider process | Deployment-specific provider terms must define the bound before processing starts. See the [processor checklist](./processor-checklist.md). |
 | GitHub/GitLab/Slack delivery destination | Posted feedback. Source-provider export | Not silently crawled or rewritten | Best-effort correction/removal through the operator path | The provider controls its copy and audit history. |
 | Application metrics | Aggregate operational counts without account, workspace, export or source labels | Not applicable | No subject-level series exists | Backend retention is deployment-specific. Operators must record it. |
@@ -99,6 +100,52 @@ identifiers. It holds no free text and is removed with workspace purge.
 (`data_handling_note`), an admin-only field for region, agreement, renewal date and retention
 details. It is shown to admins only, never to developers, and must not name individuals. None of these tables has an independent expiry. Configuration changes also follow the
 existing configuration-audit retention policy.
+
+## Research use of existing stores
+
+Research use processes stores that this map already lists. It adds no store to the instance database.
+The latest `RESEARCH_PARTICIPATION` decision in `consent_decision` gates it.
+
+A decision authorizes research only for the current notice version and the current research organization (`consent_decision.research_organization`).
+An earlier yes to narrower wording authorizes nothing. Every account answers once more when the wording changes.
+
+The research can use this data of a participant who allowed it:
+
+- Work in connected repositories and tools: pull/merge requests, issues, reviews, comments and chat.
+- Hephaestus observations and practice feedback about that work.
+- The participant's responses to that feedback.
+- How the participant uses Hephaestus, including conversations with Heph and research survey answers.
+
+The research uses no sign-in credentials or access tokens.
+A participant who stops Hephaestus from using their Slack messages has those messages erased from the instance database. The research team removes them from datasets that are not yet anonymized, and research does not use them again. Anonymized datasets cannot be linked to the participant and can remain.
+
+### Where research copies live
+
+The research team holds research datasets outside the instance database, at `[location]`.
+Before analysis, a code replaces name, username and contact details. The key that links the code to the person is stored apart from the data.
+Only the research team can reach the key.
+
+### How withdrawal and erasure reach research copies
+
+Withdrawal and person erasure act on the instance database. They do not reach research copies.
+The operator must close that gap:
+
+1. Apply the latest `RESEARCH_PARTICIPATION` decision of each account before any export or analysis.
+2. After withdrawal or a verified erasure request, remove the account's data from datasets that are not yet anonymized.
+   After a Slack message-use opt-out, remove the affected messages the same way.
+3. Finish the removal within `[removal time limit, proposed: 30 days]`.
+
+An anonymized dataset holds no link to a person. Withdrawal and erasure cannot reach it, so its data cannot be removed.
+
+### Residual retention of research copies
+
+- Pseudonymized research data and the key: kept while the research that they support continues. The team then deletes or anonymizes them.
+- `[Proposed for TUM, pending legal-owner approval: at most 10 years after collection, in line with DFG Guidelines for Safeguarding Good Research Practice, Guideline 17.]`
+- Anonymized datasets: outside the GDPR. They can remain and be published with no end date. They cannot be removed.
+- Consent ledger rows: unchanged. They are append-only.
+
+The [record of processing](./record-of-processing.md) owns the research purpose, safeguards and retention reasoning.
+The [DPIA pre-screen](./dpia-prescreen.md) owns the risks.
 
 ## Person request implementation inventory
 

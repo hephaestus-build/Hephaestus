@@ -38,7 +38,8 @@ export const Enabled: Story = {
 		participateInResearch: true,
 	},
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("switch", { name: "Participate in academic research" }));
+		await expect(canvas.getByText(/AET, may use your data for research/u)).toBeVisible();
+		await userEvent.click(canvas.getByRole("switch", { name: "Allow research use of my data" }));
 		await expect(args.onToggleResearch).toHaveBeenCalledWith(false, expect.anything());
 	},
 };

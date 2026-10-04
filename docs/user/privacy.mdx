@@ -25,27 +25,65 @@ For a specific task:
 
 The sign-in screen links to your instance’s privacy notice and imprint.
 You can read both before you choose a provider.
-Setup then shows one page with two separate decisions.
+Setup then shows one page with up to two separate decisions.
 You see both before you make either.
 
 The first, **Terms and privacy**, has three short points:
 
-- What Hephaestus reads.
-- That an AI model writes its feedback and can be wrong.
-- Where to find your instance’s privacy notice.
+- **What it reads:** your work in the tools your project connects.
+- **Feedback can be wrong:** an AI model writes it, so check it against the work first.
+- **Your data:** where to find your instance’s privacy notice.
 
 To accept the terms, select **I accept the terms of use**.
-The terms require you to access only work you have permission to see.
-They also require you to treat feedback as guidance for its recipient, not an assessment to share.
-Acceptance is not research consent.
+The terms ask you to use only work you are entitled to see.
+They also ask you to treat feedback as guidance for the person it is for, not as an assessment to share.
+Accepting the terms is not research consent.
 
-The second decision appears only if the organization that runs your instance also runs a study.
-The screen names that organization.
-It offers **Yes, take part** or **`No, don't take part`**, with the same service if you do not participate.
-Neither answer starts selected. Both need one selection.
-Without a configured study, the terms alone complete setup.
+The second decision, **Allow research use of your data?**, appears only if your instance names a research organization.
+The screen shows that name.
+Research is optional, and Hephaestus works the same either way.
+Without a named organization, the terms alone complete setup.
 
-**Continue** records both decisions against the version of the text you saw.
+If you allow it, the research organization may use your data for research.
+The research looks at how developers work and learn, and how AI systems can review and support that work.
+It includes building and running benchmarks and evaluation datasets for such AI systems.
+
+Your data means:
+
+- Your work in the tools your project connects.
+- Hephaestus’s observations and feedback about that work.
+- Your responses to that feedback.
+- How you use Hephaestus, including your conversations with Heph.
+- Your answers to research surveys.
+
+The research team replaces your name with a code before analysis.
+Only the team and its AI model providers work with data that could identify you.
+Nobody else gets a dataset unless it is anonymized.
+
+You can withdraw at any time, as easily as you said yes.
+Withdrawing stops future use.
+The team then removes your data from datasets that are not yet anonymized.
+It cannot remove anonymized data that is already in a published result.
+
+Select **What this means** to read more.
+It opens seven short points:
+
+- What data.
+- Who uses it.
+- How it is protected.
+- Datasets and benchmarks.
+- If you change your mind.
+- Your choice has no cost.
+- Your rights.
+
+[Your AI choice](#your-ai-choice) applies to benchmark runs that use AI models.
+
+Choose **Yes, allow research use** or **No, keep my data out of research**.
+Neither answer starts selected, and you must choose one.
+
+**Save and continue** records your decisions against the version of the text you saw.
+When that text changes, setup asks again, and an earlier **Yes** does not carry over to the new text.
+When your instance names a different research organization, setup asks the research question again.
 You can change your research answer later.
 [Your choices and right to object](#your-choices-and-right-to-object) explains how.
 
@@ -75,8 +113,8 @@ It lists members by name and never ranks them.
 Your sign-in details, connected accounts, memberships, preferences, chats, and feedback reactions support your account and conversations.
 Product-feedback submissions support product improvement, as do survey invitations, answers, and declines.
 Submissions include the page path and browser identification you choose to attach, plus the Hephaestus release that received them.
-A **Research** survey is available only while you participate in the research program your instance names.
-Its answers are study data collected under your research consent.
+A **Research** survey is available only while you allow research use for the organization your instance names.
+Its answers are research data, collected under your research consent.
 
 These records support security, troubleshooting, and spending controls:
 
@@ -166,15 +204,32 @@ The first action stops collection and erases collected channel messages and rela
 The second does not restore deleted data.
 Neither erases mentor DMs, unrelated repository feedback, Slack’s copy, or [separately retained copies](#copies-outside-active-records).
 
-### Academic research participation
+### Research participation
 
-1. Where offered, open **User settings → Academic research participation → Participate in academic research**.
-2. Turn it on to record your agreement, or off to withdraw it.
-3. For data already shared for research or withdrawal from a specific study, contact your instance’s privacy contact.
+1. Where offered, open **User settings → Research participation**.
+2. Turn on **Allow research use of my data** to say yes.
+3. Turn it off to withdraw.
+4. For data already in a published dataset, contact your instance’s privacy contact.
 
+The same section repeats the research summary and has **What this means** for the details.
+Giving consent and withdrawing it take the same single switch.
+Hephaestus records your answer with the date and the version of the text you saw.
 Slack App Home links to these account settings.
-Withdrawal ends research survey invitations but does not stop ordinary practice reviews or erase stored data.
-Existing research data includes research survey answers.
+
+When you withdraw:
+
+- New research use of your data stops.
+- Research survey invitations stop.
+- The research team removes your data from datasets that are not yet anonymized.
+- Research done before you withdrew stays lawful.
+- Anonymized data in a published result or dataset cannot be traced back to you, so it cannot be removed.
+- Ordinary practice reviews continue.
+
+Withdrawal does not erase other stored data by itself.
+[Delete your account or request wider erasure](#delete-your-account-or-request-wider-erasure) explains that step.
+Research is optional and separate from the terms.
+Saying no or withdrawing has no disadvantage, and you keep the same access, features and feedback.
+Research use of your data does not include browsing activity from the browser extension.
 
 ### Email notifications
 
@@ -183,8 +238,8 @@ Optional invitations, connection alerts, and admin updates start off where offer
 1. Choose each category in **User settings → Email notifications**.
 2. To unsubscribe without sign-in, use the unsubscribe link in an email.
 
-Research invitation emails also require research participation.
-Disabling emails does not withdraw participation.
+**Research survey invitations** also require that you allow research use.
+Turning them off stops the emails, but it does not end your research participation.
 The mail relay receives your contact address, notification type, and links, not product-feedback text or survey answers.
 Account-security and deletion notices are separate from optional subscriptions.
 

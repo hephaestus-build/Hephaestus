@@ -266,8 +266,8 @@ hephaestus:
     database:
         allow-insecure-remote: ${HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE:false}
     consent:
-        # Names the organisation running the optional research programme. Unset means this deployment
-        # runs none, and first-login setup and account settings then omit the question entirely.
+        # Names the organisation running optional research. Unset means this deployment runs none,
+        # and first-login setup and account settings then omit the question entirely.
         research-organization: ${HEPHAESTUS_RESEARCH_ORGANIZATION:}
     auth:
         issuer: ${HEPHAESTUS_AUTH_ISSUER:http://localhost:8080}

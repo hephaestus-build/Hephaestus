@@ -139,15 +139,47 @@ class ConsentServiceTest extends BaseUnitTest {
         verify(decisionRepository, never()).save(any());
     }
 
+    /** The wording before research consent covered benchmarks and evaluation datasets. */
+    private static final String NARROWER_WORDING = "2026-09-11";
+
     @Test
-    void shouldSupersedeAnAnswerGivenAgainstAnOlderNotice() {
-        researchOnRecord(researchDecision(true, "2026-08-30", ORG));
+    void shouldNotCarryAResearchYesGivenToNarrowerWordingIntoTheBroaderScope() {
+        researchOnRecord(researchDecision(true, NARROWER_WORDING, ORG));
+
+        ConsentService.ConsentStatusDTO status = serviceWithResearch().status(42L);
+
+        assertThat(status.completed()).isFalse();
+        assertThat(status.participateInResearch()).isFalse();
+        assertThat(serviceWithResearch().participates(42L)).isFalse();
+    }
+
+    @Test
+    void shouldAskAgainBeforeSettingsCanRecordAnythingForAnAccountOnNarrowerWording() {
+        researchOnRecord(researchDecision(true, NARROWER_WORDING, ORG));
+
+        assertThatThrownBy(() -> serviceWithResearch()
+                        .setResearchParticipation(42L, new ConsentService.ResearchConsentDTO(VERSION, true, ORG)))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_REQUIRED));
+
+        verify(decisionRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRecordANewYesEvenThoughTheEarlierAnswerWasYesToo() {
+        researchOnRecord(researchDecision(true, NARROWER_WORDING, ORG));
 
         serviceWithResearch()
                 .completeFirstLogin(42L, new ConsentService.FirstLoginConsentDTO(VERSION, true, true, ORG));
 
-        assertThat(saved(3).get(2))
-                .satisfies(decision -> assertThat(decision.getNoticeVersion()).isEqualTo(VERSION));
+        assertThat(saved(3))
+                .filteredOn(decision -> decision.getPurpose() == ConsentDecision.Purpose.RESEARCH_PARTICIPATION)
+                .singleElement()
+                .satisfies(decision -> {
+                    assertThat(decision.isGranted()).isTrue();
+                    assertThat(decision.getNoticeVersion()).isEqualTo(VERSION);
+                });
     }
 
     @Test

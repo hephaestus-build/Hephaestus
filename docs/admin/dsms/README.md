@@ -27,7 +27,7 @@ Do not publish unresolved placeholders as a valid privacy notice.
 | Decision | Operator must record |
 |---|---|
 | Responsibility | `[controller name, address, representative, privacy contact, DPO where applicable]`. Identify any joint controllers and their actual arrangement. An admin role alone does not establish Art. 26 status. |
-| Purpose and lawful basis | `[basis and necessity per purpose and data-subject group]`, including people who never sign in, employees, students, incidental third parties, and research participants. Terms acceptance and the AI choice do not supply this basis. |
+| Purpose and lawful basis | `[basis and necessity per purpose and data-subject group]`, including people who never sign in, employees, students, incidental third parties, and research participants. Terms acceptance and the AI choice do not supply this basis. Research uses a broad consent to an area of research. Record `[research organization, ethics approval reference, research information page URL, retention, removal time limit, privacy contact]`. |
 | Information duties | `[how and when people receive the Art. 13/14 notice]`, including source-only contributors and Slack participants. Record any claimed Art. 14 exception and its safeguards. A footer link alone does not prove that you meet this duty. |
 | Risk | `[full DPIA reference, owner, measures, residual risk and controller decision]`. The [screen](./dpia-prescreen.md) indicates a full DPIA for the current combined scope. |
 | Recipients and transfers | `[exact providers, roles, regions, contracts, subprocessors, transfer safeguards, renewal dates]`, using the [processor checklist](./processor-checklist.md). |
@@ -90,10 +90,10 @@ They do not redact every name, secret, or third-party detail in source text.
 | File | Purpose |
 |---|---|
 | [`record-of-processing.md`](./record-of-processing.md) | Art. 30 record. TOMs (Art. 32) folded in under Art. 30(1)(g). Fenced blocks paste-ready into the TUM DSMS form. |
-| [`dpia-prescreen.md`](./dpia-prescreen.md) | Art. 35 pre-screen. Indicates a full DPIA. Records the pending controller/DPO determination, safeguards, and change freeze. |
+| [`dpia-prescreen.md`](./dpia-prescreen.md) | Art. 35 pre-screen. Indicates a full DPIA. Records the pending controller/DPO determination, safeguards, and change freeze. Covers the research purpose and the reasoning for one research consent. |
 | [`processor-checklist.md`](./processor-checklist.md) | Art. 28 checklist. Per-processor AVV status. LRZ-as-separate-controller analysis. |
 | [`artifact-source-governance.md`](./artifact-source-governance.md) | Approval, minimization, processor-egress, retention, and erasure gate for every AI-readable source. |
-| [`personal-data-map.md`](./personal-data-map.md) | Personal-data stores, export coverage, erasure paths, residual retention, and their verification. |
+| [`personal-data-map.md`](./personal-data-map.md) | Personal-data stores, export coverage, erasure paths, residual retention, and their verification. Includes how withdrawal reaches research copies. |
 
 The live imprint and privacy pages are at https://hephaestus.build/imprint and https://hephaestus.build/privacy. Markdown source: [`webapp/public/legal/profiles/tumaet/`](https://github.com/hephaestus-build/Hephaestus/tree/main/webapp/public/legal/profiles/tumaet).
 
@@ -106,6 +106,10 @@ Activation of an integration that the latest review does not cover also requires
 
 The DPIA pre-screen requires a recorded controller/DPO determination before material source expansion.
 The amendment triggers are in `processor-checklist.md`, `dpia-prescreen.md` §5–§6, and `artifact-source-governance.md`.
+
+A change to the research wording needs a new notice version.
+Every account then answers once more, because an earlier yes to narrower wording does not carry over.
+Update the records in this package in the same change.
 
 ## Contacts
 

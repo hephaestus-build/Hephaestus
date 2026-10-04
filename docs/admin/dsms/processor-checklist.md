@@ -10,6 +10,7 @@ The existing TUM record lists these recipients:
 - The per-workspace LLM provider: Microsoft Azure OpenAI by default on the TUM-operated deployment.
   Alternatively, a workspace can configure any OpenAI-API-compatible HTTPS endpoint.
 - Slack: per-workspace opt-in.
+- AI model providers for research benchmark runs: pseudonymized data only, under the same Art. 28 agreement as practice review.
  The LRZ (gitlab.lrz.de) is **not** a processor. It is a separate controller under the EDPB 07/2020 framework. Outline has no fixed operator or origin. It remains disabled until the operator records a per-instance role, hosting region, transfer basis, and AVV status. The webapp includes optional consent-controlled Sentry. The actual production endpoint and enabled state require deployment evidence. Code alone cannot prove that it is off.
 
 First-party product feedback and survey responses remain inside the instance PostgreSQL database.
@@ -31,6 +32,7 @@ the gitlab.lrz.de operator.
 | **GitHub, Inc.** (USA) | Identity provider (OAuth) and source-system API for connected GitHub repositories | **Yes** | A DPA is in place at TUM/AET level. GitHub holds its own EU-US Data Privacy Framework certification. Microsoft's published covered-entities list confirms that this certification is independent of Microsoft Corporation's. SCCs Module 2 provide the contracted fall-back. Re-verify DPF status annually. |
 | **Microsoft Corporation (Azure OpenAI Service)** (USA / EU) | Default LLM provider for the TUM-operated deployment. Verify the actual deployment type and processing geography. An EU resource location alone is insufficient. | **Yes** | The TUM-operated tenancy has a DPA at TUM/AET level. When the workspace administrator's institution supplies credentials, the DPA applies at that institution's level (joint-controller model, privacy §10). Enterprise API no-training terms apply. The provider is DPF-certified. SCCs Module 2 provide the fall-back. |
 | **OpenAI OpCo, LLC** (USA), with **OpenAI Ireland Ltd.** (Ireland) as the EEA contracting party — or any OpenAI-API-compatible endpoint chosen by a workspace administrator | Workspace-configured LLM provider | **Yes, when engaged** | AET-pool processors have a DPA at TUM/AET level. Non-pool endpoints have a DPA at the administrator's institution level. DPF / SCC framing applies recipient-by-recipient. Verify each recipient's DPF status before engagement. |
+| **AI model providers for research benchmark runs** | Run AI models on pseudonymized research data for the research organization | **Yes, when engaged** | Same Art. 28 agreement, region and no-training terms as practice review. See "Research benchmark runs" below. |
 | **Salesforce, Inc. / Slack Technologies, LLC** (USA) | Slack app delivery, identity linking, App Home privacy controls, DM mentor messages, and monitored-channel event delivery when Slack is enabled by the workspace administrator | **Yes, when engaged** | A DPA is in place at TUM/AET level. Salesforce is DPF-certified (Slack participates under the Salesforce certification). SCCs Module 2 provide the fall-back. |
 | **Connected Outline instance operator** | Selected-document source and optional OAuth identity linking | **Depends on the operator's role** | No generic approval. Before activation, classify the exact origin as controller-owned infrastructure, an Art. 28 processor, or a separate controller. Record the operator, region, transfer basis, retention terms, and AVV where required. Workspace selection cannot supply this approval. |
 | **Leibniz-Rechenzentrum (LRZ) der BAdW (gitlab.lrz.de)** | Source system and OIDC identity provider | **Not Art. 28** | LRZ is a separate controller. Inter-public-body transmission falls under Art. 5(1) Nr. 1 BayDSG. LRZ is an institute of the Bayerische Akademie der Wissenschaften. It applies its own TOMs on its own infrastructure. |
@@ -83,6 +85,22 @@ Optional trace export also needs an
 approved collector and retention. It can contain workspace and run identifiers. Private metrics
 must not be exposed through the public application route.
 
+### Research benchmark runs
+
+Building and running benchmarks for research can mean running AI models on research data.
+The research organization is the controller of this research. For the TUM deployment, it is TUM (AET).
+A provider that runs these models for it is a processor.
+
+Apply these rules to every benchmark run:
+
+1. Require the same Art. 28 agreement, region and no-training terms as for practice review. Complete the recipient record above.
+2. Send only pseudonymized data. Pseudonymized data is still personal data (EDPB Guidelines 01/2025).
+3. Send data only for participants with a current research grant.
+4. Honor the participant's AI choice (**No AI**, **In-house** or **Cloud**) in the run.
+
+Recipients of anonymized datasets are not processors. Anonymous data is outside the GDPR (Recital 26).
+A release of a dataset that is not anonymized needs a separate choice and a new notice version.
+
 ## Why the LRZ relationship is not Art. 28
 
 An Art. 28 processor processes personal data on behalf of the controller, under the controller's documented instructions. EDPB Guidelines 07/2020 §§ 14–33 identify the decisive criterion: who determines the essential means of the processing. These means include purposes, data, subjects, duration and access.
@@ -115,6 +133,8 @@ Amend this file, the Art. 30 record, and the privacy statement before deploying 
 - The application adds external storage (S3, CDN) or serves a third-party font, script, image, or embed. This requires a recipient-role assessment, any applicable agreement and a privacy-statement entry.
 - Heph gains internet access or the practice-review sandbox network posture expands beyond the governed worker gateway. This triggers a re-audit under §5 of `dpia-prescreen.md`.
 - An existing processor receives a new artifact-source privacy class. Its region or provider retention changes. Product evidence gains an operator/research evaluation use. An existing DPA does not by itself authorize a new purpose or data category. Complete the [artifact-source governance gate](./artifact-source-governance.md).
+- Research benchmark runs start without the agreement that "Research benchmark runs" requires.
+- Research benchmark runs use data that is not pseudonymized.
 
 ### Direct browser image requests
 

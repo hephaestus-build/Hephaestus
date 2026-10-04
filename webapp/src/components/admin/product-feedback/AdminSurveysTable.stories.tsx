@@ -55,7 +55,7 @@ export const Default: Story = {
 		await expect(canvas.getByRole("cell", { name: "Open Research" })).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"All workspaces · participants in the study by Technical University of Munich",
+				"All workspaces · participants in research run by Technical University of Munich",
 			),
 		).toBeVisible();
 		// 17 of 42 rounds to 40%; a survey nobody was invited to shows no rate at all.

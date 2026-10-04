@@ -28,7 +28,8 @@ Before collecting data, publish a deployment-specific notice that states:
 - `[recipients, providers, regions, contracts, international-transfer safeguards and training terms]`;
 - `[retention periods or deletion/review triggers]` for active records, worker copies, broker events,
   logs, monitoring and backups, including categories with no automatic expiry;
-- AI choices, Slack message-use controls, research withdrawal and feedback disputes, with their limits;
+- `[research use of data, if the deployment runs research: the area of research, who works with the data, pseudonymization, datasets and benchmarks, and retention]`, and how to withdraw research consent, including what withdrawal cannot undo, such as data already in a published anonymized dataset;
+- AI choices, Slack message-use controls and feedback disputes, with their limits;
 - the narrower account export/deletion and wider operator-assisted person export/erasure, including
   people without accounts, identity verification, residual copies and the rights contact; and
 - rights, response times, applicable portability conditions and the supervisory complaint route.

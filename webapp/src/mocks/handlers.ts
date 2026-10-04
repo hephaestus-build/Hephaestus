@@ -11,6 +11,7 @@ import type { Wire } from "@/lib/dates";
 
 import { workspaceOnboarding } from "./fixtures/onboarding";
 
+import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import {
 	adminUsers,
 	currentUser,
@@ -65,7 +66,7 @@ export const handlers = [
 	http.get("*/user/consent", () =>
 		HttpResponse.json({
 			completed: true,
-			noticeVersion: "2026-09-11",
+			noticeVersion: WORDING_VERSION,
 			participateInResearch: false,
 		}),
 	),

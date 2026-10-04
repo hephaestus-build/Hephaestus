@@ -247,6 +247,20 @@ A broken account integration is **unavailable right now**.
 Keep both visible without silently changing the person's answer.
 The [user privacy guide](/user/privacy#your-ai-choice) owns the member-facing data boundary.
 
+## Research use
+
+**Research use** is a member's optional consent for the instance's **research organization** to use their data for research in a stated area.
+The member-facing name is **Allow research use of my data**.
+It is separate from the terms, from your AI choice, and from using Hephaestus.
+The research organization is the organization that `HEPHAESTUS_RESEARCH_ORGANIZATION` names.
+The [admin legal pages guide](/admin/legal-pages#the-optional-research-question) owns the operator obligations.
+
+Data is **pseudonymized** when a code replaces the identifiers that name a person.
+Pseudonymized data is still personal data.
+Data is **anonymized** when nobody can identify the person from it.
+Say *anonymized* only for data that passed a re-identification test.
+Do not use *academic* or *study* for research use in UI text.
+
 ## Software technical names
 
 Use these names for software concepts, not as substitutes for ordinary words.

@@ -60,7 +60,7 @@ export function surveyAudience(
 ): string {
 	const workspace = survey.workspace?.displayName ?? "All workspaces";
 	return isResearch(survey)
-		? `${workspace} · participants in the study by ${survey.researchOrganization}`
+		? `${workspace} · participants in research run by ${survey.researchOrganization}`
 		: workspace;
 }
 

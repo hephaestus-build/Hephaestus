@@ -414,11 +414,11 @@ base.describe("complete processes, keyboard only", () => {
 		await expect(page).toHaveTitle("Terms and consent · Hephaestus");
 		const terms = page.getByRole("checkbox", { name: /terms/iu });
 		await tabTo(page, terms);
-		await expect(page.getByRole("button", { name: "Continue" })).toBeDisabled();
+		await expect(page.getByRole("button", { name: "Save and continue" })).toBeDisabled();
 		await page.keyboard.press("Space");
 		await expect(terms).toBeChecked();
 
-		await tabTo(page, page.getByRole("button", { name: "Continue" }));
+		await tabTo(page, page.getByRole("button", { name: "Save and continue" }));
 		await page.keyboard.press("Enter");
 		await expect(page).not.toHaveTitle("Terms and consent · Hephaestus");
 		expect(await axeViolations(page)).toEqual([]);

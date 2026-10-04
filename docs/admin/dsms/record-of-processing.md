@@ -59,6 +59,12 @@ Team memberships sync from GitHub teams and gitlab.lrz.de subgroups. They let me
 
 Signed-in contributors can send product feedback. They can answer or decline surveys that instance administrators author. These submissions stay in the instance database. Instance administrators can read them for product improvement. They are not reused for research. Research-purpose surveys are covered under *Legal basis* below.
 
+Research use is optional and rests on consent. A participant who says yes allows TUM (AET) and the researchers who work for it to use their data for research. The area of research is how developers work and learn, and how AI systems can review and support that work. It includes building and running benchmarks and evaluation datasets for such AI systems. Only research in this area is covered.
+
+The research uses the participant's work in connected repositories and tools, Hephaestus observations and practice feedback about that work, and the participant's responses to that feedback. It also uses how the participant uses Hephaestus, including conversations with Heph and research survey answers. Sign-in credentials and access tokens are never used.
+
+The participant can refuse or withdraw at any time. Refusing or withdrawing has no disadvantage, and practice reviews continue. The consent is separate from the terms of use and is not a condition of service. The research is covered in more detail under *Legal basis* below.
+
 The existing TUM record describes an Art. 26 arrangement for these workspace-level choices. The legal owner must confirm its actual parties and arrangement reference. The choices are listed in "Legal basis" below. Hephaestus focuses on the contributor's own development. Observations serve the contributor and let the workspace administrator deliver targeted feedback during the project.
 
 Observations are advisory and contestable. The platform makes no automated decisions within the meaning of Art. 22 GDPR. It feeds no grading, assessment, HR, or access-control pipeline. Signed-in contributors can stop new practice-feedback comments and related Slack reminders through the in-app **Comments and Slack reminders** setting. They can respond to individual pieces of feedback by recording whether the feedback was helpful and how they handled it.
@@ -148,6 +154,15 @@ Other categories include:
 - Selected Outline project documents.
 - Slack integration data when enabled: Slack IDs, Slack identity links and App Home privacy choices.
 - Hephaestus DM mentor messages and new messages in administrator-activated monitored Slack channels, when Slack is enabled.
+
+For research participants only, the research uses these categories in pseudonymized form:
+
+- The participant's work in connected repositories and tools: pull/merge requests, issues, reviews, comments and chat.
+- Hephaestus observations and practice feedback about that work.
+- The participant's responses to that feedback.
+- How the participant uses Hephaestus, including conversations with Heph and research survey answers.
+
+Sign-in credentials and access tokens are never used. A participant who stops Hephaestus from using their Slack messages has those messages erased from the instance database. The research team removes them from datasets that are not yet anonymized, and research does not use them again.
 ```
 
 Hephaestus does not intentionally solicit or classify special-category data (Art. 9(1) GDPR) or criminal-offence data (Art. 10 GDPR). Because repository and chat fields contain free text, incidental content may include and therefore cause processing of them. The privacy statement instructs users not to enter third-party personal or sensitive data.
@@ -164,6 +179,14 @@ TUM/AET engages external processors as controller. AVVs are in place at TUM/AET 
 - When the workspace enables Slack, Salesforce, Inc. / Slack Technologies, LLC (USA) provides Slack app delivery and identity linking. It also provides App Home privacy controls, DM mentor messages, and monitored-channel event delivery.
 
 - The operator of the exact Outline origin connected to a workspace supplies selected documents and optional OAuth identity. Hephaestus has no default Outline vendor or origin. The integration remains disabled until the deployment record classifies that operator. The classification must identify controller-owned infrastructure, an Art. 28 processor, or a separate controller. The record must include its region, transfer basis, retention terms, and AVV where required.
+
+Research recipients (only for participants with a current research grant):
+
+- The research team of the research organization, for this deployment TUM (AET), works with the research data. Only this team and its processors work with pseudonymized data.
+
+- AI model providers act as processors when the research team runs benchmarks with AI models. They receive only pseudonymized data, under an Art. 28 agreement. The participant's AI choice (No AI, In-house or Cloud) applies to these runs.
+
+- The public and other researchers receive only anonymized datasets. A dataset that the team cannot anonymize stays inside the team.
 
 Separate controller (not an Art. 28 processor):
 
@@ -188,6 +211,12 @@ and trace collectors also need recipient entries when configured. See the proces
 ## Third-country transfers (Art. 30(1)(e))
 
 The EU-US Data Privacy Framework covers U.S. recipients where the recipient is on the active DPF list (Commission Implementing Decision (EU) 2023/1795). Standard Contractual Clauses Module 2 provide the fall-back (Commission Implementing Decision (EU) 2021/914). The TUM-operated deployment defaults to Microsoft Azure OpenAI in an EU region. Verify processing geography against the actual deployment type and contract. An Outline origin outside the EEA cannot be enabled until its transfer basis is recorded in this section.
+
+A public release of an anonymized dataset is not a transfer of personal data, because anonymous data is outside the GDPR (Recital 26). By the consent wording, a dataset leaves the research team only if it is anonymized.
+
+A separate choice and a new notice version are needed in three cases. The release contains data that is not anonymized. Or it serves a purpose outside the stated area. Or it goes to a recipient in a third country without adequate safeguards.
+
+AI model providers that run benchmarks on pseudonymized data are processors. They follow the [processor checklist](./processor-checklist.md).
 
 ## Storage location and retention (Art. 30(1)(f))
 
@@ -244,6 +273,16 @@ After projection of a package into the practice-feedback ledger, a terminal deli
 Workspace memberships, AI conversations, and activity records
 
 Hephaestus retains these with the relevant workspace records. Removal occurs when those records or the workspace are purged, or through the instance-admin Person data job on verified erasure. Disconnect or workspace purge removes the active PostgreSQL mirror of Slack and Outline content. Materialized diagnostic output, worker-input copies, and broker messages expire under the bounded windows below.
+
+Research data
+
+The research team holds research copies outside the instance database, at `[location]`. They are pseudonymized copies of the data that the participant allowed. The key that links codes to people is stored apart from them.
+
+The team keeps pseudonymized research data and the key while the research that they support continues. It then deletes or anonymizes them. `[Proposed for TUM, pending legal-owner approval: at most 10 years after collection, in line with the DFG Guidelines for Safeguarding Good Research Practice, Guideline 17.]` Self-hosters record `[retention period of the research organization]`.
+
+Anonymized datasets are outside the GDPR. They can remain and can be published with no end date. They cannot be removed.
+
+After withdrawal, the team removes the account's data from datasets that are not yet anonymized within `[removal time limit, proposed: 30 days]`. Consent ledger rows are append-only and unchanged by the research use. See "Legal basis" for the ledger.
 
 Retired leaderboard values (league points, XP)
 
@@ -305,6 +344,8 @@ Container stdout includes startup and error output, with no per-request records.
 Hephaestus is contributor-facing. Account-bound data gives the data subject continuity of feedback while they participate. Hephaestus removes it when they leave or on a verified erasure request (Art. 5(1)(e) GDPR storage limitation). Authentication and settings-change history have time-based windows. Container stdout has a size limit, not an age limit.
 
 The controller must assess their necessity and actual retention under Art. 32(1) GDPR and Art. 5(1)(c) and (e). These bounds alone do not prove proportionality.
+
+The controller must also record why each research retention period is necessary for the research that it supports (Art. 5(1)(e) and Art. 89 GDPR). The TUM period above is a proposal.
 ```
 
 **Deletion responsibility**
@@ -374,6 +415,12 @@ Instance administration → Person data covers exact source-only identities as w
 Erasure cancels affected attempts and waits for mounted evidence-store acknowledgement. It removes selected conversations and derived records. It anonymizes shared profiles and attribution. It clears affected hidden Heph runtime journals. An offline worker or failed step leaves a resumable request, not a completed erasure.
 
 Other developers' observations and feedback stay when the person appeared only in their evidence. Erasure removes the captured input copies. Permanent exact-native-identity suppression prevents new product processing. Sync may still mirror upstream records. Git history, broker payloads, backups, delivered email and provider-side copies follow the separate boundaries in the personal-data map. These controls do not authorize extended evaluation retention.
+
+Research copies
+
+The research team holds copies outside the instance database. Account erasure and workspace purge in Hephaestus do not reach them. Before any export or analysis, the operator applies the latest `RESEARCH_PARTICIPATION` decision of each account.
+
+After a withdrawal or a verified erasure request, the operator removes the account's data from research datasets that are not yet anonymized. Anonymized datasets cannot be reached and cannot be traced back to the person.
 
 Mirrored third-party content
 
@@ -485,6 +532,17 @@ Testing and evaluation (Art. 32(1)(d))
 
 CI runs repository-specific Semgrep checks, Trivy (filesystem and container image), TruffleHog secret detection, and Renovate dependency updates. CI selects unit, integration and browser suites under the repository verification contract. The personal-data map links focused export, erasure and tenancy tests.
 
+Research safeguards (Art. 89(1) GDPR)
+
+- Before analysis, name, username and contact details are replaced by a code (pseudonymization).
+- The key is stored apart from the data. Only the research team can reach it.
+- Free text can still name people. Researchers screen for names and remove what they find.
+- The research team does not look for special-category data (Art. 9) and removes any that it finds. Data minimization applies.
+- Access to research data is limited to the research team.
+- A dataset or benchmark leaves the research team only if it is anonymized.
+- A re-identification test must pass before a dataset is called anonymous. See the DPIA pre-screen.
+- Benchmark runs with AI models use only pseudonymized data, under an Art. 28 agreement. The participant's AI choice applies.
+
 Organisational
 
 Operators are TUM / AET employees or authorized contributors who act under TUM-internal security policies. Before workspace provisioning, workspace administrators receive a briefing on the joint-controller / shared-responsibility model (privacy §10).
@@ -497,7 +555,7 @@ Do **not** select 6.1f. Bavarian public bodies cannot rely on legitimate interes
 In DSMS:
 
 1. Select Art. 6.1a GDPR (consent) for workspaces that collect explicit consent (e.g., the AET capstone course).
-2. Select Art. 6.1a GDPR (consent) for optional academic-research participation requested at first login.
+2. Select Art. 6.1a GDPR (consent) for optional research participation, a broad consent to an area of research (Recital 33 GDPR). Hephaestus asks for it at first login and offers it in User settings.
 3. Select Art. 6.1b GDPR (contract / service request) for voluntary sign-in by non-TUM contributors.
 4. Select Art. 6.1e GDPR (public task) for TUM/AET operation of the platform.
 5. In the national multi-select, select `Art. 4.1 BayDSG (Bavarian data protection act)`.
@@ -518,23 +576,69 @@ Administrators outside TUM cannot invoke Art. 6(1)(e) BayHIG. They invoke a basi
 
 Voluntary sign-in by non-TUM contributors to use personal features: Art. 6(1)(b) GDPR.
 
-Optional academic-research participation: Art. 6(1)(a) GDPR. It is separate from the terms and from the public-task basis for platform operation. Research enrollment and analysis require the latest `RESEARCH_PARTICIPATION` decision to be a grant for the current notice version. After withdrawal, they do not fall back to a preference flag or another legal basis.
+Optional research participation: Art. 6(1)(a) GDPR. It is a broad consent to an area of research (Recital 33 GDPR). The area is how developers work and learn, and how AI systems can review and support that work. It includes building and running benchmarks and evaluation datasets for such AI systems. The research organization is the controller of this research. For this deployment, it is TUM (AET).
 
-The append-only ledger records grants, refusals and withdrawals with a UTC timestamp, mechanism and notice version. The version identifies the first-layer wording: the first-login screen as published in that signed release, immutable in git. The screen links to operator-specific detail in the privacy notice at `/privacy`. The deployment versions that notice, rather than this ledger. Withdrawal immediately ends authorization for further research processing.
+The consent is separate from the terms and from the public-task basis for platform operation. It is voluntary and is not a condition of service (Art. 7(4) GDPR). Refusing or withdrawing has no disadvantage. The participant gets the same access, features and feedback.
+
+Research enrollment and analysis require the latest `RESEARCH_PARTICIPATION` decision to be a grant. The grant must be for the current notice version and for the research organization that the question named. After withdrawal, they do not fall back to a preference flag or another legal basis. A decision on an earlier notice version authorizes nothing.
+
+An earlier yes to narrower wording does not carry over to the broader scope. A new notice version is a new question. Every account answers once more, so every account sees one more setup screen.
+
+The append-only ledger records grants, refusals and withdrawals with a UTC timestamp, mechanism, notice version and research organization (`consent_decision.research_organization`). The notice version names the wording. It points at the signed release that published the words, which is immutable in git. The ledger stores the version only, with no copy or digest of the text.
+
+The screen links to operator-specific detail in the privacy notice at `/privacy`. The deployment versions that notice, rather than this ledger.
+
+Withdrawal (Art. 7(3) GDPR) is one switch in User settings. It is as easy as giving consent. Withdrawal immediately ends authorization for further research processing, and research survey invitations stop. Ordinary practice reviews continue.
+
+On withdrawal, the research team removes the account's data from datasets that are not yet anonymized within `[removal time limit, proposed: 30 days]`. Anonymized data in a published result or dataset cannot be traced back and cannot be removed. Research done before withdrawal stays lawful.
 
 Account erasure removes the ledger's account reference. The resulting non-account-linked event remains, with its notice version, as evidence of how the system managed consent.
 
 Product feedback and product-purpose surveys improve the TUM-operated instance under Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG and Art. 4(1) BayDSG. Responses are not reused for research.
 
-Research-purpose surveys: Art. 6(1)(a) GDPR under the research participation above. Such a survey reaches only accounts whose latest research decision is a grant for the organization it names. The screen labels it as research.
+Research-purpose surveys: Art. 6(1)(a) GDPR under the research participation above. Such a survey reaches only accounts whose latest research decision is a grant for the current notice version and for the organization it names. The screen labels it as research.
 
-Its answers are that study's data, rather than product feedback. They stay in the same database. Instance administrators who read them act on behalf of the study.
+Its answers are research data, rather than product feedback. They stay in the same database. Instance administrators who read them act on behalf of the research.
 
-Withdrawal does not automatically delete stored answers. The study must apply withdrawal to further consent-based processing. It must review retention and erasure under its documented lawful basis. Continued storage is not permission to continue research use.
+Withdrawal does not automatically delete stored survey answers in the instance database. The research team removes them from datasets that are not yet anonymized and applies withdrawal to further consent-based processing. It must review retention and erasure under its documented lawful basis. Continued storage is not permission to continue research use.
 
 The Hephaestus session cookie (`__Host-HEPHAESTUS_AT`), the CSRF + OAuth-state cookies, and theme-preference localStorage use this basis:
 § 25 Abs. 2 Nr. 2 TDDDG (technisch unbedingt erforderlich) i.V.m. Art. 6(1)(e) GDPR.
 ```
+
+## Research use under broad consent
+
+The first-login screen and User settings ask the research question. `ConsentService.WORDING_VERSION` names the wording that an account saw. The wording source is `webapp/src/components/auth/consent-wording.tsx`. The research organization comes from `HEPHAESTUS_RESEARCH_ORGANIZATION`. The controller of the research is that organization. For the TUM deployment, it is TUM (AET).
+
+The [DPIA pre-screen](./dpia-prescreen.md) records why sharing or publishing a dataset has no second consent switch. The [personal-data map](./personal-data-map.md) records where research copies live and how withdrawal reaches them.
+
+Self-hosters use their own research organization. Replace each bracketed value with the facts of that organization:
+
+- `[research organization name]`.
+- `[retention period of the research organization]`.
+- `[ethics approval reference]`.
+- `[research information page URL]`.
+- `[privacy contact]`.
+- `[removal time limit]`.
+
+### Controls that the controller must evidence
+
+A broad purpose needs compensating transparency and safeguards (EDPB Guidelines 05/2020 paras 161-162, EDPB Guidelines 1/2026 paras 48-49). The controller must evidence each of these controls before research use starts:
+
+1. Keep a research information page at `[research information page URL]`. It lists current research projects and released datasets.
+2. Hold a positive vote of an ethics board for the research. For TUM, this is the university ethics body, with `[ethics approval reference]`.
+3. Restrict access to research data to the research team.
+4. Give `[privacy contact]` as the contact for questions about the research.
+
+### Power imbalance
+
+Students and employees can feel pressure to say yes. Consent is valid only with a real refusal path and no disadvantage (Recital 43 GDPR, EDPB Guidelines 05/2020 paras 16-24 and 46-48). The two answers on the screen have equal weight.
+
+The research team must be separate from grading and line management. If doubt remains that consent is freely given, the controller must not rely on consent (EDPB Guidelines 1/2026 para 36).
+
+### Approval state
+
+The research retention period and the removal time limit are proposals. They are pending legal-owner approval. No text in this section is approved for the TUM deployment.
 
 ## Source of data
 
@@ -584,6 +688,7 @@ practice review and Heph, including Slack. Model eligibility also depends on wor
 the declared operator. No AI stops new reviews about that developer, Heph requests and feedback delivery. It does not stop source sync or requests already sent. Person-scoped history is checked against the person's choice, but shared repository content can remain in other developers' review context.
 
 This product choice is separate from research consent and is not the legal basis for underlying processing.
+The choice also applies to benchmark runs that use AI models on research data.
 Slack App Home reflects mentor eligibility and keeps channel-message controls available when Heph
 is refused. Linking Slack alone grants neither research participation nor unrestricted AI use.
 
@@ -625,6 +730,7 @@ and failures can delay removal. Contributor profiles, conversations, observation
 2. Document them.
 
 Do not call indefinite storage a retention period.
+Research data has its own retention decision under "Research data" in the retention block above.
 
 Worker attempt folders are removed after evidence admission. Ended attempts have a one-hour grace,
 and restart cleanup removes abandoned folders. Removal failures need a later successful cleanup.
