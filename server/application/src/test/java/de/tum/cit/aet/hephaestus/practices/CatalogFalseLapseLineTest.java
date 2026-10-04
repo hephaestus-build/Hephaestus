@@ -73,6 +73,14 @@ class CatalogFalseLapseLineTest extends BaseUnitTest {
             merges-only-after-approval | a bot's request for changes does not stand | its request for changes does not stand against another person's approval
             merges-only-after-approval | a bot's decision still makes the occasion | a decision marked `bot` is still a review decision for this gate
             merges-only-after-approval | automation comes from the marker, not the login | Whether an account is automated is the captured `bot` marker, never the login's shape
+            ships-a-preview-with-each-new-view | a host's preview covers what it renders | shown through a previewed host's body is covered by that preview
+            ships-a-preview-with-each-new-view | an effect owner needs no preview scaffolding | it needs no new initializer, injection or architecture just so a preview can construct it
+            ships-a-preview-with-each-new-view | a wrapper's own chrome still needs a preview | is its own presentation, and a preview must show it
+            ships-a-preview-with-each-new-view | a host's coverage is traced, not assumed | Never assume a host renders a view you did not trace
+            ships-a-preview-with-each-new-view | a live fetch is no sample data | a live fetch inside a preview is not sample data
+            changes-dependencies-deliberately | a manifest's name is no occasion | The changed lines decide, not the file's name.
+            changes-dependencies-deliberately | internal target wiring is no dependency | declares no external dependency and is NOT_APPLICABLE, even inside a dependency manifest
+            changes-dependencies-deliberately | a lockfile refresh is still an occasion | A resolution change on its own, such as a lockfile refresh, is an occasion.
             """)
     void theCriteriaDrawTheLineWhereACarefulReviewerWould(String slug, String pattern, String sentence) {
         assertThat(CRITERIA.get(slug)).as(pattern).contains(sentence);
