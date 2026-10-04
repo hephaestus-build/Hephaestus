@@ -87,9 +87,8 @@ public final class PracticeTrend {
      * Σ weight·(1 − metShare) / Σ decay^age} over every age the window has, read or not. With fewer decided
      * opportunities than the window, the ages not reached yet count as neither a problem nor a success, so the
      * same problems weigh the same whatever the count. One problem on the newest piece of work therefore scores
-     * the same with one, two, three or four pieces decided, and keeps the same label. Measured against the
-     * weight of the opportunities read instead, one problem among three or fewer scored lower than among four,
-     * and its label changed with the count alone. With a full window the two are the same.
+     * the same with one, two, three or four pieces decided. Dividing by the weight of the opportunities read
+     * instead would score one problem among few pieces lower, so the label would change with the count alone.
      *
      * @param window how many of the newest decided opportunities to consider, at least one
      * @param decay per-opportunity weight factor in {@code (0,1]}; 1.0 is an unweighted mean

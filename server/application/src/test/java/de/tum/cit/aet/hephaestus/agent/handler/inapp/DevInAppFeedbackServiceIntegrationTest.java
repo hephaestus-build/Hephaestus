@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
+import de.tum.cit.aet.hephaestus.practices.DevPracticeRevisionController;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
@@ -27,6 +28,8 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -36,6 +39,9 @@ import org.springframework.web.server.ResponseStatusException;
 class DevInAppFeedbackServiceIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
     private static final Instant PREPARED_AT = NOW.minus(Duration.ofDays(10));
+
+    @Autowired
+    private ApplicationContext context;
 
     private Workspace workspace;
     private User developer;
@@ -128,6 +134,16 @@ class DevInAppFeedbackServiceIntegrationTest extends AbstractPracticeReviewInteg
                 .hasMessageContaining("about other work");
         assertThat(feedbackRepository.existsById(written)).isFalse();
         assertThat(feedbackRepository.existsById(refused)).isFalse();
+    }
+
+    @Test
+    @DisplayName("the seed endpoints and their service do not exist while dev seeding is off, as it is by default")
+    void shouldRegisterNoSeedBeanWhenSeedingIsOff() {
+        assertThat(context.getBeanNamesForType(DevInAppFeedbackController.class))
+                .isEmpty();
+        assertThat(context.getBeanNamesForType(DevInAppFeedbackService.class)).isEmpty();
+        assertThat(context.getBeanNamesForType(DevPracticeRevisionController.class))
+                .isEmpty();
     }
 
     /** Built by hand: the bean exists only while dev seeding is enabled, which the shared context is not. */

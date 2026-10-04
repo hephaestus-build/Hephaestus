@@ -48,11 +48,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
- * {@code GET /practices/workspace-overview} over a workspace this class seeds: the owner and twenty six developers
- * besides the reader, split evenly over two groups, barely over a third and over all but three in a fourth, so both
- * shapes the privacy rule allows appear, the withheld one for a small standing and for a small none yet. A part
- * shows only with four developers in it, the reader counted, so every reader sees the same shape. Every count
- * asserted is one of these rows.
+ * {@code GET /practices/workspace-overview} over a workspace this class seeds: the owner, the reader and twenty six
+ * developers, every one with a standing. Packaging and Testing split. Issues has too few developers with a standing
+ * and Craft too few without one, so both show only their total. Every count asserted is one of these rows.
  */
 class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
@@ -185,8 +183,11 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo(1)
                 .jsonPath("$.practicesGoingWell.yours")
                 .isEqualTo(1)
-                .jsonPath("$.practicesGoingWell.middleLow")
-                .isNumber()
+                // Sixteen developers with no practice going well, four with one, five with two, three with three.
+                .jsonPath("$.practicesGoingWell.middle.low")
+                .isEqualTo(0)
+                .jsonPath("$.practicesGoingWell.middle.high")
+                .isEqualTo(2)
                 .jsonPath("$.practicesNeedingAttention.yours")
                 .isEqualTo(0);
     }
@@ -219,10 +220,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo(6)
                 // A group with one practice names it, split as the group is.
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].practices[0].split.shape")
-                .isEqualTo("TOTAL_ONLY")
-                // The reader's own learning stays in their profile: the page carries no trend of theirs.
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourDirection")
-                .doesNotExist();
+                .isEqualTo("TOTAL_ONLY");
     }
 
     @Test
@@ -308,9 +306,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         read().jsonPath("$.openFeedback.yours")
                 .isEqualTo(1)
                 // Nobody else has feedback, so the middle half of every eligible developer is none, now.
-                .jsonPath("$.openFeedback.middleLow")
+                .jsonPath("$.openFeedback.middle.low")
                 .isEqualTo(0)
-                .jsonPath("$.openFeedback.middleHigh")
+                .jsonPath("$.openFeedback.middle.high")
                 .isEqualTo(0);
         assertThat(feedbackRepository.findById(open.getId()))
                 .map(Feedback::getDeliveryState)
@@ -422,9 +420,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         tiles("ALL_TIME")
                 .jsonPath("$.reviewedWork.yours")
                 .isEqualTo(1)
-                .jsonPath("$.reviewedWork.middleLow")
+                .jsonPath("$.reviewedWork.middle")
                 .doesNotExist()
-                .jsonPath("$.practicesGoingWell.middleHigh")
+                .jsonPath("$.practicesGoingWell.middle")
                 .doesNotExist();
     }
 

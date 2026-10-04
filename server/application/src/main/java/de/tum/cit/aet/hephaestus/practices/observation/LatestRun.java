@@ -56,6 +56,18 @@ public final class LatestRun {
         return latest(observations, Claim::of);
     }
 
+    /**
+     * Narrows a developer's window to each claim's newest LIVE run: what the trend, the standing and the work
+     * resolution count. A requested or backfilled run is a self-selected sample ({@link ObservationOrigin}), so it
+     * neither counts nor hides the live run before it. {@link #perClaim} still decides what is quoted, so a
+     * requested re-review that came back clean stops a live problem from being cited.
+     */
+    public static List<Observation> perLiveClaim(Collection<Observation> observations) {
+        return perClaim(observations.stream()
+                .filter(observation -> observation.getOrigin() == ObservationOrigin.LIVE)
+                .toList());
+    }
+
     private static <K> List<Observation> latest(Collection<Observation> observations, Function<Observation, K> key) {
         Map<K, UUID> latestByKey = observations.stream()
                 .collect(Collectors.groupingBy(key, Collectors.collectingAndThen(Collectors.toList(), LatestRun::of)));

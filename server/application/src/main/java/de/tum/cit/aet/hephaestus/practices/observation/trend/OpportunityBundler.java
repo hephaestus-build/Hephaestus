@@ -38,10 +38,7 @@ final class OpportunityBundler {
 
     /**
      * One opportunity per piece of reviewed work observed at or after {@code cutoff}, read off its latest live run,
-     * newest first. A requested or backfilled run is no opportunity: people ask for a review of work they are unsure
-     * of, and a campaign over work that already existed is a population of its own ({@link ObservationOrigin}).
-     * Neither may speak for work a live review judged, so a requested review stays evidence but never moves a trend
-     * and never resolves feedback.
+     * newest first. Which runs count is {@link LatestRun#perLiveClaim}'s rule.
      */
     static List<EvidenceOpportunity> opportunities(List<Observation> observations, Instant cutoff) {
         return opportunities(observations, cutoff, false);

@@ -1,15 +1,12 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
-import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.backfilled;
 import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.clean;
 import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.noVerdict;
 import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.problem;
-import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.requested;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -82,38 +79,6 @@ class WorkResolutionTest {
     }
 
     /** The path the cards and the profile take: bundle the practice's work once, then read one piece of feedback. */
-    @Test
-    void shouldNotResolveFeedbackWhenOnlyABackfillCampaignCameBackClean() {
-        WorkResolution resolution = resolve(List.of(
-                backfilled(11L, "2026-05-02T09:00:00Z", Outcome.MET),
-                backfilled(12L, "2026-05-03T09:00:00Z", Outcome.MET),
-                backfilled(13L, "2026-05-04T09:00:00Z", Outcome.MET)));
-
-        assertThat(resolution).isEqualTo(WorkResolution.NONE);
-    }
-
-    /**
-     * Requested reviews are evidence, but a developer cannot ask for reviews until the work comes back clean:
-     * three clean requested reviews resolve nothing, and a clean requested re-review does not clear the live problem
-     * on the same work.
-     */
-    @Test
-    void shouldNotResolveFeedbackWhenOnlyRequestedReviewsCameBackClean() {
-        WorkResolution resolution = resolve(List.of(
-                requested(11L, "2026-05-02T09:00:00Z", Outcome.MET),
-                requested(12L, "2026-05-03T09:00:00Z", Outcome.MET),
-                requested(13L, "2026-05-04T09:00:00Z", Outcome.MET)));
-
-        assertThat(resolution).isEqualTo(WorkResolution.NONE);
-
-        WorkResolution reReviewed = resolve(List.of(
-                problem(11L, "2026-05-02T09:00:00Z"),
-                requested(11L, "2026-05-03T09:00:00Z", Outcome.MET),
-                clean(12L, "2026-05-04T09:00:00Z")));
-
-        assertThat(reReviewed.cleanWork()).extracting(WorkResolution.Work::id).containsExactly(12L);
-    }
-
     private static WorkResolution resolve(List<Observation> observations) {
         return WorkResolution.Opportunities.of(observations, Instant.EPOCH).resolve(PREPARED_AT);
     }

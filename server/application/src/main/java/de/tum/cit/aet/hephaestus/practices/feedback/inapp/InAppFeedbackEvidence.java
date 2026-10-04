@@ -176,48 +176,18 @@ public class InAppFeedbackEvidence {
      * evidence. Feedback without visible evidence is absent, since it is not shown anywhere either.
      *
      * <p>Read the way the practice standing reads its window: the same query, the same visibility gate, then
-     * each claim narrowed to its latest run ({@link LatestRun#perClaim}), so that the card and the practice
+     * each claim narrowed to its newest live run ({@link LatestRun#perLiveClaim}), so that the card and the practice
      * profile's summary resolve a piece of feedback off the same observations. Work that may not be shown may
      * not resolve anything either.
+     *
+     * <p>Each piece is read against its own recipient's work, all recipients in one query. Reading from the oldest
+     * piece of anyone's feedback changes no answer, since only work reviewed after a piece was prepared can
+     * resolve it.
      *
      * @param practiceChangedAt {@link #practiceChangedAt} over the same evidence
      * @param now the moment the caller reads at: work reviewed after it does not count
      */
     public Map<UUID, WorkResolution> workResolutions(
-            Long workspaceId,
-            Long developerId,
-            Collection<Feedback> feedback,
-            Map<UUID, List<Observation>> evidenceByFeedback,
-            Map<UUID, Instant> practiceChangedAt,
-            Instant now) {
-        Optional<Instant> oldestPreparedAt = feedback.stream()
-                .filter(piece -> evidenceByFeedback.containsKey(piece.getId()))
-                .map(Feedback::getCreatedAt)
-                .min(Comparator.naturalOrder());
-        if (oldestPreparedAt.isEmpty()) {
-            return Map.of();
-        }
-        List<Observation> later = observationRepository.findByDeveloperAndWorkspaceBetween(
-                developerId, workspaceId, oldestPreparedAt.get(), now);
-        Set<UUID> visible =
-                visibilityPolicy.permitsAll(workspaceId, later, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        Map<String, List<Observation>> laterByPractice =
-                LatestRun.perClaim(later.stream()
-                                .filter(observation -> visible.contains(observation.getId()))
-                                .toList())
-                        .stream()
-                        .collect(Collectors.groupingBy(
-                                observation -> observation.getPractice().getSlug()));
-        return workResolutionsFrom(feedback, evidenceByFeedback, practiceChangedAt, laterByPractice);
-    }
-
-    /**
-     * {@link #workResolutions} for the feedback of several developers at once, each piece read against its own
-     * recipient's work: one read of the workspace's observations rather than one per developer. Reading from the
-     * oldest piece of anyone's feedback changes no answer, since only work reviewed after a piece was prepared can
-     * resolve it.
-     */
-    public Map<UUID, WorkResolution> workResolutionsOfRecipients(
             Long workspaceId,
             Collection<Feedback> feedback,
             Map<UUID, List<Observation>> evidenceByFeedback,
@@ -245,16 +215,15 @@ public class InAppFeedbackEvidence {
                 pieces,
                 evidenceByFeedback,
                 practiceChangedAt,
-                LatestRun.perClaim(laterByRecipient.getOrDefault(recipient, List.of())).stream()
+                LatestRun.perLiveClaim(laterByRecipient.getOrDefault(recipient, List.of())).stream()
                         .collect(Collectors.groupingBy(
                                 observation -> observation.getPractice().getSlug())))));
         return resolutions;
     }
 
     /**
-     * {@link #workResolutions} over observations the caller already holds,
-     * per practice slug, each claim at its latest run. Each practice's work is bundled once, however many
-     * cards are about it.
+     * {@link #workResolutions} over observations the caller already holds, per practice slug, each claim at its
+     * newest live run. Each practice's work is bundled once, however many cards are about it.
      *
      * <p>Feedback closed because its practice changed is absent, as feedback without evidence is: the work
      * that came after was measured by other rules and cannot answer what these ones asked.

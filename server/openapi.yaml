@@ -20597,6 +20597,22 @@ components:
         gitlab:
           $ref: "#/components/schemas/GitLabProvider"
           description: "GitLab workspace provider config, null if not available"
+    WorkspaceRange:
+      type: object
+      description: "The middle half of the developers counted: the 25th to the 75th\
+        \ percentile"
+      properties:
+        high:
+          type: integer
+          format: int32
+          description: The 75th percentile
+        low:
+          type: integer
+          format: int32
+          description: The 25th percentile
+      required:
+      - high
+      - low
     WorkspaceReviewScope:
       type: object
       description: An empty repository selection admits no repository work; an empty
@@ -20729,15 +20745,9 @@ components:
       description: "One figure: the reader's own value, then the middle half of the\
         \ developers counted"
       properties:
-        middleHigh:
-          type: integer
-          format: int32
-          description: Upper bound of the workspace's middle half; null when too few
-            are counted
-        middleLow:
-          type: integer
-          format: int32
-          description: Lower bound of the workspace's middle half; null when too few
+        middle:
+          $ref: "#/components/schemas/WorkspaceRange"
+          description: The workspace's middle half; absent while too few developers
             are counted
         yours:
           type: integer

@@ -7,32 +7,19 @@ import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 
 /**
- * What the page may say about the developers other than its reader, and the only place that decides it.
+ * What the page may say about the developers other than its reader, and the only place that decides it (ADR 0051).
  *
- * <p>Every figure about other developers is a count of developers. A part of a split is shown only when it holds
- * more than {@link #MINIMUM_OTHERS} developers, counted over every developer with a standing: whoever reads it, that
- * part holds at least {@link #MINIMUM_OTHERS} others, and every reader sees the same shape.
+ * <p>Every figure about other developers is a count of developers. A part of a split shows only when it holds more
+ * than {@link #MINIMUM_OTHERS} developers, counted over every developer with a standing, so whoever reads it the part
+ * stands for at least {@link #MINIMUM_OTHERS} others and every reader sees the same shape. A split shows all four
+ * parts or none of them: the page states how many developers have a standing, so one missing part would be that
+ * total less the rest. A split held back still shows its total while the total itself would show as a part.
  *
- * <p>The total with a standing shows only while it holds {@link #MINIMUM_OTHERS} others. A practice group and a
- * practice are split by the same rule, over the same developers with a standing: each developer falls in the part of
- * their group standing or their practice standing, and both standings that are no verdict fall in none yet. A split
- * shows Needs attention, Mixed feedback, Going well and none yet only when every one of the four holds enough; otherwise the whole split is
- * withheld, never a part of it, since the page states how many developers have a standing and a missing part would
- * be that total less the rest. Omit rather than show a zero. A split withheld still shows its total, the developers
- * with a standing it would split, while that total holds more than {@link #MINIMUM_OTHERS}: every split counts the
- * same developers, so the total says nothing the page total does not. The reader's own standing shows only as the
- * marker on their part of a split, and a split withheld marks no one.
+ * <p>A group's developers with a standing are everyone with a standing in any of its practices, so the group's split
+ * and its practices' splits can be subtracted from each other; {@link #group} guards those differences.
  *
- * <p>A group's standing is read off its practices, so its developers with a standing are everyone with a standing
- * in any of them, and its split and its practices' splits can be subtracted from each other: two practices of
- * sixteen and a group of thirty one name the one developer with a standing in both. A practice therefore shows only
- * while the developers its group has and it lacks are none or at least {@link #MINIMUM_OTHERS}, and a group's
- * practices show only while the overlap they add up to beyond the group is none or at least
- * {@link #MINIMUM_OTHERS} ({@link #group}).
- *
- * <p>The splits count the current standing and take no window, so two windows of one split never exist to subtract.
- * The tiles' middle halves are checked per window, and the figures are live, so two windows of a tile, or two reads
- * at different times, can still be subtracted from each other; ADR 0051 records that limit.
+ * <p>Each read is guarded on its own. Two windows of a tile, or two reads at different times, are not guarded
+ * against each other; ADR 0051 records that limit.
  */
 public final class CohortPrivacyPolicy {
 
@@ -40,8 +27,8 @@ public final class CohortPrivacyPolicy {
     public static final int MINIMUM_OTHERS = 3;
 
     /**
-     * The fewest developers other than the reader a middle half may be read over: twice K, so neither quarter
-     * outside the middle half can be one developer's value.
+     * The fewest developers other than the reader a middle half may be read over: twice K, so each quarter outside
+     * the middle half spans more than one developer.
      */
     public static final int MINIMUM_OTHERS_FOR_MIDDLE_HALF = 2 * MINIMUM_OTHERS;
 
@@ -50,7 +37,6 @@ public final class CohortPrivacyPolicy {
     /** The verdicts a split counts a part for, in the order the practice profile lists them. */
     static final List<Standing> VERDICTS = List.of(Standing.DEVELOPING, Standing.MIXED, Standing.STRENGTH);
 
-    /** How one split is shown. */
     public enum Shape {
         /** Needs attention, Mixed feedback, Going well and none yet, each counted. */
         SPLIT,
@@ -60,7 +46,6 @@ public final class CohortPrivacyPolicy {
         WITHHELD,
     }
 
-    /** The developers at one verdict in a split. */
     public record Part(Standing standing, int developers) {}
 
     /**
@@ -173,14 +158,13 @@ public final class CohortPrivacyPolicy {
         return Split.heldBack(withAStanding.size());
     }
 
-    /** The middle half of a figure across the workspace, as the two values that bound it. */
     public record MiddleHalf(int low, int high) {}
 
     /**
      * The middle half of one figure across the developers counted, the reader's own value among them, or null when
-     * fewer than {@link #MINIMUM_OTHERS_FOR_MIDDLE_HALF} others are counted. Only the quartiles leave, each interpolated
-     * between the two values around it and rounded, so a quartile falls on one developer's value only where the
-     * values around it agree: a minimum, a maximum or a count of developers at one value would single someone out.
+     * fewer than {@link #MINIMUM_OTHERS_FOR_MIDDLE_HALF} others are counted. Only the two quartiles leave, each
+     * interpolated linearly and rounded. A quartile is an order statistic and can equal some developer's value, but
+     * it never says whose: a minimum, a maximum or a count of developers at one value would.
      *
      * @param values the figure for every developer counted, the reader's included when the reader is counted
      * @param others how many of {@code values} are other developers'

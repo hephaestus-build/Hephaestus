@@ -7196,6 +7196,20 @@ export type WorkspaceProviders = {
 };
 
 /**
+ * The middle half of the developers counted: the 25th to the 75th percentile
+ */
+export type WorkspaceRange = {
+  /**
+   * The 75th percentile
+   */
+  high: number;
+  /**
+   * The 25th percentile
+   */
+  low: number;
+};
+
+/**
  * An empty repository selection admits no repository work; an empty person selection admits nobody. A selected repository without branches admits all its branches.
  */
 export type WorkspaceReviewScope = {
@@ -7286,13 +7300,9 @@ export type WorkspaceTeamSettings = {
  */
 export type WorkspaceTile = {
   /**
-   * Upper bound of the workspace's middle half; null when too few are counted
+   * The workspace's middle half; absent while too few developers are counted
    */
-  middleHigh?: number;
-  /**
-   * Lower bound of the workspace's middle half; null when too few are counted
-   */
-  middleLow?: number;
+  middle?: WorkspaceRange;
   /**
    * The reader's own value
    */

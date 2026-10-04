@@ -74,7 +74,7 @@ public class PreviousInAppFeedback {
                 feedbackEvidence.visibleEvidence(workspaceId, List.of(feedback.getId()));
         Map<UUID, Instant> practiceChangedAt = feedbackEvidence.practiceChangedAt(evidence);
         Instant byWork = feedbackEvidence
-                .workResolutions(workspaceId, recipientUserId, List.of(feedback), evidence, practiceChangedAt, now)
+                .workResolutions(workspaceId, List.of(feedback), evidence, practiceChangedAt, now)
                 .getOrDefault(feedback.getId(), WorkResolution.NONE)
                 .resolvedAt();
         Instant byDeveloper = InAppFeedbackEvidence.resolvedByDeveloperAt(reactionRepository

@@ -160,20 +160,21 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
     }
 
     /**
-     * A requested review is a self-selected sample: it neither raises a card on its own nor clears the live
-     * problem on the same work, however it came back.
+     * A requested review's problem raises no card on its own, and a requested re-review that came back clean stops
+     * the live problem on the same work from being cited.
      */
     @Test
-    void shouldLeaveRequestedReviewsOutOfTheEvidenceACardStandsOn() {
+    void shouldCiteNoRequestedProblemAndNoLiveProblemARequestedReReviewFoundClean() {
         Observation live = observation(
                 1L, UUID.randomUUID(), NOW.minus(Duration.ofDays(2)), ObservationOrigin.LIVE, Outcome.NOT_MET);
         Observation requestedClean = observation(
                 1L, UUID.randomUUID(), NOW.minus(Duration.ofDays(1)), ObservationOrigin.MANUAL, Outcome.MET);
         Observation requestedProblem =
                 observation(2L, UUID.randomUUID(), NOW, ObservationOrigin.MANUAL, Outcome.NOT_MET);
+        Observation otherLive = observation(3L, UUID.randomUUID(), NOW, ObservationOrigin.LIVE, Outcome.NOT_MET);
 
-        assertThat(InAppFeedbackRouter.problemsIn(List.of(requestedProblem, requestedClean, live)))
-                .containsExactly(live);
+        assertThat(InAppFeedbackRouter.problemsIn(List.of(otherLive, requestedProblem, requestedClean, live)))
+                .containsExactly(otherLive);
         assertThat(route(problems(4, ObservationOrigin.MANUAL), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, null))
                 .isEqualTo(InAppRoutingDecision.NO_EVIDENCE);
     }

@@ -106,12 +106,11 @@ public final class InAppFeedbackRouter {
     public static List<Observation> problemsIn(List<Observation> evidence) {
         Comparator<Observation> worstFirst = ObservationOrder.worstFirst();
         Map<ReviewedWorkKey, Observation> worstPerWork = new LinkedHashMap<>();
-        // A requested review is a self-selected sample: it neither raises a card nor stands in for the live verdict.
-        List<Observation> unrequested = evidence.stream()
-                .filter(observation -> observation.getOrigin() != ObservationOrigin.MANUAL)
-                .toList();
-        for (Observation observation : LatestRun.perWork(unrequested)) {
-            if (!observation.getOutcome().isDecided() || observation.getOutcome() != Outcome.NOT_MET) {
+        for (Observation observation : LatestRun.perWork(evidence)) {
+            // A requested review is a self-selected sample: its problem raises no card on its own.
+            if (observation.getOrigin() == ObservationOrigin.MANUAL
+                    || !observation.getOutcome().isDecided()
+                    || observation.getOutcome() != Outcome.NOT_MET) {
                 continue;
             }
             worstPerWork.merge(

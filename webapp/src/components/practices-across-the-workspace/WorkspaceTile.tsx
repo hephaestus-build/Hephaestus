@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "cn";
-import type { WorkspaceTile as WorkspaceTileFigure } from "@/api/types.gen";
+import type { WorkspaceRange, WorkspaceTile as WorkspaceTileFigure } from "@/api/types.gen";
 import { StatTile, StatTileSkeleton } from "@/components/common/StatTile";
 import { NEUTRAL_GREY } from "@/components/practice-vocabulary/standing-counts";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,11 +30,7 @@ export function WorkspaceTile({
 	qualifier,
 	noneSentence,
 }: WorkspaceTileProps) {
-	const { yours, middleLow, middleHigh } = figure;
-	const middle: MiddleHalf | undefined =
-		middleLow !== undefined && middleHigh !== undefined
-			? { low: middleLow, high: middleHigh }
-			: undefined;
+	const { yours, middle } = figure;
 	return (
 		<StatTile icon={icon} title={title} value={yours} qualifier={qualifier}>
 			<div className="mt-auto flex flex-col gap-1.5">
@@ -68,13 +64,8 @@ function scaleOf(yours: number, high: number): number {
 	return Math.max(1, Math.ceil(Math.max(yours, high) * 1.25));
 }
 
-interface MiddleHalf {
-	low: number;
-	high: number;
-}
-
 /** The middle half in words, low to high: "11 to 21", or one value where both bounds agree. */
-function rangeText({ low, high }: MiddleHalf): string {
+function rangeText({ low, high }: WorkspaceRange): string {
 	return low === high ? `${low}` : `${low} to ${high}`;
 }
 
@@ -82,7 +73,7 @@ function rangeText({ low, high }: MiddleHalf): string {
  * A track from nought with the reader's value pinned on it, and the middle half as a band on it
  * once the workspace may show.
  */
-function RangeBar({ yours, middle }: { yours: number; middle?: MiddleHalf }) {
+function RangeBar({ yours, middle }: { yours: number; middle?: WorkspaceRange }) {
 	const scale = scaleOf(yours, middle?.high ?? 0);
 	const at = (value: number) => `${(value / scale) * 100}%`;
 	const range = middle === undefined ? "" : ` Typical range here: ${rangeText(middle)}.`;

@@ -60,7 +60,7 @@ class PracticeStandingTest {
     private static PracticeStanding standing(PracticeStandingDTO.Standing standing, PracticeTrend trend) {
         PracticeStandingDTO dto = new PracticeStandingDTO(
                 SLUG, "Testing", null, null, null, null, standing, List.of(), List.of(), null, null);
-        return new PracticeStanding(dto, List.of(), trend, null);
+        return new PracticeStanding(dto, List.of(), List.of(), trend, null);
     }
 
     /** One review per piece of work, oldest first: {@code true} came back clean, {@code false} raised a problem. */

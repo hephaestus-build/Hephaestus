@@ -19,27 +19,17 @@ public class PracticeTrendService {
     private final TrendProperties properties;
     private final Clock clock;
 
-    /**
-     * The start of today's trend horizon: the oldest evidence the practice profile's trends read. It is the
-     * profile's own look-back, which the page names as the span of every standing it shows.
-     */
+    /** The start of today's trend horizon, which is the practice profile's look-back. */
     public Instant horizon() {
         return clock.instant().minus(PracticeStandingService.LOOKBACK_DAYS, ChronoUnit.DAYS);
     }
 
-    /**
-     * One practice's trend over its evidence observed from {@code since}; insufficient over none. The caller says
-     * where its evidence starts, so a reader of a span longer than the {@link #horizon()} reads all of it.
-     */
+    /** One practice's trend over its evidence observed from {@code since}; insufficient over none. */
     public PracticeTrend calculatePractice(String practiceSlug, List<Observation> evidence, Instant since) {
         return PracticeTrendCalculator.calculatePractice(practiceSlug, evidence, since, properties);
     }
 
-    /**
-     * {@link PracticeTrend#recentMetShare} over a practice's requested and backfilled work alone, observed from
-     * {@code since}. Their reading is sound on its own and never part of a live trend, so this is what a standing
-     * reads for a practice that only a requested review or a campaign judged.
-     */
+    /** {@link PracticeTrend#recentMetShare} over a practice's requested and backfilled work alone. */
     public OptionalDouble selfSelectedMetShare(List<Observation> evidence, Instant since, int window, double decay) {
         return PracticeTrend.recentMetShare(
                 OpportunityBundler.opportunities(evidence, since, true).reversed(), window, decay);

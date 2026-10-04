@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler.inapp;
 
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackLedgerRecorder;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
@@ -23,42 +24,30 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Dev-only: writes in-app feedback with a history, so a local seed can show every state a card takes on the
- * Practice profile. {@link InAppFeedbackPreparer} writes a card as a review prepares it, now and unread; a demo
- * also needs cards prepared weeks ago, read, and answered. The rows are the ones the preparer writes, through
- * the same repositories, with the body layout of {@link InAppFeedbackBody} and the thread key of
- * {@link FeedbackThreadKey}, and the answer is the row the response endpoint writes.
- *
- * <p>The caller chooses every id, so it can find and remove what it wrote. Exists only while
- * {@code hephaestus.dev.seed-enabled} is set.
+ * Dev-only: writes in-app feedback with a history (prepared weeks ago, read, answered), which
+ * {@link InAppFeedbackPreparer} cannot, since it writes a card as a review prepares it. The rows use the
+ * preparer's body layout ({@link InAppFeedbackBody}) and thread key ({@link FeedbackThreadKey}). The caller chooses
+ * every id, so it can find and remove what it wrote.
  */
 @Service
-@ConditionalOnProperty(name = "hephaestus.dev.seed-enabled", havingValue = "true")
+@ConditionalOnServerRole
+@ConditionalOnBooleanProperty("hephaestus.dev.seed-enabled")
+@RequiredArgsConstructor
 public class DevInAppFeedbackService {
 
     private final FeedbackRepository feedbackRepository;
     private final FeedbackObservationRepository feedbackObservationRepository;
     private final ObservationRepository observationRepository;
     private final ReactionRepository reactionRepository;
-
-    public DevInAppFeedbackService(
-            FeedbackRepository feedbackRepository,
-            FeedbackObservationRepository feedbackObservationRepository,
-            ObservationRepository observationRepository,
-            ReactionRepository reactionRepository) {
-        this.feedbackRepository = feedbackRepository;
-        this.feedbackObservationRepository = feedbackObservationRepository;
-        this.observationRepository = observationRepository;
-        this.reactionRepository = reactionRepository;
-    }
 
     /**
      * One card as the developer's page would hold it.

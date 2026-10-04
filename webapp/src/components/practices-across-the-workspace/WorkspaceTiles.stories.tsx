@@ -51,7 +51,7 @@ export const NeedsMoreData: Story = {
 
 /** Nobody here has feedback open: one sentence in place of a band and pin at nought. */
 export const NoOpenFeedbackHere: Story = {
-	args: { openFeedback: { yours: 0, middleLow: 0, middleHigh: 0 } },
+	args: { openFeedback: { yours: 0, middle: { low: 0, high: 0 } } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Most developers here have no open feedback.")).toBeVisible();
 		await expect(canvas.getAllByText(/^Typical range:/u)).toHaveLength(3);

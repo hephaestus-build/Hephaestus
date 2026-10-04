@@ -18,7 +18,7 @@ const meta = {
 	args: {
 		title: "Pieces of work reviewed",
 		icon: <GitPullRequestIcon className="size-4 text-muted-foreground" aria-hidden />,
-		figure: { yours: 17, middleLow: 11, middleHigh: 21 },
+		figure: { yours: 17, middle: { low: 11, high: 21 } },
 		qualifier: "in the last 30 days",
 	},
 } satisfies Meta<typeof WorkspaceTile>;
@@ -39,7 +39,7 @@ export const Default: Story = {
 
 /** A middle half on one value says it once, and the band still shows. */
 export const OneValue: Story = {
-	args: { figure: { yours: 0, middleLow: 2, middleHigh: 2 } },
+	args: { figure: { yours: 0, middle: { low: 2, high: 2 } } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("2")).toBeVisible();
 		await expect(

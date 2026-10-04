@@ -9,7 +9,6 @@ import org.jspecify.annotations.Nullable;
  * own; the splits read the current standing and take no window.
  */
 public enum PracticesAcrossWorkspaceWindow {
-    /** Every observation recorded, with no lower bound. */
     ALL_TIME(null),
     DAYS_30(30),
     DAYS_90(90);

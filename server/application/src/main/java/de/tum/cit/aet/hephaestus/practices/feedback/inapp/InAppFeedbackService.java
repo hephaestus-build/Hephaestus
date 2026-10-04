@@ -44,9 +44,11 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Reads the current developer's own practice feedback, and records that they read it.
  *
- * <p>Self-scoped with no way to ask about anybody else: the recipient is resolved from the security
- * context, never from a parameter. That is not a convenience — the pull is what makes this surface safe,
- * and a {@code userId} parameter would turn a private surface into a roster.
+ * <p>The cards are self-scoped with no way to ask about anybody else: the recipient is resolved from the
+ * security context, never from a parameter. That is not a convenience — the pull is what makes this surface
+ * safe, and a {@code userId} parameter would turn a private surface into a roster. {@link #countOpen} takes
+ * developers but returns only a count per developer, for a caller that shows them inside
+ * {@code CohortPrivacyPolicy}.
  */
 @Service
 @RequiredArgsConstructor
@@ -104,12 +106,7 @@ public class InAppFeedbackService {
         List<Feedback> readable = feedbackRepository.findReadableInAppForRecipient(workspaceId, recipientUserId);
         Reads reads = reads(workspaceId, readable);
         Map<UUID, WorkResolution> resolutions = feedbackEvidence.workResolutions(
-                workspaceId,
-                recipientUserId,
-                awaitingTheWork(reads, now),
-                reads.evidence(),
-                reads.practiceChangedAt(),
-                now);
+                workspaceId, awaitingTheWork(reads, now), reads.evidence(), reads.practiceChangedAt(), now);
         List<Slot> page = page(reads.rows(), reads, resolutions, now);
         List<UUID> toMarkDelivered = page.stream()
                 .map(Slot::feedback)
@@ -135,7 +132,7 @@ public class InAppFeedbackService {
         Instant now = clock.instant();
         List<Feedback> readable = feedbackRepository.findReadableInAppForRecipients(workspaceId, recipientUserIds);
         Reads reads = reads(workspaceId, readable);
-        Map<UUID, WorkResolution> resolutions = feedbackEvidence.workResolutionsOfRecipients(
+        Map<UUID, WorkResolution> resolutions = feedbackEvidence.workResolutions(
                 workspaceId, awaitingTheWork(reads, now), reads.evidence(), reads.practiceChangedAt(), now);
         Map<Long, List<Feedback>> byRecipient =
                 reads.rows().stream().collect(Collectors.groupingBy(Feedback::getRecipientUserId));

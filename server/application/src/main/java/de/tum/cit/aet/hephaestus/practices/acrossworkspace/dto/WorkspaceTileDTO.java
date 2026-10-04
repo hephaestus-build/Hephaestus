@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto;
 
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -9,8 +10,10 @@ public record WorkspaceTileDTO(
         @NonNull @Schema(description = "The reader's own value")
         Integer yours,
 
-        @Nullable @Schema(description = "Lower bound of the workspace's middle half; null when too few are counted")
-        Integer middleLow,
+        @Nullable @Schema(description = "The workspace's middle half; absent while too few developers are counted")
+        WorkspaceRangeDTO middle) {
 
-        @Nullable @Schema(description = "Upper bound of the workspace's middle half; null when too few are counted")
-        Integer middleHigh) {}
+    public static WorkspaceTileDTO of(int yours, @Nullable MiddleHalf middle) {
+        return new WorkspaceTileDTO(yours, middle == null ? null : new WorkspaceRangeDTO(middle.low(), middle.high()));
+    }
+}

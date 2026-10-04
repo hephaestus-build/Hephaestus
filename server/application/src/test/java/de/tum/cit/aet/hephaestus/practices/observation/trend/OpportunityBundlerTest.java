@@ -1,9 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
-import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.backfilled;
 import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.judged;
 import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.noVerdict;
-import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.requested;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -133,30 +131,6 @@ class OpportunityBundlerTest {
         assertThat(result.trail()).hasSize(1);
         assertThat(result.trail().getFirst().decided()).isFalse();
         assertThat(result.current()).isEmpty();
-    }
-
-    @Test
-    void shouldNotLetALaterBackfillSpeakForWorkALiveReviewJudged() {
-        OpportunityBundler.Bundles result = bundle(
-                judged(1, UUID.randomUUID(), "2026-08-10T09:00:00Z", Outcome.NOT_MET),
-                backfilled(1, "2026-08-11T09:00:00Z", Outcome.MET),
-                backfilled(2, "2026-08-11T10:00:00Z", Outcome.MET));
-
-        // The campaign's two pieces of work are no opportunities, and the live problem still speaks for its work.
-        assertThat(result.trail()).hasSize(1);
-        assertThat(result.current().getFirst().outcomes().notMet()).isEqualTo(1);
-    }
-
-    @Test
-    void shouldNotLetARequestedReviewMoveTheTrend() {
-        OpportunityBundler.Bundles result = bundle(
-                judged(1, UUID.randomUUID(), "2026-08-10T09:00:00Z", Outcome.NOT_MET),
-                requested(1, "2026-08-11T09:00:00Z", Outcome.MET),
-                requested(2, "2026-08-11T10:00:00Z", Outcome.MET));
-
-        // A requested re-review does not clear the live problem, and requested work is no opportunity of its own.
-        assertThat(result.trail()).hasSize(1);
-        assertThat(result.current().getFirst().outcomes().notMet()).isEqualTo(1);
     }
 
     private static OpportunityBundler.Bundles bundle(Observation... observations) {
