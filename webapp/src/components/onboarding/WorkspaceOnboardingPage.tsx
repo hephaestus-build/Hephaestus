@@ -40,6 +40,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { isMentorSetUp } from "@/lib/mentor-preference";
 import { openRequiredLinks } from "@/lib/onboarding-links";
 import { type WorkspaceCoverage, workspaceCoverage } from "@/lib/workspace-coverage";
 
@@ -101,6 +102,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 		requiredSatisfied,
 		canSubmit,
 		coverage,
+		mentorSetUp,
 		heading,
 		intro,
 		hint,
@@ -165,7 +167,17 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 
 					<header className="space-y-4">
 						<h1 className="text-2xl font-semibold tracking-tight break-words">{heading}</h1>
-						<HephSays intro={intro} narration={narration} />
+						{/* Heph speaks only where a Heph model is ready; until that is known, the page does. */}
+						{mentorSetUp ? (
+							<HephSays intro={intro} narration={narration} />
+						) : (
+							<div>
+								<p>{intro}</p>
+								<p aria-live="polite" className="mt-2 font-medium">
+									{narration}
+								</p>
+							</div>
+						)}
 					</header>
 
 					<Separator />
@@ -200,9 +212,11 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 									</span>
 								</QuestionnaireTitle>
 								<QuestionnaireDescription>
-									Hephaestus reviews your work against your team’s practices, and Heph talks it
-									through with you. Choose which AI may do that. Cloud also allows in-house models.
-									What Hephaestus syncs and stores does not change.
+									{mentorSetUp
+										? "Hephaestus reviews your work against your team’s practices, and Heph talks it through with you."
+										: "Hephaestus can review your work against your team’s practices where set up."}{" "}
+									Choose which AI may do that. Cloud also allows in-house models. What Hephaestus
+									syncs and stores does not change.
 								</QuestionnaireDescription>
 								<fieldset disabled={saving} className="min-w-0 disabled:opacity-50">
 									<AiChoiceCards
@@ -214,6 +228,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 											models: Object.fromEntries(
 												state.data.aiOptions.map((option) => [option.choice, option.models]),
 											),
+											mentorSetUp,
 										}}
 									/>
 								</fieldset>
@@ -409,10 +424,10 @@ function onboardingNarration({
 	afterLink: boolean;
 }): string {
 	if (status === "loading") {
-		return "Give me a moment. I’m fetching your setup.";
+		return "Loading your setup…";
 	}
 	if (status === "error") {
-		return "I could not fetch your setup just now.";
+		return "Your setup did not load.";
 	}
 	if (changed) {
 		const uncovered =
@@ -469,9 +484,15 @@ function memberSetupState(
 	const heading = "Your AI choice";
 	const models = data?.aiOptions.find((option) => option.choice === choice)?.models ?? [];
 	const workspaceName = data?.workspaceName ?? "this workspace";
-	const intro = firstVisit
-		? `Before you start in ${workspaceName}, one question. Your answer controls future AI requests for practice reviews and Heph across all your workspaces.`
-		: `Your answer controls future AI requests for practice reviews and Heph in ${workspaceName}, and holds in all your workspaces.`;
+	const mentorSetUp = data !== undefined && isMentorSetUp(data);
+	let intro = "Your answer controls future AI requests across all your workspaces.";
+	if (firstVisit) {
+		intro = mentorSetUp
+			? `Before you start in ${workspaceName}, one question. Your answer controls future AI requests for practice reviews and Heph across all your workspaces.`
+			: `Before you start in ${workspaceName}, one question. ${intro}`;
+	} else if (mentorSetUp) {
+		intro = `Your answer controls future AI requests for practice reviews and Heph in ${workspaceName}, and holds in all your workspaces.`;
+	}
 	let hint: string | undefined;
 	if (data !== undefined) {
 		if (choice === undefined) {
@@ -496,6 +517,7 @@ function memberSetupState(
 		requiredSatisfied,
 		canSubmit,
 		coverage,
+		mentorSetUp,
 		heading,
 		intro,
 		hint,
