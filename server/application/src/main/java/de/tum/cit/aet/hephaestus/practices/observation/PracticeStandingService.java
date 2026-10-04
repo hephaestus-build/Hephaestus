@@ -313,9 +313,9 @@ public class PracticeStandingService {
      * same rule, so the two populations are never mixed.
      *
      * <p>Every opportunity is read from {@code since}, where the caller's evidence starts, so the binary fallback
-     * is reached only when every verdict lies before it. The profile reads from the trend horizon over a look-back
-     * of {@link #LOOKBACK_DAYS} days, and never reaches it while the two are equal, as they are by default. Across
-     * the workspace the window is the start, All time included, so the page never reaches it.
+     * is reached only when every verdict lies before it. The profile reads from the trend horizon, which is its
+     * own look-back of {@link #LOOKBACK_DAYS} days, so it never reaches it. Across the workspace the window is the
+     * start, All time included, so the page never reaches it either.
      */
     private double standingShare(PracticeEvidence evidence, PracticeTrend trend, Instant since) {
         OptionalDouble live = trend.recentMetShare(STANDING_WINDOW, STANDING_DECAY);

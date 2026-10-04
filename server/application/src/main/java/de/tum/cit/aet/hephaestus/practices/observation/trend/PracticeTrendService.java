@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.dto.PracticeGroupTrendDTO;
 import java.time.Clock;
 import java.time.Instant;
@@ -18,9 +19,12 @@ public class PracticeTrendService {
     private final TrendProperties properties;
     private final Clock clock;
 
-    /** The start of today's trend horizon: the oldest evidence the practice profile's trends read. */
+    /**
+     * The start of today's trend horizon: the oldest evidence the practice profile's trends read. It is the
+     * profile's own look-back, which the page names as the span of every standing it shows.
+     */
     public Instant horizon() {
-        return clock.instant().minus(properties.getHorizonDays(), ChronoUnit.DAYS);
+        return clock.instant().minus(PracticeStandingService.LOOKBACK_DAYS, ChronoUnit.DAYS);
     }
 
     /**
