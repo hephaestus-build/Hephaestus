@@ -29,7 +29,7 @@ export const PRACTICES: PracticeTraceEntry[] = [
 		autonomy: "HUMAN_APPROVAL",
 		decidedAt: minutesBefore(42),
 		deliveredCount: 0,
-		explanation: "A review measured this practice; its feedback waits for approval.",
+		explanation: "A review measured this practice. Its feedback waits for approval.",
 		observationCount: 1,
 		outcome: "REVIEWED",
 		practiceName: "Small, focused changes",

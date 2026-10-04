@@ -30,6 +30,16 @@
 			"rules": { "import/no-relative-parent-imports": "off" }
 		},
 		{
+			// UI text follows the writing standard in all of `src`. The next entry turns it off again for
+			// tests, which assert on text.
+			"files": ["src/**"],
+			"rules": { "hephaestus/ste-ui-text": ["error", { "allPaths": true }] }
+		},
+		{
+			"files": ["**/*.test.ts", "**/*.test.tsx"],
+			"rules": { "hephaestus/ste-ui-text": "off" }
+		},
+		{
 			// Views, content script and worker only; the configs and the Playwright tree run on Node.
 			"files": ["src/**"],
 			"rules": {
