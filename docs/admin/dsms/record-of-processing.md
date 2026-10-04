@@ -45,11 +45,11 @@ A workspace administrator connects one or more Git repositories from github.com 
 
 Hephaestus then syncs authored pull/merge requests, issues, code reviews, review comments, and commit metadata from those repositories. The platform processes activity authored in the connected repositories, whether or not the author has signed in to Hephaestus.
 
-Hephaestus analyzes the synced activity against practices that the workspace administrator configures. It produces observations about each contributor's activity. Some judgments require the analysis to read and understand natural-language text. Examples include the meaning of a code comment or the substance of a review reply. For those judgments, the analysis uses an external LLM provider that the administrator chooses for the workspace.
+Hephaestus analyzes the synced activity against practices that the workspace administrator configures. It produces observations about each contributor's activity. Some judgments require the analysis to read and understand natural-language text. Examples include the meaning of a code comment or the substance of a review reply. For those judgments, the analysis uses an eligible model configured for the workspace, selected by the reviewed developer's AI choice (see the recipient details below).
 
 Automated practice review forwards the relevant pull/merge-request diff or issue content and the surrounding discussion to the provider. For a pull/merge request, it also forwards whatever the review reads from the captured repository and its history. It can post the resulting AI-generated feedback as comments on the reviewed artifact. Where explicitly connected and permitted, selected Outline documents may supply project context.
 
-The conversational mentor is an in-app chat where contributors can ask follow-up questions. Hephaestus forwards their messages and the approved bounded context to the same provider. This context can come from repository activity, prior feedback, selected Outline documents, or participant-permitted monitored Slack channels. Sources are purpose- and audience-bound. An enabled integration does not by itself authorize all of its content for every request.
+The conversational mentor is an in-app chat where contributors can ask follow-up questions. Hephaestus forwards their messages and the approved bounded context to an eligible model configured for Heph, selected by the AI choice of the person who asks (see the recipient details below). This context can come from repository activity, prior feedback, selected Outline documents, or participant-permitted monitored Slack channels. Sources are purpose- and audience-bound. An enabled integration does not by itself authorize all of its content for every request.
 
 Contributors who sign in with their GitHub or LRZ-GitLab account get a personal dashboard that summarizes their observations and activity. They get access to the conversational mentor and their account preferences. Sign-in adds the federated user identifier, username, display name, email, and avatar URL to what Hephaestus holds about that contributor.
 
@@ -170,11 +170,11 @@ Hephaestus does not intentionally solicit or classify special-category data (Art
 ## Recipients (Art. 30(1)(d))
 
 ```text
-TUM/AET engages external processors as controller. AVVs are in place at TUM/AET level for the AET-pool processors. Where a workspace administrator configures a different LLM endpoint, the AVV is at that administrator's institution. See the LLM provider details below.
+TUM/AET engages external processors as controller, each under an agreement verified for that recipient (see processor-checklist.md). A configured model endpoint or key alone does not establish an agreement or a role for another institution. See the model recipient details below.
 
 - GitHub, Inc. (USA) is the identity provider (OAuth) and source-system API for connected repositories on github.com.
 
-- The workspace administrator chooses an external LLM provider per workspace from any OpenAI-API-compatible HTTPS endpoint. A base URL, an API token, and a model name configure the endpoint. The choice is a joint-controller decision under Art. 26 GDPR. By default, the TUM-operated deployment uses Microsoft Azure OpenAI Service in an EU region under enterprise no-training terms. A workspace administrator may configure a different endpoint instead. Examples include OpenAI OpCo, LLC (with OpenAI Ireland Ltd. as the EEA contracting party). An institution-level enterprise gateway or a self-hosted model server is another option.
+- Each workspace configures its models from OpenAI-API-compatible HTTPS endpoints. A base URL, an API token, and a model name configure an endpoint. This configuration is under TUM's controller responsibility; choosing an endpoint or key does not make an administrator a joint controller. Each practice review uses the AI choice of the reviewed developer, and Heph uses the choice of the person who asks, to select among the compatible configured models. An in-house model, for example one served through Logos, stays with its in-house operator; a model that Logos forwards to an external provider makes that provider the recipient. The [processor checklist](./processor-checklist.md) holds the exact-provider evidence.
 
 - When the workspace enables Slack, Salesforce, Inc. / Slack Technologies, LLC (USA) provides Slack app delivery and identity linking. It also provides App Home privacy controls, DM mentor messages, and monitored-channel event delivery.
 
@@ -210,7 +210,7 @@ and trace collectors also need recipient entries when configured. See the proces
 
 ## Third-country transfers (Art. 30(1)(e))
 
-The EU-US Data Privacy Framework covers U.S. recipients where the recipient is on the active DPF list (Commission Implementing Decision (EU) 2023/1795). Standard Contractual Clauses Module 2 provide the fall-back (Commission Implementing Decision (EU) 2021/914). The TUM-operated deployment defaults to Microsoft Azure OpenAI in an EU region. Verify processing geography against the actual deployment type and contract. An Outline origin outside the EEA cannot be enabled until its transfer basis is recorded in this section.
+The EU-US Data Privacy Framework covers U.S. recipients where the recipient is on the active DPF list (Commission Implementing Decision (EU) 2023/1795). Standard Contractual Clauses Module 2 provide the fall-back (Commission Implementing Decision (EU) 2021/914). For an external model provider, verify the processing location and transfer basis of the exact recipient and deployment in the [processor checklist](./processor-checklist.md) before engagement. An Outline origin outside the EEA cannot be enabled until its transfer basis is recorded in this section.
 
 A public release of an anonymized dataset is not a transfer of personal data, because anonymous data is outside the GDPR (Recital 26). By the consent wording, a dataset leaves the research team only if it is anonymized.
 
@@ -232,7 +232,7 @@ When practice-review code execution is enabled, the host filesystem may store lo
 
 No layer of the stack writes an HTTP access log. The production profile explicitly disables Tomcat's access log. The Traefik reverse proxy starts without `--accesslog` (Traefik's default is off). Both nginx containers (static frontend and maintenance page) disable the access log at the server level. The shipped stack creates no general HTTP access-log copy. Authentication and security events still record connection metadata.
 
-Application and authentication data reside on TUM infrastructure within the EU. AI-assisted features also forward code snippets and surrounding discussion to the workspace-configured LLM provider. The TUM-operated deployment defaults to Microsoft Azure OpenAI in an EU region.
+Application and authentication data reside on TUM infrastructure within the EU. AI-assisted features also forward code snippets and surrounding discussion to the configured model that the AI choice selects. Its location depends on the recipient: an in-house model or an external provider, as recorded in the processor checklist.
 ```
 
 **Retention**
@@ -296,7 +296,7 @@ That request uses the instance-admin Person data process under "Deletion respons
 
 LLM-provider-side prompts
 
-The chosen provider's terms govern retention. The TUM-operated default is Microsoft Azure OpenAI in an EU region. Its retention follows the enterprise abuse-monitoring window in Microsoft's Azure OpenAI data-privacy documentation. Eligible customers may apply for Microsoft's modified abuse monitoring (Limited Access program) to suppress prompt storage and human review.
+The recipient's terms govern retention. For an external provider, the [processor checklist](./processor-checklist.md) records the prompt and response retention, training terms and human access of the exact deployment. For an in-house model, its operator's retention applies.
 
 Settings-change audit log (`config_audit_event`)
 
@@ -545,7 +545,7 @@ Research safeguards (Art. 89(1) GDPR)
 
 Organisational
 
-Operators are TUM / AET employees or authorized contributors who act under TUM-internal security policies. Before workspace provisioning, workspace administrators receive a briefing on the joint-controller / shared-responsibility model (privacy §10).
+Operators are TUM / AET employees or authorized contributors who act under TUM-internal security policies. Before workspace provisioning, workspace administrators receive a briefing on the workspace configuration and responsibilities (privacy §10).
 ```
 
 ## Legal basis (Art. 6 GDPR + national norms)
@@ -656,7 +656,7 @@ Markdown source under `webapp/public/legal/profiles/tumaet/`.
 ## Other Remarks (DSMS form vendor-pool comment)
 
 ```text
-Bitte folgende Auftragsverarbeiter zum AET-Pool hinzufügen, soweit noch nicht vorhanden: GitHub Inc. (USA), Microsoft Corp. (Azure OpenAI Service, USA/EU), OpenAI OpCo, LLC (USA) ggf. mit OpenAI Ireland Ltd. (Irland) als EWR-Vertragspartner, Salesforce / Slack Technologies, LLC (USA). Beschreibungen unter "Recipient Categories"; Drittlandtransfers durch das EU–US Data Privacy Framework und Standardvertragsklauseln Modul 2 (jeweils im Rahmen des einschlägigen Enterprise-AVV) abgedeckt; DPF-Status pro Empfänger vor Anbindung verifizieren.
+Bitte folgende Auftragsverarbeiter zum AET-Pool hinzufügen, soweit noch nicht vorhanden: GitHub Inc. (USA), Salesforce / Slack Technologies, LLC (USA) sowie jeden externen Modellanbieter, der tatsächlich angebunden wird, erst nach Prüfung des konkreten Empfängers in der Processor-Checklist. Beschreibungen unter "Recipient Categories"; Drittlandtransfers nur auf Grundlage des EU–US Data Privacy Framework oder von Standardvertragsklauseln, jeweils pro Empfänger vor Anbindung verifiziert.
 ```
 
 ### Git history during person erasure
