@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
+import type { PracticeTraceEntry, ProfileReviewRun } from "@/api/types.gen";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { artifactTrace } from "@/components/practice-trace/fixtures";
@@ -117,7 +118,9 @@ export const Default: Story = {
 		).toBeVisible();
 		// The unfiltered table states no count: the tab already carries it.
 		await expect(screen.queryByText(/^\d+ practices?\.$/u)).toBeNull();
-		await expect(screen.getByText("3 of 4 practices reached")).toBeVisible();
+		await expect(
+			screen.getByText("three practices assessed in this review · four practices listed"),
+		).toBeVisible();
 		// The operating facts are the admin's.
 		await expect(screen.queryByText(/^Rests on/u)).toBeNull();
 
@@ -132,43 +135,61 @@ const REUSED =
 
 const PUSHED = { signal: "scm.pull_request.synchronized", displayName: "New commits pushed" };
 
+/** The review before the open one, on the same merge request. */
+const EARLIER_REVIEW = "00000000-0000-0000-0000-0000000002a2";
+
+/** The open review started by a push rather than asked for. */
+const pushedRun = { ...openProfileReviewRun, triggerMode: "AUTO" } satisfies ProfileReviewRun;
+
+const pushedSignals = namedTrace.signals.map((signal) =>
+	signal.id === "sig-ready" ? { ...signal, ...PUSHED } : signal,
+);
+
+/** A practice this review left to the earlier review's answer, reached through the push it started. */
+function answeredEarlier(practiceSlug: string, practiceName: string): PracticeTraceEntry {
+	return {
+		practiceSlug,
+		practiceName,
+		autonomy: "AUTOMATIC",
+		outcome: "REVIEWED",
+		explanation: REUSED,
+		watches: [PUSHED],
+		occasionedBy: PUSHED,
+		occasionedById: "sig-ready",
+		reviewId: EARLIER_REVIEW,
+		observationCount: 0,
+		deliveredCount: 0,
+		withheldReasons: [],
+	};
+}
+
+const commitSubjects = answeredEarlier("commit-subjects", "Commit subjects explain each change");
+const scopedChange = answeredEarlier("scope-one-reviewable-change", "Scope one reviewable change");
+
 /**
- * This review asked some practices and reused an earlier review's answer for another. The reused row
- * belongs to this review through the push it started, reads the reuse reason with no observation of
- * this review's own, and never claims a clean result.
+ * Three practices assessed here, two answered by the earlier review, one never reached. The head
+ * counts each apart, a reused row links to the review that answered it beside the push this review
+ * rests on, and its delivery sentence speaks only of this review.
  */
 export const AnsweredByAnEarlierReview: Story = {
 	args: {
+		canAdminister: true,
 		state: {
 			...loaded,
-			run: { ...openProfileReviewRun, triggerMode: "AUTO" },
+			run: pushedRun,
 			activity: {
 				status: "ready",
 				trace: {
 					...namedTrace,
-					signals: namedTrace.signals.map((signal) =>
-						signal.id === "sig-ready" ? { ...signal, ...PUSHED } : signal,
-					),
+					signals: pushedSignals,
 					practices: [
 						...namedTrace.practices.map((entry) =>
 							entry.occasionedById === "sig-ready"
 								? { ...entry, watches: [PUSHED], occasionedBy: PUSHED }
 								: entry,
 						),
-						{
-							practiceSlug: "commit-subjects",
-							practiceName: "Commit subjects explain each change",
-							autonomy: "AUTOMATIC",
-							outcome: "REVIEWED",
-							explanation: REUSED,
-							watches: [PUSHED],
-							occasionedBy: PUSHED,
-							occasionedById: "sig-ready",
-							reviewId: "aaaaaaaa-1111-1111-1111-111111111111",
-							observationCount: 0,
-							deliveredCount: 0,
-							withheldReasons: [],
-						},
+						commitSubjects,
+						scopedChange,
 					],
 				},
 			},
@@ -176,11 +197,20 @@ export const AnsweredByAnEarlierReview: Story = {
 	},
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByRole("tab", { name: "Every practice 5" })).toBeVisible();
+		await expect(
+			screen.getByText(
+				"three practices assessed in this review · two practices answered by an earlier review · six practices listed",
+			),
+		).toBeVisible();
+		await expect(screen.getByRole("tab", { name: "Every practice 6" })).toBeVisible();
 		const table = within(practiceTable());
-		await expect(table.getByText(REUSED)).toBeVisible();
+		await expect(table.getAllByText(REUSED)).toHaveLength(2);
+		await expect(table.getAllByRole("link", { name: "Open the earlier review" })).toHaveLength(2);
+		await expect(
+			table.getAllByText("No new observations in this review, so nothing was sent"),
+		).toHaveLength(2);
+		await expect(table.getAllByText(/^Rests on New commits pushed/u)[0]).toBeVisible();
 		await expect(table.getByText("The refactor and the fix arrived together")).toBeVisible();
-		await expect(table.queryByText(/nothing to report/u)).toBeNull();
 	},
 };
 

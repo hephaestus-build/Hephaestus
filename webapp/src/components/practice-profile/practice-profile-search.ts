@@ -73,6 +73,17 @@ export function reviewLevel(reviewId: string): DetailStackEntry<PracticeProfileD
 	return { kind: "review", id: reviewId };
 }
 
+/**
+ * One review's own tab and filters, cleared when another review takes its place: a filter chosen
+ * for one review could hide every practice of the next. The reviews list's filters stay.
+ */
+export const REVIEW_SELECTION_CLEARED = {
+	reviewTab: undefined,
+	reviewGroup: undefined,
+	reviewPractice: undefined,
+	reviewWatches: undefined,
+} satisfies PracticeGroupDetailSelection;
+
 /** The review level's tabs, from the `reviewTab` search param. */
 export const REVIEW_TABS = ["practices", "noticed"] as const;
 

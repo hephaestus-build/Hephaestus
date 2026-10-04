@@ -9,6 +9,7 @@ import type {
 	ProfileReviewRun,
 	ReviewedWorkRef,
 } from "@/api/types.gen";
+import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
 import {
 	PracticeTabsList,
@@ -22,7 +23,9 @@ import { useNow } from "@/components/common/use-now";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import {
+	earlierReviewOf,
 	type ReviewRunPracticeFilters,
 	ReviewRunPracticeTable,
 	ReviewRunPracticeTableSkeleton,
@@ -30,7 +33,7 @@ import {
 } from "@/components/practice-trace/ReviewRunPracticeTable";
 import { TraceSignalTimeline } from "@/components/practice-trace/TraceSignalTimeline";
 import { useOccurrenceJump } from "@/components/practice-trace/use-occurrence-jump";
-import { count } from "@/components/practice-vocabulary/feedback-text";
+import { countsTogether } from "@/components/practice-vocabulary/feedback-text";
 import { REVIEW_RUN_STATE_DEFS } from "@/components/practice-vocabulary/review-run-state-defs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
@@ -39,7 +42,12 @@ import { artifactKindLabel, reviewedWorkName, sameReviewedWork } from "@/lib/art
 import { formatDayTime } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
-import { REVIEW_TABS, type ReviewTab } from "./practice-profile-search";
+import {
+	REVIEW_SELECTION_CLEARED,
+	REVIEW_TABS,
+	reviewLevel,
+	type ReviewTab,
+} from "./practice-profile-search";
 import { RequestedReviewTag, ReviewOrdinalTag } from "./review-run-tags";
 
 /**
@@ -88,6 +96,27 @@ const TAB_LABELS: Record<ReviewTab, string> = {
 	noticed: "What we noticed",
 };
 
+/**
+ * Swapped in for this review rather than opened over it: the review level is read off the stack by
+ * kind, so a second review over the first would never be the one shown.
+ */
+function earlierReviewLink(reviewId: string) {
+	return (
+		<InlineLink
+			render={
+				<DetailStackLink
+					entry={reviewLevel(reviewId)}
+					swap
+					levelSearch={REVIEW_SELECTION_CLEARED}
+				/>
+			}
+			className="text-sm"
+		>
+			Open the earlier review
+		</InlineLink>
+	);
+}
+
 function LoadingBody() {
 	return (
 		<div className="flex flex-col gap-4">
@@ -125,6 +154,9 @@ export function ProfileReviewLevel({
 	const trace = activity?.status === "ready" ? activity.trace : undefined;
 	const signals = trace?.signals ?? [];
 	const practices = runPractices(trace?.practices ?? [], signals, run?.reviewId);
+	const reused = practices.filter(
+		(entry) => earlierReviewOf(entry, run?.reviewId) !== undefined,
+	).length;
 
 	let body: ReactNode;
 	if (state.status === "error") {
@@ -189,6 +221,8 @@ export function ProfileReviewLevel({
 						onOpenPractice={onOpenPractice}
 						onShowOccurrence={showOccurrence}
 						canAdminister={canAdminister}
+						reviewId={state.run.reviewId}
+						earlierReviewLink={earlierReviewLink}
 						emptyMessage={
 							state.run.status === "IN_PROGRESS"
 								? "Practices appear here as the review reaches them."
@@ -215,6 +249,7 @@ export function ProfileReviewLevel({
 					run={run}
 					positionOnWork={positionOnWork}
 					listed={trace === undefined ? undefined : practices.length}
+					reused={trace === undefined ? undefined : reused}
 					onReviewNow={onReviewNow}
 					requesting={requesting}
 					refusal={refusal}
@@ -229,8 +264,10 @@ interface ReviewHeadProps {
 	path: LevelPath;
 	run: ProfileReviewRun | undefined;
 	positionOnWork: number | undefined;
-	/** Every practice the table lists, so the head's ratio and the table's count agree. */
+	/** Every practice the table lists, so the head and the table's count agree. */
 	listed: number | undefined;
+	/** The listed practices an earlier review's answer stands for. */
+	reused: number | undefined;
 	onReviewNow?: (work: ReviewedWorkRef) => void;
 	requesting?: Pick<ReviewedWorkRef, "kind" | "id">;
 	refusal?: ReactNode;
@@ -242,6 +279,7 @@ function ReviewHead({
 	run,
 	positionOnWork,
 	listed,
+	reused,
 	onReviewNow,
 	requesting,
 	refusal,
@@ -250,7 +288,21 @@ function ReviewHead({
 	const at = run?.reviewedAt;
 	const today = new Date(useNow());
 	const WorkIcon = reviewedWorkIcon(work?.kind, work?.provider);
-	const reached = run?.practicesEvaluated;
+	// Three counts, never one ratio: the recorded coverage counts only what this review assessed
+	// itself, so an earlier review's answers and the listed total are facts of their own.
+	const assessed = run?.practicesEvaluated;
+	const facts = [
+		assessed === undefined ? undefined : { n: assessed, label: "assessed in this review" },
+		reused === undefined || reused === 0
+			? undefined
+			: { n: reused, label: "answered by an earlier review" },
+		listed === undefined ? undefined : { n: listed, label: "listed" },
+	].filter((fact) => fact !== undefined);
+	const coverage = countsTogether(
+		facts.map((fact) => ({ n: fact.n, one: "practice", many: "practices" })),
+	)
+		.map((counted, index) => [counted, facts[index]?.label].join(" "))
+		.join(" · ");
 	const isRequesting =
 		work !== undefined && requesting !== undefined && sameReviewedWork(requesting, work);
 	const canAsk = run?.mayRequest === true && onReviewNow !== undefined;
@@ -277,11 +329,7 @@ function ReviewHead({
 						</time>
 					</span>
 				)}
-				{reached !== undefined && listed !== undefined && (
-					<span>
-						{reached} of {count(listed, "practice", "practices", true)} reached
-					</span>
-				)}
+				{assessed !== undefined && <span>{coverage}</span>}
 				{run?.status !== undefined && <StatusBadge def={REVIEW_RUN_STATE_DEFS[run.status]} />}
 				{run?.triggerMode === "MANUAL" && <RequestedReviewTag />}
 				<ReviewOrdinalTag position={positionOnWork} />

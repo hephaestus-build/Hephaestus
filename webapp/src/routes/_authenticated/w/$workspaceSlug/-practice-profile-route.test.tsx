@@ -3,7 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { InAppFeedback, ProfileReviewRun } from "@/api/types.gen";
+import type {
+	InAppFeedback,
+	ObservationDetail,
+	PracticeSignal,
+	PracticeTraceEntry,
+	ProfileReviewRun,
+} from "@/api/types.gen";
 import { rangeStart } from "@/components/activity/activity-range";
 import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
 import { artifactTrace } from "@/components/practice-trace/fixtures";
@@ -21,6 +27,7 @@ import {
 } from "@/stories/practice-profile-story-mock-data";
 import {
 	openProfileReviewRun,
+	openProfileRunObservations,
 	profileReviewRuns,
 } from "@/stories/profile-review-runs-story-mock-data";
 import { STORY_NOW } from "@/stories/story-clock";
@@ -103,6 +110,153 @@ beforeEach(() => {
 		),
 	);
 });
+
+/** The open review, by its address, over the list of reviews. */
+const OPEN_REVIEW_PAGE = `${PAGE}?detail=${encodeURIComponent(
+	JSON.stringify(["reviews:all", `review:${openProfileReviewRun.reviewId}`]),
+)}`;
+
+const READY = {
+	signal: "scm.pull_request.ready",
+	displayName: "Marked ready for review",
+} satisfies PracticeSignal;
+const PUSHED = {
+	signal: "scm.pull_request.synchronized",
+	displayName: "New commits pushed",
+} satisfies PracticeSignal;
+
+/**
+ * A push started the open review, which assessed its own practices and left Commit subjects to the
+ * review before it, which the work being marked ready had started.
+ */
+const pushedRun = { ...openProfileReviewRun, triggerMode: "AUTO" } satisfies ProfileReviewRun;
+
+const COMMIT_SUBJECTS = {
+	practiceSlug: "commit-subjects",
+	practiceName: "Commit subjects explain each change",
+} as const;
+
+/** The earlier review assessed one practice itself, and observed it. */
+const producerRun = {
+	...earlierOnSameWork,
+	practicesEvaluated: 1,
+	practices: { notMet: 1, met: 0, notApplicable: 0, undetermined: 0 },
+	feedbackDelivered: 0,
+	slippedPractices: [COMMIT_SUBJECTS],
+} satisfies ProfileReviewRun;
+
+const producerObservation = {
+	...detailObservation,
+	...COMMIT_SUBJECTS,
+	id: "00000000-0000-0000-0000-0000000002b1",
+	summary: "Two commits are titled only “fix”",
+	observedAt: earlierOnSameWork.reviewedAt,
+} satisfies ObservationDetail;
+
+const readySignal = artifactTrace.signals.find((signal) => signal.id === "sig-ready");
+if (!readySignal) {
+	throw new Error("The trace fixture carries the occurrence that started the open review");
+}
+
+/** The work's occurrences: the push that started the open review, and the ready that started the one before. */
+const reuseSignals = [
+	{
+		...readySignal,
+		id: "sig-ready-earlier",
+		occurredAt: earlierOnSameWork.reviewedAt,
+		reviewId: earlierOnSameWork.reviewId,
+	},
+	...artifactTrace.signals.map((signal) =>
+		signal.id === "sig-ready" ? { ...signal, ...PUSHED } : signal,
+	),
+];
+
+const commitSubjects = {
+	...COMMIT_SUBJECTS,
+	autonomy: "AUTOMATIC",
+	outcome: "REVIEWED",
+	watches: [READY, PUSHED],
+	reviewId: earlierOnSameWork.reviewId,
+	deliveredCount: 0,
+	withheldReasons: [],
+} satisfies Partial<PracticeTraceEntry>;
+
+/**
+ * The activity asked for the open review: its own practices rest on the push, and Commit subjects
+ * names the earlier review that answered it. Another review's row resting on this occurrence is left
+ * out, as the endpoint asked for this review leaves it out.
+ */
+const pushedTrace = {
+	...artifactTrace,
+	signals: reuseSignals,
+	practices: [
+		...artifactTrace.practices
+			.filter((entry) => entry.practiceSlug !== "dependency-risk")
+			.map((entry) =>
+				entry.occasionedById === "sig-ready"
+					? { ...entry, watches: [PUSHED], occasionedBy: PUSHED }
+					: entry,
+			),
+		{
+			...commitSubjects,
+			explanation:
+				"An earlier review checked this practice on the same code, so this review did not assess it again.",
+			occasionedBy: PUSHED,
+			occasionedById: "sig-ready",
+			observationCount: 0,
+		} satisfies PracticeTraceEntry,
+	],
+};
+
+/** The activity asked for the earlier review: the one practice it assessed, on the ready. */
+const producerTrace = {
+	...artifactTrace,
+	signals: reuseSignals,
+	practices: [
+		{
+			...commitSubjects,
+			explanation:
+				"Reviewed when the work was marked ready for review. One observation was recorded.",
+			occasionedBy: READY,
+			occasionedById: "sig-ready-earlier",
+			observationCount: 1,
+		} satisfies PracticeTraceEntry,
+	],
+};
+
+/**
+ * The reviews list and each review's own read and activity. Every read of a review is noted in
+ * `runReads`; an earlier review that is gone answers 404, as one no longer the reader's does.
+ */
+function reuseHandlers(runReads: string[], { earlierGone = false } = {}) {
+	return [
+		http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs", () =>
+			HttpResponse.json({
+				content: [pushedRun, producerRun, ...profileReviewRuns.slice(2)],
+				hasNext: false,
+				page: 0,
+				size: 10,
+			}),
+		),
+		http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs/:reviewId", ({ params }) => {
+			runReads.push(String(params.reviewId));
+			if (params.reviewId !== producerRun.reviewId) {
+				return HttpResponse.json({ run: pushedRun, observations: openProfileRunObservations });
+			}
+			return earlierGone
+				? HttpResponse.json({ status: 404, title: "Not Found" }, { status: 404 })
+				: HttpResponse.json({ run: producerRun, observations: [producerObservation] });
+		}),
+		http.get(
+			"*/workspaces/:workspaceSlug/practices/trace/:artifactKind/:artifactId",
+			({ request }) => {
+				const reviewId = new URL(request.url).searchParams.get("reviewId");
+				tracedReviewIds.push(reviewId);
+				return HttpResponse.json(reviewId === producerRun.reviewId ? producerTrace : pushedTrace);
+			},
+		),
+	];
+}
 
 /** The open review's row link, named for its work and its time. */
 const openReviewRowName = `Open review of ${openProfileReviewRun.reviewedWork.label}, ${formatDayTime(openProfileReviewRun.reviewedAt, new Date(STORY_NOW))}`;
@@ -422,6 +576,50 @@ describe("practice profile route", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+
+	it("opens the earlier review that answered a practice in place of this one, without this one's filter", async () => {
+		const runReads: string[] = [];
+		server.use(...reuseHandlers(runReads));
+		const { router } = renderRouteAtWithRouter(
+			`${OPEN_REVIEW_PAGE}&reviewPractice=commit&feedback=resolved`,
+		);
+
+		fireEvent.click(
+			await screen.findByRole("link", { name: "Open the earlier review" }, ROUTE_RENDER_WAIT),
+		);
+
+		await waitFor(() =>
+			expect(router.state.location.search.detail).toStrictEqual([
+				"reviews:all",
+				`review:${earlierOnSameWork.reviewId}`,
+			]),
+		);
+		// The filter belonged to the review it replaced; the page's own tab is the reader's still.
+		expect(router.state.location.search.reviewPractice).toBeUndefined();
+		expect(router.state.location.search.feedback).toBe("resolved");
+		await waitFor(() => expect(runReads).toContain(earlierOnSameWork.reviewId));
+		await waitFor(() => expect(tracedReviewIds).toContain(earlierOnSameWork.reviewId));
+		// The level is the earlier review's own: its recorded count, its one practice, its observation.
+		await screen.findByText(
+			"one practice assessed in this review · one practice listed",
+			undefined,
+			SETTLE_WAIT,
+		);
+		await screen.findByText(producerObservation.summary, undefined, SETTLE_WAIT);
+	});
+
+	it("shows an earlier review that is no longer the reader's as not found, without asking again", async () => {
+		const runReads: string[] = [];
+		server.use(...reuseHandlers(runReads, { earlierGone: true }));
+		renderRouteAtWithRouter(OPEN_REVIEW_PAGE);
+
+		fireEvent.click(
+			await screen.findByRole("link", { name: "Open the earlier review" }, ROUTE_RENDER_WAIT),
+		);
+
+		await screen.findByText("We could not find this review", undefined, ROUTE_RENDER_WAIT);
+		expect(runReads.filter((reviewId) => reviewId === earlierOnSameWork.reviewId)).toHaveLength(1);
 	});
 
 	it("shows a review that is not the reader's as not found, without asking again", async () => {
