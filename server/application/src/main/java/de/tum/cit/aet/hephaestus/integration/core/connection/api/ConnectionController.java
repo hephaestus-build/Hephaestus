@@ -167,8 +167,7 @@ public class ConnectionController {
                     case SUSPENDED -> "SUSPEND";
                     case UNINSTALLED -> "DISCONNECT";
                     case PENDING ->
-                        throw new IllegalArgumentException(
-                                "An administrator cannot set a connection to the state PENDING.");
+                        throw new IllegalArgumentException("An admin cannot set a connection to the state PENDING.");
                 };
 
         String correlationId = eventType.toLowerCase(Locale.ROOT) + "-" + connection.getId() + "-" + UUID.randomUUID();

@@ -478,7 +478,7 @@ class DeliveryComposer {
                     clampToSentenceBudget(sanitizeStudentText(f.summary()).strip(), RECURRING_BUDGET);
             sb.append("- ").append(sentence).append("\n");
         }
-        sb.append("\nThese appeared in several of your recent changes. This feedback only names them.\n\n");
+        sb.append("\nThese appeared in several of your recent changes, so this feedback only names them.\n\n");
     }
 
     private static void appendExpanded(

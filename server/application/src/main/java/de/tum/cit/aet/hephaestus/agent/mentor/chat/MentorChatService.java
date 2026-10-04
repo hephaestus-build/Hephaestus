@@ -888,10 +888,10 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         if (e instanceof LlmUnpricedUsageBlockedException unpriced) {
             return Objects.requireNonNullElse(
                     unpriced.getMessage(),
-                    "The mentor cannot use a model that has no price under the current budget policy.");
+                    "Heph cannot use a model that has no price under the current budget policy.");
         }
         if (e instanceof MentorRunnerException) {
-            return "The mentor had an unexpected error. Try again.";
+            return "Heph had an unexpected error. Try again.";
         }
         if (e instanceof TimeoutException) {
             return "The mentor turn took too long and stopped.";

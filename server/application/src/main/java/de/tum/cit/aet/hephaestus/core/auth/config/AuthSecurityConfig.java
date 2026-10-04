@@ -217,6 +217,7 @@ public class AuthSecurityConfig {
         }
         if (environment.matchesProfiles("prod")) {
             throw new IllegalStateException("hephaestus.auth.state-cookie-key is required in production. "
+                    + "The server fails closed and does not start without it. "
                     + "Set it to a base64-encoded 32-byte (256-bit AES) value.");
         }
         byte[] ephemeral = new byte[32];

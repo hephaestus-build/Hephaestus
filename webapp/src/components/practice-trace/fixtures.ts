@@ -158,7 +158,7 @@ export const tracedSignals = [
 		state: "SUPPRESSED",
 		stateReason: "COOLDOWN_ACTIVE",
 		stateReasonDescription:
-			"A review of this work already ran in the cooldown period of this workspace.",
+			"This work already had a review within the cooldown period of this workspace.",
 	},
 	{
 		id: "sig-review-requested",

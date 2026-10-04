@@ -438,7 +438,7 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
             assertThat(initialAlternatives.getBodyPart(part).getContent().toString())
                     .doesNotContain("This is your only reminder.");
             assertThat(reminderAlternatives.getBodyPart(part).getContent().toString())
-                    .contains("This is your only reminder.", "Hephaestus will not send another reminder.");
+                    .contains("This is your only reminder.", "No further reminder is scheduled.");
         }
         var invitation = invitations
                 .findBySurveyIdAndAccountId(survey.getId(), recipient.accountId())

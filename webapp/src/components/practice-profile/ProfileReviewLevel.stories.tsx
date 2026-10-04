@@ -203,7 +203,7 @@ export const WhatWeNoticed: Story = {
 		await settledDrawerPanel();
 		await expect(screen.getByRole("heading", { name: "What we noticed" })).toBeVisible();
 		await expect(
-			screen.getByText(/already ran in the cooldown period of this workspace/u),
+			screen.getByText(/already had a review within the cooldown period of this workspace/u),
 		).toBeVisible();
 	},
 };

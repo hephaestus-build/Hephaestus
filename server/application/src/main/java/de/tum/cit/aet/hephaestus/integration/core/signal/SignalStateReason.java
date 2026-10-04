@@ -123,7 +123,7 @@ public enum SignalStateReason {
     public String describe() {
         return switch (this) {
             case GATE_SKIPPED -> "The review settings of this workspace did not allow a review of this work.";
-            case COOLDOWN_ACTIVE -> "A review of this work already ran in the cooldown period of this workspace.";
+            case COOLDOWN_ACTIVE -> "This work already had a review within the cooldown period of this workspace.";
             case REQUEST_COOLDOWN_ACTIVE -> "A review of this work was already requested a short time ago.";
             case REQUESTER_QUOTA_EXHAUSTED ->
                 "The person who asked used all of their review requests for this hour. The allowance fills again later.";

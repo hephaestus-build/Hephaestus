@@ -152,7 +152,7 @@ describe("product feedback wire contract", () => {
 			),
 			http.post("*/workspaces/acme/product-feedback/surveys/:id/responses", () =>
 				HttpResponse.json(
-					{ status: 400, detail: "a required question was not answered" },
+					{ status: 400, detail: "The response does not answer a required question." },
 					{ status: 400 },
 				),
 			),
@@ -164,7 +164,7 @@ describe("product feedback wire contract", () => {
 		});
 		await waitFor(() =>
 			expect(result.current.error).toBe(
-				"Could not send (a required question was not answered). Your draft is still here.",
+				"Could not send. The response does not answer a required question. Your draft is still here.",
 			),
 		);
 	});

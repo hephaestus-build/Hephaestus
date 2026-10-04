@@ -87,7 +87,7 @@ public class ReviewBackfillService {
             case RUNNING -> "already running";
             case PAUSED -> "paused";
             case COMPLETED -> "already finished";
-            case CANCELLED -> "already cancelled";
+            case CANCELLED -> "already canceled";
         };
     }
 
@@ -117,7 +117,7 @@ public class ReviewBackfillService {
         }
         if (runRepository.existsByWorkspaceIdAndStatusIn(context.id(), UNDER_WAY)) {
             throw new ReviewBackfillConflictException(
-                    "A backfill is already under way for this workspace. To start another backfill, first cancel it.");
+                    "A backfill is already active for this workspace. To start another backfill, first cancel the active backfill.");
         }
         supersedeUnconfirmed(context.id());
 
@@ -190,7 +190,7 @@ public class ReviewBackfillService {
             case RUNNING -> {
                 if (!run.getStatus().isConfirmable()) {
                     throw new ReviewBackfillConflictException(
-                            "You cannot start this backfill. It is " + statusWords(run.getStatus()) + ".");
+                            "You cannot start this backfill because it is " + statusWords(run.getStatus()) + ".");
                 }
                 if (run.getStartedAt() == null) {
                     run.setStartedAt(Instant.now());
@@ -209,7 +209,7 @@ public class ReviewBackfillService {
             case CANCELLED -> {
                 if (!run.getStatus().isActive() && run.getStatus() != ReviewBackfillStatus.AWAITING_CONFIRMATION) {
                     throw new ReviewBackfillConflictException(
-                            "You cannot cancel this backfill. It is " + statusWords(run.getStatus()) + ".");
+                            "You cannot cancel this backfill because it is " + statusWords(run.getStatus()) + ".");
                 }
                 run.transitionTo(ReviewBackfillStatus.CANCELLED, null);
                 log.info("Review backfill cancelled: runId={}, workspaceId={}", run.getId(), context.id());

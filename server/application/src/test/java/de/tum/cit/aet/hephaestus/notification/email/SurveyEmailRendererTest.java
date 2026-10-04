@@ -54,7 +54,7 @@ class SurveyEmailRendererTest extends BaseUnitTest {
                                 "unsubscribeUrl",
                                 EmailTestSupport.WEBAPP_URL + "/unsubscribe?token=opaque-token"));
 
-        assertThat(rendered.text()).contains("People who saw an in-app invitation: 3", "Responded: 2", "Declined: 1");
+        assertThat(rendered.text()).contains("People shown an in-app invitation: 3", "Responded: 2", "Declined: 1");
         assertThat(rendered.html())
                 .contains("/admin/surveys", "<strong>3</strong>", "<strong>2</strong>", "<strong>1</strong>");
     }

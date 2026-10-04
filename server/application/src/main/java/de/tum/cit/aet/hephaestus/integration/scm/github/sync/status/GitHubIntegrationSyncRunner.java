@@ -172,8 +172,8 @@ public class GitHubIntegrationSyncRunner implements IntegrationSyncRunner {
     }
 
     /**
-     * The one human sentence the UI renders for a backfill page, e.g.
-     * {@code "Backfill of ls1intum/Artemis: issues #4812 → #3200"}.
+     * The one human-readable text the UI renders for a backfill page. It names the repository, the kind
+     * of work and the number range reached.
      *
      * <p>Backfill walks issue/PR numbers down toward #1, so the range reads as a countdown: high-water
      * mark on the left, live position on the right — the repository's own numbering rather than an

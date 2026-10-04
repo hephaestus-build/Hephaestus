@@ -48,9 +48,9 @@ validation error:
 
 | Attempt | What you get back |
 | --- | --- |
-| Create a model with `enabled: true` | *Create the model disabled, set its price, then activate it.* |
-| Enable a model whose connection is off, or whose price is `UNPRICED` | *Activate the connection and configure a price before activating the model.* |
-| Reprice an **enabled** model to `UNPRICED` | *Disable the model before changing its price to UNPRICED.* |
+| Create a model with `enabled: true` | *Create the model as disabled. Set its price. Then activate the model.* |
+| Enable a model whose connection is off, or whose price is `UNPRICED` | *Before you activate the model, activate the connection. Also set a price for the model.* |
+| Reprice an **enabled** model to `UNPRICED` | *To change the price of the model to UNPRICED, first disable the model.* |
 
 That last one is the whole point of the staging: an enabled model with no price would spend money
 nobody can account for, and would make the month's budget verdict UNVERIFIABLE instead of merely
@@ -184,7 +184,7 @@ told what it costs. Each model is one of:
 
 - **Price per 1M tokens** (`PRICED`) — you supply the rates below.
 - **No metered API cost** (`NO_CHARGE`) — asserts a real $0, counts as confirmed $0 spend, satisfies
-  a cap. Requires a note saying why (e.g. *internal endpoint; infrastructure billed separately*).
+  a cap. Requires a note saying why (e.g. *internal endpoint, infrastructure billed separately*).
   Infrastructure cost may still be real; this is only about a per-token API charge.
 - **No price set** (`UNPRICED`) — asserts nothing. Usage is recorded but excluded from monthly
   totals, and a **capped** purse whose month contains unpriced usage reads **UNVERIFIABLE** and is
@@ -321,9 +321,9 @@ enabling it, and wait until every runtime role has been upgraded before assignin
 2. In the workspace's **AI models**, each purpose (**Practice reviews** and **Heph**) has three
    rows: **In-house**, **Cloud** and **Members who have not chosen**. A row holds only a model
    declared as that tier. Assigning a model declared as another tier is refused with *This model
-   is declared as \{tier\}. Assign it to that row.*, and an undeclared model with *This model's
-   data handling is not declared yet. Declare it first, or assign it to Members who haven't
-   chosen.* A model whose declaration later loosens no longer matches its row, reads **Not ready**
+   is declared as a different tier. Assign it to that row.*, and an undeclared model with *The data
+   handling of this model is not declared yet. Declare it first, or assign the model to Members
+   who have not chosen.* A model whose declaration later loosens no longer matches its row, reads **Not ready**
    and stops serving until you reassign it. Nothing is substituted. Existing grants, price
    declarations, funding sources, the practice-review switch and budgets still apply, and **Max concurrent
    runs** applies independently to each row.

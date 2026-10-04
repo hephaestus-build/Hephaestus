@@ -35,10 +35,7 @@ await test("STE paths are explicit, unique, and grow only", () => {
 		'["docs/**"]',
 		'["a.md", "a.md"]',
 		'["server/data.json"]',
-		'["webapp/src/api/client.ts"]',
-		'["webapp/src/routeTree.gen.ts"]',
-		'["webapp/src/components/test.test.tsx"]',
-		'["webapp/src/mocks/data.ts"]',
+		'["webapp/src/components/Test.tsx"]',
 	]) {
 		assert.throws(() => parsePaths(source));
 	}

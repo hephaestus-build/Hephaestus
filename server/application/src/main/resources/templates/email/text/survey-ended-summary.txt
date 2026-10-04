@@ -2,7 +2,7 @@
 
 A survey ended. These are its participation totals. Only a signed-in administrator can read individual answers, in the administrator console.
 
-People who saw an in-app invitation: [(${invited})]
+People shown an in-app invitation: [(${invited})]
 Responded: [(${responded})]
 Declined: [(${declined})]
 

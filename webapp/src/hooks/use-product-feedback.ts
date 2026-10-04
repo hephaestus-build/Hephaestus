@@ -54,7 +54,7 @@ function submissionError(error: unknown, subject: "survey" | "feedback"): string
 	if (subject === "survey" && status === 404) {
 		return "This survey is no longer available. Your answers have not been sent.";
 	}
-	return `Could not send (${problemDetailOf(error, "the server refused the request")}). ${DRAFT_KEPT}`;
+	return `Could not send. ${problemDetailOf(error, "The server refused the request.")} ${DRAFT_KEPT}`;
 }
 
 /** What a member needs to know about a survey to be thanked for it: `submit` takes it from the dialog. */

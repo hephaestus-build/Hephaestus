@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-The web app, the browser extension, emails, and the messages that Hephaestus sends to Slack, GitHub and GitLab now use short, plain sentences. Contractions, semicolons and long sentences are gone. Meaning and behavior stay the same.
+Text in the web app, the browser extension, emails, API errors, and the comments and messages that Hephaestus posts to Slack, GitHub and GitLab now uses short, plain sentences. The wording of some API errors and email subjects changed. A script that matches on that text must change.

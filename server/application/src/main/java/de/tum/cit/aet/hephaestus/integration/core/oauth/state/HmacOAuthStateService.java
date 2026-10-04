@@ -33,7 +33,7 @@ import org.springframework.stereotype.Component;
  * <p><b>Single-use guarantee.</b> Every {@link #issue} writes a row to
  * {@link OAuthStateNonceStore}; every {@link #consume} attempts an atomic
  * conditional UPDATE on that row. The first caller wins; the second sees zero
- * rows affected and is rejected with {@code "The OAuth state was already used."}.
+ * rows affected and is rejected as already used.
  * This closes the replay window inside the TTL.
  *
  * <p>{@link OAuthStateNonceStore} is optional in the constructor so the

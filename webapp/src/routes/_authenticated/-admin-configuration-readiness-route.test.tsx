@@ -92,7 +92,7 @@ describe("instance overview configuration readiness", () => {
 		);
 		await queryClient.invalidateQueries({ queryKey: adminGetConfigurationReadinessQueryKey() });
 		await screen.findByText(
-			"Could not refresh. Showing the last successful check.",
+			"Could not refresh. This card shows the last successful check.",
 			{},
 			ROUTE_RENDER_WAIT,
 		);
@@ -107,7 +107,7 @@ describe("instance overview configuration readiness", () => {
 		await user.click(within(alert).getByRole("button", { name: "Retry" }));
 		await waitFor(() => {
 			expect(
-				screen.queryByText("Could not refresh. Showing the last successful check."),
+				screen.queryByText("Could not refresh. This card shows the last successful check."),
 			).toBeNull();
 		});
 	});

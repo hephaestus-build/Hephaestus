@@ -67,9 +67,10 @@ public class SlackIntegrationSyncRunner implements IntegrationSyncRunner {
                     .append(summary.skipped())
                     .append(summary.skipped() == 1 ? " channel." : " channels.");
         }
-        // A failed channel is also counted as skipped, so "of them" always has its referent.
         if (summary.failed() > 0) {
-            step.append(" The sync failed for ").append(summary.failed()).append(" of them.");
+            step.append(" The sync failed for ")
+                    .append(summary.failed())
+                    .append(summary.failed() == 1 ? " channel." : " channels.");
         }
         if (summary.budgetExhausted()) {
             step.append(" The request budget ran out.");

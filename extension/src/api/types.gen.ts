@@ -966,7 +966,7 @@ export type ConsentStatus = {
   noticeVersion: string;
   participateInResearch: boolean;
   /**
-   * Organisation running the optional research programme, or null when this instance runs none
+   * Organization that runs the optional research program, or null when this instance runs none
    */
   researchOrganization?: string;
 };
@@ -1945,11 +1945,11 @@ export type FeedbackWorkspaceRef = {
 export type FirstLoginConsent = {
   noticeVersion: string;
   /**
-   * Required when the instance names a research organisation, omitted otherwise
+   * Required when the instance names a research organization, omitted otherwise
    */
   participateInResearch?: boolean;
   /**
-   * The organisation the research question named on screen; omitted when it asked none
+   * The organization the research question named on screen; omitted when it asked none
    */
   researchOrganization?: string;
   termsAccepted: boolean;
@@ -4520,7 +4520,7 @@ export type ResearchConsent = {
   granted: boolean;
   noticeVersion: string;
   /**
-   * The organisation this control named on screen
+   * The organization this control named on screen
    */
   researchOrganization?: string;
 };
@@ -12038,7 +12038,7 @@ export type PreflightBackfillRunErrors = {
    */
   400: ProblemDetail;
   /**
-   * A campaign is already under way for this workspace
+   * A backfill is already active for this workspace
    */
   409: ProblemDetail;
 };

@@ -357,7 +357,8 @@ class LlmModelServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> modelService.update(7L, request))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("configure a price");
+                    .hasMessage(
+                            "Before you activate the model, activate the connection. Also set a price for the model.");
             verify(modelRepository, never()).saveAndFlush(any());
         }
 

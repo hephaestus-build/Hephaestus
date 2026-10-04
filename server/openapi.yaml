@@ -6036,7 +6036,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: A campaign is already under way for this workspace
+          description: A backfill is already active for this workspace
       summary: Enumerate and price a backfill campaign
       tags:
       - Practice Review Backfill
@@ -10846,7 +10846,7 @@ components:
           type: boolean
         researchOrganization:
           type: string
-          description: "Organisation running the optional research programme, or null\
+          description: "Organization that runs the optional research program, or null\
             \ when this instance runs none"
       required:
       - completed
@@ -12643,11 +12643,11 @@ components:
           type: string
         participateInResearch:
           type: boolean
-          description: "Required when the instance names a research organisation,\
+          description: "Required when the instance names a research organization,\
             \ omitted otherwise"
         researchOrganization:
           type: string
-          description: The organisation the research question named on screen; omitted
+          description: The organization the research question named on screen; omitted
             when it asked none
         termsAccepted:
           type: boolean
@@ -16449,7 +16449,7 @@ components:
           type: string
         researchOrganization:
           type: string
-          description: The organisation this control named on screen
+          description: The organization this control named on screen
       required:
       - granted
       - noticeVersion

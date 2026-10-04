@@ -126,7 +126,7 @@ class EmailRendererTest extends BaseUnitTest {
         RenderedEmail rendered = renderer.render(
                 EmailKind.ACCOUNT_DELETION_SCHEDULED, Map.of("purgeAfter", "14 September 2026 at 10:00 UTC"));
 
-        assertThat(rendered.subject()).isEqualTo("Hephaestus scheduled your account for deletion");
+        assertThat(rendered.subject()).isEqualTo("Your Hephaestus account is scheduled for deletion");
         assertThat(rendered.text())
                 .contains("After 14 September 2026 at 10:00 UTC")
                 .contains("You cannot undo this yourself");

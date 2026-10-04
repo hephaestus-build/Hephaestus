@@ -185,7 +185,7 @@ public class AgentJobLifecycleService {
                 AgentJob racedAgain = requireJob(workspaceId, jobId);
                 if (racedAgain.getStatus() != AgentJobStatus.CANCELLED) {
                     throw new AgentJobStateConflictException(
-                            "This review changed state while the server cancelled it. Reload the review and try again.");
+                            "This review changed state while the server canceled it. Reload the review and try again.");
                 }
                 return new CancelOutcome(racedAgain, false);
             }

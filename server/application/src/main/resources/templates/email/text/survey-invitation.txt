@@ -2,7 +2,7 @@
 
 [(${research ? 'A research survey is available in your Hephaestus workspace.' : 'A product survey is available in your Hephaestus workspace.'})] You do not have to take part. Sign in to read its purpose. Then decide if you want to respond.
 
-[(${reminder == true ? 'This is your only reminder. You can ignore or decline the survey. Hephaestus will not send another reminder.' : ''})]
+[(${reminder == true ? 'This is your only reminder. You can ignore or decline the survey. No further reminder is scheduled.' : ''})]
 
 Open the survey: [(${webappUrl})]/w/[(${workspaceSlug})]?survey=[(${surveyId})]
 

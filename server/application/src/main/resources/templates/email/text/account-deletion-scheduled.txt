@@ -1,6 +1,6 @@
 [(#{email.account-deletion-scheduled.subject})]
 
-Hephaestus received the request to delete your account at [(${webappUrl})]. It signed you out on all devices.
+Hephaestus received the request to delete your account at [(${webappUrl})]. You are signed out on all devices.
 
 After [(${purgeAfter})], a scheduled cleanup removes these items: your sign-in details, linked identities, product-feedback submissions and survey responses. An account record stays, with its contact details cleared. You cannot undo this yourself.
 

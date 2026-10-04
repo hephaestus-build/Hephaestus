@@ -42,7 +42,7 @@ public class FeedbackApprovalService {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
                         brake == FeedbackSuppressionReason.INSTANCE_SILENCED
-                                ? "Silent Mode is on for this instance, so approving this proposal sends nothing."
+                                ? "Silent mode is on for this instance, so approving this proposal sends nothing."
                                 : "Sending is paused for this workspace, so approving this proposal sends nothing.");
             }
         }

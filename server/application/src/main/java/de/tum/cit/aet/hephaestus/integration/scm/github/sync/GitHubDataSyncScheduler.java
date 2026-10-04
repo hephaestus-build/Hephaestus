@@ -435,7 +435,7 @@ public class GitHubDataSyncScheduler {
                     reportPhase(
                             handle,
                             SyncPhase.ISSUES,
-                            "Sync of sub-issue and issue dependency links",
+                            "Sync of sub-issues and issue dependencies",
                             reposProcessed,
                             totalRepos);
                     syncSubIssues(session, handle);

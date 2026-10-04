@@ -224,7 +224,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("nonce store wired: first consume wins, second is rejected as already-consumed")
+    @DisplayName("nonce store wired: first consume wins, second is rejected as already used")
     void singleUseEnforcedWithNonceStore() {
         InMemoryNonceStore store = new InMemoryNonceStore();
         HmacOAuthStateService svc = HmacOAuthStateService.withNonceStore(SECRET, Duration.ofMinutes(10), store);
@@ -238,7 +238,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
         // still validate. This is the load-bearing replay guard.
         assertThatThrownBy(() -> svc.consume(state))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("already used");
+                .hasMessage("The OAuth state was already used.");
     }
 
     @Test

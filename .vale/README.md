@@ -54,7 +54,7 @@ This protects against parser gaps such as [skipped component children](https://g
 [skipped text after an expression](https://github.com/vale-cli/vale/issues/1179).
 
 The report scans Markdown and MDX in the three docs trees.
-For UI source, it scans literal JSX text and text props, including stories.
+For UI source, it scans literal JSX text and text props, including stories, in `webapp/src`.
 It excludes generated clients, the route tree, tests, and mock data.
 A dash in the report means that the UI rule does not implement that check.
 Counts are alerts, not unique sentences or confirmed defects.

@@ -87,7 +87,7 @@ public class ConsentService implements ResearchParticipationQuery {
         }
         String organisation = properties.researchProgramme();
         if (organisation != null && request.participateInResearch() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Answer the research question to continue");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Answer the research question to continue.");
         }
         if (organisation == null && request.participateInResearch() != null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This instance does not run a research program.");
@@ -236,7 +236,7 @@ public class ConsentService implements ResearchParticipationQuery {
 
             @Schema(
                     description =
-                            "Organisation running the optional research programme, or null when this instance runs none")
+                            "Organization that runs the optional research program, or null when this instance runs none")
             @Nullable
             String researchOrganization) {}
 
@@ -246,11 +246,11 @@ public class ConsentService implements ResearchParticipationQuery {
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
             boolean termsAccepted,
 
-            @Schema(description = "Required when the instance names a research organisation, omitted otherwise")
+            @Schema(description = "Required when the instance names a research organization, omitted otherwise")
             @Nullable
             Boolean participateInResearch,
 
-            @Schema(description = "The organisation the research question named on screen; omitted when it asked none")
+            @Schema(description = "The organization the research question named on screen; omitted when it asked none")
             @Nullable
             String researchOrganization) {
         public FirstLoginConsentDTO {
@@ -264,7 +264,7 @@ public class ConsentService implements ResearchParticipationQuery {
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
             boolean granted,
 
-            @Schema(description = "The organisation this control named on screen") @Nullable
+            @Schema(description = "The organization this control named on screen") @Nullable
             String researchOrganization) {
         public ResearchConsentDTO {
             Objects.requireNonNull(noticeVersion, "noticeVersion");

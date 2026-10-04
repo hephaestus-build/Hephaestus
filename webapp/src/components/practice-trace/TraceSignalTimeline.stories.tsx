@@ -32,7 +32,7 @@ export const SignalsExplainThemselves: Story = {
 		await expect(canvas.getByText("Marked ready for review")).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"A review of this work already ran in the cooldown period of this workspace.",
+				"This work already had a review within the cooldown period of this workspace.",
 			),
 		).toBeVisible();
 		await expect(

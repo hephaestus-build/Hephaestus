@@ -241,7 +241,7 @@ public class WorkspaceLlmModelService {
     private static void requireActivatable(WorkspaceLlmModel model) {
         if (!model.getConnection().isEnabled() || model.getPricingMode() == PricingMode.UNPRICED) {
             throw new IllegalArgumentException(
-                    "To activate the model, first activate the connection. Then configure a price for the model.");
+                    "Before you activate the model, activate the connection. Also set a price for the model.");
         }
     }
 

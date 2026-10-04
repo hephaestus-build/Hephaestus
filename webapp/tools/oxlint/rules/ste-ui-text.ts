@@ -1,24 +1,13 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { defineRule, type ESTree } from "@oxlint/plugins";
 import { decodeHTMLStrict } from "entities";
 
-import { asStringArray, isRecord, parseJson } from "../../../../scripts/lib/json.ts";
+import { isRecord } from "../../../../scripts/lib/json.ts";
 import {
 	approvedWords,
-	steRoot,
 	withoutTechnicalNames,
 	wordAlerts,
 } from "../../../../scripts/lib/ste-words.ts";
 
-const enforced = new Set(
-	asStringArray(
-		parseJson(readFileSync(new URL(".vale/enforced-paths.json", steRoot), "utf8")),
-		"STE paths",
-	),
-);
-const root = fileURLToPath(steRoot);
 // Names of the JSX props and object keys whose string values are UI text. Object keys cover the
 // vocabulary registries, option lists and form schemas.
 const textNames = new Set([
@@ -48,6 +37,8 @@ const textNames = new Set([
 	"heading",
 	"caption",
 	"subtitle",
+	"success",
+	"loading",
 ]);
 const toastCalls = new Set(["error", "success", "info", "warning", "message", "loading"]);
 const dictionary = new Set(approvedWords);
@@ -81,6 +72,9 @@ function literalText(node: ESTree.Node): string[] {
 }
 
 function isToastCall(callee: ESTree.Node): boolean {
+	if (callee.type === "Identifier") {
+		return callee.name === "toast";
+	}
 	return (
 		callee.type === "MemberExpression" &&
 		callee.object.type === "Identifier" &&
@@ -109,12 +103,12 @@ export const steUiText = defineRule({
 	meta: {
 		type: "problem",
 		docs: {
-			description: "Use the STE writing standard for literal UI text on the enforced paths.",
+			description: "Use the STE writing standard for literal UI text.",
 		},
 		schema: [
 			{
 				type: "object",
-				properties: { allPaths: { type: "boolean" }, vocabulary: { type: "boolean" } },
+				properties: { vocabulary: { type: "boolean" } },
 				additionalProperties: false,
 			},
 		],
@@ -128,12 +122,7 @@ export const steUiText = defineRule({
 	},
 	create(context) {
 		const options = context.options[0];
-		const allPaths = isRecord(options) && options.allPaths === true;
 		const vocabulary = isRecord(options) && options.vocabulary === true;
-		const filename = path.relative(root, context.filename).split(path.sep).join("/");
-		if (!allPaths && !enforced.has(filename)) {
-			return {};
-		}
 		function check(node: ESTree.Node, text: string): void {
 			if (vocabulary) {
 				for (const match of withoutTechnicalNames(text).matchAll(/\b[a-z]+\b/giu)) {
@@ -184,7 +173,7 @@ export const steUiText = defineRule({
 				}
 			},
 			Property(node) {
-				const name = propertyName(node.key);
+				const name = node.computed ? undefined : propertyName(node.key);
 				if (name !== undefined && textNames.has(name) && node.parent.type === "ObjectExpression") {
 					for (const text of literalText(node.value)) {
 						check(node.value, text);

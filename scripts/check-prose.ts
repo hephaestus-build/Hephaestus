@@ -7,7 +7,6 @@ import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asStringArray, parseJson } from "./lib/json.ts";
-import { uiAlerts, uiIgnorePatterns } from "./lib/ste-ui.ts";
 import { steRoot } from "./lib/ste-words.ts";
 import { prepareVale, valeAlerts } from "./lib/vale.ts";
 
@@ -19,23 +18,8 @@ export function parsePaths(source: string): readonly string[] {
 		throw new Error("Write a nonempty list of unique STE paths.");
 	}
 	for (const file of paths) {
-		if (!/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w.$/-]+\.(?:md|mdx|tsx|ts)$/u.test(file)) {
-			throw new Error(
-				`Invalid STE path: ${file}. Write an exact repository-relative prose or UI source path.`,
-			);
-		}
-		if (/\.tsx?$/u.test(file) && !/^webapp\/src\/.*\.tsx?$/u.test(file)) {
-			throw new Error(
-				`STE UI path is outside webapp/src: ${file}. Add a prose path or a UI source path.`,
-			);
-		}
-		if (
-			/\.tsx?$/u.test(file) &&
-			uiIgnorePatterns.some((pattern) => path.matchesGlob(file, pattern))
-		) {
-			throw new Error(
-				`STE UI path is excluded from prose checks: ${file}. Add a maintained UI source path.`,
-			);
+		if (!/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w.$/-]+\.mdx?$/u.test(file)) {
+			throw new Error(`Invalid STE path: ${file}. Write an exact repository-relative prose path.`);
 		}
 	}
 	return paths;
@@ -88,28 +72,20 @@ if (process.argv[1] === import.meta.filename) {
 	const args = process.argv.slice(2);
 	const base = isSet(process.env.PR_BASE_SHA) ? process.env.PR_BASE_SHA : "origin/main";
 	const paths = args.length > 0 ? args : [...checkRatchet(base)];
-	const files = paths.filter((file) => /\.mdx?$/u.test(file));
 	const vale = await prepareVale();
 	try {
 		let errors = 0;
 		// Small batches stay below the Windows command-line limit as the list grows.
-		for (let offset = 0; offset < files.length; offset += 50) {
+		for (let offset = 0; offset < paths.length; offset += 50) {
 			const alerts = valeAlerts(
 				vale.binary,
-				files.slice(offset, offset + 50),
+				paths.slice(offset, offset + 50),
 				args.length > 0 ? "suggestion" : "error",
 			);
 			const located = [...alerts].flatMap(([file, list]) => list.map((alert) => ({ file, alert })));
 			for (const { file, alert } of located) {
 				console.log(`${file}:${alert.Line}: ${alert.Severity} ${alert.Check}: ${alert.Message}`);
 				errors += Number(alert.Severity === "error");
-			}
-		}
-		const ui = paths.filter((file) => /^webapp\/src\/.*\.tsx?$/u.test(file));
-		for (let offset = 0; offset < ui.length; offset += 50) {
-			for (const alert of await uiAlerts(ui.slice(offset, offset + 50))) {
-				console.log(`${alert.filename}: ${alert.severity}: ${alert.message}`);
-				errors += Number(alert.severity === "error");
 			}
 		}
 		console.log(`STE: ${paths.length} prose paths checked; ${errors} errors.`);

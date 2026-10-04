@@ -80,8 +80,8 @@ export function DeleteWorkspaceAlertDialog({
 							<li>the Slack app installation</li>
 							<li>security, audit, and accounting records for prior activity</li>
 							<li>
-								the name <span className="font-mono break-all">{workspaceSlug}</span>, which no new
-								workspace can ever use
+								the name <span className="font-mono break-all">{workspaceSlug}</span>, which stays
+								reserved and which no new workspace can ever use
 							</li>
 						</ul>
 						<p>
