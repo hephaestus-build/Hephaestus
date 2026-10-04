@@ -145,7 +145,7 @@ export default function handlesErrorsInsteadOfSwallowingThem(
 	const directions =
 		hints.length > 0
 			? [
-					`Found ${hints.length} construct(s) added across ${Object.keys(byLang).length} language(s) that may discard or silence an error — investigate whether the failure is genuinely swallowed (no surfacing, logging, or recovery).`,
+					`Found ${hints.length} possible error-discard constructs in ${Object.keys(byLang).length} languages. First establish whether each call can fail. For each failure, inspect whether it stays visible. A valid fixed URL has no runtime-dependent parse failure. A later empty-value check does not swallow an error already recorded by its handler.`,
 				]
 			: [];
 	return {

@@ -172,7 +172,7 @@ export default async function usesAdaptiveColorsForEveryAppearance(
 	const directions: string[] = [...sampleNote(scan)];
 	if (literals > 0) {
 		directions.push(
-			`${literals} literal color(s) added in view types against ${systemAdaptive} system-adaptive and ${namedAssets} named asset color(s); for each literal read the modifier chain to see whether it colors text over a fill the same view sets (content) or a background or text on a system background (one appearance baked in).`,
+			`Found ${literals} literal colors, ${systemAdaptive} system-adaptive colors and ${namedAssets} named asset colors added in view types. For each literal, read the modifier chain. Text over a fill the same view sets is content. A literal background or text on a system background can fix one appearance. A translucent scrim over an image is content, not an adaptive screen background.`,
 		);
 	}
 	if (assetsWithoutDarkAppearance > 0) {
