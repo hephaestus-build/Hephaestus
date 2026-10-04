@@ -77,22 +77,6 @@ class DeliveryComposer {
             Map<String, String> whyBySlug,
             List<ComposedFeedbackUnit> composed,
             @Nullable String lead) {
-        return composeAdmitted(observations, artifact, whyBySlug, composed, lead, Set.of());
-    }
-
-    /**
-     * @param recurringSlugs practices last observed negative for this developer on several other recent
-     *     pieces of work ({@link RecurringLapses}); a non-blocking lapse in one of them is named in one
-     *     line instead of explained again, and does not spend the improvement cap
-     */
-    @Nullable
-    static DeliveryContent composeAdmitted(
-            @Nullable List<ValidatedObservation> observations,
-            ArtifactKind artifact,
-            Map<String, String> whyBySlug,
-            List<ComposedFeedbackUnit> composed,
-            @Nullable String lead,
-            Set<String> recurringSlugs) {
         if (observations == null || observations.isEmpty()) {
             return null;
         }
@@ -135,14 +119,6 @@ class DeliveryComposer {
             dedupDropped.addAll(identityDiff(before, negatives));
         }
 
-        // Shorten recurring non-blocking lapses; blocking lapses retain the full explanation.
-        List<ValidatedObservation> recurring = negatives.stream()
-                .filter(f -> recurringSlugs.contains(f.practiceSlug()))
-                .filter(f -> f.severity() != Severity.CRITICAL && f.severity() != Severity.MAJOR)
-                .toList();
-        if (!recurring.isEmpty()) {
-            negatives = identityDiff(negatives, recurring);
-        }
         // Every blocking (CRITICAL/MAJOR) observation is kept; only the non-blocking tail is capped (see
         // capImprovementTail). The capped list, not the raw one, flows into the partition and diff notes
         // below, so a dropped nudge leaves no inline comment either.
@@ -158,18 +134,6 @@ class DeliveryComposer {
             improvementOverflow = (int) (improvementTotal - MAX_IMPROVEMENT_SUGGESTIONS);
         }
 
-        if (negatives.isEmpty() && !recurring.isEmpty()) {
-            Rendering rendering =
-                    new Rendering(whyBySlug, emittedWhy, ComposedNotes.claim(recurring, observations, composed), lead);
-            var sb = new StringBuilder(1024);
-            sb.append(openingOf(rendering));
-            appendRecurring(sb, recurring);
-            return new DeliveryContent(
-                    sb.toString(),
-                    List.of(),
-                    withheldObservations(dedupDropped, capDropped, composerWithheld),
-                    keysOf(recurring));
-        }
         if (negatives.isEmpty()) {
             // A strength reaches the work only as the composition stage's own note for it: an observation
             // summary is a measurement, not an intervention, and a lead has nothing to introduce without one.
@@ -224,20 +188,13 @@ class DeliveryComposer {
         summarised.sort(ObservationOrder.worstFirstUnstored());
 
         String mrNote = composeMrNote(summarised, improvementOverflow, rendering);
-        if (!recurring.isEmpty()) {
-            var sb = new StringBuilder(mrNote);
-            appendRecurring(sb, recurring);
-            mrNote = sb.toString();
-        }
         List<DiffNote> diffNotes = placed.notes();
         var withheld = withheldObservations(dedupDropped, capDropped, composerWithheld);
-        if (diffNotes.isEmpty() && rendering.summarised().isEmpty() && recurring.isEmpty()) {
+        if (diffNotes.isEmpty() && rendering.summarised().isEmpty()) {
             // Every remaining problem scrubbed to nothing: an opening alone is not a note.
             return withheld.isEmpty() ? null : new DeliveryContent(null, List.of(), withheld, List.of());
         }
-        List<ValidatedObservation> summarisedFrom = new ArrayList<>(rendering.writtenFrom(rendering.summarised()));
-        summarisedFrom.addAll(recurring);
-        return new DeliveryContent(mrNote, diffNotes, withheld, keysOf(summarisedFrom));
+        return new DeliveryContent(mrNote, diffNotes, withheld, keysOf(rendering.writtenFrom(rendering.summarised())));
     }
 
     private static List<String> keysOf(List<ValidatedObservation> observations) {
@@ -368,8 +325,6 @@ class DeliveryComposer {
     private static final int STRENGTH_BUDGET = 280;
 
     private static final int LEAD_BUDGET = 240;
-    /** A recurring lapse gets its one sentence instead of the full explanation. */
-    private static final int RECURRING_BUDGET = 200;
 
     /**
      * The opening sits where a reader trusts the comment most, so it is held to a narrower contract than an
@@ -468,17 +423,6 @@ class DeliveryComposer {
         }
 
         return sb.toString();
-    }
-
-    /** Recurrence establishes earlier observations, not visible private feedback. */
-    static void appendRecurring(StringBuilder sb, List<ValidatedObservation> recurring) {
-        sb.append("**Still open from your earlier changes**\n\n");
-        for (ValidatedObservation f : recurring) {
-            String sentence =
-                    clampToSentenceBudget(sanitizeStudentText(f.summary()).strip(), RECURRING_BUDGET);
-            sb.append("- ").append(sentence).append("\n");
-        }
-        sb.append("\nThese appeared in several of your recent changes, so this feedback only names them.\n\n");
     }
 
     private static void appendExpanded(
