@@ -96,7 +96,7 @@ export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 	VOLUME_CAPPED: "Over the limit on how much feedback one person gets from a single review.",
 	PRACTICE_REQUIRES_APPROVAL: "This feedback is waiting for a person to approve it.",
 	BACKFILL_QUIET: "Found while reviewing past work, which is measured but never sent.",
-	INSTANCE_SILENCED: "Silent mode was turned on for the whole instance.",
+	INSTANCE_SILENCED: "Silent mode was on for the whole instance.",
 	WORKSPACE_DISABLED: "Practice feedback is not enabled for this workspace.",
 	WORKSPACE_DELIVERY_PAUSED: "External practice feedback is paused for this workspace.",
 	STALE_ROLLOUT_REVISION:

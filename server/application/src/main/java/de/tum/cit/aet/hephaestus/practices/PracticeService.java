@@ -211,7 +211,7 @@ public class PracticeService {
             @Nullable PracticeAutonomy initialAutonomy) {
         if (practiceRepository.existsByWorkspaceIdAndSlug(ctx.id(), slug)) {
             throw new PracticeSlugConflictException(
-                    "A practice with slug '" + slug + "' already exists in this workspace.");
+                    "A practice with slug “" + slug + "” already exists in this workspace.");
         }
 
         Workspace workspace = lockWorkspace(ctx);
@@ -252,7 +252,7 @@ public class PracticeService {
                 throw ex;
             }
             throw new PracticeSlugConflictException(
-                    "A practice with slug '" + slug + "' already exists in this workspace.", ex);
+                    "A practice with slug “" + slug + "” already exists in this workspace.", ex);
         }
         int revisionNumber = practiceRevisionService.append(practice).getRevisionNumber();
         workspace.getReviewSettings().incrementRolloutRevision();

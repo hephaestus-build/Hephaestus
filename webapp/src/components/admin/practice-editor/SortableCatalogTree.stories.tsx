@@ -235,7 +235,7 @@ const dragTo = async (handle: HTMLElement, clientY: number) => {
 	send("pointermove", clientY);
 	await waitFor(async () => expect(announcement()).toMatch(/^Moving/u));
 	send("pointerup", clientY);
-	await waitFor(async () => expect(announcement()).toMatch(/^(?:Moved|Move cancelled)/u));
+	await waitFor(async () => expect(announcement()).toMatch(/^(?:Moved|Move canceled)/u));
 };
 
 export const Default: Story = {};

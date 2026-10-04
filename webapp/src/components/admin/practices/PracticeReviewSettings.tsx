@@ -225,7 +225,7 @@ function ReviewTimingSection({
 				<FieldContent>
 					<FieldLabel htmlFor="trigger-manual">Start requested reviews</FieldLabel>
 					<FieldDescription>
-						Covers the <strong>Review this now</strong> button, a backfill of past work, a recurring
+						Covers the <strong>Request review</strong> button, a backfill of past work, a recurring
 						check, and <code>/hephaestus review</code> in a GitLab merge request comment. Turning
 						this off stops all of them.
 					</FieldDescription>
@@ -313,7 +313,7 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 					Sending feedback
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					These settings apply to all comments and mentor feedback in the workspace.
+					These settings apply to all comments and feedback from Heph in the workspace.
 				</p>
 			</div>
 			{paused ? (
@@ -321,7 +321,7 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 					<AlertCircle />
 					<AlertTitle>Sending is paused</AlertTitle>
 					<AlertDescription>
-						Reviews and in-app feedback continue, but no comments or mentor feedback leave
+						Reviews and in-app feedback continue, but no comments or feedback from Heph leave
 						Hephaestus. Automatic feedback is not queued for later delivery. Pending approvals
 						remain in the review queue, and a workspace owner or admin can decide them after
 						resuming.
@@ -335,7 +335,7 @@ function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "
 						<StatusBadge def={WORKSPACE_DELIVERY_STATUS_DEFS[settings.deliveryStatus]} />
 					</div>
 					<FieldDescription>
-						Pause all comments and mentor feedback without stopping reviews or changing coverage.
+						Pause all comments and feedback from Heph without stopping reviews or changing coverage.
 					</FieldDescription>
 				</FieldContent>
 				<Switch

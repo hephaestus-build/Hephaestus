@@ -171,7 +171,7 @@ function Ready({
 							disabled={action?.status === "pending"}
 							onClick={() => props.onAction({ kind: "request-review" })}
 						>
-							Request review…
+							Request review
 						</Button>
 					) : null
 				}
@@ -318,7 +318,7 @@ function LineAction({
 					disabled={props.action?.status === "pending"}
 					onClick={() => props.onAction({ kind: "request-review" })}
 				>
-					Request review…
+					Request review
 				</Button>
 			);
 		}

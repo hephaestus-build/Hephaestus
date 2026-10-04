@@ -384,7 +384,9 @@ function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 			void invalidate();
 		},
 		onError: (error) => {
-			toast.error("We could not estimate this backfill", { description: problemDetailOf(error) });
+			toast.error("We could not estimate the cost of this review of past work", {
+				description: problemDetailOf(error),
+			});
 		},
 	});
 
@@ -393,13 +395,15 @@ function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 		onSuccess: (run) => {
 			void invalidate();
 			if (run.status === "RUNNING") {
-				toast.success("Backfill started");
+				toast.success("Review of past work started");
 			} else if (run.status === "CANCELLED") {
-				toast.success("Backfill stopped");
+				toast.success("Review of past work stopped");
 			}
 		},
 		onError: (error) => {
-			toast.error("We could not update this backfill", { description: problemDetailOf(error) });
+			toast.error("We could not update this review of past work", {
+				description: problemDetailOf(error),
+			});
 		},
 	});
 

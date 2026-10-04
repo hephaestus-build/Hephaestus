@@ -132,7 +132,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Workspace not found");
+                .hasMessageContaining("We could not find that workspace");
     }
 
     @Test

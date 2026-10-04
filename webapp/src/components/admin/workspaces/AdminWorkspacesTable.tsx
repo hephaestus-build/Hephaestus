@@ -95,7 +95,7 @@ export function AdminWorkspacesTable({
 			<div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
 				<Building2 className="size-8" aria-hidden />
 				<p className="text-sm">
-					{hasSearch ? "No workspace matches your search." : "No workspaces yet."}
+					{hasSearch ? "No workspaces match your search" : "No workspaces yet"}
 				</p>
 			</div>
 		);

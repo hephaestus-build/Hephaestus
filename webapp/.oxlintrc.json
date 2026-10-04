@@ -211,7 +211,7 @@
 	// Entries whose globs overlap but set different rules are fine, and there are several below.
 	"overrides": [
 		{
-			// UI text follows the writing standard in all of `src`. The next entry turns the rule off
+			// UI text follows the product voice of the writing standard in all of `src`. The next entry turns the rule off
 			// for tests, which assert on text, and for mocks, which reproduce what the server sends.
 			"files": ["src/**"],
 			"rules": { "hephaestus/ui-text-voice": "error" }

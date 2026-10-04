@@ -41,7 +41,7 @@ export const SelfHosted: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await userEvent.click(canvas.getByText("Use a self-hosted instance"));
 		await userEvent.type(canvas.getByLabelText("Hephaestus address"), "https://heph.example.test");
-		await userEvent.click(canvas.getByRole("button", { name: "Connect" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Connect instance" }));
 		await expect(args.onConnectCustom).toHaveBeenCalledWith({
 			origin: "https://heph.example.test",
 			webAppOrigin: undefined,

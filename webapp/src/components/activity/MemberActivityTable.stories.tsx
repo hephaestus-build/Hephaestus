@@ -99,7 +99,7 @@ export const Stale: Story = {
 export const NoMembers: Story = {
 	args: { state: readyMembers([]) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No members here")).toBeVisible();
+		await expect(canvas.getByText("No members yet")).toBeVisible();
 	},
 };
 

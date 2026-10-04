@@ -60,7 +60,7 @@ export const Pending: Story = {
 export const Cancelled: Story = {
 	args: { attempt: { status: "cancelled" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("status")).toHaveTextContent(/cancelled and nothing changed/u);
+		await expect(canvas.getByRole("status")).toHaveTextContent(/canceled and nothing changed/u);
 		await expect(canvas.queryByRole("alert")).toBeNull();
 		await expect(canvas.getByRole("button", { name: "Sign in with GitHub" })).toBeEnabled();
 	},
@@ -88,7 +88,7 @@ export const Loading: Story = { args: { options: { status: "loading" } } };
 
 export const Failed: Story = {
 	args: {
-		options: { status: "error", message: "Hephaestus could not be reached.", onRetry: fn() },
+		options: { status: "error", message: "We could not reach Hephaestus.", onRetry: fn() },
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();

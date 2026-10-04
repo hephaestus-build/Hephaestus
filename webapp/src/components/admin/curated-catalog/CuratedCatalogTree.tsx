@@ -144,9 +144,9 @@ export function CuratedCatalogTree({
 			renderEntryPreview={(practice) => <PracticeDragPreview practice={practice} />}
 			getEmptyLabel={(groupSlug, total) => {
 				if (total > 0) {
-					return "No matching practices.";
+					return "No matching practices";
 				}
-				return groupSlug === null ? "Nothing unassigned." : "No practices here.";
+				return groupSlug === null ? "Nothing unassigned" : "No practices in this group";
 			}}
 		/>
 	);

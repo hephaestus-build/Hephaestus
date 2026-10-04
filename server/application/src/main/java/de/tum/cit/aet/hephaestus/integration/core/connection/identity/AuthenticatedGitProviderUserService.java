@@ -78,13 +78,13 @@ public class AuthenticatedGitProviderUserService {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Your account has more than one GitLab identity on " + serverUrl
-                            + ". Unlink the one you do not use in Settings, under Connected accounts.");
+                            + ". Disconnect the one you do not use in User settings, under Connected accounts.");
         }
         if (matching.isEmpty()) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Link your GitLab account on " + serverUrl
-                            + " before you create a workspace there. Do this in Settings, under Connected accounts.");
+                    "Connect your GitLab account on " + serverUrl
+                            + " before you create a workspace there. Do this in User settings, under Connected accounts.");
         }
         return resolveOrProvisionUser(matching.getFirst());
     }
@@ -131,8 +131,8 @@ public class AuthenticatedGitProviderUserService {
             // A mutable login cannot substitute for the provider's numeric actor id.
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Hephaestus cannot use your linked " + type
-                            + " identity because it has a non-numeric subject. Link the account again in Settings, under Connected accounts.",
+                    "Hephaestus cannot use your connected " + type
+                            + " account because its ID is not a number. Disconnect it in User settings, under Connected accounts, then connect it again.",
                     e);
         }
     }

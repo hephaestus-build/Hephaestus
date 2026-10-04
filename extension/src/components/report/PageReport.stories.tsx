@@ -78,7 +78,7 @@ export const Default: Story = {
 		);
 		await expect(row(canvasElement).getBoundingClientRect().height).toBe(REPORT_ROW_HEIGHT);
 		// Primer's small default button, not the web app's.
-		const request = canvas.getByRole("button", { name: "Request review…" });
+		const request = canvas.getByRole("button", { name: "Request review" });
 		await expect(getComputedStyle(request).height).toBe("28px");
 		await expect(getComputedStyle(request).borderTopLeftRadius).toBe("6px");
 		await userEvent.click(request);
@@ -96,7 +96,7 @@ export const OneHeightInEveryState: Story = {
 	render: (args) => {
 		const states: Partial<PageReportProps>[] = [
 			{ state: { status: "loading" } },
-			{ state: { status: "failed", message: "Hephaestus could not be reached." } },
+			{ state: { status: "failed", message: "We could not reach Hephaestus." } },
 			{ state: { status: "signed-out", instanceHost: "heph.example.test" } },
 			{ state: { status: "not-found", instanceHost: "heph.example.test", workLabel: "!1" } },
 			{ feedback: { status: "ready", data: NO_FEEDBACK } },
@@ -172,7 +172,7 @@ export const Opened: Story = {
 			READY.links.trace,
 		);
 		await expect(canvas.queryByRole("link", { name: /Review details/u })).toBeNull();
-		await expect(canvas.getAllByRole("button", { name: "Request review…" })).toHaveLength(1);
+		await expect(canvas.getAllByRole("button", { name: "Request review" })).toHaveLength(1);
 	},
 };
 
@@ -247,12 +247,12 @@ export const FeedbackFailed: Story = {
 		expanded: true,
 		feedback: {
 			status: "error",
-			message: "Hephaestus had a problem and could not answer. Try again in a moment.",
+			message: "We could not get an answer from Hephaestus. Try again in a moment.",
 		},
 	},
 	play: async ({ canvas, args }) => {
 		await expect(canvas.getByRole("button", { expanded: true })).toHaveAccessibleName(
-			/Your feedback could not load/u,
+			/We could not load your feedback/u,
 		);
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();
@@ -264,7 +264,7 @@ export const ObservationsFailed: Story = {
 		expanded: true,
 		observations: {
 			status: "error",
-			message: "Hephaestus could not be reached. Check your connection and try again.",
+			message: "We could not reach Hephaestus. Check your connection and try again.",
 		},
 	},
 	play: async ({ canvas, args }) => {
@@ -294,7 +294,7 @@ export const DecisionPending: Story = {
 		await expect(canvas.getByRole("button", { expanded: true })).toHaveAccessibleName(
 			/^Practice review Review decision pending · 3 comments for you/u,
 		);
-		await expect(canvas.getByRole("button", { name: "Request review…" })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Request review" })).toBeVisible();
 	},
 };
 
@@ -349,7 +349,7 @@ export const WorkspaceAdmin: Story = {
 export const Loading: Story = { args: { state: { status: "loading" }, expanded: true } };
 
 export const LoadFailed: Story = {
-	args: { state: { status: "failed", message: "Hephaestus could not be reached." } },
+	args: { state: { status: "failed", message: "We could not reach Hephaestus." } },
 	play: async ({ canvas, args }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onRetry).toHaveBeenCalledOnce();
@@ -359,12 +359,12 @@ export const LoadFailed: Story = {
 /** Opened, a failure explains itself once and keeps the line's one Retry. */
 export const LoadFailedOpened: Story = {
 	args: {
-		state: { status: "failed", message: "Hephaestus could not be reached." },
+		state: { status: "failed", message: "We could not reach Hephaestus." },
 		expanded: true,
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getAllByRole("button", { name: "Retry" })).toHaveLength(1);
-		await expect(canvas.getByRole("alert")).toHaveTextContent("Hephaestus could not be reached.");
+		await expect(canvas.getByRole("alert")).toHaveTextContent("We could not reach Hephaestus.");
 	},
 };
 
@@ -423,7 +423,7 @@ export const OnANarrowWindow: Story = {
 	parameters: { reflow: true },
 	play: async ({ canvas, canvasElement }) => {
 		await expectNoHorizontalOverflow(canvasElement);
-		const requests = canvas.getAllByRole("button", { name: "Request review…" });
+		const requests = canvas.getAllByRole("button", { name: "Request review" });
 		await expect(requests.filter((request) => request.checkVisibility())).toHaveLength(1);
 		await expect(canvasElement.querySelector("[data-tone] img")).toBeVisible();
 		const item = within(canvas.getByRole("list", { name: "Comments for you" })).getAllByRole(
@@ -450,7 +450,7 @@ export const OnGitLabDark: Story = {
 	globals: { theme: "dark" },
 	play: async ({ canvas }) => {
 		// GitLab's medium default button, not Primer's or the web app's.
-		const request = canvas.getAllByRole("button", { name: "Request review…" })[0];
+		const request = canvas.getAllByRole("button", { name: "Request review" })[0];
 		await expect(request === undefined ? "" : getComputedStyle(request).height).toBe("32px");
 		await expect(request === undefined ? "" : getComputedStyle(request).borderTopLeftRadius).toBe(
 			"4px",

@@ -72,7 +72,7 @@ export const JOB_STATUS_LABEL: Record<SyncJob["status"], string> = {
 	SUCCEEDED: "Succeeded",
 	SUCCEEDED_WITH_WARNINGS: "Succeeded with warnings",
 	FAILED: "Failed",
-	CANCELLED: "Cancelled",
+	CANCELLED: "Canceled",
 };
 
 /**

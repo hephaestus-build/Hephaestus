@@ -72,7 +72,7 @@ export function readCallback(
 
 /**
  * One interactive sign-in, from the worker, started by a click in the options page. The verifier
- * and `state` live only in this call. Chrome closing the window, or the user cancelling, is an
+ * and `state` live only in this call. Chrome closing the window, or the user canceling, is an
  * ordinary outcome and says so.
  */
 export async function signIn(instance: InstanceConfig, method: SignInMethod): Promise<Credentials> {
@@ -93,7 +93,7 @@ export async function signIn(instance: InstanceConfig, method: SignInMethod): Pr
 		// Chrome uses this exact error when the user closes or declines the interactive flow.
 		// Other failures can contain an authorization URL; never pass their raw message to a view.
 		if (error instanceof Error && error.message === "The user did not approve access.") {
-			throw new WorkerError("cancelled", "Sign-in was cancelled before it finished.");
+			throw new WorkerError("cancelled", "Sign-in was canceled before it finished.");
 		}
 		throw new WorkerError("network", "We could not finish signing you in. Try again.");
 	}

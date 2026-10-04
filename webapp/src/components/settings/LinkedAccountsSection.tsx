@@ -49,7 +49,7 @@ type LinkableProvider = IdentityProviderView & { registrationId: string };
  * has to earn the click on its own — the account it links to is not a way into Hephaestus.
  */
 const LINK_ONLY_RATIONALE: Record<string, string> = {
-	SLACK: "Connect Slack to manage your channel-message preference and reach the mentor in a DM.",
+	SLACK: "Connect Slack to manage your channel-message preference and talk to Heph in a DM.",
 	OUTLINE: "Connect Outline so the documents you write there are recognized as your work.",
 };
 
@@ -102,7 +102,7 @@ export function LinkedAccountsSection({
 	if (isLoading) {
 		return (
 			<LinkedAccountsFrame headingRef={headingRef}>
-				<ItemGroup aria-busy="true" aria-label="Loading connected accounts">
+				<ItemGroup aria-busy="true" aria-label="Loading connected accounts…">
 					{Array.from({ length: 2 }, (_, index) => (
 						<Item key={index} variant="outline" role="listitem">
 							<ItemMedia variant="icon">

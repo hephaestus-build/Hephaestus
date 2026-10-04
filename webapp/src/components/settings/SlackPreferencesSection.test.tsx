@@ -46,12 +46,12 @@ describe("SlackPreferencesSection", () => {
 		// The flip alone must NOT delete anything — an irreversible deletion is gated by a confirmation.
 		expect(onToggleChannelMessages).not.toHaveBeenCalled();
 
-		fireEvent.click(screen.getByRole("button", { name: /turn off and delete/iu }));
+		fireEvent.click(screen.getByRole("button", { name: "Stop using and delete" }));
 
 		expect(onToggleChannelMessages).toHaveBeenCalledWith("hephaestustest", false);
 	});
 
-	it("cancelling the confirmation leaves message use ON", () => {
+	it("canceling the confirmation leaves message use ON", () => {
 		const onToggleChannelMessages =
 			vi.fn<SlackPreferencesSectionProps["onToggleChannelMessages"]>();
 		render(

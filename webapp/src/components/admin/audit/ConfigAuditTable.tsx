@@ -112,7 +112,7 @@ export function ConfigAuditTable({
 				{hasFilter && onResetFilters && (
 					<EmptyContent>
 						<Button variant="outline" onClick={onResetFilters}>
-							Reset filters
+							Clear filters
 						</Button>
 					</EmptyContent>
 				)}
@@ -190,13 +190,13 @@ export function ConfigAuditTable({
 											type="button"
 											variant="ghost"
 											size="sm"
-											aria-label={`Details for ${subject.label}, ${actionLabel(entry.action).toLowerCase()}`}
+											aria-label={`View details for ${subject.label}, ${actionLabel(entry.action).toLowerCase()}`}
 											onClick={() => {
 												setDetail(entry);
 												setDetailOpen(true);
 											}}
 										>
-											Details
+											View details
 										</Button>
 									</TableCell>
 								</TableRow>

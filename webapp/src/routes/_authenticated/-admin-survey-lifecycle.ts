@@ -57,7 +57,7 @@ export function useSurveyLifecycle() {
 			queryClient.removeQueries({ queryKey: adminGetProductSurveySummaryQueryKey(path) });
 			queryClient.removeQueries({ queryKey: adminListProductSurveyResponsesQueryKey(path) });
 			invalidateSurveys();
-			toast.success("Survey deleted.");
+			toast.success("Survey deleted");
 		},
 		onError: (error) =>
 			toast.error("We could not delete the survey", { description: problemDetailOf(error) }),
@@ -82,7 +82,7 @@ export function useSurveyLifecycle() {
 				{ path: { surveyId: survey.id }, body: { ...editOf(survey), endsAt: new Date() } },
 				{
 					onSuccess: () => {
-						toast.success("Survey ended.");
+						toast.success("Survey ended");
 					},
 				},
 			),

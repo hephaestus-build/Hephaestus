@@ -35,8 +35,8 @@ function WorkspaceSettingsPage() {
 			queryClient.setQueryData(adminGetInstanceSettingsQueryKey(), data);
 			toast.success(
 				data.silentModeEngaged
-					? "Silent mode engaged. Workspace feedback and messages are now withheld."
-					: "Silent mode released. Workspace feedback and messages can go out again.",
+					? "Silent mode is on. Workspace feedback and messages are withheld."
+					: "Silent mode is off. Workspace feedback and messages can go out again.",
 			);
 		},
 		onError: async (error) => {

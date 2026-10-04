@@ -9,7 +9,7 @@ public class RepositoryProviderNotConnectedException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     public RepositoryProviderNotConnectedException(String workspaceSlug) {
-        super("Workspace '" + workspaceSlug + "' has no active GitHub or GitLab connection. "
+        super("The workspace “" + workspaceSlug + "” has no active GitHub or GitLab connection. "
                 + "Connect one before adding repositories to monitor.");
     }
 }

@@ -254,7 +254,7 @@ export const NoPractices: Story = {
 		...groupOverview(otherGroup.slug),
 	},
 	play: async () => {
-		await expectSettledVisible(await screen.findByText("No practices here yet"));
+		await expectSettledVisible(await screen.findByText("No practices yet"));
 		await expect(screen.getByRole("tab", { name: "Practices 0" })).toBeVisible();
 		await expect(screen.queryByText("What is holding up well")).toBeNull();
 		await expect(screen.queryByText("Next step")).toBeNull();

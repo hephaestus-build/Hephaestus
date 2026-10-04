@@ -53,7 +53,7 @@ export const ConfirmTurningOff: Story = {
 		// Flipping the switch alone must not delete anything.
 		await expect(args.onToggleChannelMessages).not.toHaveBeenCalled();
 
-		const confirm = await screen.findByRole("button", { name: /turn off and delete/iu });
+		const confirm = await screen.findByRole("button", { name: "Stop using and delete" });
 		await userEvent.click(confirm);
 		await expect(args.onToggleChannelMessages).toHaveBeenCalledWith("hephaestustest", false);
 	},

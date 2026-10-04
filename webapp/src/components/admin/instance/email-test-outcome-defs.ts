@@ -40,7 +40,7 @@ export const EMAIL_TEST_OUTCOME_DEFS: StatusDefs<EmailTestOutcome> = {
 		label: "Withheld by silent mode",
 		icon: VolumeXIcon,
 		badgeVariant: "warning",
-		description: "Silent mode withheld this email. Release silent mode before trying again.",
+		description: "Silent mode withheld this email. Turn off silent mode before trying again.",
 	},
 	NO_RECIPIENT: {
 		label: "No recipient",
@@ -73,7 +73,7 @@ export const EMAIL_TEST_OUTCOME_DEFS: StatusDefs<EmailTestOutcome> = {
 		icon: GaugeIcon,
 		badgeVariant: "warning",
 		description:
-			"Sending is paused. The email attempt limit was reached, or capacity could not be checked. Try again later.",
+			"Sending is paused. The email attempt limit was reached, or capacity could not be checked. Try again in a moment.",
 	},
 	UNAVAILABLE: {
 		label: "Relay unavailable",

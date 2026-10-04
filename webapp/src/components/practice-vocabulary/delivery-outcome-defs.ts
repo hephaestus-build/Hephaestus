@@ -109,20 +109,19 @@ const IN_CHAT_OVERRIDES = {
 		label: "Prepared for conversation",
 		icon: MessageSquareDashedIcon,
 		badgeVariant: "secondary",
-		description: "Waiting for the developer’s next chat with the mentor, which is what sends it.",
+		description: "Waiting for the developer’s next chat with Heph, which is what sends it.",
 	},
 	RAISED: {
 		label: "Delivered in conversation",
 		icon: BotMessageSquareIcon,
 		badgeVariant: "success",
-		description: "The mentor showed it to the developer in a reply to their next chat.",
+		description: "Heph showed it to the developer in a reply to their next chat.",
 	},
 	EXPIRED: {
 		label: "Withheld, never raised",
 		icon: HourglassIcon,
 		badgeVariant: "warning",
-		description:
-			"It stayed prepared for conversation until it expired. The mentor never raised it.",
+		description: "It stayed prepared for conversation until it expired. Heph never raised it.",
 	},
 } as const satisfies Record<string, StatusDef>;
 

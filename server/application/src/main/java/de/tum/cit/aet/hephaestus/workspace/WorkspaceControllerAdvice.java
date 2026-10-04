@@ -141,7 +141,7 @@ public class WorkspaceControllerAdvice {
         return problem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Workspace operation failed",
-                "The server could not complete the workspace request. Try again later.");
+                "We could not complete the workspace request. Try again in a moment.");
     }
 
     private ProblemDetail problem(HttpStatus status, String title, String detail) {

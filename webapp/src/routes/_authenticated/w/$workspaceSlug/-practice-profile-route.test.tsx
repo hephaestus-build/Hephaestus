@@ -292,7 +292,7 @@ describe("practice profile route", () => {
 		fireEvent.click(await openReviewsChip());
 
 		fireEvent.click(
-			await screen.findByRole("button", { name: "Review this now: #890" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Request review: #890" }, ROUTE_RENDER_WAIT),
 		);
 
 		await screen.findByText("No review was started", undefined, ROUTE_RENDER_WAIT);
@@ -323,7 +323,7 @@ describe("practice profile route", () => {
 		);
 
 		fireEvent.click(
-			await screen.findByRole("button", { name: "Review this now" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Request review" }, ROUTE_RENDER_WAIT),
 		);
 		await screen.findByText("A review of this was already asked for a moment ago.");
 

@@ -25,7 +25,7 @@ export const DELIVERY_PLACE_DEFS: StatusDefs<DeliveryPlace> = {
 		icon: BotMessageSquareIcon,
 		badgeVariant: "outline",
 		description:
-			"Held back until the developer’s next chat with the mentor, then raised there. What is stored is the move to make, not the words, so it is withheld from every operator surface including this one.",
+			"Held back until the developer’s next chat with Heph, then raised there. What is stored is the move to make, not the words, so it is withheld from every operator surface including this one.",
 	},
 	IN_APP: {
 		label: "On their practice pages",
@@ -48,7 +48,7 @@ export const OPERATOR_WITHHELD_TEXT: Partial<
 	IN_CHAT: {
 		title: "Notes for the conversation are private",
 		detail:
-			"Any notes prepared for the developer’s next conversation with the mentor are private to them and withheld from operators.",
+			"Any notes prepared for the developer’s next conversation with Heph are private to them and withheld from operators.",
 	},
 	IN_APP: {
 		title: "Text is private to the developer",

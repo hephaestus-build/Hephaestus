@@ -650,7 +650,8 @@ function PracticeCatalogRoute() {
 						<AlertDialogTitle>Delete group “{deletingGroup?.name}”?</AlertDialogTitle>
 						<AlertDialogDescription>
 							Choose whether to keep this group’s practices in the workspace or delete them with the
-							group. Deleting practices also permanently deletes their observations.
+							group. Deleting practices also permanently deletes their observations. You cannot undo
+							this.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter className="sm:grid sm:grid-cols-3">
@@ -668,7 +669,7 @@ function PracticeCatalogRoute() {
 								);
 							}}
 						>
-							{catalog.deleteGroup.isPending ? "Deleting…" : "Keep practices unassigned"}
+							{catalog.deleteGroup.isPending ? "Deleting group…" : "Keep practices unassigned"}
 						</AlertDialogAction>
 						<AlertDialogAction
 							variant="destructive"
@@ -686,7 +687,9 @@ function PracticeCatalogRoute() {
 								);
 							}}
 						>
-							{catalog.deleteGroup.isPending ? "Deleting…" : "Delete group and practices"}
+							{catalog.deleteGroup.isPending
+								? "Deleting group and practices…"
+								: "Delete group and practices"}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

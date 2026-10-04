@@ -70,7 +70,7 @@ export const LoadMoreFailed: Story = {
 export const Loading: Story = {
 	args: { feed: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Loading reviews").closest("[aria-busy]")).toHaveAttribute(
+		await expect(canvas.getByText("Loading reviews…").closest("[aria-busy]")).toHaveAttribute(
 			"aria-busy",
 			"true",
 		);

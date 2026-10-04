@@ -87,7 +87,7 @@ export const Default: Story = {
 	play: async ({ args }) => {
 		const panel = await settledDrawerPanel();
 		await expect(screen.getByRole("link", { name: /^Open the original/u })).toBeVisible();
-		await userEvent.click(screen.getByRole("button", { name: "Review this now" }));
+		await userEvent.click(screen.getByRole("button", { name: "Request review" }));
 		await expect(args.onReviewNow).toHaveBeenCalledWith(openProfileReviewRun.reviewedWork);
 		await expect(screen.getByText("Requested")).toBeVisible();
 		await expect(screen.getByText("2nd review")).toBeVisible();

@@ -91,7 +91,7 @@ export const ConnectUnavailable: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText(/no connectionstrategy registered/iu)).toBeVisible();
 		await expect(canvas.getByText(/outline may not be enabled on this instance/iu)).toBeVisible();
-		await expect(canvas.getByText(/ask your server administrator/iu)).toBeVisible();
+		await expect(canvas.getByText(/ask your instance operator/iu)).toBeVisible();
 	},
 };
 
@@ -156,7 +156,7 @@ export const TokenRejected: Story = {
 		tokenStatus: { accepted: false },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline no longer accepts this token/iu);
+		canvas.getByText(/outline no longer accepts this token\. reconnect with a new one/iu);
 		await expect(canvas.queryByText(/expires in/iu)).not.toBeInTheDocument();
 	},
 };

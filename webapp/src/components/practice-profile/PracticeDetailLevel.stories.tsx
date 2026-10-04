@@ -327,7 +327,7 @@ export const NotObserved: Story = {
 export const Loading: Story = {
 	args: { isLoading: true, practice: undefined },
 	play: async () => {
-		await screen.findByText("Loading reviews");
+		await screen.findByText("Loading reviews…");
 		await expect(screen.queryByRole("tab")).toBeNull();
 	},
 };

@@ -161,8 +161,8 @@ public class ReviewSweepScheduleService {
                     + max.toDays()
                     + " days, not "
                     + lookbackDays
-                    + ". To review older work, start a backfill under “Review past work”. "
-                    + "Hephaestus counts a backfill apart from live work.");
+                    + ". To review older work, use “Review past work”. "
+                    + "Hephaestus counts a review of past work apart from live work.");
         }
     }
 }

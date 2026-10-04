@@ -50,7 +50,7 @@ export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 		description: "It ran past the time it is allowed and was stopped.",
 	},
 	CANCELLED: {
-		label: "Cancelled",
+		label: "Canceled",
 		icon: CircleSlashIcon,
 		badgeVariant: "outline",
 		description: "Somebody stopped it before it finished.",

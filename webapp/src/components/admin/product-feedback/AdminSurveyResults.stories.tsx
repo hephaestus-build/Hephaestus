@@ -135,7 +135,7 @@ export const NoResponses: Story = {
 		}),
 	},
 	play: async () => {
-		await expectSettledVisible(await screen.findByText("No responses yet."));
+		await expectSettledVisible(await screen.findByText("No responses yet"));
 		// A rate over nobody is not zero.
 		await expect(screen.getByText("—")).toBeVisible();
 		await expect(screen.getByRole("button", { name: "Export CSV" })).toBeDisabled();

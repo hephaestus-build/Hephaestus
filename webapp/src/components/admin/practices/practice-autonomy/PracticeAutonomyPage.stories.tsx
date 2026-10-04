@@ -350,7 +350,7 @@ export const OverridesOnly: Story = {
 		await expect(canvas.getByText("Links the issue it closes")).toBeVisible();
 		await expect(canvas.queryByText("States the motivation")).not.toBeInTheDocument();
 		await expect(canvas.getByRole("button", { name: /^Testing/u })).toBeVisible();
-		await expect(canvas.getByText("No practices here were set by hand.")).toBeVisible();
+		await expect(canvas.getByText("No practices in this group were set by hand")).toBeVisible();
 		await expect(canvas.queryByText("Handles the error state")).not.toBeInTheDocument();
 	},
 };

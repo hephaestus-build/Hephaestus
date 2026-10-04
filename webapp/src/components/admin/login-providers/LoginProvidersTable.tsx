@@ -103,7 +103,7 @@ export function LoginProvidersTable({
 					</EmptyMedia>
 					<EmptyTitle>No login providers yet</EmptyTitle>
 					<EmptyDescription>
-						Add one so users can sign in, or link a Slack or Outline account from their settings.
+						Add one so users can sign in, or connect a Slack or Outline account in User settings.
 					</EmptyDescription>
 				</EmptyHeader>
 				{onAdd && (
@@ -235,8 +235,8 @@ export function LoginProvidersTable({
 					<AlertDialogHeader>
 						<AlertDialogTitle>Delete login provider “{deleting?.displayName}”?</AlertDialogTitle>
 						<AlertDialogDescription>
-							Users will no longer be able to sign in with this provider. Existing linked accounts
-							are unaffected. You cannot undo this.
+							Users will no longer be able to sign in with this provider. Existing connected
+							accounts are unaffected. You cannot undo this.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

@@ -290,10 +290,10 @@ function ReviewRunRow({
 						className={ROW_ACTION_PRESSED}
 						disabled={isRequesting}
 						onClick={() => onReviewNow(work)}
-						aria-label={`${isRequesting ? "Requesting review…" : "Review this now"}: ${work.label}`}
+						aria-label={`${isRequesting ? "Requesting review…" : "Request review"}: ${work.label}`}
 					>
 						<PlayIcon aria-hidden data-icon="inline-start" />
-						{isRequesting ? "Requesting review…" : "Review this now"}
+						{isRequesting ? "Requesting review…" : "Request review"}
 					</Button>
 				)}
 			</TableCell>

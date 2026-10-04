@@ -24,7 +24,7 @@ const OUTCOMES = {
 	none: {
 		Icon: InfoIcon,
 		iconClass: "size-12 text-muted-foreground",
-		title: "Nothing to show here",
+		title: "Open an integration from workspace administration",
 	},
 };
 
@@ -94,7 +94,7 @@ function IntegrationsCallback() {
 						)}
 					</div>
 					<Button nativeButton={false} render={<Link to="/" />}>
-						Return to dashboard
+						Back to dashboard
 					</Button>
 				</CardContent>
 			</Card>

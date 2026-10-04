@@ -67,7 +67,7 @@ type Story = StoryObj<typeof meta>;
 /**
  * Newest first under a heading per day. A row leads with the practices that slipped, by name, and
  * under it counts the practices that were met, did not apply, or remained undetermined, and how many practices
- * the review reached. "Review this now" is offered only on the rows whose work
+ * the review reached. "Request review" is offered only on the rows whose work
  * the reader may ask about, and feedback is linked where the provider's comment can be addressed
  * and counted elsewhere.
  */
@@ -98,7 +98,7 @@ export const Default: Story = {
 		await expect(screen.getByText("two pieces of feedback")).toBeVisible();
 		await expect(screen.getByText("one piece of feedback")).toBeVisible();
 
-		const asks = screen.getAllByRole("button", { name: /^Review this now: /u });
+		const asks = screen.getAllByRole("button", { name: /^Request review: /u });
 		await expect(asks).toHaveLength(3);
 		const [firstAsk] = asks;
 		if (!firstAsk) {
@@ -191,7 +191,7 @@ export const AskingForAReview: Story = {
 	play: async () => {
 		await settledDrawerPanel();
 		await expect(screen.getAllByText("Requesting review…")).toHaveLength(2);
-		await expect(screen.getAllByText("Review this now")).toHaveLength(1);
+		await expect(screen.getAllByText("Request review")).toHaveLength(1);
 	},
 };
 

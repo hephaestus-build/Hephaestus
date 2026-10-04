@@ -127,15 +127,15 @@ test.describe("inline review activity", () => {
 
 		// An admin's panel does not turn another developer's queued run into their own review.
 		await expect(line(frame)).toContainText("review status unavailable");
-		await expect(frame.getByRole("button", { name: "Request review…" })).toBeVisible();
+		await expect(frame.getByRole("button", { name: "Request review" })).toBeVisible();
 
-		// On work with nothing running, "Request review…" opens the extension's own window, which
-		// shows what would change and sends nothing until confirmed there; cancelling sends nothing.
+		// On work with nothing running, "Request review" opens the extension's own window, which
+		// shows what would change and sends nothing until confirmed there; canceling sends nothing.
 		const settings = await context.newPage();
 		await providerTab(settings, GITLAB_MR5);
 		const settingsFrame = await openInline(settings);
 		const opened = context.waitForEvent("page");
-		await settingsFrame.getByRole("button", { name: "Request review…" }).last().click();
+		await settingsFrame.getByRole("button", { name: "Request review" }).last().click();
 		const confirmation = await opened;
 		await expect(confirmation).toHaveURL(/\/action\.html#/u);
 		await expect(confirmation.getByRole("heading", { level: 1 })).toHaveText(
@@ -391,14 +391,14 @@ test.describe("a developer who is not an admin", () => {
 		await expectWork(ownFrame, `${WEB_APP_URL}/w/ext-e2e/feedback/scm.pull_request/920013`);
 		const observations = ownFrame.getByRole("region", { name: "Your observations" });
 		await expect(observations.getByRole("listitem")).toHaveCount(3);
-		await expect(ownFrame.getByRole("button", { name: "Request review…" }).first()).toBeVisible();
+		await expect(ownFrame.getByRole("button", { name: "Request review" }).first()).toBeVisible();
 		await expect(ownFrame.getByRole("link", { name: /^Review details/u })).toHaveCount(0);
 
 		const other = await context.newPage();
 		await providerTab(other, GITLAB_MR);
 		const otherFrame = await openInline(other);
 		await expectWork(otherFrame, TRACE_URL);
-		await expect(otherFrame.getByRole("button", { name: "Request review…" })).toHaveCount(0);
+		await expect(otherFrame.getByRole("button", { name: "Request review" })).toHaveCount(0);
 		await expect(otherFrame.getByRole("link", { name: /^Review details/u })).toHaveCount(0);
 	});
 });
@@ -420,7 +420,7 @@ test("a list reads only the pressed row, and shows its preview at once without a
 	// One line, filled at once: nothing in it opens, and it offers no request.
 	await expect(frame.getByRole("status")).toContainText("3 comments for you");
 	await expect(frame.locator("[aria-expanded]")).toHaveCount(0);
-	await expect(frame.getByRole("button", { name: "Request review…" })).toHaveCount(0);
+	await expect(frame.getByRole("button", { name: "Request review" })).toHaveCount(0);
 	await expect(frame.locator("body")).not.toContainText("E2E_");
 	expect(reads.some((url) => new URL(url).pathname.endsWith("/feedback/on-work"))).toBe(true);
 	expect(reads.some((url) => new URL(url).pathname.endsWith("/practices/observations"))).toBe(

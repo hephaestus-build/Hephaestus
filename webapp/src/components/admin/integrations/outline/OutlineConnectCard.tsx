@@ -175,7 +175,7 @@ export function OutlineConnectCard({
 									<AlertTitle>Outline may not be enabled on this instance</AlertTitle>
 									<AlertDescription>
 										The server has no Outline integration configured, so connecting cannot succeed
-										here. If your URL and token are correct, ask your server administrator to enable
+										here. If your URL and token are correct, ask your instance operator to enable
 										the Outline integration for this deployment.
 									</AlertDescription>
 								</Alert>
@@ -215,8 +215,8 @@ export function OutlineConnectCard({
 						<AlertDialogTitle>Disconnect Outline?</AlertDialogTitle>
 						<AlertDialogDescription>
 							Hephaestus stops syncing Outline and erases every mirrored document for this
-							workspace. Documents in Outline itself are not affected. You can reconnect later with
-							a token.
+							workspace. Documents in Outline itself are not affected. You cannot undo this. You can
+							reconnect later with a token.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -260,7 +260,7 @@ function OutlineTokenPanel({ tokenStatus, isLoading }: OutlineTokenPanelProps) {
 		return (
 			<Alert variant="destructive">
 				<TriangleAlertIcon />
-				<AlertTitle>Outline no longer accepts this token</AlertTitle>
+				<AlertTitle>Outline no longer accepts this token. Reconnect with a new one</AlertTitle>
 				<AlertDescription>
 					Syncing is stopped until you store a working API key. Create a new key in Outline under{" "}
 					<strong>Settings → API Keys</strong>, then disconnect and reconnect here with it.

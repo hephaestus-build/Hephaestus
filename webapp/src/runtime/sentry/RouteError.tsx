@@ -19,7 +19,7 @@ export function RouteError({ error }: ErrorComponentProps) {
 			<section className="max-w-md space-y-4 text-center" role="alert">
 				<h1 className="text-2xl font-semibold">We could not load this page</h1>
 				<p className="text-muted-foreground">
-					Try again. If it keeps failing, contact your workspace admin.
+					Try again. If it keeps failing, contact your instance operator.
 				</p>
 				<div className="flex justify-center gap-2">
 					<Button

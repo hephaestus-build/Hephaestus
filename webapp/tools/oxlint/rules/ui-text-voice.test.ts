@@ -27,8 +27,32 @@ ruleTester.run("ui-text-voice", uiTextVoice, {
 		{ code: 'toast.success("You’re signed in.");' },
 		{ code: `<p>{\`It’s \${name}\`}</p>` },
 		{ code: "<p>You are not a member. It is not saved.</p>" },
+		{ code: "<p>The workspace’s practices.</p>" },
+		{ code: '<meta name="viewport" content="width=device-width; initial-scale=1" />' },
+		{ code: "<code>const a = 1;</code>" },
+		{ code: '<pre>{"if (x) { y(); }"}</pre>' },
+		{ code: "<p>Press <kbd>Ctrl+C</kbd>.</p>" },
+		{ code: '<Dialog confirmLabel="Delete practice" emptyTitle="No practices yet" />' },
+		{
+			// Exactly 25 words is the longest sentence the rule accepts.
+			code: "<p>One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five.</p>",
+		},
 	],
 	invalid: [
+		{
+			code: '<Dialog confirmLabel="Don’t utilize it" />',
+			errors: [{ messageId: "word" }, { messageId: "word" }],
+		},
+		{
+			code: '<Empty emptyTitle="Can’t load; retry" />',
+			errors: [{ messageId: "word" }, { messageId: "semicolon" }],
+		},
+		{ code: "<p>{name}'s plan</p>", errors: [{ messageId: "apostrophe", data: { found: "'s" } }] },
+		{
+			code: `<p>{\`\${name}'s plan\`}</p>`,
+			errors: [{ messageId: "apostrophe" }],
+		},
+		{ code: "<p>Say 'hello'.</p>", errors: [{ messageId: "apostrophe" }] },
 		{ code: "<p>You&#39;re set.</p>", errors: [{ messageId: "apostrophe" }] },
 		{ code: "<p>The workspace's practices.</p>", errors: [{ messageId: "apostrophe" }] },
 		{ code: 'toast.success("You\'re signed in.");', errors: [{ messageId: "apostrophe" }] },

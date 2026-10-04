@@ -37,11 +37,11 @@ describe("instance settings route", () => {
 		renderRouteAt("/admin/settings");
 
 		await user.click(
-			await screen.findByRole("button", { name: "Release silent mode…" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Turn off silent mode…" }, ROUTE_RENDER_WAIT),
 		);
 		const dialog = await screen.findByRole("alertdialog");
-		await user.type(within(dialog).getByLabelText(/Type release to confirm/u), "release");
-		await user.click(within(dialog).getByRole("button", { name: "Release silent mode" }));
+		await user.type(within(dialog).getByLabelText(/Type turn off to confirm/u), "turn off");
+		await user.click(within(dialog).getByRole("button", { name: "Turn off silent mode" }));
 
 		await waitFor(() => expect(reads).toBe(2));
 		expect(ifMatch).toBe('"1"');
@@ -65,16 +65,16 @@ describe("instance settings route", () => {
 		renderRouteAt("/admin/settings");
 
 		await user.click(
-			await screen.findByRole("button", { name: "Release silent mode…" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Turn off silent mode…" }, ROUTE_RENDER_WAIT),
 		);
 		const dialog = await screen.findByRole("alertdialog");
-		await user.type(within(dialog).getByLabelText(/Type release to confirm/u), "release");
-		await user.click(within(dialog).getByRole("button", { name: "Release silent mode" }));
+		await user.type(within(dialog).getByLabelText(/Type turn off to confirm/u), "turn off");
+		await user.click(within(dialog).getByRole("button", { name: "Turn off silent mode" }));
 
 		await screen.findByText("We could not verify the current instance settings");
 		await within(dialog).findByText(/The current settings could not be verified/u);
 		expect(
-			within(dialog).getByRole<HTMLButtonElement>("button", { name: "Release silent mode" })
+			within(dialog).getByRole<HTMLButtonElement>("button", { name: "Turn off silent mode" })
 				.disabled,
 		).toBe(true);
 	});
@@ -166,6 +166,6 @@ describe("instance settings route", () => {
 		await user.click(screen.getByRole("button", { name: "Send test email" }));
 
 		await screen.findByText("Accepted by relay");
-		expect(screen.queryByRole("button", { name: "Release silent mode…" })).toBeNull();
+		expect(screen.queryByRole("button", { name: "Turn off silent mode…" })).toBeNull();
 	});
 });

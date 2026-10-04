@@ -78,7 +78,7 @@ export function AdminSurveyEmailInvitations({ state }: { state: SurveyEmailInvit
 							))}
 						</dl>
 						<p className="text-sm text-muted-foreground">
-							Relay acceptance does not confirm inbox delivery. Already requested includes cancelled
+							Relay acceptance does not confirm inbox delivery. Already requested includes canceled
 							requests. It is not a pending-delivery count. Hephaestus checks eligibility again
 							before it sends.
 						</p>
@@ -123,9 +123,9 @@ export function AdminSurveyEmailInvitations({ state }: { state: SurveyEmailInvit
 									<AlertDialogTitle>Queue survey invitation emails?</AlertDialogTitle>
 									<AlertDialogDescription>
 										This requests email for up to 1,000 eligible recipients. Repeat this action if
-										recipients remain. It also retries invitations that were cancelled or expired
+										recipients remain. It also retries invitations that were canceled or expired
 										before the relay accepted them. Invitations already accepted by the relay are
-										not sent again. Cancelled reminders stay cancelled.
+										not sent again. Canceled reminders stay canceled.
 									</AlertDialogDescription>
 								</AlertDialogHeader>
 								<Field orientation="horizontal">

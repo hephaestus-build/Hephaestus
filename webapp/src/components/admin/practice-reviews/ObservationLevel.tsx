@@ -272,9 +272,9 @@ function InvalidationAlert({ invalidation }: { invalidation: ObservationInvalida
 					<RelativeTime value={invalidation.invalidatedAt} />. Reason: “{invalidation.reason}”
 				</p>
 				<p>
-					It no longer counts toward the developer’s standing, their practice page or the mentor.
-					Feedback about it that had not reached anyone was stopped. The developer sees it labelled
-					with this reason in their review history.
+					It no longer counts toward the developer’s standing, their practice page or Heph. Feedback
+					about it that had not reached anyone was stopped. The developer sees it labelled with this
+					reason in their review history.
 				</p>
 				<p>{PROVIDER_COPY_IN_FORCE[invalidation.providerCopy]}</p>
 			</AlertDescription>

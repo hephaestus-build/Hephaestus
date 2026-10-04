@@ -170,8 +170,8 @@ export function EmailPreferencesSection({
 						)}
 					{!optOutOnly && !state.preferences.emailAvailable && (
 						<p className="text-sm text-muted-foreground">
-							Your account has no verified email address. A linked sign-in provider must supply one
-							before you can turn on more emails. You can still turn off existing subscriptions.
+							Your account has no verified email address. A connected sign-in provider must supply
+							one before you can turn on more emails. You can still turn off existing subscriptions.
 							Changing these choices does not add or verify an address.
 						</p>
 					)}

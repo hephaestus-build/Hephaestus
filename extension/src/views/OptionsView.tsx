@@ -89,7 +89,7 @@ function Setup({ developmentBuild }: { developmentBuild: boolean }) {
 				setState({
 					status: "error",
 					target,
-					message: messageOf(error, "The extension could not connect. Try again."),
+					message: messageOf(error, "We could not connect. Try again."),
 				});
 			}
 		};
@@ -195,7 +195,7 @@ function useSiteAccess() {
 				setActivity({
 					origin,
 					status: "error",
-					message: messageOf(error, "Chrome could not change the extension’s access. Try again."),
+					message: messageOf(error, "We could not change the extension’s access. Try again."),
 				});
 			}
 			await refresh();

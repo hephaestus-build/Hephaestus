@@ -146,7 +146,7 @@ export function EarlierReviewsButton({
 export function ReviewRunFeedSkeleton({ rows }: { rows: number }) {
 	return (
 		<div className="flex flex-col gap-2.5" aria-busy="true">
-			<span className="sr-only">Loading reviews</span>
+			<span className="sr-only">Loading reviews…</span>
 			{Array.from({ length: rows }, (_, index) => (
 				<Skeleton key={index} className="h-24 w-full" />
 			))}

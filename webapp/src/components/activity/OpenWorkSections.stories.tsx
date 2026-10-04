@@ -80,13 +80,11 @@ export const ReviewNow: Story = {
 	play: async ({ canvas, userEvent }) => {
 		// Her three own pull requests returned or approved and her other assigned issue; the two
 		// review requests shown above them offer none, and the issue being asked about waits.
-		await expect(canvas.getAllByRole("button", { name: /^Review this now/u })).toHaveLength(4);
+		await expect(canvas.getAllByRole("button", { name: /^Request review/u })).toHaveLength(4);
 		await expect(
 			canvas.getByRole("button", { name: "Requesting review…: Hephaestus #1374" }),
 		).toBeDisabled();
-		await userEvent.click(
-			canvas.getByRole("button", { name: "Review this now: Hephaestus #2301" }),
-		);
+		await userEvent.click(canvas.getByRole("button", { name: "Request review: Hephaestus #2301" }));
 		await expect(onReviewNow).toHaveBeenCalledWith(expect.objectContaining({ id: 102 }));
 	},
 };

@@ -39,6 +39,25 @@ export const RequirementsThatKeepSkipping: Story = {
 	},
 };
 
+/** With no reason to list, the line itself says why the reviews were skipped. */
+export const SkippedWithoutListedReasons: Story = {
+	args: {
+		outcome: outcome({
+			practiceSlug: "handles-errors-instead-of-swallowing-them",
+			considered: 3,
+			skipped: 2,
+		}),
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText(
+				"Skipped in 2 reviews, because the evidence was not there to review against.",
+			),
+		).toBeVisible();
+		await expect(canvas.queryByRole("listitem")).not.toBeInTheDocument();
+	},
+};
+
 /** Reasons are counted per source, so a review blocked on several appears once for each. */
 export const ReasonsCanOutnumberTheSkips: Story = {
 	args: {

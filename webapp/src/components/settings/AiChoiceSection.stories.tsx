@@ -44,9 +44,11 @@ export const Unanswered: Story = {
 			.map((radio) => radio.closest("label")?.querySelector('[data-slot="ai-choice-header"]'))) {
 			await expect(header?.querySelector("img")).toBeNull();
 		}
-		const save = canvas.getByRole("button", { name: "Save" });
+		const save = canvas.getByRole("button", { name: "Save AI choice" });
 		await expectGenuinelyDisabled(save);
-		await expect(save).toHaveAccessibleDescription("You can change your answer at any time.");
+		await expect(save).toHaveAccessibleDescription(
+			"Applies in all your workspaces. You can change your answer at any time.",
+		);
 	},
 };
 
@@ -54,11 +56,11 @@ export const Answered: Story = {
 	args: { choice: "CLOUD" },
 	play: async ({ args, canvas, userEvent }) => {
 		await expect(canvas.getByRole("radio", { name: CLOUD })).toBeChecked();
-		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save" }));
+		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save AI choice" }));
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toBeChecked();
-		await expect(canvas.getByRole("button", { name: "Save" })).toBeEnabled();
-		await userEvent.click(canvas.getByRole("button", { name: "Save" }));
+		await expect(canvas.getByRole("button", { name: "Save AI choice" })).toBeEnabled();
+		await userEvent.click(canvas.getByRole("button", { name: "Save AI choice" }));
 		await expect(args.onSave).toHaveBeenCalledWith("NO_AI");
 	},
 };
@@ -76,7 +78,7 @@ export const Loading: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.queryAllByRole("radio")).toHaveLength(0);
 		await expect(canvas.getByText("Loading…")).toBeVisible();
-		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save" }));
+		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save AI choice" }));
 	},
 };
 

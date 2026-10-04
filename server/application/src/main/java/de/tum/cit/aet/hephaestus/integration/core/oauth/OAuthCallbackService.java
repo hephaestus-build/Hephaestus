@@ -112,7 +112,7 @@ public class OAuthCallbackService {
         }
         Workspace workspace = workspaceRepository
                 .findById(workspaceId)
-                .orElseThrow(() -> new EntityNotFoundException("Workspace not found: id=" + workspaceId));
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
         Connection fresh = new Connection(workspace, kind, /* instanceKey */ null, defaultConfig(kind));
         return connectionRepository.save(fresh);
     }

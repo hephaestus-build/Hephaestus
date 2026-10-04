@@ -123,7 +123,7 @@ function loadable<T>(query: {
 	if (query.isError) {
 		return {
 			status: "error",
-			message: query.error?.message ?? "The extension could not load this practice review.",
+			message: query.error?.message ?? "We could not load this practice review.",
 		};
 	}
 	if (query.data !== undefined) {

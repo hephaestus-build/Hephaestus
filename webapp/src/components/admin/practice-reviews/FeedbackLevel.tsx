@@ -75,7 +75,7 @@ export interface FeedbackLevelProps {
 	/** Where this feedback sits among all awaiting approval; absent when it awaits none. */
 	queue?: ApprovalQueue;
 	/**
-	 * Withdraws (`true`) or restores (`false`) a card on the developer’s practice page, with the
+	 * Withdraws (`true`) or restores (`false`) a card on the developer's practice page, with the
 	 * admin's reason. Settles when the server has answered; the form keeps the reason until it
 	 * succeeded.
 	 */
@@ -87,7 +87,7 @@ export interface FeedbackLevelProps {
  * One piece of feedback: who it is for, what it says, what became of it and what it was based on.
  * Feedback awaiting approval is the same level with the decision as its footer and the package
  * expanded, so approving it happens where it is read, and the level turns into the record the moment
- * the decision lands. A card on the developer’s practice page has withdrawing it, or restoring it, as
+ * the decision lands. A card on the developer's practice page has withdrawing it, or restoring it, as
  * its footer instead.
  */
 export function FeedbackLevel({

@@ -383,7 +383,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> service.retryDelivery(WORKSPACE_ID, jobId))
                     .isInstanceOf(EntityNotFoundException.class)
-                    .hasMessageContaining("AgentJob");
+                    .hasMessageContaining("We could not find that review.");
         }
 
         @Test
@@ -429,7 +429,7 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
 
             assertThatThrownBy(() -> service.retryDelivery(WORKSPACE_ID, jobId))
                     .isInstanceOf(AgentJobStateConflictException.class)
-                    .hasMessage("The server could not post the feedback. Try again later.")
+                    .hasMessage("We could not post the feedback. Try again in a moment.")
                     .hasRootCauseMessage("GitHub API rate limited");
 
             verify(agentJobRepository)

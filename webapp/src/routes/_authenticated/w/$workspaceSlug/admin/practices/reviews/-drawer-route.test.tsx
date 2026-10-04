@@ -412,7 +412,7 @@ describe("the reviewed-work level", () => {
 		const level = await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
 
 		await userEvent.click(
-			await within(level).findByRole("button", { name: "Review this now" }, ROUTE_RENDER_WAIT),
+			await within(level).findByRole("button", { name: "Request review" }, ROUTE_RENDER_WAIT),
 		);
 
 		await within(level).findByText("No review was started");
@@ -496,7 +496,7 @@ describe("the reviewed-work level", () => {
 		renderRouteAtWithRouter(`${REVIEWS}/work?detail=work:pull-request:1423`);
 		const level = await screen.findByRole("dialog", {}, ROUTE_RENDER_WAIT);
 		await userEvent.click(
-			await within(level).findByRole("button", { name: "Review this now" }, ROUTE_RENDER_WAIT),
+			await within(level).findByRole("button", { name: "Request review" }, ROUTE_RENDER_WAIT),
 		);
 
 		await waitFor(

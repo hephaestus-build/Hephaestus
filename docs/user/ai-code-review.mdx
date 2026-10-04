@@ -118,12 +118,12 @@ Only the work’s author, assignees, and workspace admins can use them.
 Each person has an hourly limit.
 Hephaestus refuses requests over the limit instead of adding them to a queue.
 
-**From the app.** In a workspace that reviews practices, [Activity](./activity#review-this-now) shows **Review this now** for your open pull requests and assigned issues.
+**From the app.** In a workspace that reviews practices, [Activity](./activity#request-a-review) shows **Request review** for your open pull requests and assigned issues.
 For your own work with recorded review results, it also appears beside each row of [Reviews of your work](./practice-profile#reviews-of-your-work).
 It appears on the review you open there, too.
 Workspace admins find it on any pull request or issue under **Administration → Practices → Practice reviews → Work**.
 
-1. Select **Review this now** for the work.
+1. Select **Request review** for the work.
 
 If Hephaestus refuses the request, you stay on the same page and it explains why in one sentence.
 Reasons include a review of the same work during the workspace’s cooldown period and no model within the author’s [AI choice](./user-settings#your-ai-choice).
@@ -143,7 +143,7 @@ Hephaestus ignores it after the merge request closes or merges.
 Workspace settings decide whether Hephaestus accepts it.
 
 GitHub pull requests have no such command.
-On a GitHub pull request, select **Review this now** instead.
+On a GitHub pull request, select **Request review** instead.
 
 ### See what was reviewed, and what was not
 
@@ -253,7 +253,7 @@ This stops new practice-feedback comments on issues, pull requests, or merge req
 It also stops Slack reminders sent to you.
 
 A reminder is a Slack direct message about feedback prepared for a conversation with Heph. It arrives at most once in 24 hours per workspace.
-The workspace needs a Slack connection, your account must be linked, and Heph must be available within your AI choice.
+The workspace needs a Slack connection, you must have connected your Slack account, and Heph must be available within your AI choice.
 The message contains a count, not the feedback text.
 
 This setting controls delivery only. Reviews can still run.

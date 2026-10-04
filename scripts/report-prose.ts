@@ -1,23 +1,9 @@
 import { glob, mkdir, writeFile } from "node:fs/promises";
 
-import { negativeContractions } from "./lib/ste-words.ts";
-import { uiAlerts } from "./lib/ui-text.ts";
+import { uiAlerts, uiRuleName } from "./lib/ui-text.ts";
 import { prepareVale, valeAlerts } from "./lib/vale.ts";
 
 const counts = new Map<string, Map<string, number>>();
-function uiRule(message: string): string {
-	if (message.startsWith("Split")) {
-		return "STE.SentenceLength";
-	}
-	if (message.includes("semicolon")) {
-		return "STE.Semicolons";
-	}
-	if (negativeContractions.some(({ from }) => message.includes(`instead of "${from}"`))) {
-		return "STE.NegativeContractions";
-	}
-	return "STE.Words";
-}
-
 function count(tree: string, rule: string): void {
 	const rules = counts.get(tree) ?? new Map<string, number>();
 	rules.set(rule, (rules.get(rule) ?? 0) + 1);
@@ -36,12 +22,11 @@ try {
 			}
 		}
 	}
-	for (const alert of await uiAlerts(["webapp/src"])) {
-		const rule = uiRule(alert.message);
-		count("webapp/src", rule);
+	for (const alert of await uiAlerts(["webapp/src", "extension/src"])) {
+		count("UI source", uiRuleName(alert.message));
 	}
 	const rules = [...new Set([...counts.values()].flatMap((items) => [...items.keys()]))].toSorted();
-	const trees = ["docs/user", "docs/admin", "docs/contributor", "webapp/src"];
+	const trees = ["docs/user", "docs/admin", "docs/contributor", "UI source"];
 	const unsupportedUi = new Set([
 		"STE.ProcedureLength",
 		"STE.ParagraphLength",
@@ -54,7 +39,7 @@ try {
 		"| --- | ---: | ---: | ---: | ---: |",
 		...rules.map(
 			(rule) =>
-				`| ${rule} | ${trees.map((tree) => (tree === "webapp/src" && unsupportedUi.has(rule) ? "—" : (counts.get(tree)?.get(rule) ?? 0))).join(" | ")} |`,
+				`| ${rule} | ${trees.map((tree) => (tree === "UI source" && unsupportedUi.has(rule) ? "—" : (counts.get(tree)?.get(rule) ?? 0))).join(" | ")} |`,
 		),
 	].join("\n");
 	console.log(table);

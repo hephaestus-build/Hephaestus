@@ -26,13 +26,15 @@ describe("the account AI choice on the settings page", () => {
 
 		fireEvent.click(screen.getByRole("radio", { name: NO_AI }));
 		expect(bodies).toStrictEqual([]);
-		fireEvent.click(screen.getByRole("button", { name: "Save" }));
+		fireEvent.click(screen.getByRole("button", { name: "Save AI choice" }));
 
 		await waitFor(() => expect(bodies).toStrictEqual([{ choice: "NO_AI" }]));
 		await waitFor(() => {
 			expect(screen.getByRole<HTMLInputElement>("radio", { name: NO_AI }).checked).toBe(true);
 			// Saved: nothing is left to submit until the answer changes again.
-			expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save" }).disabled).toBe(true);
+			expect(
+				screen.getByRole<HTMLButtonElement>("button", { name: "Save AI choice" }).disabled,
+			).toBe(true);
 		});
 	});
 });

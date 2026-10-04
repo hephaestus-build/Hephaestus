@@ -145,10 +145,10 @@ function UserRows({
 					) : (
 						<div className="flex flex-col items-center justify-center gap-2">
 							<Users className="size-8 text-muted-foreground" aria-hidden />
-							<p className="text-sm font-medium">No users found</p>
-							<p className="text-xs text-muted-foreground">
-								{hasSearch ? "Try a different search." : "No accounts exist yet."}
-							</p>
+							<p className="text-sm font-medium">{hasSearch ? "No users found" : "No users yet"}</p>
+							{hasSearch ? (
+								<p className="text-xs text-muted-foreground">Try a different search.</p>
+							) : null}
 						</div>
 					)}
 				</TableCell>

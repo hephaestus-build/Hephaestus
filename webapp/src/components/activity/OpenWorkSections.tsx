@@ -28,7 +28,7 @@ import { WorkItemRow } from "./WorkItemRow";
 export type OpenWorkState = PanelState<{ openWork: OpenWork; login: string }>;
 
 /**
- * "Review this now" on the person's own pull requests and assigned issues, the work they may ask a
+ * "Request review" on the person's own pull requests and assigned issues, the work they may ask a
  * review of; a request to review someone else's work never offers it.
  */
 export interface OpenWorkReviewNow {
@@ -268,7 +268,7 @@ function WorkList({
 function GroupSkeleton({ rows }: { rows: number }) {
 	return (
 		<div aria-busy="true" className="space-y-2">
-			<span className="sr-only">Loading open work</span>
+			<span className="sr-only">Loading open work…</span>
 			<div aria-hidden className="space-y-2">
 				<Skeleton className="h-4 w-36" />
 				<div className="overflow-hidden rounded-xl border bg-card">

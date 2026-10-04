@@ -51,7 +51,7 @@ export const NotAboutTheReader: Story = {
 export const Loading: Story = {
 	args: { feed: { status: "loading" } },
 	play: async ({ canvas }) => {
-		canvas.getByText("Loading reviews");
+		canvas.getByText("Loading reviews…");
 		await expect(canvas.queryByRole("list", { name: "Reviews" })).toBeNull();
 	},
 };

@@ -290,7 +290,7 @@ public class WorkspaceMembershipService {
 
         User userReference = entityManager.find(User.class, userId);
         if (userReference == null) {
-            throw new IllegalArgumentException("User not found with ID: " + userId);
+            throw new IllegalArgumentException("We could not find that user. Reload the page and try again.");
         }
 
         // Check if membership already exists
@@ -338,7 +338,7 @@ public class WorkspaceMembershipService {
         } else {
             User user = entityManager.find(User.class, userId);
             if (user == null) {
-                throw new IllegalArgumentException("User not found with ID: " + userId);
+                throw new IllegalArgumentException("We could not find that user. Reload the page and try again.");
             }
 
             WorkspaceMembership membership = createMembershipInternal(workspace, user, role);
@@ -397,7 +397,8 @@ public class WorkspaceMembershipService {
     public WorkspaceMembership updateMemberVisibility(Long workspaceId, Long userId, boolean hidden) {
         WorkspaceMembership membership = workspaceMembershipRepository
                 .findByWorkspace_IdAndUser_Id(workspaceId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("Workspace membership not found"));
+                .orElseThrow(() ->
+                        new IllegalArgumentException("We could not find that member. Reload the page and try again."));
         var before = new WorkspaceAuditSnapshots.RoleSnapshot(
                 membership.getRole() == null ? null : membership.getRole().name(), membership.isHidden());
         membership.setHidden(hidden);
@@ -437,7 +438,8 @@ public class WorkspaceMembershipService {
     public WorkspaceMembership getMembership(Long workspaceId, Long userId) {
         return workspaceMembershipRepository
                 .findByWorkspace_IdAndUser_Id(workspaceId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("Workspace membership not found"));
+                .orElseThrow(() ->
+                        new IllegalArgumentException("We could not find that member. Reload the page and try again."));
     }
 
     /**

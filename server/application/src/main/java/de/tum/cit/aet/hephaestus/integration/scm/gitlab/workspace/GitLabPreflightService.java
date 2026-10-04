@@ -85,7 +85,7 @@ public class GitLabPreflightService {
         } catch (Exception e) {
             log.warn("GitLab /api/v4/user failed: serverUrl={}, error={}", resolvedUrl, e.getMessage());
             return GitLabPreflightResponseDTO.failure(
-                    "Hephaestus could not connect to the GitLab server. Try again in a moment.");
+                    "We could not connect to the GitLab server. Try again in a moment.");
         }
 
         // Fallback: validate the token against the group it is meant for
@@ -128,12 +128,10 @@ public class GitLabPreflightService {
                     serverUrl,
                     groupFullPath,
                     e.getMessage());
-            return GitLabPreflightResponseDTO.failure(
-                    "Hephaestus could not validate the group token. Try again in a moment.");
+            return GitLabPreflightResponseDTO.failure("We could not validate the group token. Try again in a moment.");
         }
 
-        return GitLabPreflightResponseDTO.failure(
-                "Hephaestus could not validate the group token. Try again in a moment.");
+        return GitLabPreflightResponseDTO.failure("We could not validate the group token. Try again in a moment.");
     }
 
     /**

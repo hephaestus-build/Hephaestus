@@ -18,7 +18,7 @@ An operator-owned silent run requires the silent deployment checklist first.
 
 ## First response and kill-switch map
 
-1. If external feedback is wrong, immediately engage **Instance admin → Instance settings → Silent mode**.
+1. If external feedback is wrong, immediately turn on silent mode in **Instance admin → Instance settings**.
 2. If the control plane is unavailable, block provider egress at the host/network boundary.
 3. Apply the same block if a request already in progress may still write.
 4. Under either condition, stop all application servers, workers, and active sandboxes.
@@ -28,7 +28,7 @@ A switch cannot recall a request that a provider already accepted.
 
 | Control and location | What it stops | What it does not stop |
 | --- | --- | --- |
-| **Silent mode**, instance settings | New SCM, Slack, and email writes through the egress gateway. This includes edits, inline comments, approvals, reactions, mentor replies, reminders, and retries. It covers all email from the notification module. Withheld email is final and does not send on release. | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, and operator-alert exemptions |
+| **Silent mode**, instance settings | New SCM, Slack, and email writes through the egress gateway. This includes edits, inline comments, approvals, reactions, mentor replies, reminders, and retries. It covers all email from the notification module. Withheld email is final and does not send when silent mode is turned off. | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, and operator-alert exemptions |
 | `AGENT_ENABLED=false`, deployment environment on submitting servers and claiming workers | Queued review runtime. Recreate affected containers to apply it | Already-running sandboxes, interactive mentor, sync, or every external write. Not a runtime global AI stop |
 | Workspace **Review settings** controls: **Start from work activity**, **Start requested reviews** | Their respective review entry points | Other workspaces, existing work, or external delivery already in progress |
 | Workspace/group/practice autonomy **Off** | Reviewing those practices under the effective inherited policy | Other practices and other AI features. A workspace default does not override explicit group/practice choices |
@@ -41,27 +41,27 @@ A switch cannot recall a request that a provider already accepted.
 controls. There is no independent per-channel toggle matrix. For an immediate all-AI stop, stop
 server/worker/sandbox processes and deny model-provider egress. Silent mode does not stop compute.
 
-### Engage, verify, and release silent mode
+### Turn silent mode on, verify it, and turn it off
 
 The authenticated instance-admin API uses `GET /api/admin/settings` and `PATCH /api/admin/settings/silent-mode`.
 The UI handles the preconditions below.
 
-1. Engage silent mode with `{"engaged":true,"reason":"incident reference"}`.
+1. Turn on silent mode with `{"engaged":true,"reason":"incident reference"}`.
 2. Read back `silentModeEngaged=true`.
 3. Retain the audit event and current `ETag`.
-4. For release, use `{"engaged":false,"reason":"approved release reference"}` with **the current** `If-Match` ETag.
+4. To turn it off, use `{"engaged":false,"reason":"approved release reference"}` with **the current** `If-Match` ETag.
 5. If the response is `412`, read again.
-6. After a `412`, reassess the release.
-7. Do not retry release blindly.
+6. After a `412`, reassess turning it off.
+7. Do not retry turning it off blindly.
 
 `428` means the required precondition is missing.
 **Restored settings can contain silent mode off**.
-The default does not override an explicit release decision.
-Release affects all workspaces and never flushes suppressed feedback.
+The default does not override an explicit decision to turn silent mode off.
+Turning silent mode off affects all workspaces and never flushes suppressed feedback.
 
 ## Silent deployment checklist
 
-1. **Contain**. For the running instance, engage silent mode.
+1. **Contain**. For the running instance, turn on silent mode.
 2. For the running instance, read back silent mode.
 3. For a clone, use the pre-boot isolation below instead.
 4. Record exceptions.
@@ -92,7 +92,7 @@ Release affects all workspaces and never flushes suppressed feedback.
 
     Compose health alone does not verify the brake.
 
-19. **Prove silence**. After readback, keep silent mode engaged.
+19. **Prove silence**. After readback, keep silent mode on.
 20. Set `AGENT_ENABLED=true` on the submitting server and claiming worker roles.
 21. Enable the intended review/Slack settings.
 22. Recreate affected containers.
@@ -110,12 +110,12 @@ Release affects all workspaces and never flushes suppressed feedback.
 31. Remain silent if writes are unexplained, migrations fail, or spend is unaccounted for.
 32. If necessary, use recovery below.
 
-33. **Release deliberately**. Only after the rollout gates pass, review all workspace populations, recipient consent, mentor settings, and autonomy.
-34. After the rollout gates pass, release with the current ETag.
+33. **Turn off silent mode deliberately**. Only after the rollout gates pass, review all workspace populations, recipient consent, mentor settings, and autonomy.
+34. After the rollout gates pass, turn silent mode off with the current ETag.
 35. Prefer **Review before sending** for a bounded pilot.
 36. Prove that old suppressed work stays suppressed.
 37. Prove that only a fresh eligible event can deliver.
-38. If either check fails, re-engage immediately.
+38. If either check fails, turn silent mode on again immediately.
 
 ## Upgrade and failed-migration recovery
 
@@ -177,9 +177,9 @@ Removal of a stale lock does not repair a failed migration.
 6. Use matching PostgreSQL version/extensions, encryption keys, and the **previous signed release lock**.
 7. Before consumers boot, reset/quarantine divergent JetStream state with the next section.
 8. Boot only under pre-boot isolation.
-9. Read back/engage silent mode.
+9. Read back silent mode, and turn it on if it is off.
 10. Verify the restored schema, representative data, and readiness.
-11. Complete **Prove silence**, **Inspect and decide**, and **Release deliberately** in the silent checklist.
+11. Complete **Prove silence**, **Inspect and decide**, and **Turn off silent mode deliberately** in the silent checklist.
 12. Report actual recovery point/time and any lost writes.
 13. Preserve the failed database until investigation/retention permits removal.
 
@@ -324,7 +324,7 @@ The self-host broker publishes no host port.
 8. For a dedicated self-host broker, remove only that instance's `nats-server` container and confirmed `nats-data` volume.
 9. For a dedicated self-host broker, recreate NATS with an empty store.
 10. Start the isolated application server first so Liquibase completes.
-11. Engage/read back silent mode.
+11. Turn on silent mode and read it back.
 12. Start the isolated webhook role to recreate streams.
 
     Its Compose dependency requires the migrated application server.
@@ -333,7 +333,7 @@ The self-host broker publishes no host port.
 14. Verify that server consumers attach after streams exist.
 15. If necessary, restart only the isolated server.
 16. Before provider ingress returns, check fresh stream/consumer positions and no old pending deliveries.
-17. Keep silent mode engaged during reconciliation.
+17. Keep silent mode on during reconciliation.
 18. Inventory the gap.
 19. Run supported provider reconciliation within its configured monitoring window.
 20. Observe that reconciliation.
@@ -545,11 +545,11 @@ Normal job-folder retention stays unchanged:
 Deleting in-app data does not delete a provider comment. If external copies must be scrubbed,
 **complete un-deliver before workspace purge, disconnect or person erasure removes their locator records**.
 
-1. Engage silent mode.
+1. Turn on silent mode.
 2. Stop active writers/sandboxes.
 3. Preserve their dispatch state.
 4. Pause sending for the affected workspace.
-   This prevents content recreation when the instance brake later releases.
+   This prevents content recreation when silent mode is later turned off.
 5. Locate the piece of feedback from the workspace review trace.
 6. With authorized read-only database access, inventory **all** placements, not only the summary.
 7. Run the query below with `psql` variables set to verified workspace and feedback IDs.
@@ -582,7 +582,7 @@ Deleting in-app data does not delete a provider comment. If external copies must
 15. Before deletion, verify repository/project, artifact, provider account, author, and content against the provider.
 16. Never infer an API object type from a numeric ID alone.
 17. Use a separate authorized operator session to delete each confirmed provider object.
-18. Do not release application silent mode for cleanup.
+18. Do not turn off application silent mode for cleanup.
 19. Select the endpoint for the actual placement:
 
        | Placement | Provider API |
@@ -638,7 +638,7 @@ traffic and recovery objectives. Assign an owner and test the alert delivery rou
 | Poison events / repeated consumer failures | Preserve stream sequence, kind, reason and delivery count, not raw payloads in logs. Current poison handling **ACKs** at the retry limit. It does not move data to a durable DLQ. NATS maximum-delivery advisories are not a DLQ either. Recover the retained event before retention expires if authorized. Never raise the retry cap to hide a poison loop. | Reproduce with a sanitized fixture, fix the cause, replay one controlled event under silence, then reconcile the bounded gap. Healthy subsequent events continue. |
 | Dead-letter alert from deployment tooling | Identify which system owns the queue. Do not assume an application replay endpoint exists. Preserve IDs/configuration and restrict payload access. | Redrive only after fixing the cause, with a bounded batch and verified delivery idempotency. Record irrecoverable events. |
 | Rising oldest queue age, stale sampler, failed jobs | Check eligible/held/running separately, worker availability, readiness, model bindings, database and provider health. Do not delete jobs or reset leases manually. | Oldest age falls and new work completes. Held work is explained rather than silently counted as healthy. |
-| `UNCERTAIN` / failed dispatch | Engage silence if content safety is in doubt. Restore provider lookup/credentials. Never clear the write fence or create a new dispatch to bypass uncertainty. | Existing provider objects are reconciled without duplicate creates, including inline placements. |
+| `UNCERTAIN` / failed dispatch | Turn on silent mode if content safety is in doubt. Restore provider lookup/credentials. Never clear the write fence or create a new dispatch to bypass uncertainty. | Existing provider objects are reconciled without duplicate creates, including inline placements. |
 | Budget breach / unpriced usage | Identify shared versus workspace-owned funding. Pause each affected budget/model. For runaway global spend stop all AI processes/egress. Silent mode does not stop spending. | Validate usage ledger against provider billing, explain unpriced buckets and in-flight overshoot. Observe a bounded fresh run before restoring caps. Budget-held work can resume automatically. |
 | Backup stale / restore failed | Preserve the last good backup, check destination credentials, disk, WAL coverage and encryption-key recovery. Escalate at the agreed RPO, not after the next deploy. | A new off-host backup and isolated restore succeed within measured objectives. |
 | Broker storage exhaustion | Follow the documented broker/receiver restart order after freeing space. Keep ingress loss visible. Do not purge streams merely to clear an alert. | Receiver durable acknowledgments and consumption recover. Inventory missing events and verify configured bounds. |
@@ -674,7 +674,7 @@ Do not delete a shared app that another instance still uses.
 Destroy data only when retention permits.
 :::
 
-1. Engage silence.
+1. Turn on silent mode.
 2. Stop writers, workers, sandboxes, and deployment automation.
 3. If required, complete external removal before erasure.
 4. Take only final backups required by retention.

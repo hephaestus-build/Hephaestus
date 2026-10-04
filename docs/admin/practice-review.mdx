@@ -263,7 +263,7 @@ flowchart LR
     accDescr: Live events, manual requests, campaigns, and recurring checks start reviews. Provider reconciliation records an occurrence. It does not start a pull request or issue review.
     Event[A live event from GitHub or GitLab] --> Live[Live event]
     Command[The /hephaestus review comment command] --> Hand[Requested by hand]
-    Button[The Review this now button] --> Hand
+    Button[The Request review button] --> Hand
     Campaign[A confirmed Past work campaign] --> Back[Backfill of past work]
     Sweep[A recurring Keep checking new work schedule] --> Rec[Found by a recurring check]
     Reconcile[Reconciling with the provider] --> Sync[Noticed during a sync]
@@ -292,7 +292,7 @@ All five entry paths spend from the workspace's AI budget.
 | --- | --- | --- |
 | Live event | Nobody. It is automatic, per the practices' occasions | Per-workspace cooldown between reviews of the same work |
 | `/hephaestus review` in a **GitLab merge request** comment | The work's author or assignees, or a workspace admin | Per-person hourly allowance and the same per-work cooldown |
-| **Review this now** in the app | The same people. Only authorized readers see it, and the server refuses others | Per-person hourly allowance and the same per-work cooldown |
+| **Request review** in the app | The same people. Only authorized readers see it, and the server refuses others | Per-person hourly allowance and the same per-work cooldown |
 | **Past work** campaign | A workspace admin, only after confirmation of a priced estimate | The campaign's own scope |
 | **Keep checking new work** schedule | A workspace admin | One campaign at a time per workspace |
 
@@ -618,7 +618,7 @@ They run automatically after its return, or are dropped if it stays absent for a
    A continual increase means the server submits jobs but no worker claims them.
 10. **Check instance-wide silent mode.**
     Open Instance admin → **Instance settings**.
-    While engaged, it blocks external comments, conversation feedback, and email for every workspace.
+    While it is on, it blocks external comments, conversation feedback, and email for every workspace.
     Reviews continue, and in-app feedback still reaches developers' Practice profiles.
     Every instance-admin page shows a banner.
 

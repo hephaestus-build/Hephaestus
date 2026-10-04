@@ -141,7 +141,7 @@ export function ReviewRunLevel({
 							<EmptyMedia variant="icon">
 								<WorkflowIcon />
 							</EmptyMedia>
-							<EmptyTitle>Review could not be completed</EmptyTitle>
+							<EmptyTitle>We could not complete this review</EmptyTitle>
 							<EmptyDescription>
 								This review ended before it produced observations or feedback.
 							</EmptyDescription>

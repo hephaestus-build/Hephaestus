@@ -20,6 +20,7 @@ import {
 	type BindingTarget,
 	bindingTargetKey,
 	isPurpose,
+	PURPOSE_TITLES,
 } from "@/components/admin/workspace-llm/AgentBindingsPage";
 import { WorkspaceLlmProviderPanel } from "@/components/admin/workspace-llm/WorkspaceLlmProviderPanel";
 import {
@@ -146,7 +147,7 @@ function ModelsContainer() {
 			cacheSavedBinding(saved);
 			bumpSaveRevision(target);
 			void invalidateBindings();
-			toast.success("Assignment saved");
+			toast.success(`Assignment saved for ${PURPOSE_TITLES[target.purpose]}`);
 		},
 		onError: (error, { target }) => {
 			// The slot refusal is about the row's own picker, so it stays on the row.
@@ -154,7 +155,7 @@ function ModelsContainer() {
 				setSaveError(target, slotRefusalOf(error));
 				return;
 			}
-			toast.error("We could not save the assignment", {
+			toast.error(`We could not save the assignment for ${PURPOSE_TITLES[target.purpose]}`, {
 				description: problemDetailOf(error),
 			});
 		},
@@ -173,10 +174,10 @@ function ModelsContainer() {
 			dropCachedBinding(target);
 			bumpSaveRevision(target);
 			void invalidateBindings();
-			toast.success("Assignment cleared");
+			toast.success(`Assignment cleared for ${PURPOSE_TITLES[target.purpose]}`);
 		},
-		onError: (error) => {
-			toast.error("We could not clear the assignment", {
+		onError: (error, { target }) => {
+			toast.error(`We could not clear the assignment for ${PURPOSE_TITLES[target.purpose]}`, {
 				description: problemDetailOf(error),
 			});
 		},

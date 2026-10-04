@@ -21,7 +21,7 @@ public class LlmModelUpstreamIdConflictException extends RuntimeException {
 
     public LlmModelUpstreamIdConflictException(Long connectionId, String upstreamModelId, @Nullable Throwable cause) {
         super(
-                "A model with upstream id '" + upstreamModelId + "' already exists on connection " + connectionId + ".",
+                "A model with upstream id “" + upstreamModelId + "” already exists on connection " + connectionId + ".",
                 cause);
     }
 }

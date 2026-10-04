@@ -85,7 +85,7 @@ export interface ComposedOverview {
 	 * two rows. Empty when the run raised nothing to act on, and then the block is not drawn.
 	 */
 	needsAttention: AttentionPracticeRow[];
-	/** The paragraph on what moved in the latest review; empty when there was no run to compare. */
+	/** The paragraph on what moved since the latest run; empty when there was no run to compare. */
 	changed: FeedbackTextSegment[];
 	/** What the paragraph only counted, by kind; empty when it named everything. */
 	rest: RestParagraph[];

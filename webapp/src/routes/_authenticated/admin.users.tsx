@@ -159,7 +159,7 @@ function AdminUsersPage() {
 			{ path: { id: user.id }, body: { appRole: nextRole } },
 			{
 				onSuccess: () => {
-					toast.success(`Role updated to ${APP_ROLE_LABELS[nextRole]}.`);
+					toast.success(`Role updated to ${APP_ROLE_LABELS[nextRole]}`);
 				},
 			},
 		);

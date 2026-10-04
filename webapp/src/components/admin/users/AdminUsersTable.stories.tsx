@@ -86,7 +86,7 @@ export const Loading: Story = { args: { users: [], isLoading: true } };
 export const Empty: Story = {
 	args: { users: [], totalLoaded: 0 },
 	play: async ({ canvas }) => {
-		canvas.getByText("No users found");
+		canvas.getByText("No users yet");
 	},
 };
 

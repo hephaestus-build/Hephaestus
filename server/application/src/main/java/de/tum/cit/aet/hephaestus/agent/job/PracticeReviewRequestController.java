@@ -142,6 +142,6 @@ public class PracticeReviewRequestController {
      * used to probe which work another workspace monitors.
      */
     private static EntityNotFoundException notFound(CreateReviewRequestDTO request) {
-        return new EntityNotFoundException(request.artifactKind(), request.artifactId());
+        return new EntityNotFoundException("Reviewed work", request.artifactId());
     }
 }

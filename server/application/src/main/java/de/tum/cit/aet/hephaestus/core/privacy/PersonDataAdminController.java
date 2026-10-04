@@ -162,7 +162,8 @@ public class PersonDataAdminController {
         if (!audit.event(type, AuthEvent.Result.SUCCESS)
                 .actingAccount(CurrentAccount.requireId())
                 .record())
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The audit trail is unavailable");
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE, "The audit trail is unavailable. Try again in a moment.");
     }
 
     private ResponseEntity<PersonDataRequestDTO> response(PersonDataService.Snapshot snapshot) {

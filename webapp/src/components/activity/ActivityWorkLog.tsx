@@ -76,7 +76,7 @@ export function ActivityWorkLog({ state, providerType, subject }: ActivityWorkLo
 	if (state.status === "loading") {
 		return (
 			<div aria-busy="true">
-				<span className="sr-only">Loading activity</span>
+				<span className="sr-only">Loading activity…</span>
 				<div aria-hidden className="space-y-2">
 					<Skeleton className="h-4 w-24" />
 					<div className="overflow-hidden rounded-xl border bg-card">

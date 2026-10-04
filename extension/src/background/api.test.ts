@@ -392,7 +392,7 @@ describe("the report's calls", () => {
 			).rejects.toMatchObject({
 				code: "server",
 				message:
-					"Hephaestus did not accept the request. Try again. If it keeps failing, contact your workspace admin.",
+					"Hephaestus did not accept the request. Try again. If it keeps failing, contact your instance operator.",
 			});
 		}
 	});

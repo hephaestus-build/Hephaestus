@@ -74,7 +74,7 @@ export function MemberActivityTable({ state, providerType }: MemberActivityTable
 		);
 	}
 	if (state.status === "ready" && state.members.length === 0) {
-		return <ActivityEmpty icon={<PeopleIcon />} title="No members here" />;
+		return <ActivityEmpty icon={<PeopleIcon />} title="No members yet" />;
 	}
 	const members = state.status === "ready" ? state.members : [];
 	const needle = fold(query.trim());

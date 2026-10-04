@@ -187,8 +187,8 @@ export function WorkspaceTeamsTable({
 					<h2 className="mb-2 text-lg font-medium">No teams found</h2>
 					<p className="text-muted-foreground">
 						{search
-							? "No team matches your search. Try different search terms."
-							: "No teams have been synced yet."}
+							? "No team matches your search. Try a different search."
+							: "This workspace has no teams."}
 					</p>
 				</div>
 			) : (

@@ -244,7 +244,7 @@ export const Cancelling: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expectGenuinelyDisabled(panel.getByRole("button", { name: "Cancelling…" }));
+		await expectGenuinelyDisabled(panel.getByRole("button", { name: "Canceling…" }));
 	},
 };
 
@@ -275,7 +275,7 @@ export const FailedWithoutOutput: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Review could not be completed")).toBeVisible();
+		await expect(panel.getByText("We could not complete this review")).toBeVisible();
 		await expect(
 			panel.getByText("This review ended before it produced observations or feedback."),
 		).toBeVisible();
@@ -301,7 +301,7 @@ export const FailedWithPartialOutput: Story = {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByText("Review output may be incomplete")).toBeVisible();
 		panel.getByText("A dropped delivery is logged at debug and never counted");
-		await expect(panel.queryByText("Review could not be completed")).not.toBeInTheDocument();
+		await expect(panel.queryByText("We could not complete this review")).not.toBeInTheDocument();
 	},
 };
 

@@ -10,7 +10,7 @@ type ActorKind = NonNullable<ConfigAuditEntryView["actorKind"]>;
 /** The trail is append-only, so a row keeps the spelling it was written under: entity types that no
  * longer exist under these names must still read as the thing they describe. */
 const RENAMED_ENTITY_TYPE_LABELS = {
-	AGENT_CONFIG: "Agent config",
+	AGENT_CONFIG: "AI configuration",
 	AI_CONFIG_BINDING: "Model assignment",
 	PRACTICE_ACTIVE: "Practice review participation",
 	WORKSPACE_LLM_BUDGET: "Shared-model AI budget",
@@ -152,7 +152,7 @@ export function subjectLabel(entry: ConfigAuditEntryView): { label: string; hint
 	const id = entry.entityId;
 	if (hasText(name)) {
 		return {
-			label: `${type} "${name}"`,
+			label: `${type} “${name}”`,
 			hint: hasText(id) ? `${type} ${identifier(id)}` : undefined,
 		};
 	}

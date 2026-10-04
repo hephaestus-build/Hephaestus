@@ -31,19 +31,31 @@ See the [release](https://github.com/vale-cli/vale/releases/tag/v3.24.0) and its
 
 - Run `vp run gate:prose` to check the enforced paths and the fixtures.
 - Run `vp run lint:prose <path>` to see errors and suggestions for a prose path.
-- Run `vp run report:prose` to count alerts in the three docs trees and the webapp source.
+- Run `vp run report:prose` to count alerts in the three docs trees and in the UI source of the webapp and the extension.
 - Add exact paths to `enforced-paths.json` after their errors are fixed.
 
 The list can grow, but the gate rejects removal of a path from the base branch.
 A missing base revision is an error, not permission to skip this check.
 A rename or deletion needs an explicit policy change and maintainer review.
 
-The UI rule uses [oxlint's JavaScript plugin API](https://oxc.rs/docs/guide/usage/linter/js-plugins.html) to read JSX literals.
+The UI rule `hephaestus/ui-text-voice` uses [oxlint's JavaScript plugin API](https://oxc.rs/docs/guide/usage/linter/js-plugins.html) to read JSX literals.
 
 JSX entity text is decoded with the [entities library](https://github.com/fb55/entities), pinned in the webapp dev dependencies.
 It uses the BSD-2-Clause license and does not enter the application bundle.
 Only JSX text and quoted JSX attributes are decoded.
 JavaScript strings keep their literal meaning.
+
+## Product voice
+
+The user docs in `docs/user/` use the product voice, and the UI rule checks UI text with the same contraction profile.
+`.vale.ini` has a section for `**/docs/user/**`.
+It swaps `STE.Contractions` for `STE.NegativeContractions`, which rejects only negative contractions.
+It also turns off the vocabulary, passive voice, and `-ing` suggestions, which describe STE.
+The UI rule reads the same negative list through the `voice` profile in `scripts/lib/ste-words.ts`.
+
+`.vale/fixtures/docs/user/` repeats the path of the real docs on purpose.
+The `**/docs/user/**` glob matches it, so the fixtures prove the section.
+Do not move them.
 
 ## Issue and discussion forms
 
@@ -87,25 +99,8 @@ Only the named rule stops inside the marked span.
 Other rules still apply there, and the named rule applies again after the span.
 
 The report scans Markdown and MDX in the three docs trees.
-For UI source, it scans literal JSX text and text props, including stories, in `webapp/src`.
+For UI source, it scans literal JSX text and text props, including stories, in `webapp/src` and `extension/src`.
 It excludes generated clients, the route tree, tests, and mock data.
 A dash in the report means that the UI rule does not implement that check.
 Counts are alerts, not unique sentences or confirmed defects.
 Vocabulary counts include valid technical terms and inflected forms that need manual review.
-
-## Baseline before the rewrite lanes
-
-This snapshot is from October 3, 2026, with the foundation files present.
-Run `vp run report:prose` to get current counts.
-
-| Rule | User docs | Admin docs | Contributor docs | UI source |
-| --- | ---: | ---: | ---: | ---: |
-| STE.Contractions | 7 | 16 | 11 | 135 |
-| STE.IngForms | 137 | 627 | 600 | — |
-| STE.ParagraphLength | 11 | 46 | 36 | — |
-| STE.PassiveVoice | 182 | 715 | 710 | — |
-| STE.ProcedureLength | 78 | 149 | 188 | — |
-| STE.Semicolons | 132 | 806 | 780 | 41 |
-| STE.SentenceLength | 134 | 431 | 562 | 1 |
-| STE.Vocabulary | 6100 | 29197 | 31915 | 7000 |
-| STE.Words | 3 | 19 | 30 | 4 |

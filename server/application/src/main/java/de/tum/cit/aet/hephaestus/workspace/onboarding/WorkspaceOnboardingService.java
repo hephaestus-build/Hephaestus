@@ -204,7 +204,8 @@ class WorkspaceOnboardingService {
     private Workspace lockWorkspace(long id) {
         return workspaces
                 .findByIdForUpdate(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "We could not find that workspace. Reload the page and try again."));
     }
 
     private static WorkspaceOnboardingSettingsDTO toDTO(WorkspaceOnboardingSettings policy) {

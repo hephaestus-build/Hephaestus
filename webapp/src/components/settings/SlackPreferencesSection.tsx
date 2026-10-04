@@ -58,7 +58,7 @@ export function SlackPreferencesSection({
 	if (isLoading) {
 		body = (
 			<div className="flex justify-center py-6">
-				<Spinner aria-label="Loading Slack preferences" />
+				<Spinner aria-label="Loading Slack preferences…" />
 			</div>
 		);
 	} else if (isError) {
@@ -201,7 +201,7 @@ function WorkspacePreferenceRow({
 					<FieldLabel htmlFor={switchId}>Use your new channel messages</FieldLabel>
 					<FieldDescription>
 						When this is on, new messages you send in monitored Slack channels can be used as
-						context for your private mentor conversations. Turning it off deletes the
+						context for your private conversations with Heph. Turning it off deletes the
 						channel-message data already collected from you in this workspace.
 					</FieldDescription>
 				</FieldContent>
@@ -224,7 +224,7 @@ function WorkspacePreferenceRow({
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Stop using your messages and delete them?</AlertDialogTitle>
+						<AlertDialogTitle>Stop using your channel messages?</AlertDialogTitle>
 						<AlertDialogDescription>
 							Hephaestus will stop reading your new messages in monitored channels of{" "}
 							{workspace.workspaceName} and{" "}
@@ -244,7 +244,7 @@ function WorkspacePreferenceRow({
 								setConfirmingOff(false);
 							}}
 						>
-							Turn off and delete
+							Stop using and delete
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

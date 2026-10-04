@@ -112,7 +112,7 @@ public class AgentJobLifecycleService {
                     AgentJobTelemetry.Outcome.DELIVERY_FAILED,
                     Duration.between(deliveryStarted, Instant.now()));
             log.warn("Delivery retry failed: jobId={}, error={}", jobId, e.getMessage(), e);
-            throw new AgentJobStateConflictException("The server could not post the feedback. Try again later.", e);
+            throw new AgentJobStateConflictException("We could not post the feedback. Try again in a moment.", e);
         }
 
         return transactionTemplate.execute(status -> requireJob(workspaceId, jobId));

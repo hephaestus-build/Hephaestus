@@ -4,7 +4,8 @@ import { decodeHTMLStrict } from "entities";
 import { wordAlerts } from "../../../../scripts/lib/ste-words.ts";
 
 // Names of the JSX props and object keys whose string values are UI text. Object keys cover the
-// vocabulary registries, option lists and form schemas.
+// vocabulary registries, option lists and form schemas. A suffix match catches the compound names
+// that components use for the same fields (`confirmLabel`, `emptyTitle`, `emptyDescription`).
 const textNames = new Set([
 	"alt",
 	"aria-label",
@@ -16,15 +17,8 @@ const textNames = new Set([
 	"summary",
 	"message",
 	"error",
-	"helperText",
-	"emptyText",
-	"loadingText",
 	"tooltip",
 	"children",
-	"confirmText",
-	"cancelText",
-	"submitText",
-	"buttonText",
 	"note",
 	"content",
 	"detail",
@@ -35,6 +29,8 @@ const textNames = new Set([
 	"success",
 	"loading",
 ]);
+const textSuffix = /(?:Label|Title|Text|Message|Description|Placeholder|Hint|Caption|Heading)$/u;
+const codeElements = new Set(["code", "pre", "kbd", "samp", "style", "script"]);
 const toastCalls = new Set(["error", "success", "info", "warning", "message", "loading"]);
 const sentences = new Intl.Segmenter("en", { granularity: "sentence" });
 
@@ -78,12 +74,31 @@ function isToastCall(callee: ESTree.Node): boolean {
 	);
 }
 
-function isCodeElement(node: ESTree.Node): boolean {
+/** Code, not prose: its text keeps semicolons and apostrophes. */
+function insideCode(node: ESTree.Node): boolean {
+	for (let current = node.parent; current; current = current.parent) {
+		if (
+			current.type === "JSXElement" &&
+			current.openingElement.name.type === "JSXIdentifier" &&
+			codeElements.has(current.openingElement.name.name)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/** A `meta` tag's `content` holds a machine value, such as a viewport rule. */
+function isMetaElement(node: ESTree.Node): boolean {
 	return (
-		node.type === "JSXElement" &&
-		node.openingElement.name.type === "JSXIdentifier" &&
-		(node.openingElement.name.name === "style" || node.openingElement.name.name === "script")
+		node.type === "JSXOpeningElement" &&
+		node.name.type === "JSXIdentifier" &&
+		node.name.name === "meta"
 	);
+}
+
+function isTextName(name: string): boolean {
+	return textNames.has(name) || textSuffix.test(name);
 }
 
 function propertyName(key: ESTree.Node): string | undefined {
@@ -95,7 +110,7 @@ function propertyName(key: ESTree.Node): string | undefined {
 
 export const uiTextVoice = defineRule({
 	meta: {
-		type: "problem",
+		type: "suggestion",
 		docs: {
 			description: "Write literal UI text in the user-facing voice.",
 		},
@@ -104,7 +119,8 @@ export const uiTextVoice = defineRule({
 			word: 'Write "{{to}}" instead of "{{from}}". Keep the same meaning.',
 			sentence: "Split this sentence. Write no more than 25 words per sentence.",
 			semicolon: "Write two sentences instead of a semicolon.",
-			apostrophe: "Write the apostrophe as ’ in UI text.",
+			// One glyph for every apostrophe, so a contraction or possessive never mixes forms.
+			apostrophe: 'Write the apostrophe in "{{found}}" as ’.',
 		},
 	},
 	create(context) {
@@ -115,8 +131,9 @@ export const uiTextVoice = defineRule({
 			if (text.includes(";")) {
 				context.report({ node, messageId: "semicolon" });
 			}
-			if (/\p{L}'\p{L}/u.test(text)) {
-				context.report({ node, messageId: "apostrophe" });
+			const apostrophe = /[\p{L}\p{N}]*'[\p{L}\p{N}]*/u.exec(text);
+			if (apostrophe !== null) {
+				context.report({ node, messageId: "apostrophe", data: { found: apostrophe[0] } });
 			}
 			// A line break in JSX source ends a sentence for the segmenter, so join the lines first.
 			for (const { segment } of sentences.segment(text.replaceAll(/\s+/gu, " "))) {
@@ -127,13 +144,16 @@ export const uiTextVoice = defineRule({
 		}
 		return {
 			JSXText(node) {
-				check(node, decodeHTMLStrict(node.value));
+				if (!insideCode(node)) {
+					check(node, decodeHTMLStrict(node.value));
+				}
 			},
 			JSXAttribute(node) {
 				if (
 					node.name.type !== "JSXIdentifier" ||
-					!textNames.has(node.name.name) ||
-					node.value === null
+					!isTextName(node.name.name) ||
+					node.value === null ||
+					isMetaElement(node.parent)
 				) {
 					return;
 				}
@@ -153,7 +173,7 @@ export const uiTextVoice = defineRule({
 			},
 			Property(node) {
 				const name = node.computed ? undefined : propertyName(node.key);
-				if (name !== undefined && textNames.has(name) && node.parent.type === "ObjectExpression") {
+				if (name !== undefined && isTextName(name) && node.parent.type === "ObjectExpression") {
 					for (const text of literalText(node.value)) {
 						check(node.value, text);
 					}
@@ -162,7 +182,7 @@ export const uiTextVoice = defineRule({
 			JSXExpressionContainer(node) {
 				// Attributes have their own visitor; identifiers and calls need human review. A style
 				// or script element holds code, not prose.
-				if (node.parent.type === "JSXAttribute" || isCodeElement(node.parent)) {
+				if (node.parent.type === "JSXAttribute" || insideCode(node)) {
 					return;
 				}
 				for (const text of literalText(node.expression)) {

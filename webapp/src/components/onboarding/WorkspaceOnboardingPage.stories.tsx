@@ -161,7 +161,7 @@ export const Default: Story = {
 		await expect(canvas.getByRole("radio", { name: IN_HOUSE })).toBe(radios[0]);
 		await expect(canvas.getByRole("radio", { name: CLOUD })).toBe(radios[1]);
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toBe(radios[2]);
-		const submit = canvas.getByRole("button", { name: "Continue" });
+		const submit = canvas.getByRole("button", { name: "Save AI choice" });
 		await expectGenuinelyDisabled(submit);
 		await expect(submit).toHaveAccessibleDescription("Choose an answer to continue.");
 		await expect(canvas.queryByRole("button", { name: "From your team" })).toBeNull();
@@ -204,10 +204,10 @@ export const AnswerAndContinue: Story = {
 		await expect(models).toHaveTextContent("OpenAI");
 		await expect(within(models).getByText("Cloud")).toBeVisible();
 		await expect(
-			canvas.getByText("Select Continue to apply your choice in every workspace."),
+			canvas.getByText("Select Save AI choice to apply your choice in every workspace."),
 		).toBeVisible();
-		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
-		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
+		await expect(canvas.getByRole("button", { name: "Save AI choice" })).toBeEnabled();
+		await userEvent.click(canvas.getByRole("button", { name: "Save AI choice" }));
 		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("CLOUD");
 	},
 };
@@ -220,7 +220,7 @@ export const NoAi: Story = {
 		);
 		await expect(canvas.queryByRole("region", { name: /models in Engineering/u })).toBeNull();
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
-		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Save AI choice" }));
 		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("NO_AI");
 	},
 };
@@ -340,7 +340,7 @@ export const KeyboardOnly: Story = {
 export const RequiredLinkOpen: Story = {
 	args: { state: { ...ready, data: { ...welcome, aiChoice: "IN_HOUSE_ONLY" } } },
 	play: async ({ canvas, userEvent, args }) => {
-		const submit = canvas.getByRole("button", { name: "Continue" });
+		const submit = canvas.getByRole("button", { name: "Save AI choice" });
 		await expectGenuinelyDisabled(submit);
 		await expect(submit).toHaveAccessibleDescription("Connect Slack to finish setup.");
 		await expect(
@@ -365,7 +365,7 @@ export const RequiredLinkBroken: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
+		await expect(canvas.getByRole("button", { name: "Save AI choice" })).toBeEnabled();
 		await expect(canvas.getByText(/You can continue without it/u)).toBeVisible();
 		const connect = canvas.getByRole("button", { name: "Connect Slack" });
 		await expectGenuinelyDisabled(connect);
@@ -387,7 +387,7 @@ export const OptionalLinksOnly: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
+		await expect(canvas.getByRole("button", { name: "Save AI choice" })).toBeEnabled();
 		await expect(
 			canvas.getByText("Optional. You can do this later from User settings."),
 		).toBeVisible();
@@ -426,11 +426,11 @@ export const OptionUncovered: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"That is not set up here yet. Nothing switches you elsewhere. Select Continue to apply your choice in every workspace.",
+				"That is not set up here yet. Nothing switches you elsewhere. Select Save AI choice to apply your choice in every workspace.",
 			),
 		).toBeVisible();
-		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
-		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
+		await expect(canvas.getByRole("button", { name: "Save AI choice" })).toBeEnabled();
+		await userEvent.click(canvas.getByRole("button", { name: "Save AI choice" }));
 		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("IN_HOUSE_ONLY");
 	},
 };
@@ -490,9 +490,9 @@ export const SavedChoiceUncovered: Story = {
 			canvas.getByText("Your choice is not set up here yet. Nothing switches you anywhere else."),
 		).toBeVisible();
 		await expect(canvas.getByRole("radio", { name: CLOUD })).toBeChecked();
-		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save" }));
+		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save AI choice" }));
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
-		await expect(canvas.getByRole("button", { name: "Save" })).toBeEnabled();
+		await expect(canvas.getByRole("button", { name: "Save AI choice" })).toBeEnabled();
 	},
 };
 
@@ -513,9 +513,11 @@ export const ReturnVisit: Story = {
 		await expect(
 			canvas.getByText("You chose In-house. Change it whenever you like."),
 		).toBeVisible();
-		const save = canvas.getByRole("button", { name: "Save" });
+		const save = canvas.getByRole("button", { name: "Save AI choice" });
 		await expectGenuinelyDisabled(save);
-		await expect(save).toHaveAccessibleDescription("You can change your answer at any time.");
+		await expect(save).toHaveAccessibleDescription(
+			"Applies in all your workspaces. You can change your answer at any time.",
+		);
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
 		await expect(
 			canvas.getByText(
@@ -541,9 +543,11 @@ export const ReturnVisitRequiredLinkOpen: Story = {
 		},
 	},
 	play: async ({ canvas, userEvent, args }) => {
-		const save = canvas.getByRole("button", { name: "Save" });
+		const save = canvas.getByRole("button", { name: "Save AI choice" });
 		await expectGenuinelyDisabled(save);
-		await expect(save).toHaveAccessibleDescription("You can change your answer at any time.");
+		await expect(save).toHaveAccessibleDescription(
+			"Applies in all your workspaces. You can change your answer at any time.",
+		);
 		await expect(canvas.getByRole("button", { name: "Connect Slack" })).toBeEnabled();
 		await userEvent.click(canvas.getByRole("radio", { name: NO_AI }));
 		await expect(
@@ -595,7 +599,7 @@ export const OAuthReturnDone: Story = {
 			),
 		).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Back to workspace" })).toBeEnabled();
-		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save" }));
+		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save AI choice" }));
 	},
 };
 
@@ -626,7 +630,7 @@ export const Saving: Story = {
 	play: async ({ canvas, userEvent }) => {
 		const noAi = canvas.getByRole("radio", { name: NO_AI });
 		await userEvent.click(noAi);
-		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Save AI choice" }));
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Saving…" }));
 		for (const radio of canvas.getAllByRole("radio")) {
 			await expect(radio.closest("label")).toBeVisible();
@@ -651,7 +655,7 @@ export const SaveFailed: Story = {
 	),
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
-		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Save AI choice" }));
 		const alert = canvas.getByRole("alert");
 		await expect(alert).toHaveTextContent("We could not save your AI choice");
 		await expect(alert).toHaveTextContent("Your choice could not be saved.");
@@ -784,7 +788,7 @@ export const SaveNoAiBeforeConnecting: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Save AI choice" }));
 		await expect(readyArgs(args).onSubmit).toHaveBeenCalledWith("NO_AI");
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toBeChecked();
-		await expect(canvas.getByRole("button", { name: "Continue" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Save AI choice" })).toBeDisabled();
 		await expect(canvas.getByRole("button", { name: "Connect Slack" })).toBeEnabled();
 		await expect(canvas.getByRole("button", { name: "Skip for now" })).toHaveAccessibleDescription(
 			"Skipping does not save an answer selected above. Your saved choice (No AI) stays in effect.",

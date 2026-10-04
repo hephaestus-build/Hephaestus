@@ -142,7 +142,7 @@ public class LoginProviderService {
         }
         if (repository.existsByRegistrationId(registrationId)) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "The login provider '" + registrationId + "' already exists.");
+                    HttpStatus.CONFLICT, "The login provider “" + registrationId + "” already exists.");
         }
         LoginProvider provider = new LoginProvider();
         provider.setRegistrationId(registrationId);
@@ -420,12 +420,12 @@ public class LoginProviderService {
     private static String sanitizeScopesOrThrow(LoginProvider.ProviderType type, String scopes) {
         String trimmed = scopes.trim();
         if (type == LoginProvider.ProviderType.GITLAB || type == LoginProvider.ProviderType.OUTLINE) {
-            String replacement = type == LoginProvider.ProviderType.GITLAB ? "'read_user'" : "'read'";
+            String replacement = type == LoginProvider.ProviderType.GITLAB ? "“read_user”" : "“read”";
             for (String scope : trimmed.split("\\s+", -1)) {
                 if (scope.equalsIgnoreCase("openid")) {
                     throw new ResponseStatusException(
                             HttpStatus.UNPROCESSABLE_CONTENT,
-                            type + " login uses the plain OAuth2 flow. The scope must not contain 'openid'. Use "
+                            type + " login uses the plain OAuth2 flow. The scope must not contain “openid”. Use "
                                     + replacement
                                     + " instead.");
                 }

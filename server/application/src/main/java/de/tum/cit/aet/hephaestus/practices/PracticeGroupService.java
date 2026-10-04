@@ -95,7 +95,7 @@ public class PracticeGroupService {
             WorkspaceContext ctx, String slug, GroupAttributes attributes, boolean recordAudit) {
         if (practiceGroupRepository.existsByWorkspaceIdAndSlug(ctx.id(), slug)) {
             throw new PracticeGroupSlugConflictException(
-                    "A practice group with slug '" + slug + "' already exists in this workspace.");
+                    "A practice group with slug “" + slug + "” already exists in this workspace.");
         }
         Workspace workspace = lockWorkspace(ctx);
 
@@ -118,7 +118,7 @@ public class PracticeGroupService {
                 throw ex;
             }
             throw new PracticeGroupSlugConflictException(
-                    "A practice group with slug '" + slug + "' already exists in this workspace.", ex);
+                    "A practice group with slug “" + slug + "” already exists in this workspace.", ex);
         }
         if (recordAudit) {
             configAudit.record(ConfigAuditEntry.created(

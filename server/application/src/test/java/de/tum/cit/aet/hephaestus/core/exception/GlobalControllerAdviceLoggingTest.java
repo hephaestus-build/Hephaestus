@@ -56,7 +56,7 @@ class GlobalControllerAdviceLoggingTest {
 
         assertThat(response.getStatus()).isEqualTo(503);
         assertThat(response.getDetail())
-                .isEqualTo("Hephaestus could not reach a service that it depends on. Try again in a moment.");
+                .isEqualTo("We could not reach a service that Hephaestus depends on. Try again in a moment.");
         assertThat(appender.list).hasSize(1);
         ILoggingEvent event = appender.list.getFirst();
         assertThat(event.getLevel()).isEqualTo(Level.WARN);

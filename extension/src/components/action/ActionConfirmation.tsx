@@ -184,7 +184,7 @@ export function ActionConfirmation({ state, onConfirm, onClose }: ActionConfirma
 						</Button>
 						<Button variant="mentor" disabled={state.status === "sending"} onClick={onConfirm}>
 							{state.status === "sending" ? <Spinner /> : null}
-							{state.status === "sending" ? "Requesting…" : "Request review"}
+							{state.status === "sending" ? "Requesting review…" : "Request review"}
 						</Button>
 					</>
 				)}

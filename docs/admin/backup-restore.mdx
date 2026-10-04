@@ -145,14 +145,14 @@ Never point a rehearsal at the production Compose project or volumes.
 Do not combine the backup and restore overlays.
 Keep the clone's provider egress denied.
 Keep `AGENT_ENABLED=false` on server **and** worker.
-Engage silent mode before any application role starts.
+Turn on silent mode before any application role starts.
 :::
 
 :::caution CAUTION: Production data and application startup
 Never pipe this file into the production database.
 The restore overlay also refuses direct starts of the server, worker, and webhook roles.
 For later application-health checks, use a separately reviewed isolated override.
-Removal of this brake is an explicit release step, not part of the restore command.
+Turning silent mode off is an explicit step, not part of the restore command.
 :::
 
 1. Choose a recorded UTC target covered by a full backup and uninterrupted archived WAL.
@@ -186,7 +186,7 @@ Removal of this brake is an explicit release step, not part of the restore comma
    The command above waits for promotion before it changes restored data.
    The lockdown transaction:
 
-   - Engages silent mode.
+   - Turns on silent mode.
    - Pauses feedback delivery in all workspaces.
    - Disables automatic/manual reviews.
    - Turns off all Heph rows under each workspace's **AI models**, so Heph answers nobody.
@@ -290,7 +290,7 @@ Keep credential rotation disabled.
 11. Complete [broker recovery](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers).
 12. Complete **Prove silence** in the [silent checklist](./production-operations-runbook#silent-deployment-checklist).
 13. Complete **Inspect and decide**.
-14. Complete **Release deliberately** before restoring normal access.
+14. Complete **Turn off silent mode deliberately** before restoring normal access.
 15. Verify sign-in.
 16. Verify workspace relationships and activity up to the recovery timestamp.
 

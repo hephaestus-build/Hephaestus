@@ -216,7 +216,7 @@ export const RevokeTypeToConfirm: Story = {
 export const Loading: Story = {
 	args: { isLoading: true, channels: [] },
 	play: async ({ canvas }) => {
-		canvas.getByText(/messages in monitored channels to write practice feedback/iu);
+		canvas.getByText(/messages in monitored channels and uses AI to write practice feedback/iu);
 	},
 };
 

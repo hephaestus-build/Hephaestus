@@ -38,7 +38,7 @@ export function ReviewRunActions({
 					<AlertDialogTrigger
 						render={
 							<Button variant="outline" disabled={isCancelling}>
-								{isCancelling ? "Cancelling…" : "Cancel review"}
+								{isCancelling ? "Canceling…" : "Cancel review"}
 							</Button>
 						}
 					/>

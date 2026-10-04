@@ -246,7 +246,7 @@ function ScheduleRow({
 					<span className="sr-only"> checking {kindNoun}</span>
 				</Button>
 				<Button variant="ghost" size="sm" disabled={isSaving} onClick={() => onDelete(schedule.id)}>
-					Remove
+					Delete
 					<span className="sr-only"> the recurring check on {kindNoun}</span>
 				</Button>
 			</ItemActions>

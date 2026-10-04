@@ -49,6 +49,7 @@ public record ActivityWorkCursor(Instant to, Instant lastOccurredAt, String id) 
     }
 
     private static ResponseStatusException invalid(@Nullable Throwable cause) {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid cursor", cause);
+        return new ResponseStatusException(
+                HttpStatus.BAD_REQUEST, "The cursor is not valid. Reload the list and try again.", cause);
     }
 }

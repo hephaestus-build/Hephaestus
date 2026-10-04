@@ -43,7 +43,7 @@ export function forbidden(
 export function network(): WorkerError {
 	return new WorkerError(
 		"network",
-		"Hephaestus could not be reached. Check your connection and try again.",
+		"We could not reach Hephaestus. Check your connection and try again.",
 	);
 }
 
@@ -51,8 +51,8 @@ export function server(status: number): WorkerError {
 	return new WorkerError(
 		"server",
 		status >= 500
-			? "Hephaestus had a problem and could not answer. Try again in a moment."
-			: "Hephaestus did not accept the request. Try again. If it keeps failing, contact your workspace admin.",
+			? "We could not get an answer from Hephaestus. Try again in a moment."
+			: "Hephaestus did not accept the request. Try again. If it keeps failing, contact your instance operator.",
 	);
 }
 

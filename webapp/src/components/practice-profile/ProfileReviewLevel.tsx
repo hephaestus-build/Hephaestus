@@ -303,7 +303,7 @@ function ReviewHead({
 					{canAsk && (
 						<Button type="button" disabled={isRequesting} onClick={() => onReviewNow(work)}>
 							<PlayIcon aria-hidden data-icon="inline-start" />
-							{isRequesting ? "Requesting review…" : "Review this now"}
+							{isRequesting ? "Requesting review…" : "Request review"}
 						</Button>
 					)}
 				</div>

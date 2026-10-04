@@ -101,7 +101,7 @@ export function SessionsSection({ state }: SessionsSectionProps) {
 	let body: ReactNode;
 	if (state.status === "loading") {
 		body = (
-			<div className="space-y-3" role="list" aria-busy="true" aria-label="Loading sessions">
+			<div className="space-y-3" role="list" aria-busy="true" aria-label="Loading sessions…">
 				{Array.from({ length: 2 }, (_, index) => (
 					<div
 						key={index}

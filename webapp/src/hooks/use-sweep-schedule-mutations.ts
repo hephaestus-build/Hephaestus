@@ -58,9 +58,9 @@ export function useSweepScheduleMutations(workspaceSlug: string): SweepScheduleM
 		...deleteSweepScheduleMutation(),
 		onSuccess: () => {
 			void invalidate();
-			toast.success("Recurring check removed");
+			toast.success("Recurring check deleted");
 		},
-		onError: failed("remove"),
+		onError: failed("delete"),
 	});
 
 	return {

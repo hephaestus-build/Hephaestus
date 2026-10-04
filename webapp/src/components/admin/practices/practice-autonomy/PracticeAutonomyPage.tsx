@@ -559,8 +559,8 @@ function GroupGroup({
 				{group.practices.length === 0 ? (
 					<p className="py-2 text-sm text-muted-foreground">
 						{group.totalPractices === 0
-							? "No practices here."
-							: "No practices here were set by hand."}
+							? "No practices in this group"
+							: "No practices in this group were set by hand"}
 					</p>
 				) : (
 					<>

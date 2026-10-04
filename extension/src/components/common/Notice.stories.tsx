@@ -46,7 +46,7 @@ export const WithAction: Story = {
 	args: {
 		tone: "destructive",
 		icon: CircleAlertIcon,
-		title: "Hephaestus could not be reached",
+		title: "We could not reach Hephaestus",
 		children: "Check your connection.",
 		action: <Button size="sm">Retry</Button>,
 	},

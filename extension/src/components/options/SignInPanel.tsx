@@ -119,7 +119,7 @@ export function SignInPanel({
 			<Notice
 				icon={CircleAlertIcon}
 				tone="destructive"
-				title="Sign-in options could not be loaded"
+				title="We could not load sign-in options"
 				action={
 					<Button variant="outline" size="sm" onClick={options.onRetry}>
 						Retry
@@ -175,7 +175,7 @@ export function SignInPanel({
 			{attempt.status === "cancelled" ? (
 				<p className="flex items-start gap-2 text-sm text-muted-foreground" role="status">
 					<InfoIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
-					Sign-in was cancelled and nothing changed. To try again, choose a way to sign in.
+					Sign-in was canceled and nothing changed. To try again, choose a way to sign in.
 				</p>
 			) : null}
 			{attempt.status === "failed" ? (

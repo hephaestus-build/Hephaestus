@@ -50,7 +50,13 @@ export function PracticeEvidenceOutcomeSummary({
 				<>
 					{/* "Skipped in N reviews" rather than "N reviews were skipped": one review makes the
 					    second read "1 review were skipped". */}
-					<p className="text-sm text-muted-foreground">Skipped in {reviews(skipped)}.</p>
+					<p className="text-sm text-muted-foreground">
+						Skipped in {reviews(skipped)}
+						{outcome.blockersObserved.length === 0
+							? ", because the evidence was not there to review against"
+							: ""}
+						.
+					</p>
 					{outcome.blockersObserved.length > 0 && (
 						<ul className="space-y-1 text-sm text-muted-foreground">
 							{outcome.blockersObserved.map((blocker) => (

@@ -140,7 +140,7 @@ export function SiteAccessList({
 			<Notice
 				icon={CircleAlertIcon}
 				tone="destructive"
-				title="Sites could not be loaded"
+				title="We could not load sites"
 				action={
 					<Button variant="outline" size="sm" onClick={state.onRetry}>
 						Retry

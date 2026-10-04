@@ -181,7 +181,7 @@ export const mockJobTimedOut: AgentJob = {
 	createdAt: new Date("2026-05-20T08:00:00Z"),
 	availableAt: new Date("2026-05-20T08:03:00Z"),
 	completedAt: new Date("2026-05-20T08:20:00Z"),
-	errorMessage: "Agent exceeded the 1200s timeout and was terminated.",
+	errorMessage: "Agent exceeded the 1200s timeout and was stopped.",
 	llmModel: "gpt-oss-120b",
 	retryCount: 1,
 	exitCode: 124,

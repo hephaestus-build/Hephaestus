@@ -171,10 +171,10 @@ function SlackConnected({
 						<AlertDialogTitle>Disconnect Slack?</AlertDialogTitle>
 						<AlertDialogDescription>
 							This removes the Slack connection for this workspace. It also erases every stored
-							Slack message, thread, and per-channel consent record for this workspace. Messages
-							already sent in Slack stay there. To use Slack with this workspace later, connect it
-							again and activate the channels again. To replace only the stored token, use Reconnect
-							Slack instead. It keeps the channels and their data.
+							Slack message, thread, and per-channel consent record for this workspace. You cannot
+							undo this. Messages already sent in Slack stay there. To use Slack with this workspace
+							later, connect it again and activate the channels again. To replace only the stored
+							token, use Reconnect Slack instead. It keeps the channels and their data.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

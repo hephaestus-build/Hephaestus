@@ -451,7 +451,7 @@ export function WorkspaceLlmProviderPanel({
 				subject={deletingConnection}
 				onClose={() => setDeletingConnection(null)}
 				title={(connection) => `Disconnect “${connection.displayName}”?`}
-				description="The stored credential will be permanently removed. A connection with models still on it cannot be disconnected."
+				description="The stored credential will be permanently removed. You cannot undo this. A connection with models still on it cannot be disconnected."
 				confirmLabel="Disconnect provider"
 				onConfirm={(connection) =>
 					deleteConnection.mutate({ path: { workspaceSlug, id: connection.id } })

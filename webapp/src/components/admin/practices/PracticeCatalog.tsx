@@ -275,9 +275,9 @@ export function PracticeCatalog({
 				)}
 				getEmptyLabel={(groupSlug, total) => {
 					if (total > 0) {
-						return "No matching practices.";
+						return "No matching practices";
 					}
-					return groupSlug === null ? "Nothing unassigned." : "No practices here.";
+					return groupSlug === null ? "Nothing unassigned" : "No practices in this group";
 				}}
 			/>
 
@@ -302,7 +302,7 @@ export function PracticeCatalog({
 			) : (
 				focusFilter !== "ALL" &&
 				visiblePracticeSlugs.size === 0 && (
-					// Without a way out, the reader is left with per-group "No matching practices." strings
+					// Without a way out, the reader is left with per-group "No matching practices" strings
 					// and a banner telling them to clear a filter, and no control that clears it.
 					<Empty variant="outlined" className="min-h-56">
 						<EmptyHeader>

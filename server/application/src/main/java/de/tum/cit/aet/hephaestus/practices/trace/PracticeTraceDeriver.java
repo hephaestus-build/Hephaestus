@@ -239,8 +239,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.SKIPPED,
-                        reasonCopy(
-                                occurrence.stateReason(), "Hephaestus recorded this work and chose not to review it."),
+                        reasonCopy(occurrence.stateReason(), "Hephaestus recorded this work, and no review covers it."),
                         occurrence,
                         null,
                         null,

@@ -124,7 +124,7 @@ export function useConnectionSync({
 		...updateConnectionSyncJobMutation(),
 		onSuccess: () => {
 			invalidateSyncActivity();
-			toast.success(`Cancelling the sync. It stops after the current ${cancelsAfter}.`);
+			toast.success(`Canceling the sync. It stops after the current ${cancelsAfter}.`);
 		},
 		onError: (e) => {
 			toast.error("We could not cancel the sync", { description: problemDetailOf(e) });

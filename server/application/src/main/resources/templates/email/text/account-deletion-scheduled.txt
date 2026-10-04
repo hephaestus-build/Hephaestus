@@ -2,7 +2,7 @@
 
 We received the request to delete your account at [(${webappUrl})]. You are signed out on all devices.
 
-After [(${purgeAfter})], a scheduled cleanup removes your sign-in details, linked identities, product-feedback submissions and survey responses. Your account record stays, with its contact details cleared. You cannot undo this yourself.
+After [(${purgeAfter})], a scheduled cleanup removes your sign-in details, connected accounts, product-feedback submissions and survey responses. Your account record stays, with its contact details cleared. You cannot undo this yourself.
 
 If you did not request this, contact your instance operator before that time.
 

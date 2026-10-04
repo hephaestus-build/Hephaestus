@@ -52,7 +52,7 @@ const ERROR_COPY: Record<string, { title: string; description: string }> = {
 		// read as a rejected identity.
 		title: "Confirm access before connecting that account",
 		description:
-			"Connecting an identity needs a recent sign-in. Confirm access with an identity already connected to your account, then connect it again.",
+			"Connecting a sign-in account needs a recent sign-in. Confirm access with a sign-in account you already connected, then connect this one again.",
 	},
 	client_not_registered: {
 		// Reached inside the browser extension's sign-in window: the instance does not list that

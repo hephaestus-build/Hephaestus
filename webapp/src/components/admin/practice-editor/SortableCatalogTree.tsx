@@ -340,14 +340,14 @@ export function SortableCatalogTree<
 				const target = resolveEntryDropTarget({ active, over });
 				return target
 					? `Moved ${data.label} to ${describeTarget(target, data.entrySlug)}.`
-					: "Move cancelled.";
+					: "Move canceled.";
 			}
 			const overData = catalogDndData(over?.data.current);
 			return data && overData?.type === "group"
 				? `Moved ${data.label} to position ${sortedGroups.findIndex(({ slug }) => slug === overData.groupSlug) + 1} of ${sortedGroups.length}.`
-				: "Move cancelled.";
+				: "Move canceled.";
 		},
-		onDragCancel: () => "Move cancelled.",
+		onDragCancel: () => "Move canceled.",
 	};
 
 	const registerActionTrigger = (key: string) => (node: HTMLButtonElement | null) => {

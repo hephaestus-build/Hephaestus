@@ -118,7 +118,7 @@ export const ReviewNow: Story = {
 	args: { work: changesRequestedPullRequest, reviewNow: { onReviewNow, asking: false } },
 	play: async ({ canvas, userEvent }) => {
 		// The visible words come first in the name, and the name says which work it asks about.
-		const button = canvas.getByRole("button", { name: "Review this now: Hephaestus #2301" });
+		const button = canvas.getByRole("button", { name: "Request review: Hephaestus #2301" });
 		await userEvent.click(button);
 		await expect(onReviewNow).toHaveBeenCalledOnce();
 	},

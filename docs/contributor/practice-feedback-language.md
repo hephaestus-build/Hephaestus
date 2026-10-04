@@ -7,7 +7,7 @@ description: The normative product vocabulary for observations, feedback, practi
 
 Use these product terms in user-facing interfaces, documentation, and release notes.
 
-This page is the project's list of technical names and technical verbs for [Simplified Technical English](./simplified-technical-english.md).
+This page is the project's list of technical names and technical verbs for the [writing standard](./simplified-technical-english.md).
 The tables define names.
 The verb table defines actions.
 The prose checks read the first column, so keep each term in bold.

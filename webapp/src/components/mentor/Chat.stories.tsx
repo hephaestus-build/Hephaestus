@@ -111,7 +111,7 @@ export const ReadOnly: Story = {
 export const Failed: Story = {
 	args: { messages: CONVERSATION.slice(0, 5), turn: { kind: "error", failure: "failed" } },
 	play: async ({ args, canvas, userEvent }) => {
-		await expect(canvas.getByText("Heph could not finish that reply")).toBeVisible();
+		await expect(canvas.getByText("Heph could not finish this reply")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(args.onReload).toHaveBeenCalledOnce();
 	},

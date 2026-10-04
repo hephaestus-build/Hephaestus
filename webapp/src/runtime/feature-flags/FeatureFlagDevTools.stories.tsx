@@ -25,7 +25,7 @@ const meta = {
 	tags: ["autodocs"],
 	argTypes: {
 		flags: {
-			description: "Feature flags map — `undefined` renders 'Not authenticated'",
+			description: "Feature flags map — `undefined` renders “Not authenticated”",
 			control: "object",
 		},
 		isLoading: {

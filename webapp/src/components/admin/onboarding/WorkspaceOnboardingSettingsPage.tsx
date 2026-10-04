@@ -234,7 +234,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 							<EmptyTitle>No integrations to require</EmptyTitle>
 							<EmptyDescription>
 								Connect Slack or Outline under Integrations. If an integration is active but still
-								unavailable here, ask your instance admin to enable account linking for it.
+								unavailable here, ask your instance admin to allow connecting accounts for it.
 							</EmptyDescription>
 						</EmptyHeader>
 						<EmptyContent>

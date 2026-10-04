@@ -1,7 +1,9 @@
 # Hephaestus
 
 All prose follows the [writing standard](docs/contributor/simplified-technical-english.md).
-Apply it to docs, UI text, user-facing responses, comments, and repository instructions.
+It has two profiles.
+UI text, user-facing responses, and user docs use the product voice.
+Admin docs, contributor docs, and repository instructions use STE.
 
 Hephaestus is an open-source AI mentor for software teams.
 It checks developers' existing work in GitHub, GitLab, Slack, and Outline against the engineering practices that their project values.

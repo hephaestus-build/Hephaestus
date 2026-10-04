@@ -112,7 +112,7 @@ export const PullRequest: Story = {
 		// The trace's counts reach the tabs before either is opened.
 		panel.getByRole("tab", { name: "Every practice 12" });
 		panel.getByRole("tab", { name: "What we noticed 5" });
-		await userEvent.click(panel.getByRole("button", { name: "Review this now" }));
+		await userEvent.click(panel.getByRole("button", { name: "Request review" }));
 		await expect(args.onReviewNow).toHaveBeenCalledTimes(1);
 		// The path names both levels behind this one, and a crumb closes down to its own.
 		await userEvent.click(panel.getByRole("button", { name: "Observation" }));
@@ -280,7 +280,7 @@ export const Refused: Story = {
 				refusal={{
 					status: "REFUSED",
 					reason: "BUDGET_EXHAUSTED",
-					reasonDescription: "The workspace's AI budget for this month is used up.",
+					reasonDescription: "The workspace’s AI budget for this month is used up.",
 				}}
 				workspaceSlug="demo"
 				canAdminister
@@ -290,7 +290,7 @@ export const Refused: Story = {
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByText("No review was started")).toBeVisible();
-		panel.getByText("The workspace's AI budget for this month is used up.");
+		panel.getByText("The workspace’s AI budget for this month is used up.");
 		panel.getByRole("link", { name: "Open AI usage" });
 	},
 };
@@ -312,7 +312,7 @@ export const DocumentCannotBeAsked: Story = {
 		await expect(
 			panel.getByRole("heading", { name: outlineDocument.title, level: 2 }),
 		).toBeVisible();
-		await expect(panel.queryByRole("button", { name: "Review this now" })).not.toBeInTheDocument();
+		await expect(panel.queryByRole("button", { name: "Request review" })).not.toBeInTheDocument();
 	},
 };
 

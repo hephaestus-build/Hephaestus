@@ -173,7 +173,7 @@ email
 ```
 
 Workspace app installation gives Hephaestus a bot token.
-Personalized mentor DMs also require the member's Slack identity linked to their Hephaestus account.
+Personalized mentor DMs also require the member's Slack account connected to their Hephaestus account.
 
 1. Create an enabled Hephaestus login provider with registration id `slack` and type `SLACK`.
 2. Set its base URL to `https://slack.com`.
@@ -604,7 +604,7 @@ The defaults fit that model.
 The outcomes are:
 
 - `SENT`: includes the message id to find in the relay log.
-- `SILENT_MODE`: the [emergency brake](./production-operations-runbook) is engaged, as on a fresh instance.
+- `SILENT_MODE`: [silent mode](./production-operations-runbook) is on, as on a fresh instance.
 - `NOT_CONFIGURED`.
 - `INVALID_ADDRESS`.
 - `REJECTED`: refused mailbox.

@@ -108,11 +108,11 @@ export function WorkspaceSlackChannelsSettings({
 				<CardHeader>
 					<IntegrationCardHeading>Slack channel monitoring</IntegrationCardHeading>
 					<CardDescription>
-						Hephaestus reads the <strong>new</strong> messages in monitored channels to write
-						practice feedback. It reads <strong>forward only</strong> and never reads past history.
-						Each monitored channel gets a <strong>visible announcement</strong> in the channel, and
-						any member can <strong>opt out</strong> from the app’s Home tab. Removing a channel{" "}
-						<strong>permanently erases</strong> everything collected from it.
+						Hephaestus reads the <strong>new</strong> messages in monitored channels and uses AI to
+						write practice feedback. It reads <strong>forward only</strong> and never reads past
+						history. Each monitored channel gets a <strong>visible announcement</strong> in the
+						channel, and any member can <strong>opt out</strong> from the app’s Home tab. Removing a
+						channel <strong>permanently erases</strong> everything collected from it.
 					</CardDescription>
 					{hasSlackConnection && (
 						<CardAction>
@@ -286,8 +286,8 @@ function ChannelsContent({
 					</EmptyMedia>
 					<EmptyTitle>No channels monitored yet</EmptyTitle>
 					<EmptyDescription>
-						Add a Slack channel to get practice feedback from its conversations. Monitoring begins
-						only when you activate the channel.
+						Add a Slack channel to get AI practice feedback from its conversations. Monitoring
+						begins only when you activate the channel.
 					</EmptyDescription>
 				</EmptyHeader>
 				<EmptyContent>

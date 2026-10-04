@@ -73,7 +73,7 @@ export const Running: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText(/every day, covering the last 2 days/iu);
 		canvas.getByRole("button", { name: "Pause checking pull or merge requests" });
-		canvas.getByRole("button", { name: "Remove the recurring check on pull or merge requests" });
+		canvas.getByRole("button", { name: "Delete the recurring check on pull or merge requests" });
 		await expectNoPageOverflow();
 	},
 };

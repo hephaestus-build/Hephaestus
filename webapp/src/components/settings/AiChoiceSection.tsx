@@ -107,10 +107,10 @@ function AiChoiceForm({
 			<footer className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
 				<Button type="submit" disabled={!changed || busy} aria-describedby={hintId}>
 					{isSaving && <Spinner />}
-					{isSaving ? "Saving…" : "Save"}
+					{isSaving ? "Saving…" : "Save AI choice"}
 				</Button>
 				<p id={hintId} className="text-sm text-muted-foreground">
-					You can change your answer at any time.
+					Applies in all your workspaces. You can change your answer at any time.
 				</p>
 			</footer>
 		</Questionnaire>

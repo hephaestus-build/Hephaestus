@@ -108,7 +108,9 @@ export function usePracticeAutonomyMutations(workspaceSlug: string) {
 		if (failed === 0) {
 			toast.success(`Changed ${changed} ${changed === 1 ? "practice" : "practices"}`);
 		} else if (changed === 0) {
-			toast.error(`We could not change ${failed} ${failed === 1 ? "practice" : "practices"}`);
+			toast.error(
+				`We could not change ${failed} ${failed === 1 ? "practice" : "practices"}. Try again.`,
+			);
 		} else {
 			toast.warning(
 				`Changed ${changed} of ${practiceSlugs.length}. ${failed} could not be changed.`,

@@ -52,7 +52,7 @@ export function ReviewPersonFacet({
 	const selectedOption =
 		options.find((option) => option.userId === selected) ??
 		(selected == null ? null : { userId: selected, label: fallbackName ?? `#${selected}` });
-	let emptyText = "No matches";
+	let emptyText = "No matches. Try a different search.";
 	if (people.isError) {
 		emptyText = "We could not load people";
 	} else if (options.length === 0) {

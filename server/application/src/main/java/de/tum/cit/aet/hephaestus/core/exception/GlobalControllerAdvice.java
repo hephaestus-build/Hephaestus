@@ -83,7 +83,7 @@ public class GlobalControllerAdvice {
         return problem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Change not recorded",
-                "Hephaestus could not record this change in the audit log, so it did not save the change. Try again later.");
+                "We could not record this change in the audit log, so the change was not saved. Try again in a moment.");
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -153,7 +153,7 @@ public class GlobalControllerAdvice {
         return problem(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "Service unavailable",
-                "Hephaestus could not reach a service that it depends on. Try again in a moment.");
+                "We could not reach a service that Hephaestus depends on. Try again in a moment.");
     }
 
     // FALLBACK HANDLER
@@ -165,7 +165,7 @@ public class GlobalControllerAdvice {
         return problem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Internal server error",
-                "We could not finish that. Try again. If it keeps failing, contact your workspace admin.");
+                "We could not finish that. Try again. If it keeps failing, contact your instance operator.");
     }
 
     @ExceptionHandler(Exception.class)
@@ -178,7 +178,7 @@ public class GlobalControllerAdvice {
         return problem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Internal server error",
-                "We could not finish that. Try again. If it keeps failing, contact your workspace admin.");
+                "We could not finish that. Try again. If it keeps failing, contact your instance operator.");
     }
 
     // HELPER METHODS

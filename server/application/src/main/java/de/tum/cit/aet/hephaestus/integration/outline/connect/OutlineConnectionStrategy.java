@@ -87,14 +87,14 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
         }
         String serverUrl = userInput.get(INPUT_SERVER_URL);
         if (serverUrl == null || serverUrl.isBlank()) {
-            throw new IllegalArgumentException("The required field '" + INPUT_SERVER_URL + "' is missing.");
+            throw new IllegalArgumentException("The required field “" + INPUT_SERVER_URL + "” is missing.");
         }
         if (!originPolicy.allows(serverUrl)) {
             throw new IllegalArgumentException("The instance operator did not approve this Outline origin.");
         }
         String token = userInput.get(INPUT_TOKEN);
         if (token == null || token.isBlank()) {
-            throw new IllegalArgumentException("The required field '" + INPUT_TOKEN + "' is missing.");
+            throw new IllegalArgumentException("The required field “" + INPUT_TOKEN + "” is missing.");
         }
         // Validates the token AND the (admin-supplied) server URL through the SSRF guard before anything
         // is persisted. A bad token or unreachable/blocked host throws, surfacing a structured error.

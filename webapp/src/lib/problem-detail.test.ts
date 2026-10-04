@@ -43,7 +43,7 @@ describe("problemDetailOf", () => {
 			"We could not save the model",
 		);
 		expect(problemDetailOf({ message: "boom" })).toBe(
-			"We could not finish that. Try again. If it keeps failing, contact your workspace admin.",
+			"We could not finish that. Try again. If it keeps failing, contact your instance operator.",
 		);
 	});
 
@@ -59,16 +59,16 @@ describe("problemDetailOf", () => {
 
 	it("falls back to a generic message for unhandled shapes", () => {
 		expect(problemDetailOf(null)).toBe(
-			"We could not finish that. Try again. If it keeps failing, contact your workspace admin.",
+			"We could not finish that. Try again. If it keeps failing, contact your instance operator.",
 		);
 		expect(problemDetailOf(undefined)).toBe(
-			"We could not finish that. Try again. If it keeps failing, contact your workspace admin.",
+			"We could not finish that. Try again. If it keeps failing, contact your instance operator.",
 		);
 		expect(problemDetailOf({ status: 500 })).toBe(
-			"We could not finish that. Try again. If it keeps failing, contact your workspace admin.",
+			"We could not finish that. Try again. If it keeps failing, contact your instance operator.",
 		);
 		expect(problemDetailOf(42)).toBe(
-			"We could not finish that. Try again. If it keeps failing, contact your workspace admin.",
+			"We could not finish that. Try again. If it keeps failing, contact your instance operator.",
 		);
 	});
 });

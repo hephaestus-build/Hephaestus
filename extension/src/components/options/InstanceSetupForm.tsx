@@ -94,7 +94,7 @@ export function InstanceSetupForm({
 			<div className="flex flex-wrap items-center gap-3">
 				<Button type="submit" variant="outline" disabled={pending || disabled}>
 					{pending ? <Spinner /> : null}
-					{pending ? "Connecting…" : "Connect"}
+					{pending ? "Connecting…" : "Connect instance"}
 				</Button>
 				<p className="text-xs text-muted-foreground">
 					Chrome asks before the extension may reach this address.

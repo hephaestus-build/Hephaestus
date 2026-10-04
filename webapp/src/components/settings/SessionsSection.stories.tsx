@@ -55,7 +55,7 @@ export const Revoking: Story = {
 export const Loading: Story = {
 	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("list", { name: "Loading sessions" })).toHaveAttribute(
+		await expect(canvas.getByRole("list", { name: "Loading sessions…" })).toHaveAttribute(
 			"aria-busy",
 			"true",
 		);

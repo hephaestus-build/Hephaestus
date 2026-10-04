@@ -89,6 +89,10 @@ function describe(detail: string, guidance: string): string {
 	if (lead.length === 0 || lead === guidance) {
 		return guidance;
 	}
+	// A detail that already says what to do must not be followed by a second instruction.
+	if (/\btry again\b/iu.test(lead)) {
+		return lead;
+	}
 	return /[.!?]$/u.test(lead) ? `${lead} ${guidance}` : `${lead}. ${guidance}`;
 }
 

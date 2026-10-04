@@ -138,10 +138,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 		afterLink,
 	});
 
-	let saveLabel = firstVisit ? "Continue" : "Save";
-	if (firstVisit && !requiredSatisfied && changed) {
-		saveLabel = "Save AI choice";
-	}
+	let saveLabel = "Save AI choice";
 	if (savingAction === "save") {
 		saveLabel = "Saving…";
 	}
@@ -422,7 +419,7 @@ function onboardingNarration({
 			coverage === "none" ? "That is not set up here yet. Nothing switches you elsewhere. " : "";
 		if (firstVisit) {
 			return requiredSatisfied
-				? `${uncovered}Select Continue to apply your choice in every workspace.`
+				? `${uncovered}Select Save AI choice to apply your choice in every workspace.`
 				: `${uncovered}Save your AI choice now. You can connect your accounts separately.`;
 		}
 		return `${uncovered}Save to apply your new choice in every workspace. Requests already sent cannot be recalled.`;
@@ -484,7 +481,7 @@ function memberSetupState(
 				? `Save your AI choice now. Connect ${openRequiredNames} to finish setup.`
 				: `Connect ${openRequiredNames} to finish setup.`;
 		} else if (!firstVisit && !changed) {
-			hint = "You can change your answer at any time.";
+			hint = "Applies in all your workspaces. You can change your answer at any time.";
 		}
 	}
 

@@ -121,7 +121,7 @@ function AdminLoginProvidersPage() {
 			<PageHeader
 				icon={<KeyRound />}
 				title="Login providers"
-				description="Configure OAuth providers for sign-in and account linking."
+				description="Configure OAuth providers for sign-in and for connecting accounts."
 				actions={
 					<Button onClick={openCreate}>
 						<Plus className="size-4" aria-hidden />

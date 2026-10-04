@@ -30,7 +30,7 @@ function entry(over: Partial<ConfigAuditEntryView>): ConfigAuditEntryView {
 
 describe("label mapping", () => {
 	it("maps known types and actions to human labels", () => {
-		expect(entityTypeLabel("AGENT_CONFIG")).toBe("Agent config");
+		expect(entityTypeLabel("AGENT_CONFIG")).toBe("AI configuration");
 		expect(entityTypeLabel("PRACTICE_DEFINITION")).toBe("Practice");
 		expect(actionLabel("CREATED")).toBe("Created");
 	});
@@ -171,13 +171,13 @@ describe("subjectLabel", () => {
 					newValue: '{"name":"GPT-5 reviewer"}',
 				}),
 			),
-		).toStrictEqual({ label: 'Agent config "GPT-5 reviewer"', hint: "Agent config #42" });
+		).toStrictEqual({ label: "AI configuration “GPT-5 reviewer”", hint: "AI configuration #42" });
 	});
 	it("falls back to type + identifier without inventing a name", () => {
 		expect(
 			subjectLabel(entry({ entityType: "AGENT_CONFIG", entityId: "42", newValue: "{}" })),
 		).toStrictEqual({
-			label: "Agent config #42",
+			label: "AI configuration #42",
 		});
 	});
 	it("renders a slug identifier as-is", () => {

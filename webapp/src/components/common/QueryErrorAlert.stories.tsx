@@ -39,6 +39,23 @@ export const ServiceUnavailable: Story = {
 	},
 };
 
+/** A detail that already says to try again is shown alone, with no second instruction after it. */
+export const ServerFaultWithOwnInstruction: Story = {
+	args: {
+		error: {
+			status: 500,
+			detail:
+				"We could not finish that. Try again. If it keeps failing, contact your instance operator.",
+		},
+	},
+	play: async ({ canvas }) => {
+		canvas.getByText(
+			"We could not finish that. Try again. If it keeps failing, contact your instance operator.",
+		);
+		await expect(canvas.queryByText(/The server had a problem/u)).not.toBeInTheDocument();
+	},
+};
+
 /**
  * 403 — the reader isn't allowed. Retrying re-asks a question already answered, so the button is
  * withheld even though the caller passed `onRetry`, and the copy points at the actual way out.

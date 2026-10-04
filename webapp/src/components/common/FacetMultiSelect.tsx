@@ -85,7 +85,7 @@ export function FacetMultiSelect<TValue extends string | number>({
 	id,
 	disabled = false,
 	className,
-	emptyLabel = "No matches",
+	emptyLabel = "No matches. Try a different search.",
 }: FacetMultiSelectProps<TValue>) {
 	const { contains } = useComboboxFilter({ sensitivity: "base" });
 	const selectedOptions = options.filter((option) => selected.includes(option.value));
@@ -181,7 +181,9 @@ export function FacetMultiSelect<TValue extends string | number>({
 					placeholder="Search…"
 					aria-label={`Search ${title.toLowerCase()} options`}
 				/>
-				<ComboboxEmpty>{options.length === 0 ? emptyLabel : "No matches"}</ComboboxEmpty>
+				<ComboboxEmpty>
+					{options.length === 0 ? emptyLabel : "No matches. Try a different search."}
+				</ComboboxEmpty>
 				{/* The list is its own `role="listbox"`, so labelling the popup around it does not name
 				    it: a screen reader arriving on the options hears "listbox" and nothing else. Every
 				    other combobox in the app already labels its list; this one did not. */}

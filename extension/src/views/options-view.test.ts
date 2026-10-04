@@ -237,7 +237,7 @@ it("connects to a self-hosted address typed into the disclosure instead", async 
 		required(container.querySelector("details"), "the self-hosted disclosure").open = true;
 	});
 	await fill("Hephaestus address", "heph.example.test");
-	await click(button("Connect"));
+	await click(button("Connect instance"));
 
 	expect(platform.request).toHaveBeenCalledWith({ origins: ["https://heph.example.test/*"] });
 	await until(() =>
@@ -253,7 +253,7 @@ it("says a closed sign-in window changed nothing, instead of reporting an error"
 			"get-state": () => ({ ...SIGNED_OUT, instance: HOSTED }),
 			"list-sign-in-options": () => SIGN_IN_OPTIONS,
 			"sign-in": () =>
-				Object.assign(new Error("Sign-in was cancelled before it finished."), {
+				Object.assign(new Error("Sign-in was canceled before it finished."), {
 					code: "cancelled",
 				}),
 		}),
@@ -265,7 +265,7 @@ it("says a closed sign-in window changed nothing, instead of reporting an error"
 
 	await until(() =>
 		expect(container.querySelector('[role="status"]')?.textContent).toContain(
-			"Sign-in was cancelled and nothing changed",
+			"Sign-in was canceled and nothing changed",
 		),
 	);
 	expect(container.querySelector('[role="alert"]')).toBeNull();

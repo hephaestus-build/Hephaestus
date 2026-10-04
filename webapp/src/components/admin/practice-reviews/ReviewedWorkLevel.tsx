@@ -267,7 +267,7 @@ export function ReviewedWorkLevel({
 				<DrawerFooter>
 					<Button type="button" disabled={requesting} onClick={onReviewNow}>
 						<PlayIcon aria-hidden data-icon="inline-start" />
-						{requesting ? "Requesting review…" : "Review this now"}
+						{requesting ? "Requesting review…" : "Request review"}
 					</Button>
 				</DrawerFooter>
 			)}

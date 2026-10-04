@@ -107,7 +107,7 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 		...cancelAgentJobMutation(),
 		onSuccess: (job) => {
 			updateJob(job);
-			toast.success("Review cancelled");
+			toast.success("Review canceled");
 		},
 		onError: (error) =>
 			toast.error("We could not cancel the review", {

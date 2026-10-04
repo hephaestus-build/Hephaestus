@@ -78,7 +78,7 @@ export function ActivityTiles({ state, providerType }: ActivityTilesProps) {
 					</li>
 				))}
 			</ul>
-			{isBusy(state) && <span className="sr-only">Loading the summary</span>}
+			{isBusy(state) && <span className="sr-only">Loading the summary…</span>}
 		</div>
 	);
 }

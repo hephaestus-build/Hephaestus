@@ -31,8 +31,8 @@ const RETRY_NOTICES = {
 	},
 	failed: {
 		variant: "destructive",
-		title: "Heph could not finish that reply",
-		description: "Try again. If it keeps failing, contact your workspace admin.",
+		title: "Heph could not finish this reply",
+		description: "Try again. If it keeps failing, contact your instance operator.",
 	},
 } as const satisfies Record<
 	ChatFailure,

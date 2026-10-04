@@ -13,7 +13,7 @@ const ERROR_COPY = new Map([
 	[
 		"access_denied",
 		{
-			title: "Sign-in was cancelled",
+			title: "Sign-in was canceled",
 			description: "You can try again whenever you’re ready.",
 		},
 	],

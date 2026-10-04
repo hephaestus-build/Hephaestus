@@ -46,7 +46,7 @@ export const Loading: Story = { args: { state: { status: "loading" } } };
 export const Sending: Story = {
 	args: { state: { status: "sending", preview: REQUEST } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Requesting…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Requesting review…" })).toBeDisabled();
 		await expect(canvas.getByRole("button", { name: "Cancel" })).toBeDisabled();
 	},
 };

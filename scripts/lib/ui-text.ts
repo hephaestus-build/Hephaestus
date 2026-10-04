@@ -5,9 +5,26 @@ import { fileURLToPath } from "node:url";
 
 import { asArray, asRecord, asString, parseJson } from "./json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
-import { steRoot } from "./ste-words.ts";
+import { negativeContractions, steRoot } from "./ste-words.ts";
 
 const uiIgnorePatterns = ["**/api/**", "**/routeTree.gen.ts", "**/*.test.*", "**/mocks/**"];
+
+/** Names the check that a `ui-text-voice` message came from, in the vocabulary of the prose report. */
+export function uiRuleName(message: string): string {
+	if (message.startsWith("Split")) {
+		return "STE.SentenceLength";
+	}
+	if (message.includes("semicolon")) {
+		return "STE.Semicolons";
+	}
+	if (message.startsWith("Write the apostrophe")) {
+		return "UI.Apostrophe";
+	}
+	if (negativeContractions.some(({ from }) => message.includes(`instead of "${from}"`))) {
+		return "STE.NegativeContractions";
+	}
+	return "STE.Words";
+}
 
 /** Use oxlint's AST and the registered rule, not a second JSX parser for reports. */
 export async function uiAlerts(files: string[]) {
@@ -33,7 +50,14 @@ export async function uiAlerts(files: string[]) {
 		const cli = fileURLToPath(new URL("../bin/oxlint", import.meta.resolve("oxlint")));
 		const result = spawnSync(
 			process.execPath,
-			[cli, "--config", config, "--format=json", ...files],
+			[
+				cli,
+				"--config",
+				config,
+				"--format=json",
+				...uiIgnorePatterns.flatMap((pattern) => ["--ignore-pattern", pattern]),
+				...files,
+			],
 			{
 				cwd: root,
 				encoding: "utf8",

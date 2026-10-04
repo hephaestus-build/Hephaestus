@@ -271,10 +271,7 @@ async function openConfirmation(intentId: string): Promise<void> {
 		});
 		tabId = created?.tabs?.[0]?.id;
 		if (tabId === undefined || !(await bindConfirmation(actions, intentId, tabId))) {
-			throw new WorkerError(
-				"stale",
-				"The extension could not open the confirmation window. Try again.",
-			);
+			throw new WorkerError("stale", "We could not open the confirmation window. Try again.");
 		}
 		await browser.tabs.update(tabId, { url: `${page}#${intentId}` });
 	} catch (error) {
@@ -284,10 +281,7 @@ async function openConfirmation(intentId: string): Promise<void> {
 		}
 		throw error instanceof WorkerError
 			? error
-			: new WorkerError(
-					"stale",
-					"The extension could not open the confirmation window. Try again.",
-				);
+			: new WorkerError("stale", "We could not open the confirmation window. Try again.");
 	}
 }
 
@@ -312,7 +306,7 @@ async function tabWork(tabId: number): Promise<string | undefined> {
 
 function requireTab(tabId: number | undefined): number {
 	if (tabId === undefined) {
-		throw new WorkerError("invalid", "The extension could not find the tab for this request.");
+		throw new WorkerError("invalid", "We could not find the tab for this request.");
 	}
 	return tabId;
 }

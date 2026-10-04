@@ -183,7 +183,7 @@ export function PracticeReviewCoverageSettings({
 			</>
 		);
 	} else {
-		reviewButtonContent = "Save coverage";
+		reviewButtonContent = "Review changes";
 	}
 
 	return (

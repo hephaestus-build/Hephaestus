@@ -31,7 +31,7 @@ const PROVIDER_TYPE_ITEMS: { value: ProviderType; label: string }[] = [
 	{ value: "GITHUB", label: "GitHub" },
 	{ value: "GITLAB", label: "GitLab / self-hosted GitLab" },
 	{ value: "SLACK", label: "Slack / Sign in with Slack" },
-	{ value: "OUTLINE", label: "Outline (link-only)" },
+	{ value: "OUTLINE", label: "Outline (connect-only)" },
 ];
 
 function scopesPlaceholder(type: ProviderType): string {
@@ -161,8 +161,8 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 			<DialogHeader>
 				<DialogTitle>{isEdit ? "Edit login provider" : "Add login provider"}</DialogTitle>
 				<DialogDescription>
-					Configure sign-in and account-link providers. Slack and Outline are link-only: they appear
-					in Settings for account linking, not on the public sign-in page.
+					Configure sign-in and connected-account providers. Slack and Outline are connect-only:
+					they appear in User settings, under Connected accounts, not on the public sign-in page.
 				</DialogDescription>
 			</DialogHeader>
 
@@ -215,10 +215,10 @@ function ProviderForm({ editing, isSubmitting, onCreate, onUpdate, onCancel }: P
 				)}
 				{isOutline && (
 					<FieldDescription>
-						Outline is <strong>link-only</strong>: users connect it from Settings so their documents
-						are attributed to them. Nobody signs in to Hephaestus with it. Create an OAuth app in
-						Outline under <strong>Settings → Applications</strong> and register this redirect URI:{" "}
-						<code className="break-all">{redirectUri}</code>
+						Outline is <strong>connect-only</strong>: users connect it in User settings so their
+						documents are attributed to them. Nobody signs in to Hephaestus with it. Create an OAuth
+						app in Outline under <strong>Settings → Applications</strong> and register this redirect
+						URI: <code className="break-all">{redirectUri}</code>
 					</FieldDescription>
 				)}
 			</Field>

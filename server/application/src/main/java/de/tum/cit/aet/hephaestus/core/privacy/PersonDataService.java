@@ -103,10 +103,11 @@ public class PersonDataService {
         var initial = admission.getFirst();
         if (initial.state().equals("COMPLETE") || initial.state().equals("ERASING")) return;
         if (!initial.state().equals("PREVIEW") && !initial.state().equals("FAILED"))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "This preview is no longer available");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This preview is no longer available.");
         PersonScope person = mapper.readValue(Objects.requireNonNull(initial.scopeJson()), PersonScope.class);
         if (Objects.equals(person.accountId(), administratorId))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Another administrator must authorize this erasure");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Another administrator must authorize this erasure.");
         copyFence.holdForErasure();
         writeFence.holdForErasure(person.identities());
         requireActiveAdministratorAndLockAccount(administratorId, person.accountId());
@@ -114,7 +115,7 @@ public class PersonDataService {
         if (r.getState() == PersonDataRequest.State.COMPLETE || r.getState() == PersonDataRequest.State.ERASING) return;
         if (r.getState() != PersonDataRequest.State.FAILED) requirePreview(r);
         if (!scope(r).equals(person))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "The request scope changed");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "The request scope changed. Create a new preview.");
         if (r.getState() == PersonDataRequest.State.FAILED) {
             requireExternalRemoval(selections(r), externalCopiesRemoved);
             r.setAdministratorAccountId(administratorId);
@@ -160,7 +161,7 @@ public class PersonDataService {
                 Objects.requireNonNullElse(personAccountId, -1L));
         if (!eligible.contains(true))
             throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "An active instance administrator must authorize erasure");
+                    HttpStatus.FORBIDDEN, "An active instance administrator must authorize erasure.");
     }
 
     public void run(UUID id) {
@@ -303,10 +304,11 @@ public class PersonDataService {
 
     private void requirePreview(PersonDataRequest r) {
         if (r.getState() != PersonDataRequest.State.PREVIEW || r.getExpiresAt().isBefore(Instant.now()))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "This preview is no longer available");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This preview is no longer available.");
     }
 
     private static ResponseStatusException notFound() {
-        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Person data request not found");
+        return new ResponseStatusException(
+                HttpStatus.NOT_FOUND, "We could not find that request. Reload the page and try again.");
     }
 }

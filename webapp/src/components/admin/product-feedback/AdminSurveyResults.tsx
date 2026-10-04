@@ -88,7 +88,7 @@ export function AdminSurveyResults({
 						<DrawerTitle>Survey results</DrawerTitle>
 						<DrawerDescription>
 							{state.status === "loading"
-								? "Loading the survey and its responses."
+								? "Loading the survey and its responses…"
 								: "Nothing is shown until the survey loads."}
 						</DrawerDescription>
 					</div>
@@ -203,7 +203,7 @@ export function AdminSurveyResults({
 						Responses
 					</h3>
 					{responses.length === 0 ? (
-						<p className="text-sm text-muted-foreground">No responses yet.</p>
+						<p className="text-sm text-muted-foreground">No responses yet</p>
 					) : (
 						<ul className="flex flex-col gap-3">
 							{responses.map((response) => (

@@ -27,7 +27,7 @@ Sensitive access changes require a recent sign-in.
 1. Find the account.
 2. Change its instance role or force sign-out of its sessions.
 
-A linked provider account identifies a person. An instance role does not create workspace membership.
+A connected provider account identifies a person. An instance role does not create workspace membership.
 
 ## Workspaces
 
@@ -87,16 +87,16 @@ external-copy obligations. This console is separate from a member's own
 
 ## Silent mode
 
-New instances start with it engaged. It blocks outbound feedback writes to GitHub, GitLab, and Slack.
+New instances start with silent mode on. It blocks outbound feedback writes to GitHub, GitLab, and Slack.
 Inbound events, sync, practice reviews, and observation storage continue. OAuth, token lifecycle,
 webhook registration, and operator alerts remain available.
 
-A stale settings view cannot release a newer brake.
+A stale settings view cannot turn off a newer silent mode setting.
 If you turn silent mode off, Hephaestus does not replay feedback withheld while it was on.
 For incidents, deployment checks, and recovery, follow the [production operations runbook](./production-operations-runbook).
 
 1. Open **Instance admin → Instance settings** to inspect or change silent mode.
-2. Before you release it, read the current state.
+2. Before you turn it off, read the current state.
 
 ## Bootstrap and recovery
 
