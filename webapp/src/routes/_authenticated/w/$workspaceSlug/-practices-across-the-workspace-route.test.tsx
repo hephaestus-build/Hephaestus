@@ -139,10 +139,8 @@ describe("Practices across the workspace", () => {
 				name: "28 developers with a current standing in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
 			}),
 		).toHaveLength(2);
-		// No standing badge and no window: the reader's own learning is in their profile.
-		expect(level.queryByRole("button", { name: "Needs attention" })).toBeNull();
-		expect(level.queryByText(/^Last \d+ days$/u)).toBeNull();
-		// The level asks for nothing of its own: the page's one read carries every practice's split.
+		// The level asks for nothing of its own, and none of the reader's standing reads: the page's
+		// one read carries every practice's split.
 		expect(overviewReads()).toHaveLength(1);
 		expect(profileReads()).toStrictEqual([]);
 

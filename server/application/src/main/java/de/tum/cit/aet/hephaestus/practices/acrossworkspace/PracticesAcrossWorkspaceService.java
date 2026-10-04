@@ -115,7 +115,7 @@ public class PracticesAcrossWorkspaceService {
                 .map(developer -> openFeedback.getOrDefault(developer, 0))
                 .toList());
         return new PracticesAcrossWorkspaceDTO(
-                CohortPrivacyPolicy.MINIMUM_OTHERS,
+                CohortPrivacyPolicy.MINIMUM_DEVELOPERS_PER_COUNT,
                 WorkspaceTileDTO.of(reader == null ? 0 : openFeedback.getOrDefault(reader, 0), openMiddle),
                 rows);
     }
@@ -136,7 +136,7 @@ public class PracticesAcrossWorkspaceService {
                 inWindow.withAStanding().stream().map(inWindow::snapshotOf).toList();
         return new PracticesAcrossWorkspaceTilesDTO(
                 window,
-                CohortPrivacyPolicy.MINIMUM_OTHERS_FOR_MIDDLE_HALF,
+                CohortPrivacyPolicy.MINIMUM_DEVELOPERS_FOR_MIDDLE_HALF,
                 CohortPrivacyPolicy.count(withAStanding.size()),
                 yours.practices().size(),
                 tile(yours, withAStanding, PracticesAcrossWorkspaceService::reviewedWork),

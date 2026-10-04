@@ -6,6 +6,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
+import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -47,6 +50,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -94,6 +98,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private EntityManagerFactory entityManagerFactory;
+
+    @Autowired
+    private IdentityLinkRepository identityLinkRepository;
 
     @Autowired
     private RepositoryRepository repositoryRepository;
@@ -156,8 +163,8 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @WithUser
     @DisplayName("an even group splits with the reader counted; a bare or nearly full one shows its total only")
     void shouldSplitAndWithholdByTheCountsOfDevelopersWithAStanding() {
-        read().jsonPath("$.minimumOthers")
-                .isEqualTo(3)
+        read().jsonPath("$.minimumDevelopersPerCount")
+                .isEqualTo(4)
                 // The owner, the reader and twenty six developers are eligible, and every one of them was reviewed.
                 .jsonPath("$.groups[0].split.developers")
                 .isEqualTo(28)
@@ -205,8 +212,8 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         tiles("ALL_TIME")
                 .jsonPath("$.window")
                 .isEqualTo("ALL_TIME")
-                .jsonPath("$.minimumOthersForMiddleHalf")
-                .isEqualTo(6)
+                .jsonPath("$.minimumDevelopersForMiddleHalf")
+                .isEqualTo(7)
                 .jsonPath("$.developersWithAStandingInWindow")
                 .isEqualTo(28)
                 .jsonPath("$.reviewedWork.yours")
@@ -579,6 +586,69 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         pullRequest.setCreatedAt(NOW);
         pullRequest.setUpdatedAt(NOW);
         return pullRequestRepository.save(pullRequest);
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("two readers with different standings read the same overview but for their own markers")
+    void shouldShowEveryReaderTheSameOverviewButTheirOwnMarkers() {
+        // The reader is going well in Packaging; the first developer needs attention there.
+        Account account = persistAccount("across-dev-0");
+        User other = developer("across-dev-0");
+        IdentityLink link = new IdentityLink();
+        link.setAccount(account);
+        link.setProviderId(Objects.requireNonNull(other.getProvider().getId()));
+        link.setSubject(other.getNativeId().toString());
+        identityLinkRepository.saveAndFlush(link);
+
+        PracticesAcrossWorkspaceDTO yours = overviewAs(TestAuthUtils.getCurrentUserToken());
+        PracticesAcrossWorkspaceDTO theirs = overviewAs("mock-jwt-member-" + account.getId());
+
+        assertThat(List.of(yours, theirs))
+                .extracting(page -> page.groups().stream()
+                        .filter(group -> group.groupSlug().equals("review-ready-work"))
+                        .findFirst()
+                        .orElseThrow()
+                        .yourStanding())
+                .containsExactly(
+                        PracticeGroupStandingDTO.Standing.STRENGTH, PracticeGroupStandingDTO.Standing.DEVELOPING);
+        assertThat(withoutMarkers(theirs)).isEqualTo(withoutMarkers(yours));
+    }
+
+    private PracticesAcrossWorkspaceDTO overviewAs(String token) {
+        return Objects.requireNonNull(webTestClient
+                .get()
+                .uri(URI, workspace.getWorkspaceSlug())
+                .headers(headers -> headers.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(PracticesAcrossWorkspaceDTO.class)
+                .returnResult()
+                .getResponseBody());
+    }
+
+    /** The overview with every reader marker cleared: what must read the same whoever reads it. */
+    private static PracticesAcrossWorkspaceDTO withoutMarkers(PracticesAcrossWorkspaceDTO page) {
+        return new PracticesAcrossWorkspaceDTO(
+                page.minimumDevelopersPerCount(),
+                page.openFeedback(),
+                page.groups().stream()
+                        .map(group -> new WorkspaceGroupSplitDTO(
+                                group.groupSlug(),
+                                group.groupName(),
+                                group.groupIcon(),
+                                group.groupColor(),
+                                null,
+                                group.split(),
+                                group.practices().stream()
+                                        .map(practice -> new WorkspacePracticeSplitDTO(
+                                                practice.practiceSlug(),
+                                                practice.practiceName(),
+                                                null,
+                                                practice.split()))
+                                        .toList()))
+                        .toList());
     }
 
     @Test

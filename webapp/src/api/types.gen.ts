@@ -4209,9 +4209,9 @@ export type PracticesAcrossWorkspace = {
    */
   groups: Array<WorkspaceGroupSplit>;
   /**
-   * The fewest developers other than the reader a shown count stands for
+   * The fewest developers a shown count holds, the reader among them or not
    */
-  minimumOthers: number;
+  minimumDevelopersPerCount: number;
   /**
    * The reader's open feedback, counted by the rule the practice profile shows it open by, beside the middle half of every eligible developer's: both open now
    */
@@ -4227,9 +4227,9 @@ export type PracticesAcrossWorkspaceTiles = {
    */
   developersWithAStandingInWindow?: number;
   /**
-   * The fewest developers other than the reader a middle half is read over; below it a tile shows only the reader's own value
+   * The fewest developers a middle half is read over, the reader among them or not; below it a tile shows only the reader's own value
    */
-  minimumOthersForMiddleHalf: number;
+  minimumDevelopersForMiddleHalf: number;
   /**
    * The reader's practices going well
    */

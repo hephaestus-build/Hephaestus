@@ -90,6 +90,9 @@ export const AllHeldBack: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(1);
+		await expect(
+			canvas.getByRole("table", { name: "All practice groups" }),
+		).toHaveAccessibleDescription("Held back so no one can be singled out.");
 		await expect(canvas.getAllByRole("button", { name: /^Open group /u })).toHaveLength(4);
 	},
 };

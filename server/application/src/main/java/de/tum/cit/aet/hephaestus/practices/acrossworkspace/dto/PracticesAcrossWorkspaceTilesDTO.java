@@ -14,9 +14,9 @@ public record PracticesAcrossWorkspaceTilesDTO(
 
         @NonNull
         @Schema(
-                description = "The fewest developers other than the reader a middle half is read over; below it a"
-                        + " tile shows only the reader's own value")
-        Integer minimumOthersForMiddleHalf,
+                description = "The fewest developers a middle half is read over, the reader among them or not; below"
+                        + " it a tile shows only the reader's own value")
+        Integer minimumDevelopersForMiddleHalf,
 
         @Nullable
         @Schema(

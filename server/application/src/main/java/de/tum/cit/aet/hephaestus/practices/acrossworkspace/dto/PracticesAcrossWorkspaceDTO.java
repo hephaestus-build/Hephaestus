@@ -9,8 +9,8 @@ import org.jspecify.annotations.NonNull;
                 + " counted in developers and never naming one, and the open feedback beside the reader's own. Nothing"
                 + " here reads a window; the tiles that do are read on their own")
 public record PracticesAcrossWorkspaceDTO(
-        @NonNull @Schema(description = "The fewest developers other than the reader a shown count stands for")
-        Integer minimumOthers,
+        @NonNull @Schema(description = "The fewest developers a shown count holds, the reader among them or not")
+        Integer minimumDevelopersPerCount,
 
         @NonNull
         @Schema(

@@ -1,3 +1,6 @@
+// `role="img"`, not a Base UI `Meter`: a meter announces one value in a range, and a split is four
+// counts of one whole. CSS, not Recharts (`ui/chart.tsx`): one stacked row needs no axis or scale.
+
 import { TriangleIcon } from "lucide-react";
 import type { ComponentType } from "react";
 

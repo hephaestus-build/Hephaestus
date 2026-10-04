@@ -152,5 +152,9 @@ function levelState(
 	}
 	return group === undefined
 		? { status: "missing" }
-		: { status: "ready", group, minimumOthers: state.overview.minimumOthers };
+		: {
+				status: "ready",
+				group,
+				minimumDevelopersPerCount: state.overview.minimumDevelopersPerCount,
+			};
 }

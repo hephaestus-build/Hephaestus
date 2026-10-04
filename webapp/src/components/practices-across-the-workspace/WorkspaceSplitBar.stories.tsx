@@ -10,12 +10,8 @@ import {
 import { WorkspaceSplitBar } from "./WorkspaceSplitBar";
 
 /**
- * One bar for a practice group and for a practice. The text alternative names the reference group
- * and every count, and each part carries its count and icon, so the colours carry nothing a screen
- * reader or a color-blind reader misses. The bar is `role="img"` rather than a Base UI `Meter`: a
- * meter announces one value against a range, and a split is four counts of one whole. It is CSS
- * rather than Recharts through `ui/chart.tsx`: one stacked row needs no axis, scale or tooltip, and
- * each part's count must sit under its own piece at every width.
+ * One bar for a practice group and for a practice. The text alternative names every count, and
+ * each part carries its count and icon, so color carries nothing a reader can miss.
  */
 const meta = {
 	component: WorkspaceSplitBar,

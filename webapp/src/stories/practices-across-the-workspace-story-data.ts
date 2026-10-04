@@ -145,7 +145,7 @@ export const PACKAGING_GROUP: WorkspaceGroupSplit = group(
  * more than K developers, as CohortPrivacyPolicy requires, so it stands for K besides any reader.
  */
 export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
-	minimumOthers: 3,
+	minimumDevelopersPerCount: 4,
 	openFeedback: { yours: 3, middle: { low: 1, high: 4 } },
 	groups: [
 		group(ACTING, "MIXED", threeWay([6, 7, 7])),
@@ -162,7 +162,7 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 /** The reader's figures over the last 30 days beside the middle half of 26 developers with a standing. */
 export const ACROSS_WORKSPACE_TILES: PracticesAcrossWorkspaceTiles = {
 	window: "DAYS_30",
-	minimumOthersForMiddleHalf: 6,
+	minimumDevelopersForMiddleHalf: 7,
 	developersWithAStandingInWindow: 26,
 	yourPractices: 18,
 	reviewedWork: { yours: 17, middle: { low: 11, high: 21 } },

@@ -67,7 +67,7 @@ describe("shownSplit", () => {
 
 describe("tilesHint", () => {
 	const tiles = {
-		minimumOthersForMiddleHalf: 6,
+		minimumDevelopersForMiddleHalf: 7,
 		window: "DAYS_30",
 		developersWithAStandingInWindow: 41,
 	} as const;
@@ -82,13 +82,13 @@ describe("tilesHint", () => {
 	});
 
 	it("names no count where the server held the total back", () => {
-		const [band] = tilesHint({ minimumOthersForMiddleHalf: 6, window: "DAYS_30" }, WITH_A_BAND);
+		const [band] = tilesHint({ minimumDevelopersForMiddleHalf: 7, window: "DAYS_30" }, WITH_A_BAND);
 		expect(band).toContain("sorts the developers in this workspace who have a standing");
 	});
 
 	it("agrees count, noun and verb in the singular", () => {
 		const [band] = tilesHint(
-			{ ...tiles, developersWithAStandingInWindow: 1, minimumOthersForMiddleHalf: 1 },
+			{ ...tiles, developersWithAStandingInWindow: 1, minimumDevelopersForMiddleHalf: 2 },
 			WITH_A_BAND,
 		);
 		expect(band).toContain("the 1 developer in this workspace who has a standing");
@@ -110,28 +110,28 @@ describe("tilesHint", () => {
 });
 
 describe("the disclosure floor", () => {
-	// The server shows a count only above K others with the reader counted (CohortPrivacyPolicy):
-	// K = 3 is a floor of 4 for a bar, and K = 6 a floor of 7 for the typical range.
-	it("names a bar's floor as K + 1 and the others it leaves as K", () => {
-		const hint = barsHint(3, "group");
+	it("prints a bar's floor as the server sends it, and the others as the floor less you", () => {
+		const hint = barsHint(4, "group");
 		expect(hint).toContain("A count shows only when it holds at least 4 developers.");
 		expect(hint).toContain(
 			"So each count stands for at least 3 developers other than you, whoever reads it",
 		);
 	});
 
-	it("names the typical range's floor from its own K", () => {
+	it("prints the typical range's floor as the server sends it", () => {
 		expect(
-			tilesHint({ minimumOthersForMiddleHalf: 6, window: "DAYS_30" }, { yours: 1 })[0],
+			tilesHint({ minimumDevelopersForMiddleHalf: 7, window: "DAYS_30" }, { yours: 1 })[0],
 		).toContain(
 			"The band shows only when at least 7 developers are counted, so at least 6 developers other than you.",
 		);
 	});
 
 	it("gives groups and practices each their own differencing rule at the same floor", () => {
-		expect(barsHint(3, "group")).toMatch(/single out fewer than 4 developers between them\.$/u);
-		expect(barsHint(3, "practice")).toMatch(
-			/it and its group’s bar together would single out fewer than 4 developers\.$/u,
+		expect(barsHint(4, "group")).toMatch(
+			/If the groups together would single out one to three developers, every bar on the page shows only its number\.$/u,
+		);
+		expect(barsHint(4, "practice")).toMatch(
+			/A practice bar is compared with its group’s bar and the group’s other practice bars\. If that would single out one to three developers, it shows only its number\.$/u,
 		);
 	});
 });

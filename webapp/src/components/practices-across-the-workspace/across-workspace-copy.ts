@@ -63,17 +63,8 @@ export const GROUPS_LOAD_ERROR = "We could not load the practice groups";
 /** Digits always: a count of developers sits beside other figures, never in running prose. */
 const developers = (n: number) => count(n, "developer", "developers", true);
 
-/**
- * The one home of the disclosure arithmetic. The server shows a count only when it holds more than
- * `minimumOthers` developers with the reader counted, so the floor is `minimumOthers + 1` and every
- * shown count stands for `minimumOthers` others, whoever reads it.
- */
-function disclosure(minimumOthers: number) {
-	return {
-		floor: developers(minimumOthers + 1),
-		others: `${developers(minimumOthers)} other than you`,
-	};
-}
+/** A floor the server sends counts the reader too, so the floor less one is the others it stands for. */
+const othersBeyond = (floor: number) => floor - 1;
 
 /**
  * The lines under the tiles, built only from the response so they hold for every reply: no count
@@ -82,12 +73,12 @@ function disclosure(minimumOthers: number) {
  */
 export function tilesHint(
 	{
-		minimumOthersForMiddleHalf,
+		minimumDevelopersForMiddleHalf,
 		window,
 		developersWithAStandingInWindow,
 	}: Pick<
 		PracticesAcrossWorkspaceTiles,
-		"minimumOthersForMiddleHalf" | "window" | "developersWithAStandingInWindow"
+		"minimumDevelopersForMiddleHalf" | "window" | "developersWithAStandingInWindow"
 	>,
 	openFeedback: WorkspaceTile,
 ): readonly [string, string] {
@@ -95,7 +86,8 @@ export function tilesHint(
 		developersWithAStandingInWindow === undefined
 			? "the developers"
 			: `the ${developers(developersWithAStandingInWindow)}`;
-	const { floor, others } = disclosure(minimumOthersForMiddleHalf);
+	const floor = developers(minimumDevelopersForMiddleHalf);
+	const others = `${developers(othersBeyond(minimumDevelopersForMiddleHalf))} other than you`;
 	const band = [
 		"The band is the typical range.",
 		`Hephaestus sorts ${sorted} in this workspace who ${developersWithAStandingInWindow === 1 ? "has" : "have"} a standing ${windowPhrase(window)} by their value.`,
@@ -113,17 +105,24 @@ export function tilesHint(
 }
 
 /** The line over a table of bars, in the words of `docs/user/practice-profile.mdx` § The bars. */
-export function barsHint(minimumOthers: number, scope: StandingScope): string {
-	const { floor, others } = disclosure(minimumOthers);
+export function barsHint(minimumDevelopersPerCount: number, scope: StandingScope): string {
+	const floor = developers(minimumDevelopersPerCount);
+	const others = othersBeyond(minimumDevelopersPerCount);
+	const singledOut = `one to ${count(others, "developer", "developers", false)}`;
 	return [
 		`Each bar counts developers by their current standing in the ${scope}, as their Practice profile shows it.`,
 		"The You marker shows your part.",
 		`A count shows only when it holds at least ${floor}.`,
-		`So each count stands for at least ${others}, whoever reads it, and every reader sees the same bars.`,
+		`So each count stands for at least ${developers(others)} other than you, whoever reads it, and every reader sees the same bars.`,
 		"If a part would hold fewer, the bar shows only its number of developers.",
-		scope === "group"
-			? `The groups are also held back together when they would single out fewer than ${floor} between them.`
-			: `A practice is also held back when it and its group’s bar together would single out fewer than ${floor}.`,
+		...(scope === "group"
+			? [
+					`If the groups together would single out ${singledOut}, every bar on the page shows only its number.`,
+				]
+			: [
+					"A practice bar is compared with its group’s bar and the group’s other practice bars.",
+					`If that would single out ${singledOut}, it shows only its number.`,
+				]),
 	].join(" ");
 }
 

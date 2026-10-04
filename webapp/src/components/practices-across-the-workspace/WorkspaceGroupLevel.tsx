@@ -22,7 +22,7 @@ export type WorkspaceGroupLevelState =
 	| { status: "missing" }
 	| ({ status: "ready"; group: WorkspaceGroupSplit } & Pick<
 			PracticesAcrossWorkspace,
-			"minimumOthers"
+			"minimumDevelopersPerCount"
 	  >);
 
 export interface WorkspaceGroupLevelProps {
@@ -127,7 +127,7 @@ function GroupPractices({
 			{state.status === "loading" && <Skeleton className="h-10 w-full max-w-2xl" />}
 			{state.status === "ready" && state.group.practices.length > 0 && (
 				<p className="max-w-2xl text-sm text-muted-foreground">
-					{barsHint(state.minimumOthers, "practice")}
+					{barsHint(state.minimumDevelopersPerCount, "practice")}
 				</p>
 			)}
 			<SplitLegend />

@@ -1,5 +1,5 @@
 import { ClipboardCheckIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useId } from "react";
 
 import type { WorkspaceSplit } from "@/api/types.gen";
 import type { PracticeGroupStandingValue } from "@/components/practice-vocabulary/practice-group-standing-defs";
@@ -59,11 +59,18 @@ export function WorkspaceComparisonTable({
 }: WorkspaceComparisonTableProps) {
 	const rows = state.status === "ready" ? state.rows : [];
 	const allHeldBack = rows.length > 0 && rows.every((row) => shownSplit(row.split) === undefined);
+	// Each cell then holds only a hidden track, so the table is described by the one reason.
+	const reasonId = useId();
 	return (
 		<>
-			{allHeldBack && <p className="text-sm text-muted-foreground">{HELD_BACK}.</p>}
+			{allHeldBack && (
+				<p id={reasonId} className="text-sm text-muted-foreground">
+					{HELD_BACK}.
+				</p>
+			)}
 			<PracticeTableFrame
 				aria-label={label}
+				aria-describedby={allHeldBack ? reasonId : undefined}
 				columns={3}
 				head={
 					<>

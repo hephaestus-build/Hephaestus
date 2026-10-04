@@ -119,7 +119,7 @@ export function PracticesAcrossTheWorkspacePage({
 					<Section
 						size="lg"
 						title={ALL_PRACTICE_GROUPS}
-						description={overview && barsHint(overview.minimumOthers, "group")}
+						description={overview && barsHint(overview.minimumDevelopersPerCount, "group")}
 					>
 						<SplitLegend />
 						<GroupsTable

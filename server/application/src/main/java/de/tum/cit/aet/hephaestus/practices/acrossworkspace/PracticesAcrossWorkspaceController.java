@@ -32,8 +32,8 @@ public class PracticesAcrossWorkspaceController {
     @Operation(
             operationId = "getPracticesAcrossWorkspace",
             summary = "How the workspace's developers split across practice groups and practices, the reader marked",
-            description = "Counts developers, never names them: every count shown, and every count derivable from"
-                    + " them, holds none or at least "
+            description = "Counts developers, never names them: every count shown, and the three differences that"
+                    + " ADR 0051 names, hold none or at least "
                     + CohortPrivacyPolicy.MINIMUM_DEVELOPERS_PER_COUNT
                     + " developers, whoever reads it (CohortPrivacyPolicy). The splits count every developer's"
                     + " current standing and take no window.")

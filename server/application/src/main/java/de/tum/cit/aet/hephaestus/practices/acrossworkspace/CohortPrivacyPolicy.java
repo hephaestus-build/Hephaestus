@@ -7,25 +7,22 @@ import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The only place that decides what the page may show about developers (ADR 0051). One rule: every count the page
- * shows, and every count a reader can derive from them by subtraction, holds none or at least
- * {@link #MINIMUM_DEVELOPERS_PER_COUNT} developers, whoever reads it. No threshold depends on the reader, so every
- * reader sees the same shape, and each count stands for at least {@link #MINIMUM_OTHERS} others besides any reader.
- * A middle half needs {@link #MINIMUM_DEVELOPERS_FOR_MIDDLE_HALF} developers.
+ * The only place that decides what the page may show about developers (ADR 0051). One rule: every count shown, and
+ * the three differences that ADR 0051 names, hold none or at least {@link #MINIMUM_DEVELOPERS_PER_COUNT} developers,
+ * whoever reads it. No threshold depends on the reader, so every reader sees the same shape, and each count stands
+ * for at least {@link #MINIMUM_OTHERS} others besides any reader. A middle half needs
+ * {@link #MINIMUM_DEVELOPERS_FOR_MIDDLE_HALF} developers.
  */
 public final class CohortPrivacyPolicy {
 
     /** K: the fewest developers other than the reader a shown count stands for. */
     public static final int MINIMUM_OTHERS = 3;
 
-    /** K + 1: the fewest developers a shown or derivable count may hold, the reader among them or not. */
+    /** K + 1: the fewest developers a shown count or a guarded difference may hold, the reader among them or not. */
     public static final int MINIMUM_DEVELOPERS_PER_COUNT = MINIMUM_OTHERS + 1;
 
     /** 2K + 1: the fewest developers a middle half may be read over, so 2K others besides any reader. */
     public static final int MINIMUM_DEVELOPERS_FOR_MIDDLE_HALF = 2 * MINIMUM_OTHERS + 1;
-
-    /** 2K: the fewest developers other than the reader a middle half stands for. */
-    public static final int MINIMUM_OTHERS_FOR_MIDDLE_HALF = MINIMUM_DEVELOPERS_FOR_MIDDLE_HALF - 1;
 
     private CohortPrivacyPolicy() {}
 
@@ -118,7 +115,7 @@ public final class CohortPrivacyPolicy {
                 inSeveralGroups += sized.withAVerdict();
             }
         }
-        if (knownGroups > 1 && !derivable(inSeveralGroups)) {
+        if (knownGroups > 1 && !safe(inSeveralGroups)) {
             Split heldBack = Split.heldBack(total);
             groups = groups.stream()
                     .map(group -> new GroupRelease(
@@ -137,16 +134,15 @@ public final class CohortPrivacyPolicy {
                 .mapToObj(index -> split(withAStanding.stream()
                         .map(standings -> standings.practices().get(index))
                         .toList()))
-                .map(practice ->
-                        bothShown(group, practice) && !derivable(group.withAVerdict() - practice.withAVerdict())
-                                ? heldBack
-                                : practice)
+                .map(practice -> bothShown(group, practice) && !safe(group.withAVerdict() - practice.withAVerdict())
+                        ? heldBack
+                        : practice)
                 .toList();
         List<Split> shown = practices.stream()
                 .filter(practice -> bothShown(group, practice))
                 .toList();
         int inSeveralPractices = shown.stream().mapToInt(Split::withAVerdict).sum() - group.withAVerdict();
-        if (shown.size() > 1 && !derivable(inSeveralPractices)) {
+        if (shown.size() > 1 && !safe(inSeveralPractices)) {
             return new GroupRelease(
                     group, practices.stream().map(practice -> heldBack).toList());
         }
@@ -209,8 +205,8 @@ public final class CohortPrivacyPolicy {
         return one.shape() == Shape.SPLIT && other.shape() == Shape.SPLIT;
     }
 
-    /** Whether a count a reader can derive is none or holds enough, either sign. */
-    private static boolean derivable(int developers) {
+    /** Whether a guarded difference may be released: none, or enough developers either way. */
+    private static boolean safe(int developers) {
         return developers == 0 || shows(Math.abs(developers));
     }
 

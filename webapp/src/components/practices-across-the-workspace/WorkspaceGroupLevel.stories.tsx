@@ -15,7 +15,7 @@ import { Stateful } from "@/stories/stateful";
 import { ACROSS_THE_WORKSPACE } from "./across-workspace-copy";
 import { WorkspaceGroupLevel } from "./WorkspaceGroupLevel";
 
-const COUNTS = { minimumOthers: 3 } as const;
+const COUNTS = { minimumDevelopersPerCount: 4 } as const;
 
 /**
  * A practice group's practices over Practices across the workspace. The level has no page of its
@@ -97,9 +97,11 @@ export const Default: Story = {
 		);
 		await expect(args.onGoToPractice).toHaveBeenCalledWith("scope-to-one-concern");
 		await expect(table.getAllByText("Split held back")).toHaveLength(2);
-		// The practice-only rule, at the floor K + 1 from the level's counts.
+		// The practice-only rule, at the floor from the level's counts.
 		await expect(
-			level.getByText(/its group’s bar together would single out fewer than 4 developers\.$/u),
+			level.getByText(
+				/If that would single out one to three developers, it shows only its number\.$/u,
+			),
 		).toBeVisible();
 	},
 };
