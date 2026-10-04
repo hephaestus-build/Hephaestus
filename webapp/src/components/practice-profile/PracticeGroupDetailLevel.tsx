@@ -43,7 +43,7 @@ import { TableCell } from "@/components/ui/table";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
 
-import { LabelledBlock, NoDescription } from "./practice-profile-blocks";
+import { LabelledBlock, NoDescription, NoSuchGroup } from "./practice-profile-blocks";
 
 export interface PracticeGroupDetailLevelProps extends Partial<
 	Pick<HephFeedbackCardProps, "holdingUp" | "holdingUpNote" | "reviewedWork">
@@ -293,12 +293,7 @@ export function PracticeGroupDetailLevel({
 			</>
 		);
 	} else {
-		body = (
-			<p className="text-sm text-muted-foreground">
-				We could not find this practice group. Check the link, or ask a workspace admin whether it
-				is active in this workspace.
-			</p>
-		);
+		body = <NoSuchGroup />;
 	}
 
 	return (

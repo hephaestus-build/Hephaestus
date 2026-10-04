@@ -315,8 +315,12 @@ export const LoadFailed: Story = {
 	},
 };
 
+/** A group by a slug the profile does not list: the same empty state as the group across the workspace. */
 export const Missing: Story = {
 	args: { group: undefined, standing: undefined, practices: undefined },
+	play: async () => {
+		await expectSettledVisible(await screen.findByText("We could not find this practice group"));
+	},
 };
 
 /** At 320px the standing summary wraps under the title and nothing leaves the panel. */

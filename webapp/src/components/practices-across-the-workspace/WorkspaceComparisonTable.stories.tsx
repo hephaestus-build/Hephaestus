@@ -48,7 +48,7 @@ const meta = {
 		state: { status: "ready", rows: ROWS, context: CONTEXT },
 		rowLink: () => ({ text: "Open group", onOpen }),
 		noun: "practice groups",
-		empty: { title: "No practice groups here yet", description: "They appear once set up." },
+		empty: { title: "No practice groups yet", description: "They appear once set up." },
 	},
 	argTypes: { rowLink: { control: false } },
 } satisfies Meta<typeof WorkspaceComparisonTable>;
@@ -104,7 +104,7 @@ export const Loading: Story = {
 export const Empty: Story = {
 	args: { state: { status: "ready", rows: [], context: CONTEXT } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No practice groups here yet")).toBeVisible();
+		await expect(canvas.getByText("No practice groups yet")).toBeVisible();
 	},
 };
 

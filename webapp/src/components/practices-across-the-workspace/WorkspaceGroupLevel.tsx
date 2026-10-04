@@ -4,11 +4,11 @@ import type { WorkspaceGroupSplit } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
+import { NoSuchGroup } from "@/components/practice-profile/practice-profile-blocks";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { StandingBadge, TrendNote } from "@/components/practice-vocabulary/StandingBadge";
 import { DrawerBody } from "@/components/ui/drawer";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { useRevealedRows } from "@/hooks/use-revealed-rows";
 
 import { practicesHint, type SplitContext } from "./across-workspace-copy";
@@ -108,15 +108,7 @@ export function WorkspaceGroupLevel({
 			/>
 			<DrawerBody className="flex flex-col gap-4 pt-2">
 				{state.status === "missing" ? (
-					<Empty variant="outlined">
-						<EmptyHeader>
-							<EmptyTitle>No practice group here by that name</EmptyTitle>
-							<EmptyDescription>
-								It may have been removed from this workspace. Close this panel to see every practice
-								group.
-							</EmptyDescription>
-						</EmptyHeader>
-					</Empty>
+					<NoSuchGroup />
 				) : (
 					<GroupPractices key={group?.groupSlug} state={state} onOpenPractice={onOpenPractice} />
 				)}
@@ -161,7 +153,7 @@ function GroupPractices({
 				}
 				noun="practices"
 				empty={{
-					title: "No practices here yet",
+					title: "No practices yet",
 					description: "Once your workspace reviews a practice in this group, it appears here.",
 				}}
 				rowLink={(row) => ({

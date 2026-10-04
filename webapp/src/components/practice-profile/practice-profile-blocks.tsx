@@ -38,6 +38,23 @@ export function FeedbackEmpty({
 	);
 }
 
+/**
+ * A level opened for a practice group its page does not list, a stale or hand typed address, in
+ * the one shape every practice level says it in.
+ */
+export function NoSuchGroup() {
+	return (
+		<Empty variant="outlined">
+			<EmptyHeader>
+				<EmptyTitle>We could not find this practice group</EmptyTitle>
+				<EmptyDescription>
+					Check the link, or ask a workspace admin whether it is active in this workspace.
+				</EmptyDescription>
+			</EmptyHeader>
+		</Empty>
+	);
+}
+
 /** A practice or a group the catalog has no words for. */
 export function NoDescription() {
 	return <p className="text-sm text-muted-foreground">No description yet.</p>;

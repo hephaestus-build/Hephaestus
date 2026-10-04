@@ -108,7 +108,7 @@ export const NoPractices: Story = {
 	},
 	play: async () => {
 		const level = within(await settledDrawerPanel());
-		await expect(level.getByText("No practices here yet")).toBeVisible();
+		await expect(level.getByText("No practices yet")).toBeVisible();
 	},
 };
 
@@ -117,7 +117,7 @@ export const UnknownGroup: Story = {
 	args: { state: { status: "missing" } },
 	play: async () => {
 		const level = within(await settledDrawerPanel());
-		await expect(level.getByText("No practice group here by that name")).toBeVisible();
+		await expect(level.getByText("We could not find this practice group")).toBeVisible();
 	},
 };
 

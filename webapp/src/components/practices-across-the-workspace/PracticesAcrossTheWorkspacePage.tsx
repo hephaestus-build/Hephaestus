@@ -155,7 +155,7 @@ function GroupsTable({
 			openKey={openGroupSlug}
 			noun="practice groups"
 			empty={{
-				title: "No practice groups here yet",
+				title: "No practice groups yet",
 				description:
 					"Once your workspace sets up practice groups, each one appears here with your standing in it.",
 			}}

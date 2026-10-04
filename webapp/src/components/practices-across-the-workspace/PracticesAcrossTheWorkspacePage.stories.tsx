@@ -133,7 +133,7 @@ export const SwitchingWindow: Story = {
 export const Empty: Story = {
 	args: { state: { status: "ready", overview: EMPTY_WORKSPACE } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No practice groups here yet")).toBeVisible();
+		await expect(canvas.getByText("No practice groups yet")).toBeVisible();
 	},
 };
 
