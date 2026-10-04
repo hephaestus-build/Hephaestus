@@ -21,9 +21,6 @@ import { packagingGroup } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPanelOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 
-import { PROFILE_SPAN } from "@/components/practices-across-the-workspace/across-workspace-copy";
-import { LevelSplit } from "@/components/practices-across-the-workspace/WorkspaceSplitBar";
-import { threeWay } from "@/stories/practices-across-the-workspace-story-data";
 import {
 	DEFAULT_PRACTICE_TAB,
 	type PracticeProfileDetailLevelKind,
@@ -323,37 +320,6 @@ export const NotObserved: Story = {
 		await expect(screen.queryByText(/Based on your latest/u)).not.toBeInTheDocument();
 		// The header's chip is the only one: no direction is claimed over no verdict.
 		await expect(screen.getAllByText("Not enough to compare yet")).toHaveLength(1);
-	},
-};
-
-/**
- * Opened over Practices across the workspace: the same level, with this practice's split in the
- * workspace beside its title where the group level shows the group's. The two standings may read
- * different spans, so each names its own.
- */
-export const BesideTheWorkspace: Story = {
-	args: {
-		aside: (
-			<LevelSplit
-				split={threeWay([7, 6, 8])}
-				yourStanding="STRENGTH"
-				context={{
-					readerCounted: true,
-					developersWithAStanding: 28,
-					minimumOthers: 3,
-				}}
-			/>
-		),
-		span: PROFILE_SPAN,
-	},
-	play: async () => {
-		await expectSettledVisible(
-			await screen.findByRole("img", {
-				name: "28 developers with a standing in this workspace in the last 30 days: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You: Going well.",
-			}),
-		);
-		await expect(screen.getByText("Last 90 days")).toBeVisible();
-		await expect(screen.getByText("Last 30 days")).toBeVisible();
 	},
 };
 

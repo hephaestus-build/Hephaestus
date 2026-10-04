@@ -7,11 +7,15 @@ import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { NoSuchGroup } from "@/components/practice-profile/practice-profile-blocks";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
-import { StandingBadge } from "@/components/practice-vocabulary/StandingBadge";
 import { DrawerBody } from "@/components/ui/drawer";
 import { useRevealedRows } from "@/hooks/use-revealed-rows";
 
-import { practicesHint, type SplitContext } from "./across-workspace-copy";
+import {
+	GO_TO_YOUR_PROFILE,
+	practicesHint,
+	type SplitContext,
+	VIEW_IN_YOUR_PROFILE,
+} from "./across-workspace-copy";
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 import { LevelSplit, SplitLegend } from "./WorkspaceSplitBar";
 
@@ -28,24 +32,24 @@ export interface WorkspaceGroupLevelProps {
 	nested?: boolean;
 	path: LevelPath;
 	state: WorkspaceGroupLevelState;
-	/** Opens a practice of the group as the next level, the reader's own practice. */
-	onOpenPractice: (practiceSlug: string) => void;
-	/** Opens the reader's own group as the next level: their standing, trend and practices in it. */
-	onOpenOwnGroup: () => void;
+	/** Goes to the group in the reader's own Practice profile. */
+	onGoToProfile: () => void;
+	/** Goes to a practice of the group in the reader's own Practice profile. */
+	onGoToPractice: (practiceSlug: string) => void;
 }
 
 /**
- * One practice group over Practices across the workspace: the reader's own standing and trend in
- * it with the way to their own group under them, the group's split beside the title, and each
- * practice of the group beside how the workspace splits across that practice. Both open the next
- * level over this one.
+ * One practice group over Practices across the workspace: the group's split beside the title, and
+ * each practice of the group beside how the workspace splits across that practice. The reader
+ * shows only as the You marker; their own standing, trend and next step are in their Practice
+ * profile, which the header's link and every practice's row link go to.
  */
 export function WorkspaceGroupLevel({
 	nested,
 	path,
 	state,
-	onOpenPractice,
-	onOpenOwnGroup,
+	onGoToProfile,
+	onGoToPractice,
 }: WorkspaceGroupLevelProps) {
 	const group = state.status === "ready" ? state.group : undefined;
 	return (
@@ -67,17 +71,16 @@ export function WorkspaceGroupLevel({
 						/>
 					)
 				}
-				chips={group && <StandingBadge standing={group.yourStanding} scope="group" />}
 				// The way on is a link in the header's one line, not a column beside the title. As the
 				// header's description it is also the dialog's, so a screen reader reads it on opening.
 				description={
 					group && (
 						<InlineLink
-							onClick={onOpenOwnGroup}
-							aria-label={`Open your group ${group.groupName}`}
+							onClick={onGoToProfile}
+							aria-label={`${GO_TO_YOUR_PROFILE}: ${group.groupName}`}
 							className="inline-flex items-center gap-1 self-start font-medium"
 						>
-							Open your group
+							{GO_TO_YOUR_PROFILE}
 							<ArrowRightIcon className="size-3.5 shrink-0" aria-hidden />
 						</InlineLink>
 					)
@@ -96,7 +99,7 @@ export function WorkspaceGroupLevel({
 				{state.status === "missing" ? (
 					<NoSuchGroup />
 				) : (
-					<GroupPractices key={group?.groupSlug} state={state} onOpenPractice={onOpenPractice} />
+					<GroupPractices key={group?.groupSlug} state={state} onGoToPractice={onGoToPractice} />
 				)}
 			</DrawerBody>
 		</>
@@ -106,10 +109,10 @@ export function WorkspaceGroupLevel({
 /** The group's practices, keyed on the group so a new group starts from its first page. */
 function GroupPractices({
 	state,
-	onOpenPractice,
+	onGoToPractice,
 }: {
 	state: Exclude<WorkspaceGroupLevelState, { status: "missing" }>;
-	onOpenPractice: (practiceSlug: string) => void;
+	onGoToPractice: (practiceSlug: string) => void;
 }) {
 	const group = state.status === "ready" ? state.group : undefined;
 	const rows: ComparisonRow[] = (group?.practices ?? []).map((practice) => ({
@@ -143,8 +146,8 @@ function GroupPractices({
 					description: "Once your workspace reviews a practice in this group, it appears here.",
 				}}
 				rowLink={(row) => ({
-					text: "Open practice",
-					onOpen: () => onOpenPractice(row.key),
+					text: VIEW_IN_YOUR_PROFILE,
+					onOpen: () => onGoToPractice(row.key),
 				})}
 			/>
 		</>

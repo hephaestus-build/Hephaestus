@@ -69,11 +69,6 @@ export interface PracticeGroupDetailLevelProps extends Partial<
 	isLoading: boolean;
 	error?: unknown;
 	onRetry?: () => void;
-	/**
-	 * The span the standing is read over, named where the level opens over a page that counts
-	 * another one; the profile itself has one span and leaves it out.
-	 */
-	span?: string;
 }
 
 const practiceCountLabel = (n: number) => `${count(n, "practice", "practices")} in this group`;
@@ -141,7 +136,6 @@ export function PracticeGroupDetailLevel({
 	isLoading,
 	error,
 	onRetry,
-	span,
 }: PracticeGroupDetailLevelProps) {
 	const practiceCount = practices?.length ?? 0;
 	const counts = countPracticeStandings(practices ?? []);
@@ -327,7 +321,6 @@ export function PracticeGroupDetailLevel({
 								support={standing?.trendSupport}
 								scope="group"
 							/>
-							{span !== undefined && <span className="text-xs text-muted-foreground">{span}</span>}
 						</>
 					)
 				}

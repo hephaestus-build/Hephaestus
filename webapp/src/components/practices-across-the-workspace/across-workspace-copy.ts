@@ -49,12 +49,6 @@ export const windowPhrase = (window: AcrossWorkspaceWindow): string => WINDOW_DE
 export const windowHeading = (window: AcrossWorkspaceWindow): string => WINDOW_DEFS[window].label;
 
 /**
- * The span the Practice profile reads a standing over, its look-back of 90 days: named on its levels
- * where they open over a window that may count another span, so two standings never meet unnamed.
- */
-export const PROFILE_SPAN = windowHeading("DAYS_90");
-
-/**
  * What the page is for, under its title. The page is a view of the workspace, not the reader's
  * profile, so it sends the reader to the profile for their own next step.
  */

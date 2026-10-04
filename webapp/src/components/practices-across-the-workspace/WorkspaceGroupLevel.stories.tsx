@@ -7,6 +7,7 @@ import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
 import {
 	MANY_PRACTICES,
 	PACKAGING_GROUP,
+	WITHHELD,
 } from "@/stories/practices-across-the-workspace-story-data";
 import { expectNoPanelOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
@@ -30,8 +31,8 @@ const meta = {
 	args: {
 		path: { behind: [{ label: "Practices across the workspace", depth: 0 }], onClose: fn() },
 		state: { status: "ready", group: PACKAGING_GROUP, context: CONTEXT },
-		onOpenPractice: fn(),
-		onOpenOwnGroup: fn(),
+		onGoToProfile: fn(),
+		onGoToPractice: fn(),
 	},
 	argTypes: { path: { control: false } },
 	render: (args) => (
@@ -65,28 +66,38 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The head carries the reader's standing and trend, the way to their group, and the group's split. */
+/**
+ * The head carries the crumb, the group and its split with the You marker, and the way to the group
+ * in the reader's profile. The reader's own standing and trend are there, not here.
+ */
 export const Default: Story = {
 	play: async ({ args }) => {
 		const panel = await settledDrawerPanel();
 		const level = within(panel);
 		await expectSettledVisible(level.getByRole("heading", { name: "Packaging work for review" }));
-		await expect(level.getByRole("button", { name: "Needs attention" })).toBeVisible();
-		await expect(level.getByRole("button", { name: "More positive recently" })).toBeVisible();
-		// The window the group's split and the reader's standing in it count, named beside them.
-		await expect(level.getByText("Last 30 days")).toBeVisible();
+		// The head's bar comes first; a practice that splits as its group does repeats its words.
+		await expect(
+			level.getAllByRole("img", {
+				name: "28 developers with a current standing in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
+			})[0],
+		).toBeVisible();
+		// No standing badge, no trend and no window: this level is the workspace, not the profile.
+		await expect(level.queryByRole("button", { name: "Needs attention" })).toBeNull();
+		await expect(level.queryByText(/More positive recently/u)).toBeNull();
+		await expect(level.queryByText(/^Last \d+ days$/u)).toBeNull();
+		await expect(level.queryByText(/^You:/u)).toBeNull();
 		await userEvent.click(
-			level.getByRole("button", { name: "Open your group Packaging work for review" }),
+			level.getByRole("button", { name: "Go to your profile: Packaging work for review" }),
 		);
-		await expect(args.onOpenOwnGroup).toHaveBeenCalledOnce();
+		await expect(args.onGoToProfile).toHaveBeenCalledOnce();
 		const table = within(
 			level.getByRole("table", { name: "Practices of Packaging work for review" }),
 		);
-		await expect(table.getAllByRole("button", { name: /^Open practice /u })).toHaveLength(5);
+		await expect(table.getAllByRole("button", { name: /^View in your profile /u })).toHaveLength(5);
 		await userEvent.click(
-			table.getByRole("button", { name: "Open practice Scope the change to one concern" }),
+			table.getByRole("button", { name: "View in your profile Scope the change to one concern" }),
 		);
-		await expect(args.onOpenPractice).toHaveBeenCalledWith("scope-to-one-concern");
+		await expect(args.onGoToPractice).toHaveBeenCalledWith("scope-to-one-concern");
 		await expect(table.getAllByText("Held back so no one can be singled out.")).toHaveLength(2);
 		// Why a practice is held back more often than its group, once, over its practices.
 		await expect(
@@ -94,7 +105,46 @@ export const Default: Story = {
 		).toBeVisible();
 		// The page's legend sits above the practices it explains.
 		await expect(level.getByRole("list", { name: "What the bars show" })).toBeVisible();
-		await expect(level.queryByText(/See practices/u)).toBeNull();
+	},
+};
+
+/** A group held back: the head shows the empty track and its reason, and nothing of the reader. */
+export const GroupHeldBack: Story = {
+	args: {
+		state: {
+			status: "ready",
+			group: { ...PACKAGING_GROUP, split: WITHHELD },
+			context: CONTEXT,
+		},
+	},
+	play: async () => {
+		const level = within(await settledDrawerPanel());
+		await expect(level.getAllByText("Held back so no one can be singled out.")).toHaveLength(3);
+		await expect(level.queryByText(/^You:/u)).toBeNull();
+		await expect(
+			level.getByRole("button", { name: "Go to your profile: Packaging work for review" }),
+		).toBeVisible();
+	},
+};
+
+/** A reader with no current standing is in no count, so no part carries the You marker. */
+export const ReaderNotCounted: Story = {
+	args: {
+		state: {
+			status: "ready",
+			group: PACKAGING_GROUP,
+			context: { ...CONTEXT, readerCounted: false },
+		},
+	},
+	play: async () => {
+		const level = within(await settledDrawerPanel());
+		// The head's bar comes first; a practice that splits as its group does repeats its words.
+		await expect(
+			level.getAllByRole("img", {
+				name: "28 developers with a current standing in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet.",
+			})[0],
+		).toBeVisible();
+		await expect(level.queryByText(/^You:/u)).toBeNull();
 	},
 };
 
@@ -122,9 +172,9 @@ export const ManyPractices: Story = {
 		const more = level.getByRole("button", { name: "Show more practices" });
 		more.scrollIntoView();
 		await userEvent.click(more);
-		await expect(within(table).getAllByRole("button", { name: /^Open practice /u })).toHaveLength(
-			24,
-		);
+		await expect(
+			within(table).getAllByRole("button", { name: /^View in your profile /u }),
+		).toHaveLength(24);
 		await expect(frame.scrollHeight).toBeLessThanOrEqual(frame.clientHeight + 1);
 	},
 };
