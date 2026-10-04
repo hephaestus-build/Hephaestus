@@ -45,11 +45,11 @@ A workspace administrator connects one or more Git repositories from github.com 
 
 Hephaestus then syncs authored pull/merge requests, issues, code reviews, review comments, and commit metadata from those repositories. The platform processes activity authored in the connected repositories, whether or not the author has signed in to Hephaestus.
 
-Hephaestus analyzes the synced activity against practices that the workspace administrator configures. It produces observations about each contributor's activity. Some judgments require the analysis to read and understand natural-language text. Examples include the meaning of a code comment or the substance of a review reply. For those judgments, the analysis uses an external LLM provider that the administrator chooses for the workspace.
+Hephaestus analyzes the synced activity against practices that the workspace administrator configures. It produces observations about each contributor's activity. Some judgments require the analysis to read and understand natural-language text. Examples include the meaning of a code comment or the substance of a review reply. For those judgments, the analysis uses an eligible model configured for the workspace, selected by the reviewed developer's AI choice (see the recipient details below).
 
 Automated practice review forwards the relevant pull/merge-request diff or issue content and the surrounding discussion to the provider. For a pull/merge request, it also forwards whatever the review reads from the captured repository and its history. It can post the resulting AI-generated feedback as comments on the reviewed artifact. Where explicitly connected and permitted, selected Outline documents may supply project context.
 
-The conversational mentor is an in-app chat where contributors can ask follow-up questions. Hephaestus forwards their messages and the approved bounded context to the same provider. This context can come from repository activity, prior feedback, selected Outline documents, or participant-permitted monitored Slack channels. Sources are purpose- and audience-bound. An enabled integration does not by itself authorize all of its content for every request.
+The conversational mentor is an in-app chat where contributors can ask follow-up questions. Hephaestus forwards their messages and the approved bounded context to an eligible model configured for Heph, selected by the AI choice of the person who asks (see the recipient details below). This context can come from repository activity, prior feedback, selected Outline documents, or participant-permitted monitored Slack channels. Sources are purpose- and audience-bound. An enabled integration does not by itself authorize all of its content for every request.
 
 Contributors who sign in with their GitHub or LRZ-GitLab account get a personal dashboard that summarizes their observations and activity. They get access to the conversational mentor and their account preferences. Sign-in adds the federated user identifier, username, display name, email, and avatar URL to what Hephaestus holds about that contributor.
 
@@ -65,7 +65,7 @@ The research uses the participant's work in connected repositories and tools, He
 
 The participant can refuse or withdraw at any time. Refusing or withdrawing has no disadvantage, and practice reviews continue. The consent is separate from the terms of use and is not a condition of service. The research is covered in more detail under *Legal basis* below.
 
-The existing TUM record describes an Art. 26 arrangement for these workspace-level choices. The legal owner must confirm its actual parties and arrangement reference. The choices are listed in "Legal basis" below. Hephaestus focuses on the contributor's own development. Observations serve the contributor and let the workspace administrator deliver targeted feedback during the project.
+TUM is the controller. Workspace administrators make these workspace-level choices under TUM's operating responsibility; an administrator role does not establish separate or joint controllership. The choices are listed in "Legal basis" below. Hephaestus focuses on the contributor's own development. Observations serve the contributor and let the workspace administrator deliver targeted feedback during the project.
 
 Observations are advisory and contestable. The platform makes no automated decisions within the meaning of Art. 22 GDPR. It feeds no grading, assessment, HR, or access-control pipeline. Signed-in contributors can stop new practice-feedback comments and related Slack reminders through the in-app **Comments and Slack reminders** setting. They can respond to individual pieces of feedback by recording whether the feedback was helpful and how they handled it.
 
@@ -170,11 +170,11 @@ Hephaestus does not intentionally solicit or classify special-category data (Art
 ## Recipients (Art. 30(1)(d))
 
 ```text
-TUM/AET engages external processors as controller. AVVs are in place at TUM/AET level for the AET-pool processors. Where a workspace administrator configures a different LLM endpoint, the AVV is at that administrator's institution. See the LLM provider details below.
+TUM/AET engages external processors as controller, each under an agreement verified for that recipient (see processor-checklist.md). A configured model endpoint or key alone does not establish an agreement or a role for another institution. See the model recipient details below.
 
 - GitHub, Inc. (USA) is the identity provider (OAuth) and source-system API for connected repositories on github.com.
 
-- The workspace administrator chooses an external LLM provider per workspace from any OpenAI-API-compatible HTTPS endpoint. A base URL, an API token, and a model name configure the endpoint. The choice is a joint-controller decision under Art. 26 GDPR. By default, the TUM-operated deployment uses Microsoft Azure OpenAI Service in an EU region under enterprise no-training terms. A workspace administrator may configure a different endpoint instead. Examples include OpenAI OpCo, LLC (with OpenAI Ireland Ltd. as the EEA contracting party). An institution-level enterprise gateway or a self-hosted model server is another option.
+- Each workspace configures its models from OpenAI-API-compatible HTTPS endpoints. A base URL, an API token, and a model name configure an endpoint. This configuration is under TUM's controller responsibility; choosing an endpoint or key does not make an administrator a joint controller. Each practice review uses the AI choice of the reviewed developer, and Heph uses the choice of the person who asks, to select among the compatible configured models. An in-house model, for example one served through Logos, stays with its in-house operator; a model that Logos forwards to an external provider makes that provider the recipient. The [processor checklist](./processor-checklist.md) holds the exact-provider evidence.
 
 - When the workspace enables Slack, Salesforce, Inc. / Slack Technologies, LLC (USA) provides Slack app delivery and identity linking. It also provides App Home privacy controls, DM mentor messages, and monitored-channel event delivery.
 
@@ -210,7 +210,7 @@ and trace collectors also need recipient entries when configured. See the proces
 
 ## Third-country transfers (Art. 30(1)(e))
 
-The EU-US Data Privacy Framework covers U.S. recipients where the recipient is on the active DPF list (Commission Implementing Decision (EU) 2023/1795). Standard Contractual Clauses Module 2 provide the fall-back (Commission Implementing Decision (EU) 2021/914). The TUM-operated deployment defaults to Microsoft Azure OpenAI in an EU region. Verify processing geography against the actual deployment type and contract. An Outline origin outside the EEA cannot be enabled until its transfer basis is recorded in this section.
+The EU-US Data Privacy Framework covers U.S. recipients where the recipient is on the active DPF list (Commission Implementing Decision (EU) 2023/1795). Standard Contractual Clauses Module 2 provide the fall-back (Commission Implementing Decision (EU) 2021/914). For an external model provider, verify the processing location and transfer basis of the exact recipient and deployment in the [processor checklist](./processor-checklist.md) before engagement. An Outline origin outside the EEA cannot be enabled until its transfer basis is recorded in this section.
 
 A public release of an anonymized dataset is not a transfer of personal data, because anonymous data is outside the GDPR (Recital 26). By the consent wording, a dataset leaves the research team only if it is anonymized.
 
@@ -232,7 +232,7 @@ When practice-review code execution is enabled, the host filesystem may store lo
 
 No layer of the stack writes an HTTP access log. The production profile explicitly disables Tomcat's access log. The Traefik reverse proxy starts without `--accesslog` (Traefik's default is off). Both nginx containers (static frontend and maintenance page) disable the access log at the server level. The shipped stack creates no general HTTP access-log copy. Authentication and security events still record connection metadata.
 
-Application and authentication data reside on TUM infrastructure within the EU. AI-assisted features also forward code snippets and surrounding discussion to the workspace-configured LLM provider. The TUM-operated deployment defaults to Microsoft Azure OpenAI in an EU region.
+Application and authentication data reside on TUM infrastructure within the EU. AI-assisted features also forward code snippets and surrounding discussion to the configured model that the AI choice selects. Its location depends on the recipient: an in-house model or an external provider, as recorded in the processor checklist.
 ```
 
 **Retention**
@@ -278,11 +278,11 @@ Research data
 
 The research team holds research copies outside the instance database, at `[location]`. They are pseudonymized copies of the data that the participant allowed. The key that links codes to people is stored apart from them.
 
-The team keeps pseudonymized research data and the key while the research that they support continues. It then deletes or anonymizes them. `[Proposed for TUM, pending legal-owner approval: at most 10 years after collection, in line with the DFG Guidelines for Safeguarding Good Research Practice, Guideline 17.]` Self-hosters record `[retention period of the research organization]`.
+The team keeps pseudonymized research data and the key while the research that they support continues. It then deletes or anonymizes them. For the TUM deployment, the public notice (§3) states the retention criterion; no fixed period applies. Self-hosters record `[retention period or criterion of the research organization]`.
 
 Anonymized datasets are outside the GDPR. They can remain and can be published with no end date. They cannot be removed.
 
-After withdrawal, the team removes the account's data from datasets that are not yet anonymized within `[removal time limit, proposed: 30 days]`. Consent ledger rows are append-only and unchanged by the research use. See "Legal basis" for the ledger.
+After withdrawal, the team removes the account's data from datasets that are not yet anonymized without undue delay, as a manual step. Consent ledger rows are append-only and unchanged by the research use. See "Legal basis" for the ledger.
 
 Retired leaderboard values (league points, XP)
 
@@ -296,7 +296,7 @@ That request uses the instance-admin Person data process under "Deletion respons
 
 LLM-provider-side prompts
 
-The chosen provider's terms govern retention. The TUM-operated default is Microsoft Azure OpenAI in an EU region. Its retention follows the enterprise abuse-monitoring window in Microsoft's Azure OpenAI data-privacy documentation. Eligible customers may apply for Microsoft's modified abuse monitoring (Limited Access program) to suppress prompt storage and human review.
+The recipient's terms govern retention. For an external provider, the [processor checklist](./processor-checklist.md) records the prompt and response retention, training terms and human access of the exact deployment. For an in-house model, its operator's retention applies.
 
 Settings-change audit log (`config_audit_event`)
 
@@ -545,7 +545,7 @@ Research safeguards (Art. 89(1) GDPR)
 
 Organisational
 
-Operators are TUM / AET employees or authorized contributors who act under TUM-internal security policies. Before workspace provisioning, workspace administrators receive a briefing on the joint-controller / shared-responsibility model (privacy §10).
+Operators are TUM / AET employees or authorized contributors who act under TUM-internal security policies. Before workspace provisioning, workspace administrators receive a briefing on the workspace configuration and responsibilities (privacy §10).
 ```
 
 ## Legal basis (Art. 6 GDPR + national norms)
@@ -563,16 +563,7 @@ In DSMS:
 ```text
 TUM/AET as platform operator: Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben der Hochschule) and Art. 4(1) BayDSG.
 
-Per-workspace lawful basis:
-
-1. Confirm the actual parties for the existing TUM Art. 26 arrangement.
-2. Confirm its reference.
-
-An authorized administrator within one controller is not a separate controller because of their role. The administrator invokes the basis that applies to their workspace's contributors. Typically, this is Art. 6(1)(a) GDPR (consent, e.g. the AET capstone course's application phase).
-
-Alternatively, it is Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG for public-task activity by a TUM unit. Examples include regular courses or public open-source repositories such as ls1intum/Artemis.
-
-Administrators outside TUM cannot invoke Art. 6(1)(e) BayHIG. They invoke a basis available to them. Typically, this is Art. 6(1)(a) consent, or Art. 6(1)(f) for private bodies under their own LIA.
+Per-workspace processing: every workspace on the TUM deployment uses the TUM basis above. Workspace administrators make configuration choices under TUM's operating responsibility; their role does not make them a separate or joint controller. The operators of the source platforms process the original work under their own legal bases.
 
 Voluntary sign-in by non-TUM contributors to use personal features: Art. 6(1)(b) GDPR.
 
@@ -590,7 +581,7 @@ The screen links to operator-specific detail in the privacy notice at `/privacy`
 
 Withdrawal (Art. 7(3) GDPR) is one switch in User settings. It is as easy as giving consent. Withdrawal immediately ends authorization for further research processing, and research survey invitations stop. Ordinary practice reviews continue.
 
-On withdrawal, the research team removes the account's data from datasets that are not yet anonymized within `[removal time limit, proposed: 30 days]`. Anonymized data in a published result or dataset cannot be traced back and cannot be removed. Research done before withdrawal stays lawful.
+On withdrawal, the research team removes the account's data from datasets that are not yet anonymized without undue delay, as a manual step. Anonymized data in a published result or dataset cannot be traced back and cannot be removed. Research done before withdrawal stays lawful.
 
 Account erasure removes the ledger's account reference. The resulting non-account-linked event remains, with its notice version, as evidence of how the system managed consent.
 
@@ -615,18 +606,18 @@ The [DPIA pre-screen](./dpia-prescreen.md) records why sharing or publishing a d
 Self-hosters use their own research organization. Replace each bracketed value with the facts of that organization:
 
 - `[research organization name]`.
-- `[retention period of the research organization]`.
-- `[ethics approval reference]`.
+- `[retention period or criterion of the research organization]`.
+- `[ethics approval reference, where a vote is required]`.
 - `[research information page URL]`.
 - `[privacy contact]`.
-- `[removal time limit]`.
+- `[removal procedure]`.
 
 ### Controls that the controller must evidence
 
-A broad purpose needs compensating transparency and safeguards (EDPB Guidelines 05/2020 paras 161-162, EDPB Guidelines 1/2026 paras 48-49). The controller must evidence each of these controls before research use starts:
+A broad purpose needs compensating transparency and safeguards (EDPB Guidelines 05/2020 paras 161-162, EDPB Guidelines 1/2026 paras 48-49). The [research prerequisites](../legal-pages.mdx#what-operators-must-do) are the operator list. This section records the TUM facts. The controller must evidence each of these controls before research use starts:
 
-1. Keep a research information page at `[research information page URL]`. It lists current research projects and released datasets.
-2. Hold a positive vote of an ethics board for the research. For TUM, this is the university ethics body, with `[ethics approval reference]`.
+1. Keep a research information page at `[research information page URL]`. It lists current research projects and released datasets. The TUM public notice currently gives the research group contact for this information.
+2. Assess whether the research needs an ethics committee vote, and get it where the institution or the study requires it. TUM has not sought or obtained an ethics vote for this research.
 3. Restrict access to research data to the research team.
 4. Give `[privacy contact]` as the contact for questions about the research.
 
@@ -638,7 +629,7 @@ The research team must be separate from grading and line management. If doubt re
 
 ### Approval state
 
-The research retention period and the removal time limit are proposals. They are pending legal-owner approval. No text in this section is approved for the TUM deployment.
+The public notice states the research retention criterion and the manual removal step. Their publication does not record a DPO or institutional approval of this section.
 
 ## Source of data
 
@@ -665,7 +656,7 @@ Markdown source under `webapp/public/legal/profiles/tumaet/`.
 ## Other Remarks (DSMS form vendor-pool comment)
 
 ```text
-Bitte folgende Auftragsverarbeiter zum AET-Pool hinzufügen, soweit noch nicht vorhanden: GitHub Inc. (USA), Microsoft Corp. (Azure OpenAI Service, USA/EU), OpenAI OpCo, LLC (USA) ggf. mit OpenAI Ireland Ltd. (Irland) als EWR-Vertragspartner, Salesforce / Slack Technologies, LLC (USA). Beschreibungen unter "Recipient Categories"; Drittlandtransfers durch das EU–US Data Privacy Framework und Standardvertragsklauseln Modul 2 (jeweils im Rahmen des einschlägigen Enterprise-AVV) abgedeckt; DPF-Status pro Empfänger vor Anbindung verifizieren.
+Bitte folgende Auftragsverarbeiter zum AET-Pool hinzufügen, soweit noch nicht vorhanden: GitHub Inc. (USA), Salesforce / Slack Technologies, LLC (USA) sowie jeden externen Modellanbieter, der tatsächlich angebunden wird, erst nach Prüfung des konkreten Empfängers in der Processor-Checklist. Beschreibungen unter "Recipient Categories"; Drittlandtransfers nur auf Grundlage des EU–US Data Privacy Framework oder von Standardvertragsklauseln, jeweils pro Empfänger vor Anbindung verifiziert.
 ```
 
 ### Git history during person erasure

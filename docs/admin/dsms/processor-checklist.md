@@ -7,10 +7,10 @@ This record lists every entity that might qualify as a processor (Art. 28 GDPR) 
 The existing TUM record lists these recipients:
 
 - GitHub: identity provider and source-system API.
-- The per-workspace LLM provider: Microsoft Azure OpenAI by default on the TUM-operated deployment.
-  Alternatively, a workspace can configure any OpenAI-API-compatible HTTPS endpoint.
+- The per-workspace model service: in-house models, for example served through Logos, or external providers that a workspace configures.
+  Each recipient needs its own evidence (see below).
 - Slack: per-workspace opt-in.
-- AI model providers for research benchmark runs: pseudonymized data only, under the same Art. 28 agreement as practice review.
+- AI model providers for research benchmark runs: pseudonymized data only, after recipient-specific verification.
  The LRZ (gitlab.lrz.de) is **not** a processor. It is a separate controller under the EDPB 07/2020 framework. Outline has no fixed operator or origin. It remains disabled until the operator records a per-instance role, hosting region, transfer basis, and AVV status. The webapp includes optional consent-controlled Sentry. The actual production endpoint and enabled state require deployment evidence. Code alone cannot prove that it is off.
 
 First-party product feedback and survey responses remain inside the instance PostgreSQL database.
@@ -30,9 +30,9 @@ the gitlab.lrz.de operator.
 | Traefik v3 reverse proxy (in-house container) | TLS termination, routing | No (self-hosted) | — |
 | `Let's Encrypt` ACME endpoint | Domain-validation certificates | The endpoint receives no end-user project content. Record ACME account/contact data separately. | — |
 | **GitHub, Inc.** (USA) | Identity provider (OAuth) and source-system API for connected GitHub repositories | **Yes** | A DPA is in place at TUM/AET level. GitHub holds its own EU-US Data Privacy Framework certification. Microsoft's published covered-entities list confirms that this certification is independent of Microsoft Corporation's. SCCs Module 2 provide the contracted fall-back. Re-verify DPF status annually. |
-| **Microsoft Corporation (Azure OpenAI Service)** (USA / EU) | Default LLM provider for the TUM-operated deployment. Verify the actual deployment type and processing geography. An EU resource location alone is insufficient. | **Yes** | The TUM-operated tenancy has a DPA at TUM/AET level. When the workspace administrator's institution supplies credentials, the DPA applies at that institution's level (joint-controller model, privacy §10). Enterprise API no-training terms apply. The provider is DPF-certified. SCCs Module 2 provide the fall-back. |
-| **OpenAI OpCo, LLC** (USA), with **OpenAI Ireland Ltd.** (Ireland) as the EEA contracting party — or any OpenAI-API-compatible endpoint chosen by a workspace administrator | Workspace-configured LLM provider | **Yes, when engaged** | AET-pool processors have a DPA at TUM/AET level. Non-pool endpoints have a DPA at the administrator's institution level. DPF / SCC framing applies recipient-by-recipient. Verify each recipient's DPF status before engagement. |
-| **AI model providers for research benchmark runs** | Run AI models on pseudonymized research data for the research organization | **Yes, when engaged** | Same Art. 28 agreement, region and no-training terms as practice review. See "Research benchmark runs" below. |
+| **In-house model service** (for example a model served through Logos) | Workspace-configured model for practice review and Heph, declared In-house | **Depends on the operator** | Record who operates the model and the Logos service. A model on controller-owned infrastructure needs no AVV. An in-house operator outside the controller needs an Art. 28 assessment. A model that Logos forwards to an external provider is an external recipient (next row), not an in-house one. |
+| **External model provider configured for a workspace** (any OpenAI-API-compatible provider, directly or forwarded through Logos) | Workspace-configured model for practice review and Heph, used only where the AI choice allows Cloud | **Yes, when engaged** | No generic approval. Before engagement, complete the recipient record below for the exact provider, service and deployment. Record the signed DPA/AVV, retention and training terms, processing location and transfer basis. Published provider terms or a resource region do not prove the terms of this deployment. |
+| **AI model providers for research benchmark runs** | Run AI models on pseudonymized research data for the research organization | **Yes, when engaged** | Verify each recipient separately with the recipient record below. Approval for practice review does not carry over. See "Research benchmark runs" below. |
 | **Salesforce, Inc. / Slack Technologies, LLC** (USA) | Slack app delivery, identity linking, App Home privacy controls, DM mentor messages, and monitored-channel event delivery when Slack is enabled by the workspace administrator | **Yes, when engaged** | A DPA is in place at TUM/AET level. Salesforce is DPF-certified (Slack participates under the Salesforce certification). SCCs Module 2 provide the fall-back. |
 | **Connected Outline instance operator** | Selected-document source and optional OAuth identity linking | **Depends on the operator's role** | No generic approval. Before activation, classify the exact origin as controller-owned infrastructure, an Art. 28 processor, or a separate controller. Record the operator, region, transfer basis, retention terms, and AVV where required. Workspace selection cannot supply this approval. |
 | **Leibniz-Rechenzentrum (LRZ) der BAdW (gitlab.lrz.de)** | Source system and OIDC identity provider | **Not Art. 28** | LRZ is a separate controller. Inter-public-body transmission falls under Art. 5(1) Nr. 1 BayDSG. LRZ is an institute of the Bayerische Akademie der Wissenschaften. It applies its own TOMs on its own infrastructure. |
@@ -93,7 +93,7 @@ A provider that runs these models for it is a processor.
 
 Apply these rules to every benchmark run:
 
-1. Require the same Art. 28 agreement, region and no-training terms as for practice review. Complete the recipient record above.
+1. Complete the recipient record above for each provider before its first run. Do not assume that the agreement, region or training terms of practice review apply.
 2. Send only pseudonymized data. Pseudonymized data is still personal data (EDPB Guidelines 01/2025).
 3. Send data only for participants with a current research grant.
 4. Honor the participant's AI choice (**No AI**, **In-house** or **Cloud**) in the run.
@@ -115,9 +115,9 @@ Art. 26 GDPR (joint controllership) is equally absent: EDPB 07/2020 §§ 50–65
 
 ## Why the workspace administrator is not an Art. 28 processor
 
-The existing TUM notice describes an Art. 26 arrangement for workspace-configurable decisions (§10). Confirm the actual parties and arrangement with the legal owner. An authorized individual acting within TUM is not a separate controller merely because they administer a workspace.
+TUM is the controller. The public TUM notice (§10) states that workspace administrators make workspace-configurable decisions under TUM's operating responsibility. An administrator acting within TUM is not a separate controller because of that role.
 
-The listed decisions cover repository selection, practices, LLM providers and credentials, automatic review triggers, Slack routing and selected Outline collections. The privacy statement provides data subjects with the Art. 26(2) Satz 1 allocation of duties. It also provides the Art. 26(2) Satz 2 essence of the arrangement.
+The listed decisions cover repository selection, practices, models, automatic review triggers, Slack routing and selected Outline collections. The privacy statement sets out the responsibilities of TUM/AET and of workspace administrators.
 
 TUM/AET is the single point of contact for data-subject rights. The workspace administrator is also a contact for workspace-specific questions.
 

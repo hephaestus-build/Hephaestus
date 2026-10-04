@@ -133,14 +133,13 @@ The operator must close that gap:
 1. Apply the latest `RESEARCH_PARTICIPATION` decision of each account before any export or analysis.
 2. After withdrawal or a verified erasure request, remove the account's data from datasets that are not yet anonymized.
    After a Slack message-use opt-out, remove the affected messages the same way.
-3. Finish the removal within `[removal time limit, proposed: 30 days]`.
+3. Finish the removal without undue delay. This is a manual step of the research team.
 
 An anonymized dataset holds no link to a person. Withdrawal and erasure cannot reach it, so its data cannot be removed.
 
 ### Residual retention of research copies
 
-- Pseudonymized research data and the key: kept while the research that they support continues. The team then deletes or anonymizes them.
-- `[Proposed for TUM, pending legal-owner approval: at most 10 years after collection, in line with DFG Guidelines for Safeguarding Good Research Practice, Guideline 17.]`
+- Pseudonymized research data and the key: kept under the retention criterion in the [record of processing](./record-of-processing.md) and the public notice. No fixed period applies. The team then deletes or anonymizes them.
 - Anonymized datasets: outside the GDPR. They can remain and be published with no end date. They cannot be removed.
 - Consent ledger rows: unchanged. They are append-only.
 

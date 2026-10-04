@@ -1,6 +1,6 @@
 Information in accordance with § 5 DDG (Digitale-Dienste-Gesetz — German Digital Services Act).
 
-*Last updated: 2026-05-07.*
+*Last updated: 2026-10-04.*
 
 ## Publisher
 
@@ -53,9 +53,9 @@ The source code of Hephaestus is available under the MIT License at [github.com/
 
 ## Liability Disclaimer
 
-Information on this platform has been collected and verified to the best of our knowledge and belief. No warranty is given that the information is up to date, correct, or complete. Before publication, the legal owner must confirm `[applicable terms of use and contractual relationship]`, consistent with the legal bases recorded in [Privacy](/privacy).
+Information on this platform has been collected and verified to the best of our knowledge and belief. No warranty is given that the information is up to date, correct, or complete.
 
-This disclaimer does not limit statutory data-subject rights or liability under applicable law, including Art. 82 GDPR and § 839 BGB (liability in case of breach of official duty). The legal owner must confirm `[any permissible limitation of liability]` before publication.
+This disclaimer does not limit statutory data-subject rights or liability under applicable law, including Art. 82 GDPR and § 839 BGB (liability in case of breach of official duty).
 
 ## Data Protection
 
