@@ -60,7 +60,7 @@ export default function shipsAPreviewWithEachNewView(
 	const directions: string[] = [];
 	if (newViews > 0) {
 		directions.push(
-			`${newViews} new view type(s) declared and ${previewsAdded} preview(s) added; ${filesWithNewViewAndNoPreview} file(s) declare a view and add no preview — a preview may live in another file of the change, so scan the whole diff before deciding.`,
+			`${newViews} new view type(s) declared and ${previewsAdded} preview(s) added; ${filesWithNewViewAndNoPreview} file(s) declare a view and add no preview — a preview may live in another file of the change, so scan the whole diff before deciding. These counts pair no preview with a view. Read the previews and view bodies to trace the presentation coverage described in the criteria, including nested views and content delegated by an effect-only owner.`,
 		);
 	}
 	return {
