@@ -2,7 +2,7 @@
 
 **Status:** Proposed — on hold, not for 1.0. The direction after 1.0 is to keep the detected outcome
 authoritative and run answered questions beside it as an advisory decision with a confidence
-([#2158](https://github.com/hephaestus-build/Hephaestus/issues/2158)).
+([#2445](https://github.com/hephaestus-build/Hephaestus/issues/2445)).
 **Date:** 2026-10-03
 **Amends:** [ADR 0050](0050-one-practice-standard-one-outcome.md), which kept the outcome a judgment the
 model states from free-text criteria.
