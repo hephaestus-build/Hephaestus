@@ -230,14 +230,13 @@ await test("contributor docs reject missing repository paths and npm packages", 
 	assert.match(failures[2] ?? "", /@missing\/package/u);
 });
 
-await test("a renamed settings path is not read as a missing package", () => {
-	// A release note names both halves of a rename, and the old half is what a shape test bites on:
-	// `hephaestus.mentor.docker-cli` ends the way an npm CLI package does. It blocked a release.
+await test("a settings path is not read as a missing package", () => {
+	// `hephaestus.mentor.docker-cli` ends the way an npm CLI package does.
 	assert.deepEqual(
 		analyse(
 			snapshot({
 				"package.json": JSON.stringify({ dependencies: {} }),
-				"MIGRATION.md":
+				"docs/contributor/setup.md":
 					"Rename `hephaestus.mentor.docker-cli` to `hephaestus.sandbox.docker.cli`.\n",
 			}),
 		),
@@ -255,6 +254,23 @@ await test("a renamed settings path is not read as a missing package", () => {
 		),
 		/lodash\.merge-cli/u,
 	);
+});
+
+await test("the release history may name a path a later release removed; current directions may not", () => {
+	const docker = { "docker/compose.app.yaml": { kind: "opaque" } } as const;
+	const history =
+		"Run `./setup.sh` in `docker/self-host`, then delete `docker/agent-image-pin.env`.\n";
+	assert.deepEqual(
+		analyse(snapshot({ ...docker, "MIGRATION.md": history, "CHANGELOG.md": history })),
+		[],
+	);
+	const stale = "Start `docker/missing-current-compose.yaml` with `@missing/upgrade-tool`.\n";
+	for (const current of ["README.md", "scripts/templates/migration-guide.md"]) {
+		const failures = analyse(snapshot({ ...docker, [current]: stale }));
+		assert.equal(failures.length, 2, failures.join("\n"));
+		assert.match(failures[0] ?? "", /docker\/missing-current-compose\.yaml/u, current);
+		assert.match(failures[1] ?? "", /@missing\/upgrade-tool/u, current);
+	}
 });
 
 await test("an intentional non-checkout path is allowed only in the document that owns it", () => {
