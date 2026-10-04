@@ -74,6 +74,8 @@ export const Default: Story = {
 		await expectSettledVisible(level.getByRole("heading", { name: "Packaging work for review" }));
 		await expect(level.getByRole("button", { name: "Needs attention" })).toBeVisible();
 		await expect(level.getByRole("button", { name: "More positive recently" })).toBeVisible();
+		// The window the group's split and the reader's standing in it count, named beside them.
+		await expect(level.getByText("Last 30 days")).toBeVisible();
 		await userEvent.click(
 			level.getByRole("button", { name: "Open your group Packaging work for review" }),
 		);

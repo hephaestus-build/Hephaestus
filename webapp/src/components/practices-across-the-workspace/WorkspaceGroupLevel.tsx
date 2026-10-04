@@ -13,7 +13,7 @@ import { useRevealedRows } from "@/hooks/use-revealed-rows";
 
 import { practicesHint, type SplitContext } from "./across-workspace-copy";
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
-import { SplitLegend, WorkspaceSplitBar } from "./WorkspaceSplitBar";
+import { LevelSplit, SplitLegend } from "./WorkspaceSplitBar";
 
 /** How many practices the level lists before it offers more. */
 export const PRACTICES_PAGE_SIZE = 20;
@@ -96,14 +96,11 @@ export function WorkspaceGroupLevel({
 				}
 				aside={
 					state.status === "ready" ? (
-						<div className="w-full sm:w-88">
-							<WorkspaceSplitBar
-								split={state.group.split}
-								yourStanding={state.group.yourStanding}
-								showYourWord={false}
-								{...state.context}
-							/>
-						</div>
+						<LevelSplit
+							split={state.group.split}
+							yourStanding={state.group.yourStanding}
+							context={state.context}
+						/>
 					) : undefined
 				}
 			/>

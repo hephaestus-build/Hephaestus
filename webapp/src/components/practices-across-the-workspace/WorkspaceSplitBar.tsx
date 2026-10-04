@@ -19,6 +19,7 @@ import {
 	type SplitContext,
 	type SplitStanding,
 	splitDescription,
+	windowHeading,
 	yourStandingWord,
 } from "./across-workspace-copy";
 
@@ -171,6 +172,32 @@ export function WorkspaceSplitBar({
 					<YourWord standing={yourStanding} />
 				</p>
 			)}
+		</div>
+	);
+}
+
+/**
+ * A split beside a level's title, under the window it counts. The reader's own standing beside it
+ * may be read over another span, so the window is named where the marker points at the reader.
+ */
+export function LevelSplit({
+	split,
+	yourStanding,
+	context,
+}: {
+	split: WorkspaceSplit;
+	yourStanding: PracticeGroupStandingValue;
+	context: SplitContext;
+}) {
+	return (
+		<div className="flex w-full flex-col gap-1 sm:w-88">
+			<p className="text-xs text-muted-foreground">{windowHeading(context.window)}</p>
+			<WorkspaceSplitBar
+				split={split}
+				yourStanding={yourStanding}
+				showYourWord={false}
+				{...context}
+			/>
 		</div>
 	);
 }

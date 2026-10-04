@@ -71,6 +71,11 @@ export interface PracticeDetailLevelProps {
 	onRetry?: () => void;
 	/** Beside the title, where a page over the profile sets this practice beside its workspace. */
 	aside?: ReactElement;
+	/**
+	 * The span the standing is read over, named where the level opens over a page that counts
+	 * another one; the profile itself has one span and leaves it out.
+	 */
+	span?: string;
 }
 
 /**
@@ -109,6 +114,7 @@ export function PracticeDetailLevel({
 	error,
 	onRetry,
 	aside,
+	span,
 }: PracticeDetailLevelProps) {
 	// The server narrows which runs reached the practice; the level narrows the same way and shows
 	// only that practice's observations instead of everything the run found.
@@ -300,6 +306,7 @@ export function PracticeDetailLevel({
 								support={practice.trendSupport}
 								scope="practice"
 							/>
+							{span !== undefined && <span className="text-xs text-muted-foreground">{span}</span>}
 						</>
 					)
 				}

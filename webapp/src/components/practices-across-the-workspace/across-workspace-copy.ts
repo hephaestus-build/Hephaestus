@@ -48,6 +48,12 @@ export const windowPhrase = (window: AcrossWorkspaceWindow): string => WINDOW_DE
 /** The window as a section heading. */
 export const windowHeading = (window: AcrossWorkspaceWindow): string => WINDOW_DEFS[window].label;
 
+/**
+ * The span the Practice profile reads a standing over, its look-back of 90 days: named on its levels
+ * where they open over a window that may count another span, so two standings never meet unnamed.
+ */
+export const PROFILE_SPAN = windowHeading("DAYS_90");
+
 /** What the page is for and how a standing moves, under its title. */
 export const PAGE_PURPOSE =
 	"See where your practices stand among the developers in this workspace, so you can choose what to work on next. Standings move with your next pieces of reviewed work; open a group to see your next step.";

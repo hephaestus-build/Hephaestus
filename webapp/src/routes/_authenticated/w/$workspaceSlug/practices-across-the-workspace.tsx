@@ -30,6 +30,7 @@ import { PracticeDetailLevel } from "@/components/practice-profile/PracticeDetai
 import { PracticeGroupDetailLevel } from "@/components/practice-profile/PracticeGroupDetailLevel";
 import {
 	DEFAULT_WINDOW,
+	PROFILE_SPAN,
 	WINDOW_VALUES,
 } from "@/components/practices-across-the-workspace/across-workspace-copy";
 import {
@@ -40,7 +41,7 @@ import {
 	WorkspaceGroupLevel,
 	type WorkspaceGroupLevelState,
 } from "@/components/practices-across-the-workspace/WorkspaceGroupLevel";
-import { WorkspaceSplitBar } from "@/components/practices-across-the-workspace/WorkspaceSplitBar";
+import { LevelSplit } from "@/components/practices-across-the-workspace/WorkspaceSplitBar";
 import { useInAppFeedback } from "@/hooks/use-in-app-feedback";
 import { REVIEW_RUN_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overview";
@@ -198,16 +199,14 @@ function PracticesAcrossTheWorkspace() {
 								// Where the group level shows the group's split, the practice shows its own.
 								aside={
 									overview && split ? (
-										<div className="w-full sm:w-88">
-											<WorkspaceSplitBar
-												split={split.split}
-												yourStanding={split.yourStanding}
-												showYourWord={false}
-												{...splitContextOf(overview)}
-											/>
-										</div>
+										<LevelSplit
+											split={split.split}
+											yourStanding={split.yourStanding}
+											context={splitContextOf(overview)}
+										/>
 									) : undefined
 								}
+								span={PROFILE_SPAN}
 								{...practiceLoad}
 							/>
 						);
@@ -225,6 +224,7 @@ function PracticesAcrossTheWorkspace() {
 								nextStep={composeNextStep(feedback.cards, entry.id)}
 								openPracticeSlug={openPracticeSlug}
 								onOpenPractice={openPractice}
+								span={PROFILE_SPAN}
 								{...ownGroupLoad}
 							/>
 						);

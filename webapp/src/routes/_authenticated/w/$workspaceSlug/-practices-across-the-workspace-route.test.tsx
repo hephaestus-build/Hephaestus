@@ -192,6 +192,39 @@ describe("Practices across the workspace", () => {
 		});
 	});
 
+	it("names the span of each standing where a practice sets its own beside the workspace's", async () => {
+		// The profile reads the practice over 90 days as Mixed feedback; the window reads it as Needs
+		// attention.
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practices/standings", () =>
+				HttpResponse.json([
+					{
+						...SCOPE_STANDING,
+						slug: "keep-the-diff-reviewable",
+						name: "Keep the diff reviewable in one sitting",
+						standing: "MIXED",
+					},
+				]),
+			),
+		);
+		renderRouteAtWithRouter(
+			`${PAGE}?detail=%5B%22practice-group%3Areview-ready-work%22%2C%22practice%3Akeep-the-diff-reviewable%22%5D`,
+		);
+		const level = within(
+			await screen.findByRole(
+				"dialog",
+				{ name: "Keep the diff reviewable in one sitting" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		await level.findByRole("button", { name: "Mixed feedback" }, ROUTE_RENDER_WAIT);
+		level.getByText("Last 90 days");
+		level.getByText("Last 30 days");
+		level.getByRole("img", {
+			name: /^28 developers observed in this workspace in the last 30 days: .* You: Needs attention\.$/u,
+		});
+	});
+
 	it("keeps a practice dismissed after its tab changed, so Back does not open it again", async () => {
 		const router = await renderPage();
 		await userEvent.click(

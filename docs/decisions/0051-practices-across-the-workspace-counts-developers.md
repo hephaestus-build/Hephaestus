@@ -70,7 +70,9 @@ whoever only has observations that did not apply or stayed undetermined is not o
   alike whatever the window, so it never sets one moment beside a span; read in one pass.
 - The page asks for no estimate first. Every group shows at once. A group opens over the page with
   its practices; the reader's own group and a practice open over it as the profile's own levels, so
-  nothing on the page leaves for the Practice profile.
+  nothing on the page leaves for the Practice profile. The page reads the reader's standing over the
+  chosen window and those levels over the Practice profile's 90 days, so the two can differ; each
+  level names the span beside the standing it shows.
 - Workspace admins read nothing new. Instance administrators read the page through **View as user**,
   as they read every other practice page.
 
