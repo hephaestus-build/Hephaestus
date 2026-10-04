@@ -69,6 +69,13 @@ export interface ReviewRunPracticeTableProps {
 	canAdminister?: boolean;
 	/** Why there is no practice at all to list, which only the caller can say. */
 	emptyMessage: string;
+	/**
+	 * The review the table lists, when it lists one: its rows then speak for that review, and a row
+	 * answered by an earlier review says so. Absent, the rows speak for every review of the work.
+	 */
+	reviewId?: string;
+	/** How a row answered by an earlier review links to it; the caller owns where reviews open. */
+	earlierReviewLink?: (reviewId: string) => ReactNode;
 }
 
 /** Practices the workspace files in no group are still listed, under a name of their own. */
@@ -102,6 +109,22 @@ export function runPractices(
 	);
 }
 
+/**
+ * The earlier review whose answer `reviewId` reused for the entry, or `undefined` when this review
+ * assessed the practice itself, did not reach it, or the entry names no review.
+ */
+export function earlierReviewOf(
+	entry: PracticeTraceEntry,
+	reviewId: string | undefined,
+): string | undefined {
+	return reviewId !== undefined &&
+		entry.outcome === "REVIEWED" &&
+		hasText(entry.reviewId) &&
+		entry.reviewId !== reviewId
+		? entry.reviewId
+		: undefined;
+}
+
 function groupNameOf(entry: PracticeTraceEntry): string {
 	return hasText(entry.groupName) ? entry.groupName : UNGROUPED;
 }
@@ -121,6 +144,8 @@ export function ReviewRunPracticeTable({
 	onShowOccurrence,
 	canAdminister = false,
 	emptyMessage,
+	reviewId,
+	earlierReviewLink,
 }: ReviewRunPracticeTableProps) {
 	// From the entries, not `groups`: that holds only the groups the reader has a standing in.
 	const groupNames = [...new Set(entries.map(groupNameOf))].sort((left, right) =>
@@ -246,6 +271,8 @@ export function ReviewRunPracticeTable({
 									}
 									onShowOccurrence={onShowOccurrence}
 									canAdminister={canAdminister}
+									earlierReview={earlierReviewOf(entry, reviewId)}
+									earlierReviewLink={earlierReviewLink}
 								/>
 							</TableCell>
 						</TableRow>
@@ -303,6 +330,8 @@ interface WhatItSawProps {
 	occurrenceName: string | undefined;
 	onShowOccurrence: (signalId: string) => void;
 	canAdminister: boolean;
+	earlierReview: string | undefined;
+	earlierReviewLink: ((reviewId: string) => ReactNode) | undefined;
 }
 
 /**
@@ -316,6 +345,8 @@ function WhatItSaw({
 	occurrenceName,
 	onShowOccurrence,
 	canAdminister,
+	earlierReview,
+	earlierReviewLink,
 }: WhatItSawProps) {
 	// Narrowed here: the closure below would not keep a narrowing made in the JSX guard.
 	const occasionedById = hasText(entry.occasionedById) ? entry.occasionedById : undefined;
@@ -348,10 +379,18 @@ function WhatItSaw({
 					</span>
 				))
 			)}
+			{earlierReview !== undefined && earlierReviewLink?.(earlierReview)}
 			{canAdminister && (
 				<span className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
 					<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-						<span>{deliveryLabel(entry)}</span>
+						<span>
+							{/* The observations behind a reused answer are the earlier review's; this one made none. */}
+							{earlierReview !== undefined &&
+							entry.observationCount === 0 &&
+							entry.deliveredCount === 0
+								? "No new observations in this review, so nothing was sent"
+								: deliveryLabel(entry)}
+						</span>
 						<AutonomyBadge autonomy={entry.autonomy} />
 					</span>
 					{occasionedById !== undefined &&
