@@ -176,7 +176,7 @@ export default async function declaresPermissionsTruthfullyAtPointOfUse(
 	const requests = countLabel(scan, "authorization request");
 	if (requests > 0) {
 		directions.push(
-			`${requests} authorization request(s) added — for each, read the enclosing flag and the call chain to see whether it runs from the feature or from launch.`,
+			`${requests} authorization requests were added. For each request, read the enclosing flag and the call chain. Decide whether it runs when the feature is reached or earlier. A root view can be the feature that needs authorization.`,
 		);
 	}
 	return {
