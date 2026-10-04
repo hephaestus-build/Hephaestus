@@ -191,10 +191,11 @@ export function SilentModeCard({
 					<AlertDialogHeader>
 						<AlertDialogTitle>Release silent mode?</AlertDialogTitle>
 						<AlertDialogDescription>
-							Feedback starts landing on pull requests and merge requests again, and Slack messages
-							go out — for every workspace, immediately. Anything withheld while silent mode was on
-							stays withheld. Releasing does not post it. If a bad review is what prompted this,
-							check that it is fixed first: the next completed review posts for real.
+							Hephaestus posts feedback on pull requests and merge requests again, and Slack
+							messages go out. This applies to every workspace, immediately. Anything withheld while
+							silent mode was on stays withheld. Releasing does not post it. If a bad review is what
+							prompted this, check that it is fixed first: the next completed review posts its
+							feedback.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					{releaseDisabled ? (

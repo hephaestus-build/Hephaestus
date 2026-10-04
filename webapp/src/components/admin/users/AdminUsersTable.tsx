@@ -53,7 +53,7 @@ function statusBadgeVariant(status: AdminAccountView["status"]) {
 
 function changeRoleLabel(isSelfAdmin: boolean, appRole: AppRole) {
 	if (isSelfAdmin) {
-		return "Cannot revoke your own admin";
+		return "You cannot revoke your own admin";
 	}
 	return appRole === "APP_ADMIN" ? "Revoke admin" : "Change role";
 }

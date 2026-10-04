@@ -74,7 +74,7 @@ required.
 **Three fields are immutable on purpose.** Base URL, API shape and authentication mode are the
 connection's *routing identity*: every job that ever ran on it froze that identity into its
 provenance snapshot, so editing them in place would silently re-point historical runs at an endpoint
-they never used. The form says so — *"Endpoint, API shape and authentication can't change. Add a
+they never used. The form says so — *"Endpoint, API shape and authentication cannot change. Add a
 connection instead."* To move providers: create a replacement, test it, re-point the bindings,
 disable the old one.
 
@@ -103,7 +103,7 @@ re-check. All four rejections are HTTP 400 with title `Invalid request`:
 | *Provider URLs must not contain credentials or query parameters.* | The URL carries userinfo, a query string or a fragment. Gateways that want their key in the URL (`https://gw/v1?api-key=…`) are refused: that value would end up in snapshots, DTOs and logs. |
 | *Provider host must be a public HTTPS URL* | Not HTTPS, or the host resolves to a private, link-local, loopback or CGNAT address. Unconditional — the SSRF guard has no override, and it is re-applied at connect time so a DNS rebind between save and dial does not slip past. |
 | *Provider host `<host>` is not in the allowed list* | Instance settings define an egress allowlist and this host is not on it. A blank allowlist allows any public host. |
-| — (HTTP 403) *Connecting your own AI provider is disabled on this server.* | A workspace admin tried to add a connection or model while **Let workspaces add providers and models** is off. |
+| — (HTTP 403) *This server does not allow you to connect your own AI provider.* | A workspace admin tried to add a connection or model while **Let workspaces add providers and models** is off. |
 
 `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK=true` permits `http://localhost` base URLs for local
 development. **Never set it in production** — it lets a workspace admin aim a "provider" at
@@ -203,12 +203,12 @@ Four rates, all **US dollars per 1,000,000 tokens**, stored as `NUMERIC(18,8)`:
 
 Rules the server enforces, verbatim as you will see them:
 
-- *A price requires at least an input rate and an output rate (per 1M tokens).*
-- *A price requires at least one rate greater than zero. For a model without usage charges, choose No metered API cost instead.*
+- *A price needs at least an input rate and an output rate (per 1M tokens).*
+- *A price needs at least one rate greater than zero. For a model without usage charges, choose No metered API cost.*
 - *Rates must be zero or greater.* — and below `10000000` per 1M tokens, which is not the column's
   limit but the point past which a rate cannot survive a round-trip through the browser's binary64
   unchanged.
-- *Rates can only be set when the model has a price; clear them or set a price first.*
+- *You can set rates only when the model has a price. Clear the rates, or set a price first.*
 
 **Repricing is a supersede, never an edit.** The instance catalog keeps price history: repricing
 closes the current row's `effective_to` and inserts a new one, so every past run keeps the rates it
@@ -319,10 +319,10 @@ enabling it, and wait until every runtime role has been upgraded before assignin
    agreement, its renewal date and any retention details, and is shown to admins only. Token
    limits and the reasoning switch sit under **Advanced**.
 2. In the workspace's **AI models**, each purpose (**Practice reviews** and **Heph**) has three
-   rows: **In-house**, **Cloud** and **Members who haven't chosen**. A row holds only a model
+   rows: **In-house**, **Cloud** and **Members who have not chosen**. A row holds only a model
    declared as that tier. Assigning a model declared as another tier is refused with *This model
    is declared as \{tier\}. Assign it to that row.*, and an undeclared model with *This model's
-   data handling isn't declared yet. Declare it first, or assign it to Members who haven't
+   data handling is not declared yet. Declare it first, or assign it to Members who haven't
    chosen.* A model whose declaration later loosens no longer matches its row, reads **Not ready**
    and stops serving until you reassign it. Nothing is substituted. Existing grants, price
    declarations, funding sources, the practice-review switch and budgets still apply, and **Max concurrent
@@ -351,7 +351,7 @@ checked on every request, and a model whose declared facts loosen stops serving 
 it. Members see the setup page again only after you change **Member onboarding** itself, and only
 those who skipped it or have a newly required link still open.
 
-The **Members who haven't chosen** row preserves existing assignments for workspaces that have never
+The **Members who have not chosen** row preserves existing assignments for workspaces that have never
 required member choices. It serves only members without a choice where the choice is optional and
 is never a fallback for a member who chose. Existing models upgrade with nothing declared
 (**Not declared**) and existing assignments land in that row. Hephaestus does not infer data handling

@@ -253,9 +253,10 @@ function SignedIn({
 				description={
 					<>
 						A practice review appears on pull requests, merge requests and issues only on the sites
-						you allow. There, the extension sends the address of each one to {instance.host} when
-						you open it. On a list, it sends only the address of the row where you press the
-						Hephaestus button. It never sends the page&apos;s content. Remove a site to stop.
+						you allow. There, the extension sends the address of each one to {instance.host} to find
+						its practice review when you open it. On a list, it sends only the address of the row
+						where you press the Hephaestus button. It never sends the page&apos;s content. Remove a
+						site to stop.
 					</>
 				}
 			>

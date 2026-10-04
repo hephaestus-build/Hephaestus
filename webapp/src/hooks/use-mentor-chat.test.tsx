@@ -339,7 +339,7 @@ describe("useMentorChat", () => {
 			});
 
 			act(() => {
-				chat.raiseError(new Error("Heph is busy. Please try again."));
+				chat.raiseError(new Error("Heph is busy. Try again."));
 			});
 
 			expect(result.current.turn).toStrictEqual({ kind: "error", failure: "failed" });

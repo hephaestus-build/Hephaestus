@@ -122,7 +122,7 @@ function SlackConnected({
 						<ItemTitle>Slack workspace</ItemTitle>
 						<ItemDescription className={credentialUnreadable ? "line-clamp-none" : undefined}>
 							{credentialUnreadable
-								? "Cannot post with this token. Reconnect Slack to replace it, or restore the original server key."
+								? "Hephaestus cannot post with this token. Reconnect Slack to replace it, or restore the original server key."
 								: "Hephaestus is installed and can post as the app."}
 						</ItemDescription>
 					</ItemContent>

@@ -94,7 +94,7 @@ function amountIn(
 export interface FxConversion {
 	/** As it renders, without surrounding punctuation: `≈ €3.96`. */
 	text: string;
-	/** As it is announced: `approximately 3.96 euros`. */
+	/** As it is announced: `about 3.96 euros`. */
 	label: string;
 }
 

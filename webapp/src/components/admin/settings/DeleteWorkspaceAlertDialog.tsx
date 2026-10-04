@@ -76,20 +76,18 @@ export function DeleteWorkspaceAlertDialog({
 								messages and comments Hephaestus posted to external providers, including GitHub,
 								GitLab, and Slack
 							</li>
-							<li>
-								GitHub, GitLab, and Outline access tokens at their providers. Revoke them there if
-								you no longer need them.
-							</li>
-							<li>
-								the Slack app installation. Hephaestus revokes its bot token only when no other
-								workspace uses it.
-							</li>
+							<li>GitHub, GitLab, and Outline access tokens at their providers</li>
+							<li>the Slack app installation</li>
 							<li>security, audit, and accounting records for prior activity</li>
 							<li>
-								the name <span className="font-mono break-all">{workspaceSlug}</span>. It stays
-								reserved, and no new workspace can use it.
+								the name <span className="font-mono break-all">{workspaceSlug}</span>, which no new
+								workspace can ever use
 							</li>
 						</ul>
+						<p>
+							Revoke the access tokens at their providers if you no longer need them. Hephaestus
+							revokes the Slack bot token only when no other workspace uses it.
+						</p>
 					</div>
 				</AlertDialogHeader>
 

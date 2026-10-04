@@ -22,7 +22,7 @@ export const MARKED_INCORRECT_DEF: StatusDef & { note: string } = {
 /** What became of the comments already on the work while a correction is in force. */
 export const PROVIDER_COPY_IN_FORCE: Record<ProviderCopy, string> = {
 	PENDING:
-		"Hephaestus is still correcting the comments it posted about this observation. It may also still be checking whether a comment it tried to post arrived.",
+		"Hephaestus is still correcting the comments it posted about this observation, or it is still checking whether a comment it tried to post arrived.",
 	NONE: "No comment about it was found on the work.",
 	UPDATED:
 		"Every summary comment Hephaestus posted about it now opens with a correction notice, or has since been deleted.",

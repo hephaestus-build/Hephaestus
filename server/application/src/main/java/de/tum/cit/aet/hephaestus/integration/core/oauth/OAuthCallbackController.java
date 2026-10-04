@@ -172,7 +172,7 @@ public class OAuthCallbackController {
             return problemDetail(
                     kind.name(),
                     "no_strategy",
-                    "No ConnectionStrategy is registered for kind=" + kind,
+                    "No ConnectionStrategy registered for kind=" + kind,
                     HttpStatus.INTERNAL_SERVER_ERROR);
         }
 

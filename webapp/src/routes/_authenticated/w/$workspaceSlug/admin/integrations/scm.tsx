@@ -30,7 +30,7 @@ function ScmIntegrationPage() {
 	const { kind, label, hasConnection, isConnectionActive, isAppInstallationWorkspace } = scm;
 	const ProviderIcon = kind === undefined ? WebhookIcon : SCM_ICONS[kind];
 
-	let credentialRecovery = "Reconnect this source-control integration before replacing its token";
+	let credentialRecovery = "Reconnect this source-control integration before you replace its token";
 	if (isAppInstallationWorkspace) {
 		credentialRecovery = "Reconnect through the GitHub App installation";
 	} else if (isConnectionActive) {

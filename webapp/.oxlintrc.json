@@ -211,9 +211,8 @@
 	// Entries whose globs overlap but set different rules are fine, and there are several below.
 	"overrides": [
 		{
-			// UI text follows the writing standard in all of `src`; this is not the repository's prose
-			// gate. The next entry turns it off again for tests and mock data, which reproduce what
-			// people and the server send.
+			// UI text follows the writing standard in all of `src`. The next entry turns the rule off
+			// for tests, which assert on text, and for mocks, which reproduce what the server sends.
 			"files": ["src/**"],
 			"rules": { "hephaestus/ste-ui-text": ["error", { "allPaths": true }] }
 		},
