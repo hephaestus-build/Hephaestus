@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/empty";
 
 export interface MissingRecordEmptyProps {
-	/** What did not arrive, as a sentence: "This feedback hasn't loaded". */
+	/** What did not arrive, as a sentence: "This feedback has not loaded". */
 	title: string;
 	onRetry?: () => void;
 	className?: string;

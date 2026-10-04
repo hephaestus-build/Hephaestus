@@ -59,7 +59,7 @@ export const Default: Story = {
 		await expect(
 			canvas.getByRole("columnheader", { name: "Marked incorrect" }),
 		).toHaveAccessibleDescription(
-			"Marked incorrect: Only observations an admin found wrong are marked; an unmarked one is not confirmed correct.",
+			"Marked incorrect: Only observations an admin found wrong are marked. An unmarked one is not confirmed correct.",
 		);
 		const busiest = canvas.getByRole("row", { name: /Thin controllers/u });
 		await expect(levelsOpenedBy(within(busiest).getByRole("link"))).toEqual([

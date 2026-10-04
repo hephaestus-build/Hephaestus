@@ -74,7 +74,7 @@ export function WorkspaceDangerZoneSettings({ workspaceSlug }: WorkspaceDangerZo
 							)}
 							{roleUnavailable && (
 								<p className="text-sm text-destructive" role="alert">
-									We couldn’t verify that you’re the workspace owner.
+									We could not verify that you are the workspace owner.
 								</p>
 							)}
 							{!isRolePending && !roleUnavailable && !isOwner && (

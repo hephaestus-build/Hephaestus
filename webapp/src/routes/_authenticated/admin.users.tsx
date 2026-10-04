@@ -138,7 +138,7 @@ function AdminUsersPage() {
 			if (openConfirmAccess(error)) {
 				return;
 			}
-			toast.error(problemDetailOf(error, "Couldn't sign the user out."));
+			toast.error(problemDetailOf(error, "Could not sign the user out."));
 			setSignOutTarget(null);
 		},
 	});
@@ -219,7 +219,7 @@ function AdminUsersPage() {
 				isPending={updateRole.isPending}
 				errorMessage={
 					updateRole.isError
-						? problemDetailOf(updateRole.error, "Couldn't update the role.")
+						? problemDetailOf(updateRole.error, "Could not update the role.")
 						: undefined
 				}
 				onOpenChange={(open) => {
@@ -261,8 +261,8 @@ function AdminUsersPage() {
 							Force sign-out {signOutTarget?.user.displayName ?? "this user"}?
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							This revokes all of the account’s active sessions immediately, so they’ll have to sign
-							in again. This can’t be undone.
+							This revokes all of the account’s active sessions immediately, so they will have to
+							sign in again. This cannot be undone.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

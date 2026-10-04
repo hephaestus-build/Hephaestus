@@ -81,7 +81,7 @@ export const Default: Story = {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByRole("heading", { level: 2, name: "Reviews" })).toBeVisible();
 		await expect(panel.getByText("Last 30 days · Platform / Payments")).toBeVisible();
-		await expect(panel.getByRole("figure")).toHaveAccessibleName(/reviews; busiest day/u);
+		await expect(panel.getByRole("figure")).toHaveAccessibleName(/reviews\. Busiest day/u);
 		await userEvent.click(panel.getByRole("button", { name: "Copy as Markdown" }));
 		await expect(onCopy).toHaveBeenCalledOnce();
 	},

@@ -42,7 +42,7 @@ function OutlineIntegrationTestContainer() {
 		return (
 			<QueryErrorAlert
 				error={outline.connectionsError}
-				title="We couldn't load the Outline connection"
+				title="We could not load the Outline connection"
 				onRetry={outline.retryConnections}
 			/>
 		);
@@ -52,7 +52,7 @@ function OutlineIntegrationTestContainer() {
 			{outline.tokenStatusError && (
 				<QueryErrorAlert
 					error={outline.tokenStatusError}
-					title="We couldn't verify the Outline token"
+					title="We could not verify the Outline token"
 					onRetry={outline.retryTokenStatus}
 				/>
 			)}
@@ -399,7 +399,7 @@ describe("Outline integration — token lifecycle", () => {
 
 		renderContainer();
 
-		await screen.findByText(/we couldn't verify the outline token/iu);
+		await screen.findByText(/we could not verify the outline token/iu);
 		screen.getByRole("button", { name: /retry/iu });
 	});
 
@@ -439,7 +439,7 @@ describe("Outline integration — with live push down, polling keeps a running s
 	});
 
 	// With the SSE stream down, polling is the freshness channel and must be fast: the 5s poll clears
-	// a running job that has since settled. Polling doesn't halt at settle — it drops to the 60s idle
+	// a running job that has since settled. Polling does not halt at settle — it drops to the 60s idle
 	// cadence — so this asserts the running state clears, not that refetching stops. Fake timers keep
 	// it deterministic and off the wall clock.
 	it("clears a settled job on the fast 5s poll while the live stream is down", async () => {

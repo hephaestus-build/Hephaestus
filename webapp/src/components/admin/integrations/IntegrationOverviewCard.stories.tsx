@@ -139,7 +139,7 @@ export const StatusError: Story = {
 		onRetryStatus: fn(),
 	},
 	play: async ({ args, canvas }) => {
-		canvas.getByText(/couldn't load sync status/iu);
+		canvas.getByText(/could not load sync status/iu);
 		canvas.getByText(/github api is unavailable/iu);
 		await userEvent.click(canvas.getByRole("button", { name: /retry/iu }));
 		await expect(args.onRetryStatus).toHaveBeenCalledTimes(1);
@@ -172,7 +172,7 @@ export const CredentialUnreadable: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/the stored token can’t be read/iu)).toBeVisible();
+		await expect(canvas.getByText(/the stored token cannot be read/iu)).toBeVisible();
 		// The overview does not know the provider's door, so it points at the page that does.
 		await expect(canvas.getByText(/the connection's page says how to replace it/iu)).toBeVisible();
 		// Neither a health verdict nor a sync trigger beside a token nothing can use.

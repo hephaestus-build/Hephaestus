@@ -109,7 +109,7 @@ export function ReviewRunLevel({
 					{jobState.status === "error" ? (
 						<QueryErrorAlert
 							error={jobState.error}
-							title="Couldn't load this review"
+							title="Could not load this review"
 							onRetry={jobState.onRetry}
 						/>
 					) : (
@@ -141,7 +141,7 @@ export function ReviewRunLevel({
 							<EmptyMedia variant="icon">
 								<WorkflowIcon />
 							</EmptyMedia>
-							<EmptyTitle>Review couldn’t be completed</EmptyTitle>
+							<EmptyTitle>Review could not be completed</EmptyTitle>
 							<EmptyDescription>
 								This review ended before it produced observations or feedback.
 							</EmptyDescription>

@@ -35,7 +35,7 @@ describe("validateSurveyDraft", () => {
 	it("names the empty fields", () => {
 		const errors = validateSurveyDraft(emptySurveyDraft("q1"), NOW);
 		expect(errors.title).toBe("Give the survey a title.");
-		expect(errors.description).toBe("Tell members why you're asking.");
+		expect(errors.description).toBe("Tell members why you are asking.");
 		expect(errors.questionErrors).toStrictEqual([{ prompt: "Write the question." }]);
 	});
 

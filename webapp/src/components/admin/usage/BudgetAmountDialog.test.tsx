@@ -51,7 +51,7 @@ describe("the cap editor's currency hint", () => {
 		);
 
 		expect(screen.queryByText(/at today's rate/iu)).toBeNull();
-		expect(screen.queryByLabelText(/approximately 44 euros/iu)).toBeNull();
+		expect(screen.queryByLabelText(/about 44 euros/iu)).toBeNull();
 	});
 
 	it("says nothing about a rate a caller never claimed a month for", () => {

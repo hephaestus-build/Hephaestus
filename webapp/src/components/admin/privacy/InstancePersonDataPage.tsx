@@ -311,7 +311,7 @@ function RequestCard({
 					{rowCount} rows in {heldStores.length} of {stores.length} stores.{" "}
 					{request.state === "PREVIEW" && (
 						<>
-							Export and erasure use exactly these rows; if the data changes, preview again. This
+							Export and erasure use exactly these rows. If the data changes, preview again. This
 							preview expires <RelativeTime value={request.expiresAt} />.
 						</>
 					)}

@@ -29,7 +29,7 @@ export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 		label: "Running",
 		icon: LoaderIcon,
 		badgeVariant: "secondary",
-		description: "Being run now; results appear as it finishes.",
+		description: "Being run now. Results appear as it finishes.",
 	},
 	COMPLETED: {
 		label: "Completed",

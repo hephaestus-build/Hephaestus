@@ -97,7 +97,7 @@ export const TeamRequest: Story = {
 	args: { work: twoTeamsReviewRequest },
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("via payments and Billing Reliability")).toBeVisible();
+		await expect(canvas.getByText("through payments and Billing Reliability")).toBeVisible();
 		await expectNoPageOverflow();
 	},
 };

@@ -58,7 +58,7 @@ export const LongContent: Story = {
 		title:
 			"Decisions, documentation, and long-lived operational knowledge that outlives its authors",
 		description:
-			"Practices covering how a team records the reasoning behind a change, keeps operational runbooks current, and makes the resulting knowledge findable long after the original authors have moved on.",
+			"Practices covering how a team records the reasoning behind a change, keeps runbooks current, and keeps that knowledge findable.",
 		actions: <Button size="sm">Review 12 practices</Button>,
 	},
 };

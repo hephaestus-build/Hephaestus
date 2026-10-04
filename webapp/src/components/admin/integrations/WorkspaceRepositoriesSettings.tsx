@@ -165,7 +165,7 @@ export function WorkspaceRepositoriesSettings({
 		list = (
 			<QueryErrorAlert
 				error={error}
-				title="We couldn't load the monitored repositories"
+				title="We could not load the monitored repositories"
 				onRetry={onRetry}
 			/>
 		);

@@ -25,7 +25,7 @@ const STATE_COPY: Partial<Record<ConnectionState, StateCopy>> = {
 	PENDING: {
 		icon: <CircleDashedIcon />,
 		title: "Finishing setup",
-		describe: (name) => `${name} isn't live yet. Sync controls unlock once setup completes.`,
+		describe: (name) => `${name} is not live yet. Sync controls unlock once setup completes.`,
 		// Benign and self-resolving — no action is owed, so this must not shout.
 		variant: "default",
 	},
@@ -73,7 +73,7 @@ export interface ConnectionStateNoticeProps {
  * connection is in: it is the one condition that leaves a connection ACTIVE while everything that
  * needs its token fails, so it must be said wherever the state would be.
  *
- * Renders nothing for an ACTIVE connection whose credential reads, or for a connection that doesn't
+ * Renders nothing for an ACTIVE connection whose credential reads, or for a connection that does not
  * exist — neither has anything to explain.
  */
 export function ConnectionStateNotice({
@@ -92,9 +92,9 @@ export function ConnectionStateNotice({
 			{credentialsUnreadableSince && (
 				<Alert variant="warning">
 					<KeyRoundIcon />
-					<AlertTitle>The stored token can’t be read</AlertTitle>
+					<AlertTitle>The stored token cannot be read</AlertTitle>
 					<AlertDescription>
-						{`${displayName}'s stored token can't be read with this server's current keys — usually after a key change, or a database restored under another key — so nothing that needs it can run. ${credentialRecovery}, or restore the key it was written with if that was changed by mistake.`}
+						{`${displayName}'s stored token cannot be read with the current keys of this server. This usually happens after a key change, or after a restore of the database under another key. Nothing that needs the token can run. ${credentialRecovery}, or restore the key that wrote it if someone changed the key by mistake.`}
 					</AlertDescription>
 				</Alert>
 			)}

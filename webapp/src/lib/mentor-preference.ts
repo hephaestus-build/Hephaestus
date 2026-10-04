@@ -14,7 +14,7 @@ export type MentorNotice =
 
 /**
  * Why Heph will not answer this member, if it will not. The server twin is `MentorRefusal`.
- * `aiChoice == null && !aiChoiceRequired` is `undefined` on purpose: members who haven't chosen
+ * `aiChoice == null && !aiChoiceRequired` is `undefined` on purpose: members who have not chosen
  * are served by the undeclared slot. `not-set-up` comes before the choice: no choice the member
  * could make would bring Heph.
  */
@@ -53,7 +53,7 @@ export const MENTOR_PREFERENCE_COPY = {
 		cta: "Change your AI choice",
 	},
 	"not-set-up": {
-		title: "Heph isn't set up in this workspace yet",
+		title: "Heph is not set up in this workspace yet",
 		description:
 			"No Heph model is ready for any AI choice here. A workspace owner sets one up under AI models.",
 	},
@@ -64,7 +64,7 @@ export const MENTOR_PREFERENCE_COPY = {
 		cta: "Make your AI choice",
 	},
 	unavailable: {
-		title: "Heph isn't set up for your AI choice yet",
+		title: "Heph is not set up for your AI choice yet",
 		description: {
 			before: "No Heph model is within ",
 			after: " yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",

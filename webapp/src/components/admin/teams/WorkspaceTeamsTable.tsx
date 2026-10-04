@@ -142,7 +142,7 @@ export function WorkspaceTeamsTable({
 		return (
 			<PageLayout>
 				{header}
-				<QueryErrorAlert error={error} title="Couldn't load teams" onRetry={onRetry} />
+				<QueryErrorAlert error={error} title="Could not load teams" onRetry={onRetry} />
 			</PageLayout>
 		);
 	}

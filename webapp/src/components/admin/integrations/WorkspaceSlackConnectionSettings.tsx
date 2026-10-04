@@ -122,7 +122,7 @@ function SlackConnected({
 						<ItemTitle>Slack workspace</ItemTitle>
 						<ItemDescription className={credentialUnreadable ? "line-clamp-none" : undefined}>
 							{credentialUnreadable
-								? "Can't post with this token. Reconnect Slack to replace it, or restore the original server key."
+								? "Cannot post with this token. Reconnect Slack to replace it, or restore the original server key."
 								: "Hephaestus is installed and can post as the app."}
 						</ItemDescription>
 					</ItemContent>
@@ -172,9 +172,9 @@ function SlackConnected({
 						<AlertDialogDescription>
 							The Slack connection for this workspace is removed, and every ingested Slack message,
 							thread, and per-channel consent record for this workspace is erased. Messages already
-							sent in Slack remain there. To use Slack with this workspace again, re-authorize via
-							OAuth and re-activate channels. To replace only the stored token, use Reconnect Slack
-							instead: it keeps the channels and their data.
+							sent in Slack remain there. To use Slack with this workspace again, re-authorize
+							through OAuth and re-activate channels. To replace only the stored token, use
+							Reconnect Slack instead: it keeps the channels and their data.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

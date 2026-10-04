@@ -38,7 +38,7 @@ type Story = StoryObj<typeof meta>;
 /** Empty initial state — no token entered yet. */
 export const Default: Story = {};
 
-/** User has entered a token but hasn't validated yet. */
+/** User has entered a token but has not validated yet. */
 export const FilledNotValidated: Story = {
 	decorators: [
 		withWizardState({

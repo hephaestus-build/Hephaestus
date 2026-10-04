@@ -164,7 +164,7 @@ function ChoiceModel({
 	// The mark already shows the maker, so the words name the service when one is declared.
 	let detail = "Maker and service not declared";
 	if (model.connectionPlatform) {
-		detail = `via ${AI_CONNECTION_PLATFORM_META[model.connectionPlatform].label}`;
+		detail = `through ${AI_CONNECTION_PLATFORM_META[model.connectionPlatform].label}`;
 	} else if (model.brand) {
 		detail = AI_MODEL_BRAND_META[model.brand].label;
 	}

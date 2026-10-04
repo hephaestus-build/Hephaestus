@@ -74,12 +74,12 @@ export const WithLiveCurrencyHint: Story = {
 	play: async ({ args }) => {
 		const dialog = await capDialog();
 		await expectSettledVisible(await dialog.findByText(/at today's rate\./u));
-		dialog.getByLabelText("approximately 44 euros");
+		dialog.getByLabelText("about 44 euros");
 
 		const input = dialog.getByLabelText(/monthly cap/iu);
 		await userEvent.clear(input);
 		await userEvent.type(input, "120");
-		await expectSettledVisible(await dialog.findByLabelText("approximately 105 euros"));
+		await expectSettledVisible(await dialog.findByLabelText("about 105 euros"));
 
 		// An empty field has nothing to estimate, so the hint leaves rather than reading "≈ €0".
 		await userEvent.clear(input);

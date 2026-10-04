@@ -113,7 +113,7 @@ export const LoadError: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText(/no collections mirrored yet/iu)).not.toBeInTheDocument();
-		canvas.getByText(/couldn't load the mirrored collections/iu);
+		canvas.getByText(/could not load the mirrored collections/iu);
 		canvas.getByText(/outline sync is unavailable/iu);
 		canvas.getByRole("button", { name: /^retry$/iu });
 	},

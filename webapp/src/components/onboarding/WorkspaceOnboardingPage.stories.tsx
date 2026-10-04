@@ -273,16 +273,16 @@ export const WorkspaceModels: Story = {
 		const models = canvas.getByRole("region", { name: "Cloud models in Engineering" });
 		await expect(models).toHaveTextContent("Qwen3");
 		await expect(models).toHaveTextContent("gpt-6-luna");
-		await expect(models).toHaveTextContent("OpenAI · via Microsoft Azure");
+		await expect(models).toHaveTextContent("OpenAI · through Microsoft Azure");
 		await expect(models).toHaveTextContent("Team model");
 		await expect(models.querySelectorAll("img")).toHaveLength(4);
 		const cloud = canvas.getByRole("radio", { name: CLOUD });
 		// The card leads with the model a cloud request reaches first, not the first one listed.
-		await expect(cloud).toHaveAccessibleName(/gpt-6-luna via Microsoft Azure \+2 more models/u);
+		await expect(cloud).toHaveAccessibleName(/gpt-6-luna through Microsoft Azure \+2 more models/u);
 		const model = cloud.closest("label")?.querySelector('[data-slot="ai-choice-model"]');
 		await expect(model?.querySelectorAll("img")).toHaveLength(2);
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
-		await expect(inHouse).toHaveAccessibleName(/Qwen3 via Logos/u);
+		await expect(inHouse).toHaveAccessibleName(/Qwen3 through Logos/u);
 	},
 };
 
@@ -316,7 +316,7 @@ export const ProviderOperatedLogos: Story = {
 	play: async ({ canvas }) => {
 		const models = canvas.getByRole("region", { name: "Cloud models in Engineering" });
 		await expect(models).toHaveTextContent("Qwen3");
-		await expect(models).toHaveTextContent("via Logos");
+		await expect(models).toHaveTextContent("through Logos");
 		// Logos is where the requests go; the admin's declaration, not the mark, makes it cloud.
 		await expect(within(models).getByText("Cloud")).toBeVisible();
 	},
@@ -343,7 +343,7 @@ export const RequiredLinkOpen: Story = {
 		await expect(submit).toHaveAccessibleDescription("Connect Slack to finish setup.");
 		await expect(
 			canvas.getByText(
-				"Your AI choice is set and holds in all your workspaces. Connect Slack and you're in.",
+				"Your AI choice is set and holds in all your workspaces. Connect Slack and you are in.",
 			),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
@@ -364,11 +364,11 @@ export const RequiredLinkBroken: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
-		await expect(canvas.getByText(/doesn't hold you up/u)).toBeVisible();
+		await expect(canvas.getByText(/does not hold you up/u)).toBeVisible();
 		const connect = canvas.getByRole("button", { name: "Connect Slack" });
 		await expectGenuinelyDisabled(connect);
 		await expect(connect).toHaveAccessibleDescription(
-			"Unavailable right now for Engineering team. It doesn't hold you up.",
+			"Unavailable right now for Engineering team. It does not hold you up.",
 		);
 	},
 };
@@ -424,7 +424,7 @@ export const OptionUncovered: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"That isn't set up here yet. Nothing switches you elsewhere. Press Continue and it holds in every workspace.",
+				"That is not set up here yet. Nothing switches you elsewhere. Press Continue and it holds in every workspace.",
 			),
 		).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Continue" })).toBeEnabled();
@@ -450,18 +450,18 @@ export const HephNotCovered: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await expect(
 			canvas.getByText(
-				"Part of your choice isn't set up here yet. Nothing switches you anywhere else.",
+				"Part of your choice is not set up here yet. Nothing switches you anywhere else.",
 			),
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Practice reviews run in Engineering within this answer. Heph isn't set up here yet.",
+				"Practice reviews run in Engineering within this answer. Heph is not set up here yet.",
 			),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
 		await expect(
 			canvas.getByText(
-				"Heph runs in Engineering within this answer. Practice reviews aren't set up here yet.",
+				"Heph runs in Engineering within this answer. Practice reviews are not set up here yet.",
 			),
 		).toBeVisible();
 	},
@@ -485,7 +485,7 @@ export const SavedChoiceUncovered: Story = {
 	},
 	play: async ({ canvas, userEvent }) => {
 		await expect(
-			canvas.getByText("Your choice isn't set up here yet. Nothing switches you anywhere else."),
+			canvas.getByText("Your choice is not set up here yet. Nothing switches you anywhere else."),
 		).toBeVisible();
 		await expect(canvas.getByRole("radio", { name: CLOUD })).toBeChecked();
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Save" }));
@@ -593,7 +593,7 @@ export const OAuthReturnDone: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByText(
-				"Your accounts are connected. Head back to your workspace whenever you're ready.",
+				"Your accounts are connected. Head back to your workspace whenever you are ready.",
 			),
 		).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Back to workspace" })).toBeEnabled();
@@ -612,7 +612,7 @@ export const AnsweredElsewhere: Story = {
 		await expect(canvas.getByRole("radio", { name: CLOUD })).toBeChecked();
 		await expect(
 			canvas.getByText(
-				"Your AI choice is set and holds in all your workspaces. Connect Slack and you're in.",
+				"Your AI choice is set and holds in all your workspaces. Connect Slack and you are in.",
 			),
 		).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Connect Slack" })).toBeEnabled();
@@ -655,7 +655,7 @@ export const SaveFailed: Story = {
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
 		await userEvent.click(canvas.getByRole("button", { name: "Continue" }));
 		const alert = canvas.getByRole("alert");
-		await expect(alert).toHaveTextContent("Couldn't save your AI choice");
+		await expect(alert).toHaveTextContent("Could not save your AI choice");
 		await expect(alert).toHaveTextContent("Your choice could not be saved.");
 		await waitFor(async () => expect(alert).toHaveFocus());
 		await expect(canvas.getByRole("radio", { name: CLOUD })).toBeChecked();
@@ -676,7 +676,7 @@ export const SkipFailed: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Skip for now" }));
 		await expect(canvas.getByRole("alert")).toHaveTextContent(
-			"Couldn't continue to your workspace",
+			"Could not continue to your workspace",
 		);
 	},
 };
@@ -690,7 +690,7 @@ export const RefreshFailed: Story = {
 		},
 	},
 	play: async ({ canvas, userEvent, args }) => {
-		await expect(canvas.getByText("Couldn't refresh your setup")).toBeVisible();
+		await expect(canvas.getByText("Could not refresh your setup")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		const { refresh } = readyArgs(args);
 		if (refresh?.status !== "error") {
@@ -715,7 +715,7 @@ export const LoadFailed: Story = {
 		state: { status: "error", error: new Error("Unavailable"), onRetry: fn(), onLeave: fn() },
 	},
 	play: async ({ canvas, userEvent, args }) => {
-		await expect(canvas.getByText("Hephaestus couldn't fetch your setup just now.")).toBeVisible();
+		await expect(canvas.getByText("Hephaestus could not fetch your setup just now.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		if (args.state.status !== "error") {
 			throw new Error("Expected the retryable error state");

@@ -91,7 +91,7 @@ it("names the saved choice when no Heph model is within it", async () => {
 	renderRouteAtWithRouter("/w/acme/mentor");
 	await screen.findByRole(
 		"heading",
-		{ name: "Heph isn't set up for your AI choice yet" },
+		{ name: "Heph is not set up for your AI choice yet" },
 		ROUTE_RENDER_WAIT,
 	);
 	expect(screen.getByText("Cloud", { selector: "em" }).parentElement?.textContent).toBe(
@@ -124,7 +124,7 @@ it("says Heph is not set up, and offers no choice to change, where no model is r
 	renderRouteAtWithRouter("/w/acme/mentor");
 	await screen.findByRole(
 		"heading",
-		{ name: "Heph isn't set up in this workspace yet" },
+		{ name: "Heph is not set up in this workspace yet" },
 		ROUTE_RENDER_WAIT,
 	);
 	expect(screen.queryByRole("link", { name: /^(?:Change|Make) your AI choice$/u })).toBeNull();

@@ -9,7 +9,8 @@ export const FEEDBACK_KIND_DEFS: StatusDefs<FeedbackItem["kind"]> = {
 		label: "Idea",
 		icon: Lightbulb,
 		badgeVariant: "default",
-		description: "A feature or change the sender would like; worth passing on to the project.",
+		description:
+			"A feature or change the sender would like. It is worth passing on to the project.",
 	},
 	BUG: {
 		label: "Bug",

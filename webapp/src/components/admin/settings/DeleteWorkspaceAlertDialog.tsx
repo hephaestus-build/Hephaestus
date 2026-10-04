@@ -64,30 +64,30 @@ export function DeleteWorkspaceAlertDialog({
 					<div className="space-y-3 text-left text-sm text-muted-foreground">
 						<p>Deleting the workspace permanently erases:</p>
 						<ul className="list-disc space-y-1 pl-5">
-							<li>memberships and access;</li>
-							<li>workspace, team, and repository settings;</li>
-							<li>Hephaestus copies of synced integration content;</li>
-							<li>practice feedback and mentor conversations;</li>
-							<li>locally stored integration and AI-provider credentials.</li>
+							<li>memberships and access</li>
+							<li>workspace, team, and repository settings</li>
+							<li>Hephaestus copies of synced integration content</li>
+							<li>practice feedback and mentor conversations</li>
+							<li>locally stored integration and AI-provider credentials</li>
 						</ul>
 						<p>These survive:</p>
 						<ul className="list-disc space-y-1 pl-5">
 							<li>
 								messages and comments Hephaestus posted to external providers, including GitHub,
-								GitLab, and Slack;
+								GitLab, and Slack
 							</li>
 							<li>
-								GitHub, GitLab, and Outline access tokens at their providers; revoke them there if
-								no longer needed;
+								GitHub, GitLab, and Outline access tokens at their providers. Revoke them there if
+								you no longer need them.
 							</li>
 							<li>
-								the Slack app installation; its bot token is revoked only when no other workspace
-								uses it;
+								the Slack app installation. Hephaestus revokes its bot token only when no other
+								workspace uses it.
 							</li>
-							<li>security, audit, and accounting records for prior activity;</li>
+							<li>security, audit, and accounting records for prior activity</li>
 							<li>
-								the name <span className="font-mono break-all">{workspaceSlug}</span>, which stays
-								reserved and can never be used for a new workspace.
+								the name <span className="font-mono break-all">{workspaceSlug}</span>. It stays
+								reserved, and no new workspace can use it.
 							</li>
 						</ul>
 					</div>

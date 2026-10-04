@@ -135,7 +135,7 @@ const IN_APP_OVERRIDES = {
 		label: "Prepared for their practice pages",
 		icon: UserRoundIcon,
 		badgeVariant: "secondary",
-		description: "Waiting on the developer's own practice pages; opening it is what delivers it.",
+		description: "Waiting on the developer's own practice pages. Opening it delivers it.",
 	},
 } as const satisfies Record<string, StatusDef>;
 

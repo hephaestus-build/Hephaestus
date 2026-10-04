@@ -118,7 +118,7 @@ export const TeamsFailed: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.queryByRole("combobox", { name: "Team" })).not.toBeInTheDocument();
 		const alert = canvas.getByRole("alert");
-		await expect(alert).toHaveTextContent("Couldn't load teams");
+		await expect(alert).toHaveTextContent("Could not load teams");
 		await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
 		await expect(retryTeams).toHaveBeenCalledOnce();
 	},

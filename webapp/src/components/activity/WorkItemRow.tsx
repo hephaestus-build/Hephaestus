@@ -65,7 +65,7 @@ export function WorkItemRow({ work, providerType, login, reviewNow }: WorkItemRo
 							teams.length > 0 && (
 								<span key="teams" className="inline-flex items-center gap-1">
 									<TeamIcon size={12} className="shrink-0" />
-									via {andList.format(teams.map((team) => team.name))}
+									through {andList.format(teams.map((team) => team.name))}
 								</span>
 							),
 							work.author && work.author.login !== login && `by ${work.author.name}`,

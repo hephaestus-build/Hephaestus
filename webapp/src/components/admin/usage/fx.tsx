@@ -99,9 +99,7 @@ export interface FxConversion {
 }
 
 function conversionOf(amount: { written: string; spoken: string } | null): FxConversion | null {
-	return amount == null
-		? null
-		: { text: `≈ ${amount.written}`, label: `approximately ${amount.spoken}` };
+	return amount == null ? null : { text: `≈ ${amount.written}`, label: `about ${amount.spoken}` };
 }
 
 export function spendConversion(usd: number | null | undefined, fx: Fx): FxConversion | null {
@@ -125,7 +123,7 @@ export function spendOfCapConversion(
 	}
 	return {
 		text: `≈ ${spend.written} of ${cap.written}`,
-		label: `approximately ${spend.spoken} of ${cap.spoken}`,
+		label: `about ${spend.spoken} of ${cap.spoken}`,
 	};
 }
 
@@ -175,7 +173,7 @@ function disclosureParts(fx: Fx, isCurrentMonth: boolean): DisclosureParts | nul
 		lead: `${fx.currencyCode} amounts are estimates at the ${attribution}reference rate published on ${formatRateDate(fx.rateDate)}`,
 		rate: {
 			text: `1 USD ≈ ${written}`,
-			label: `1 US dollar is approximately ${spoken}`,
+			label: `1 US dollar is about ${spoken}`,
 		},
 		tail: isCurrentMonth
 			? ". Spend is metered and enforced in USD."

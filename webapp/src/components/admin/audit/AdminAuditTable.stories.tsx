@@ -165,7 +165,7 @@ export const EmptyWithFilter: Story = {
 export const ErrorState: Story = {
 	args: { events: [], isError: true },
 	play: async ({ canvas }) => {
-		canvas.getByText(/Couldn’t load the audit log/iu);
+		canvas.getByText(/Could not load the audit log/iu);
 	},
 };
 

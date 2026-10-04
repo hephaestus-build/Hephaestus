@@ -45,7 +45,7 @@ function firstMatch(tokens: readonly (readonly [RegExp, string])[], ua: string) 
 
 /**
  * Best-effort "Browser on OS" label from a raw User-Agent string. A raw UA is unreadable to humans,
- * so a user can't tell their sessions apart — the recognition the revoke feature depends on. The raw
+ * so a user cannot tell their sessions apart — the recognition the revoke feature depends on. The raw
  * string is kept as a tooltip for the rare case the heuristic misses. Order matters (Edge/Opera
  * before Chrome; Chrome before Safari) because UAs nest these tokens.
  */

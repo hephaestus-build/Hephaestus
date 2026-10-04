@@ -135,7 +135,7 @@ const ANSWERS = [
 	},
 	{
 		value: "no",
-		title: "No, don't take part",
+		title: "No, do not take part",
 		detail: "Keep my usage and feedback out of the research.",
 	},
 ] as const;
@@ -171,13 +171,13 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 			return "Give me a moment. Hephaestus is fetching your setup.";
 		}
 		if (state.status === "error") {
-			return "Hephaestus couldn't fetch your setup just now.";
+			return "Hephaestus could not fetch your setup just now.";
 		}
 		if (stale) {
 			return "Hephaestus was updated while this page was open.";
 		}
 		if (termsAccepted && answered) {
-			return "That's everything. Let's get to work.";
+			return "That is everything. You can get to work.";
 		}
 		if (!asksAboutResearch) {
 			return "The rules first.";
@@ -186,7 +186,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 			return "Thanks. One question to go, and either answer is fine.";
 		}
 		if (answer === undefined) {
-			return "Two things first. Accept the rules, then say if you'd like to take part in the research.";
+			return "Two things first. Accept the rules, then say if you want to take part in the research.";
 		}
 		return "Noted. Just the terms left.";
 	}
@@ -235,11 +235,9 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 					<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
 
 					<header className="space-y-4">
-						<h1 className="text-2xl font-semibold tracking-tight break-words">
-							Let’s get you set up
-						</h1>
+						<h1 className="text-2xl font-semibold tracking-tight break-words">Get set up</h1>
 						<HephSays
-							intro="I'm Heph, the mentor in Hephaestus. I read the work you already do, give you feedback on the practices your project cares about, and talk it through whenever you ask."
+							intro="I am Heph, the mentor in Hephaestus. I read the work you already do, give you feedback on the practices your project cares about, and talk it through whenever you ask."
 							narration={narration}
 						/>
 					</header>
@@ -268,8 +266,8 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 									{/* The obligations sit with the box that accepts them. The points above are
 										    what the reader needs in order to decide, not things anyone agrees to. */}
 									<FieldDescription>
-										Keep to the work you are entitled to see, and treat feedback as guidance for the
-										person it is addressed to rather than an assessment to pass on.
+										Keep to the work you are entitled to see. Treat feedback as guidance for the
+										person it is addressed to, not as an assessment to pass on.
 									</FieldDescription>
 								</FieldContent>
 							</Field>
@@ -324,7 +322,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 
 						{submissionFailed && (
 							<Alert variant="destructive">
-								<AlertTitle>Your answers weren’t saved</AlertTitle>
+								<AlertTitle>Your answers were not saved</AlertTitle>
 								<AlertDescription>Try again.</AlertDescription>
 							</Alert>
 						)}
@@ -384,7 +382,7 @@ function ConsentBody({
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Couldn't load your setup"
+				title="Could not load your setup"
 				onRetry={state.onRetry}
 			/>
 		);

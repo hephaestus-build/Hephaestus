@@ -34,7 +34,7 @@ export function GeneratedPathsSettings(props: GeneratedPathsSettingsProps) {
 				<QueryErrorAlert
 					error={repositories.error}
 					onRetry={repositories.onRetry}
-					title="Couldn't load generated-path settings"
+					title="Could not load generated-path settings"
 				/>
 			)}
 			{repositories.status === "ready" && repositories.options.length === 0 && (
@@ -80,7 +80,7 @@ function RepositoryGeneratedPaths({
 	});
 	const errorMessage = conflicted
 		? "Saved patterns changed while you were editing. Your draft has not been saved."
-		: "Couldn't save generated paths. Check the patterns and try again.";
+		: "Could not save generated paths. Check the patterns and try again.";
 	const save = async () => {
 		setState("saving");
 		try {
@@ -114,7 +114,7 @@ function RepositoryGeneratedPaths({
 				/>
 				<FieldDescription id={`${id}-description`}>
 					One repository-root pattern per line, such as <code>src/api/**</code> or{" "}
-					<code>**/*.generated.ts</code>. Case-sensitive: <code>*</code> stays within a directory;{" "}
+					<code>**/*.generated.ts</code>. Case-sensitive. <code>*</code> stays within a directory.{" "}
 					<code>**</code> crosses directories. Clear all lines and save to reset.
 				</FieldDescription>
 				{invalid || conflicted || state === "error" ? (

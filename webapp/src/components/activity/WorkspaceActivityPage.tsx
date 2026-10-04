@@ -96,7 +96,7 @@ export function WorkspaceActivityPage({
 				}
 			/>
 			{teams.status === "error" && (
-				<QueryErrorAlert error={teams.error} title="Couldn't load teams" onRetry={teams.onRetry} />
+				<QueryErrorAlert error={teams.error} title="Could not load teams" onRetry={teams.onRetry} />
 			)}
 			<Section
 				size="lg"

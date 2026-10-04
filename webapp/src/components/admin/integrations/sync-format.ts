@@ -29,7 +29,7 @@ export function syncPollInterval(
 
 /**
  * Human "5 minutes ago" phrasing for a timestamp against the caller's `now`. A missing/invalid value
- * renders the {@link fallback} dash — never "now" — so an absent timestamp can't masquerade as a
+ * renders the {@link fallback} dash — never "now" — so an absent timestamp cannot masquerade as a
  * fresh one.
  */
 export function relativeTime(

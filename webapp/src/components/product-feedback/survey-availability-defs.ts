@@ -34,7 +34,7 @@ export const SURVEY_AVAILABILITY_DEFS: StatusDefs<SurveyAvailability> = {
 		label: "Ended",
 		icon: CircleCheck,
 		badgeVariant: "outline",
-		description: "The window has closed; the responses stay.",
+		description: "The window has closed. The responses stay.",
 	},
 };
 

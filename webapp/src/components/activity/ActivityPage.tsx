@@ -67,7 +67,7 @@ export function ActivityPage({
 				{header}
 				<QueryErrorAlert
 					error={account.error}
-					title="Couldn't load your membership in this workspace"
+					title="Could not load your membership in this workspace"
 					onRetry={account.onRetry}
 				/>
 			</PageLayout>

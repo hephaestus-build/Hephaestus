@@ -196,7 +196,7 @@ function AdminLlmModelFormDialogContent({
 									/>
 									{sharedWorkspaceIds.length === 0 && (
 										<FieldDescription>
-											No workspace can use this model yet. This is safe for staging; manage access
+											No workspace can use this model yet. This is safe for staging. Manage access
 											from the model table when it is ready.
 										</FieldDescription>
 									)}

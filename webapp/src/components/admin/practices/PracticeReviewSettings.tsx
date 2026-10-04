@@ -132,7 +132,7 @@ function ModelReadiness({
 		return (
 			<Alert variant="warning" role="status">
 				<AlertCircle />
-				<AlertTitle>Couldn’t check the review model</AlertTitle>
+				<AlertTitle>Could not check the review model</AlertTitle>
 				<AlertDescription>
 					<Button variant="outline" size="sm" onClick={model.onRetry}>
 						Retry
@@ -163,8 +163,8 @@ function ModelReadiness({
 			<AlertDescription>
 				<p>
 					{model.binding
-						? "The selected model is turned off or was removed, so reviews can't run."
-						: "Reviews can't run until a model is chosen."}
+						? "The selected model is turned off or was removed, so reviews cannot run."
+						: "Reviews cannot run until a model is chosen."}
 				</p>
 				<Link
 					to="/w/$workspaceSlug/admin/models"

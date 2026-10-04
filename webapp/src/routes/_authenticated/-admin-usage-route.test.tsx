@@ -141,7 +141,7 @@ describe("instance AI usage route", () => {
 
 		slowPut.resolve();
 
-		await screen.findByText("Couldn't save the budget");
+		await screen.findByText("Could not save the budget");
 		screen.getByText("The budget service is down.");
 		expect(
 			screen
@@ -166,6 +166,6 @@ describe("instance AI usage route", () => {
 
 		const dialog = await screen.findByRole("dialog");
 		await within(dialog).findByText("A budget above $1,000,000 is refused.");
-		expect(screen.queryByText("Couldn't save the budget")).toBeNull();
+		expect(screen.queryByText("Could not save the budget")).toBeNull();
 	});
 });

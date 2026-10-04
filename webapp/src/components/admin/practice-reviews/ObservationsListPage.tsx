@@ -94,7 +94,7 @@ export function ObservationsListPage({
 					state={resultsState(isLoading, rows, hasFilter ? reset : undefined)}
 				/>
 			) : (
-				<QueryErrorAlert error={error} title="Couldn't load observations" onRetry={onRetry} />
+				<QueryErrorAlert error={error} title="Could not load observations" onRetry={onRetry} />
 			)}
 			<TablePagination
 				page={observations?.page?.number ?? search.page ?? 0}

@@ -81,7 +81,7 @@ function BudgetAmountDialogContent({
 	const fxHintId = useId();
 	const errorId = useId();
 	const [value, setValue] = useState(currentValueUsd == null ? "" : String(currentValueUsd));
-	// Withheld until the first submit so the field isn't red before anything was attempted.
+	// Withheld until the first submit so the field is not red before anything was attempted.
 	const [showError, setShowError] = useState(false);
 	// The server error stays until the amount is edited, so it reads as "this value was rejected".
 	const [dismissedServerError, setDismissedServerError] = useState<string | null>(null);

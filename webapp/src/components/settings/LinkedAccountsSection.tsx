@@ -257,8 +257,8 @@ export function LinkedAccountsSection({
 				<div className="space-y-2 pt-2">
 					<h3 className="text-sm font-medium">Connect another account</h3>
 					<p className="text-xs text-muted-foreground">
-						Connecting a provider sends you to its sign-in page; the identity you sign in with is
-						then linked to this account.
+						Connecting a provider sends you to its sign-in page. Hephaestus then links the identity
+						that you sign in with to this account.
 					</p>
 					<div className="flex flex-wrap gap-2 pt-1">
 						{signInProviders.map((provider) => {
@@ -289,7 +289,7 @@ export function LinkedAccountsSection({
 
 			{linkableProviders.length === 0 && identities.length > 0 && (
 				<p className="pt-2 text-xs text-muted-foreground">
-					You’ve connected all available providers.
+					You have connected all available providers.
 				</p>
 			)}
 		</LinkedAccountsFrame>
@@ -393,7 +393,7 @@ function UnlinkControl({
 					<AlertDialogDescription>
 						{isLinkOnly
 							? `Hephaestus will stop attributing your ${provider} activity to this account. You can reconnect ${provider} anytime from Settings.`
-							: `You'll no longer be able to sign in to Hephaestus with this ${provider} account. You can reconnect it anytime by signing in with ${provider} again.`}
+							: `You will no longer be able to sign in to Hephaestus with this ${provider} account. You can reconnect it anytime by signing in with ${provider} again.`}
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>

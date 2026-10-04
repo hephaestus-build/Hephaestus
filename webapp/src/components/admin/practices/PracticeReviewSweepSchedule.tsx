@@ -165,7 +165,7 @@ export function PracticeReviewSweepSchedule({
 			{isError ? (
 				<Alert variant="destructive">
 					<AlertCircle />
-					<AlertTitle>Recurring checks couldn’t be loaded</AlertTitle>
+					<AlertTitle>Recurring checks could not be loaded</AlertTitle>
 					<AlertDescription>
 						<p>Whatever is scheduled is still running. This is only about showing it here.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>

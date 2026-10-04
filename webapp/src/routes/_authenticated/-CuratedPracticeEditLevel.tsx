@@ -62,7 +62,7 @@ export function CuratedPracticeEditLevel({
 			<DrawerBody>
 				<QueryErrorAlert
 					error={practiceQuery.error ?? catalogQuery.error ?? definitionOptionsQuery.error}
-					title="Couldn't load the practice"
+					title="Could not load the practice"
 					onRetry={() => {
 						void practiceQuery.refetch();
 						void catalogQuery.refetch();
@@ -131,7 +131,7 @@ function LoadedCuratedPracticeEditor({
 				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 				void releaseQuery.refetch();
 			}
-			toast.error("Couldn't accept the update", { description: problemDetailOf(error) });
+			toast.error("Could not accept the update", { description: problemDetailOf(error) });
 		},
 	});
 	const declineRelease = useMutation({
@@ -148,7 +148,7 @@ function LoadedCuratedPracticeEditor({
 				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 				void releaseQuery.refetch();
 			}
-			toast.error("Couldn't decline the update", { description: problemDetailOf(error) });
+			toast.error("Could not decline the update", { description: problemDetailOf(error) });
 		},
 	});
 	const updatePractice = useMutation({
@@ -164,7 +164,7 @@ function LoadedCuratedPracticeEditor({
 				setConflict(true);
 				return;
 			}
-			toast.error("Couldn't update the practice", { description: problemDetailOf(error) });
+			toast.error("Could not update the practice", { description: problemDetailOf(error) });
 		},
 	});
 	const deleteOverride = useMutation({
@@ -190,7 +190,7 @@ function LoadedCuratedPracticeEditor({
 				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 				return;
 			}
-			toast.error("Couldn't apply the default", { description: problemDetailOf(error) });
+			toast.error("Could not apply the default", { description: problemDetailOf(error) });
 		},
 	});
 	const keepCurrentDefinition = useMutation({
@@ -215,7 +215,7 @@ function LoadedCuratedPracticeEditor({
 				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 				return;
 			}
-			toast.error("Couldn't keep the saved version", { description: problemDetailOf(error) });
+			toast.error("Could not keep the saved version", { description: problemDetailOf(error) });
 		},
 	});
 
@@ -230,7 +230,7 @@ function LoadedCuratedPracticeEditor({
 			setBasePractice(latest);
 			setConflict(false);
 		} catch (error) {
-			toast.error("Couldn't refresh the latest version", { description: problemDetailOf(error) });
+			toast.error("Could not refresh the latest version", { description: problemDetailOf(error) });
 		}
 	};
 	let releaseReview: ReactNode;
@@ -244,7 +244,7 @@ function LoadedCuratedPracticeEditor({
 		releaseReview = (
 			<QueryErrorAlert
 				error={releaseQuery.error}
-				title="Couldn't load the update"
+				title="Could not load the update"
 				onRetry={() => {
 					void releaseQuery.refetch();
 				}}

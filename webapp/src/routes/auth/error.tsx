@@ -19,19 +19,19 @@ interface ErrorSearch {
 /** PII-free, friendly copy keyed by the server's auth-failure codes. */
 const ERROR_COPY: Record<string, { title: string; description: string }> = {
 	oauth_failure: {
-		title: "Sign-in didn't complete",
+		title: "Sign-in did not complete",
 		description:
-			"We couldn't finish signing you in with that provider. Please try again from the sign-in page.",
+			"We could not finish signing you in with that provider. Please try again from the sign-in page.",
 	},
 	token_exchange: {
-		title: "Sign-in couldn't be verified",
+		title: "Sign-in could not be verified",
 		description:
 			"There was a problem confirming your identity with the provider. Please try signing in again.",
 	},
 	idp_unavailable: {
 		title: "Provider unavailable",
 		description:
-			"The identity provider couldn't be reached right now. Please try again in a few moments.",
+			"The identity provider could not be reached right now. Please try again in a few moments.",
 	},
 	already_linked: {
 		title: "Account already linked",
@@ -59,9 +59,9 @@ const ERROR_COPY: Record<string, { title: string; description: string }> = {
 	client_not_registered: {
 		// Reached inside the browser extension's sign-in window: the instance does not list that
 		// extension, so the server refuses to hand it a sign-in rather than redirect to it.
-		title: "This extension can't sign in here",
+		title: "This extension cannot sign in here",
 		description:
-			"This Hephaestus instance doesn't allow that browser extension to sign in. Ask an admin to add its extension ID, then try again from the extension.",
+			"This Hephaestus instance does not allow that browser extension to sign in. Ask an admin to add its extension ID, then try again from the extension.",
 	},
 	unknown_provider: {
 		title: "Provider is not configured",

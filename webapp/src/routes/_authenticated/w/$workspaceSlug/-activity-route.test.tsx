@@ -458,7 +458,7 @@ describe("Activity", () => {
 		renderRouteAtWithRouter("/w/acme/activity");
 
 		await screen.findByText(
-			"Couldn't load your membership in this workspace",
+			"Could not load your membership in this workspace",
 			undefined,
 			ROUTE_RENDER_WAIT,
 		);

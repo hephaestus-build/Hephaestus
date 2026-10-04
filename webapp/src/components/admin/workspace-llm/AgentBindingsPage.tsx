@@ -99,7 +99,7 @@ const PURPOSES: PurposeMeta[] = [
 /** The developer answers the preview walks, in card order; No AI is served by nothing. */
 const PREVIEWED_CHOICES = ["IN_HOUSE_ONLY", "CLOUD"] satisfies MemberAiChoice[];
 
-const UNCHOSEN_ROW_TITLE = "Members who haven't chosen";
+const UNCHOSEN_ROW_TITLE = "Members who have not chosen";
 
 const MIN_TIMEOUT_SECONDS = 30;
 const MAX_TIMEOUT_SECONDS = 10_800;
@@ -227,7 +227,7 @@ export function AgentBindingsPage({
 				)}
 
 				{isError && (
-					<QueryErrorAlert error={loadError} title="Couldn't load AI models" onRetry={onRetry} />
+					<QueryErrorAlert error={loadError} title="Could not load AI models" onRetry={onRetry} />
 				)}
 				{!isError && isLoading && (
 					<div className="flex h-40 items-center justify-center">

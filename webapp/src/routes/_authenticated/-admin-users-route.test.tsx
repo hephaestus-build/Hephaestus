@@ -77,7 +77,7 @@ describe("instance users route", () => {
 		await user.click(await screen.findByRole("button", { name: "Force sign-out" }));
 
 		await screen.findByRole("dialog", { name: "Confirm access" });
-		expect(screen.queryByText(/Couldn't sign the user out/u)).toBeNull();
+		expect(screen.queryByText(/Could not sign the user out/u)).toBeNull();
 	});
 
 	it("says nothing about a recent sign-in when the refusal is an ordinary one", async () => {
@@ -86,7 +86,7 @@ describe("instance users route", () => {
 				HttpResponse.json(
 					{
 						status: 409,
-						detail: "You can't revoke the last admin. Grant admin to another account first.",
+						detail: "You cannot revoke the last admin. Grant admin to another account first.",
 					},
 					{ status: 409 },
 				),
@@ -99,7 +99,7 @@ describe("instance users route", () => {
 
 		const refusal = await screen.findByRole("alert");
 		expect(refusal.textContent).toBe(
-			"You can't revoke the last admin. Grant admin to another account first.",
+			"You cannot revoke the last admin. Grant admin to another account first.",
 		);
 		expect(screen.queryByRole("dialog", { name: "Confirm access" })).toBeNull();
 	});

@@ -99,7 +99,7 @@ export function AdminSurveyResults({
 					) : (
 						<QueryErrorAlert
 							error={state.error}
-							title="Survey results couldn't be loaded"
+							title="Survey results could not be loaded"
 							onRetry={state.onRetry}
 						/>
 					)}

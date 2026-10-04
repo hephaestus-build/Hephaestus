@@ -92,7 +92,7 @@ describe("instance overview configuration readiness", () => {
 		);
 		await queryClient.invalidateQueries({ queryKey: adminGetConfigurationReadinessQueryKey() });
 		await screen.findByText(
-			"Couldn't refresh. Showing the last successful check.",
+			"Could not refresh. Showing the last successful check.",
 			{},
 			ROUTE_RENDER_WAIT,
 		);
@@ -102,11 +102,13 @@ describe("instance overview configuration readiness", () => {
 		// Other overview cards have no API here and show alerts of their own; pick this card's.
 		const alert = screen
 			.getAllByRole("alert")
-			.find((candidate) => candidate.textContent.includes("Couldn't refresh"));
+			.find((candidate) => candidate.textContent.includes("Could not refresh"));
 		assert(alert);
 		await user.click(within(alert).getByRole("button", { name: "Retry" }));
 		await waitFor(() => {
-			expect(screen.queryByText("Couldn't refresh. Showing the last successful check.")).toBeNull();
+			expect(
+				screen.queryByText("Could not refresh. Showing the last successful check."),
+			).toBeNull();
 		});
 	});
 

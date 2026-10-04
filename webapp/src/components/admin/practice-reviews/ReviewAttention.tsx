@@ -49,7 +49,7 @@ export interface ReviewAttentionProps {
 interface ProblemDef {
 	key: "failedReviews" | "unprocessedResults" | "failedDeliveries";
 	phrase: (count: number) => string;
-	/** For the error alert: "Couldn't load failed reviews". */
+	/** For the error alert: "Could not load failed reviews". */
 	what: string;
 }
 
@@ -137,7 +137,7 @@ function Approvals({
 		return (
 			<QueryErrorAlert
 				error={state.error}
-				title="Couldn't load the feedback awaiting your approval"
+				title="Could not load the feedback awaiting your approval"
 				onRetry={state.onRetry}
 			/>
 		);
@@ -218,7 +218,7 @@ function Problems({
 				<QueryErrorAlert
 					key={problem.key}
 					error={state.error}
-					title={`Couldn't load ${problem.what}`}
+					title={`Could not load ${problem.what}`}
 					onRetry={state.onRetry}
 				/>
 			))}

@@ -36,7 +36,7 @@ function AdminLayout() {
 		topStrip = (
 			<QueryErrorAlert
 				error={settingsQuery.error}
-				title="Couldn't load the instance delivery state"
+				title="Could not load the instance delivery state"
 				onRetry={() => {
 					void settingsQuery.refetch();
 				}}

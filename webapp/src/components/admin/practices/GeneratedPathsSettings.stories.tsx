@@ -76,7 +76,7 @@ export const SaveFailed: Story = {
 		await userEvent.click(
 			canvas.getByRole("button", { name: "Save generated paths for owner/repo" }),
 		);
-		await expect(canvas.getByText(/Couldn't save generated paths/u)).toBeVisible();
+		await expect(canvas.getByText(/Could not save generated paths/u)).toBeVisible();
 		await expect(canvas.getByRole("textbox", { name: "owner/repo" })).toHaveValue("generated/**");
 	},
 };

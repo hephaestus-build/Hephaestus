@@ -682,7 +682,7 @@ function PracticeAutonomyRow({
 					/>
 				) : (
 					<p className="text-xs text-muted-foreground">
-						This practice can’t be reviewed automatically, so it stays off.
+						This practice cannot be reviewed automatically, so it stays off.
 					</p>
 				)}
 			</ItemActions>

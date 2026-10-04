@@ -40,12 +40,12 @@ export function AiChoiceSection({
 					Your AI choice
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					One answer for every workspace you’re in on this Hephaestus instance.
+					One answer for every workspace you are in on this Hephaestus instance.
 				</p>
 			</div>
 
 			{isError ? (
-				<QueryErrorAlert title="Couldn’t load your AI choice" error={error} onRetry={onRetry} />
+				<QueryErrorAlert title="Could not load your AI choice" error={error} onRetry={onRetry} />
 			) : (
 				// Keyed on the saved answer: a refetch that changes it remounts the form with a clean draft.
 				<AiChoiceForm

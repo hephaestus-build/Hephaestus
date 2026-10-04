@@ -38,7 +38,7 @@ describe("DangerZoneSection — data export", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: /Request export/u }));
 
-		// First status poll returns PENDING; the in-progress copy proves we're polling.
+		// First status poll returns PENDING; the in-progress copy proves we are polling.
 		await waitFor(() => screen.getByText(/Preparing your export/iu));
 
 		// Drive the 2s poll interval forward; the next poll lands READY.

@@ -98,7 +98,7 @@ export function OutlineCollectionRow({
 					{collection.syncStatus === "PENDING" ? (
 						<Badge variant="secondary">
 							{/* The visible "Syncing…" text carries the meaning; hide the spinner from AT so the
-							row doesn't double-announce a generic "Loading" live region per collection. */}
+							row does not double-announce a generic "Loading" live region per collection. */}
 							<Spinner className="size-3" role="presentation" aria-hidden />
 							Syncing…
 						</Badge>

@@ -39,7 +39,7 @@ function classifyError(status: number | undefined): ErrorClass {
 	if (status === 403) {
 		return {
 			icon: <LockIcon />,
-			guidance: "You don't have permission to view this. Ask an admin for access.",
+			guidance: "You do not have permission to view this. Ask an admin for access.",
 			variant: "destructive",
 			retryable: false,
 		};
@@ -78,7 +78,7 @@ function classifyError(status: number | undefined): ErrorClass {
 	}
 	return {
 		icon: <AlertCircleIcon />,
-		guidance: "The request wasn't accepted. Reload the page and try again.",
+		guidance: "The request was not accepted. Reload the page and try again.",
 		variant: "destructive",
 		retryable: false,
 	};

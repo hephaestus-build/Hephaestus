@@ -35,7 +35,7 @@ type Story = StoryObj<typeof meta>;
 
 export const OwnProviderCap: Story = {
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText(/You've used 84% of your provider cap/u)).toBeVisible();
+		await expect(await canvas.findByText(/You have used 84% of your provider cap/u)).toBeVisible();
 	},
 };
 

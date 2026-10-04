@@ -50,18 +50,18 @@ describe("bucketSummary", () => {
 				one: "review",
 				many: "reviews",
 			}),
-		).toBe("7 reviews; busiest day Tuesday 22 September, 3");
+		).toBe("7 reviews. Busiest day Tuesday 22 September, 3");
 	});
 
 	it("names a week and a month the way a sentence does", () => {
 		const weekly = { bucket: "WEEK" as const, buckets, summary };
 		expect(
 			bucketSummary(weekly, span, ["REVIEW_APPROVED"], { one: "approval", many: "approvals" }),
-		).toBe("6 approvals; busiest week 23–29 September 2026, 3");
+		).toBe("6 approvals. Busiest week 23–29 September 2026, 3");
 		const monthly = { bucket: "MONTH" as const, buckets: [bucket(1, { approvals: 6 })], summary };
 		expect(
 			bucketSummary(monthly, span, ["REVIEW_APPROVED"], { one: "approval", many: "approvals" }),
-		).toBe("6 approvals; busiest month September 2026, 6");
+		).toBe("6 approvals. Busiest month September 2026, 6");
 	});
 
 	it("names no busiest bucket when nothing happened", () => {

@@ -100,7 +100,7 @@ describe("source-control credential recovery", () => {
 
 			await screen.findByRole("button", { name: "Sync now" }, ROUTE_RENDER_WAIT);
 			expect(requests).toStrictEqual([{ personalAccessToken: "replacement-token" }]);
-			expect(screen.queryByText("The stored token can’t be read")).toBeNull();
+			expect(screen.queryByText("The stored token cannot be read")).toBeNull();
 			await waitFor(() => expect(input).toHaveProperty("value", ""));
 		},
 	);
@@ -158,7 +158,7 @@ describe("source-control credential recovery", () => {
 
 		await screen.findByText("This connection changed. Reload before replacing its token.");
 		expect(input).toHaveProperty("value", "replacement-token");
-		screen.getByText("The stored token can’t be read");
+		screen.getByText("The stored token cannot be read");
 		expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
 	});
 

@@ -166,7 +166,7 @@ function ReadyBody({
 		<>
 			{refreshFailure ? (
 				<QueryErrorAlert
-					title="Couldn't refresh. Showing the last successful check."
+					title="Could not refresh. Showing the last successful check."
 					error={refreshFailure.error}
 					onRetry={refreshFailure.onRetry}
 				/>

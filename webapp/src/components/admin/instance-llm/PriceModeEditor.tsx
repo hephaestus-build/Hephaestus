@@ -140,7 +140,7 @@ export function PriceModeEditor({
 						id={`${idPrefix}-note`}
 						value={value.note ?? ""}
 						onChange={(e) => set("note", e.target.value)}
-						placeholder="e.g. internal endpoint; infrastructure billed separately"
+						placeholder="e.g. internal endpoint, infrastructure billed separately"
 						aria-required="true"
 						aria-invalid={Boolean(errors?.note)}
 						aria-describedby={`${idPrefix}-note-hint${hasText(errors?.note) ? ` ${idPrefix}-note-error` : ""}`}

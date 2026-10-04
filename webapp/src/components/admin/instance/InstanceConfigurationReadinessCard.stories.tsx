@@ -169,7 +169,7 @@ export const RefreshFailed: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText("Couldn't refresh. Showing the last successful check."),
+			canvas.getByText("Could not refresh. Showing the last successful check."),
 		).toBeVisible();
 		await expect(
 			canvas.getByText("Every check that applies to this instance passes."),

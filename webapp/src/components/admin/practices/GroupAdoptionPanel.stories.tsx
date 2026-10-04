@@ -185,7 +185,7 @@ export const LongContent: Story = {
 			definition: {
 				name: "Decisions, documentation, and long-lived operational knowledge",
 				description:
-					"Practices covering how a team records the reasoning behind a change, keeps operational runbooks current, and makes the resulting knowledge findable long after the original authors have moved on.",
+					"Practices covering how a team records the reasoning behind a change, keeps runbooks current, and keeps that knowledge findable.",
 			},
 		}),
 	},

@@ -226,7 +226,7 @@ export const LoadError: Story = {
 	play: async ({ args, canvas }) => {
 		await expect(canvas.queryByText(/no channels monitored yet/iu)).not.toBeInTheDocument();
 		await expect(canvas.getByRole("alert")).toHaveTextContent(
-			/couldn't load the monitored channels/iu,
+			/could not load the monitored channels/iu,
 		);
 
 		// Retry is wired, not decorative.

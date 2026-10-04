@@ -146,10 +146,12 @@ The gate uses these error checks:
 - Contractions use full words, and semicolons become separate sentences.
 
 The UI rule checks literal JSX text, literal text expressions, and known text props.
+It also checks the message of a `toast` call and the text keys of object literals, such as `label` and `description`.
 It includes static branches, template text, and text concatenation, but does not follow variables or function calls.
 It does not check class names, routes, query keys, or other machine strings.
 The UI gate checks replacements, contractions, semicolons, and the 25-word limit.
 It cannot prove paragraph structure across components.
+The webapp lint configuration runs it as an error on all of `webapp/src`, except tests and mock data.
 
 Vocabulary, passive voice, and noun or adjective `-ing` checks give suggestions, not errors.
 The open word list is not the ASD dictionary and does not cover every valid technical word or inflected form.
@@ -167,9 +169,9 @@ These surfaces follow STE even where the current tools cannot check them.
 3. Add the exact path to `.vale/enforced-paths.json`.
 4. Run `vp run gate:prose` and the scoped checks for that tree.
 
-For a UI file, add its path, then run `vp -C webapp lint <path-relative-to-webapp>`.
+A UI file under `webapp/src` needs no entry. Run `vp -C webapp lint <path-relative-to-webapp>`.
 The list starts with the new foundation documents.
-Each rewrite lane adds the paths it has made clean.
+Each documentation rewrite lane adds the paths it has made clean.
 The gate compares the list with the base branch and rejects removal.
 No path loses enforcement silently.
 

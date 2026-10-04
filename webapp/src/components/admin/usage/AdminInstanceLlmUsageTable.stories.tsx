@@ -199,7 +199,7 @@ export const DisplayCurrencyThisMonth: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText(FX_DISCLOSURE)).toBeVisible();
-		canvas.getByLabelText("approximately 21.99 euros");
+		canvas.getByLabelText("about 21.99 euros");
 	},
 };
 
@@ -377,7 +377,7 @@ export const Loading: Story = {
 export const RetryableServerError: Story = {
 	args: {
 		rows: [],
-		error: { status: 500, detail: "Couldn't roll up AI usage." },
+		error: { status: 500, detail: "Could not roll up AI usage." },
 	},
 };
 

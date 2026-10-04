@@ -72,7 +72,7 @@ export function FeedbackListPage({
 			{error == null ? (
 				<FeedbackResults state={resultsState(isLoading, rows, hasFilter ? reset : undefined)} />
 			) : (
-				<QueryErrorAlert error={error} title="Couldn't load feedback" onRetry={onRetry} />
+				<QueryErrorAlert error={error} title="Could not load feedback" onRetry={onRetry} />
 			)}
 			<TablePagination
 				page={feedback?.page?.number ?? search.page ?? 0}

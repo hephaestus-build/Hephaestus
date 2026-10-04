@@ -39,6 +39,26 @@ const textProps = new Set([
 	"submitText",
 	"buttonText",
 ]);
+// Object keys whose string values are UI text: the vocabulary registries, option lists and form schemas.
+const textKeys = new Set([
+	"label",
+	"description",
+	"title",
+	"message",
+	"summary",
+	"placeholder",
+	"tooltip",
+	"helperText",
+	"emptyText",
+	"note",
+	"content",
+	"detail",
+	"hint",
+	"heading",
+	"caption",
+	"subtitle",
+]);
+const toastCalls = new Set(["error", "success", "info", "warning", "message", "loading"]);
 const dictionary = new Set(approvedWords);
 const sentences = new Intl.Segmenter("en", { granularity: "sentence" });
 
@@ -67,6 +87,31 @@ function literalText(node: ESTree.Node): string[] {
 			: [...left, ...right];
 	}
 	return [];
+}
+
+function isToastCall(callee: ESTree.Node): boolean {
+	return (
+		callee.type === "MemberExpression" &&
+		callee.object.type === "Identifier" &&
+		callee.object.name === "toast" &&
+		callee.property.type === "Identifier" &&
+		toastCalls.has(callee.property.name)
+	);
+}
+
+function isCodeElement(node: ESTree.Node): boolean {
+	return (
+		node.type === "JSXElement" &&
+		node.openingElement.name.type === "JSXIdentifier" &&
+		(node.openingElement.name.name === "style" || node.openingElement.name.name === "script")
+	);
+}
+
+function propertyName(key: ESTree.Node): string | undefined {
+	if (key.type === "Identifier") {
+		return key.name;
+	}
+	return key.type === "Literal" && typeof key.value === "string" ? key.value : undefined;
 }
 
 export const steUiText = defineRule({
@@ -113,7 +158,8 @@ export const steUiText = defineRule({
 			if (text.includes(";")) {
 				context.report({ node, messageId: "semicolon" });
 			}
-			for (const { segment } of sentences.segment(text)) {
+			// A line break in JSX source ends a sentence for the segmenter, so join the lines first.
+			for (const { segment } of sentences.segment(text.replaceAll(/\s+/gu, " "))) {
 				if ([...segment.matchAll(/\b[\p{L}\p{N}]+(?:[-’'][\p{L}\p{N}]+)*\b/gu)].length > 25) {
 					context.report({ node, messageId: "sentence" });
 				}
@@ -137,12 +183,31 @@ export const steUiText = defineRule({
 					check(value, node.value.type === "Literal" ? decodeHTMLStrict(text) : text);
 				}
 			},
-			JSXExpressionContainer(node) {
-				// Attributes have their own visitor; identifiers and calls need human review.
-				if (node.parent.type !== "JSXAttribute") {
-					for (const text of literalText(node.expression)) {
-						check(node.expression, text);
+			CallExpression(node) {
+				// The `description` option of a toast is an object property, which its own visitor checks.
+				const [message] = node.arguments;
+				if (message !== undefined && isToastCall(node.callee)) {
+					for (const text of literalText(message)) {
+						check(message, text);
 					}
+				}
+			},
+			Property(node) {
+				const name = propertyName(node.key);
+				if (name !== undefined && textKeys.has(name) && node.parent.type === "ObjectExpression") {
+					for (const text of literalText(node.value)) {
+						check(node.value, text);
+					}
+				}
+			},
+			JSXExpressionContainer(node) {
+				// Attributes have their own visitor; identifiers and calls need human review. A style
+				// or script element holds code, not prose.
+				if (node.parent.type === "JSXAttribute" || isCodeElement(node.parent)) {
+					return;
+				}
+				for (const text of literalText(node.expression)) {
+					check(node.expression, text);
 				}
 			},
 		};

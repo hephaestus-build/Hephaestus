@@ -147,7 +147,7 @@ export function FeedbackLevel({
 					{state.status === "error" ? (
 						<QueryErrorAlert
 							error={state.error}
-							title="Couldn't load this feedback"
+							title="Could not load this feedback"
 							onRetry={state.onRetry}
 						/>
 					) : (

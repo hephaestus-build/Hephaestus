@@ -75,7 +75,7 @@ export function OpenWorkSections({
 			<Section level={level} size="lg" title={title}>
 				<QueryErrorAlert
 					error={state.error}
-					title="Couldn't load open work"
+					title="Could not load open work"
 					onRetry={state.onRetry}
 				/>
 			</Section>

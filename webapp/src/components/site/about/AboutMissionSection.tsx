@@ -19,7 +19,7 @@ const FEATURES_DATA: FeatureData[] = [
 		title: "Talk it through",
 		description: "Ask why, push back, or work out the next step",
 		content:
-			"In chat Hephaestus goes by Heph, and draws on recent project activity, the feedback a developer has received, and any Slack messages or Outline documents their admins connected. Available in the web app and, when connected, in Slack.",
+			"In chat Hephaestus goes by Heph. It draws on recent project activity, the feedback a developer has received, and any Slack messages or Outline documents their admins connected. Available in the web app and, when connected, in Slack.",
 	},
 ];
 
@@ -36,10 +36,10 @@ export function AboutMissionSection() {
 
 				<p className="text-lg leading-relaxed">
 					Developers learn to work well in a team by doing the work and getting feedback on it. That
-					feedback is a mentor’s job, whether that is a coach on a university capstone or an
-					experienced maintainer on an open-source project, and there is never enough of that
-					attention to go round. The developers who need it most often get none. Hephaestus carries
-					the routine part so that everyone gets some.
+					feedback is a mentor’s job. A mentor can be a coach on a university capstone or an
+					experienced maintainer on an open-source project. There is never enough of that attention
+					for everyone. The developers who need it most often get none. Hephaestus carries the
+					routine part so that everyone gets some.
 				</p>
 			</div>
 

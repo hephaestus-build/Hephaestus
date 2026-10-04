@@ -236,7 +236,7 @@ export function LlmConnectionFields({
 				/>
 				{isEdit && (
 					<FieldDescription>
-						Endpoint, API shape and authentication can’t change. Add a connection instead.
+						Endpoint, API shape and authentication cannot change. Add a connection instead.
 					</FieldDescription>
 				)}
 				{hasText(errors.baseUrl) && <FieldError id={baseUrlErrorId}>{errors.baseUrl}</FieldError>}

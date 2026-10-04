@@ -169,7 +169,7 @@ describe("GitLab workspace wizard", () => {
 
 		await screen.findByRole(
 			"heading",
-			{ name: "GitLab sign-in isn’t configured" },
+			{ name: "GitLab sign-in is not configured" },
 			ROUTE_RENDER_WAIT,
 		);
 		screen.getByRole("link", { name: "Manage login providers" });

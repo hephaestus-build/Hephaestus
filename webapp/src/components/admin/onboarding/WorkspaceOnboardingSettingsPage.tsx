@@ -85,7 +85,7 @@ export function WorkspaceOnboardingSettingsPage({
 			)}
 			{state.status === "error" && (
 				<QueryErrorAlert
-					title="Couldn't load onboarding settings"
+					title="Could not load onboarding settings"
 					error={state.error}
 					onRetry={state.onRetry}
 				/>
@@ -211,8 +211,8 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 						<InfoIcon aria-hidden="true" />
 						<AlertTitle>Members still have to choose</AlertTitle>
 						<AlertDescription>
-							Members who haven’t chosen get no practice reviews and no Heph. Turn the setup page on
-							so they can choose.
+							Members who have not chosen get no practice reviews and no Heph. Turn the setup page
+							on so they can choose.
 						</AlertDescription>
 					</Alert>
 				)}
@@ -310,7 +310,7 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 			)}
 			{submission.status === "error" && edits?.refused && (
 				<Alert variant="destructive">
-					<AlertTitle>Couldn’t save onboarding settings</AlertTitle>
+					<AlertTitle>Could not save onboarding settings</AlertTitle>
 					<AlertDescription>{submission.message}</AlertDescription>
 				</Alert>
 			)}

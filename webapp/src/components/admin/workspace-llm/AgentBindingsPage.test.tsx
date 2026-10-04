@@ -59,7 +59,7 @@ function renderPage(overrides: Partial<AgentBindingsPageProps> = {}) {
 
 type Scope = ReturnType<typeof within<typeof queries>>;
 
-const UNCHOSEN_ROW = "Members who haven't chosen";
+const UNCHOSEN_ROW = "Members who have not chosen";
 
 function row(purpose: string, title: string): Scope {
 	const card = screen.getByRole("region", { name: purpose });
@@ -94,7 +94,7 @@ describe("AgentBindingsPage", () => {
 		expect(unassignedSwitch.getAttribute("aria-disabled")).toBe("true");
 	});
 
-	it("previews who gets which model by the ceiling rule, including members who haven't chosen", () => {
+	it("previews who gets which model by the ceiling rule, including members who have not chosen", () => {
 		renderPage({ bindings: [inHouseBinding, cloudBinding] });
 		const reviews = within(screen.getByRole("region", { name: "Practice reviews" }));
 		const definitionAfter = (term: string) =>
@@ -102,13 +102,13 @@ describe("AgentBindingsPage", () => {
 
 		expect(definitionAfter("In-house")).toBe("GPT Test (In-house)");
 		expect(definitionAfter("Cloud")).toBe("GPT Test (In-house)");
-		expect(definitionAfter("Members who haven't chosen")).toBe("Nothing runs for them");
+		expect(definitionAfter("Members who have not chosen")).toBe("Nothing runs for them");
 	});
 
 	it("drops the unchosen preview row once the choice is required", () => {
 		renderPage({ aiChoiceRequired: true });
 		const reviews = within(screen.getByRole("region", { name: "Practice reviews" }));
-		expect(reviews.queryByText("Members who haven't chosen", { selector: "dt" })).toBeNull();
+		expect(reviews.queryByText("Members who have not chosen", { selector: "dt" })).toBeNull();
 		row("Practice reviews", UNCHOSEN_ROW).getByText(/serves no one now/u);
 	});
 

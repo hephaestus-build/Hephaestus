@@ -49,7 +49,7 @@ export const SendsFeedbackWithoutContext: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expect(
-			dialog.getByRole("checkbox", { name: "Attach the page and browser you’re on" }),
+			dialog.getByRole("checkbox", { name: "Attach the page and browser you are on" }),
 		).not.toBeChecked();
 		await userEvent.type(
 			dialog.getByRole("textbox", { name: "Your feedback" }),
@@ -71,7 +71,7 @@ export const BugReport: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expect(
-			dialog.getByRole("checkbox", { name: "Attach the page and browser you’re on" }),
+			dialog.getByRole("checkbox", { name: "Attach the page and browser you are on" }),
 		).toBeChecked();
 		await expectSettledVisible(dialog.getByText(context.pagePath));
 		await expectSettledVisible(dialog.getByText(context.userAgent));
@@ -97,7 +97,7 @@ export const Idea: Story = {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(dialog.getByRole("heading", { name: "Share an idea" }));
 		await expect(
-			dialog.getByRole("checkbox", { name: "Attach the page and browser you’re on" }),
+			dialog.getByRole("checkbox", { name: "Attach the page and browser you are on" }),
 		).not.toBeChecked();
 		await userEvent.type(dialog.getByRole("textbox", { name: "Your idea" }), "Pin a practice.");
 		await userEvent.click(dialog.getByRole("radio", { name: "Bug" }));
@@ -132,7 +132,7 @@ export const Sending: Story = {
 
 export const Error: Story = {
 	args: {
-		error: "Couldn't send. Your draft is still here.",
+		error: "Could not send. Your draft is still here.",
 		onSubmit: fn(async () => false),
 	},
 	play: async () => {

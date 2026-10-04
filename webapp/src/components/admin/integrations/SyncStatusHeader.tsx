@@ -137,7 +137,7 @@ function ConnectionDiagnostics({ status }: { status: ConnectionSyncStatus }) {
 	// tracks no registration" — Slack's events arrive through the app's own subscription, a PAT-backed
 	// SCM connection registers nothing — so `null` with no event ever seen is not a fault, it is silence.
 	// Rendering "Webhook — No events yet" there accuses a connection of a gap it was never watched for.
-	// A `false` registration IS a measured fact ("we should have one and don't"), so it still shows.
+	// A `false` registration IS a measured fact ("we should have one and do not"), so it still shows.
 	const tracksWebhook = status.webhookRegistered != null || status.lastEventProcessedAt != null;
 	if (tracksWebhook) {
 		let webhookFact: ReactNode = <span className="text-muted-foreground">No events yet</span>;
@@ -276,8 +276,8 @@ export function SyncStatusHeader({
 					error={error.cause}
 					title={
 						error.failedQuery === "connection"
-							? `We couldn't load the ${label} connection`
-							: `We couldn't load ${label} sync status`
+							? `We could not load the ${label} connection`
+							: `We could not load ${label} sync status`
 					}
 					onRetry={onRetry}
 				/>
@@ -336,7 +336,7 @@ export function SyncStatusHeader({
 						</>
 					) : (
 						/* "Never synced" on a connection with nothing to sync yet is an accusation the
-						   facts don't support — a fresh Slack workspace has no activated channels. */
+						   facts do not support — a fresh Slack workspace has no activated channels. */
 						<span className="text-muted-foreground">
 							{status.resourceCounts.total === 0 ? "No resources to sync yet" : "Never synced"}
 						</span>

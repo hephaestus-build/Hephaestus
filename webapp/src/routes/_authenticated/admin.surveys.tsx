@@ -83,7 +83,7 @@ function AdminSurveysPage() {
 			<PageHeader
 				icon={<ClipboardList />}
 				title="Surveys"
-				description="Ask members a few questions when it suits them; invitations wait in the app header and a new survey is announced once."
+				description="Ask members a few questions when it suits them. Invitations wait in the app header and a new survey is announced once."
 				actions={
 					<DetailStackLink entry={surveyLevel()} className={buttonVariants()}>
 						<Plus className="mr-1.5 size-4" aria-hidden />

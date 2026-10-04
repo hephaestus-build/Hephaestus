@@ -72,7 +72,7 @@ function WorkspaceSettingsPage() {
 				{settingsQuery.isError ? (
 					<QueryErrorAlert
 						error={settingsQuery.error}
-						title="Couldn't verify the current instance settings"
+						title="Could not verify the current instance settings"
 						onRetry={() => {
 							void settingsQuery.refetch();
 						}}
@@ -97,7 +97,7 @@ function WorkspaceSettingsPage() {
 		body = (
 			<QueryErrorAlert
 				error={settingsQuery.error}
-				title="Couldn't load instance settings"
+				title="Could not load instance settings"
 				onRetry={() => {
 					void settingsQuery.refetch();
 				}}

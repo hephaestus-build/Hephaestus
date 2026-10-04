@@ -272,7 +272,7 @@ export const LoadFailed: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	args: { feedback: undefined, error: { status: 500, detail: "Something went wrong." } },
 	play: async ({ canvas }) => {
-		await canvas.findByText("Couldn't load feedback");
+		await canvas.findByText("Could not load feedback");
 	},
 };
 

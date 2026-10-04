@@ -43,7 +43,7 @@ it("keeps the main route available when the optional copilot import rejects", as
 		expect(caught).toMatchObject({ cause: importFailure });
 		await waitFor(() => {
 			expect(screen.getByRole("main").textContent).toContain(
-				"You're not a member of any workspace yet.",
+				"You are not a member of any workspace yet.",
 			);
 		}, ROUTE_RENDER_WAIT);
 		expect(

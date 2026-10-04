@@ -116,8 +116,8 @@ export function ProfileReviewsLevel({
 						{REVIEWS_OF_YOUR_WORK}
 					</DrawerTitle>
 					<DrawerDescription className="max-w-2xl">
-						Reviews that recorded something about your work, newest first; one still running appears
-						once it does.
+						Reviews that recorded something about your work, newest first. A review that is still
+						running appears once it records something.
 					</DrawerDescription>
 				</div>
 			</DetailDrawerHeader>

@@ -108,7 +108,7 @@ export function AdminSurveyResultsLevel({
 			}
 			saveTextFile(data, `survey-${surveyId}-responses.csv`, "text/csv;charset=utf-8;");
 		},
-		onError: () => toast.error("Couldn't export the responses. Please try again."),
+		onError: () => toast.error("Could not export the responses. Please try again."),
 	});
 
 	let state: AdminSurveyResultsState;

@@ -134,7 +134,7 @@ export function PracticeReviewBackfill({
 			{isError ? (
 				<Alert variant="destructive">
 					<AlertCircle />
-					<AlertTitle>Backfills couldn’t be loaded</AlertTitle>
+					<AlertTitle>Backfills could not be loaded</AlertTitle>
 					<AlertDescription>
 						<p>Any backfill already running is unaffected. This is only about showing it here.</p>
 						<Button variant="outline" size="sm" onClick={onRetry}>
@@ -295,10 +295,10 @@ function ConfirmationSection({
 				<AlertTitle>What a backfill does and does not do</AlertTitle>
 				<AlertDescription>
 					Each {noun} is reviewed once, as it stands now. There is no record of how it looked while
-					it was being worked on. Nothing is posted on the work itself and nobody is notified:
-					commenting on {plural} that are already finished would notify everyone involved about work
+					it was being worked on. Nothing is posted on the work itself and nobody is notified.
+					Commenting on {plural} that are already finished would notify everyone involved about work
 					nobody can act on. The observations it records are kept separate from your live trends,
-					because older work has been polished since and comparing the two would invent an
+					because older work has been polished since. A comparison of the two would invent an
 					improvement nobody made.
 				</AlertDescription>
 			</Alert>
@@ -414,7 +414,7 @@ function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoad
 							<ItemDescription>
 								{run.status === "CANCELLED"
 									? `Stopped after reviewing ${countOf(run.submittedCount, run.artifactKind)}.`
-									: `Reviewed ${countOf(run.submittedCount, run.artifactKind)}; ${run.passedCount} needed no new observation.${
+									: `Reviewed ${countOf(run.submittedCount, run.artifactKind)}. ${run.passedCount} needed no new observation.${
 											run.failedCount > 0
 												? ` ${run.failedCount} could not be read, so were not reviewed.`
 												: ""

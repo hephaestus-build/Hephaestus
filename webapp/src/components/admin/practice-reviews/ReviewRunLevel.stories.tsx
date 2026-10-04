@@ -275,7 +275,7 @@ export const FailedWithoutOutput: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Review couldn’t be completed")).toBeVisible();
+		await expect(panel.getByText("Review could not be completed")).toBeVisible();
 		await expect(
 			panel.getByText("This review ended before it produced observations or feedback."),
 		).toBeVisible();
@@ -301,7 +301,7 @@ export const FailedWithPartialOutput: Story = {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByText("Review output may be incomplete")).toBeVisible();
 		panel.getByText("A dropped delivery is logged at debug and never counted");
-		await expect(panel.queryByText("Review couldn’t be completed")).not.toBeInTheDocument();
+		await expect(panel.queryByText("Review could not be completed")).not.toBeInTheDocument();
 	},
 };
 
@@ -328,7 +328,7 @@ export const Loading: Story = {
 	play: async ({ args, userEvent }) => {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.getByRole("heading", { level: 2 })).toHaveAccessibleName("Loading review");
-		await expect(panel.queryByText("Couldn't load this review")).not.toBeInTheDocument();
+		await expect(panel.queryByText("Could not load this review")).not.toBeInTheDocument();
 		await userEvent.click(panel.getByRole("button", { name: "Practice reviews" }));
 		await expect(args.path.onClose).toHaveBeenCalledWith(0);
 	},
@@ -345,7 +345,7 @@ export const LoadFailed: Story = {
 	},
 	play: async ({ args, userEvent }) => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Couldn't load this review")).toBeVisible();
+		await expect(panel.getByText("Could not load this review")).toBeVisible();
 		// With no record to name it, the level is named for what it is.
 		await expect(screen.getByRole("dialog")).toHaveAccessibleName("Review");
 		panel.getByRole("button", { name: "Practice reviews" });
@@ -368,7 +368,7 @@ export const OneSectionFailed: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Couldn't load observations")).toBeVisible();
+		await expect(panel.getByText("Could not load observations")).toBeVisible();
 		// The other section is unaffected, which is the whole point of two states rather than one.
 		await panel.findByText(/2 issues to tighten in this change/u);
 	},

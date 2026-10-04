@@ -156,7 +156,7 @@ export function PracticeCatalog({
 		catalogContent = (
 			<QueryErrorAlert
 				error={library.state.error}
-				title="Couldn't load the catalog"
+				title="Could not load the catalog"
 				onRetry={library.state.onRetry}
 			/>
 		);

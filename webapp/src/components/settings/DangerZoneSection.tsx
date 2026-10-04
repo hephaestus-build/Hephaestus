@@ -32,7 +32,7 @@ const DELETE_CONFIRM_PHRASE = "delete my account";
 // Export states that mean the server is still working — keep polling while in these.
 const EXPORT_IN_PROGRESS = new Set(["PENDING", "PROCESSING"]);
 
-// Give up polling after this long so a wedged export doesn't poll indefinitely.
+// Give up polling after this long so a wedged export does not poll indefinitely.
 const MAX_EXPORT_WAIT_MS = 3 * 60 * 1000;
 
 interface DangerZoneSectionProps {
@@ -235,9 +235,9 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 			<div className="flex-1 space-y-1">
 				<h3 className="text-base font-medium">Delete account</h3>
 				<p className="text-sm leading-relaxed text-muted-foreground">
-					Permanently delete your account and erase your personal data (GDPR Art. 17). You’ll be
+					Permanently delete your account and erase your personal data (GDPR Art. 17). You will be
 					signed out on all devices immediately, and the account is scheduled for permanent deletion
-					after a ~48-hour cooldown. It can’t be recovered from here.
+					after a ~48-hour cooldown. It cannot be recovered from here.
 				</p>
 			</div>
 			<AlertDialog
@@ -263,7 +263,7 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 						<AlertDialogTitle>Delete your account?</AlertDialogTitle>
 						<AlertDialogDescription>
 							This signs you out on all devices immediately and disables your account, then
-							permanently deletes it and your data after a ~48-hour cooldown. It can’t be undone
+							permanently deletes it and your data after a ~48-hour cooldown. It cannot be undone
 							from here. To confirm, type{" "}
 							<span className="font-medium text-foreground">{DELETE_CONFIRM_PHRASE}</span> below.
 						</AlertDialogDescription>

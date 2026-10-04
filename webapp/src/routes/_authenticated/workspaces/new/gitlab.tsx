@@ -40,7 +40,7 @@ export const Route = createFileRoute("/_authenticated/workspaces/new/gitlab")({
 const STEP_META: Record<WizardStep, { title: string; description: string }> = {
 	1: {
 		title: "Connect to GitLab",
-		description: "Enter an access token for the GitLab instance you'll monitor.",
+		description: "Enter an access token for the GitLab instance you will monitor.",
 	},
 	2: { title: "Select a Group", description: "Choose the GitLab group to monitor." },
 	3: { title: "Configure Workspace", description: "Set a name and URL slug for your workspace." },
@@ -79,10 +79,10 @@ function NoGitLabProviderNotice({
 		<div className="mx-auto w-full max-w-2xl">
 			<BackToProviders />
 			<div className="space-y-4">
-				<h1 className="text-2xl font-semibold tracking-tight">GitLab sign-in isn’t configured</h1>
+				<h1 className="text-2xl font-semibold tracking-tight">GitLab sign-in is not configured</h1>
 				<p className="text-muted-foreground">
 					GitLab workspaces are created on {serverUrl}, which has no GitLab login provider, so a
-					GitLab account there can’t be linked yet.
+					GitLab account there cannot be linked yet.
 					{isAppAdmin
 						? " Add one to enable GitLab sign-in."
 						: " Ask an instance admin to add one (Instance admin → Login providers)."}
@@ -118,8 +118,8 @@ function GitLabLinkPrompt({
 				<div className="space-y-1.5">
 					<h1 className="text-2xl font-semibold tracking-tight">Link your GitLab account</h1>
 					<p className="text-muted-foreground">
-						To create a GitLab workspace, link your GitLab account on {serverUrl} first. You’ll be
-						redirected to GitLab to sign in; the identity is then attached to your current account.
+						To create a GitLab workspace, link your GitLab account on {serverUrl} first. Hephaestus
+						sends you to GitLab to sign in. It then attaches that identity to your current account.
 					</p>
 				</div>
 				<div className="flex flex-col items-start gap-2">
@@ -295,7 +295,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 	};
 
 	const handleBack = () => {
-		// Reset stale mutation state so old errors don't persist after back-navigation
+		// Reset stale mutation state so old errors do not persist after back-navigation
 		if (state.step === 2) {
 			listGroups.reset();
 		}

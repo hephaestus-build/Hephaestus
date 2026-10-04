@@ -32,7 +32,7 @@ export type { SlackConsentState } from "./slack-channels/consent-terms";
 
 export type SlackChannelCandidate = ApiSlackChannelCandidate;
 
-/** Shared by the loading and loaded states so the header doesn't materialise on resolve. */
+/** Shared by the loading and loaded states so the header does not materialise on resolve. */
 function ChannelsTableHeader() {
 	return (
 		<TableHeader>
@@ -128,7 +128,7 @@ export function WorkspaceSlackChannelsSettings({
 					{hasSlackConnection && (
 						<p className="text-sm text-muted-foreground">
 							You can also invite Hephaestus from Slack. In the channel, run{" "}
-							<code className="rounded bg-muted px-1 py-0.5">/invite @Hephaestus</code>; it appears
+							<code className="rounded bg-muted px-1 py-0.5">/invite @Hephaestus</code>. It appears
 							here as <strong>Not started</strong> until an admin activates monitoring.
 						</p>
 					)}
@@ -272,7 +272,7 @@ function ChannelsContent({
 		return (
 			<QueryErrorAlert
 				error={error}
-				title="We couldn't load the monitored channels"
+				title="We could not load the monitored channels"
 				onRetry={onRetry}
 			/>
 		);

@@ -648,11 +648,10 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 							<Field data-invalid={hasText(shownErrors.criteria) ? "true" : undefined}>
 								<FieldLabel htmlFor="practice-criteria">What to look for *</FieldLabel>
 								<FieldDescription id="practice-criteria-description">
-									Describe one observable way of working, what demonstrates it, and when a reviewer
-									should stay silent. Do not ask the reviewer to infer intent or facts outside the
-									selected work. For example: “Look for a description that explains the behavior
-									change and why. Stay silent for automated dependency updates.” Markdown is
-									supported.
+									Describe one observable way of working, what shows it, and when a reviewer should
+									stay silent. Do not ask the reviewer to infer intent or facts outside the selected
+									work. For example: “Look for a description that explains the behavior change and
+									why. Stay silent for automated dependency updates.” Markdown is supported.
 								</FieldDescription>
 								<Textarea
 									id="practice-criteria"
@@ -688,7 +687,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									maxLength={2000}
 								/>
 								<FieldDescription>
-									Shown to developers; it does not change review rules.
+									Shown to developers. It does not change review rules.
 								</FieldDescription>
 							</Field>
 							<Field>
@@ -729,9 +728,9 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 								</h2>
 								<p className="text-sm text-muted-foreground">
 									A practice is reviewed on one occasion: the moments that start a review, and what
-									that review reads. A way of working worth judging differently at a different
-									moment, such as what is in front of you when the work arrives or what was never
-									resolved by the merge, is a second practice rather than a second occasion.
+									that review reads. A way of working that you judge differently at a different
+									moment is a second practice, not a second occasion. Examples are what is in front
+									of you when the work arrives, or what the merge never resolved.
 								</p>
 							</div>
 

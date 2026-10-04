@@ -36,7 +36,7 @@ export function SilentModeStatusCard({
 			<div className="space-y-1">
 				<Badge variant="outline">Unknown</Badge>
 				<p className="text-sm text-muted-foreground">
-					Couldn&rsquo;t read the delivery state — open instance settings to check.
+					Could not read the delivery state — open instance settings to check.
 				</p>
 			</div>
 		);

@@ -41,7 +41,7 @@ export function usePracticeEditor(workspaceSlug: string): PracticeEditor {
 	const update = useMutation({
 		...updatePracticeMutation(),
 		scope,
-		onError: () => toast.error("Couldn't save the practice"),
+		onError: () => toast.error("Could not save the practice"),
 	});
 	const create = useMutation({
 		...createPracticeMutation(),
@@ -50,7 +50,7 @@ export function usePracticeEditor(workspaceSlug: string): PracticeEditor {
 			toast.error(
 				problemStatusOf(error) === 409
 					? "A practice with this identifier already exists in this workspace"
-					: "Couldn't create the practice",
+					: "Could not create the practice",
 			),
 	});
 

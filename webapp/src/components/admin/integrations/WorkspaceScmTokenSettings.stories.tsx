@@ -58,7 +58,7 @@ export const UnreadableGitLabToken: Story = {
 		</div>
 	),
 	play: async ({ canvas }) => {
-		canvas.getByText("The stored token can’t be read");
+		canvas.getByText("The stored token cannot be read");
 		await expect(canvas.getByLabelText("New personal access token")).toBeEnabled();
 	},
 };

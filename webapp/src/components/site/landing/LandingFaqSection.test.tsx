@@ -31,7 +31,7 @@ describe("LandingFaqSection", () => {
 		const answer = await screen.findByText(/The instance admin sets each workspace's monthly cap/u);
 		expect(answer.textContent).toContain("for shared models");
 		expect(answer.textContent).toContain(
-			"the workspace admin sets the cap for the workspace's own provider",
+			"The workspace admin sets the cap for the workspace's own provider",
 		);
 	});
 });

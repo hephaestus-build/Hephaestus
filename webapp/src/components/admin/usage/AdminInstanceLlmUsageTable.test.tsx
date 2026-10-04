@@ -288,8 +288,8 @@ describe("AdminInstanceLlmUsageTable", () => {
 			renderTable([workspace], { fx: eur });
 
 			const row = within(firstDataRow());
-			row.getByLabelText("approximately 3.74 euros");
-			row.getByLabelText("approximately 1.54 euros");
+			row.getByLabelText("about 3.74 euros");
+			row.getByLabelText("about 1.54 euros");
 		});
 
 		it("stays silent about a rate nothing on the table used", () => {

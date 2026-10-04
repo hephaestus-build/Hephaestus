@@ -187,7 +187,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 					{state.status === "error" && (
 						<QueryErrorAlert
 							error={state.error}
-							title="Couldn't load your setup"
+							title="Could not load your setup"
 							onRetry={state.onRetry}
 						/>
 					)}
@@ -262,7 +262,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 												const team = hasText(link.teamName) ? ` for ${link.teamName}` : "";
 												const rowDescription =
 													!link.available && !link.linked
-														? `Unavailable right now${team}. It doesn't hold you up.`
+														? `Unavailable right now${team}. It does not hold you up.`
 														: `${link.required ? "Required" : "Optional"}${team}`;
 												const descriptionId = `${id}-link-${link.connectionId}`;
 												return (
@@ -316,7 +316,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 					{ready?.refresh?.status === "error" && (
 						<QueryErrorAlert
 							error={ready.refresh.error}
-							title="Couldn't refresh your setup"
+							title="Could not refresh your setup"
 							onRetry={ready.refresh.onRetry}
 						/>
 					)}
@@ -324,8 +324,8 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 						<Alert ref={alertRef} tabIndex={-1} variant="destructive">
 							<AlertTitle>
 								{submission.action === "save"
-									? "Couldn't save your AI choice"
-									: "Couldn't continue to your workspace"}
+									? "Could not save your AI choice"
+									: "Could not continue to your workspace"}
 							</AlertTitle>
 							<AlertDescription>{submission.message}</AlertDescription>
 						</Alert>
@@ -415,11 +415,11 @@ function onboardingNarration({
 		return "Give me a moment. Hephaestus is fetching your setup.";
 	}
 	if (status === "error") {
-		return "Hephaestus couldn't fetch your setup just now.";
+		return "Hephaestus could not fetch your setup just now.";
 	}
 	if (changed) {
 		const uncovered =
-			coverage === "none" ? "That isn't set up here yet. Nothing switches you elsewhere. " : "";
+			coverage === "none" ? "That is not set up here yet. Nothing switches you elsewhere. " : "";
 		if (firstVisit) {
 			return requiredSatisfied
 				? `${uncovered}Press Continue and it holds in every workspace.`
@@ -431,23 +431,23 @@ function onboardingNarration({
 		return "Compare the three below. Any answer is fine, including none.";
 	}
 	if (coverage === "none") {
-		return "Your choice isn't set up here yet. Nothing switches you anywhere else.";
+		return "Your choice is not set up here yet. Nothing switches you anywhere else.";
 	}
 	if (coverage === "partial") {
-		return "Part of your choice isn't set up here yet. Nothing switches you anywhere else.";
+		return "Part of your choice is not set up here yet. Nothing switches you anywhere else.";
 	}
 	if (firstVisit && answered) {
 		return requiredSatisfied
-			? "Your AI choice is set and holds in all your workspaces. Let's get to work."
-			: `Your AI choice is set and holds in all your workspaces. Connect ${openRequiredNames} and you're in.`;
+			? "Your AI choice is set and holds in all your workspaces. You can get to work."
+			: `Your AI choice is set and holds in all your workspaces. Connect ${openRequiredNames} and you are in.`;
 	}
 	if (firstVisit) {
 		return requiredSatisfied
-			? "That's everything. Let's get to work."
-			: `Noted. Connect ${openRequiredNames} and you're in.`;
+			? "That is everything. You can get to work."
+			: `Noted. Connect ${openRequiredNames} and you are in.`;
 	}
 	if (afterLink) {
-		return "Your accounts are connected. Head back to your workspace whenever you're ready.";
+		return "Your accounts are connected. Head back to your workspace whenever you are ready.";
 	}
 	return `You chose ${memberAiChoiceTitle(choice)}. Change it whenever you like.`;
 }
@@ -526,7 +526,7 @@ function WorkspaceModels({
 					const detail = [
 						model.brand ? AI_MODEL_BRAND_META[model.brand].label : undefined,
 						model.connectionPlatform
-							? `via ${AI_CONNECTION_PLATFORM_META[model.connectionPlatform].label}`
+							? `through ${AI_CONNECTION_PLATFORM_META[model.connectionPlatform].label}`
 							: undefined,
 					].filter((part) => part !== undefined);
 					return (
@@ -552,7 +552,7 @@ function WorkspaceModels({
 			</ItemGroup>
 			<p className="text-xs text-muted-foreground">
 				Your admins declare whether each model is in-house or cloud. Logos name the maker and the
-				service; they do not decide where your work goes.
+				service. They do not decide where your work goes.
 			</p>
 		</section>
 	);

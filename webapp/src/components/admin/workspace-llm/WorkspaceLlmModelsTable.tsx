@@ -115,7 +115,7 @@ export function WorkspaceLlmModelsTable({
 				subject={deleting}
 				onClose={() => setDeleting(null)}
 				title={(model) => `Delete “${model.displayName}”?`}
-				description="Any agent bound to this model will stop working until it's rebound. This cannot be undone."
+				description="Any agent bound to this model will stop working until you bind the model again. This cannot be undone."
 				confirmLabel="Delete"
 				onConfirm={onDelete}
 			/>

@@ -83,7 +83,7 @@ export const Default: Story = {
 	},
 };
 
-/** A row mid-mutation disables its own toggle/edit/delete so concurrent edits can't race. */
+/** A row mid-mutation disables its own toggle/edit/delete so concurrent edits cannot race. */
 export const RowBusy: Story = {
 	args: { mutatingIds: new Set(["github"]) },
 	play: async ({ canvas }) => {
@@ -146,7 +146,7 @@ export const ErrorState: Story = {
 	},
 };
 
-/** Loading: skeleton rows inside the real table shell, so the layout doesn't jump on arrival. */
+/** Loading: skeleton rows inside the real table shell, so the layout does not jump on arrival. */
 export const Loading: Story = {
 	args: { providers: [], isLoading: true },
 };

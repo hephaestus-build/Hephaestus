@@ -80,7 +80,7 @@ function AdminInstanceUsagePage() {
 		},
 		onError: (error, variables) => {
 			if (onScreenWorkspaceRef.current?.workspaceSlug !== variables.path.workspaceSlug) {
-				toast.error("Couldn't save the budget", { description: problemDetailOf(error) });
+				toast.error("Could not save the budget", { description: problemDetailOf(error) });
 			}
 		},
 	});
@@ -154,7 +154,7 @@ function AdminInstanceUsagePage() {
 				serverError={
 					updateBudget.error == null
 						? null
-						: problemDetailOf(updateBudget.error, "Couldn't save the budget")
+						: problemDetailOf(updateBudget.error, "Could not save the budget")
 				}
 				onOpenChange={(open) => {
 					if (!open) {

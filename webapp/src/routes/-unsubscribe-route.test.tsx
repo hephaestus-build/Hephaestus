@@ -71,7 +71,7 @@ describe("anonymous email unsubscribe confirmation", () => {
 		);
 		renderRouteAt(`/unsubscribe?token=${token}`);
 		await user.click(await screen.findByRole("button", { name: "Unsubscribe" }, ROUTE_RENDER_WAIT));
-		await screen.findByText("We couldn't confirm the result. You can safely try again.");
+		await screen.findByText("We could not confirm the result. You can safely try again.");
 		await waitFor(() =>
 			expect(screen.getByRole<HTMLButtonElement>("button", { name: "Unsubscribe" }).disabled).toBe(
 				false,

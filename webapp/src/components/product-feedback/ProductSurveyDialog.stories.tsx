@@ -130,7 +130,7 @@ export const Sending: Story = {
 export const Error: Story = {
 	args: {
 		draft: { answers: { useful: "4" }, item: "improve" },
-		error: "Couldn't send. Your draft is still here.",
+		error: "Could not send. Your draft is still here.",
 	},
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
