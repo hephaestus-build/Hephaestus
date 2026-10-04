@@ -253,8 +253,9 @@ The server also handles account renames through `installation_target` when deliv
 **Projects v2:** GitHub's event reference lists organization-webhook availability for the three project events.
 Discussions and Projects sync are off by default (`HEPHAESTUS_SYNC_DISCUSSIONS_ENABLED=false` and `HEPHAESTUS_SYNC_PROJECTS_ENABLED=false`).
 
-1. Verify App delivery with a pull request update.
-2. If unavailable, add an organization webhook subscribed **only to those three events**.
+1. Change a project item.
+2. Verify that the App delivers the `projects_v2_item` event.
+3. If App delivery is unavailable, add an organization webhook subscribed **only to those three events**.
 
 Projects read remains required for API synchronization.
 
