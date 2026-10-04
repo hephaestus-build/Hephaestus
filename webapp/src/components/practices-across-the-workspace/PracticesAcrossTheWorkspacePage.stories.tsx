@@ -130,6 +130,15 @@ export const Withheld: Story = {
 		// No count of them, where the server held the total back.
 		await expect(canvas.queryByText(/\d+ developers\s+with a standing/u)).toBeNull();
 		await expect(
+			canvas.getByText(
+				/^The grey band is the typical range\. To find it, Hephaestus sorts the developers/u,
+			),
+		).toBeVisible();
+		// Open feedback has no band either, and its line says when it would.
+		await expect(
+			canvas.getByText(/Its band shows only when this page counts at least 6 other developers\.$/u),
+		).toBeVisible();
+		await expect(
 			canvas.getAllByText("Needs more data before the workspace shows here."),
 		).toHaveLength(4);
 		await expect(canvas.getAllByText("Held back so no one can be singled out.")).toHaveLength(8);

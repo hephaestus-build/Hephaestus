@@ -86,6 +86,66 @@ describe("a split held back", () => {
 	});
 });
 
+describe("the tiles' hint holds for every response", () => {
+	const OPEN_WITH_A_BAND = { yours: 3, middleLow: 1, middleHigh: 4 };
+	const OPEN_ALONE = { yours: 3 };
+	const tiles = {
+		minimumOthersForMiddleHalf: 6,
+		window: "DAYS_30",
+		developersWithAStandingInWindow: 41,
+	} as const;
+
+	it("counts one developer in the singular", () => {
+		const [band] = tilesHint({ ...tiles, developersWithAStandingInWindow: 1 }, OPEN_WITH_A_BAND);
+		expect(band).toContain("Hephaestus sorts the 1 developer with a standing in the last 30 days");
+	});
+
+	it("names no count where the server held the total back, in every window", () => {
+		for (const window of ["DAYS_30", "DAYS_90", "ALL_TIME"] as const) {
+			const [band] = tilesHint({ minimumOthersForMiddleHalf: 6, window }, OPEN_WITH_A_BAND);
+			expect(band).toMatch(/Hephaestus sorts the developers with a standing /u);
+			expect(band).not.toMatch(/\d+ developers? with a standing/u);
+		}
+	});
+
+	it.each([
+		["DAYS_30", "the 41 developers with a standing in the last 30 days by their value"],
+		["DAYS_90", "the 41 developers with a standing in the last 90 days by their value"],
+		["ALL_TIME", "the 41 developers with a standing so far by their value"],
+	] as const)("names the %s window as the toggle does", (window, phrase) => {
+		const [band] = tilesHint({ ...tiles, window }, OPEN_WITH_A_BAND);
+		expect(band).toContain(phrase);
+	});
+
+	it("takes the threshold from the server, with its verb in number", () => {
+		expect(tilesHint({ ...tiles, minimumOthersForMiddleHalf: 10 }, OPEN_WITH_A_BAND)[0]).toContain(
+			"only when at least 10 other developers have a standing.",
+		);
+		expect(tilesHint({ ...tiles, minimumOthersForMiddleHalf: 1 }, OPEN_WITH_A_BAND)[0]).toContain(
+			"only when at least 1 other developer has a standing.",
+		);
+	});
+
+	it("says open feedback counts every developer and what is open now, with its band", () => {
+		expect(tilesHint(tiles, OPEN_WITH_A_BAND)[1]).toBe(
+			"Open feedback counts what is open now, for every developer that this page counts.",
+		);
+		// A band at nought is still a band: the tile says most have none in its place.
+		expect(tilesHint(tiles, { yours: 0, middleLow: 0, middleHigh: 0 })[1]).toBe(
+			"Open feedback counts what is open now, for every developer that this page counts.",
+		);
+	});
+
+	it("says when open feedback shows its band, where it has none, by the server's threshold", () => {
+		expect(tilesHint(tiles, OPEN_ALONE)[1]).toBe(
+			"Open feedback counts what is open now, for every developer that this page counts. Its band shows only when this page counts at least 6 other developers.",
+		);
+		expect(tilesHint({ ...tiles, minimumOthersForMiddleHalf: 1 }, OPEN_ALONE)[1]).toMatch(
+			/at least 1 other developer\.$/u,
+		);
+	});
+});
+
 describe("the hints", () => {
 	it("says how the typical range comes about, with the count and window the response gives", () => {
 		expect(
