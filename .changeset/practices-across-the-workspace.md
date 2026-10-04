@@ -2,8 +2,10 @@
 "hephaestus": minor
 ---
 
-Developers can open **Across the workspace** under their Practice profile. The page shows their own figures and their standing in each practice group. It sets them beside how the workspace's developers split across each group. It counts developers and never names them. The range shows the last 30 days, the last 90 days, or all time.
+Developers can open **Across the workspace** under their Practice profile. The page shows where the developers in the workspace stand in each practice group. It counts developers and never names them. **You** marks your own part of each bar, and the four figures at the top show your own values beside the workspace's typical range.
 
-Each figure shows the middle half of the developers with a standing when six other developers have one. Open feedback counts the feedback that is open now, for every developer that the page counts, reviewed or not. A group opens its practices, and each practice has its own comparison. The developer's own group and practices open over it with their own observations and feedback.
+Each bar counts every developer by their current standing, the standing that their Practice profile shows. Thus, your marker always agrees with your profile. The range of the last 30 days, the last 90 days, or all time changes only the four figures. Open feedback counts the feedback that is open now, for every developer that the page counts, reviewed or not.
 
-A split appears only when each of its parts holds at least four developers. Thus, every reader sees the same split, and each part stands for at least three other developers. If not, the bar is held back.
+A group opens a panel with its bar and a bar for each practice. To see your own standing, trend, and next step, select **Go to your profile** or **View in your profile**. Your Practice profile opens with that group or practice open.
+
+A bar appears only when each of its parts holds at least four developers. Thus, every reader sees the same bar, and each part stands for at least three other developers. If not, the bar is held back.

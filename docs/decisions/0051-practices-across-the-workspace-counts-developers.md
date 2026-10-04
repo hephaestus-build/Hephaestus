@@ -31,17 +31,19 @@ that audience.
 1. **A layer in the Practice profile's tables.** Rejected: it makes the comparison part of the
    developer's own record, the attribute of a person ADR 0047 protects, and the first thing seen.
 2. **A tab on the Practice profile.** Rejected for the same reason, with worse discoverability.
-3. **Its own page, reached from the sidebar, each row linking back to the reader's own group.** Chosen.
+3. **Its own page, reached from the sidebar, linking to the reader's own group and practices in the
+   Practice profile.** Chosen.
 
 ## Decision
 
-**Practices across the workspace** is a page of its own. It shows the reader their own standing in
-each practice group as a word, and beside it how the workspace's developers with a standing split
-across Needs attention, Mixed feedback and Going well, counted in developers. A developer with a
+**Practices across the workspace** is a page of its own and a view of the workspace, not the
+reader's profile. It shows how the workspace's developers with a standing split across Needs
+attention, Mixed feedback and Going well in each practice group, counted in developers. The reader
+appears only as the **You** marker on their part of a bar and as their own value on the tiles. A developer with a
 standing is an eligible developer with a standing in at least one practice group the page shows;
 whoever only has observations that did not apply or stayed undetermined is not one of them.
 
-- The figures come from one guarded scan of the workspace's observations, classified by the same
+- The figures come from guarded scans of the workspace's observations, classified by the same
   standing and group standing rules the Practice profile uses. Hidden members are left out, as they are
   of every workspace total.
 - `CohortPrivacyPolicy` is the only place that decides what may be shown, and every reader of a
@@ -50,11 +52,17 @@ whoever only has observations that did not apply or stayed undetermined is not o
   the four holds at least four developers, counted over every developer with a standing, so whoever
   reads it each part stands for at least three others; otherwise the whole split is held back, never
   a part of it, since the page states how many developers have a standing and a missing part would
-  be that total less the rest. Omit rather than show a small number. Each window (the last 30 days, the
-  last 90 days, all time) is checked on its own. *All time* reads every observation, with no lower
-  bound, and reads every standing and trend over all of it by the same rule as the shorter windows.
-  The page opens on the last 30 days.
-- The total of developers with a standing shows only while it holds three others.
+  be that total less the rest. Omit rather than show a small number.
+- **The bars count the current standing.** Every split, for a group and for a practice, counts each
+  developer by the standing their Practice profile shows now: the same service, read over the same
+  look-back and trend horizon (90 days today), whatever window the tiles show. So the **You** marker
+  is always on the part the reader's profile names, and a bar never sets one span beside another.
+- **The window applies to the tiles alone.** Its toggle sits in the tiles' heading row. Each window
+  (the last 30 days, the last 90 days, all time) is checked on its own. *All time* reads every
+  observation, with no lower bound, and reads every standing over all of it by the same rule as the
+  shorter windows. The page opens on the last 30 days.
+- The total of developers with a standing shows only while it holds three others: the bars' total
+  of developers with a current standing, and the tiles' total in the window, each on its own.
 - A group's practices are the ones review is admitted for, in catalog order, the same list for every
   reader whatever their own evidence holds; a practice switched off is not listed. Each is split by the
   same rule over the same developers with a standing. Because a group's developers with a standing are
@@ -70,10 +78,12 @@ whoever only has observations that did not apply or stayed undetermined is not o
   profile's own rule, for the reader and for every eligible developer alike whatever the window, so
   it never sets one moment beside a span; read in one pass.
 - The page asks for no estimate first. Every group shows at once. A group opens over the page with
-  its practices; the reader's own group and a practice open over it as the profile's own levels, so
-  nothing on the page leaves for the Practice profile. The page reads the reader's standing over the
-  chosen window and those levels over the Practice profile's 90 days, so the two can differ; each
-  level names the span beside the standing it shows.
+  its bar and its practices' bars, and nothing about the reader beyond the marker: no standing
+  badge, no trend, no window. A held back bar shows its dashed track and the reason, and says nothing
+  of the reader.
+- **The reader's own learning stays in the Practice profile.** The group's panel links to the same
+  group in the profile (**Go to your profile**), and each practice row links to the same practice
+  there (**View in your profile**). The page reads none of the profile's own data.
 - Workspace admins read nothing new. Instance administrators read the page through **View as user**,
   as they read every other practice page.
 
@@ -87,6 +97,11 @@ whoever only has observations that did not apply or stayed undetermined is not o
 - The page always shows the workspace. An earlier version let the reader switch the comparison off
   and remembered the choice in the browser; the maintainer dropped that switch, since opening the
   page is already the reader's choice and the switch added a state to every surface of it.
+- The page is not the reader's profile. An earlier version showed the reader's standing badge and
+  trend on each group, read the bars over the chosen window, and opened the reader's own group and
+  practice over the page. The two standings could then disagree. The maintainer decided on
+  2026-10-04 that the page is an aggregate view: the bars count the current standing, the window
+  moves only the tiles, and the reader's own levels are reached by links to the Practice profile.
 
 ## Lowering K and dropping the collapse
 
@@ -108,16 +123,17 @@ against *none yet*. The maintainer lowered K to three and dropped the collapsed 
 Each read is safe on its own; two reads are not guarded against each other, so this falls short of
 the driver that nothing another reader sees can be traced back to one developer.
 
-- **Windows.** A developer reviewed only between day 31 and day 90 is in the 90 day counts and not
-  the 30 day ones. When few others differ between the two, subtracting one window's split from the
-  other's shows that developer's bucket.
+- **Windows.** The bars take no window, so no two windows of a split exist to subtract. The tiles'
+  middle halves still change with the window: a developer reviewed only between day 31 and day 90 is
+  in the 90 day tiles and not the 30 day ones. A middle half shows only from six others and never a
+  value of one developer, but two windows read together can still narrow one down.
 - **Time.** The figures are live. A reader who loads the page before and after a colleague's review,
   which the whole team can see on the provider, can read the colleague's new bucket off the change,
   or a new tile value off a moved quartile.
 
-Mitigations considered and not yet taken, since each changes the page: offering one window only,
-holding a split back when the developers between two windows are one to four, freezing the figures
-at the start of a day or week, and rounding counts to multiples of K.
+Mitigations considered and not yet taken, since each changes the page: offering one window only for
+the tiles, freezing the figures at the start of a day or week, and rounding counts to multiples of K.
+Counting the bars by the current standing, which removed the window risk for the bars, was taken.
 
 ## Open decisions
 
