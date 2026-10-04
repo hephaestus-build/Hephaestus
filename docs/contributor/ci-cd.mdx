@@ -206,7 +206,13 @@ actual verdict.
 
 One check owns the dependency verdict: the dependency vulnerability gate in `ci-security-scan.yml`,
 a second Trivy pass in `table` format over the same checkout. It runs on pull requests and on `main`
-pushes and includes development and test dependencies from the lockfiles. An advisory published
+pushes and includes development and test dependencies from the lockfiles.
+
+The native `server/buildscript-gradle.lockfile` also covers the resolved Gradle plugin classpath.
+Trivy reads this file through its [Gradle lockfile analyzer](https://github.com/aquasecurity/trivy/blob/main/pkg/fanal/analyzer/language/java/gradle/lockfile.go).
+Application lockfiles and container scans do not cover build plugins.
+
+An advisory published
 against a pin no pull request touches fails the next run rather than waiting for someone to open
 the code-scanning dashboard. It applies the [vulnerability remediation](./vulnerability-remediation.mdx) severity policy: fixable high or critical.
 `security/trivy-dependency-ignore.yaml` records its exceptions, the sole exception path for dependency findings.
@@ -214,7 +220,8 @@ the code-scanning dashboard. It applies the [vulnerability remediation](./vulner
 Dependency review compares the base and head dependency graphs, so it cannot hold that verdict. It
 reports what the pull request introduces and fails nothing. Gradle graphs are generated on pull
 requests and main pushes through the official Gradle action, with dependency verification still
-enabled. Generation has read-only permissions.
+enabled. The workflow runs `dependencies buildEnvironment` to include the plugin classpath.
+Generation has read-only permissions.
 
 A separate `workflow_run` publisher submits the
 snapshot without checking out or executing the originating code. Dependency review waits for these
@@ -369,6 +376,7 @@ Reproduce the distinction for the Gradle sources from the repository root with t
 osv-scanner scan source --format json --all-packages \
   --lockfile server/application/gradle.lockfile \
   --lockfile server/generated-clients/gradle.lockfile \
+  --lockfile server/buildscript-gradle.lockfile \
   --lockfile server/gradle/verification-metadata.xml
 ```
 
@@ -379,10 +387,11 @@ were reported. An extraction or network error is not a clean assessment.
 
 The advisories investigated
 in [#2078](https://github.com/hephaestus-build/Hephaestus/issues/2078) all came from verification
-metadata, not either resolved lockfile. The script classpath is separate: those lockfiles do not
-cover the GraphQL and OpenAPI build plugins. `server/build.gradle.kts` forces their vulnerable
-transitive dependencies to patched versions. Check `./server/gradlew -p server buildEnvironment`
-when diagnosing those packages rather than inferring their absence from an application lockfile.
+metadata, not either application lockfile. The plugin classpath now has its own native lockfile,
+`server/buildscript-gradle.lockfile`. `server/build.gradle.kts` aligns both Jackson API families with
+patched BOMs and constrains other generator dependencies.
+[Gradle requires separate activation for buildscript locking](https://docs.gradle.org/current/userguide/dependency_locking.html#sec:activate-locking-build-script).
+Check `./server/gradlew -p server buildEnvironment` when diagnosing these packages.
 
 Re-run the checks when the action or dependencies change. The recorded observation is not an
 exemption for a new advisory against a resolved package.
@@ -460,7 +469,7 @@ gh api -X DELETE "repos/hephaestus-build/Hephaestus/environments/preview%2Fpr-<n
 Automating it would mean giving a scheduled workflow an administration-scoped credential, which is a
 larger grant than tidy settings are worth.
 
-Deployments are serialized, never parallel, and each one deploys the pull request's *current* head.
+Deployments are serialized, never parallel, and each one deploys the pull request's _current_ head.
 A burst of pushes therefore produces one deployment of the newest commit rather than one per commit.
 If you push while a deployment is in flight, that run stands down rather than deploying a commit that
 is no longer the head. The new push starts the next deployment and nothing needs relabeling.
@@ -738,7 +747,7 @@ Thus, a scan-only rerun scans that build's artifact.
 
 `ci-contract.test.ts` asserts the whole contract.
 The build must publish every consumer-resolved tag for that consumer's event.
-No job resolves an image by the run that built it. A run-scoped tag names the attempt rather than the artifact, and GitHub's *re-run failed jobs*
+No job resolves an image by the run that built it. A run-scoped tag names the attempt rather than the artifact, and GitHub's _re-run failed jobs_
 gives the retried job a new attempt number.
 
 ## Build once

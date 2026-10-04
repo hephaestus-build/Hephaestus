@@ -30,6 +30,6 @@ jobs:
       # Capture the resolved graphs without packaging again or disabling dependency verification.
       - name: Resolve the dependency graph
         working-directory: server
-        run: ./gradlew dependencies --no-configuration-cache
+        run: ./gradlew dependencies buildEnvironment --no-configuration-cache
       - name: Require the snapshot
         run: test -s dependency-graph-reports/server.json
