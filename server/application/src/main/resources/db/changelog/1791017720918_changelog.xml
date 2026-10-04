@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1791017720918-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <not><columnExists tableName="practice" columnName="judgment"/></not>
+            <not><columnExists tableName="observation" columnName="answers"/></not>
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conname = 'chk_observation_severity' AND conrelid = 'public.observation'::regclass</sqlCheck>
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_curated_practice_override_based_on' AND conrelid = 'public.curated_practice_override'::regclass</sqlCheck>
+        </preConditions>
+        <comment>Practices decide outcomes from answered questions. Every reviewed practice, its current revision, every reviewed instance override and every adopted base gains a holistic judgment that restates what its criteria already asked: whether the occasion arises, whether the standard is met, and how severe a shortfall is. Earlier revisions keep no judgment, because they never asked these questions. Observations gain the answers and the deciding rule; earlier observations keep none. INFO severities become MINOR, the band that keeps a specific edit to make.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE FUNCTION pg_temp.holistic_judgment() RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$
+    SELECT '{
+      "questions": [
+        {"key": "has_occasion", "title": "The work gives this practice an occasion",
+         "question": "Does this work give the practice something to review, as its criteria describe the occasion? Answer NO only when a fact you can cite rules the practice out for this work.",
+         "yes": "The work contains what the practice reviews.",
+         "no": "A cited fact shows the practice has nothing to review in this work."},
+        {"key": "meets_standard", "title": "The work meets the practice standard",
+         "question": "Does the work meet the complete standard the criteria describe? One desirable behaviour being present is not enough when the standard asks for more.",
+         "yes": "The cited evidence shows the complete standard is met.",
+         "no": "The cited evidence shows a material shortfall against the standard."},
+        {"key": "major_shortfall", "title": "The shortfall is major",
+         "question": "Is the shortfall a real problem to fix before the work is done: major or above, where the criteria grade severity? Answer NO when the work meets the standard.",
+         "yes": "The shortfall is a real problem to fix before the work is done.",
+         "no": "There is no shortfall, or it is a bounded improvement."},
+        {"key": "critical_shortfall", "title": "The shortfall is critical",
+         "question": "Does the shortfall have a consequence that is expensive or impossible to undo, such as a leaked credential or lost data? Answer NO when the work meets the standard or the criteria never allow critical.",
+         "yes": "The shortfall has a consequence that is expensive or impossible to undo.",
+         "no": "There is no shortfall, or its consequence can still be taken back."}
+      ],
+      "rules": [
+        {"id": "no-occasion", "when": {"has_occasion": "NO"}, "outcome": "NOT_APPLICABLE",
+         "reason": "The occasion this practice reviews does not arise in this work."},
+        {"id": "critical-shortfall", "when": {"meets_standard": "NO", "critical_shortfall": "YES"}, "outcome": "NOT_MET", "severity": "CRITICAL",
+         "reason": "The work falls short of the practice with a consequence that is hard to undo."},
+        {"id": "major-shortfall", "when": {"meets_standard": "NO", "major_shortfall": "YES"}, "outcome": "NOT_MET", "severity": "MAJOR",
+         "reason": "The work falls short of the practice in a way to fix before it is done."},
+        {"id": "shortfall", "when": {"meets_standard": "NO"}, "outcome": "NOT_MET", "severity": "MINOR",
+         "reason": "The work falls short of the practice standard."},
+        {"id": "met", "when": {}, "outcome": "MET",
+         "reason": "The work meets the practice standard."}
+      ]
+    }'::jsonb;
+$$;
+CREATE FUNCTION pg_temp.is_reviewed(policy jsonb) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+    SELECT policy IS NOT NULL AND policy->'automatedReview'->>'mode' IS DISTINCT FROM 'NONE';
+$$;
+
+DROP TRIGGER practice_requires_current_revision_projection ON practice;
+DROP TRIGGER practice_revision_immutable_update ON practice_revision;
+
+ALTER TABLE practice ADD COLUMN judgment jsonb;
+ALTER TABLE practice_revision ADD COLUMN judgment jsonb;
+ALTER TABLE curated_practice_override ADD COLUMN judgment jsonb;
+
+UPDATE practice SET judgment = pg_temp.holistic_judgment()
+    WHERE pg_temp.is_reviewed(automated_review_policy);
+UPDATE practice SET adopted_base = adopted_base || jsonb_build_object('judgment', pg_temp.holistic_judgment())
+    WHERE adopted_base IS NOT NULL AND pg_temp.is_reviewed(adopted_base->'automatedReviewPolicy');
+UPDATE practice_revision revision SET judgment = practice.judgment
+    FROM practice
+    WHERE practice.current_revision_id = revision.id AND revision.practice_id = practice.id;
+UPDATE curated_practice_override SET judgment = pg_temp.holistic_judgment()
+    WHERE name IS NOT NULL AND pg_temp.is_reviewed(automated_review_policy);
+UPDATE curated_practice_override SET adopted_base = adopted_base || jsonb_build_object('judgment', pg_temp.holistic_judgment())
+    WHERE adopted_base IS NOT NULL AND pg_temp.is_reviewed(adopted_base->'automatedReviewPolicy');
+
+DROP FUNCTION pg_temp.is_reviewed(jsonb);
+DROP FUNCTION pg_temp.holistic_judgment();
+
+ALTER TABLE practice
+    ADD CONSTRAINT ck_practice_judgment CHECK (
+        (judgment IS NULL OR (jsonb_typeof(judgment->'questions') = 'array' AND jsonb_typeof(judgment->'rules') = 'array'))
+        AND (judgment IS NULL OR automated_review_policy->'automatedReview'->>'mode' <> 'NONE')
+        AND (judgment IS NOT NULL
+            OR automated_review_policy->'automatedReview'->>'mode' = 'NONE'
+            OR automated_review_policy->'automatedReview'->>'evidenceSufficiency' <> 'SUFFICIENT_WHEN_REQUIREMENTS_MET'));
+ALTER TABLE practice_revision
+    ADD CONSTRAINT ck_practice_revision_judgment CHECK (
+        judgment IS NULL OR (jsonb_typeof(judgment->'questions') = 'array' AND jsonb_typeof(judgment->'rules') = 'array'));
+ALTER TABLE curated_practice_override
+    ADD CONSTRAINT ck_curated_practice_override_judgment CHECK (
+        judgment IS NULL OR (jsonb_typeof(judgment->'questions') = 'array' AND jsonb_typeof(judgment->'rules') = 'array')),
+    DROP CONSTRAINT ck_curated_practice_override_based_on,
+    ADD CONSTRAINT ck_curated_practice_override_based_on CHECK (
+        based_on_digest IS NULL OR based_on_digest ~ '^practice:v[1234]:[0-9a-f]{64}$');
+
+UPDATE observation SET severity = 'MINOR' WHERE severity = 'INFO';
+ALTER TABLE observation
+    ADD COLUMN answers jsonb,
+    ADD COLUMN rule_id varchar(40),
+    DROP CONSTRAINT chk_observation_severity,
+    ADD CONSTRAINT chk_observation_severity CHECK (severity IN ('CRITICAL', 'MAJOR', 'MINOR')),
+    ADD CONSTRAINT chk_observation_answers CHECK (answers IS NULL OR jsonb_typeof(answers) = 'array'),
+    ADD CONSTRAINT chk_observation_rule_answers CHECK (rule_id IS NULL OR answers IS NOT NULL);
+
+CREATE OR REPLACE FUNCTION public.enforce_practice_current_revision_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM practice practice
+                JOIN practice_revision revision
+                  ON revision.id = practice.current_revision_id
+                 AND revision.practice_id = practice.id
+                LEFT JOIN practice_group practice_group
+                  ON practice_group.id = practice.practice_group_id
+                WHERE practice.id = NEW.id
+                  AND revision.slug = practice.slug
+                  AND revision.name = practice.name
+                  AND revision.applies_to = practice.applies_to
+                  AND revision.signals = practice.signals
+                  AND revision.evidence_requirements = practice.evidence_requirements
+                  AND revision.review_when = practice.review_when
+                  AND revision.subject = practice.subject
+                  AND revision.precondition IS NOT DISTINCT FROM practice.precondition
+                  AND revision.criteria = practice.criteria
+                  AND revision.judgment IS NOT DISTINCT FROM practice.judgment
+                  AND revision.precompute_script IS NOT DISTINCT FROM practice.precompute_script
+                  AND revision.automated_review_policy = practice.automated_review_policy
+                  AND revision.delivery_behavior = practice.delivery_behavior
+                  AND revision.why_it_matters IS NOT DISTINCT FROM practice.why_it_matters
+                  AND revision.what_good_looks_like IS NOT DISTINCT FROM practice.what_good_looks_like
+                  AND revision.group_slug IS NOT DISTINCT FROM practice_group.slug
+            ) THEN
+                RAISE EXCEPTION 'practice current revision does not match its current projection'
+                    USING ERRCODE = '23514';
+            END IF;
+            RETURN NULL;
+        END;
+        $$;
+
+CREATE CONSTRAINT TRIGGER practice_requires_current_revision_projection
+    AFTER INSERT OR UPDATE OF current_revision_id, slug, name, applies_to, signals, evidence_requirements, review_when,
+        subject, precondition, criteria, judgment, precompute_script, automated_review_policy, delivery_behavior,
+        why_it_matters, what_good_looks_like, practice_group_id ON practice
+    DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_practice_current_revision_projection();
+CREATE TRIGGER practice_revision_immutable_update BEFORE UPDATE ON practice_revision
+    FOR EACH ROW EXECUTE FUNCTION public.enforce_practice_revision_immutability();
+        ]]></sql>
+        <rollback>
+            <stop>Restore a verified database backup made before the practice judgment cutover. The holistic judgments given to existing practices and the INFO severities mapped to MINOR cannot be told apart from later edits.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

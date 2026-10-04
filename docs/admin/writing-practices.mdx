@@ -1,12 +1,17 @@
 ---
 id: writing-practices
 title: Writing effective practices
-description: Define evidence-bounded review criteria and check them against realistic cases before adoption.
+description: Define evidence-bounded criteria, the questions a review answers and the rules that decide, and check them against realistic cases before adoption.
 ---
 
-A useful practice helps a developer make a specific decision about their work. Its review criteria
-must explain **when the expectation matters, what can be observed, and what would justify feedback**.
-A memorable name or a long checklist is not enough.
+A useful practice helps a developer make a specific decision about their work. Its definition must
+explain **when the expectation matters, what can be observed, and what would justify feedback**. A
+memorable name or a long checklist is not enough.
+
+A practice Hephaestus reviews has two parts. The **criteria** are guidance: the standard, the sources,
+what to cite and what other practices own. **How the review decides** holds yes/no questions the review
+answers from the evidence, and rules that turn the answers into the outcome. The review never states an
+outcome; the first rule that matches its answers does.
 
 Use this guide when creating a custom practice or adapting a catalog entry. The
 [Practice Catalog guide](./practice-catalog) explains adoption and updates.
@@ -23,11 +28,17 @@ without making every practice relevant to that change.
 
 Separate the fields in the editor:
 
-- **What to look for** contains every rule needed to make the judgment: applicability, evidence,
-  sufficient and insufficient behavior, uncertainty and severity.
+- **What to look for** holds the criteria: the standard, its sources, what to cite and what other
+  practices own. It informs every answer but decides nothing.
+- **How the review decides** holds the questions and rules: whether the occasion arises, which facts
+  meet or fall short of the standard, and how severe a shortfall is.
 - **Why it matters** explains the practical benefit without claiming a guaranteed outcome.
 - **What good looks like** gives a realistic example. If an example introduces a requirement, also
-  state that requirement in **What to look for**; explanatory guidance does not change review rules.
+  state that requirement in the criteria or a question; explanatory guidance does not change review rules.
+
+**How the review decides** appears only while Hephaestus reviews the practice. A practice set to
+**Guidance only** has no questions. A practice that needs human review may keep its questions for the
+person who answers them.
 
 **Person this practice judges** is the relation to the reviewed work, not the person who wrote the
 criteria. A practice about a reviewer's comments must select **reviewer**; leaving **author** selected
@@ -51,46 +62,49 @@ of the alternatives is present. Clear the field only when the practice must appl
 name or wording change leaves both the gate and the person judged unchanged.
 
 A gate must be a necessary condition for the practice to apply. A keyword list that misses unfamiliar
-APIs or file names cannot establish that no relevant behavior exists. Leave such a gate empty and let
-the review criteria decide applicability from the complete captured evidence.
+APIs or file names cannot establish that no relevant behavior exists. Leave such a gate empty and let a
+question decide from the complete captured evidence whether the occasion arises.
 
-## Write the review criteria
+## Decide where each decision lives
 
-Use these questions as a drafting outline, not as mandatory headings or a word-count target.
+Use this outline to draft, not as a word-count target.
 
-| Decision | What the author must make clear |
-| --- | --- |
-| Applicability | What fact in the work makes this expectation relevant? What ordinary cases need no observation? |
-| Standard | What observable requirements must the reviewed work meet? |
-| Evidence | Which captured sources may establish each claim? Who authored them, and at what point in the work? |
-| Conformance | What evidence establishes the complete standard or a material shortfall? |
-| Absence | What complete, bounded search would justify saying the needed behavior is missing or a harmful behavior is absent? |
-| Uncertainty | What unresolved question would prevent a judgment, even with the required evidence captured? |
-| Consequence | Why does a not-met observation matter, and what consequence justifies its severity? |
-| Feedback | What specific change could the developer make? When would no corrective feedback be useful? |
+| Decision      | Where it lives                                                | What the author must make clear                                                                    |
+| ------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Applicability | A question, usually the first                                 | What fact in the work makes this expectation relevant? What ordinary cases need no observation?    |
+| Standard      | **The standard**, and the questions that test it              | What observable requirements must the reviewed work meet?                                          |
+| Evidence      | **Sources**                                                   | Which captured sources may establish each claim? Who authored them, and at what point in the work? |
+| Absence       | **Grounding**, and the question that rests on it              | What complete, bounded search would justify answering that the needed behavior is missing?         |
+| Consequence   | A question that separates the bands, and each rule's severity | What consequence makes a shortfall major or critical rather than minor?                            |
+| Outcome       | The rules                                                     | Which combination of answers decides each outcome?                                                 |
+| Feedback      | Each rule's reason                                            | What one sentence about the work states what was found?                                            |
+| Ownership     | **Defer**                                                     | Which expectations belong to other practices?                                                      |
 
 Prefer “identify a material decision whose rationale the reviewer needs” to a keyword test for
-“because.” Prefer the consequence of a missing check to a rule that every missing heading is MAJOR.
+“because.” Prefer the consequence of a missing check to a rule that every missing heading is major.
 If a threshold represents a team policy, identify that policy and its exceptions. Do not present a
 convenient number as a universal engineering standard.
 
-### One outcome against the standard
+## Write the criteria
 
-Use one outcome for conformance within the recorded evidence boundary:
+The bundled catalog uses this shape, and it is a good template for custom practices:
 
-| Outcome | Example for verification guidance on a persistence change |
-| --- | --- |
-| `MET` | Complete instructions save a setting, restart the app, and check the saved value without destroying it. |
-| `NOT_MET` | A required restart check is missing, or the instructions claim an in-memory preview proves persistence. |
-| `NOT_APPLICABLE` | The work has no material behavior requiring this verification. |
-| `UNDETERMINED` | Adequate captured evidence contains an unresolved conflict about the required behavior. |
+1. **REVIEW FOCUS:** — one line naming the observable standard.
+2. **## The standard** — what doing that behavior well means, with an example that looks like a lapse
+   but meets the standard.
+3. **## Sources** — which captured sources can support each claim, and their limits.
+4. **## Grounding** — what to cite for each claim, and the boundary an absence search records.
+5. **## Defer** — expectations owned by other practices.
 
-A useful instruction alone does not establish conformance to the complete standard. Absence claims
-need a complete bounded search. An optional improvement being missing is not a shortfall. Required
-capture failing creates no observation; it is not uncertainty about the developer's work.
+Keep each requirement in one place. The criteria do not decide: do not name the outcomes or
+severities in them, and do not write an occasion, a verdict or a severity section. Those decisions
+belong to the questions and rules, where an author and a developer can see which fact decided. The
+bundled catalog has a criteria length limit; meeting it does not establish that the criteria are clear
+or correct.
 
-Do not count inadequate instructions and their missing part as separate shortfalls when both request
-the same correction. Severity applies only to `NOT_MET`. Delivery is a separate decision.
+To see the template in use, open **State how to verify the change** in the practice editor. Adapt its
+structure, not its applicability rules: each practice needs evidence and consequences that match its
+own expectation and the sources your workspace can capture.
 
 ### Evidence is more than a matching quotation
 
@@ -100,64 +114,153 @@ need not communicate the intended result. An uninspected screenshot supplies no 
 facts. A template issue number is not automatically an adopted requirement.
 
 Required evidence that is missing, failed or truncated stops assessment: record the collection gap,
-not an observation about the developer. With qualified evidence, use UNDETERMINED for a material
-question that remains unresolved. Inability to find a quotation does not itself prove absence.
-A previous observation records an earlier judgment; it is not independent proof that judgment was right.
+not an observation about the developer. With qualified evidence, a question the evidence leaves
+unresolved stays open. Inability to find a quotation does not itself prove absence. A previous
+observation records an earlier judgment; it is not independent proof that judgment was right.
 
 Separate recorded facts from the events they approximate. A commit timestamp records a commit, not
 the moment development began. A pull request creation time records a handoff, not an earlier start
-time. Do not replace an unknown deciding timestamp with a different event merely to produce a verdict.
+time. Do not replace an unknown deciding timestamp with a different event merely to produce an answer.
 
-## Write the criteria as a decision procedure
+## Write the questions
 
-The bundled catalog uses the following order. It is also a useful template for custom practices;
-the questions above remain the basis for deciding what belongs in each section.
+A practice asks one to eight questions. The review answers each one **Yes**, **No** or leaves it
+**Open**, with one sentence saying why and the lines it rests on, and skips a question the other
+answers have already made irrelevant. Each question has a **Title**, the **Question** as the reviewer
+reads it, and what **A yes means** and **A no means** for the work.
 
-1. **REVIEW FOCUS** — name the observable standard.
-2. **The standard** — define what doing that behavior well means.
-3. **Occasion** — identify work where the expectation does not apply.
-4. **Sources** — state which captured sources can support each claim and their limits.
-5. **Judge** — state when the complete standard is MET and what evidenced shortfall makes it
-   NOT_MET. Define the exclusion that supports NOT_APPLICABLE and the unresolved question that
-   supports UNDETERMINED. Make these conditions distinct, and state the order of checks where it
-   matters. Include an example that looks like a lapse but meets the standard.
-6. **Severity** — tie NOT_MET outcomes to consequences.
-7. **Grounding** — state the evidence needed to support each claim.
-8. **Defer** — identify expectations owned by other practices.
+- **Ask about facts a reviewer can cite.** “Does the description name the failure the change
+  removes?” can be settled from cited lines; “Is the description good?” cannot.
+- **Write the title as the statement a yes affirms**, such as *Says how to check the main effect*. It
+  is shown beside every answer, so it must read correctly next to **Yes**, **No** and **Open**. No
+  final period.
+- **One concern per question.** A question that bundles two facts gets one answer for both, and the
+  rules cannot tell which one failed. Split it, and let a rule combine the answers.
+- **Say what counts and what does not.** The question text carries the boundary cases: what a
+  restated title, a template placeholder or a reviewer's report of testing count as. Give a concrete
+  example in **A yes means** and **A no means**.
+- **Ask whether the occasion arises first.** A question such as *The change has an effect a reviewer
+  must check* lets the first rule decide **Not applicable**. Answer it **No** only on a fact the review
+  can cite.
+- **Let a gate question save the review work.** When one answer makes another question unable to
+  change the outcome or its severity, whichever way that question would be answered, the review skips
+  it. Hephaestus works this out from your rules; there is nothing to configure. Under the **No** above,
+  the first rule decides whatever the other questions say, so the review asks none of them. A skipped
+  question shows no answer on the observation.
+- **Leave the answer open instead of asking whether it is settled.** Do not add a question such as
+  *The evidence is unsettled* only to reach **Undetermined**. Say in the question itself when to leave
+  the answer open and what to name as settling it: “If the checkout cannot show whether another
+  service depends on it, leave the answer open and name what would settle it.” An open answer already
+  reaches **Undetermined** wherever it could change the outcome.
+- **Name where an absence is searched.** A **No** that rests on something missing records the sources
+  searched, what was looked for, and what the search did not cover. The question should say which
+  sources make that search complete.
+- **Leave the answer open when a deciding source was not captured.** A linked issue, a discussion or a
+  checkout that was not collected says nothing about the work. When such a source could supply the
+  missing fact, the question says to leave the answer open and name it, never to answer **No**.
+- **Say which way a close call goes.** A question whose **Yes** raises the severity ends with *When
+  unsure, answer No*, so a borderline case gets the lower band, as the severity table asks. A question
+  that can only change the severity, never the outcome, is one the review may leave open; the lower
+  band then holds.
+- **Keep it short, and write your own examples.** The review applies a short question more reliably
+  than a long one: keep long lists in **The standard** and point to them. Invent the examples; a
+  question that quotes one real pull request teaches the review that case, not the rule.
 
-Keep each requirement in one place. Use the four outcome terms consistently. The bundled catalog has
-a criteria length limit; meeting that limit does not establish that the criteria are clear or correct.
+A question's key is its stable identifier: rules and recorded answers refer to it. Earlier
+observations keep the questions and rules of the revision that judged them.
 
-The recording tool checks the outcome and its required evidence fields. It does not establish that
-an assessment meets the practice criteria. Criteria must state the standard and the evidence needed
-to judge it; do not encode excluded presence or desirability combinations.
+## Write the rules
 
-To see the template in use, open **State how to verify the change** in the practice editor.
-Adapt its structure, not its applicability rules: each practice needs evidence and consequences
-that match its own expectation and the sources your workspace can capture.
+Rules are read from the top, and the first rule whose conditions all match the answers decides. Each
+rule sets a condition per question — **Any answer**, **Yes** or **No** — and an **Outcome**, a
+**Severity** for **Not met**, and a **Reason**. The **Last rule** has no conditions and reads as **In
+every other case**, so every combination of answers has an outcome. A practice has two to 32 rules.
+
+Order them from the most specific to the catch-all: the occasion first, then the most severe shortfall,
+then lesser ones, then the outcome that holds when nothing else matched.
+
+| Outcome            | Example rule for verification guidance on a persistence change                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Met**            | In every other case: the author's sources give an entry, an action and an expected result.                                                                   |
+| **Not met**        | *Says how to check the main effect* is **No**: nothing communicated gives a way to check it.                                                                 |
+| **Not applicable** | *The change has an effect a reviewer must check* is **No**: the patch holds only prose or formatting.                                                        |
+| **Undetermined**   | A rule may decide it outright when a fact the review can cite makes the practice unanswerable, such as one login that both asks and answers review comments. |
+
+A useful instruction alone does not establish conformance to the complete standard. An optional
+improvement being missing is not a shortfall. Do not write two rules that ask for the same correction
+under different names.
+
+**Severity** applies only to **Not met**, and follows the consequence, not the number of matches:
+
+| Severity     | Use it when                                                                                   |
+| ------------ | --------------------------------------------------------------------------------------------- |
+| **Critical** | The consequence is expensive or impossible to undo, such as a leaked credential or lost data. |
+| **Major**    | A real problem to fix before the work is considered done.                                     |
+| **Minor**    | A bounded shortfall with a specific edit to make; nobody would block the work on it alone.    |
+
+There is no informational severity. A point that does not ask for a change is not a shortfall: let the
+work be **Met**, and say what held in the reason.
+
+**The reason is one sentence about the work.** It heads every observation the rule decides and is the
+first thing a developer reads about it. State what the work does or lacks — *The title and description
+say what changed but not why.* — not what the developer is, what they should do, or which outcome it
+is. Ten to 200 characters.
+
+The editor checks the rules as you edit, and the server checks them again on save: the last rule has no
+conditions, every rule can decide some combination of answers, and every question is used by a rule.
+Saving also refuses a question or reason that names a result label such as `NOT_MET`: say what the
+evidence shows in plain words. Those checks prove that the rules are complete, not that they are wise.
+
+### The open answer never becomes a negative
+
+A review leaves a question **Open** when the captured evidence it read does not settle it, and says
+what would settle it. Hephaestus then tries the open question both ways. If every way leads to the same
+outcome, that outcome stands at the least severe band any of them reached. The observation names the
+rule that decided it only when that rule's conditions hold without the open answer; otherwise it says
+that the outcome holds however the open questions are settled. If the ways disagree, the outcome is
+**Undetermined** and no rule decided it.
+
+So an unsettled fact can never turn into a claim about the work. In the verification example, a
+missing check with *Verifying needs more than one bounded fix* left open is still **Not met**, but at
+**Minor**, the severity both ways support. Put a question that only raises severity behind the
+shortfall it grades, so leaving it open lowers the severity rather than hiding the shortfall.
+
+An open answer is not a capture failure. A source that was never captured records no observation at all.
+
+### The starting questions
+
+A new practice starts with four questions — whether the work gives the practice an occasion, whether
+it meets the standard, and whether a shortfall is major or critical — and five rules from **Not
+applicable** through **Met**. Existing practices received the same starting questions when Hephaestus
+moved to questions and rules. They ask the reviewer to apply the criteria as a whole, so they are only
+as precise as the criteria. Replace them with questions about this practice's own facts before relying
+on it. **Restore the starting questions** returns to them.
 
 ## Challenge the draft before adopting it
 
-Prepare a small set of real or clearly identified synthetic cases. Record the expected behavior,
-judgment, decisive evidence and appropriate feedback **before** running the review. Include:
+Prepare a small set of real or clearly identified synthetic cases. Record the expected answer to each
+question, the outcome, the decisive evidence and appropriate feedback **before** running the review.
+Include:
 
 - a clearly useful example, a misleading example and a genuinely missing necessary behavior;
 - a harmless omission or excluded occasion, and a case with missing required capture;
 - sufficient context spread across permitted sources, plus an irrelevant or unadopted linked source;
 - an ambiguous case with a precise settling question;
 - a near-identical pair where one decisive fact changes, and a cosmetic rewrite that should not
-  change the judgment;
+  change any answer;
 - source text that attempts to instruct the reviewer, which must remain evidence rather than authority.
 
-Have another reviewer use the criteria without seeing your expected judgments. Compare the named
-behaviors and rationales as well as labels: matching outcomes can conceal different claims. Revise
-ambiguous instructions, then evaluate on additional cases that were not used to write the revision.
-Agreement measures consistency; it does not establish correctness or human independence.
+Have another reviewer answer the questions without seeing your expected answers. Compare answers
+question by question as well as outcomes: matching outcomes can conceal different answers, and a
+disagreement on one question shows which question needs rewording. Revise ambiguous questions, then
+evaluate on additional cases that were not used to write the revision. Agreement measures consistency;
+it does not establish correctness or human independence.
 
 Keep **Review before sending** while evaluating. Check unsupported corrections, missed material
-concerns, exclusions and uncertainty separately; a single positive rate hides these differences.
-Record the definition and evidence used for each evaluation. Changing criteria requires renewed
-validation, and neither a successful run nor valid citations authorizes automatic sending.
+concerns, exclusions and open answers separately; a single positive rate hides these differences.
+Record the definition and evidence used for each evaluation. Changing criteria, questions or rules
+requires renewed validation, and neither a successful run nor valid citations authorizes automatic
+sending.
 
 ## Basis for these guidelines
 
@@ -165,6 +268,8 @@ validation, and neither a successful run nor valid citations authorizes automati
 supports checking real functionality, justified complexity, useful tests and explanatory comments.
 [Its guidance on small changes](https://google.github.io/eng-practices/review/developer/small-cls.html)
 uses review burden and context rather than a universal line or file limit.
+[CheckEval](https://arxiv.org/abs/2403.18771) decomposes a judgment into yes/no checklist questions and
+reports higher agreement between evaluators.
 [Artstein and Poesio's survey](https://aclanthology.org/J08-4004/) explains agreement measures and their
 assumptions. [Datasheets for Datasets](https://doi.org/10.1145/3458723) motivates recording composition,
 collection and limitations. These sources inform review and evaluation design; they do not prove

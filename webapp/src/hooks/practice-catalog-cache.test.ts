@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { Practice } from "@/api/types.gen";
-import { mockAuthorDeclaredEvidenceValidation } from "@/mocks/fixtures/practice";
+import {
+	mockAuthorDeclaredEvidenceValidation,
+	mockDescriptionJudgment,
+	mockStartingJudgment,
+} from "@/mocks/fixtures/practice";
 
 import {
 	chosenAutonomy,
@@ -130,6 +134,7 @@ describe("practice catalog cache updates", () => {
 			...practice("edited", "delivery", 4),
 			autonomy: chosenAutonomy("OFF"),
 			name: "Updated",
+			judgment: mockDescriptionJudgment,
 			automatedReviewValidation: {
 				...mockAuthorDeclaredEvidenceValidation,
 				reviewRuleFingerprint: `v5:${"1".repeat(64)}`,
@@ -157,8 +162,13 @@ describe("practice catalog cache updates", () => {
 				automatedReviewPolicy: updated.automatedReviewPolicy,
 			}),
 		).toStrictEqual({
+			// Turning automated review off drops the questions, so the server's answer is taken.
+			judgment: updated.judgment,
 			automatedReviewPolicy: updated.automatedReviewPolicy,
 			automatedReviewValidation: updated.automatedReviewValidation,
+		});
+		expect(selectPracticePatch(updated, { judgment: mockStartingJudgment })).toStrictEqual({
+			judgment: updated.judgment,
 		});
 		expect(selectPracticePatch(updated, { criteria: updated.criteria })).toStrictEqual({
 			criteria: updated.criteria,

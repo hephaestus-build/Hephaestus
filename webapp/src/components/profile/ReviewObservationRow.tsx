@@ -18,6 +18,7 @@ import {
 import { FEEDBACK_USEFULNESS_DEFS } from "@/components/practice-vocabulary/feedback-usefulness-defs";
 import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
 import { OBSERVATION_ORIGIN_DEFS } from "@/components/practice-vocabulary/observation-origin-defs";
+import { ObservationAnswerList } from "@/components/practice-vocabulary/ObservationAnswerList";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { StatusTooltip } from "@/components/practice-vocabulary/StatusTooltip";
@@ -114,6 +115,7 @@ export function ReviewObservationRow({
 		invalidated ||
 		note !== undefined ||
 		hasText(observation.evidenceRationale) ||
+		observation.answers !== undefined ||
 		checks.length > 0 ||
 		evidenceLocations.length > 0 ||
 		hasText(nextStep) ||
@@ -206,10 +208,23 @@ export function ReviewObservationRow({
 							</p>
 						)}
 						{note !== undefined && <p className="text-sm text-muted-foreground">{note}</p>}
-						{hasText(observation.evidenceRationale) && (
-							<DetailSection label="Why it was noted">
-								<ReviewerText>{observation.evidenceRationale}</ReviewerText>
-							</DetailSection>
+						{observation.answers ? (
+							<>
+								{hasText(observation.answers.decidedBy) && (
+									<DetailSection label="Why it was noted">
+										<p className="text-sm text-pretty">{observation.answers.decidedBy}</p>
+									</DetailSection>
+								)}
+								<DetailSection label="How it was decided">
+									<ObservationAnswerList answers={observation.answers} />
+								</DetailSection>
+							</>
+						) : (
+							hasText(observation.evidenceRationale) && (
+								<DetailSection label="Why it was noted">
+									<ReviewerText>{observation.evidenceRationale}</ReviewerText>
+								</DetailSection>
+							)
 						)}
 						{checks.length > 0 && (
 							<DetailSection label="What was checked">

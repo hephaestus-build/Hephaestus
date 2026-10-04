@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -120,6 +121,7 @@ class InAppCooldownQueryIntegrationTest extends BaseIntegrationTest {
                     created.setSlug(PRACTICE_SLUG);
                     created.setName("Ships Tests With Changes");
                     created.setCriteria("Criteria");
+                    created.setJudgment(PracticeJudgment.holistic());
                     created.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
                     PracticeTestEvidence.configure(created, ScmSignals.PULL_REQUEST_OPENED);
                     return practiceRepository.saveAndFlush(created);
@@ -147,6 +149,8 @@ class InAppCooldownQueryIntegrationTest extends BaseIntegrationTest {
                 "MAJOR",
                 null,
                 "reasoning",
+                null,
+                null,
                 null,
                 createdAt,
                 "LIVE");

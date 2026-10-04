@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluation;
@@ -154,6 +155,7 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
         practice.setSlug(slug);
         practice.setName(name);
         practice.setCriteria("Criteria for " + slug);
+        practice.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         return practiceRepository.save(practice);
@@ -208,6 +210,8 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                 severity,
                 "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":\"context/diff.patch\",\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":42,\"endLine\":50,\"quote\":\"example\",\"quoteRedacted\":false}]}",
                 "Reasoning for " + title,
+                null,
+                null,
                 "recurrence-" + title,
                 observedAt,
                 "LIVE");
@@ -467,7 +471,7 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
         void filtersBySeveralSeverities() {
             insertProblem(practiceA, job, alice, "Critical", "CRITICAL");
             insertProblem(practiceA, job, alice, "Major", "MAJOR");
-            insertProblem(practiceA, job, alice, "Info", "INFO");
+            insertProblem(practiceA, job, alice, "Minor", "MINOR");
 
             getOk(OBSERVATIONS + "?severity=CRITICAL&severity=MAJOR", workspace.getWorkspaceSlug())
                     .jsonPath("$.page.totalElements")
@@ -507,7 +511,6 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     new ObservationInput("Critical problem", "NOT_MET", "CRITICAL"),
                     new ObservationInput("Major problem", "NOT_MET", "MAJOR"),
                     new ObservationInput("Minor problem", "NOT_MET", "MINOR"),
-                    new ObservationInput("Info problem", "NOT_MET", "INFO"),
                     new ObservationInput("Strength", "MET", null),
                     new ObservationInput("Not applicable", "NOT_APPLICABLE", null));
             for (int i = 0; i < observations.size(); i++) {
@@ -524,7 +527,7 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
             }
 
             getOk(
-                            OBSERVATIONS + "?agentJobId={id}&sort=ACTIONABILITY&size=5",
+                            OBSERVATIONS + "?agentJobId={id}&sort=ACTIONABILITY&size=4",
                             workspace.getWorkspaceSlug(),
                             job.getId())
                     .jsonPath("$.content[0].summary")
@@ -534,14 +537,12 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                     .jsonPath("$.content[2].summary")
                     .isEqualTo("Minor problem")
                     .jsonPath("$.content[3].summary")
-                    .isEqualTo("Info problem")
-                    .jsonPath("$.content[4].summary")
                     .isEqualTo("Strength");
 
-            getOk(OBSERVATIONS + "?agentJobId={id}&size=5", workspace.getWorkspaceSlug(), job.getId())
+            getOk(OBSERVATIONS + "?agentJobId={id}&size=4", workspace.getWorkspaceSlug(), job.getId())
                     .jsonPath("$.content[0].summary")
                     .isEqualTo("Not applicable")
-                    .jsonPath("$.content[4].summary")
+                    .jsonPath("$.content[3].summary")
                     .isEqualTo("Major problem");
         }
 

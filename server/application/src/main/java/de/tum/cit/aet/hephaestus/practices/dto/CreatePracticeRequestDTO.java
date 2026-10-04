@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -60,6 +61,13 @@ public record CreatePracticeRequestDTO(
         @Nullable
         String criteria,
 
+        @Valid
+        @Schema(
+                description = "Questions the review answers and the rules that decide the outcome; required when the"
+                        + " practice is reviewed automatically")
+        @Nullable
+        PracticeJudgment judgment,
+
         @Size(
                 max = PracticeDefinition.MAX_PRECOMPUTE_SCRIPT_LENGTH,
                 message = "Precompute script must be at most 100000 characters")
@@ -101,6 +109,7 @@ public record CreatePracticeRequestDTO(
             @Nullable ActorRole subject,
             @Nullable PracticePrecondition precondition,
             @Nullable String criteria,
+            @Nullable PracticeJudgment judgment,
             @Nullable String precomputeScript,
             @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy,
             @Nullable String whyItMatters,
@@ -115,6 +124,7 @@ public record CreatePracticeRequestDTO(
                 subject,
                 precondition,
                 criteria,
+                judgment,
                 precomputeScript,
                 automatedReviewPolicy,
                 whyItMatters,

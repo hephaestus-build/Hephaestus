@@ -3,6 +3,7 @@ import { expect, fn, screen, within } from "storybook/test";
 
 import type { FeedbackResponseRequest, ObservationDetail } from "@/api/types.gen";
 import { formatDay } from "@/lib/dates";
+import { mockDescriptionAnswers } from "@/mocks/fixtures/practice";
 import { expectSettledVisible } from "@/stories/overlay";
 import {
 	nextStepWithoutDelivery,
@@ -397,6 +398,29 @@ export const OutcomeExplained: Story = {
 		await expectSettledVisible(
 			await screen.findByText(/practice standard is met in the reviewed evidence/u),
 		);
+	},
+};
+
+/**
+ * Decided from answers: the deciding rule's reason says why it was noted, and the answers say how,
+ * the deciding one first.
+ */
+export const DecidedFromAnswers: Story = {
+	args: {
+		observation: {
+			...strength,
+			summary: "The description says what changed and stops there",
+			outcome: "NOT_MET",
+			severity: "MINOR",
+			answers: mockDescriptionAnswers,
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("The description says what changed but not why.")).toBeVisible();
+		await expect(canvas.getByText("How it was decided")).toBeVisible();
+		await expect(
+			canvas.queryByText(/The comment above the changed branch states why/u),
+		).not.toBeInTheDocument();
 	},
 };
 

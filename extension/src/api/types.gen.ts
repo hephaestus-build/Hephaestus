@@ -1171,6 +1171,10 @@ export type CreatePracticeRequest = {
    */
   groupSlug?: string | null;
   /**
+   * Questions the review answers and the rules that decide the outcome; required when the practice is reviewed automatically
+   */
+  judgment?: PracticeJudgment;
+  /**
    * Human-readable name
    */
   name: string;
@@ -1476,6 +1480,10 @@ export type CuratedPracticeDefinition = {
   deliveryBehavior: PracticeDeliveryBehavior;
   evidenceRequirements: Array<PracticeEvidenceRequirement>;
   groupSlug?: string;
+  /**
+   * Questions the review answers and the rules that decide the outcome; absent when the practice is not reviewed automatically
+   */
+  judgment?: PracticeJudgment;
   name: string;
   precomputeScript?: string;
   precondition?: PracticePrecondition;
@@ -1507,6 +1515,10 @@ export type CuratedPracticeRequest = {
   deliveryBehavior?: PracticeDeliveryBehavior;
   evidenceRequirements: Array<PracticeEvidenceRequirement>;
   groupSlug?: string;
+  /**
+   * Questions the review answers and the rules that decide the outcome; required when the practice is reviewed automatically
+   */
+  judgment?: PracticeJudgment;
   name: string;
   precomputeScript?: string;
   precondition?: PracticePrecondition;
@@ -2703,9 +2715,60 @@ export type NotificationPreferences = {
 };
 
 /**
+ * The reviewer's answer to one practice question
+ */
+export type ObservationAnswer = {
+  answer: 'YES' | 'NO' | 'UNDETERMINED';
+  /**
+   * The fact in the cited lines that decides the answer
+   */
+  because: string;
+  /**
+   * Indexes into the observation's evidence citations
+   */
+  citations: Array<number>;
+  /**
+   * Whether the deciding rule used this answer
+   */
+  decisive: boolean;
+  /**
+   * The question key
+   */
+  question: string;
+  search?: EvidenceSearch;
+  /**
+   * The question's title, a statement a YES affirms
+   */
+  title: string;
+  /**
+   * For an undetermined answer: the evidence that would decide it
+   */
+  wouldSettleIt?: string;
+};
+
+/**
+ * The answers an observation was decided from, and the rule that decided it
+ */
+export type ObservationAnswers = {
+  answers: Array<ObservationAnswer>;
+  /**
+   * The deciding rule's reason: one sentence about the work, the observation's headline
+   */
+  decidedBy?: string;
+  /**
+   * The deciding rule; null when open answers left the outcome undetermined
+   */
+  ruleId?: string;
+};
+
+/**
  * Full practice observation detail including delivered feedback and evidence
  */
 export type ObservationDetail = {
+  /**
+   * The answers the observation was decided from and the deciding rule; null for an observation recorded before reviews answered questions, and whenever evidence is withheld
+   */
+  answers?: ObservationAnswers;
   /**
    * Artifact entity ID
    */
@@ -2778,7 +2841,7 @@ export type ObservationDetail = {
   /**
    * Severity level (null unless outcome is NOT_MET)
    */
-  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR';
   /**
    * Observation summary
    */
@@ -2874,7 +2937,7 @@ export type ObservationList = {
   /**
    * Severity level (null unless outcome is NOT_MET)
    */
-  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR';
   /**
    * Observation summary
    */
@@ -3282,6 +3345,10 @@ export type Practice = {
    */
   id: number;
   /**
+   * Questions the review answers and the rules that decide the outcome; absent when the practice is not reviewed automatically
+   */
+  judgment?: PracticeJudgment;
+  /**
    * Human-readable name
    */
   name: string;
@@ -3390,6 +3457,10 @@ export type PracticeDefinition = {
   deliveryBehavior: PracticeDeliveryBehavior;
   evidenceRequirements: Array<PracticeEvidenceRequirement>;
   groupSlug?: string;
+  /**
+   * Questions the review answers and the rules that decide the outcome; required exactly when the practice is reviewed automatically
+   */
+  judgment?: PracticeJudgment;
   name: string;
   precomputeScript?: string;
   precondition?: PracticePrecondition;
@@ -3413,6 +3484,10 @@ export type PracticeDefinitionOptions = {
    * Source contract these options describe
    */
   sourceContractVersion: string;
+  /**
+   * The questions and rules a practice starts from when its author turns on automated review: whether the occasion arises, whether the standard is met, and how severe a shortfall is
+   */
+  startingJudgment: PracticeJudgment;
   workTypes: Array<PracticeWorkTypeDefinitionOptions>;
 };
 
@@ -3650,6 +3725,14 @@ export type PracticeGroupTrend = {
 };
 
 /**
+ * Questions a review answers and rules that decide the outcome from the answers
+ */
+export type PracticeJudgment = {
+  questions: Array<PracticeQuestion>;
+  rules: Array<PracticeRule>;
+};
+
+/**
  * What must be in a piece of work for this practice to have anything to judge
  */
 export type PracticePrecondition = {
@@ -3707,9 +3790,35 @@ export type PracticeProfileOverview = {
   window: OverviewWindow;
 };
 
+/**
+ * One yes/no question a practice review answers from evidence
+ */
+export type PracticeQuestion = {
+  /**
+   * stable identifier that rules and recorded answers refer to
+   */
+  key: string;
+  /**
+   * what a NO means for the reviewed work
+   */
+  no: string;
+  /**
+   * the question as the reviewer reads it: what counts and what does not
+   */
+  question: string;
+  /**
+   * short statement a YES affirms, shown wherever the answer is shown
+   */
+  title: string;
+  /**
+   * what a YES means for the reviewed work
+   */
+  yes: string;
+};
+
 export type PracticeReleaseField = {
   conflict: boolean;
-  field: 'NAME' | 'SIGNALS' | 'EVIDENCE_REQUIREMENTS' | 'REVIEW_WHEN' | 'SUBJECT' | 'PRECONDITION' | 'CRITERIA' | 'PRECOMPUTE_SCRIPT' | 'AUTOMATED_REVIEW_POLICY' | 'WHY_IT_MATTERS' | 'WHAT_GOOD_LOOKS_LIKE' | 'GROUP_SLUG' | 'DELIVERY_BEHAVIOR';
+  field: 'NAME' | 'SIGNALS' | 'EVIDENCE_REQUIREMENTS' | 'REVIEW_WHEN' | 'SUBJECT' | 'PRECONDITION' | 'CRITERIA' | 'JUDGMENT' | 'PRECOMPUTE_SCRIPT' | 'AUTOMATED_REVIEW_POLICY' | 'WHY_IT_MATTERS' | 'WHAT_GOOD_LOOKS_LIKE' | 'GROUP_SLUG' | 'DELIVERY_BEHAVIOR';
   offeredChanged: boolean;
 };
 
@@ -3924,6 +4033,34 @@ export type PracticeReviewStateValue = {
 };
 
 /**
+ * A rule that decides an outcome from the answers; the first matching rule decides
+ */
+export type PracticeRule = {
+  /**
+   * stable identifier an observation records as the rule that decided it
+   */
+  id: string;
+  /**
+   * the outcome this rule decides
+   */
+  outcome: 'MET' | 'NOT_MET' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  /**
+   * one sentence about the work, shown as the observation's headline and used as its warrant
+   */
+  reason: string;
+  /**
+   * required exactly for NOT_MET
+   */
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR';
+  /**
+   * Question key to the answer it requires (YES or NO); empty matches every combination
+   */
+  when: {
+    [key: string]: 'YES' | 'NO' | 'UNDETERMINED';
+  };
+};
+
+/**
  * A signal and the words a reader sees for it
  */
 export type PracticeSignal = {
@@ -4027,7 +4164,7 @@ export type PracticeStandingObservation = {
   /**
    * Impact level (null unless NOT_MET)
    */
-  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR';
   /**
    * The headline of the feedback
    */
@@ -4590,7 +4727,7 @@ export type ReviewBoundObservation = {
   /**
    * Severity band (null unless outcome is NOT_MET)
    */
-  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR';
   summary: string;
 };
 
@@ -4819,7 +4956,7 @@ export type ReviewObservation = {
   /**
    * Severity band (null unless outcome is NOT_MET)
    */
-  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR';
   /**
    * Whose work the observation is about; null when the identity is no longer resolvable
    */
@@ -4848,6 +4985,10 @@ export type ReviewObservationCounts = {
  */
 export type ReviewObservationDetail = {
   agentJobId: string;
+  /**
+   * The answers the observation was decided from and the deciding rule; null for an observation recorded before reviews answered questions, and whenever evidence is withheld
+   */
+  answers?: ObservationAnswers;
   /**
    * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed. Earlier observation standards and missing fingerprints are unverifiable under the current whole-practice standard
    */
@@ -4890,7 +5031,7 @@ export type ReviewObservationDetail = {
   /**
    * Severity band (null unless outcome is NOT_MET)
    */
-  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
+  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR';
   /**
    * Whose work the observation is about; null when the identity is no longer resolvable
    */
@@ -6091,6 +6232,10 @@ export type UpdatePracticeRequest = {
    * Catalog placement to apply with the definition update; omit to leave unchanged
    */
   group?: BindPracticeGroupRequest;
+  /**
+   * Replacement questions and rules; omit to preserve them
+   */
+  judgment?: PracticeJudgment;
   /**
    * Human-readable name
    */
@@ -11596,7 +11741,7 @@ export type ListPracticeGroupReviewRunsData = {
      * Only reviews of these artifact kinds, e.g. scm.pull_request (repeatable)
      */
     artifactKinds?: Array<string>;
-    severities?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
+    severities?: Array<'CRITICAL' | 'MAJOR' | 'MINOR'>;
     /**
      * Zero-based page, at most 100
      */
@@ -12181,7 +12326,7 @@ export type ListObservationsData = {
     /**
      * Only observations with these severities (repeatable); omit for all
      */
-    severities?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
+    severities?: Array<'CRITICAL' | 'MAJOR' | 'MINOR'>;
     /**
      * Drop NOT_APPLICABLE rows — only observations where the practice actually applied
      */
@@ -12854,7 +12999,7 @@ export type ListPracticeReviewObservationsData = {
     page?: number;
     size?: number;
     /**
-     * Sorting strategy. ACTIONABILITY orders NOT_MET by severity (CRITICAL, MAJOR, MINOR, INFO), then MET, then NOT_APPLICABLE and UNDETERMINED together. Within each rank, observation time and ID are descending.
+     * Sorting strategy. ACTIONABILITY orders NOT_MET by severity (CRITICAL, MAJOR, MINOR), then MET, then NOT_APPLICABLE and UNDETERMINED together. Within each rank, observation time and ID are descending.
      */
     sort?: 'NEWEST' | 'ACTIONABILITY';
     practiceSlug?: Array<string>;
@@ -12871,7 +13016,7 @@ export type ListPracticeReviewObservationsData = {
      * true for only the observations the developer disputes feedback about, false for only the others; omit for both
      */
     disputed?: boolean;
-    severity?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
+    severity?: Array<'CRITICAL' | 'MAJOR' | 'MINOR'>;
     agentJobId?: string;
     /**
      * Kind of reviewed work, e.g. scm.pull_request

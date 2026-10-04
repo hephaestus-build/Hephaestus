@@ -306,7 +306,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             id, occurrence_key, agent_job_id, workspace_id, practice_id, practice_revision_id,
             artifact_kind, artifact_id, about_user_id,
             summary, outcome, severity,
-            evidence, evidence_rationale,
+            evidence, evidence_rationale, answers, rule_id,
             recurrence_key, observed_at, origin
         )
         SELECT
@@ -314,7 +314,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             p.workspace_id, p.id, COALESCE(:practiceRevisionId, p.current_revision_id),
             :artifactKind, :artifactId, :aboutUserId,
             :summary, :outcome, :severity,
-            CAST(:evidence AS jsonb), :evidenceRationale,
+            CAST(:evidence AS jsonb), :evidenceRationale, CAST(:answers AS jsonb), :ruleId,
             :recurrenceKey, :observedAt, :origin
         FROM practice p
         WHERE p.id = :practiceId AND p.workspace_id = :workspaceId
@@ -335,6 +335,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("severity") @Nullable String severity,
             @Param("evidence") @Nullable String evidence,
             @Param("evidenceRationale") @Nullable String evidenceRationale,
+            @Param("answers") @Nullable String answers,
+            @Param("ruleId") @Nullable String ruleId,
             @Param("recurrenceKey") @Nullable String recurrenceKey,
             @Param("observedAt") Instant observedAt,
             @Param("origin") String origin);
@@ -514,7 +516,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
 
     /**
      * Same filter set as {@link #findByAboutUserAndWorkspace}, ordered by severity. The severity rank
-     * is a fixed CASE (CRITICAL &gt; MAJOR &gt; MINOR &gt; INFO, severity-less strengths last, ties
+     * is a fixed CASE (CRITICAL &gt; MAJOR &gt; MINOR, severity-less strengths last, ties
      * broken newest-first) because a {@code Pageable} sort on the enum column would order
      * alphabetically; {@code severitySign} {@code +1} puts the most severe first, {@code -1} the
      * least severe (then strengths lead). Callers pass an UNSORTED pageable.
@@ -544,8 +546,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             WHEN f.severity = de.tum.cit.aet.hephaestus.practices.model.Severity.CRITICAL THEN 0
             WHEN f.severity = de.tum.cit.aet.hephaestus.practices.model.Severity.MAJOR THEN 1
             WHEN f.severity = de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR THEN 2
-            WHEN f.severity = de.tum.cit.aet.hephaestus.practices.model.Severity.INFO THEN 3
-            ELSE 4
+            ELSE 3
         END) * :severitySign, f.observedAt DESC
         """, countQuery = """
         SELECT COUNT(f) FROM Observation f
@@ -978,7 +979,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             + " CASE WHEN " + NOT_MET_OUTCOME + " THEN 0 WHEN o.outcome = 'MET' THEN 1 ELSE 2 END"
             + " ELSE 0 END,"
             + " CASE WHEN :prioritizeActionable AND " + NOT_MET_OUTCOME + " THEN"
-            + " CASE o.severity WHEN 'CRITICAL' THEN 0 WHEN 'MAJOR' THEN 1 WHEN 'MINOR' THEN 2 WHEN 'INFO' THEN 3"
+            + " CASE o.severity WHEN 'CRITICAL' THEN 0 WHEN 'MAJOR' THEN 1 WHEN 'MINOR' THEN 2"
             + " ELSE 4 END"
             + " ELSE 0 END,"
             + " o.observed_at DESC, o.id DESC";

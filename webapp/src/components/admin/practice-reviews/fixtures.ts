@@ -3,6 +3,7 @@ import type {
 	AgentJob,
 	AutonomyAssignment,
 	EvidenceCitation,
+	ObservationAnswers,
 	Practice,
 	PracticeReviewBucket,
 	PracticeReviewCounts,
@@ -349,6 +350,8 @@ interface ObservationSpec {
 	claimCurrentness?: ReviewObservation["claimCurrentness"];
 	observedAt: string;
 	evidence?: EvidenceCitation[];
+	/** Absent for an observation recorded before reviews answered questions. */
+	answers?: ObservationAnswers;
 }
 
 interface RunSpec {
@@ -518,8 +521,35 @@ export const REVIEW_FIXTURE: RunSpec[] = [
 				practiceSlug: "the-change-explains-itself",
 				group: "documentation",
 				outcome: "NOT_MET",
-				severity: "INFO",
+				severity: "MINOR",
 				observedAt: "2026-07-28T13:37:00Z",
+				answers: {
+					ruleId: "no-why",
+					decidedBy: "The description says what changed but not why.",
+					answers: [
+						{
+							question: "states_what",
+							title: "Says what changed",
+							answer: "YES",
+							because: "Each bullet names a file the change touches.",
+							decisive: false,
+							citations: [0],
+						},
+						{
+							question: "states_why",
+							title: "Says why the change exists",
+							answer: "NO",
+							because: "The body is a bullet per changed file; nothing says what was slow.",
+							decisive: true,
+							citations: [0],
+							search: {
+								consulted: ["scm.pull-request.core"],
+								lookedFor: "a sentence about the problem the cache solves",
+								boundary: "The whole title and body were read",
+							},
+						},
+					],
+				},
 				evidence: [
 					cited(
 						"scm.pull-request.core",
@@ -1083,6 +1113,7 @@ export function observationDetail(observationId: string): ReviewObservationDetai
 			suppressionReason: item.withheldFor,
 		})),
 		evidenceRationale: observation.evidenceRationale,
+		answers: observation.answers,
 		invalidations: [],
 		disputes: [],
 	};

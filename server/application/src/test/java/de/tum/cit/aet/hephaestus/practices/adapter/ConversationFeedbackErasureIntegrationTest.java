@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluation;
@@ -309,6 +310,8 @@ class ConversationFeedbackErasureIntegrationTest extends BaseIntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 Instant.now(),
                 "LIVE");
 
@@ -339,6 +342,7 @@ class ConversationFeedbackErasureIntegrationTest extends BaseIntegrationTest {
         practice.setSlug("erasure-practice-" + workspace.getId());
         practice.setName("Erasure Practice");
         practice.setCriteria("Test description");
+        practice.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         return practiceRepository.save(practice);
     }

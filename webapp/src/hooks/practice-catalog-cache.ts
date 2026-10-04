@@ -101,6 +101,10 @@ export function selectPracticePatch(
 			? { automatedReviewPolicy: practice.automatedReviewPolicy }
 			: {}),
 		...("criteria" in request ? { criteria: practice.criteria } : {}),
+		// Turning automated review off drops the questions server-side.
+		...("judgment" in request || "automatedReviewPolicy" in request
+			? { judgment: practice.judgment }
+			: {}),
 		// A signal edit can change the kind of assessed work; use the server's resulting validation basis.
 		...("signals" in request ||
 		"criteria" in request ||

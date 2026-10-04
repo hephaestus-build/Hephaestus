@@ -111,6 +111,25 @@ export const Default: Story = {
 	},
 };
 
+/**
+ * An observation decided from answers: the deciding rule's reason heads it, the deciding answer comes
+ * first, and each answer names the passages it rests on.
+ */
+export const DecidedFromAnswers: Story = {
+	args: { observation: ready(observationDetail("88888888-8888-8888-8888-888888888888")) },
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(
+			panel.getByRole("heading", { name: "How it was decided", level: 3 }),
+		).toBeVisible();
+		await expect(
+			panel.queryByRole("heading", { name: "Why this was raised", level: 3 }),
+		).not.toBeInTheDocument();
+		await expect(panel.getByText("The description says what changed but not why.")).toBeVisible();
+		await expect(panel.getByText("Decided the outcome")).toBeVisible();
+	},
+};
+
 export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async () => {

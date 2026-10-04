@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationAnswersDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationEvidenceDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -42,6 +43,12 @@ public record ReviewObservationDetailDTO(
 
         @Nullable ObservationEvidenceDTO evidence,
         @Nullable String evidenceRationale,
+
+        @Nullable
+        @Schema(
+                description = "The answers the observation was decided from and the deciding rule; null for an "
+                        + "observation recorded before reviews answered questions, and whenever evidence is withheld")
+        ObservationAnswersDTO answers,
 
         @Schema(description = "Cross-run locus key; null when continuity is unavailable") @Nullable
         String recurrenceKey,
@@ -89,6 +96,7 @@ public record ReviewObservationDetailDTO(
                 observation.getSeverity(),
                 includeEvidence ? ObservationEvidenceDTO.from(observation.getEvidence()) : null,
                 observation.getEvidenceRationale(),
+                includeEvidence ? ObservationAnswersDTO.from(observation) : null,
                 observation.getRecurrenceKey(),
                 ReviewClaimCurrentness.of(revision, practice, observation.getSupersededAt()),
                 invalidations,

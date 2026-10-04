@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMemb
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -151,6 +152,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         practice.setSlug(practiceSlug);
         practice.setName("Practice of " + ws.getWorkspaceSlug());
         practice.setCriteria("Criteria for " + ws.getWorkspaceSlug());
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setSignals(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
         practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()));
         practice.setReviewWhen(Map.of());
@@ -181,6 +183,8 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 null,
                 null,
                 "reasoning",
+                null,
+                null,
                 null,
                 Instant.now(),
                 "LIVE");
@@ -430,6 +434,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         practice.setSlug("in-app-" + ws.getWorkspaceSlug());
         practice.setName("In-app practice of " + ws.getWorkspaceSlug());
         practice.setCriteria("Criteria for " + ws.getWorkspaceSlug());
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setSignals(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
         practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()));
         practice.setReviewWhen(Map.of());
@@ -464,6 +469,8 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 "MAJOR",
                 DIFF_EVIDENCE_JSON,
                 "reasoning",
+                null,
+                null,
                 null,
                 Instant.now(),
                 "LIVE");

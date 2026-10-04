@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalogLoader;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
@@ -592,6 +593,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
             Practice practice =
                     practiceRepository.findById(releaseNotes.getId()).orElseThrow();
             practice.setCriteria("A rewritten rubric, measuring something else");
+            practice.setJudgment(PracticeJudgment.holistic());
             PracticeRevision changed = practiceRevisionRepository.save(new PracticeRevision(practice, 2));
             practice.setCurrentRevision(changed);
             practiceRepository.save(practice);

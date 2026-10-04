@@ -9,6 +9,7 @@ import {
 	DEFAULT_DELIVERY_BEHAVIOR_TEXT,
 	deliveryBehaviorSentences,
 } from "@/components/admin/practice-editor/delivery-behavior-text";
+import { judgmentText } from "@/components/admin/practice-editor/practice-judgment";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ const FIELDS = {
 	SUBJECT: { label: "Person judged", key: "subject" },
 	PRECONDITION: { label: "Only review when", key: "precondition" },
 	CRITERIA: { label: "Review criteria", key: "criteria" },
+	JUDGMENT: { label: "Questions and rules", key: "judgment" },
 	PRECOMPUTE_SCRIPT: { label: "Static analysis", key: "precomputeScript" },
 	AUTOMATED_REVIEW_POLICY: { label: "Automated review settings", key: "automatedReviewPolicy" },
 	WHY_IT_MATTERS: { label: "Why it matters", key: "whyItMatters" },
@@ -56,6 +58,9 @@ function fieldText(definition: PracticeDefinition, field: Field): string {
 	if (field === "DELIVERY_BEHAVIOR") {
 		const sentences = deliveryBehaviorSentences(definition.deliveryBehavior);
 		return sentences.length > 0 ? sentences.join("\n") : DEFAULT_DELIVERY_BEHAVIOR_TEXT;
+	}
+	if (field === "JUDGMENT") {
+		return definition.judgment ? judgmentText(definition.judgment) : "No questions";
 	}
 	const value = definition[FIELDS[field].key];
 	if (value === undefined) {

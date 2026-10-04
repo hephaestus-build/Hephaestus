@@ -106,7 +106,12 @@ task-level note wearing a costume — rewrite it or drop it.
 ## What you are given
 
 - `work/composition/observations.json` — **what this run just measured**, with the reasoning, the
-  citations, and an `anchorable` flag per observation and per citation. `anchorable` means the citation
+  citations, and an `anchorable` flag per observation and per citation. The reviewer answered each
+  practice's questions (`answers`: each question's key, its answer, `because` and the indexes of the
+  citations it rests on) and the practice's own rules decided the outcome from them: `evidenceRationale`
+  opens with the deciding rule's reason, then the deciding answers' reasons. Build a unit on that reason
+  and on the answers that decided it — they name the specific shortfall — never on an answer the rule did
+  not use. `anchorable` means the citation
   points at a line inside this change, and therefore that a note can be placed on it. An observation that
   is not anchorable is not less true — use `ARTIFACT` placement when it belongs on the issue or
   whole-artifact summary instead of inventing a line.

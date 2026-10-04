@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -50,6 +51,7 @@ class AgentJobRetentionObservationIntegrationTest extends AbstractWorkspaceInteg
         practice.setSlug("review-quality");
         practice.setName("Review quality");
         practice.setCriteria("Review the change");
+        practice.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         practice = practiceRepository.save(practice);
@@ -73,6 +75,8 @@ class AgentJobRetentionObservationIntegrationTest extends AbstractWorkspaceInteg
                 "MAJOR",
                 "{}",
                 "Reasoning",
+                null,
+                null,
                 "retention-locus",
                 Instant.now(),
                 "LIVE");

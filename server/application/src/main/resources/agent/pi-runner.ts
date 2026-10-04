@@ -11,6 +11,7 @@ import {
 	createAgentSession,
 	createCodemodeExtension,
 	DefaultResourceLoader,
+	type ExtensionFactory,
 	getAgentDir,
 	defineTool,
 	ModelRuntime,
@@ -26,35 +27,44 @@ import { CHANGE_ROOT } from "./pi-change.ts";
 import { errorText } from "./pi-error-text.ts";
 import { folderCitationIndex } from "./pi-folder-index.ts";
 import {
-	OUTCOME_VALUES,
-	OUTCOME_DESCRIPTIONS,
+	ANSWER_DESCRIPTIONS,
+	ANSWER_VALUES,
+	MAX_BECAUSE_CHARS,
+	MAX_WOULD_SETTLE_IT_CHARS,
 	MAX_SUMMARY_CHARS,
-	SEVERITY_VALUES,
-	SEVERITY_DESCRIPTIONS,
+	OUTCOME_VALUES,
 	boundedAtSentenceEnd,
+	citationsOf,
 	describeVocabulary,
 	isRecord,
 	type NormalizedCitation,
 	type NormalizedObservation,
 	type Outcome,
+	type CitationSource,
+	containsWords,
+	locateAnchor,
+	type PracticeQuestion,
+	type SkipCondition,
 	normalizeObservation,
 	normalizePracticeSlug,
 	resolveQuote,
 	validateEvidenceSources,
-	validateInapplicabilityScope,
 	validateSearchScope,
+	changeHasCitableLines,
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, reasoningSetting, registerHephaestusProvider } from "./pi-provider.ts";
-import { buildBrief } from "./pi-review-brief.ts";
+import { buildBrief, shownLabels } from "./pi-review-brief.ts";
 import {
-	type Work,
 	deriveWindows,
+	finishedTurnEdits,
 	missingSlugs,
 	planTurns,
 	shouldRecordNow,
 	spent,
+	TURN_PRACTICES_MARKER,
 	turnBudget,
+	type Work,
 } from "./pi-review-turns.ts";
 import {
 	ACTIONS,
@@ -141,11 +151,11 @@ function submittedList(
  */
 const OBSERVATION_ITEM_KEYS: ReadonlySet<string> = new Set([
 	"revises",
-	"evidenceRationale",
 	"practiceSlug",
+	"scan",
 	"summary",
-	"outcome",
-	"severity",
+	"evidence",
+	"answers",
 ]);
 /** The keys of a feedback unit that never belong to an object inside it. */
 const UNIT_ITEM_KEYS: ReadonlySet<string> = new Set([
@@ -271,14 +281,96 @@ function followingKey(text: string, from: number): string | null {
 	return text[index] === ":" ? key : null;
 }
 
-/** The schema for such a list: the array, or the same array as a JSON string. */
+/**
+ * The schema for such a list: an array, typed as one. A list that arrives as a JSON string anyway is read
+ * before validation ({@link preparedList}); offering the string form invites it, and the escaping a string
+ * needs is where a list breaks.
+ */
 function listSchema(items: unknown, what: string) {
 	return {
-		anyOf: [
-			{ type: "array", minItems: 1, maxItems: 10, items },
-			{ type: "string", minLength: 2, description: `The ${what} as a JSON-encoded array` },
-		],
+		type: "array",
+		minItems: 1,
+		maxItems: 10,
+		items,
+		description: `The ${what}, as a JSON array`,
 	};
+}
+
+/**
+ * A list tool's arguments in the shape its documented schema declares, before the SDK validates them whole:
+ * a list or nested object sent as JSON text is read, a lone value where a list belongs is listed, answers
+ * sent as a list are keyed by their question, and a line written `[L12]` is a number. A list nobody can
+ * read is passed on as `unreadable`, so the tool refuses it with where it broke instead of the SDK echoing
+ * the whole call back.
+ */
+function preparedList(
+	args: unknown,
+	field: string,
+	shape: unknown,
+	itemKeys: ReadonlySet<string>,
+): Record<string, unknown> {
+	if (!isRecord(args)) {
+		return {
+			[field]: [],
+			unreadable: `the arguments arrived as ${typeof args}, not an object with ${field}`,
+		};
+	}
+	const submitted = submittedList(args[field], itemKeys);
+	if ("error" in submitted) {
+		return { [field]: [], unreadable: submitted.error };
+	}
+	const items = isRecord(shape) ? shape.items : undefined;
+	return {
+		...args,
+		[field]: submitted.items.map((item) => shaped(keyedAnswers(item), items)),
+		...(submitted.repaired ? { repaired: true } : {}),
+	};
+}
+
+/** Answers sent as a list of `{question, …}` keyed by their question, as the schema keys them. */
+function keyedAnswers(item: unknown): unknown {
+	if (!isRecord(item) || !Array.isArray(item.answers)) {
+		return item;
+	}
+	const keyed: Record<string, unknown> = {};
+	for (const answer of item.answers) {
+		const key = isRecord(answer) && typeof answer.question === "string" ? answer.question : "";
+		if (!key || key in keyed) {
+			return item;
+		}
+		keyed[key] = answer;
+	}
+	return { ...item, answers: keyed };
+}
+
+/** One value in the type its documented schema gives it, where that is unambiguous; otherwise as sent. */
+function shaped(value: unknown, schema: unknown): unknown {
+	if (!isRecord(schema) || value === undefined || value === null) {
+		return value;
+	}
+	let current: unknown = value;
+	if ((schema.type === "array" || schema.type === "object") && typeof current === "string") {
+		try {
+			current = parseJson(current);
+		} catch {
+			return value;
+		}
+	}
+	if (schema.type === "array") {
+		return (Array.isArray(current) ? current : [current]).map((item) => shaped(item, schema.items));
+	}
+	if (schema.type === "object" && isRecord(current) && !Array.isArray(current)) {
+		const properties = isRecord(schema.properties) ? schema.properties : {};
+		const rest = isRecord(schema.additionalProperties) ? schema.additionalProperties : undefined;
+		return Object.fromEntries(
+			Object.entries(current).map(([key, item]) => [key, shaped(item, properties[key] ?? rest)]),
+		);
+	}
+	if (schema.type === "integer" && typeof current === "string") {
+		const written = /^\s*\[?L?E?(?<n>\d+)\]?\s*$/iu.exec(current)?.groups?.n;
+		return written === undefined ? current : Number(written);
+	}
+	return current;
 }
 
 interface PracticeIndexEntry {
@@ -286,6 +378,8 @@ interface PracticeIndexEntry {
 	group?: string;
 	readsSources: string[];
 	exhaustiveSources: string[];
+	/** The questions the review answers for this practice; the server derives the outcome from the answers. */
+	questions: PracticeQuestion[];
 }
 
 /** The task this runner was started for. */
@@ -348,7 +442,8 @@ const WORKSPACE_ROOT = "/workspace";
 const EVIDENCE_TOOLS = ["read", "grep", "find", "ls"] as const;
 // Codemode runs a script that calls the other tools, so a chain of reads and searches, or a large
 // result filtered down to what a criterion needs, costs one model call rather than one per step.
-const PRACTICE_TOOLS = [...EVIDENCE_TOOLS, "write", "edit", "bash", "codemode"] as const;
+// A reviewer reads: bash runs git and sed for codemode scripts, and nothing it is given writes the workspace.
+const PRACTICE_TOOLS = [...EVIDENCE_TOOLS, "bash", "codemode"] as const;
 const CWD = process.env.PI_RUNNER_CWD ?? WORKSPACE_ROOT;
 const ENVELOPE_MISMATCH_EXIT = 42;
 const TASK_PATH = `${CWD}/task.json`;
@@ -457,19 +552,57 @@ function readPracticeIndex(): PracticeIndexEntry[] {
 			exhaustiveSources: jsonArray(practice.exhaustiveSources).filter(
 				(kind): kind is string => typeof kind === "string",
 			),
+			questions: practiceQuestions(practice.slug, practice.questions),
 		};
 	});
+}
+
+/** A practice's questions as the index stages them; a practice with none cannot be answered, so it is refused. */
+function practiceQuestions(slug: string, value: unknown): PracticeQuestion[] {
+	const questions = jsonArray(value).map((question): PracticeQuestion => {
+		if (
+			!isRecord(question) ||
+			typeof question.key !== "string" ||
+			typeof question.title !== "string" ||
+			typeof question.question !== "string" ||
+			typeof question.yes !== "string" ||
+			typeof question.no !== "string"
+		) {
+			throw new Error(`the task-declared practice index: ${slug} has a malformed question`);
+		}
+		return {
+			key: question.key,
+			title: question.title,
+			question: question.question,
+			yes: question.yes,
+			no: question.no,
+			skipWhen: jsonArray(question.skipWhen).flatMap((skip): SkipCondition[] =>
+				isRecord(skip) &&
+				typeof skip.question === "string" &&
+				(skip.answer === "YES" || skip.answer === "NO")
+					? [{ question: skip.question, answer: skip.answer }]
+					: [],
+			),
+			...(question.gradesSeverityOnly === true ? { gradesSeverityOnly: true as const } : {}),
+		};
+	});
+	if (questions.length === 0) {
+		throw new Error(`the task-declared practice index: ${slug} has no questions to answer`);
+	}
+	return questions;
 }
 
 const folderIndex = parseJson(readFileSync(INPUT_PATHS.manifest, "utf8"));
 const { availableSourceKinds, artifactSources } = folderCitationIndex(folderIndex);
 const availableSourceKindValues = [...availableSourceKinds].toSorted();
-const stagedArtifactPaths = [...artifactSources.keys()].toSorted();
 const practiceIndex = readPracticeIndex();
 const admittedPractices = new Set(practiceIndex.map((practice) => practice.slug));
-// ABSENT is sound only over sources the practice declares exhaustive.
+// An absence is sound only over sources the practice declares exhaustive.
 const practiceExhaustiveSources = new Map(
 	practiceIndex.map((practice) => [practice.slug, new Set(practice.exhaustiveSources)]),
+);
+const practiceQuestionsBySlug = new Map(
+	practiceIndex.map((practice) => [practice.slug, practice.questions]),
 );
 /** What this run spent, in the buckets usage.json reports. */
 interface UsageTotals {
@@ -540,8 +673,6 @@ const runnerDebug: { attempts: AttemptDebug[]; turns: TurnTrace[]; usageTotals: 
 	turns: [],
 	usageTotals,
 };
-/** The turn the session events are charged to; null between turns. */
-let currentTurn: TurnTrace | null = null;
 
 /** How much of a refusal reason the trace keeps: the kind of failure, not the whole excerpt. */
 const TRACE_REASON_CHARS = 140;
@@ -571,117 +702,109 @@ const searchSchema = {
 		},
 	},
 } as const;
-const inapplicabilitySchema = {
-	type: "object",
-	additionalProperties: false,
-	required: ["consulted", "subject", "ruledOutBy"],
-	properties: {
-		consulted: {
-			type: "array",
-			minItems: 1,
-			items: { type: "string", enum: availableSourceKindValues },
-			description:
-				"Evidence source kinds you read to reach this conclusion, e.g. scm.pull-request.diff.",
-		},
-		subject: {
-			type: "string",
-			minLength: 1,
-			description:
-				"What this practice looks for, e.g. error handling around outbound network calls.",
-		},
-		ruledOutBy: {
-			type: "string",
-			minLength: 1,
-			description:
-				"The fact about THIS work that means the subject cannot occur in it, e.g. the change touches " +
-				"only Markdown documentation and makes no network calls.",
+/**
+ * Every line an observation's answers rest on, listed once and cited by number. The model names lines and
+ * never copies their text: the runner records what those lines say, so a quote can neither drift from the
+ * file nor be paid for twice.
+ */
+const evidenceSchema = {
+	type: "array",
+	minItems: 1,
+	description:
+		"Every line your answers rest on, each listed once; answers cite them by number, 1 for the first. Name " +
+		"the narrowest lines that show the fact. Do not copy their text: Hephaestus records what the lines say.",
+	items: {
+		type: "object",
+		additionalProperties: false,
+		required: ["path", "startLine"],
+		properties: {
+			path: {
+				type: "string",
+				minLength: 1,
+				description:
+					"The staged file as the brief names it (context/description.md), or for a line of the change the changed file as its +++ b/ header names it.",
+			},
+			startLine: {
+				type: "integer",
+				minimum: 1,
+				maximum: 2_147_483_647,
+				description:
+					"The first [L<n>] line: of the staged file, or for a line of the change, of work/change/diff.patch.",
+			},
+			endLine: {
+				type: "integer",
+				minimum: 1,
+				maximum: 2_147_483_647,
+				description: "The last line, at least startLine; omitted means one line.",
+			},
+			side: {
+				type: "string",
+				enum: ["OLD", "NEW"],
+				description: "For a line of the change: the side it is on, as its +/- marker shows.",
+			},
+			revision: {
+				type: "string",
+				pattern: "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+				description:
+					"For repository text at another commit than the captured HEAD: its full commit SHA.",
+			},
+			anchor: {
+				type: "string",
+				maxLength: 120,
+				description:
+					"A few distinctive words copied from the first cited line, e.g. 'guard !text.isEmpty'. When the line number is off, Hephaestus finds the line by them; they are not recorded.",
+			},
 		},
 	},
 } as const;
-const undecidabilitySchema = {
+/**
+ * One answer; the model answers each question on its own and never states an outcome. Its evidence and its
+ * reason come before the answer, so the answer is written from them rather than justified after it.
+ */
+const answerSchema = {
 	type: "object",
 	additionalProperties: false,
-	required: ["openQuestion", "wouldSettleIt"],
+	required: ["cites", "because", "answer"],
 	properties: {
-		openQuestion: {
+		cites: {
+			type: "array",
+			minItems: 1,
+			items: { type: "integer", minimum: 1 },
+			description: "The numbers of the evidence entries that decide this answer, e.g. [1, 3].",
+		},
+		because: {
 			type: "string",
 			minLength: 1,
-			description: "The question the evidence you actually read left open, in one sentence.",
+			maxLength: MAX_BECAUSE_CHARS,
+			description:
+				"One sentence naming the fact in the cited lines that decides this answer, e.g. 'The description only " +
+				"restates the title; no line names a problem or goal.' Evidence, not advice or intent.",
+		},
+		answer: {
+			type: "string",
+			enum: ANSWER_VALUES,
+			description: describeVocabulary(ANSWER_VALUES, ANSWER_DESCRIPTIONS),
+		},
+		search: {
+			...searchSchema,
+			description:
+				"Only when the answer rests on something being absent: what you looked for, in which sources, and " +
+				"what the search did not cover. List every source the practice reads exhaustively.",
 		},
 		wouldSettleIt: {
 			type: "string",
 			minLength: 1,
+			maxLength: MAX_WOULD_SETTLE_IT_CHARS,
 			description:
-				"The EVIDENCE that would have decided it — something that already exists and you could not " +
-				"read, named concretely: 'the body of issue #7', 'the test file the description says covers " +
-				"this'. NOT what the author should have written: advice belongs to a later step, and " +
-				"answering with it leaves nobody any wiser about which source this practice is missing.",
-		},
-	},
-} as const;
-const evidenceSchema = {
-	type: "object",
-	additionalProperties: false,
-	required: ["citations"],
-	description:
-		"citations always: the lines that decide the outcome. Beside them, at most the one branch the " +
-		"outcome takes: search for a MET or NOT_MET that rests on something missing — what you looked " +
-		"for, where, and what the search did not cover; inapplicability for NOT_APPLICABLE; " +
-		"undecidability for UNDETERMINED.",
-	properties: {
-		search: searchSchema,
-		inapplicability: inapplicabilitySchema,
-		undecidability: undecidabilitySchema,
-		citations: {
-			type: "array",
-			minItems: 1,
-			items: {
-				type: "object",
-				additionalProperties: false,
-				required: ["sourceKind", "artifactPath", "path", "startLine"],
-				properties: {
-					sourceKind: { type: "string", enum: availableSourceKindValues },
-					artifactPath: { type: "string", enum: stagedArtifactPaths },
-					path: { type: "string", minLength: 1 },
-					side: {
-						type: "string",
-						enum: ["OLD", "NEW"],
-						description:
-							"For a quote of the change: artifactPath names the pinned change (change.json), path is the file as named on that side, and the lines are the [L<n>] coordinates of work/change/diff.patch.",
-					},
-					revision: {
-						type: "string",
-						pattern: "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
-						description:
-							"For repository text: artifactPath names the captured .git/HEAD, path is repository-relative, and revision optionally selects a full commit SHA; omission means the captured HEAD.",
-					},
-					startLine: {
-						type: "integer",
-						minimum: 1,
-						maximum: 2_147_483_647,
-						description:
-							"The 1-based line of the quoted text in the artifact; for a quote of the change, the [L<n>] coordinate of work/change/diff.patch.",
-					},
-					endLine: {
-						type: "integer",
-						minimum: 1,
-						maximum: 2_147_483_647,
-						description: "The last line of the quote, at least startLine; omitted means one line.",
-					},
-					quote: {
-						type: "string",
-						description:
-							"The text at those lines, copied as shown; a diff marker, a [L<n>] prefix or a non-breaking space read as a space are tolerated. Omit it to cite the whole of the lines: what was recorded is echoed back.",
-					},
-				},
-			},
+				"Only for UNDETERMINED: the existing EVIDENCE that would decide the question — something that " +
+				"exists and you could not read, named concretely: 'the body of issue #7'. Not advice to the author.",
 		},
 	},
 } as const;
 const observationSchema = {
 	type: "object",
 	additionalProperties: false,
-	required: ["practiceSlug", "summary", "outcome", "severity", "evidence", "evidenceRationale"],
+	required: ["practiceSlug", "summary", "evidence", "answers"],
 	properties: {
 		revises: {
 			type: "string",
@@ -689,6 +812,25 @@ const observationSchema = {
 				"To correct a draft already recorded in this review, copy its returned draft reference here and resend the complete observation. Omit for a new draft. A refused correction leaves the previous draft unchanged.",
 		},
 		practiceSlug: { type: "string", minLength: 1 },
+		// Reasoning before format: a model that lists what it found before it cites and answers answers from it.
+		scan: {
+			type: "string",
+			description:
+				"Written first, in a few lines: what you looked for and what you found — for each question that asks you to find something, every candidate line with what it shows, or where you looked and found none. Not recorded; the answers are.",
+		},
+		evidence: evidenceSchema,
+		// One answer shape for every key, not a copy per question: the schema rides on every call of the
+		// session, and a copy for each question of a full catalogue costs tens of thousands of tokens a call.
+		// The turn prompt names each practice's keys, and the runner refuses a missing or foreign one by name.
+		answers: {
+			type: "object",
+			description:
+				"One answer per question the practice asks and its answers do not skip, keyed by the question's key " +
+				'as its Questions section names it — e.g. {"states_why": {"cites": [1], "because": "…", "answer": "NO"}}. ' +
+				"Hephaestus derives the outcome and severity from the answers.",
+			additionalProperties: answerSchema,
+		},
+		// Last: the headline names what the answers found, so it is written after them.
 		summary: {
 			type: "string",
 			minLength: 1,
@@ -696,34 +838,8 @@ const observationSchema = {
 			// documentedShape removes schema bounds, so include this limit in the model-facing description.
 			description:
 				`A short phrase of at most ${MAX_SUMMARY_CHARS} characters identifying the specific behavior whose conformance to the practice standard you assess, such as 'Debug print left in the request handler'. ` +
-				"Never a single word and never the practice's own name; the reasons, titles and quotes go in evidenceRationale. " +
+				"Never a single word and never the practice's own name; the reasons go in each answer's because. " +
 				"A longer summary is refused, not shortened.",
-		},
-		outcome: {
-			type: "string",
-			enum: OUTCOME_VALUES,
-			description: describeVocabulary(OUTCOME_VALUES, OUTCOME_DESCRIPTIONS),
-		},
-		severity: {
-			type: ["string", "null"],
-			enum: [...SEVERITY_VALUES, null],
-			description: `Required for a NOT_MET outcome, from the practice's Severity section; null otherwise. ${describeVocabulary(SEVERITY_VALUES, SEVERITY_DESCRIPTIONS)}`,
-		},
-		evidence: {
-			...evidenceSchema,
-			properties: {
-				citations: evidenceSchema.properties.citations,
-				search: searchSchema,
-				inapplicability: inapplicabilitySchema,
-				undecidability: undecidabilitySchema,
-			},
-		},
-		evidenceRationale: {
-			type: "string",
-			minLength: 1,
-			description:
-				"A concise explanation of how the cited evidence warrants this outcome. Describe evidence, " +
-				"not advice, intent, confidence, or hidden chain-of-thought.",
 		},
 	},
 } as const;
@@ -796,19 +912,92 @@ interface Validated {
 	notes: string[];
 }
 
-function normalizeAndValidateObservation(rawObservation: unknown): Validated {
+/**
+ * The orchestrator with the task's own paths written in: a placeholder such as `<repositoryRoot>` copied
+ * into a command is a shell syntax error, and the session has no other way to learn what it stands for.
+ */
+function orchestratorWithPaths(text: string): string {
+	const { contextRoot, repositoryRoot, manifest, preparedFeedback } = taskEnvelope.paths;
+	const indexPath = taskEnvelope.paths.practiceIndex;
+	return text
+		.replaceAll("<contextRoot>", contextRoot)
+		.replaceAll("<repositoryRoot>", repositoryRoot)
+		.replaceAll("<manifest>", manifest)
+		.replaceAll("<practiceIndex>", indexPath)
+		.replaceAll("<practiceRoot>", nodePath.dirname(indexPath))
+		.replaceAll("<historyRoot>", nodePath.dirname(preparedFeedback));
+}
+
+/** The sources the brief shows whole — every artifact of them, or for the change its diff view; set with the brief. */
+let briefSources: ReadonlySet<string> = new Set();
+
+function sourcesShownWhole(labels: ReadonlySet<string>): Set<string> {
+	const whole = new Set<string>();
+	for (const sourceKind of availableSourceKinds) {
+		const artifacts = [...artifactSources]
+			.filter(([, kind]) => kind === sourceKind)
+			.map(([artifact]) => artifact);
+		const read =
+			sourceKind === DIFF_SOURCE
+				? labels.has(`${CHANGE_ROOT}/diff.patch`)
+				: artifacts.length > 0 && artifacts.every((artifact) => labels.has(artifact));
+		if (read) {
+			whole.add(sourceKind);
+		}
+	}
+	return whole;
+}
+
+/** The artifact a source staged, where it staged one: what a citation of that source is recorded against. */
+function stagedArtifactOf(sourceKind: string): string | undefined {
+	return [...artifactSources].find(([, kind]) => kind === sourceKind)?.[0];
+}
+
+/**
+ * Where a cited path that is no staged record was read: with a side, or naming the change view itself, a
+ * line of the change; any other path outside the records, a file of the checkout.
+ */
+function citationSourceFor({
+	path,
+	side,
+}: {
+	path: string;
+	side: string | null;
+}): CitationSource | undefined {
+	const read = (sourceKind: string) => {
+		const artifactPath = availableSourceKinds.has(sourceKind)
+			? stagedArtifactOf(sourceKind)
+			: undefined;
+		return artifactPath === undefined ? undefined : { artifactPath, sourceKind };
+	};
+	if (side !== null || path === `${CHANGE_ROOT}/diff.patch`) {
+		return read(DIFF_SOURCE);
+	}
+	const contextRoot = `${taskEnvelope.paths.contextRoot}/`;
+	return path.startsWith(contextRoot) || path.startsWith("work/") ? undefined : read(TREE_SOURCE);
+}
+
+function normalizeAndValidateObservation(
+	review: ReviewSession,
+	rawObservation: unknown,
+): Validated {
 	const notes: string[] = [];
-	const observation = normalizeObservation(rawObservation, notes, (artifact) =>
-		artifactSources.get(artifact),
-	);
-	if (!admittedPractices.has(observation.practiceSlug)) {
+	const slug = isRecord(rawObservation) ? normalizePracticeSlug(rawObservation.practiceSlug) : "";
+	if (slug && !admittedPractices.has(slug)) {
 		throw new Error(
-			`unknown practice '${observation.practiceSlug}'; this turn's practices are ${currentTurnSlugs.join(", ")}`,
+			`unknown practice '${slug}'; this turn's practices are ${review.turnSlugs.join(", ")}`,
 		);
 	}
+	const observation = normalizeObservation(
+		rawObservation,
+		(practiceSlug) => practiceQuestionsBySlug.get(practiceSlug),
+		notes,
+		(artifact) => artifactSources.get(artifact),
+		citationSourceFor,
+	);
 	// The manifest says which source staged an artifact; a citation that names the artifact under
 	// another source kind is read as the manifest reads it, and the correction is echoed back.
-	for (const citation of observation.evidence.citations) {
+	for (const citation of citationsOf(observation)) {
 		// A quote of a staged record (description.md, comments.json) named as its path under the pinned
 		// change is a quote of that record: the artifact is the path.
 		const stagedAtPath = artifactSources.get(citation.path);
@@ -845,35 +1034,41 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 		observation,
 		practiceExhaustiveSources.get(observation.practiceSlug) ?? new Set(),
 		availableSourceKinds,
+		briefSources,
+		notes,
 	);
-	validateInapplicabilityScope(observation, availableSourceKinds);
-	// Inapplicability must be grounded in the change unless another observation already consulted it.
-	if (
-		(observation.outcome === "NOT_APPLICABLE" || observation.outcome === "UNDETERMINED") &&
-		availableSourceKinds.has(DIFF_SOURCE) &&
-		![
-			...reviewState.observations.filter(
-				(previous) => previous.practiceSlug !== observation.practiceSlug,
-			),
-			observation,
-		].some(readTheChange)
-	) {
+	// A practice that reads the change answers from it: an answer about the change that never quoted or
+	// searched it would be an answer about text nobody read. A change with no line to quote is exempt.
+	if (readsTheChange(observation.practiceSlug) && !readTheChange(observation)) {
 		throw new Error(
-			"an observation that decides nothing must show it read the change: cite a line of " +
-				`${CHANGE_ROOT}/diff.patch (sourceKind ${DIFF_SOURCE}), or list ${DIFF_SOURCE} among the ` +
-				"sources consulted in evidence.search or evidence.inapplicability",
+			`'${observation.practiceSlug}' reads the change, and none of its answers shows it did: add a changed ` +
+				`line to evidence — the file's path, its side, and lines from ${CHANGE_ROOT}/diff.patch — and cite it ` +
+				`in the answer it decides, or list ${DIFF_SOURCE} in that answer's search.consulted`,
 		);
 	}
-	for (const citation of observation.evidence.citations) {
+	// An evidence entry several answers cite is one citation: it is read and echoed once, and every answer
+	// that cites it records the same lines.
+	const settled = new Map<string, NormalizedCitation>();
+	for (const citation of citationsOf(observation)) {
+		const key = JSON.stringify(citation);
+		const known = settled.get(key);
+		if (known !== undefined) {
+			delete citation.anchor;
+			Object.assign(citation, known);
+			continue;
+		}
 		// Match admission: repository quotes use Git blobs; change quotes use the derived diff.
 		const content = citedContent(citation);
-		const resolved = resolveCited(citation, content);
+		const { anchor } = citation;
+		delete citation.anchor;
+		const resolved =
+			anchoredLines(citation, content, anchor, notes) ?? resolveCited(citation, content);
 		if ("mismatch" in resolved) {
 			throw new Error(
-				`citation does not match ${citation.path}:${citation.startLine}-${citation.endLine} ` +
-					`(${citation.side ?? "text"}) in '${citation.artifactPath}': ${resolved.mismatch}. Copy the exact ` +
-					`artifact text and, for the change, the [L<n>] coordinates and OLD/NEW side of ${CHANGE_ROOT}/diff.patch ` +
-					"(the numbers sed -n or grep -n print are lines of diff.patch, not these coordinates)",
+				`evidence ${citation.path}:${citation.startLine}-${citation.endLine} ` +
+					`(${citation.side ?? "text"}) in '${citation.artifactPath}' does not hold: ${resolved.mismatch}. Cite ` +
+					`the lines as the brief numbers them and, for the change, the [L<n>] coordinates and OLD/NEW side of ` +
+					`${CHANGE_ROOT}/diff.patch (the numbers sed -n or grep -n print are lines of diff.patch, not these coordinates)`,
 			);
 		}
 		const cited = `${citation.path}:${citation.startLine}-${citation.endLine}`;
@@ -884,7 +1079,14 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 			citation.path = resolved.path;
 			citation.side = resolved.side;
 		}
-		if (resolved.startLine !== undefined && resolved.endLine !== undefined) {
+		if (resolved.shortened === true && resolved.endLine !== undefined) {
+			const startLine = resolved.startLine ?? citation.startLine;
+			notes.push(
+				`${cited} could not be recorded whole; recorded ${citation.path}:${startLine}-${resolved.endLine}, the leading lines of it the change shows that one entry holds`,
+			);
+			citation.startLine = startLine;
+			citation.endLine = resolved.endLine;
+		} else if (resolved.startLine !== undefined && resolved.endLine !== undefined) {
 			notes.push(
 				`${cited} does not hold that text; it is at ${citation.path}:${resolved.startLine}-${resolved.endLine}${resolved.side === undefined ? "" : ` (${resolved.side})`}, recorded there`,
 			);
@@ -892,8 +1094,55 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 			citation.endLine = resolved.endLine;
 		}
 		citation.quote = resolved.quote;
+		settled.set(key, { ...citation });
 	}
 	return { observation, notes };
+}
+
+/**
+ * The citation's lines found by its anchor when its numbers miss them: the lines it named do not resolve, or
+ * do not hold the anchor, and the anchor's words are on one line only — for the change, of the cited file on
+ * either side. The cited span moves there whole and is recorded as whole lines; the move is noted. Undefined
+ * when the lines as numbered hold the anchor, or the anchor does not settle where they are.
+ */
+function anchoredLines(
+	citation: NormalizedCitation,
+	content: ReturnType<typeof citedContent>,
+	anchor: string | undefined,
+	notes: string[],
+): ReturnType<typeof resolveCited> | undefined {
+	if (anchor === undefined || citation.quote.trim() !== "" || typeof content !== "string") {
+		return undefined;
+	}
+	const asNumbered = resolveCited(citation, content);
+	if (!("mismatch" in asNumbered) && containsWords(asNumbered.quote, anchor)) {
+		return asNumbered;
+	}
+	const at = locateAnchor(citation, content, anchor);
+	if (at === undefined) {
+		return undefined;
+	}
+	const moved: NormalizedCitation = {
+		...citation,
+		path: at.path,
+		...(at.side === undefined ? {} : { side: at.side }),
+		startLine: at.line,
+		endLine: at.line + (citation.endLine - citation.startLine),
+	};
+	const whole = resolveCited(moved, content);
+	if ("mismatch" in whole) {
+		return undefined;
+	}
+	notes.push(
+		`${citation.path}:${citation.startLine}-${citation.endLine} did not hold "${anchor}"; recorded at ${moved.path}:${moved.startLine}-${moved.endLine}${moved.side === undefined ? "" : ` (${moved.side})`}, where it is`,
+	);
+	Object.assign(citation, {
+		path: moved.path,
+		startLine: moved.startLine,
+		endLine: moved.endLine,
+		...(moved.side === undefined ? {} : { side: moved.side }),
+	});
+	return whole;
 }
 
 /** Infer an omitted diff side by exact quote match, preferring NEW; never override a supplied side. */
@@ -924,16 +1173,33 @@ function excerptOf(text: string): string {
 const DIFF_SOURCE = "scm.pull-request.diff";
 const TREE_SOURCE = "scm.repository.tree";
 
-/** Whether an observation cites the change or names it among the sources its warrant consulted. */
+/** Whether any answer cites the change or names it among the sources its search consulted. */
+let citableChange: boolean | undefined;
+/** Read once: whether the staged change has any line a citation could quote. */
+function changeIsCitable(): boolean {
+	citableChange ??= changeHasCitableLines(readFileSync(`${CWD}/${CHANGE_ROOT}/diff.patch`, "utf8"));
+	return citableChange;
+}
+
+/**
+ * Whether a practice must show it read the change: its subject is the change — it declares the diff exhaustive,
+ * so a NO may rest on the change's absence — and the change has a line to cite. A practice that reads the diff
+ * only to place what it judges elsewhere, such as a reviewer's comment, owes no line of it.
+ */
+function readsTheChange(slug: string): boolean {
+	return (
+		availableSourceKinds.has(DIFF_SOURCE) &&
+		(practiceExhaustiveSources.get(slug)?.has(DIFF_SOURCE) ?? false) &&
+		changeIsCitable()
+	);
+}
+
 function readTheChange(observation: NormalizedObservation): boolean {
-	if (observation.evidence.citations.some((citation) => citation.sourceKind === DIFF_SOURCE)) {
-		return true;
-	}
-	const consulted = [
-		...(observation.evidence.search?.consulted ?? []),
-		...(observation.evidence.inapplicability?.consulted ?? []),
-	];
-	return consulted.includes(DIFF_SOURCE);
+	return observation.answers.some(
+		(answer) =>
+			answer.citations.some((citation) => citation.sourceKind === DIFF_SOURCE) ||
+			(answer.search?.consulted.includes(DIFF_SOURCE) ?? false),
+	);
 }
 
 /** What a repository read returns for a file that is not text: git's own rule, a NUL in the opening bytes. */
@@ -1022,7 +1288,7 @@ function readCheckoutFile(path: string, repository: string): string | typeof BIN
 type Recorded =
 	| (({ kind: "stored" } | { kind: "revised" }) & {
 			slug: string;
-			negative: boolean;
+			answered: string;
 			filled: string[];
 	  })
 	| { kind: "duplicate"; slug: string }
@@ -1045,11 +1311,14 @@ const REPEATED_RECORDING_NUDGE = 2;
 const REPEATED_RECORDING_ABORT = 3;
 
 /** Avoid logging SDK error events again when the tool already logged its refusal. */
-const answeredRefusals = new Set<string>();
 
 /** A refusal the tool itself is answering: logged where it was decided, and once. */
-async function refusal<T>(toolCallId: string, text: string): Promise<AgentToolResult<T>> {
-	answeredRefusals.add(toolCallId);
+async function refusal<T>(
+	review: ReviewSession,
+	toolCallId: string,
+	text: string,
+): Promise<AgentToolResult<T>> {
+	review.answeredRefusals.add(toolCallId);
 	throw new Error(text);
 }
 
@@ -1077,9 +1346,6 @@ function firstLine(text: string): string {
 	return line.length > TOOL_ERROR_CHARS ? `${line.slice(0, TOOL_ERROR_CHARS)}…` : line;
 }
 
-/** The session the turn events belong to, once it exists; what the loop bound aborts. */
-let activeSession: AgentSession | null = null;
-
 /**
  * What the turn in flight still owes and how it is told to record it; set and cleared with its trace.
  * Measuring owes one observation per practice, composition one decision per NOT_MET practice.
@@ -1090,7 +1356,51 @@ interface TurnDemand {
 	nudge: string;
 	endsWhenPaid?: true;
 }
-let turnDemand: TurnDemand | null = null;
+
+/**
+ * The review's one model session and the turn it is running. Every turn runs in it, one after another, so a
+ * later turn builds on the brief and the reading the earlier ones already paid for.
+ */
+interface ReviewSession {
+	/** The model session the turn events belong to, once it exists; what its loop bounds abort. */
+	session: AgentSession | null;
+	/** The turn the session events are charged to; null between turns. */
+	turn: TurnTrace | null;
+	/** The practices the turn asked about; a recorded result for one of them is what it owes. */
+	turnSlugs: readonly string[];
+	/** What the turn in flight still owes and how it is told to record it; set and cleared with its trace. */
+	demand: TurnDemand | null;
+	/** When the session last showed any sign of life; what the stall watchdog reads. */
+	lastEventAt: number;
+	/** Output tokens of the last assistant message, when that message carries a recording call. */
+	recordingMessageTokens: number;
+	/** Whether the task, the brief and the example are in this session's context: see openingIfNeeded. */
+	openingInContext: boolean;
+	/** How often each call of the current turn has been made: the loop guard's memory, reset per turn. */
+	repeatedCalls: Map<string, number>;
+	/**
+	 * The items refused in this turn, as sent, with why: an identical resend gets the same answer, so it is
+	 * told so at once rather than checked again; cleared with the turn.
+	 */
+	refusedItems: Map<string, { reason: string; resent: number }>;
+	/** The tool calls a tool already answered with its own refusal; the session's other errors are the SDK's. */
+	answeredRefusals: Set<string>;
+}
+
+function newReviewSession(): ReviewSession {
+	return {
+		session: null,
+		turn: null,
+		turnSlugs: [],
+		demand: null,
+		lastEventAt: Date.now(),
+		recordingMessageTokens: 0,
+		openingInContext: false,
+		repeatedCalls: new Map(),
+		refusedItems: new Map(),
+		answeredRefusals: new Set(),
+	};
+}
 
 /**
  * Output tokens the model spends per observation it records, averaged over its recording messages: what
@@ -1098,10 +1408,6 @@ let turnDemand: TurnDemand | null = null;
  * has recorded once.
  */
 let tokensPerObservation = 1500;
-/** Output tokens of the last assistant message, when that message carries a recording call. */
-let recordingMessageTokens = 0;
-/** When the session last showed any sign of life; what the stall watchdog reads. */
-let lastEventAt = Date.now();
 
 /** How many observations a report_observation call carried, stored, duplicate or refused alike. */
 function observationsIn(result: unknown): number {
@@ -1119,47 +1425,48 @@ function observationsIn(result: unknown): number {
  * remaining work only pays for that, and is ended between model calls — after the tools of the call that
  * spent the budget have run, so a recording in that call lands — never within one.
  */
-function chargeWork(event: AgentSessionEvent): void {
-	lastEventAt = Date.now();
-	const turn = currentTurn;
+function chargeWork(review: ReviewSession, event: AgentSessionEvent): void {
+	review.lastEventAt = Date.now();
+	const { turn } = review;
 	if (event.type === "message_end" && event.message.role === "assistant") {
 		const output = outputTokensOf(event.message);
-		recordingMessageTokens = listOrEmpty(event.message.content).some(
+		review.recordingMessageTokens = listOrEmpty(event.message.content).some(
 			(c) => c.type === "toolCall" && c.name === "report_observation",
 		)
 			? output
 			: 0;
-		if (!turn || !turnDemand) {
+		const { demand } = review;
+		if (!turn || !demand) {
 			return;
 		}
 		turn.calls += 1;
 		turn.outputTokens += output;
-		noteCutOff(turn, event.message.stopReason === "length" || output >= outputLimit);
+		noteCutOff(review, turn, event.message.stopReason === "length" || output >= outputLimit);
 		const used: Work = { modelCalls: turn.calls, outputTokens: turn.outputTokens };
 		if (
 			!turn.askedToRecord &&
 			turn.stoppedBy === null &&
-			shouldRecordNow(used, turn.budget, turnDemand.owed(), tokensPerObservation)
+			shouldRecordNow(used, turn.budget, demand.owed(), tokensPerObservation)
 		) {
 			turn.askedToRecord = true;
 			console.error(
 				`[pi-runner] ${turn.label}: ${turn.calls} of ${turn.budget.modelCalls} calls and ` +
 					`${turn.outputTokens} of ${turn.budget.outputTokens} output tokens spent — nudging to record`,
 			);
-			if (activeSession) {
-				void steer(activeSession, turnDemand.nudge);
+			if (review.session) {
+				void steer(review.session, demand.nudge);
 			}
 		}
 		return;
 	}
 	if (event.type === "tool_execution_end" && event.toolName === "report_observation") {
 		const written = observationsIn(event.result);
-		if (written > 0 && recordingMessageTokens > 0) {
+		if (written > 0 && review.recordingMessageTokens > 0) {
 			tokensPerObservation = Math.round(
-				(tokensPerObservation + recordingMessageTokens / written) / 2,
+				(tokensPerObservation + review.recordingMessageTokens / written) / 2,
 			);
 		}
-		recordingMessageTokens = 0;
+		review.recordingMessageTokens = 0;
 		return;
 	}
 	if (
@@ -1168,6 +1475,7 @@ function chargeWork(event: AgentSessionEvent): void {
 		spent({ modelCalls: turn.calls, outputTokens: turn.outputTokens }, turn.budget)
 	) {
 		stopTurn(
+			review,
 			"budget",
 			`work budget spent (${turn.calls} calls, ${turn.outputTokens} output tokens) — ending this turn`,
 		);
@@ -1178,22 +1486,23 @@ function chargeWork(event: AgentSessionEvent): void {
  * A call cut off at the output limit reaches its tool incomplete, and the tool's error reads like the
  * model's mistake: the model is told it was the cut, once; a second cut in the turn ends it.
  */
-function noteCutOff(turn: TurnTrace, cutOff: boolean): void {
+function noteCutOff(review: ReviewSession, turn: TurnTrace, cutOff: boolean): void {
 	if (!cutOff) {
 		return;
 	}
 	turn.cutOff += 1;
 	if (turn.cutOff >= CUT_OFF_ABORT) {
 		stopTurn(
+			review,
 			"loop",
 			`${turn.cutOff} calls in this turn ran into the ${outputLimit}-token output limit — aborting this turn`,
 		);
 		return;
 	}
 	console.error(`[pi-runner] ${turn.label}: a call ran into the output limit — telling the model`);
-	if (activeSession) {
+	if (review.session) {
 		void steer(
-			activeSession,
+			review.session,
 			`Your last call was cut off at the ${outputLimit}-token output limit, so its tool received it ` +
 				"incomplete and failed: the error it reports is the cut, not your syntax. Send a short call " +
 				"instead — a search with a pattern rather than a list of every value, and a few " +
@@ -1203,14 +1512,14 @@ function noteCutOff(turn: TurnTrace, cutOff: boolean): void {
 }
 
 /** End the turn in flight for a reason of the runner's own; the first reason is the one the trace keeps. */
-function stopTurn(reason: StopReason, why: string): void {
-	const turn = currentTurn;
+function stopTurn(review: ReviewSession, reason: StopReason, why: string): void {
+	const { turn } = review;
 	console.error(`[pi-runner] ${turn?.label ?? "review"}: ${why}`);
 	if (turn && turn.stoppedBy === null) {
 		turn.stoppedBy = reason;
 	}
-	if (activeSession) {
-		void abortSession(activeSession);
+	if (review.session) {
+		void abortSession(review.session);
 	}
 }
 
@@ -1230,16 +1539,10 @@ function slugOf(raw: unknown): string {
 	return (isRecord(raw) ? normalizePracticeSlug(raw.practiceSlug) : "") || "unknown";
 }
 
-/**
- * The items refused in this turn, as sent, with why: an identical resend gets the same answer, so it is
- * told so at once rather than checked again; cleared with the turn.
- */
-const refusedItems = new Map<string, { reason: string; resent: number }>();
-
 /** An identical refused item sent this many times more ends the turn: the circuit breaker. */
 const IDENTICAL_REFUSAL_ABORT = 2;
 
-function record(raw: unknown): Recorded {
+function record(review: ReviewSession, raw: unknown): Recorded {
 	const slug = slugOf(raw);
 	// An item with no slug is answered with what it lacks, never with the bound of a practice named
 	// "unknown": the refusal it is counted under is a bookkeeping name, not one the session sent.
@@ -1251,12 +1554,13 @@ function record(raw: unknown): Recorded {
 		};
 	}
 	const sent = JSON.stringify(raw);
-	const earlier = refusedItems.get(sent);
+	const earlier = review.refusedItems.get(sent);
 	if (earlier !== undefined) {
 		earlier.resent += 1;
 		countRefusal(slug);
 		if (earlier.resent >= IDENTICAL_REFUSAL_ABORT) {
 			stopTurn(
+				review,
 				"loop",
 				`the same refused ${slug} observation sent ${earlier.resent + 1} times — aborting this turn`,
 			);
@@ -1284,18 +1588,18 @@ function record(raw: unknown): Recorded {
 	}
 	let validated: Validated;
 	try {
-		validated = normalizeAndValidateObservation(candidate);
+		validated = normalizeAndValidateObservation(review, candidate);
 	} catch (error) {
 		countRefusal(slug);
 		const reason = errorText(error);
-		refusedItems.set(sent, { reason, resent: 0 });
+		review.refusedItems.set(sent, { reason, resent: 0 });
 		return { kind: "refused", slug, reason };
 	}
 	const { observation, notes } = validated;
 	const index = reviewState.observations.findIndex((draft) => draft.practiceSlug === slug);
+	// A revision of a draft that was never stored — its first send was refused — is that first draft.
 	if (index === -1 && revises !== undefined) {
-		countRefusal(slug);
-		return { kind: "refused", slug, reason: `No draft '${slug}' exists in this review to revise.` };
+		notes.push(`no draft '${slug}' existed to revise; stored as its first draft`);
 	}
 	const previous = reviewState.observations[index];
 	if (previous !== undefined && isDeepStrictEqual(previous, observation)) {
@@ -1317,7 +1621,7 @@ function record(raw: unknown): Recorded {
 	return {
 		kind: previous === undefined ? "stored" : "revised",
 		slug,
-		negative: observation.outcome === "NOT_MET",
+		answered: answeredLine(observation),
 		filled: notes,
 	};
 }
@@ -1339,11 +1643,15 @@ function recordedSoFar(): string {
 	}
 	return reviewState.observations
 		.map((observation) => {
-			const verdict = observation.outcome;
-			const cited = [...new Set(observation.evidence.citations.map((citation) => citation.path))];
-			return `- ${observation.practiceSlug}: ${verdict} — ${observation.summary} (cites ${cited.join(", ")})`;
+			const cited = [...new Set(citationsOf(observation).map((citation) => citation.path))];
+			return `- ${observation.practiceSlug}: ${answeredLine(observation)} — ${observation.summary} (cites ${cited.join(", ")})`;
 		})
 		.join("\n");
+}
+
+/** The answers as one line, the question keys with what each was answered: what the model checks its draft by. */
+function answeredLine(observation: NormalizedObservation): string {
+	return observation.answers.map((answer) => `${answer.question} ${answer.answer}`).join(", ");
 }
 
 interface ReportObservationDetails {
@@ -1357,26 +1665,23 @@ interface ReportObservationDetails {
 
 const MAX_REFUSAL_LOG_CHARS = 500;
 
-function logRefusal(slug: string, reason: string): void {
+function logRefusal(review: ReviewSession, slug: string, reason: string): void {
 	const line = `[pi-runner] observation refused for ${slug}: ${reason}`;
 	console.error(
 		line.length > MAX_REFUSAL_LOG_CHARS ? `${line.slice(0, MAX_REFUSAL_LOG_CHARS)}…` : line,
 	);
-	if (currentTurn) {
-		currentTurn.refused += 1;
-		currentTurn.refusalReasons.push(
+	if (review.turn) {
+		review.turn.refused += 1;
+		review.turn.refusalReasons.push(
 			reason.length > TRACE_REASON_CHARS ? `${reason.slice(0, TRACE_REASON_CHARS)}…` : reason,
 		);
 	}
 }
 
-/** The practices the current turn asked about; a recorded result for one of them is what the turn owes. */
-let currentTurnSlugs: readonly string[] = [];
-
-/** The practices of the turn in flight with no recorded result that may still get one. */
-function owedPractices(): string[] {
+/** The practices of the review's turn in flight with no recorded result that may still get one. */
+function owedPractices(review: ReviewSession): string[] {
 	const observed = new Set(reviewState.observations.map((item) => item.practiceSlug));
-	return currentTurnSlugs.filter((slug) => !observed.has(slug) && !blockedPractices.has(slug));
+	return review.turnSlugs.filter((slug) => !observed.has(slug) && !blockedPractices.has(slug));
 }
 
 /** JSON Schema keywords that refuse; what they say is applied per observation instead. */
@@ -1404,10 +1709,8 @@ function documentedShape(schema: unknown): unknown {
 		return schema;
 	}
 	const out: Record<string, unknown> = {};
-	// Container types go, so a list may arrive serialized and each item is answered on its own; scalar
-	// types stay, because they tell the model what a value is. The tool still reads a mistyped scalar
-	// itself where it can ("L12" for a line), so the SDK's coercion is not the only reader.
-	const structural = schema.type === "object" || schema.type === "array";
+	// Types stay, containers included: they tell the model what each value is, and a model shown a list
+	// writes a list. What the SDK would refuse whole for its type is put in shape first, by preparedList.
 	const noted = (note: string) => {
 		const description = typeof out.description === "string" ? out.description : "";
 		out.description = description ? `${description} ${note}` : note;
@@ -1425,7 +1728,13 @@ function documentedShape(schema: unknown): unknown {
 			noted(`Required: ${value.map(String).join(", ")}.`);
 			continue;
 		}
-		if (RULE_KEYWORDS.has(key) || (key === "type" && structural)) {
+		// A schema under additionalProperties is the shape of every value, as the answers are keyed; only the
+		// boolean form is a rule.
+		if (key === "additionalProperties" && isRecord(value)) {
+			out[key] = documentedShape(value);
+			continue;
+		}
+		if (RULE_KEYWORDS.has(key)) {
 			continue;
 		}
 		if (key === "enum" && Array.isArray(value)) {
@@ -1441,7 +1750,8 @@ function documentedShape(schema: unknown): unknown {
 	return out;
 }
 
-function buildReportObservationTool() {
+function buildReportObservationTool(review: ReviewSession) {
+	const observations = documentedShape(listSchema(observationSchema, "observations"));
 	return defineTool({
 		name: "report_observation",
 		exposure: "model-only",
@@ -1453,10 +1763,10 @@ function buildReportObservationTool() {
 		parameters: {
 			type: "object",
 			required: ["observations"],
-			properties: {
-				observations: documentedShape(listSchema(observationSchema, "observations")),
-			},
+			properties: { observations },
 		},
+		prepareArguments: (args) =>
+			preparedList(args, "observations", observations, OBSERVATION_ITEM_KEYS),
 		execute: async (toolCallId, params): Promise<AgentToolResult<ReportObservationDetails>> => {
 			if (measurementClosed) {
 				const text = "Measurement is closed; this turn may only compose feedback.";
@@ -1472,16 +1782,20 @@ function buildReportObservationTool() {
 					},
 				};
 			}
-			const submitted = submittedList(
-				isRecord(params) ? params.observations : null,
-				OBSERVATION_ITEM_KEYS,
-			);
-			if ("error" in submitted) {
+			const parsed =
+				isRecord(params) && typeof params.unreadable === "string"
+					? { error: params.unreadable }
+					: submittedList(isRecord(params) ? params.observations : null, OBSERVATION_ITEM_KEYS);
+			if ("error" in parsed) {
 				// No practice is charged for a list nobody could read: the repeated-call guard ends a session
 				// that keeps sending the same string, and the practices stay owed.
-				logRefusal("(unparsed list)", submitted.error);
-				return refusal(toolCallId, `observations refused — ${submitted.error}`);
+				logRefusal(review, "(unparsed list)", parsed.error);
+				return refusal(review, toolCallId, `observations refused — ${parsed.error}`);
 			}
+			const submitted = {
+				...parsed,
+				repaired: parsed.repaired || (isRecord(params) && params.repaired === true),
+			};
 			const slugs = submitted.items.map((item) =>
 				isRecord(item) ? normalizePracticeSlug(item.practiceSlug) : "",
 			);
@@ -1489,24 +1803,25 @@ function buildReportObservationTool() {
 			if (repeated.length > 0) {
 				for (const slug of new Set(repeated)) {
 					countRefusal(slug);
-					logRefusal(slug, "more than one item for this practice in the call");
+					logRefusal(review, slug, "more than one item for this practice in the call");
 				}
 				return refusal(
+					review,
 					toolCallId,
 					`Call refused without changing any drafts: more than one item for ${[...new Set(repeated)].join(", ")}. Send one complete observation per practice.`,
 				);
 			}
-			const outcomes = submitted.items.map(record);
+			const outcomes = submitted.items.map((item) => record(review, item));
 			const stored = outcomes.filter(
 				(outcome) => outcome.kind === "stored" || outcome.kind === "revised",
 			);
 			for (const outcome of outcomes) {
 				if (outcome.kind === "refused") {
-					logRefusal(outcome.slug, outcome.reason);
+					logRefusal(review, outcome.slug, outcome.reason);
 				}
 			}
-			if (currentTurn) {
-				currentTurn.stored += stored.length;
+			if (review.turn) {
+				review.turn.stored += stored.length;
 			}
 			if (stored.length > 0) {
 				persistReviewState();
@@ -1516,12 +1831,12 @@ function buildReportObservationTool() {
 			}
 			// A practice past its refusal limit is not owed any more: listing it as owed invites the resend
 			// it can no longer accept.
-			const remainingPractices = owedPractices();
-			const closed = currentTurnSlugs.filter((slug) => blockedPractices.has(slug));
+			const remainingPractices = owedPractices(review);
+			const closed = review.turnSlugs.filter((slug) => blockedPractices.has(slug));
 			const lines = outcomes.map((outcome, index) => {
 				const head = `#${index + 1} ${outcome.slug}:`;
 				if (outcome.kind === "stored" || outcome.kind === "revised") {
-					return `${head} ${outcome.kind}${outcome.negative ? " (negative)" : ""}. Draft reference: '${outcome.slug}'.${outcome.filled.map((line) => `\n   ${line}`).join("")}`;
+					return `${head} ${outcome.kind} — ${outcome.answered}. Draft reference: '${outcome.slug}'.${outcome.filled.map((line) => `\n   ${line}`).join("")}`;
 				}
 				if (outcome.kind === "duplicate") {
 					return `${head} already recorded; this item changed nothing, so do not send it again.`;
@@ -1552,7 +1867,7 @@ function buildReportObservationTool() {
 			// recorded included, or it reads as success and is sent again; one that stored some of what it
 			// sent is an answer, with the refusals named in it.
 			if (stored.length === 0) {
-				return refusal(toolCallId, text);
+				return refusal(review, toolCallId, text);
 			}
 			// The turn owes nothing more once each of its practices has a result; ending the run here
 			// spares the wrap-up calls a session otherwise makes after its last recording.
@@ -1603,6 +1918,51 @@ function logPracticeCoverage() {
 	);
 }
 
+/** The text a message carries to the model, whatever shape its content has. */
+function messageText(message: unknown): string {
+	const content: unknown = isRecord(message) ? message.content : undefined;
+	if (typeof content === "string") {
+		return content;
+	}
+	return Array.isArray(content)
+		? content
+				.map((block: unknown) =>
+					isRecord(block) && typeof block.text === "string" ? block.text : "",
+				)
+				.join("")
+		: "";
+}
+
+/**
+ * Half the model's context window, in characters at four to a token: past it, a turn's end clears what the
+ * finished turns no longer need, well before compaction would summarize the session.
+ */
+let contextBudgetChars = Number.POSITIVE_INFINITY;
+
+/**
+ * When a turn ends and the context has outgrown its budget, the finished turns' criteria and the raw output of
+ * their reads leave the context of every later call, as {@link finishedTurnEdits} decides; the session records
+ * them as context edits, so its history stays whole.
+ */
+const finishedTurnsLeaveTheirBulk: ExtensionFactory = (pi) => {
+	pi.on("agent_before_settle", (event) => ({
+		entries: finishedTurnEdits(
+			event.context.contextEntries.flatMap((entry) =>
+				entry.messages.map((message) => ({
+					entryId: entry.sourceEntry.id,
+					role: message.role,
+					text: messageText(message),
+				})),
+			),
+			contextBudgetChars,
+		).map((edit) => ({
+			type: "context_edit" as const,
+			targetId: edit.targetId,
+			replacement: { content: edit.content },
+		})),
+	}));
+};
+
 /** What a composer that reads instead of writing is told, at the exploration bound and near the budget's end. */
 const COMPOSITION_NUDGE =
 	`Stop reading: the admitted observations and the history are in this turn's prompt and in ` +
@@ -1615,8 +1975,9 @@ const COMPOSITION_NUDGE =
 const COMPOSITION_EXPLORATION_NUDGE = 12;
 
 const PERSIST_DISCIPLINE =
-	`Record the outcome the evidence supports, MET, NOT_MET, NOT_APPLICABLE, or UNDETERMINED; there is no quota ` +
-	`and no next step to write. Use tools only from this point onward; no planning prose.`;
+	`Answer every question of each practice from what the evidence shows — YES, NO, or UNDETERMINED with what ` +
+	`would settle it; there is no quota and no next step to write. Use tools only from this point onward; no ` +
+	`planning prose.`;
 
 /** What a turn is told once its remaining work only pays for recording what it owes. */
 const RECORD_NUDGE =
@@ -1731,7 +2092,7 @@ interface ReportSummaryDetails {
 /** Refused leads before the tool answers that the review opens on its first finding and stays quiet. */
 const MAX_LEAD_REFUSALS = 3;
 
-function buildSummaryTool() {
+function buildSummaryTool(review: ReviewSession) {
 	let leadRefusals = 0;
 
 	return defineTool({
@@ -1755,7 +2116,8 @@ function buildSummaryTool() {
 			},
 		},
 		execute: async (toolCallId, params): Promise<AgentToolResult<ReportSummaryDetails>> => {
-			const refuse = async (text: string) => refusal<ReportSummaryDetails>(toolCallId, text);
+			const refuse = async (text: string) =>
+				refusal<ReportSummaryDetails>(review, toolCallId, text);
 			if (!compositionAdmitted) {
 				return refuse(
 					"Feedback composition opens only after Java admits the completed observations.",
@@ -1791,8 +2153,8 @@ function buildSummaryTool() {
 			}
 			composedFeedback.lead = lead;
 			persistComposedFeedback();
-			if (currentTurn) {
-				currentTurn.stored += 1;
+			if (review.turn) {
+				review.turn.stored += 1;
 			}
 			return {
 				content: [
@@ -2000,6 +2362,7 @@ function buildFeedbackTool(
 	request: CompositionRequest,
 	observations: readonly AdmittedObservation[],
 	preparedTargets: PreparedFeedbackTarget[],
+	review: ReviewSession,
 ) {
 	// The reader resolves supersession against the envelope's copy of this list and drops any unit
 	// naming a thread outside it, so the vocabulary is recorded here, where it is decided.
@@ -2065,7 +2428,7 @@ function buildFeedbackTool(
 		};
 	};
 
-	return defineTool({
+	const tool = defineTool({
 		name: "report_feedback",
 		exposure: "model-only",
 		label: "Report Feedback",
@@ -2221,20 +2584,24 @@ function buildFeedbackTool(
 					details: { stored: 0 },
 				};
 			}
-			const submitted = submittedList(isRecord(params) ? params.units : null, UNIT_ITEM_KEYS);
+			const submitted =
+				isRecord(params) && typeof params.unreadable === "string"
+					? { error: params.unreadable }
+					: submittedList(isRecord(params) ? params.units : null, UNIT_ITEM_KEYS);
 			if ("error" in submitted) {
-				return refusal(toolCallId, `units refused — ${submitted.error}`);
+				return refusal(review, toolCallId, `units refused — ${submitted.error}`);
 			}
 			if (submitted.items.length === 0) {
 				return refusal(
+					review,
 					toolCallId,
 					"units refused — the list is empty; send every unit you have ready in it",
 				);
 			}
 			const outcomes = submitted.items.map(store);
 			const stored = outcomes.filter((outcome) => outcome.stored).length;
-			if (currentTurn) {
-				currentTurn.stored += stored;
+			if (review.turn) {
+				review.turn.stored += stored;
 			}
 			if (stored > 0) {
 				persistComposedFeedback();
@@ -2243,15 +2610,23 @@ function buildFeedbackTool(
 			// A call that stored nothing is an error the session must correct — the reasons are in it;
 			// one that stored some of what it sent is an answer, with the skips named per unit.
 			if (stored === 0) {
-				return refusal(toolCallId, text);
+				return refusal(review, toolCallId, text);
 			}
 			return {
 				content: [{ type: "text", text }],
 				details: { stored, total: composedFeedback.units.length },
-				terminate: turnDemand?.endsWhenPaid === true && turnDemand.owed() === 0,
+				terminate: review.demand?.endsWhenPaid === true && review.demand.owed() === 0,
 			};
 		},
 	});
+	// Read before the SDK validates the call whole, as the observations are: see preparedList.
+	const parameters: unknown = tool.parameters;
+	const units =
+		isRecord(parameters) && isRecord(parameters.properties)
+			? parameters.properties.units
+			: undefined;
+	tool.prepareArguments = (args) => preparedList(args, "units", units, UNIT_ITEM_KEYS);
+	return tool;
 }
 
 /** Match ComposedFeedbackUnit bounds so the model can correct a unit before server admission. */
@@ -2876,9 +3251,16 @@ async function admitObservations() {
 	);
 }
 
-function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measuring: boolean): void {
+function noteToolCall(
+	review: ReviewSession,
+	turn: TurnTrace,
+	toolName: string,
+	args: unknown,
+	measuring: boolean,
+): void {
 	turn.toolCalls[toolName] = (turn.toolCalls[toolName] ?? 0) + 1;
-	if (!activeSession) {
+	const { session } = review;
+	if (!session) {
 		return;
 	}
 	const calls = Object.values(turn.toolCalls).reduce((sum, count) => sum + count, 0);
@@ -2891,11 +3273,11 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 		console.error(
 			`[pi-runner] composition: ${COMPOSITION_EXPLORATION_NUDGE} calls without a recording call — nudging to persist`,
 		);
-		void steer(activeSession, COMPOSITION_NUDGE);
+		void steer(session, COMPOSITION_NUDGE);
 	}
 	const signature = `${toolName}:${JSON.stringify(args)}`;
-	const repeats = (repeatedCalls.get(signature) ?? 0) + 1;
-	repeatedCalls.set(signature, repeats);
+	const repeats = (review.repeatedCalls.get(signature) ?? 0) + 1;
+	review.repeatedCalls.set(signature, repeats);
 	turn.repeatedCalls = Math.max(turn.repeatedCalls, repeats);
 	const recording = RECORDING_TOOLS.has(toolName);
 	if (repeats === (recording ? REPEATED_RECORDING_NUDGE : REPEATED_CALL_NUDGE)) {
@@ -2904,24 +3286,25 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 		);
 		// Naming what is still owed matters most when the repeated call is the recording itself: "record"
 		// alone reads as "send that again".
-		const owed = measuring ? owedPractices() : [];
+		const owed = measuring ? owedPractices(review) : [];
 		const next =
 			owed.length > 0
 				? `Still owed: ${owed.join(", ")}. Record what the evidence you have read supports for these`
 				: "Record what the evidence you have read supports";
 		void steer(
-			activeSession,
+			session,
 			`You have run the same ${toolName} call ${repeats} times; its result will not change. ${next}, in one ${measuring ? "report_observation" : "report_feedback"} call. ${PERSIST_DISCIPLINE}`,
 		);
 	}
 	if (repeats >= (recording ? REPEATED_RECORDING_ABORT : REPEATED_CALL_ABORT)) {
-		stopTurn("loop", `the same ${toolName} call ${repeats} times — aborting this turn`);
+		stopTurn(review, "loop", `the same ${toolName} call ${repeats} times — aborting this turn`);
 	}
 	// SDK schema refusals bypass tool execution and its per-practice cap; count attempts here too.
 	if (RECORDING_TOOLS.has(toolName)) {
 		turn.recordingCalls += 1;
 		if (turn.recordingCalls >= MAX_RECORDING_ATTEMPTS_PER_TURN && turn.stored === 0) {
 			stopTurn(
+				review,
 				"loop",
 				`${turn.recordingCalls} recording calls without a record — aborting this turn`,
 			);
@@ -2929,14 +3312,16 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 	}
 }
 
-/** How often each call of the current turn has been made: the loop guard's memory, reset per turn. */
-const repeatedCalls = new Map<string, number>();
-
-function openTurnTrace(label: string, budget: Work, demand: TurnDemand): TurnTrace {
-	repeatedCalls.clear();
-	refusedItems.clear();
-	lastEventAt = Date.now();
-	currentTurn = {
+function openTurnTrace(
+	review: ReviewSession,
+	label: string,
+	budget: Work,
+	demand: TurnDemand,
+): TurnTrace {
+	review.repeatedCalls.clear();
+	review.refusedItems.clear();
+	review.lastEventAt = Date.now();
+	const turn: TurnTrace = {
 		label,
 		durationMs: Date.now(),
 		calls: 0,
@@ -2956,15 +3341,16 @@ function openTurnTrace(label: string, budget: Work, demand: TurnDemand): TurnTra
 		askedToRecord: false,
 		stoppedBy: null,
 	};
-	turnDemand = demand;
-	return currentTurn;
+	review.turn = turn;
+	review.demand = demand;
+	return turn;
 }
 
-function closeTurnTrace(trace: TurnTrace): void {
+function closeTurnTrace(review: ReviewSession, trace: TurnTrace): void {
 	trace.durationMs = Date.now() - trace.durationMs;
 	runnerDebug.turns.push(trace);
-	currentTurn = null;
-	turnDemand = null;
+	review.turn = null;
+	review.demand = null;
 	persistRunnerDebug();
 	console.error(
 		`[pi-runner] ${trace.label}: ${(trace.durationMs / 1000).toFixed(1)}s, calls=${trace.calls}/${trace.budget.modelCalls}, ` +
@@ -3050,6 +3436,29 @@ function precomputeSectionOf(slug: string): string {
 		: "";
 }
 
+/** A practice's questions as the model answers them: key, title, the question, and what each answer means. */
+function questionsSectionOf(slug: string): string {
+	const questions = practiceQuestionsBySlug.get(slug) ?? [];
+	const titleOf = (key: string) => questions.find((question) => question.key === key)?.title ?? key;
+	const listed = questions
+		.map((question) => {
+			const skip = (question.skipWhen ?? [])
+				.map(
+					(condition) =>
+						`\`${condition.question}\` (${titleOf(condition.question)}) is ${condition.answer}`,
+				)
+				.join(", or ");
+			const skipLine = skip ? `\n- Skip it when ${skip}: it cannot change the outcome then.` : "";
+			const gradeLine =
+				question.gradesSeverityOnly === true
+					? "\n- It grades how serious a shortfall is: answer it whenever you found one; left open, the lower band holds."
+					: "";
+			return `##### \`${question.key}\` — ${question.title}\n${question.question}\n- YES: ${question.yes}\n- NO: ${question.no}${skipLine}${gradeLine}`;
+		})
+		.join("\n\n");
+	return `#### Questions for \`${slug}\` — answer each on its own, in order, and skip only where it says so\n${listed}`;
+}
+
 /** The criteria of the turn's practices and their precomputed leads, inlined: the turn carries what it asks about. */
 function criteriaOf(slugs: readonly string[]): string {
 	return slugs
@@ -3057,30 +3466,28 @@ function criteriaOf(slugs: readonly string[]): string {
 			const criteria = criteriaFileOf(slug) ?? "(criteria file missing)";
 			const exhaustive = [...(practiceExhaustiveSources.get(slug) ?? [])];
 			const scope =
-				exhaustive.length > 0
-					? `Exhaustive sources (an absence claim must have searched all of them): ${exhaustive.join(", ")}.\n\n`
-					: "";
-			return `### Practice \`${slug}\`\n${scope}${criteria}${precomputeSectionOf(slug)}`;
+				(exhaustive.length > 0
+					? `Exhaustive sources (an absence claim must have searched all of them): ${exhaustive.join(", ")}.\n`
+					: "No source is read exhaustively: no answer may rest on an absence, so send no search.\n") +
+				(readsTheChange(slug)
+					? "It reads the change: at least one answer cites a changed line (path and side) or searches the diff.\n\n"
+					: "\n");
+			return `### Practice \`${slug}\`\n${scope}${criteria}\n\n${questionsSectionOf(slug)}${precomputeSectionOf(slug)}`;
 		})
 		.join("\n\n");
 }
 
 /**
- * Whether the task, the brief and the example are still in the session's context. The first turn
- * carries them; a compaction summarizes them away, so the turn after it carries them again, with what
- * was recorded, and the model quotes the exact text rather than a summary of it.
- */
-let openingInContext = false;
-
-/**
  * The task, the brief and the example, when the context no longer holds them; nothing otherwise. The
  * composer records no observation, so it gets the task and the brief alone.
  */
-function openingIfNeeded(brief: string, composing = false): string {
-	if (openingInContext) {
+function openingIfNeeded(review: ReviewSession, brief: string, composing = false): string {
+	// The first turn of a session carries them; a compaction summarizes them away, so the turn after it carries
+	// them again, with what was recorded, and the model cites the exact lines rather than a summary of them.
+	if (review.openingInContext) {
 		return "";
 	}
-	openingInContext = true;
+	review.openingInContext = true;
 	return composing
 		? `${prompt}\n\n${brief}\n\n`
 		: `${prompt}\n\n${brief}\n\n${OBSERVATION_EXAMPLE}\n\n${
@@ -3089,90 +3496,83 @@ function openingIfNeeded(brief: string, composing = false): string {
 }
 
 /**
- * Three observations written out, with this review's real artifact paths: the shape of a call the model
- * has not yet made, shown once with the brief. One each of met, not met and not applicable, so no
- * outcome reads as the expected one.
+ * Three practices' observations written out, with this review's real paths: the shape of a call the model has
+ * not yet made, shown once with the brief. Between them every kind of answer appears once — a YES from a cited
+ * line, a NO resting on an absence with its search, an UNDETERMINED with what would settle it, and a gate answer
+ * that leaves the questions it makes moot unasked — so none reads as the expected one. The question keys are
+ * illustrations; each practice's own keys are listed under its Questions.
  */
 const OBSERVATION_EXAMPLE = (() => {
 	const context = taskEnvelope.paths.contextRoot;
 	const example = [
 		{
-			practiceSlug: "<the practice's slug>",
-			summary: "Date parser added with tests for empty and malformed input",
-			outcome: "MET",
-			severity: null,
-			evidenceRationale:
-				"The change adds DateParser and, beside it, tests that feed it an empty string and a malformed date.",
-			evidence: {
-				citations: [
-					{
-						sourceKind: "scm.pull-request.diff",
-						artifactPath: `${context}/change.json`,
-						path: "Tests/DateParserTests.swift",
-						side: "NEW",
-						startLine: 12,
-						endLine: 12,
-						quote: "func testRejectsMalformedDate() {",
+			practiceSlug: "<a practice's slug>",
+			scan: "Added branches: DateParser.swift [L30] rejects an empty string. Added tests: DateParserTests.swift [L12]-[L14] parses a valid ISO date; no added test passes an empty string.",
+			evidence: [
+				{ path: "App/DateParser.swift", side: "NEW", startLine: 30, anchor: "guard !text.isEmpty" },
+				{
+					path: "Tests/DateParserTests.swift",
+					side: "NEW",
+					startLine: 12,
+					endLine: 14,
+					anchor: "func testParsesIsoDate",
+				},
+			],
+			answers: {
+				adds_behaviour: {
+					cites: [1],
+					because: "The change adds a branch that rejects an empty string.",
+					answer: "YES",
+				},
+				test_covers: {
+					cites: [2],
+					because: "The only added test parses a valid ISO date; none passes an empty string.",
+					answer: "NO",
+					search: {
+						consulted: ["scm.pull-request.diff"],
+						lookedFor: "an added test that passes an empty string to the parser",
+						boundary: "the added test files of this change; tests outside the change were not read",
 					},
-				],
-			},
-		},
-		{
-			practiceSlug: "<the practice's slug>",
-			summary: "New error branch of the parser ships without a test",
-			outcome: "NOT_MET",
-			severity: "MINOR",
-			evidenceRationale:
-				"The change adds a branch that rejects an empty string; no added test feeds the parser one.",
-			evidence: {
-				citations: [
-					{
-						sourceKind: "scm.pull-request.diff",
-						artifactPath: `${context}/change.json`,
-						path: "App/DateParser.swift",
-						side: "NEW",
-						startLine: 30,
-						endLine: 30,
-						quote: "guard !text.isEmpty else { throw ParseError.empty }",
-					},
-				],
-				search: {
-					consulted: ["scm.pull-request.diff"],
-					lookedFor: "an added test that passes an empty string to the parser",
-					boundary: "the added test files of this change; tests outside the change were not read",
 				},
 			},
+			summary: "New error branch of the date parser ships without a test",
 		},
 		{
-			practiceSlug: "<the practice's slug>",
-			summary: "No persisted model changes in this change",
-			outcome: "NOT_APPLICABLE",
-			severity: null,
-			evidenceRationale:
-				"Every changed file is a view or a test; none declares or migrates a stored type.",
-			evidence: {
-				citations: [
-					{
-						sourceKind: "scm.pull-request.core",
-						artifactPath: `${context}/metadata.json`,
-						path: `${context}/metadata.json`,
-						startLine: 3,
-						endLine: 3,
-						quote: '"title": "Add date parser"',
-					},
-				],
-				inapplicability: {
-					consulted: ["scm.pull-request.diff", "scm.pull-request.core"],
-					subject: "a persisted model or schema",
-					ruledOutBy: "the changed files are views and tests only",
+			practiceSlug: "<another practice's slug>",
+			scan: "The description closes #7 and points to its criteria; the body of #7 was not captured.",
+			evidence: [
+				{ path: `${context}/description.md`, startLine: 4 },
+				{ path: `${context}/description.md`, startLine: 6 },
+			],
+			answers: {
+				closes_issue: { cites: [1], because: "The description closes issue #7.", answer: "YES" },
+				meets_criteria: {
+					cites: [2],
+					because: "The description defers the criteria to issue #7, whose body was not captured.",
+					answer: "UNDETERMINED",
+					wouldSettleIt: "the body of issue #7",
 				},
 			},
+			summary: "Linked issue's acceptance criteria could not be read",
+		},
+		{
+			practiceSlug: "<a third practice's slug>",
+			scan: "Every changed file is a rename with no edited line.",
+			evidence: [{ path: `${context}/commits.json`, startLine: 9, endLine: 12 }],
+			answers: {
+				changes_behaviour: {
+					cites: [1],
+					because: "Every changed file is a rename with no edited line.",
+					answer: "NO",
+				},
+			},
+			summary: "The change only renames files",
 		},
 	];
 	return `## How report_observation takes observations
-\`observations\` is a JSON array with one object per practice, every object carrying every key shown (null where the contract says so). An illustration, not evidence from this work:
+\`observations\` is a JSON array with one object per practice: its \`practiceSlug\`; a \`scan\` written first, a few lines of what you looked for and what you found (every candidate line and what it shows, or where you looked and found none), which is your working and is not recorded; the \`evidence\` its answers rest on, each line listed once; \`answers\` keyed by question key, each citing evidence by number; and last a \`summary\` phrase naming what the answers found. The third practice's other questions say "Skip it when \`changes_behaviour\` is NO", so they are left out. Hephaestus decides the outcome from the answers, so no observation states one. An illustration, not evidence from this work:
 \`\`\`json
-${JSON.stringify({ observations: example }, null, 1)}
+${JSON.stringify({ observations: example })}
 \`\`\``;
 })();
 
@@ -3180,9 +3580,14 @@ ${JSON.stringify({ observations: example }, null, 1)}
  * A turn of practices, after the opening when the context does not hold it. Its work budget is not stated:
  * told its call budget up front, an open model read less and missed more not-met practices.
  */
-function practicesTurnText(heading: string, slugs: readonly string[], brief: string): string {
-	return `${openingIfNeeded(brief)}${heading}
-Evaluate these practices: ${slugs.join(", ")}. Their criteria follow and decide the outcome. What the brief shows is yours to quote; read more only when a criterion needs it, and when it needs more than one read or search, run them together in one codemode script that prints only the lines you will quote. Record one observation per practice — the outcome the criteria and the evidence support, NOT_APPLICABLE and UNDETERMINED included — with report_observation, every one that is ready in one call.
+function practicesTurnText(
+	review: ReviewSession,
+	heading: string,
+	slugs: readonly string[],
+	brief: string,
+): string {
+	return `${openingIfNeeded(review, brief)}${heading}
+${TURN_PRACTICES_MARKER} ${slugs.join(", ")}. Their criteria and questions follow. What the brief shows is yours to cite; read more only when a question needs it, and when it needs more than one read or search, run them together in one codemode script that prints only the lines you need. For each practice, first write its scan — what you looked for and what you found, every candidate line with what it shows — then list the lines your answers rest on once under evidence, then answer its questions in order — each citing evidence numbers, one sentence of because, then YES, NO, or UNDETERMINED with what would settle it — skipping a question only where it says so, and last its summary. Record the practices with report_observation, up to three in one call. Hephaestus decides each outcome from the answers, so never answer toward an outcome.
 
 ${criteriaOf(slugs)}`;
 }
@@ -3235,6 +3640,7 @@ function compositionBudget(notMet: number): Work {
 
 /** Retry undecided composition once, under its own work budget and the run's safety line. */
 async function askComposerOnceMore(
+	review: ReviewSession,
 	session: AgentSession,
 	notMet: readonly string[],
 	undecided: () => readonly string[],
@@ -3244,7 +3650,7 @@ async function askComposerOnceMore(
 	console.error(
 		`[pi-runner] composition left ${notMet.length} NOT_MET practice(s) undecided — asking once more`,
 	);
-	const trace = openTurnTrace("composition once more", compositionBudget(notMet.length), {
+	const trace = openTurnTrace(review, "composition once more", compositionBudget(notMet.length), {
 		owed: () => undecided().length,
 		nudge: COMPOSITION_NUDGE,
 		endsWhenPaid: true,
@@ -3262,7 +3668,7 @@ async function askComposerOnceMore(
 		if (trace.stoppedBy !== null) {
 			await settleSession(session, "composition", ABORT_SETTLE_MS);
 		}
-		closeTurnTrace(trace);
+		closeTurnTrace(review, trace);
 	}
 }
 
@@ -3299,19 +3705,23 @@ async function main() {
 	const settingsManager = SettingsManager.create(CWD, AGENT_DIR, SANDBOX_SETTINGS_MANAGER_OPTIONS);
 	// Disable instruction discovery; load only the server-staged orchestrator (see pi-agent-sandbox.ts).
 	const orchestratorPath = `${AGENT_DIR}/AGENTS.md`;
-	const orchestrator = readFileSync(orchestratorPath, "utf8");
-	const loader = new DefaultResourceLoader({
+	const systemPrompt = orchestratorWithPaths(readFileSync(orchestratorPath, "utf8"));
+	const resourceLoader = new DefaultResourceLoader({
 		cwd: CWD,
 		agentDir: AGENT_DIR ?? getAgentDir(),
 		settingsManager,
 		...SANDBOX_RESOURCE_LOADER_OPTIONS,
-		agentsFilesOverride: () => ({
-			agentsFiles: [{ path: orchestratorPath, content: orchestrator }],
-		}),
+		// The orchestrator is the whole system prompt: a reviewer is not framed as a coding assistant, and
+		// nothing of Pi's own (edit rules, its documentation) rides on every call.
+		systemPrompt,
+		agentsFilesOverride: () => ({ agentsFiles: [] }),
 		// "on" keeps every tool callable directly as well; scripts get no model catalog to call.
-		extensionFactories: [createCodemodeExtension({ mode: "on", models: false })],
+		extensionFactories: [
+			createCodemodeExtension({ mode: "on", models: false }),
+			finishedTurnsLeaveTheirBulk,
+		],
 	});
-	await loader.reload();
+	await resourceLoader.reload();
 	const modelRuntime = await ModelRuntime.create({
 		authPath: `${AGENT_DIR}/auth.json`,
 		modelsPath: `${AGENT_DIR}/models.json`,
@@ -3330,6 +3740,7 @@ async function main() {
 		throw new Error(`Hephaestus model was not registered: ${providerConfig.modelId}`);
 	}
 	outputLimit = model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY;
+	contextBudgetChars = model.contextWindow > 0 ? model.contextWindow * 2 : Number.POSITIVE_INFINITY;
 	console.error(
 		`[pi-runner] registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} ` +
 			`model=${providerConfig.modelId} contextWindow=${model.contextWindow}`,
@@ -3339,6 +3750,10 @@ async function main() {
 		`[pi-runner] reasoning effort: ${providerConfig.reasoningEffort?.toLowerCase() ?? "provider default"}`,
 	);
 
+	const allSlugs = loadPracticeSlugs();
+	const turns = planTurns(practiceIndex, PRACTICES_PER_TURN);
+	// Composition comes after measuring, in the same session, which already holds the brief.
+	const review = newReviewSession();
 	const compositionRequest = loadCompositionRequest();
 	const feedbackTool = compositionRequest
 		? buildFeedbackTool(
@@ -3346,6 +3761,7 @@ async function main() {
 				compositionRequest,
 				admittedObservations,
 				stagedPreparedTargets(),
+				review,
 			)
 		: null;
 	const streamUsage = newUsageLedger();
@@ -3353,7 +3769,8 @@ async function main() {
 	let measuring = true;
 	const subscribeSession = (trackedSession: AgentSession) =>
 		trackedSession.subscribe((event: AgentSessionEvent) => {
-			chargeWork(event);
+			chargeWork(review, event);
+			const currentTurn = review.turn;
 			const label = measuring ? "review" : "composer";
 			if (event.type === "tool_execution_start") {
 				// A call a codemode script makes is the script's work, not a call the model sent: the loop
@@ -3361,7 +3778,7 @@ async function main() {
 				if (event.parentToolCallId === undefined) {
 					console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
 					if (currentTurn) {
-						noteToolCall(currentTurn, event.toolName, event.args, measuring);
+						noteToolCall(review, currentTurn, event.toolName, event.args, measuring);
 					}
 				} else {
 					console.error(`[pi-runner] ${label} tool: codemode → ${event.toolName}`);
@@ -3375,7 +3792,7 @@ async function main() {
 			if (
 				event.type === "tool_execution_end" &&
 				event.isError &&
-				!answeredRefusals.delete(event.toolCallId)
+				!review.answeredRefusals.delete(event.toolCallId)
 			) {
 				const result: unknown = event.result;
 				const reason = firstLine(toolResultText(result));
@@ -3392,7 +3809,7 @@ async function main() {
 					`[pi-runner] ${label} context compacted (${event.reason})${hasText(event.errorMessage) ? `: ${event.errorMessage}` : ""}`,
 				);
 				if (!event.aborted && !hasText(event.errorMessage)) {
-					openingInContext = false;
+					review.openingInContext = false;
 				}
 				if (currentTurn && !event.aborted) {
 					currentTurn.compactions += 1;
@@ -3440,14 +3857,13 @@ async function main() {
 			}
 		});
 
-	const allSlugs = loadPracticeSlugs();
 	practiceCoverageLedger = new PracticeCoverageLedger(PRACTICE_COVERAGE_PATH, allSlugs);
 	persistRecordedNotes();
-	const turns = planTurns(practiceIndex, PRACTICES_PER_TURN);
 	const brief = buildBrief(CWD, {
 		contextRoot: taskEnvelope.paths.contextRoot,
 		repositoryRoot: taskEnvelope.paths.repositoryRoot,
 	});
+	briefSources = sourcesShownWhole(shownLabels(brief));
 	console.error(
 		`[pi-runner] Review: ${allSlugs.length} practice(s) in ${turns.length} turn(s); brief=${brief.length} chars`,
 	);
@@ -3461,14 +3877,17 @@ async function main() {
 		);
 	}
 
-	const customTools = [buildReportObservationTool()];
-	if (feedbackTool) {
-		customTools.push(feedbackTool, buildSummaryTool());
-	}
 	if (tooLate) {
 		logPracticeCoverage();
 		finalizeOutput();
 		process.exit(1);
+	}
+	const customTools = [buildReportObservationTool(review)];
+	// The composition tools are declared from the start, so measuring and composing share one cached
+	// prefix; they refuse until admission.
+	const composes = feedbackTool !== null;
+	if (composes) {
+		customTools.push(feedbackTool, buildSummaryTool(review));
 	}
 	const { session, extensionsResult } = await createAgentSession({
 		cwd: CWD,
@@ -3476,12 +3895,12 @@ async function main() {
 		tools: [
 			...PRACTICE_TOOLS,
 			"report_observation",
-			...(feedbackTool ? ["report_feedback", "report_summary"] : []),
+			...(composes ? ["report_feedback", "report_summary"] : []),
 		],
 		customTools,
 		sessionManager: SessionManager.create(CWD, `${CWD}/.sessions`),
 		settingsManager,
-		resourceLoader: loader,
+		resourceLoader,
 		modelRuntime,
 		model,
 		thinkingLevel,
@@ -3489,16 +3908,24 @@ async function main() {
 	for (const error of extensionsResult.errors) {
 		console.error(`[pi-runner] extension error: ${error.path}: ${error.error}`);
 	}
-	activeSession = session;
+	review.session = session;
 	const unsubscribe = subscribeSession(session);
+	const stopReview = async (): Promise<void> => {
+		await stopSession(session);
+		unsubscribe();
+	};
 
 	// Liveness, not a budget: a turn that shows no sign of life for STALL_MS is aborted.
 	const stallWatch = setInterval(() => {
-		if (currentTurn?.stoppedBy === null && Date.now() - lastEventAt >= STALL_MS) {
+		if (review.turn?.stoppedBy === null && Date.now() - review.lastEventAt >= STALL_MS) {
 			if (measuring) {
 				providerFailures += 1;
 			}
-			stopTurn("stall", `no model or tool event for ${STALL_MS / 1000}s — aborting this turn`);
+			stopTurn(
+				review,
+				"stall",
+				`no model or tool event for ${STALL_MS / 1000}s — aborting this turn`,
+			);
 		}
 	}, STALL_CHECK_MS);
 	stallWatch.unref();
@@ -3526,12 +3953,13 @@ async function main() {
 			`[pi-runner] ${label}: ${slugs.length} practice(s), up to ${budget.modelCalls} calls and ` +
 				`${budget.outputTokens} output tokens (${tokensPerObservation} tokens per observation so far)`,
 		);
-		const trace = openTurnTrace(label, budget, {
-			owed: () => owedPractices().length,
+		review.turnSlugs = slugs;
+		const trace = openTurnTrace(review, label, budget, {
+			owed: () => owedPractices(review).length,
 			nudge: RECORD_NUDGE,
 		});
 		const safety = scheduleDeadline(safetyMs, () => {
-			stopTurn("safety", "the run is near its safety ceiling — aborting this turn");
+			stopTurn(review, "safety", "the run is near its safety ceiling — aborting this turn");
 		});
 		try {
 			await Promise.race([session.prompt(text), safety.elapsed]);
@@ -3542,24 +3970,28 @@ async function main() {
 			if (trace.stoppedBy !== null) {
 				await settleSession(session, label, ABORT_SETTLE_MS);
 			}
-			closeTurnTrace(trace);
+			closeTurnTrace(review, trace);
 		}
 		return trace.stoppedBy;
 	}
 
+	let stalls = 0;
 	try {
-		let stalls = 0;
 		for (const [index, turn] of turns.entries()) {
-			currentTurnSlugs = turn.slugs;
 			const stop = await runTurn(
 				`turn ${index + 1}/${turns.length} (${turn.id})`,
-				practicesTurnText(`## Turn ${index + 1} of ${turns.length}: ${turn.id}`, turn.slugs, brief),
+				practicesTurnText(
+					review,
+					`## Turn ${index + 1} of ${turns.length}: ${turn.id}`,
+					turn.slugs,
+					brief,
+				),
 				turn.slugs,
 			);
 			stalls = stop === "stall" ? stalls + 1 : 0;
 			if (stop === "safety" || stalls >= 2) {
 				console.error(
-					`[pi-runner] Measuring ends early: ${stop === "safety" ? "safety ceiling" : "the session stalled twice in a row"}`,
+					`[pi-runner] measuring ends early: ${stop === "safety" ? "safety ceiling" : "the session stalled twice in a row"}`,
 				);
 				break;
 			}
@@ -3569,14 +4001,15 @@ async function main() {
 			reviewState.observations.map((item) => item.practiceSlug),
 		);
 		const unfinished = missing.filter((slug) => !blockedPractices.has(slug));
+		// A session that stalled twice running would only stall a third time.
 		if (unfinished.length > 0 && stalls < 2 && Date.now() < measureEnd) {
 			console.error(
 				`[pi-runner] Finishing ${unfinished.length} practice(s): ${unfinished.join(", ")}`,
 			);
-			currentTurnSlugs = unfinished;
 			await runTurn(
 				"finish",
 				practicesTurnText(
+					review,
 					"## Unfinished practices\nNo turn recorded a result for these practices; evaluate them now.",
 					unfinished,
 					brief,
@@ -3621,8 +4054,7 @@ async function main() {
 	}
 
 	if (!maybeWriteResultFile()) {
-		await stopSession(session);
-		unsubscribe();
+		await stopReview();
 		if (providerFailures > 0) {
 			console.error(
 				`[pi-runner] UNREACHABLE: this review reached no practice, and ${providerFailures} model call(s) ` +
@@ -3650,6 +4082,7 @@ async function main() {
 			const instructions = readFileSync(COMPOSER_PROMPT_PATH, "utf8");
 			const safety = scheduleDeadline(safetyMs, () => {
 				stopTurn(
+					review,
 					"safety",
 					"the run is near its safety ceiling — preserving observations and composed units so far",
 				);
@@ -3668,7 +4101,7 @@ async function main() {
 				);
 				return notMet.filter((slug) => !decided.has(slug));
 			};
-			const trace = openTurnTrace("composition", compositionBudget(notMet.length), {
+			const trace = openTurnTrace(review, "composition", compositionBudget(notMet.length), {
 				owed: () => undecided().length,
 				nudge: COMPOSITION_NUDGE,
 			});
@@ -3679,7 +4112,7 @@ async function main() {
 				const compositionTurn = `${instructions}\n\n${buildCompositionTurn(compositionRequest, admittedObservations, notReached)}`;
 				await makeRoomFor(session, model, compositionTurn);
 				// When room had to be made, the brief goes with the turn again.
-				const compositionText = `${openingIfNeeded(brief, true)}${compositionTurn}`;
+				const compositionText = `${openingIfNeeded(review, brief, true)}${compositionTurn}`;
 				if (safety.expired()) {
 					throw new Error("the run reached its safety ceiling while the session was compacted");
 				}
@@ -3687,7 +4120,7 @@ async function main() {
 			} catch (error) {
 				console.error(`[pi-runner] composition failed: ${errorText(error)}`);
 			} finally {
-				closeTurnTrace(trace);
+				closeTurnTrace(review, trace);
 			}
 			// A composer that ended on its own, or was cut off by a loop guard, is asked once more for the
 			// NOT_MET practices it left undecided; otherwise they have no composed next step.
@@ -3697,7 +4130,7 @@ async function main() {
 				left.length > 0 &&
 				!safety.expired()
 			) {
-				await askComposerOnceMore(session, left, undecided, compositionRequest, safety);
+				await askComposerOnceMore(review, session, left, undecided, compositionRequest, safety);
 			}
 			clearTimeout(safety.timer);
 			persistComposedFeedback();
@@ -3706,8 +4139,7 @@ async function main() {
 			persistUsage();
 		}
 	}
-	await stopSession(session);
-	unsubscribe();
+	await stopReview();
 	console.error(
 		`[pi-runner] SUCCESS: result.json holds ${reviewState.observations.length} observation(s)`,
 	);

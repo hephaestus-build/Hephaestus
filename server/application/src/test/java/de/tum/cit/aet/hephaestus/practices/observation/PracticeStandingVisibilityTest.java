@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -116,6 +117,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
         practice.setSlug(slug);
         practice.setName("Handling failure robustly");
         practice.setCriteria("ordinary criteria"); // not a defect-detector
+        practice.setJudgment(PracticeJudgment.holistic());
         return practice;
     }
 
@@ -167,6 +169,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
         practice.setSlug("robust-error-handling");
         practice.setName("Handling failure robustly");
         practice.setCriteria("ordinary criteria"); // not a defect-detector
+        practice.setJudgment(PracticeJudgment.holistic());
 
         when(observationRepository.findByDeveloperAndWorkspaceBetween(
                         eq(USER_ID), eq(WORKSPACE_ID), any(Instant.class), any(Instant.class)))

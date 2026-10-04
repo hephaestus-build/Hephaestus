@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -72,6 +73,7 @@ class DeliveredFeedbackConsentGateIntegrationTest extends AbstractSlackConsentGa
         practice.setSlug("test-practice");
         practice.setName("Test Practice");
         practice.setCriteria("Test description");
+        practice.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.saveAndFlush(practice);
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 1));
@@ -162,6 +164,8 @@ class DeliveredFeedbackConsentGateIntegrationTest extends AbstractSlackConsentGa
                 "NOT_MET",
                 "MAJOR",
                 evidence(artifactKind),
+                null,
+                null,
                 null,
                 null,
                 now,

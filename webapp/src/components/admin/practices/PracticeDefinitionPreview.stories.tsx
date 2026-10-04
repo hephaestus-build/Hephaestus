@@ -114,7 +114,7 @@ export const CriteriaIsMarkdown: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "How it decides" }));
+		await userEvent.click(canvas.getByRole("button", { name: "What it looks for" }));
 		const standard = await canvas.findByRole("heading", { name: "The standard", level: 4 });
 		await expect(standard).toBeVisible();
 		await expect(canvas.getByRole("list")).toBeVisible();
@@ -151,6 +151,19 @@ export const RationaleOnly: Story = {
 			canvas.queryByRole("heading", { name: "What good looks like" }),
 		).not.toBeInTheDocument();
 		await expect(canvas.getByRole("button", { name: "How it decides" })).toBeVisible();
+	},
+};
+
+/** The questions the review answers and the rules that decide, before the criteria they rest on. */
+export const DecidesFromQuestions: Story = {
+	play: async ({ canvas }) => {
+		const decides = canvas.getByRole("button", { name: "How it decides" });
+		await expect(precedes(decides, canvas.getByRole("button", { name: "What it looks for" }))).toBe(
+			true,
+		);
+		await userEvent.click(decides);
+		await expect(await canvas.findByText("The reviewer answers")).toBeVisible();
+		await expect(canvas.getByText("In every other case")).toBeVisible();
 	},
 };
 

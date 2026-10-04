@@ -50,6 +50,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -65,6 +66,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
@@ -573,15 +575,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 .contains("context/chat/", "context/docs/", "context/people/");
         assertThat(java.nio.file.Files.readString(prepared.filesOnDisk().get("context/chat/C1732/2024-01.jsonl")))
                 .doesNotContain("Committed during rendering");
-        var output = OBJECT_MAPPER.createObjectNode();
-        var observation = output.putArray("observations").addObject();
-        observation
-                .put("practiceSlug", practice.getSlug())
-                .put("summary", "Cross-source context")
-                .put("outcome", "MET")
-                .put("evidenceRationale", "Four independently captured sources support the review.")
-                .putNull("severity");
-        var citations = observation.putObject("evidence").putArray("citations");
+        var citations = OBJECT_MAPPER.createArrayNode();
         Map<String, String> quotes = Map.of(
                 "context/scm/" + repository.getId() + "/pulls/50/comments.jsonl",
                 "Other repository comment",
@@ -611,6 +605,12 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     .put("endLine", line)
                     .put("quote", quote.getValue());
         }
+        // Every answer rests on all four sources, so the observation cites each of them once.
+        var observation = AnsweredObservations.observation(
+                practice.getSlug(), "Cross-source context", Outcome.MET, null, citations.get(0));
+        for (var answer : observation.path("answers")) ((ObjectNode) answer).set("citations", citations.deepCopy());
+        var output = OBJECT_MAPPER.createObjectNode();
+        output.set("observations", AnsweredObservations.submitted(observation));
         assertThat(agentJobRepository.discardRetiredArtifactInventory(
                         next.getId(), workspace.getId(), 0, "test-worker"))
                 .isZero();
@@ -669,6 +669,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         p.setSlug(slug);
         p.setName(name);
         p.setCriteria("Test " + slug);
+        p.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(p, ScmSignals.PULL_REQUEST_OPENED);
         p = practiceRepository.saveAndFlush(p);
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(p, 1));
@@ -695,7 +696,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
      *     review is allowed to say it found nothing
      */
     private AgentJob admitAndSetOutput(AgentJob job, String rawOutput, boolean reachedEveryPractice) {
-        JsonNode observations = OBJECT_MAPPER.readTree(withEvidence(rawOutput)).path("observations");
+        JsonNode observations = OBJECT_MAPPER.readTree(rawOutput).path("observations");
         admit(job, observations);
         String digest = "test-admission-digest";
         JsonNode jobMetadata = job.getMetadata();
@@ -780,49 +781,28 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 .put("bytes", bytes.length);
     }
 
-    private String withEvidence(String rawOutput) {
-        try {
-            var root = OBJECT_MAPPER.readTree(rawOutput);
-            for (var observation : root.path("observations")) {
-                if (!observation.has("evidence")) {
-                    var citation = ((ObjectNode) observation)
-                            .putObject("evidence")
-                            .putArray("citations")
-                            .addObject();
-                    citation.put("sourceKind", "scm.pull-request.core");
-                    citation.put("artifactPath", "context/metadata.json");
-                    citation.put("path", "body");
-                    citation.put("startLine", 1);
-                    citation.put("endLine", 1);
-                    citation.put("quote", "Test body");
-                }
-            }
-            return OBJECT_MAPPER.writeValueAsString(root);
-        } catch (RuntimeException ignored) {
-            return rawOutput;
-        }
+    /** The pull request body, the staged line every answer in these reviews rests on. */
+    private static ObjectNode bodyCitation() {
+        return AnsweredObservations.recordCitation("context/metadata.json", 1, "Test body")
+                .put("path", "body");
+    }
+
+    /** One practice's answers that derive {@code outcome} under the holistic judgment, citing the body. */
+    private static ObjectNode observed(String slug, String summary, Outcome outcome, @Nullable Severity severity) {
+        return AnsweredObservations.observation(slug, summary, outcome, severity, bodyCitation());
+    }
+
+    /** The run's output as the runner submits it. */
+    private static String output(ObjectNode... observations) {
+        ObjectNode root = OBJECT_MAPPER.createObjectNode();
+        root.set("observations", AnsweredObservations.submitted(observations));
+        return OBJECT_MAPPER.writeValueAsString(root);
     }
 
     private String validAgentOutput() {
-        String observations = """
-            {
-              "observations": [
-                {
-                  "practiceSlug": "pr-description-quality",
-                  "summary": "Good PR description",
-                  "outcome": "MET",
-                  "severity": null,
-                  "evidenceRationale": "The description names what changed."
-                },
-                {
-                  "practiceSlug": "error-handling",
-                  "summary": "Missing null check",
-                  "outcome": "NOT_MET",
-                  "severity": "MAJOR",
-                  "evidenceRationale": "The method does not check for null input."
-                }
-              ]""";
-        return observations + "\n}";
+        return output(
+                observed("pr-description-quality", "Good PR description", Outcome.MET, null),
+                observed("error-handling", "Missing null check", Outcome.NOT_MET, Severity.MAJOR));
     }
 
     private List<Feedback> unitsOf(AgentJob job, FeedbackChannel channel) {
@@ -902,21 +882,11 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
     @Nested
     class PartialDelivery {
 
-        private static final String FOUR_OBSERVATIONS = """
-                {"observations": [
-                  {"practiceSlug": "pr-description-quality", "summary": "The description never says why",
-                   "outcome": "NOT_MET", "severity": "MINOR",
-                   "evidenceRationale": "The body lists what changed only."},
-                  {"practiceSlug": "error-handling", "summary": "Missing null check",
-                   "outcome": "NOT_MET", "severity": "MAJOR",
-                   "evidenceRationale": "The method does not check for null input."},
-                  {"practiceSlug": "parser-input-validation", "summary": "Second unchecked input",
-                   "outcome": "NOT_MET", "severity": "MINOR",
-                   "evidenceRationale": "The parser does not check its input either."},
-                  {"practiceSlug": "issue-linking", "summary": "The description names the issue",
-                   "outcome": "MET", "severity": null,
-                   "evidenceRationale": "The body closes the issue."}
-                ]}""";
+        private static final String FOUR_OBSERVATIONS = output(
+                observed("pr-description-quality", "The description never says why", Outcome.NOT_MET, Severity.MINOR),
+                observed("error-handling", "Missing null check", Outcome.NOT_MET, Severity.MAJOR),
+                observed("parser-input-validation", "Second unchecked input", Outcome.NOT_MET, Severity.MINOR),
+                observed("issue-linking", "The description names the issue", Outcome.MET, null));
 
         @Test
         void aLineNoteThatNeverLandsIsRecordedFailedAndNotBehindTheDeliveredComment() {
@@ -1084,31 +1054,14 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         private static final String LEAD =
                 "SwiftLint has stalled in the pipeline and the VoiceOver pass is still unchecked.";
 
-        private static final String BOTH_HOLD = """
-                {"observations": [
-                  {"practiceSlug": "pr-description-quality", "summary": "The description names the issue it closes",
-                   "outcome": "MET", "severity": null,
-                   "evidenceRationale": "The body closes the issue."},
-                  {"practiceSlug": "error-handling", "summary": "Errors reach the caller",
-                   "outcome": "MET", "severity": null,
-                   "evidenceRationale": "Every failure path returns an error."}
-                ]}""";
+        private static final String BOTH_HOLD = output(
+                observed("pr-description-quality", "The description names the issue it closes", Outcome.MET, null),
+                observed("error-handling", "Errors reach the caller", Outcome.MET, null));
 
         /** The manual MR !2 shape on staging: one strength held again, the other practice had no subject. */
-        private static final String ONE_HOLDS_ONE_ABSTAINS = """
-                {"observations": [
-                  {"practiceSlug": "pr-description-quality", "summary": "The description names the issue it closes",
-                   "outcome": "MET", "severity": null,
-                   "evidenceRationale": "The body closes the issue."},
-                  {"practiceSlug": "error-handling", "summary": "No error path changed",
-                   "outcome": "NOT_APPLICABLE", "severity": null,
-                   "evidenceRationale": "The change touches no error path.",
-                   "evidence": {
-                     "citations": [{"sourceKind": "scm.pull-request.core", "artifactPath": "context/metadata.json",
-                                    "path": "body", "startLine": 1, "endLine": 1, "quote": "Test body"}],
-                     "inapplicability": {"consulted": ["scm.pull-request.core"], "subject": "an error path",
-                                         "ruledOutBy": "the change adds no failing call"}}}
-                ]}""";
+        private static final String ONE_HOLDS_ONE_ABSTAINS = output(
+                observed("pr-description-quality", "The description names the issue it closes", Outcome.MET, null),
+                observed("error-handling", "No error path changed", Outcome.NOT_APPLICABLE, null));
 
         @Test
         void aStrengthAlreadyPraisedOnAnEarlierMergeRequestIsNotPostedAgainOnEitherReviewOfTheNextOne() {
@@ -1151,12 +1104,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         }
 
         /** One unchanged lapse, raised on the work and prepared for a conversation, as each review composes it. */
-        private static final String SWALLOWED_ERROR = """
-                {"observations": [
-                  {"practiceSlug": "error-handling", "summary": "Export errors stop at the log",
-                   "outcome": "NOT_MET", "severity": "MAJOR",
-                   "evidenceRationale": "The export call logs the failure and returns an empty file."}
-                ]}""";
+        private static final String SWALLOWED_ERROR =
+                output(observed("error-handling", "Export errors stop at the log", Outcome.NOT_MET, Severity.MAJOR));
 
         @Test
         void shouldSuppressRepeatedGuidanceWhenARepairRecheckStillRecordsTheSameNegative() {
@@ -1204,12 +1153,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         void shouldReplaceTheCurrentNegativeWithAPositiveFromAnAdmittedRepairReview() {
             AgentJob first = reviewOf(prId, 50, "pipelinesha", null, SWALLOWED_ERROR);
             List<Observation> earlier = observationRepository.findByAgentJobId(first.getId(), workspace.getId());
-            String repaired = """
-                    {"observations": [
-                      {"practiceSlug": "error-handling", "summary": "Export errors reach the caller",
-                       "outcome": "MET", "severity": null,
-                       "evidenceRationale": "The caller receives the export failure instead of an empty file."}
-                    ]}""";
+            String repaired = output(observed("error-handling", "Export errors reach the caller", Outcome.MET, null));
             AgentJob second = reviewOf(
                     prId,
                     50,
@@ -1356,12 +1300,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
     @Nested
     class DisputedFeedback {
 
-        private static final String UNCHECKED_EXPORT = """
-                {"observations": [
-                  {"practiceSlug": "error-handling", "summary": "Export errors stop at the log",
-                   "outcome": "NOT_MET", "severity": "MAJOR",
-                   "evidenceRationale": "The export call logs the failure and returns an empty file."}
-                ]}""";
+        private static final String UNCHECKED_EXPORT =
+                output(observed("error-handling", "Export errors stop at the log", Outcome.NOT_MET, Severity.MAJOR));
 
         @Test
         void shouldWithholdTheSameObservationFromTheNextReviewUntilTheDisputeIsWithdrawn() {
@@ -1481,19 +1421,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void allPositiveFindingsStayQuietWhenTheReviewDidNotReachEveryPractice() {
-            String output = """
-                {
-                  "observations": [
-                    {
-                      "practiceSlug": "pr-description-quality",
-                      "summary": "Good description",
-                      "outcome": "MET",
-                      "severity": null,
-                      "evidenceRationale": "The description explains the change."
-                    }
-                  ]
-                }""";
-            agentJob = admitAndSetOutput(agentJob, output, false);
+            agentJob = admitAndSetOutput(
+                    agentJob, output(observed("pr-description-quality", "Good description", Outcome.MET, null)), false);
 
             handler.deliver(agentJob);
 
@@ -1518,43 +1447,26 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
     @Nested
     class ErrorCases {
 
+        /**
+         * A run that answers for a practice the job never admitted is answering for work it was never given, so
+         * nothing it recorded is trusted: the whole delivery is refused and no row is written.
+         */
         @Test
         void unknownSlugRejectsDeliveryAtomically() {
-            String output = """
-                {
-                  "observations": [
-                    {
-                      "practiceSlug": "pr-description-quality",
-                      "summary": "Good description",
-                      "outcome": "MET",
-                      "severity": null,
-                      "evidenceRationale": "The description explains the change."
-                    },
-                    {
-                      "practiceSlug": "nonexistent-practice",
-                      "summary": "Unknown practice",
-                      "outcome": "MET",
-                      "severity": null,
-                      "evidenceRationale": "The submitted practice does not exist."
-                    },
-                    {
-                      "practiceSlug": "error-handling",
-                      "summary": "Good handling",
-                      "outcome": "NOT_MET",
-                      "severity": "MINOR",
-                      "evidenceRationale": "The implementation omits the required check."
-                    }
-                  ]
-                }""";
-            JsonNode submitted = OBJECT_MAPPER.readTree(withEvidence(output)).path("observations");
+            JsonNode submitted = OBJECT_MAPPER
+                    .readTree(output(
+                            observed("pr-description-quality", "Good description", Outcome.MET, null),
+                            observed("nonexistent-practice", "Unknown practice", Outcome.MET, null),
+                            observed("error-handling", "Missing check", Outcome.NOT_MET, Severity.MINOR)))
+                    .path("observations");
 
             assertThatThrownBy(() -> admit(agentJob, submitted))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("practice not admitted to the job");
 
-            assertThat(observationRepository.findAll()).isEmpty();
+            assertThat(observationRepository.findByAgentJobId(agentJob.getId(), workspace.getId()))
+                    .isEmpty();
             verify(commentPoster, never()).post(any());
-            verify(diffNotePoster, never()).reconcileInlineNotes(any(), any());
         }
 
         @Test

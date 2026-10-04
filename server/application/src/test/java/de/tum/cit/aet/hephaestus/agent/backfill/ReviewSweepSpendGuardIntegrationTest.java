@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -162,6 +163,7 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
         practice.setSlug("sweep-guard-practice");
         practice.setName("Sweep guard practice");
         practice.setCriteria("Review the pull request");
+        practice.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_READY);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         practiceRepository.save(practice);

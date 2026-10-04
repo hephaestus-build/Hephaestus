@@ -1,4 +1,6 @@
 import type {
+	ObservationAnswers,
+	PracticeJudgment,
 	PracticeAutomatedReviewPolicy,
 	PracticeAutomatedReviewValidation,
 	PracticeDefinitionOptions,
@@ -170,8 +172,167 @@ const feedbackHistorySource = {
 	supportsExhaustiveEvidence: true,
 } satisfies PracticeEvidenceSourceOption;
 
+/** The starting judgment the server offers, as `PracticeJudgment.holistic()` writes it. */
+export const mockStartingJudgment: PracticeJudgment = {
+	questions: [
+		{
+			key: "has_occasion",
+			title: "The work gives this practice an occasion",
+			question:
+				"Does this work give the practice something to review, as its criteria describe the occasion? Answer NO only when a fact you can cite rules the practice out for this work.",
+			yes: "The work contains what the practice reviews.",
+			no: "A cited fact shows the practice has nothing to review in this work.",
+		},
+		{
+			key: "meets_standard",
+			title: "The work meets the practice standard",
+			question:
+				"Does the work meet the complete standard the criteria describe? One desirable behaviour being present is not enough when the standard asks for more.",
+			yes: "The cited evidence shows the complete standard is met.",
+			no: "The cited evidence shows a material shortfall against the standard.",
+		},
+		{
+			key: "major_shortfall",
+			title: "The shortfall is major",
+			question:
+				"Is the shortfall a real problem to fix before the work is done: major or above, where the criteria grade severity? Answer NO when the work meets the standard.",
+			yes: "The shortfall is a real problem to fix before the work is done.",
+			no: "There is no shortfall, or it is a bounded improvement.",
+		},
+		{
+			key: "critical_shortfall",
+			title: "The shortfall is critical",
+			question:
+				"Does the shortfall have a consequence that is expensive or impossible to undo, such as a leaked credential or lost data? Answer NO when the work meets the standard or the criteria never allow critical.",
+			yes: "The shortfall has a consequence that is expensive or impossible to undo.",
+			no: "There is no shortfall, or its consequence can still be taken back.",
+		},
+	],
+	rules: [
+		{
+			id: "no-occasion",
+			when: { has_occasion: "NO" },
+			outcome: "NOT_APPLICABLE",
+			reason: "The occasion this practice reviews does not arise in this work.",
+		},
+		{
+			id: "critical-shortfall",
+			when: { meets_standard: "NO", critical_shortfall: "YES" },
+			outcome: "NOT_MET",
+			severity: "CRITICAL",
+			reason: "The work falls short of the practice with a consequence that is hard to undo.",
+		},
+		{
+			id: "major-shortfall",
+			when: { meets_standard: "NO", major_shortfall: "YES" },
+			outcome: "NOT_MET",
+			severity: "MAJOR",
+			reason: "The work falls short of the practice in a way to fix before it is done.",
+		},
+		{
+			id: "shortfall",
+			when: { meets_standard: "NO" },
+			outcome: "NOT_MET",
+			severity: "MINOR",
+			reason: "The work falls short of the practice standard.",
+		},
+		{ id: "met", when: {}, outcome: "MET", reason: "The work meets the practice standard." },
+	],
+};
+
+/** A judgment written for one practice, as a catalogue practice asks it. */
+export const mockDescriptionJudgment: PracticeJudgment = {
+	questions: [
+		{
+			key: "states_what",
+			title: "Says what changed",
+			question: "Does the title or description say what the change does?",
+			yes: "A reader can tell what the change does without opening the diff.",
+			no: "The title and description leave what changed to the diff.",
+		},
+		{
+			key: "states_why",
+			title: "Says why the change exists",
+			question:
+				"Does the title or description say why the change is needed? A restated title does not count.",
+			yes: "The motivation is stated, e.g. 'the cache stalled under load'.",
+			no: "Nothing says why the change is needed.",
+		},
+	],
+	rules: [
+		{
+			id: "no-what",
+			when: { states_what: "NO" },
+			outcome: "NOT_MET",
+			severity: "MAJOR",
+			reason: "The description does not say what the change does.",
+		},
+		{
+			id: "no-why",
+			when: { states_why: "NO" },
+			outcome: "NOT_MET",
+			severity: "MINOR",
+			reason: "The description says what changed but not why.",
+		},
+		{ id: "met", when: {}, outcome: "MET", reason: "The description says what changed and why." },
+	],
+};
+
+/** How a review answered {@link mockDescriptionJudgment} for a description that says what but not why. */
+export const mockDescriptionAnswers: ObservationAnswers = {
+	ruleId: "no-why",
+	decidedBy: "The description says what changed but not why.",
+	answers: [
+		{
+			question: "states_what",
+			title: "Says what changed",
+			answer: "YES",
+			because: "The first line says the change adds a cache in front of the review query.",
+			decisive: false,
+			citations: [0],
+		},
+		{
+			question: "states_why",
+			title: "Says why the change exists",
+			answer: "NO",
+			because: "The body lists the touched files and stops; nothing says what was slow.",
+			decisive: true,
+			citations: [0, 1],
+			search: {
+				consulted: ["scm.pull-request.core"],
+				lookedFor: "a sentence about the problem the cache solves",
+				boundary: "The whole title and body were read",
+			},
+		},
+	],
+};
+
+/** The same review with the motivation left open: what would settle it is named. */
+export const mockOpenAnswers: ObservationAnswers = {
+	answers: [
+		{
+			question: "states_what",
+			title: "Says what changed",
+			answer: "YES",
+			because: "The first line says the change adds a cache in front of the review query.",
+			decisive: false,
+			citations: [0],
+		},
+		{
+			question: "states_why",
+			title: "Says why the change exists",
+			answer: "UNDETERMINED",
+			because: "The body says 'see #412' for the reason, and #412 was not captured.",
+			decisive: true,
+			citations: [1],
+			wouldSettleIt: "The body of issue #412",
+		},
+	],
+};
+
 export const mockPracticeDefinitionOptions = {
 	sourceContractVersion: "1.3.0",
+	startingJudgment: mockStartingJudgment,
 	workTypes: [
 		{
 			artifactKind: "scm.pull_request",

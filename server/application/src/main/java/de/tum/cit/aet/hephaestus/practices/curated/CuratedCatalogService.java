@@ -367,6 +367,7 @@ public class CuratedCatalogService {
                 definition.subject(),
                 definition.precondition(),
                 definition.criteria(),
+                definition.judgment(),
                 definition.precomputeScript(),
                 definition.automatedReviewPolicy(),
                 definition.whyItMatters(),

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
@@ -691,6 +692,7 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
         practice.setSlug("cited-" + SLUG_SEQUENCE.incrementAndGet());
         practice.setName("Cited practice");
         practice.setCriteria("Criteria");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.saveAndFlush(practice);
@@ -713,6 +715,8 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
                 "Six parts and nothing to check off",
                 "NOT_MET",
                 "MAJOR",
+                null,
+                null,
                 null,
                 null,
                 null,

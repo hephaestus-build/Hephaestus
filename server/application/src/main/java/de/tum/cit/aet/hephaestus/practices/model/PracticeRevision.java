@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.ReviewRuleFingerprint;
 import jakarta.persistence.Column;
@@ -115,6 +116,12 @@ public class PracticeRevision {
     @ToString.Exclude
     private @Nullable PracticePrecondition precondition;
 
+    /** The judgment this revision reviewed with; absent for a revision recorded before judgments existed. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "judgment", columnDefinition = "jsonb")
+    @ToString.Exclude
+    private @Nullable PracticeJudgment judgment;
+
     @Column(name = "criteria", columnDefinition = "TEXT", nullable = false)
     @ToString.Exclude
     private String criteria;
@@ -176,6 +183,7 @@ public class PracticeRevision {
         this.subject = practice.getSubject();
         this.precondition = practice.getPrecondition();
         this.criteria = Objects.requireNonNull(practice.getCriteria(), "practice.criteria");
+        this.judgment = practice.getJudgment();
         this.precomputeScript = practice.getPrecomputeScript();
         this.automatedReviewPolicy =
                 Objects.requireNonNull(practice.getAutomatedReviewPolicy(), "practice.automatedReviewPolicy");
@@ -209,6 +217,7 @@ public class PracticeRevision {
                 subject,
                 precondition,
                 criteria,
+                judgment,
                 precomputeScript,
                 automatedReviewPolicy,
                 groupSlug);

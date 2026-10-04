@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -173,6 +174,7 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
             PracticeTestEvidence.configure(practice, ArtifactKinds.CONVERSATION_THREAD);
             practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.CONVERSATION_THREAD));
             var revision = new PracticeRevision();
+            ReflectionTestUtils.setField(revision, "judgment", PracticeJudgment.holistic());
             ReflectionTestUtils.setField(revision, "id", 12L);
             practice.setCurrentRevision(revision);
             when(practiceCatalogInjector.resolveEligiblePractices(job, ArtifactKinds.CONVERSATION_THREAD))
@@ -209,16 +211,14 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
     @Nested
     class PrepareObservations {
 
-        private static final String OBSERVATION = """
-            [{
-              "practiceSlug": "explains-why",
-              "summary": "States the motivation",
-              "outcome": "MET",
-              "severity": null,
-              "evidenceRationale": "The text says why.",
-              "evidence": {}
-            }]
-            """;
+        private static final tools.jackson.databind.JsonNode OBSERVATION =
+                AnsweredObservations.submitted(AnsweredObservations.observation(
+                        "explains-why",
+                        "States the motivation",
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.MET,
+                        null,
+                        AnsweredObservations.recordCitation(
+                                "context/description.md", 1, "Because the cache stalled.")));
 
         @Test
         void shouldRefuseRatherThanFailWhenNothingSubmittedIsAnObservation() {
@@ -230,7 +230,10 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
                     .isInstanceOfSatisfying(
                             de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException.class,
                             e -> assertThat(e.reasonCode()).isEqualTo("no_valid_observations"));
-            org.mockito.Mockito.verifyNoInteractions(deliveryService);
+            org.mockito.Mockito.verify(deliveryService, org.mockito.Mockito.never())
+                    .prepare(any(), any());
+            org.mockito.Mockito.verify(deliveryService, org.mockito.Mockito.never())
+                    .publish(any(), any());
         }
 
         @Test
@@ -240,8 +243,9 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
             var admissible = mock(ReviewOutputService.PreparedObservations.class);
             when(deliveryService.prepare(org.mockito.ArgumentMatchers.eq(job), any()))
                     .thenReturn(admissible);
+            when(deliveryService.judgments(job)).thenReturn(AnsweredObservations.judgments("explains-why"));
 
-            var prepared = handler.prepareObservations(job, objectMapper.readTree(OBSERVATION));
+            var prepared = handler.prepareObservations(job, OBSERVATION);
             org.mockito.Mockito.verify(deliveryService, org.mockito.Mockito.never())
                     .publish(any(), any());
 

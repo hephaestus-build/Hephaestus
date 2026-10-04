@@ -74,7 +74,8 @@ public class ObservationService {
                 query.severities() != null && !query.severities().isEmpty();
         List<ArtifactKind> artifactKinds =
                 hasArtifactKinds ? Objects.requireNonNull(query.artifactKinds()) : List.of(ArtifactKinds.PULL_REQUEST);
-        List<Severity> severities = hasSeverities ? Objects.requireNonNull(query.severities()) : List.of(Severity.INFO);
+        List<Severity> severities =
+                hasSeverities ? Objects.requireNonNull(query.severities()) : List.of(Severity.MINOR);
         if (query.sort() == ObservationSort.SEVERITY) {
             return observationRepository.findByAboutUserAndWorkspaceSeverityFirst(
                     currentUser.get().getId(),

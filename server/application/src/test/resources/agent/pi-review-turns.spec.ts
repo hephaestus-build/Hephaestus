@@ -2,11 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+	CLEARED_OUTPUT,
 	deriveWindows,
+	FINISHED_TURN_NOTE,
+	finishedTurnEdits,
 	missingSlugs,
 	planTurns,
 	shouldRecordNow,
 	spent,
+	TURN_PRACTICES_MARKER,
 	turnBudget,
 } from "../../../main/resources/agent/pi-review-turns.ts";
 
@@ -76,4 +80,62 @@ void test("a turn has spent its budget when either its calls or its output token
 void test("missing practices keep the review's order", () => {
 	assert.deepEqual(missingSlugs(["a", "b", "c"], ["c", "a"]), ["b"]);
 	assert.deepEqual(missingSlugs(["a"], ["a", "a"]), []);
+});
+
+void test("below the budget the context only grows, so the provider's prompt cache keeps serving it", () => {
+	assert.deepEqual(
+		finishedTurnEdits(
+			[
+				{ entryId: "t1", role: "user", text: `## Turn 1 of 2: code\n${TURN_PRACTICES_MARKER} a.` },
+				{ entryId: "t1-read", role: "toolResult", text: "x".repeat(5000) },
+			],
+			10_000,
+		),
+		[],
+	);
+});
+
+void test("past the budget every finished turn keeps its opening, heading and the model's messages, and drops its bulk", () => {
+	const opening = "Task.\n\n## What was captured\nthe brief\n\n";
+	const edits = finishedTurnEdits(
+		[
+			{
+				entryId: "t1",
+				role: "user",
+				text: `${opening}## Turn 1 of 3: code\n${TURN_PRACTICES_MARKER} a.`,
+			},
+			{ entryId: "t1-read", role: "toolResult", text: "x".repeat(5000) },
+			{ entryId: "t1-call", role: "assistant", text: "Recorded a." },
+			{
+				entryId: "t2",
+				role: "user",
+				text: `## Turn 2 of 3: docs\n${TURN_PRACTICES_MARKER} b, c. Criteria…`,
+			},
+			{ entryId: "t2-read", role: "toolResult", text: "y".repeat(5000) },
+			{ entryId: "t2-nudge", role: "user", text: "Record what this turn still owes." },
+			{ entryId: "t2-stored", role: "toolResult", text: "stored 2 observation(s)" },
+		],
+		8000,
+	);
+	// One edit for all of them: a single break of the cache buys the most room.
+	assert.deepEqual(edits, [
+		{ targetId: "t1", content: `${opening}## Turn 1 of 3: code\n${FINISHED_TURN_NOTE}` },
+		{ targetId: "t1-read", content: CLEARED_OUTPUT },
+		{ targetId: "t2", content: `## Turn 2 of 3: docs\n${FINISHED_TURN_NOTE}` },
+		{ targetId: "t2-read", content: CLEARED_OUTPUT },
+	]);
+});
+
+void test("an edited prompt no longer starts a turn, so no turn is edited twice", () => {
+	assert.deepEqual(
+		finishedTurnEdits(
+			[
+				{ entryId: "t1", role: "user", text: `## Turn 1 of 1: code\n${FINISHED_TURN_NOTE}` },
+				{ entryId: "compose", role: "user", text: "The review just finished." },
+				{ entryId: "read", role: "toolResult", text: "z".repeat(5000) },
+			],
+			100,
+		),
+		[],
+	);
 });

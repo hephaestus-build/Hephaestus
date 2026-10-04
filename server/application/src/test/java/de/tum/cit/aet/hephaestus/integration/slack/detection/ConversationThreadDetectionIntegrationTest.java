@@ -10,10 +10,15 @@ import static org.mockito.Mockito.verify;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationThreadCandidate;
 import de.tum.cit.aet.hephaestus.agent.job.ConversationReviewSubmitter;
 import de.tum.cit.aet.hephaestus.agent.job.conversation.ConversationThreadTriggerScheduler;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationProjector;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -70,6 +75,26 @@ class ConversationThreadDetectionIntegrationTest extends BaseIntegrationTest {
     private long newWorkspace() {
         Workspace workspace = WorkspaceTestFixtures.activeWorkspace("conv-detect-" + WS_SEQ.incrementAndGet());
         return workspaceRepository.save(workspace).getId();
+    }
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private IdentityProviderRepository identityProviderRepository;
+
+    private static final AtomicLong USER_SEQ = new AtomicLong(9_100_000L);
+
+    /** A workspace member a Slack turn can be linked to: {@code slack_message.author_member_id} references it. */
+    private long linkedMember(String login) {
+        IdentityProvider provider = identityProviderRepository
+                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseGet(() -> identityProviderRepository.save(
+                        new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+        long nativeId = USER_SEQ.incrementAndGet();
+        return userRepository
+                .save(TestUserFactory.createUser(nativeId, login + "-" + nativeId, provider))
+                .getId();
     }
 
     private SlackConversationTestSupport support;
@@ -181,13 +206,24 @@ class ConversationThreadDetectionIntegrationTest extends BaseIntegrationTest {
         seedThread(ws, "C1", rootTs, replyTs, 2, "{100}");
         seedMessage(ws, "C1", rootTs, null);
         seedMessage(ws, "C1", replyTs, rootTs);
+        long reviewed = linkedMember("thread-asker");
+        jdbc.update(
+                "UPDATE slack_message SET author_member_id = ? WHERE workspace_id = ? AND slack_ts = ?",
+                reviewed,
+                ws,
+                rootTs);
 
-        ObjectNode payload = projector.buildThreadPayload(ws, "C1", rootTs);
+        ObjectNode payload = projector.buildThreadPayload(ws, "C1", rootTs, reviewed);
 
         assertThat(payload.get("channel").asString()).isEqualTo("C1");
         assertThat(payload.get("messageCount").asInt()).isEqualTo(2);
         assertThat(payload.get("_meta").get("trustLevel").asString()).isEqualTo("UNTRUSTED_EXTERNAL");
         assertThat(payload.get("messages")).hasSize(2);
+        // Only the reviewed participant's turn is the work under review; the reply is context.
+        assertThat(payload.get("messages").get(0).get("underReview").asBoolean())
+                .isTrue();
+        assertThat(payload.get("messages").get(1).get("underReview").asBoolean())
+                .isFalse();
     }
 
     @org.junit.jupiter.params.ParameterizedTest
@@ -205,7 +241,7 @@ class ConversationThreadDetectionIntegrationTest extends BaseIntegrationTest {
             seedMessage(ws, "C1", ts, i == 0 ? null : rootTs);
         }
 
-        ObjectNode payload = projector.buildThreadPayload(ws, "C1", rootTs);
+        ObjectNode payload = projector.buildThreadPayload(ws, "C1", rootTs, 100L);
 
         assertThat(payload.get("messages")).hasSize(messageCount);
         assertThat(payload.get("truncated").asBoolean()).isFalse();
@@ -226,7 +262,7 @@ class ConversationThreadDetectionIntegrationTest extends BaseIntegrationTest {
         seedMessage(wsRevoked, "C1", rootTs, null);
         seedMessage(wsRevoked, "C1", replyTs, rootTs);
 
-        ObjectNode revoked = projector.buildThreadPayload(wsRevoked, "C1", rootTs);
+        ObjectNode revoked = projector.buildThreadPayload(wsRevoked, "C1", rootTs, 100L);
         assertThat(revoked.get("messageCount").asInt()).isZero();
         assertThat(revoked.get("messages")).isEmpty();
 
@@ -236,7 +272,7 @@ class ConversationThreadDetectionIntegrationTest extends BaseIntegrationTest {
         seedThread(wsPaused, "C1", rootTs, replyTs, 2, "{100}");
         seedMessage(wsPaused, "C1", rootTs, null);
         seedMessage(wsPaused, "C1", replyTs, rootTs);
-        assertThat(projector.buildThreadPayload(wsPaused, "C1", rootTs).get("messages"))
+        assertThat(projector.buildThreadPayload(wsPaused, "C1", rootTs, 100L).get("messages"))
                 .isEmpty();
 
         // Control: the SAME thread shape on an ACTIVE channel still projects both turns.
@@ -245,7 +281,7 @@ class ConversationThreadDetectionIntegrationTest extends BaseIntegrationTest {
         seedThread(wsActive, "C1", rootTs, replyTs, 2, "{100}");
         seedMessage(wsActive, "C1", rootTs, null);
         seedMessage(wsActive, "C1", replyTs, rootTs);
-        assertThat(projector.buildThreadPayload(wsActive, "C1", rootTs).get("messages"))
+        assertThat(projector.buildThreadPayload(wsActive, "C1", rootTs, 100L).get("messages"))
                 .hasSize(2);
     }
 

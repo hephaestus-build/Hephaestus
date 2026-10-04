@@ -221,3 +221,42 @@ describe("the unsaved-changes guard around a save", () => {
 		await screen.findByRole("alertdialog", { name: "Discard unsaved changes?" });
 	});
 });
+
+describe("the questions and rules", () => {
+	it("sends the starting questions with a practice Hephaestus reviews", async () => {
+		const onSubmit = vi.fn();
+		await renderCreateForm(onSubmit);
+		fillValidDraft();
+		fireEvent.click(screen.getByRole("button", { name: "Create practice" }));
+		await waitFor(() =>
+			expect(onSubmit).toHaveBeenCalledWith(
+				expect.objectContaining({ judgment: mockPracticeDefinitionOptions.startingJudgment }),
+			),
+		);
+	});
+
+	it("sends no questions for a practice that is guidance only", async () => {
+		const onSubmit = vi.fn<(value: PracticeDefinitionValue) => void>();
+		await renderCreateForm(onSubmit);
+		fillValidDraft();
+		fireEvent.click(screen.getByRole("radio", { name: /Guidance only/u }));
+		expect(screen.queryByRole("heading", { name: "How the review decides" })).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: "Create practice" }));
+		await waitFor(() =>
+			expect(onSubmit).toHaveBeenCalledWith(
+				expect.objectContaining({ name: "Explain what changed and why" }),
+			),
+		);
+		expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty("judgment");
+	});
+
+	it("refuses a save while a rule can never decide, and says why", async () => {
+		const onSubmit = vi.fn();
+		await renderCreateForm(onSubmit);
+		fillValidDraft();
+		fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+		fireEvent.click(screen.getByRole("button", { name: "Create practice" }));
+		expect(onSubmit).not.toHaveBeenCalled();
+		screen.getByText("Rule 5 needs a reason of 10–200 characters: one sentence about the work.");
+	});
+});

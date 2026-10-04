@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -508,6 +509,7 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
         result.setSlug("review-quality");
         result.setName("Review quality");
         result.setCriteria("Review the change");
+        result.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(result, ScmSignals.PULL_REQUEST_OPENED);
         result.setAutonomy(PracticeAutonomy.AUTOMATIC);
         return practiceRepository.save(result);
@@ -539,6 +541,8 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 severity,
                 "{}",
                 "Reasoning",
+                null,
+                null,
                 "summary-" + title,
                 Instant.now(),
                 "LIVE");

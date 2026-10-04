@@ -52,6 +52,7 @@ class PracticeRepositoryIntegrationTest extends BaseIntegrationTest {
         practice.setSlug(slug);
         practice.setName(name);
         practice.setCriteria("Default criteria for " + slug);
+        practice.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         return practice;
     }
@@ -73,6 +74,7 @@ class PracticeRepositoryIntegrationTest extends BaseIntegrationTest {
         void savesAndRetrieves() {
             Practice practice = createPractice("test-slug", "Test Practice");
             practice.setCriteria("Check for quality");
+            practice.setJudgment(PracticeJudgment.holistic());
             practice.setAutonomy(PracticeAutonomy.OFF);
 
             Practice saved = practiceRepository.save(practice);

@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -143,6 +144,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
         practice.setSlug(slug);
         practice.setName("Issue metadata review");
         practice.setCriteria("Review the issue");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ScmSignals.ISSUE));
         PracticeTestEvidence.configure(practice, ScmSignals.ISSUE_UPDATED);
         practices.save(practice);

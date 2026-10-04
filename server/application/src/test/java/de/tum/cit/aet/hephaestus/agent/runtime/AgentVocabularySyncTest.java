@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
+import de.tum.cit.aet.hephaestus.practices.model.QuestionAnswer;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
@@ -37,8 +38,38 @@ class AgentVocabularySyncTest extends BaseUnitTest {
     void shouldUseTheSameOutcomeVocabularyInRuntimeAndAdmission() throws IOException {
         assertThat(jsArray("OUTCOME_VALUES")).containsExactlyInAnyOrderElementsOf(names(Outcome.values()));
         assertThat(Files.readString(RUNNER, StandardCharsets.UTF_8))
-                .contains("outcome:", "severity:")
                 .doesNotContain("assessmentStatus:", "presence:", "assessment:");
+    }
+
+    @Test
+    void shouldUseTheSameAnswerVocabularyInRuntimeAndAdmission() throws IOException {
+        assertThat(jsArray("ANSWER_VALUES"))
+                .as("ANSWER_VALUES in pi-observation-normalize.ts vs QuestionAnswer.values()")
+                .containsExactlyInAnyOrderElementsOf(names(QuestionAnswer.values()));
+    }
+
+    @Test
+    void shouldBoundAnswerReasonsAlikeInRunnerAndAdmission() throws IOException {
+        Matcher matcher = Pattern.compile("export const MAX_BECAUSE_CHARS = (\\d+);")
+                .matcher(Files.readString(NORMALIZER, StandardCharsets.UTF_8));
+        assertThat(matcher.find())
+                .as("MAX_BECAUSE_CHARS is declared in pi-observation-normalize.ts")
+                .isTrue();
+        assertThat(Integer.parseInt(matcher.group(1)))
+                .as("MAX_BECAUSE_CHARS vs ReviewResultParser.MAX_BECAUSE_LENGTH")
+                .isEqualTo(ReviewResultParser.MAX_BECAUSE_LENGTH);
+    }
+
+    @Test
+    void shouldBoundWhatWouldSettleAnOpenAnswerAlikeInRunnerAndAdmission() throws IOException {
+        Matcher matcher = Pattern.compile("export const MAX_WOULD_SETTLE_IT_CHARS = (\\d+);")
+                .matcher(Files.readString(NORMALIZER, StandardCharsets.UTF_8));
+        assertThat(matcher.find())
+                .as("MAX_WOULD_SETTLE_IT_CHARS is declared in pi-observation-normalize.ts")
+                .isTrue();
+        assertThat(Integer.parseInt(matcher.group(1)))
+                .as("MAX_WOULD_SETTLE_IT_CHARS vs ReviewResultParser.MAX_WOULD_SETTLE_IT_LENGTH")
+                .isEqualTo(ReviewResultParser.MAX_WOULD_SETTLE_IT_LENGTH);
     }
 
     @Test
@@ -96,11 +127,17 @@ class AgentVocabularySyncTest extends BaseUnitTest {
     }
 
     @Test
-    void orchestratorPromptCoversEveryOutcome() throws IOException {
+    void orchestratorPromptCoversEveryAnswer() throws IOException {
         String body = Files.readString(ORCHESTRATOR, StandardCharsets.UTF_8);
         assertThat(body)
-                .contains("MET", "NOT_MET", "NOT_APPLICABLE", "UNDETERMINED")
-                .doesNotContain("BEHAVIOR_PRESENT_", "NO_REVIEW_OCCASION", "INSUFFICIENT_EVIDENCE", "INCONCLUSIVE");
+                .contains("| YES |", "| NO |", "| UNDETERMINED |")
+                .doesNotContain(
+                        "BEHAVIOR_PRESENT_",
+                        "NO_REVIEW_OCCASION",
+                        "INSUFFICIENT_EVIDENCE",
+                        "INCONCLUSIVE",
+                        "| NOT_MET |",
+                        "evidenceRationale");
     }
 
     @Test

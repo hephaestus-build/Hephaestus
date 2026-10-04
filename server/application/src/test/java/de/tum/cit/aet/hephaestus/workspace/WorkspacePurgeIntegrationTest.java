@@ -39,6 +39,7 @@ import de.tum.cit.aet.hephaestus.mentor.ChatMessage;
 import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
 import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
@@ -864,6 +865,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             practice.setSlug("conv-practice-" + workspace.getId());
             practice.setName("Conversation Practice");
             practice.setCriteria("Test description");
+            practice.setJudgment(PracticeJudgment.holistic());
             practice = practiceRepository.save(practice);
 
             AgentJob job = new AgentJob();
@@ -889,6 +891,8 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         "Observation title",
                         "NOT_MET",
                         "MAJOR",
+                        null,
+                        null,
                         null,
                         null,
                         null,

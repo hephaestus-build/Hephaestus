@@ -12,6 +12,7 @@ import {
 	DEFAULT_DELIVERY_BEHAVIOR_TEXT,
 	deliveryBehaviorSentences,
 } from "@/components/admin/practice-editor/delivery-behavior-text";
+import { judgmentText } from "@/components/admin/practice-editor/practice-judgment";
 import { PracticeEvidenceSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -59,6 +60,7 @@ const PRACTICE_FIELDS = {
 	artifactKind: "Work reviewed",
 	groupSlug: "Group",
 	criteria: "What to look for",
+	judgment: "How the review decides",
 	whyItMatters: "Why it matters",
 	whatGoodLooksLike: "What good looks like",
 	precomputeScript: "Static analysis",
@@ -185,6 +187,10 @@ export function HephaestusVersionPanel(props: HephaestusVersionPanelProps) {
 											) : (
 												"Evidence details are unavailable for this kind of work."
 											);
+										} else if (field === "judgment" && shippedPractice) {
+											value = shippedPractice.judgment
+												? judgmentText(shippedPractice.judgment)
+												: "No questions";
 										} else if (field === "deliveryBehavior" && shippedPractice) {
 											const sentences = deliveryBehaviorSentences(shippedPractice.deliveryBehavior);
 											value =

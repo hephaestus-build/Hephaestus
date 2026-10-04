@@ -102,7 +102,7 @@ upload deadline. A terminal upload failure has exit code `43`; it is not a succe
 │                                    #   feedback.json, watchdog-killed.json
 ├── task.json                        # TaskEnvelope<…> — runtime contract between handler and runner.
 ├── .pi/                             # Pi SDK agent dir — $PI_CODING_AGENT_DIR resolves here.
-│   ├── AGENTS.md                    #   Orchestrator instructions
+│   ├── AGENTS.md                    #   The orchestrator: each review session's whole system prompt, task paths written in
 │   └── settings.json                #   Pi SDK config (provider, model, compaction, retry)
 ├── .sessions/                       # Pi SDK session JSONL, one file per session.
 ├── pi-provider.json                 # Provider/model routing for the runner.
@@ -114,7 +114,7 @@ upload deadline. A terminal upload failure has exit code `43`; it is not a succe
 ├── pi-precompute.ts                 # Precompute launcher using task-declared paths.
 ├── pi-observation-normalize.ts      # Normalises sandbox observations before out/ is written.
 ├── pi-runner-usage.ts               # Token-usage accounting sidecar.
-├── pi-review-brief.ts               # The first turn's brief: the captured records and the change view, line-numbered.
+├── pi-review-brief.ts               # The brief each session's first turn carries: the captured records and the change view, line-numbered.
 ├── pi-review-turns.ts               # Practices as turns per catalog group; the budget's fair shares.
 ├── pi-runner-composition.ts         # Feedback-composition contract and coherence rules.
 ├── feedback-composer.md             # Composition-stage prompt; digested with the prompt scaffolding.
@@ -166,8 +166,8 @@ execute on Node; see
   derived here: they are staged as `context/commits.json`, so a quote of a commit message cites
   an artifact admission can verify. Absent when no change was captured (an issue review). A precompute script
   receives this directory as its fifth argument and reads it through `lib/change.ts`.
-- **`work/`** — agent + precompute scratch. The Pi agent may write here; the server never
-  collects it.
+- **`work/`** — agent + precompute scratch. The runner, precompute and the agent's `bash` may write
+  here; the server never collects it.
 - **`out/`** — the *only* directory the sandbox collects after the run. `runner-debug.json` carries the
   per-turn trace — calls, tool calls by name, observations stored and refused with the refusal reasons,
   compactions, provider retries — which the server keeps in the job output, so friction in production
@@ -246,6 +246,26 @@ name — `owner/repo#12`, `v1.2#3`, `GH-12` — is not this repository's issue a
 counted the issues this repository stores as the item's children, closed ones as completed (GitLab,
 whose sync links a child to its parent and never totals them). All three are absent when there is
 neither a provider count nor a child.
+
+**`conversation_thread.json`** (a conversation review) — `channel`, `threadTs`, `messageCount`,
+`truncated` and `messages`, oldest first: `ts`, `author` (the Slack user id), `text`, `underReview`
+and, when present, `authorLogin`, `authorName` and `edited`. A thread is reviewed once for each
+participant, and `underReview` is `true` on the turns of the one participant this review is about:
+the other turns are context, never the work under review.
+
+## Practice index
+
+**`inputs/practices/index.json`** — one entry per practice the job may review: `slug`, `name`,
+`group`, `revisionId`, `questions`, `readsSources` and `exhaustiveSources`. `questions` lists the
+pinned revision's questions in order, each with `key`, `title`, `question`, `yes`, `no`, `skipWhen`
+and, for a question whose answer can change only the severity, `gradesSeverityOnly: true`; a revision
+without questions fails preparation. `skipWhen` is a list of
+`{ question, answer }` pairs, each another question's `YES` or `NO` under which this one is a
+[skipped question](../practice-review-glossary.mdx#deriving-the-outcome), and is empty when no answer
+makes it one. The server derives it from the rules; the rules themselves are never staged, so the model
+answers what it observes rather than toward an outcome. `readsSources` points at what the practice
+reads; what may be cited is what the manifest lists. `exhaustiveSources` names the sources an answer
+resting on absence must search.
 
 ## History records
 
@@ -374,34 +394,88 @@ outer boundary.
 
 ## Practice review tools
 
-One review is one session, and its tool set is fixed when the runner creates it, in `pi-runner.ts`:
-the native Pi tools `read`, `grep`, `find`, `ls`, `write`, `edit` and `bash`, Pi's `codemode`, plus
-`report_observation` for the measuring turns and, when composition was requested, `report_feedback` and
-`report_summary` for the composition turn. `codemode` runs one JavaScript script in a QuickJS sandbox
-that calls the native tools, so a chain of searches and reads costs one model call; only what the script
-prints returns to the model. The recording tools are declared `model-only`, so a script cannot call them:
-what a turn records is always a call the model made. A script's own tool calls appear in the per-turn
-trace as `codemode.<tool>` and do not count toward the repetition limits, which watch the model's calls.
-A measuring turn ends with the `report_observation` call that leaves each of its practices with a
-recorded result, rather than on a further model call. The two feedback tools store nothing until the server has admitted the recorded
-observations. `report_observation` and `report_feedback` take a list — several observations or units in
-one call, each stored or refused on its own with the reason — and accept that list as a JSON string as
-well as an array, because a smaller model sends the string form often and, offered the array alone,
-re-sends the same string against the SDK's schema error indefinitely. A string with a closing brace too
-many or too few is repaired where the repair is unambiguous and checked field by field afterwards; one
-that does not parse is refused with the parse error. A turn that calls the recording tool many times
-without recording anything is ended. A citation's quote is optional: by
-coordinates alone, the runner records the cited lines and echoes them back. A quote given with a diff
-marker, a `[L<n>]` prefix, a non-breaking space read as a space, or a JSON string's text read without
-its escapes is recorded as the artifact's own bytes, because admission verifies those bytes; a quote
-whose lines were miscounted is recorded at the lines where the text is, when it occurs once; a citation
-that names `work/change/diff.patch` itself, by the view's own line numbers, is recorded at the changed
-file, side and `[L<n>]` its quote occurs at, when that is one place; a side or revision on a citation that
-settles on another source than the change or the checkout is dropped, since admission refuses either
-there; a refused citation is answered with what the cited lines really hold. The
-mentor runner exposes no native tool at all: its context arrives through `fetch_context`, and it gives
-feedback about an observation with `link_observation`, whose `text` the reply shows the developer once
-the server admits that observation for them; a refused link fails the call and shows nothing.
+A review runs in one session ([execution sequence](../practice-review-runtime.mdx#execution-sequence)).
+Its tool set is fixed when the runner creates it, in `pi-runner.ts`: the native Pi tools `read`,
+`grep`, `find`, `ls` and `bash`, Pi's `codemode`, and `report_observation`; when composition was
+requested, also `report_feedback` and `report_summary` for the composition turn. There is no `write` or `edit` tool: a
+reviewer reads. `codemode` runs one JavaScript script in a QuickJS sandbox that calls the native tools,
+so a chain of searches and reads costs one model call; only what the script prints returns to the
+model. The recording tools are declared `model-only`, so a script cannot call them: what a turn records
+is always a call the model made. A script's own tool calls appear in the per-turn trace as
+`codemode.<tool>` and do not count toward the repetition limits, which watch the model's calls. A
+measuring turn ends with the
+`report_observation` call that leaves each of its practices with a recorded result, rather than on a
+further model call. The two feedback tools store nothing until the server has admitted the recorded
+observations.
+
+`report_observation` and `report_feedback` take a list — several observations or units in one call,
+each stored or refused on its own with the reason. Their schemas are typed, arrays and objects as such,
+and carry no constraint keywords, so the SDK never refuses a whole call for a count or a pattern; the
+tool applies those rules item by item. A list is not offered as a JSON-encoded string: offered that
+alternative, a model sent every call as a string, and a string is where the escaping breaks. Before the
+SDK validates a call, `prepareArguments` puts it in the declared shape anyway: a list or object sent as
+JSON text is read, a lone value where a list belongs is listed, answers sent as a list of
+`{ question, … }` are keyed by their question, and a line written `[L12]`, `L12` or `"12"` is a number. JSON
+text with a closing brace too many or too few is repaired where the repair is unambiguous and checked
+field by field afterwards. A list that still cannot be read reaches the tool, which refuses it with
+where it broke and charges it to no practice. A turn that calls the recording tool many times without
+recording anything is ended. The mentor runner exposes no native tool at all: its context arrives
+through `fetch_context`, and it gives feedback about an observation with `link_observation`, whose
+`text` the reply shows the developer once the server admits that observation for them; a refused link
+fails the call and shows nothing.
+
+A `report_observation` item is `{ practiceSlug, scan?, evidence, answers, summary }`, in that order, and
+carries no outcome, severity or rationale:
+
+```json
+{"practiceSlug": "describe-what-and-why",
+ "scan": "Body line 1 restates the title; line 2 is the template's. No line names a problem the cache solves.",
+ "evidence": [{"path": "<contextRoot>/description.md", "startLine": 1, "endLine": 2}],
+ "answers": {"states_what": {"cites": [1], "because": "Line 1 says the change caches the review query.", "answer": "YES"},
+             "states_why": {"cites": [1], "because": "No line names a problem the cache solves.", "answer": "NO"}},
+ "summary": "Description restates the title"}
+```
+
+`scan` comes first: a few lines of what the model looked for and found, every candidate line with what
+it shows, before it cites or answers. It is the model's working and is never recorded; it exists because
+a model that lists its candidates before it formats an answer finds more of them. The `summary` comes
+last, as the headline of what the answers found.
+
+`evidence` lists the lines the answers rest on, each once: `{ path, startLine, endLine?, side?,
+revision?, anchor? }`. The model copies no text. The runner reads the cited lines, records them as the
+entry's quote and echoes them back in the stored item; one entry may record at most 4000 characters,
+and a longer range is recorded as its leading lines that fit, with a note. `anchor` is a few words of the
+first cited line: when the numbered lines do not resolve or do not hold them, and the words are on one
+line only — for the change, of that file on either side — the entry moves there with its span and the
+move is noted; the anchor itself is never recorded. Source and
+artifact follow from the path: a staged record is its own artifact; with a `side`, or naming
+`work/change/diff.patch`, the entry is a line of the change, recorded against the staged change artifact;
+any other repository path is a file of the checkout, read at `revision` when one is named.
+`sourceKind` and `artifactPath` are named only where the path alone is ambiguous. A quote the model
+sends anyway is checked: one given with a diff marker, a `[L<n>]` prefix, a non-breaking space
+read as a space, or a JSON string's text read without its escapes is recorded as the artifact's own
+bytes, because admission verifies those bytes; one whose lines were miscounted is recorded at the lines
+where the text is, when it occurs once; an entry that names `work/change/diff.patch` by the view's own
+line numbers is recorded at the changed file, side and `[L<n>]` it falls on, when that is one place. A
+side or revision on an entry that settles on a source other than the change or the checkout is
+dropped, since admission refuses either there, and a refused entry is answered with what the cited
+lines really hold. An entry no answer cites is not recorded.
+
+`answers` maps question keys to `{ cites, because, answer, search?, wouldSettleIt? }`, written in that
+order so the reason comes before the verdict. `cites` holds the numbers of the evidence entries the
+answer rests on, 1 for the first; `because` is one sentence; `answer` is `YES`, `NO` or `UNDETERMINED`.
+An answer resting on absence carries `search` (`consulted`, `lookedFor`, `boundary`) covering every
+source in `exhaustiveSources`; a source the brief shows whole was read in full, so it is added to
+`consulted` with a note rather than refused, and only an `UNDETERMINED` answer carries `wouldSettleIt`, which it
+requires. Every question is answered except a skipped one — a question whose `skipWhen` the item's own
+answers meet — and one marked `gradesSeverityOnly`, which left out is read as open: it cannot change the
+outcome, and supervaluation keeps the least severe band its answers allow. The runner and admission
+accept an omission only in these two cases. Before
+admission the runner expands each answer's `cites` into the entries' citations, so the server receives
+answers carrying their citations inline and its contract is unchanged. The turn asks for up to three
+observations per call, so a call stays inside the output limit. A stored item echoes the answers
+recorded; a refusal names every answer and field at fault. Admission derives the outcome — the
+[practice review pipeline](../practice-review-pipeline.mdx#observation) owns how.
 
 The image provides Bash, Git, ripgrep, fd-find, and standard shell utilities. `PI_OFFLINE=1`
 disables tool downloads. Use `work/` or `$TMPDIR` for scratch files; scratch files are not

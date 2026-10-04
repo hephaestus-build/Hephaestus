@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
@@ -180,6 +181,7 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
                         ActorRole.AUTHOR,
                         null,
                         rows.getString("criteria"),
+                        PracticeJudgment.holistic(),
                         null,
                         policy,
                         null,
@@ -200,6 +202,7 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
                         ActorRole.AUTHOR,
                         null,
                         rows.getString("criteria"),
+                        PracticeJudgment.holistic(),
                         null,
                         repinnedPolicy,
                         null,

@@ -321,6 +321,9 @@ public class PracticeService {
                                 ? null
                                 : beforeDefinition.precondition(),
                 request.criteria() == null ? beforeDefinition.criteria() : request.criteria(),
+                automatedReviewPolicy.automatedReview().mode() == PracticeAutomatedReviewMode.NONE
+                        ? null
+                        : request.judgment() == null ? beforeDefinition.judgment() : request.judgment(),
                 removesAutomatedReview && request.precomputeScript() == null
                         ? null
                         : patch(
@@ -470,6 +473,7 @@ public class PracticeService {
                 request.subject() == null ? ActorRole.AUTHOR : request.subject(),
                 request.precondition(),
                 required(request.criteria(), "criteria"),
+                request.judgment(),
                 request.precomputeScript(),
                 request.automatedReviewPolicy() == null
                         ? evidenceDefaults.policyFor(artifactKind)
@@ -495,6 +499,7 @@ public class PracticeService {
         practice.setSubject(definition.subject());
         practice.setPrecondition(definition.precondition());
         practice.setCriteria(definition.criteria());
+        practice.setJudgment(definition.judgment());
         practice.setPrecomputeScript(definition.precomputeScript());
         practice.setAutomatedReviewPolicy(definition.automatedReviewPolicy());
         practice.setDeliveryBehavior(definition.deliveryBehavior());

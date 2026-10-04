@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
@@ -56,11 +57,13 @@ class PracticeCatalogContentSourceTest extends BaseUnitTest {
         awaiting.setSlug("awaiting-approval");
         awaiting.setName("Awaiting");
         awaiting.setCriteria("c");
+        awaiting.setJudgment(PracticeJudgment.holistic());
         awaiting.setAutonomy(PracticeAutonomy.HUMAN_APPROVAL);
         Practice off = new Practice();
         off.setSlug("switched-off");
         off.setName("Off");
         off.setCriteria("c");
+        off.setJudgment(PracticeJudgment.holistic());
         off.setAutonomy(PracticeAutonomy.OFF);
         when(practiceRepository.findByWorkspaceId(eq(1L))).thenReturn(List.of(awaiting, off));
 
@@ -83,6 +86,7 @@ class PracticeCatalogContentSourceTest extends BaseUnitTest {
         practice.setSlug("error-state-handling");
         practice.setName("Error State Handling");
         practice.setCriteria("Show an error view for failed network calls.");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         when(practiceRepository.findByWorkspaceId(eq(1L))).thenReturn(List.of(practice));
 

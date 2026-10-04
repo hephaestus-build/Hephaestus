@@ -116,3 +116,69 @@ export function missingSlugs(all: readonly string[], observed: readonly string[]
 	const seen = new Set(observed);
 	return all.filter((slug) => !seen.has(slug));
 }
+
+/** What starts a practice turn's own part of its prompt; what comes before it is the opening, if any, and the heading. */
+export const TURN_PRACTICES_MARKER = "Evaluate these practices:";
+
+/** What a finished turn's prompt keeps of its own part. */
+export const FINISHED_TURN_NOTE =
+	"Its practices are recorded; their criteria and the output of this turn's reads are cleared. Read a line again if a later question needs it.";
+
+/** What a long output of a finished turn's call is replaced with. */
+export const CLEARED_OUTPUT =
+	"Output cleared after its turn; read it again if a later question needs it.";
+
+/** An output longer than this is the bulk of a finished turn, not its reasoning. */
+const KEPT_OUTPUT_CHARS = 1200;
+
+/** One message of the model's context, as the session holds it: the entry it came from, its role and its text. */
+export interface ContextMessage {
+	entryId: string;
+	role: string;
+	text: string;
+}
+
+/** A replacement for one entry's content in every later model call. */
+export interface ContextEdit {
+	targetId: string;
+	content: string;
+}
+
+/**
+ * What the finished turns leave for the turns after them, once the context has outgrown its budget. Their
+ * practices are recorded, so their criteria and the raw output of their reads only make every later call longer:
+ * each prompt keeps the opening it carried and its heading, and each long tool output is cleared. The model's own
+ * messages — what it read, concluded and recorded — stay, so later turns still build on them.
+ *
+ * An edit changes the context every later call begins with, so a provider's prompt cache serves none of what
+ * follows it; below the budget the context only grows by appending and stays cached. Past it, every finished
+ * turn not yet edited is edited at once, so one cache break buys the most room. A prompt already edited no
+ * longer holds the marker, so no turn is edited twice.
+ *
+ * @param budgetChars the context size, in characters, past which the finished turns are cleared
+ */
+export function finishedTurnEdits(
+	context: readonly ContextMessage[],
+	budgetChars: number,
+): ContextEdit[] {
+	const size = context.reduce((total, message) => total + message.text.length, 0);
+	const start = context.findIndex(
+		(message) => message.role === "user" && message.text.includes(TURN_PRACTICES_MARKER),
+	);
+	if (size <= budgetChars || start === -1) {
+		return [];
+	}
+	return context.slice(start).flatMap((message): ContextEdit[] => {
+		if (message.role === "user" && message.text.includes(TURN_PRACTICES_MARKER)) {
+			return [
+				{
+					targetId: message.entryId,
+					content: `${message.text.slice(0, message.text.indexOf(TURN_PRACTICES_MARKER))}${FINISHED_TURN_NOTE}`,
+				},
+			];
+		}
+		return message.role === "toolResult" && message.text.length > KEPT_OUTPUT_CHARS
+			? [{ targetId: message.entryId, content: CLEARED_OUTPUT }]
+			: [];
+	});
+}

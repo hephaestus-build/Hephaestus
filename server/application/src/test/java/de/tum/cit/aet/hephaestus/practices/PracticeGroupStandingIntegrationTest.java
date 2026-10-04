@@ -104,6 +104,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         p.setSlug(slug);
         p.setName(name);
         p.setCriteria("Description for " + slug);
+        p.setJudgment(PracticeJudgment.holistic());
         p.setGroup(boundGroup);
         p = practiceRepository.saveAndFlush(p);
         p.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(p, 1)));
@@ -194,6 +195,8 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                 DIFF_EVIDENCE_JSON,
                 "Test reasoning for " + title,
                 null,
+                null,
+                null,
                 observedAt,
                 "LIVE");
         return id;
@@ -216,6 +219,8 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                 null,
                 DIFF_EVIDENCE_JSON,
                 "Test reasoning for an inapplicable run",
+                null,
+                null,
                 null,
                 Instant.now(),
                 "LIVE");

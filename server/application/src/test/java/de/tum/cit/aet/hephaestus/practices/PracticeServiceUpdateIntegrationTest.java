@@ -49,6 +49,7 @@ class PracticeServiceUpdateIntegrationTest extends AbstractWorkspaceIntegrationT
                 "the change has no Swift code",
                 List.of(PracticePreconditionClause.changedPathMatches(List.of("**/*.swift")))));
         practice.setCriteria("Assess the review");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         return practiceRepository.save(practice);
@@ -62,7 +63,21 @@ class PracticeServiceUpdateIntegrationTest extends AbstractWorkspaceIntegrationT
                 ctx,
                 before.getSlug(),
                 new UpdatePracticeRequestDTO(
-                        "New name", null, null, null, null, null, null, null, null, null, null, null, null, null));
+                        "New name",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
         var reloaded = practiceService.getPractice(ctx, before.getSlug());
         assertThat(reloaded.getName()).isEqualTo("New name");
         assertThat(reloaded.getPrecondition()).isEqualTo(precondition);
@@ -89,6 +104,7 @@ class PracticeServiceUpdateIntegrationTest extends AbstractWorkspaceIntegrationT
                 null,
                 null,
                 ActorRole.AUTHOR,
+                null,
                 null,
                 null,
                 null,

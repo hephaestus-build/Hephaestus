@@ -1,95 +1,70 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
+import de.tum.cit.aet.hephaestus.practices.PracticeQuestion;
+import de.tum.cit.aet.hephaestus.practices.PracticeRule;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationAnswer;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
+import de.tum.cit.aet.hephaestus.practices.model.QuestionAnswer;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import java.io.Serial;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
-import tools.jackson.core.json.JsonReadFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
-/** Validates submitted observations into typed ones without throwing on malformed entries. */
+/**
+ * Validates the answers a review submitted and derives each observation from them: the reviewer answers the
+ * practice's questions; the practice revision's judgment, never the reviewer, decides the outcome and severity.
+ */
 public class ReviewResultParser {
 
-    private static final Logger log = LoggerFactory.getLogger(ReviewResultParser.class);
-
     public static final int MAX_SUMMARY_LENGTH = 160;
-    private static final int MAX_EVIDENCE_RATIONALE_LENGTH = 10_000;
+    public static final int MAX_BECAUSE_LENGTH = 600;
+    public static final int MAX_WOULD_SETTLE_IT_LENGTH = 600;
     private static final int MAX_EVIDENCE_BYTES = 64 * 1024;
-
-    private static final int MAX_RAW_OUTPUT_LENGTH = 1_000_000;
 
     static final int MAX_MR_NOTE_LENGTH = 60_000;
 
-    private static final Set<String> OBSERVATION_FIELDS =
-            Set.of("practiceSlug", "summary", "outcome", "severity", "evidence", "evidenceRationale");
+    private static final Set<String> OBSERVATION_FIELDS = Set.of("practiceSlug", "summary", "answers");
 
-    private static final Set<String> EVIDENCE_FIELDS =
-            Set.of("citations", "search", "inapplicability", "undecidability");
+    private static final Set<String> ANSWER_FIELDS =
+            Set.of("question", "answer", "because", "citations", "search", "wouldSettleIt");
+
+    private static final Set<String> SEARCH_FIELDS = Set.of("consulted", "lookedFor", "boundary");
 
     static final int MAX_DELIVERY_DIFF_NOTES = 30;
 
     private final JsonMapper objectMapper;
-    private final JsonMapper lenientMapper;
 
     public ReviewResultParser(JsonMapper objectMapper) {
         this.objectMapper = objectMapper;
-        // LLMs produce JSON with literal newlines/tabs/control chars inside string values that strict JSON rejects.
-        this.lenientMapper = objectMapper
-                .rebuild()
-                .enable(JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS)
-                .build();
     }
 
-    /** Parses a raw model output whose {@code rawOutput} text carries the observations, leniently. */
-    public ParseResult parse(@Nullable JsonNode jobOutput) {
-        if (jobOutput == null || jobOutput.isNull() || jobOutput.isMissingNode()) {
-            return ParseResult.empty("jobOutput is null or missing");
-        }
-        JsonNode rawOutputNode = jobOutput.get("rawOutput");
-        if (rawOutputNode == null || rawOutputNode.isNull() || rawOutputNode.isMissingNode()) {
-            return ParseResult.empty("missing rawOutput field in job output");
-        }
-        String rawOutputText = rawOutputNode.asString();
-        if (rawOutputText.isBlank()) {
-            return ParseResult.empty("rawOutput is blank");
-        }
-        // Reject before parsing to bound memory use on untrusted model output.
-        if (rawOutputText.length() > MAX_RAW_OUTPUT_LENGTH) {
-            log.warn("parse: rawOutput too large ({} chars), skipping", rawOutputText.length());
-            return ParseResult.empty("rawOutput too large");
-        }
-
-        String sanitizedText = sanitizeJsonEscapes(rawOutputText);
-        JsonNode root;
-        try {
-            root = lenientMapper.readTree(sanitizedText);
-        } catch (JacksonException e) {
-            root = extractJsonFromText(sanitizedText);
-            if (root == null) {
-                return ParseResult.empty("invalid JSON in rawOutput: " + e.getMessage());
-            }
-        }
-        if (root == null || root.isNull()) {
-            return ParseResult.empty("rawOutput parsed to null");
-        }
-        return parseObservations(root.get("observations"));
-    }
-
-    /** Validates an already-structured observations array, as the runner submits it for admission. */
-    public ParseResult parseObservations(@Nullable JsonNode observations) {
+    /**
+     * Validates the observations the runner submits for admission and derives each outcome.
+     *
+     * @param observations the submitted array
+     * @param judgments    the judgment of every practice admitted to the job, by slug
+     */
+    public ParseResult parseObservations(@Nullable JsonNode observations, Map<String, PracticeJudgment> judgments) {
         if (observations == null || !observations.isArray()) {
             return ParseResult.empty("missing or non-array 'observations' field");
         }
@@ -106,7 +81,7 @@ public class ReviewResultParser {
                 continue;
             }
             try {
-                valid.add(validateEntry(entry, i));
+                valid.add(validateEntry(entry, judgments));
             } catch (EntryValidationException e) {
                 discarded.add(new DiscardedEntry(i, String.valueOf(e.getMessage())));
             }
@@ -115,19 +90,19 @@ public class ReviewResultParser {
         return new ParseResult(Collections.unmodifiableList(valid), Collections.unmodifiableList(discarded));
     }
 
-    private ValidatedObservation validateEntry(JsonNode entry, int index) {
-        List<String> unknownFields = entry.properties().stream()
-                .map(java.util.Map.Entry::getKey)
-                .filter(field -> !OBSERVATION_FIELDS.contains(field))
-                .toList();
-        if (!unknownFields.isEmpty()) {
-            throw new EntryValidationException("unknown observation fields: " + unknownFields);
-        }
+    private ValidatedObservation validateEntry(JsonNode entry, Map<String, PracticeJudgment> judgments) {
+        rejectUnknown(entry, OBSERVATION_FIELDS, "observation");
         String practiceSlug = textField(entry, "practiceSlug");
         if (practiceSlug.isBlank()) {
             throw new EntryValidationException("practiceSlug is blank");
         }
         practiceSlug = practiceSlug.toLowerCase(Locale.ROOT).replace('_', '-');
+        PracticeJudgment judgment = judgments.get(practiceSlug);
+        if (judgment == null) {
+            // Not one bad entry but a run answering for work it was never given: nothing it recorded is trusted.
+            throw new JobDeliveryException(
+                    "Observation references a practice not admitted to the job: slug=" + practiceSlug);
+        }
 
         String summary = textField(entry, "summary");
         if (summary.isBlank()) {
@@ -138,49 +113,264 @@ public class ReviewResultParser {
                     "summary is " + summary.length() + " characters, over the " + MAX_SUMMARY_LENGTH + " allowed");
         }
 
-        Outcome outcome = parseEnum(entry, "outcome", Outcome.class);
-        Severity severity = parseNullableEnum(entry, "severity", Severity.class);
-        try {
-            outcome.validate(severity);
-        } catch (IllegalArgumentException e) {
-            throw new EntryValidationException("incoherent outcome: " + e.getMessage(), e);
-        }
+        Map<String, SubmittedAnswer> submitted = submittedAnswers(entry.get("answers"), judgment);
+        Map<String, QuestionAnswer> values = new LinkedHashMap<>();
+        submitted.forEach((key, answer) -> values.put(key, answer.answer()));
+        PracticeJudgment.Derivation derived = judgment.derive(values);
 
-        JsonNode evidence = entry.get("evidence");
-        if (evidence == null || !evidence.isObject()) {
-            throw new EntryValidationException("missing or non-object field: evidence");
+        // Every quoted line is one citation of the observation, the deciding answers' first, each listed once.
+        List<String> order = new ArrayList<>(derived.decisive());
+        judgment.questions().stream()
+                .map(PracticeQuestion::key)
+                .filter(key -> !order.contains(key))
+                .forEach(order::add);
+        ArrayNode citations = objectMapper.createArrayNode();
+        List<ObservationAnswer> answers = new ArrayList<>();
+        Map<String, ObservationAnswer> byKey = new LinkedHashMap<>();
+        for (String key : order) {
+            SubmittedAnswer answer = submitted.get(key);
+            if (answer == null) continue;
+            List<Integer> indexes = new ArrayList<>();
+            for (JsonNode citation : answer.citations()) {
+                int index = indexOf(citations, citation);
+                if (index < 0) {
+                    citations.add(citation.deepCopy());
+                    index = citations.size() - 1;
+                }
+                if (!indexes.contains(index)) indexes.add(index);
+            }
+            byKey.put(
+                    key,
+                    new ObservationAnswer(
+                            key,
+                            answer.answer(),
+                            answer.because(),
+                            derived.decisive().contains(key),
+                            indexes,
+                            answer.search(),
+                            answer.wouldSettleIt()));
         }
-        List<String> unknownEvidenceFields = evidence.properties().stream()
-                .map(java.util.Map.Entry::getKey)
-                .filter(field -> !EVIDENCE_FIELDS.contains(field))
+        judgment.questions().stream()
+                .map(question -> byKey.get(question.key()))
+                .filter(Objects::nonNull)
+                .forEach(answers::add);
+
+        ObjectNode evidence = objectMapper.createObjectNode();
+        evidence.set("citations", citations);
+        List<ObservationAnswer> deciding = derived.decisive().stream()
+                .map(key -> Objects.requireNonNull(byKey.get(key)))
                 .toList();
-        if (!unknownEvidenceFields.isEmpty()) {
-            throw new EntryValidationException("unknown evidence fields: " + unknownEvidenceFields);
+        String titles = derived.decisive().stream()
+                .map(key -> Objects.requireNonNull(judgment.question(key)).title())
+                .collect(Collectors.joining("; "));
+        PracticeRule rule = derived.rule();
+        String headline = rule != null
+                ? rule.reason()
+                : Objects.requireNonNullElse(
+                        PracticeJudgment.unsettledHeadline(derived.outcome()),
+                        "The evidence leaves open: " + titles + ".");
+        switch (derived.outcome()) {
+            case NOT_APPLICABLE -> {
+                ObjectNode inapplicability = evidence.putObject("inapplicability");
+                ArrayNode consulted = inapplicability.putArray("consulted");
+                consultedSources(deciding, citations).forEach(consulted::add);
+                inapplicability.put("subject", titles);
+                inapplicability.put("ruledOutBy", headline);
+            }
+            case UNDETERMINED -> {
+                ObjectNode undecidability = evidence.putObject("undecidability");
+                undecidability.put(
+                        "openQuestion", rule != null ? rule.reason() : "The evidence leaves open: " + titles);
+                String settle = deciding.stream()
+                        .map(ObservationAnswer::wouldSettleIt)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.joining("; "));
+                if (!settle.isBlank()) undecidability.put("wouldSettleIt", settle);
+            }
+            case MET, NOT_MET -> {
+                List<ObservationAnswer.Search> searches = deciding.stream()
+                        .map(ObservationAnswer::search)
+                        .filter(Objects::nonNull)
+                        .toList();
+                if (!searches.isEmpty()) {
+                    ObjectNode search = evidence.putObject("search");
+                    ArrayNode consulted = search.putArray("consulted");
+                    searches.stream()
+                            .flatMap(found -> found.consulted().stream())
+                            .distinct()
+                            .forEach(consulted::add);
+                    search.put(
+                            "lookedFor",
+                            searches.stream()
+                                    .map(ObservationAnswer.Search::lookedFor)
+                                    .distinct()
+                                    .collect(Collectors.joining("; ")));
+                    search.put(
+                            "boundary",
+                            searches.stream()
+                                    .map(ObservationAnswer.Search::boundary)
+                                    .distinct()
+                                    .collect(Collectors.joining("; ")));
+                }
+            }
         }
         try {
-            if (objectMapper.writeValueAsBytes(evidence).length > MAX_EVIDENCE_BYTES) {
+            if (objectMapper.writeValueAsBytes(evidence).length + objectMapper.writeValueAsBytes(answers).length
+                    > MAX_EVIDENCE_BYTES) {
                 throw new EntryValidationException("evidence exceeds " + MAX_EVIDENCE_BYTES + " bytes");
             }
         } catch (JacksonException e) {
             throw new EntryValidationException("invalid evidence JSON", e);
         }
 
-        String evidenceRationale = textField(entry, "evidenceRationale");
-        if (evidenceRationale.isBlank()) {
-            throw new EntryValidationException("evidenceRationale is blank");
-        }
-        if (evidenceRationale.length() > MAX_EVIDENCE_RATIONALE_LENGTH) {
-            throw new EntryValidationException(
-                    "evidenceRationale exceeds " + MAX_EVIDENCE_RATIONALE_LENGTH + " characters");
-        }
-
-        return new ValidatedObservation(practiceSlug, summary, outcome, severity, evidence, evidenceRationale);
+        String rationale = Stream.concat(Stream.of(headline), deciding.stream().map(ObservationAnswer::because))
+                .collect(Collectors.joining(" "));
+        return new ValidatedObservation(
+                practiceSlug,
+                summary,
+                derived.outcome(),
+                derived.severity(),
+                evidence,
+                rationale,
+                null,
+                PracticeDeliveryBehavior.DEFAULT,
+                List.copyOf(answers),
+                rule == null ? null : rule.id());
     }
 
-    private static <E extends Enum<E>> @Nullable E parseNullableEnum(JsonNode entry, String field, Class<E> enumType) {
-        JsonNode node = entry.get(field);
-        if (node == null) throw new EntryValidationException("missing field: " + field);
-        return node.isNull() ? null : parseEnum(entry, field, enumType);
+    private record SubmittedAnswer(
+            QuestionAnswer answer,
+            String because,
+            List<JsonNode> citations,
+            ObservationAnswer.@Nullable Search search,
+            @Nullable String wouldSettleIt) {}
+
+    private Map<String, SubmittedAnswer> submittedAnswers(@Nullable JsonNode node, PracticeJudgment judgment) {
+        if (node == null || !node.isArray()) {
+            throw new EntryValidationException("missing or non-array field: answers");
+        }
+        Map<String, SubmittedAnswer> answers = new LinkedHashMap<>();
+        for (JsonNode answer : node) {
+            if (!answer.isObject()) {
+                throw new EntryValidationException("every answer must be an object");
+            }
+            rejectUnknown(answer, ANSWER_FIELDS, "answer");
+            String key = textField(answer, "question");
+            if (judgment.question(key) == null) {
+                throw new EntryValidationException("unknown question: " + key);
+            }
+            QuestionAnswer value = parseEnum(answer, "answer", QuestionAnswer.class);
+            String because = textField(answer, "because").strip();
+            if (because.isBlank() || because.length() > MAX_BECAUSE_LENGTH) {
+                throw new EntryValidationException(
+                        "answer " + key + ": because must be 1–" + MAX_BECAUSE_LENGTH + " characters");
+            }
+            JsonNode citations = answer.get("citations");
+            if (citations == null || !citations.isArray() || citations.isEmpty()) {
+                throw new EntryValidationException("answer " + key + ": at least one citation is required");
+            }
+            List<JsonNode> cited = new ArrayList<>();
+            for (JsonNode citation : citations) {
+                if (!citation.isObject()) {
+                    throw new EntryValidationException("answer " + key + ": every citation must be an object");
+                }
+                cited.add(citation);
+            }
+            JsonNode wouldSettle = answer.get("wouldSettleIt");
+            String wouldSettleIt = wouldSettle == null || wouldSettle.isNull()
+                    ? null
+                    : wouldSettle.asString("").strip();
+            if (value == QuestionAnswer.UNDETERMINED
+                    && (wouldSettleIt == null
+                            || wouldSettleIt.isBlank()
+                            || wouldSettleIt.length() > MAX_WOULD_SETTLE_IT_LENGTH)) {
+                throw new EntryValidationException("answer " + key
+                        + ": an UNDETERMINED answer must name, in wouldSettleIt, the evidence that would decide it");
+            }
+            if (value != QuestionAnswer.UNDETERMINED && wouldSettleIt != null) {
+                throw new EntryValidationException("answer " + key + ": wouldSettleIt is only for UNDETERMINED");
+            }
+            if (answers.put(
+                            key,
+                            new SubmittedAnswer(
+                                    value, because, cited, search(answer.get("search"), key), wouldSettleIt))
+                    != null) {
+                throw new EntryValidationException("question " + key + " is answered twice");
+            }
+        }
+        // A question another answer makes moot need not be answered, nor one that only grades severity, which is read
+        // as open; every other one must be.
+        Map<String, List<PracticeJudgment.SkipCondition>> skips = judgment.skipConditions();
+        Set<String> severityOnly = judgment.gradesSeverityOnly();
+        List<String> missing = judgment.questions().stream()
+                .map(PracticeQuestion::key)
+                .filter(key -> !answers.containsKey(key) && !severityOnly.contains(key))
+                .filter(key -> Objects.requireNonNull(skips.get(key)).stream().noneMatch(skip -> {
+                    SubmittedAnswer gate = answers.get(skip.question());
+                    return gate != null && gate.answer() == skip.answer();
+                }))
+                .toList();
+        if (!missing.isEmpty()) {
+            throw new EntryValidationException("unanswered questions: " + missing);
+        }
+        return answers;
+    }
+
+    private static ObservationAnswer.@Nullable Search search(@Nullable JsonNode node, String key) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (!node.isObject()) {
+            throw new EntryValidationException("answer " + key + ": search must be an object");
+        }
+        rejectUnknown(node, SEARCH_FIELDS, "search");
+        JsonNode consulted = node.get("consulted");
+        if (consulted == null || !consulted.isArray() || consulted.isEmpty()) {
+            throw new EntryValidationException("answer " + key + ": search.consulted must name the sources searched");
+        }
+        List<String> sources = new ArrayList<>();
+        for (JsonNode source : consulted) {
+            if (!source.isString() || source.asString().isBlank()) {
+                throw new EntryValidationException("answer " + key + ": search.consulted holds a non-text source");
+            }
+            sources.add(source.asString());
+        }
+        String lookedFor = textField(node, "lookedFor");
+        String boundary = textField(node, "boundary");
+        if (lookedFor.isBlank() || boundary.isBlank()) {
+            throw new EntryValidationException("answer " + key + ": search needs lookedFor and boundary");
+        }
+        return new ObservationAnswer.Search(sources, lookedFor, boundary);
+    }
+
+    /** The sources the deciding answers read: what they cite and where they searched, in order. */
+    private static List<String> consultedSources(List<ObservationAnswer> deciding, ArrayNode citations) {
+        Set<String> sources = new LinkedHashSet<>();
+        for (ObservationAnswer answer : deciding) {
+            answer.citations()
+                    .forEach(index ->
+                            sources.add(citations.get(index).path("sourceKind").asString()));
+            if (answer.search() != null) sources.addAll(answer.search().consulted());
+        }
+        sources.remove("");
+        return List.copyOf(sources);
+    }
+
+    private static int indexOf(ArrayNode citations, JsonNode citation) {
+        for (int i = 0; i < citations.size(); i++) {
+            if (citations.get(i).equals(citation)) return i;
+        }
+        return -1;
+    }
+
+    private static void rejectUnknown(JsonNode node, Set<String> allowed, String what) {
+        List<String> unknown = node.properties().stream()
+                .map(Map.Entry::getKey)
+                .filter(field -> !allowed.contains(field))
+                .toList();
+        if (!unknown.isEmpty()) {
+            throw new EntryValidationException("unknown " + what + " fields: " + unknown);
+        }
     }
 
     private static String textField(JsonNode entry, String field) {
@@ -201,68 +391,6 @@ public class ReviewResultParser {
         } catch (IllegalArgumentException e) {
             throw new EntryValidationException("invalid " + field + " value: '" + node.asString() + "'", e);
         }
-    }
-
-    /**
-     * Doubles any backslash that precedes a character invalid after {@code \} in JSON (only
-     * {@code " \ / b f n r t u} are valid), turning e.g. Swift's {@code \(var)} interpolation into a literal
-     * backslash Jackson can read rather than a malformed escape.
-     */
-    static String sanitizeJsonEscapes(String text) {
-        if (text.indexOf('\\') < 0) {
-            return text;
-        }
-        StringBuilder sb = new StringBuilder(text.length() + 64);
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '\\' && i + 1 < text.length()) {
-                char next = text.charAt(i + 1);
-                if (isValidJsonEscapeChar(next)) {
-                    sb.append(c);
-                    sb.append(next);
-                    i++;
-                } else {
-                    sb.append('\\');
-                    // Don't skip `next`: it is not itself a backslash, so it still needs its own pass.
-                    sb.append('\\');
-                }
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString();
-    }
-
-    private static boolean isValidJsonEscapeChar(char c) {
-        return (c == '"' || c == '\\' || c == '/' || c == 'b' || c == 'f' || c == 'n' || c == 'r' || c == 't'
-                || c == 'u');
-    }
-
-    /**
-     * The orchestrator protocol emits phase markers (e.g. {@code [PHASE0]...}) before its JSON object; this
-     * finds the first {@code '{'} that starts a valid object containing an "observations" array.
-     */
-    @Nullable
-    private JsonNode extractJsonFromText(String text) {
-        if (text.length() > MAX_RAW_OUTPUT_LENGTH) {
-            log.warn("extractJsonFromText: input too large ({} chars), skipping", text.length());
-            return null;
-        }
-        int startIdx = 0;
-        for (int attempt = 0; attempt < 5; attempt++) {
-            int braceIdx = text.indexOf('{', startIdx);
-            if (braceIdx < 0) break;
-            try {
-                JsonNode node = lenientMapper.readTree(text.substring(braceIdx));
-                if (node != null && node.isObject() && node.has("observations")) {
-                    return node;
-                }
-            } catch (JacksonException ignored) {
-                // try the next '{'
-            }
-            startIdx = braceIdx + 1;
-        }
-        return null;
     }
 
     private static class EntryValidationException extends RuntimeException {
@@ -303,7 +431,31 @@ public class ReviewResultParser {
             @Nullable JsonNode evidence,
             @Nullable String evidenceRationale,
             @Nullable ObservationKeys keys,
-            PracticeDeliveryBehavior deliveryBehavior) {
+            PracticeDeliveryBehavior deliveryBehavior,
+            @Nullable List<ObservationAnswer> answers,
+            @Nullable String ruleId) {
+        public ValidatedObservation(
+                String practiceSlug,
+                String summary,
+                Outcome outcome,
+                @Nullable Severity severity,
+                @Nullable JsonNode evidence,
+                @Nullable String evidenceRationale,
+                @Nullable ObservationKeys keys,
+                PracticeDeliveryBehavior deliveryBehavior) {
+            this(
+                    practiceSlug,
+                    summary,
+                    outcome,
+                    severity,
+                    evidence,
+                    evidenceRationale,
+                    keys,
+                    deliveryBehavior,
+                    null,
+                    null);
+        }
+
         public ValidatedObservation(
                 String practiceSlug,
                 String summary,
@@ -322,7 +474,8 @@ public class ReviewResultParser {
                     keys,
                     PracticeDeliveryBehavior.DEFAULT);
         }
-        /** The parser's output shape: an observation not yet stamped with its persisted identities. */
+
+        /** An observation not yet stamped with its persisted identities. */
         public ValidatedObservation(
                 String practiceSlug,
                 String summary,
@@ -343,7 +496,31 @@ public class ReviewResultParser {
 
         public ValidatedObservation withKeys(@Nullable ObservationKeys keys) {
             return new ValidatedObservation(
-                    practiceSlug, summary, outcome, severity, evidence, evidenceRationale, keys, deliveryBehavior);
+                    practiceSlug,
+                    summary,
+                    outcome,
+                    severity,
+                    evidence,
+                    evidenceRationale,
+                    keys,
+                    deliveryBehavior,
+                    answers,
+                    ruleId);
+        }
+
+        /** The same answers and derivation with the evidence verification recorded on its citations. */
+        public ValidatedObservation withEvidence(@Nullable JsonNode verified) {
+            return new ValidatedObservation(
+                    practiceSlug,
+                    summary,
+                    outcome,
+                    severity,
+                    verified,
+                    evidenceRationale,
+                    keys,
+                    deliveryBehavior,
+                    answers,
+                    ruleId);
         }
 
         public @Nullable String recurrenceKey() {

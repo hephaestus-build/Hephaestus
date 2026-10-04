@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -609,6 +610,7 @@ class DeliveredWorkFeedbackControllerIntegrationTest extends AbstractWorkspaceIn
         practice.setSlug(slug);
         practice.setName("Meaningful guidance");
         practice.setCriteria("Evidence bounded guidance");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practices.save(practice);
@@ -626,6 +628,8 @@ class DeliveredWorkFeedbackControllerIntegrationTest extends AbstractWorkspaceIn
                 "An observation",
                 "NOT_MET",
                 "MAJOR",
+                null,
+                null,
                 null,
                 null,
                 null,

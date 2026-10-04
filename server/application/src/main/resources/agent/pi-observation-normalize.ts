@@ -3,13 +3,15 @@
 // AgentVocabularySyncTest parses these literals and asserts equality with the Java enum's
 // values(), preventing the runtime and persistence contracts from accepting different labels.
 export const OUTCOME_VALUES = ["MET", "NOT_MET", "NOT_APPLICABLE", "UNDETERMINED"] as const;
-export const SEVERITY_VALUES = ["CRITICAL", "MAJOR", "MINOR", "INFO"] as const;
+export const SEVERITY_VALUES = ["CRITICAL", "MAJOR", "MINOR"] as const;
+export const ANSWER_VALUES = ["YES", "NO", "UNDETERMINED"] as const;
 
 // The vocabularies above are the values; these are the types every consumer spells them with. They are
 // derived from the arrays rather than written twice, so the arrays stay the single thing Java is synced
 // against and a value cannot be added to one without being added to the other.
 export type Outcome = (typeof OUTCOME_VALUES)[number];
 export type Severity = (typeof SEVERITY_VALUES)[number];
+export type Answer = (typeof ANSWER_VALUES)[number];
 
 /** Which side of a diff hunk a citation quotes; absent on every non-diff source. */
 export type DiffSide = "OLD" | "NEW";
@@ -29,78 +31,76 @@ export interface NormalizedCitation {
 	startLine: number;
 	endLine: number;
 	quote: string;
+	/**
+	 * A few words of the first cited line, as the model wrote them: what finds the line when its number is
+	 * off. The runner reads it while verifying the citation and never records it.
+	 */
+	anchor?: string;
 }
 
-/** The recorded scope of a search that came up empty — the warrant an absence claim owes. */
+/** The recorded scope of a search that came up empty — the warrant an answer resting on absence owes. */
 export interface RecordedSearch {
 	consulted: string[];
 	lookedFor: string;
 	boundary: string;
 }
 
-/** Why this practice has no subject here — the warrant a NOT_APPLICABLE observation owes. */
-export interface RecordedInapplicability {
-	consulted: string[];
-	subject: string;
-	ruledOutBy: string;
+/** Another question's answer under which a question cannot change the outcome, so it is not asked. */
+export interface SkipCondition {
+	question: string;
+	answer: "YES" | "NO";
 }
 
-/** What the evidence left open — the warrant an UNDETERMINED observation owes. */
-export interface RecordedUndecidability {
-	openQuestion: string;
-	wouldSettleIt: string;
+/** One question of a practice, as the task-declared practice index stages it. */
+export interface PracticeQuestion {
+	key: string;
+	title: string;
+	question: string;
+	yes: string;
+	no: string;
+	/** Any one of these, answered so, makes this question moot: it may be left unanswered. */
+	skipWhen?: readonly SkipCondition[];
+	/** Its answer can change only the severity: left unanswered, it is open, and the lower band holds. */
+	gradesSeverityOnly?: true;
+}
+
+/** Whether these answers make the question moot, so it need not be answered. */
+export function isSkipped(
+	question: PracticeQuestion,
+	answers: ReadonlyMap<string, string>,
+): boolean {
+	return (question.skipWhen ?? []).some((skip) => answers.get(skip.question) === skip.answer);
+}
+
+/** One answer, checked: the reviewer's answer, the fact that decides it, and the lines it rests on. */
+export interface NormalizedAnswer {
+	question: string;
+	answer: Answer;
+	because: string;
+	citations: NormalizedCitation[];
+	search?: RecordedSearch;
+	wouldSettleIt?: string;
 }
 
 /**
- * Citations plus, at most, the one extra warrant this observation requires. Which branch is
- * present is decided by outcome and enforced in {@link normalizeEvidence}; the optionality here is the
- * shape, not the rule.
+ * One practice's answers, checked. This is what reaches result.json and admission; the server derives the
+ * outcome and severity from the answers, so neither is part of what the reviewer records.
  */
-export interface NormalizedEvidence {
-	citations: NormalizedCitation[];
-	search?: RecordedSearch;
-	inapplicability?: RecordedInapplicability;
-	undecidability?: RecordedUndecidability;
-}
-
-/** One measurement, checked. This is what reaches result.json and, from there, Java. */
-export type NormalizedObservation = ObservationOutcome & {
+export interface NormalizedObservation {
 	practiceSlug: string;
 	summary: string;
-	evidence: NormalizedEvidence;
-	evidenceRationale: string;
-};
+	answers: NormalizedAnswer[];
+}
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
-export const OUTCOME_DESCRIPTIONS: Record<Outcome, string> = {
-	MET: "The applicable practice standard is met in the captured evidence. Cite the evidence. Claims based on absence require a bounded, complete search; do not infer mastery or unseen work.",
-	NOT_MET:
-		"The applicable practice standard is not met. Cite the contradiction or record a bounded search for the required work. Supply severity and explain the consequence.",
-	NOT_APPLICABLE:
-		"A concrete fact rules out the practice's prerequisite occasion. Record the prerequisite and exclusion in evidence.inapplicability. This is not missing or incomplete evidence.",
+export const ANSWER_DESCRIPTIONS: Record<Answer, string> = {
+	YES: "The cited lines show what the question's YES describes.",
+	NO: "The cited lines show what the question's NO describes. A NO that rests on something being absent carries a search: where you looked, for what, and what the search did not cover.",
 	UNDETERMINED:
-		"Relevant evidence was captured and read, but does not settle whether the applicable standard is met. Record the open question and what would settle it in evidence.undecidability. A capture failure is a review readiness failure, not an observation.",
-};
-
-/**
- * Severity is read off the practice's own severity table, keyed to the fact that was quoted — these
- * descriptions calibrate the bands so the same fact lands in the same band every run. They are not an
- * invitation to grade by feel.
- */
-export const SEVERITY_DESCRIPTIONS: Record<Severity, string> = {
-	CRITICAL:
-		"The consequence is expensive or impossible to undo once this merges — a leaked credential, data loss, " +
-		"a security hole. Differs from MAJOR by whether the damage can still be taken back.",
-	MAJOR:
-		"A real defect to fix before merging, whose consequence is contained and correctable. Differs from " +
-		"MINOR by whether a reader of this change would be wrong about how it behaves.",
-	MINOR:
-		"A craft-level improvement worth making that nobody would block a merge on. Differs from INFO by " +
-		"whether there is a specific edit to make.",
-	INFO: "An advisory, low-impact problem. Still a NOT_MET outcome; strengths and unassessed observations require null severity.",
+		"The captured evidence was read and genuinely leaves this question open. Name in wouldSettleIt the existing evidence that would decide it. Never for evidence you did not read.",
 };
 
 /** Require a model-facing description for each enum value. */
@@ -117,6 +117,10 @@ export function describeVocabulary<T extends string>(
 			return `${value} — ${description}`;
 		})
 		.join("\n");
+}
+
+function nullish(value: unknown): boolean {
+	return value == null;
 }
 
 function trimmedText(value: unknown): string {
@@ -137,7 +141,7 @@ function trimmedStrings(value: unknown): string[] {
 /** Requires the source list, named behavior and boundary of an absence claim. */
 export function normalizeSearch(search: unknown): RecordedSearch {
 	if (!isRecord(search)) {
-		throw new Error("search is required");
+		throw new Error("search must be an object with consulted, lookedFor and boundary");
 	}
 	const consulted = trimmedStrings(search.consulted);
 	const lookedFor = trimmedText(search.lookedFor);
@@ -154,31 +158,6 @@ export function normalizeSearch(search: unknown): RecordedSearch {
 	return { consulted: [...new Set(consulted)].toSorted(), lookedFor, boundary };
 }
 
-/** A citation alone cannot establish inapplicability: require the prerequisite and its exclusion. */
-export function normalizeInapplicability(inapplicability: unknown): RecordedInapplicability {
-	if (!isRecord(inapplicability)) {
-		throw new Error("inapplicability is required");
-	}
-	const consulted = trimmedStrings(inapplicability.consulted);
-	const subject = trimmedText(inapplicability.subject);
-	const ruledOutBy = trimmedText(inapplicability.ruledOutBy);
-	if (consulted.length === 0) {
-		throw new Error(
-			"inapplicability.consulted must name at least one source you read to conclude this",
-		);
-	}
-	if (!subject) {
-		throw new Error("inapplicability.subject is required: name what this practice looks for");
-	}
-	if (!ruledOutBy) {
-		throw new Error(
-			"inapplicability.ruledOutBy is required: state the fact about THIS work that means the subject " +
-				"cannot occur in it. If you are merely unsure, the answer is UNDETERMINED, not NOT_APPLICABLE",
-		);
-	}
-	return { consulted: [...new Set(consulted)].toSorted(), subject, ruledOutBy };
-}
-
 /**
  * How a citation is completed when it leaves out what the run already knows, and where the repairs made
  * on the way in are reported, one line each.
@@ -186,7 +165,18 @@ export function normalizeInapplicability(inapplicability: unknown): RecordedInap
 export interface CitationRepairs {
 	/** The source kind the manifest staged an artifact under; undefined when it staged no such artifact. */
 	sourceOf?: (artifactPath: string) => string | undefined;
+	/**
+	 * Where a cited path that is no staged artifact was read: a line of the change, or a file of the
+	 * checkout. Undefined when the run staged no source it could be.
+	 */
+	sourceFor?: (citation: { path: string; side: string | null }) => CitationSource | undefined;
 	notes?: string[];
+}
+
+/** The staged artifact and source a citation is recorded against. */
+export interface CitationSource {
+	artifactPath: string;
+	sourceKind: string;
 }
 
 /**
@@ -208,60 +198,72 @@ function citedLine(value: unknown): number {
 function completedFromManifest(
 	fields: Record<string, unknown>,
 	path: string,
-	which: string,
-	sourceOf: CitationRepairs["sourceOf"],
-	notes: string[],
-): { artifactPath: string; sourceKind: string } {
+	{ sourceOf, sourceFor }: CitationRepairs,
+): CitationSource {
 	let artifactPath = typeof fields.artifactPath === "string" ? fields.artifactPath : "";
-	if (!artifactPath.trim() && path.trim() && sourceOf?.(path) !== undefined) {
-		artifactPath = path;
-		notes.push(`${which}artifactPath filled in as ${path}, the staged record the path names`);
-	}
 	let sourceKind = trimmedText(fields.sourceKind);
+	// Naming the path is how a citation names its source: a staged record is its own artifact, and any other
+	// path is a line of the change or a file of the checkout. Neither is a repair, so neither is echoed; an
+	// artifact named that was never staged is read the same way rather than refused for a field not asked for.
+	const named = artifactPath.trim() !== "" && sourceOf?.(artifactPath) !== undefined;
+	if (!named && path.trim()) {
+		if (sourceOf?.(path) === undefined) {
+			const side = fields.side == null ? null : trimmedText(fields.side).toUpperCase();
+			const read = sourceFor?.({ path, side });
+			if (read !== undefined) {
+				return read;
+			}
+		} else {
+			artifactPath = path;
+		}
+	}
 	const staged = artifactPath.trim() ? sourceOf?.(artifactPath) : undefined;
 	if (!sourceKind && staged !== undefined) {
 		sourceKind = staged;
-		notes.push(`${which}sourceKind filled in as ${staged}, the source that staged ${artifactPath}`);
 	}
 	return { artifactPath, sourceKind };
 }
 
-export function normalizeEvidence(
-	evidence: unknown,
-	outcome: Outcome,
-	{ sourceOf, notes = [] }: CitationRepairs = {},
-): NormalizedEvidence {
-	if (
-		!isRecord(evidence) ||
-		!Array.isArray(evidence.citations) ||
-		evidence.citations.length === 0
-	) {
-		throw new Error("evidence citations are required");
+/** A checkout file named by its workspace path, as `ls` shows it, is the file at its path inside the checkout. */
+function insideCheckout(
+	path: string,
+	sourceKind: string,
+	artifactPath: string,
+	noteRead: (read: string) => void,
+): string {
+	const checkout =
+		sourceKind === "scm.repository.tree"
+			? /^(?<root>repos\/[^/]+\/)\.git\/HEAD$/u.exec(artifactPath)?.groups?.root
+			: undefined;
+	if (checkout === undefined || !path.startsWith(checkout)) {
+		return path;
 	}
-	if (evidence.inapplicability != null && outcome !== "NOT_APPLICABLE") {
-		throw new Error("evidence.inapplicability is permitted only for NOT_APPLICABLE");
+	const read = path.slice(checkout.length);
+	noteRead(read);
+	return read;
+}
+
+/** Every citation of one answer, completed from the manifest where it left something out, and checked. */
+export function normalizeCitations(
+	citations: unknown,
+	repairs: CitationRepairs = {},
+): NormalizedCitation[] {
+	const { notes = [] } = repairs;
+	if (!Array.isArray(citations) || citations.length === 0) {
+		throw new Error("citations are required: the lines that decide this answer");
 	}
-	if (evidence.undecidability != null && outcome !== "UNDETERMINED") {
-		throw new Error("evidence.undecidability is permitted only for UNDETERMINED");
-	}
-	if (evidence.search != null && outcome !== "MET" && outcome !== "NOT_MET") {
-		throw new Error("evidence.search is permitted only for MET or NOT_MET");
-	}
-	const many = evidence.citations.length > 1;
-	const citations = evidence.citations.map((citation: unknown, index): NormalizedCitation => {
+	const many = citations.length > 1;
+	const normalized = citations.map((citation: unknown, index): NormalizedCitation => {
 		// With several citations, a problem names the one it is about.
 		const which = many ? `citation ${index + 1}: ` : "";
 		// A citation that is not an object reads as one with every field missing, which is what the
 		// required-field checks below already reject by name.
 		const fields: Record<string, unknown> = isRecord(citation) ? citation : {};
-		const path = typeof fields.path === "string" ? fields.path : "";
-		const { artifactPath, sourceKind } = completedFromManifest(
-			fields,
-			path,
-			which,
-			sourceOf,
-			notes,
-		);
+		const given = typeof fields.path === "string" ? fields.path : "";
+		const { artifactPath, sourceKind } = completedFromManifest(fields, given, repairs);
+		const path = insideCheckout(given, sourceKind, artifactPath, (read) => {
+			notes.push(`${which}path ${given} read as ${read}, its path inside the checkout`);
+		});
 		const declaredSide = fields.side == null ? null : trimmedText(fields.side).toUpperCase();
 		const revision = fields.revision == null ? null : trimmedText(fields.revision);
 		// Whether a revision applies is settled once the source is (the caller drops it elsewhere); its
@@ -286,7 +288,11 @@ export function normalizeEvidence(
 			startLine,
 		);
 		if (!sourceKind) {
-			throw new Error(`${which}evidence citation sourceKind is required`);
+			throw new Error(
+				path.startsWith("work/")
+					? `${which}${path} is a view derived here, not evidence: cite a changed line of the file itself (path and side, lines from diff.patch), or, for which files a commit changed, its "path" lines in commits.json`
+					: `${which}${path || "an entry without a path"} is neither a staged record nor a file the change or the checkout holds: name the record (context/…) or the changed file as the brief shows it`,
+			);
 		}
 		if (!artifactPath.trim()) {
 			throw new Error(
@@ -341,6 +347,7 @@ export function normalizeEvidence(
 			sourceKind === "scm.pull-request.diff" && (declaredSide === "OLD" || declaredSide === "NEW")
 				? declaredSide
 				: null;
+		const anchor = trimmedText(fields.anchor);
 		return {
 			sourceKind,
 			artifactPath,
@@ -350,79 +357,15 @@ export function normalizeEvidence(
 			startLine,
 			endLine,
 			quote,
+			...(anchor ? { anchor } : {}),
 		};
 	});
-	// Inapplicability is a positive claim about scope, not an uncertain assessment.
-	if (outcome === "NOT_APPLICABLE") {
-		if (evidence.inapplicability == null) {
-			throw new Error(
-				"a NOT_APPLICABLE observation must say why the practice does not apply: " +
-					"evidence.inapplicability with consulted, subject and ruledOutBy. If you looked and could " +
-					"not tell, say UNDETERMINED instead",
-			);
-		}
-		return { citations, inapplicability: normalizeInapplicability(evidence.inapplicability) };
-	}
-	// Make unresolved evidence explicit so uncertainty cannot silently become a verdict.
-	if (outcome === "UNDETERMINED") {
-		if (evidence.undecidability == null) {
-			throw new Error(
-				"an UNDETERMINED observation must say what it could not settle: evidence.undecidability with " +
-					"openQuestion and wouldSettleIt",
-			);
-		}
-		return { citations, undecidability: normalizeUndecidability(evidence.undecidability) };
-	}
-	return evidence.search == null
-		? { citations }
-		: { citations, search: normalizeSearch(evidence.search) };
+	return normalized;
 }
 
-/**
- * The recorded shape of a question the evidence left open. Sibling of {@link normalizeSearch} and
- * {@link normalizeInapplicability}: each observation that makes a claim beyond its citations has to ground it.
- */
-export function normalizeUndecidability(undecidability: unknown): RecordedUndecidability {
-	if (!isRecord(undecidability)) {
-		throw new Error("undecidability is required");
-	}
-	const openQuestion = trimmedText(undecidability.openQuestion);
-	const wouldSettleIt = trimmedText(undecidability.wouldSettleIt);
-	if (!openQuestion) {
-		throw new Error("undecidability.openQuestion is required");
-	}
-	if (!wouldSettleIt) {
-		throw new Error("undecidability.wouldSettleIt is required");
-	}
-	return { openQuestion, wouldSettleIt };
-}
-
-function parseVocabulary<T extends string>(values: readonly T[], value: unknown, field: string): T {
-	const admitted = values.find((candidate) => candidate === value);
-	if (admitted === undefined) {
-		const missing = nullish(value) ? " (missing)" : "";
-		throw new Error(`invalid ${field} '${String(value)}'${missing}: one of ${values.join(", ")}`);
-	}
-	return admitted;
-}
-
-function nullish(value: unknown): boolean {
-	return value == null;
-}
-
-type ObservationOutcome =
-	| { outcome: "NOT_MET"; severity: Severity }
-	| { outcome: "MET" | "NOT_APPLICABLE" | "UNDETERMINED"; severity: null };
-
-function parseOutcome(sent: Record<string, unknown>): ObservationOutcome {
-	const outcome = parseVocabulary(OUTCOME_VALUES, sent.outcome, "outcome");
-	if (outcome === "NOT_MET") {
-		return { outcome, severity: parseVocabulary(SEVERITY_VALUES, sent.severity, "severity") };
-	}
-	if (!nullish(sent.severity)) {
-		throw new Error("Severity is permitted only for NOT_MET");
-	}
-	return { outcome, severity: null };
+export function normalizeUndecided(value: unknown): string | undefined {
+	const text = trimmedText(value);
+	return text || undefined;
 }
 
 /** The summary heads the developer's practice page; a phrase, not the rationale. Mirrored by admission. */
@@ -448,95 +391,371 @@ export function boundedAtSentenceEnd(text: string, max: number): string | undefi
 	return clause < max / 2 ? undefined : prefix.slice(0, clause).trim();
 }
 
-/** The evidence fields, in the order the session tends to put them beside the observation instead. */
-const EVIDENCE_FIELDS = ["citations", "search", "inapplicability", "undecidability"] as const;
-/**
- * The fields of each evidence branch, which arrive loose — beside the observation or straight under
- * evidence — when the session forgets the branch that wraps them. `consulted` is shared by two, so a
- * branch is named by its own fields; a lone `consulted` belongs to the search.
- */
-const BRANCH_FIELDS = [
-	{ branch: "inapplicability", own: ["subject", "ruledOutBy"], consulted: true },
-	{ branch: "undecidability", own: ["openQuestion", "wouldSettleIt"], consulted: false },
-	{ branch: "search", own: ["lookedFor", "boundary", "consulted"], consulted: true },
-] as const;
-
-/** Move misplaced evidence fields and report corrections; conflicting copies remain invalid. */
-function rehomed(observation: Record<string, unknown>, notes: string[]): Record<string, unknown> {
-	const beside = new Map(Object.entries(observation));
-	const measured = isRecord(observation.evidence) ? observation.evidence : {};
-	const evidence = new Map(Object.entries(measured));
-	const moved: string[] = [];
-	for (const key of EVIDENCE_FIELDS) {
-		if (beside.has(key) && !evidence.has(key)) {
-			evidence.set(key, beside.get(key));
-			beside.delete(key);
-			moved.push(key);
-		}
-	}
-	const loose = (key: string) => beside.has(key) || evidence.has(key);
-	const take = (key: string) => {
-		if (beside.has(key) && evidence.has(key)) {
-			throw new Error(
-				`${key} was sent both beside the observation and under evidence; send one value`,
-			);
-		}
-		const value = beside.has(key) ? beside.get(key) : evidence.get(key);
-		beside.delete(key);
-		evidence.delete(key);
-		return value;
-	};
-	for (const { branch, own, consulted } of BRANCH_FIELDS) {
-		if (evidence.has(branch) || !own.some(loose)) {
-			continue;
-		}
-		const fields =
-			consulted && !own.some((key) => key === "consulted") ? [...own, "consulted"] : own;
-		const value = Object.fromEntries(fields.filter(loose).map((key) => [key, take(key)]));
-		evidence.set(branch, value);
-		moved.push(`${branch}{${Object.keys(value).join(", ")}}`);
-	}
-	if (evidence.has("evidenceRationale") && !beside.has("evidenceRationale")) {
-		beside.set("evidenceRationale", evidence.get("evidenceRationale"));
-		evidence.delete("evidenceRationale");
-		notes.push(
-			"evidenceRationale read from under evidence and recorded beside it, where it belongs; nothing to resend",
+/** An answer's own fields: a remark is left out with a note, any other unknown field is a problem. */
+function checkAnswerFields(
+	at: string,
+	raw: Record<string, unknown>,
+	repairs: CitationRepairs,
+	problems: string[],
+): void {
+	const remarks = Object.keys(raw).filter((field) => isRemark(field, raw[field]));
+	if (remarks.length > 0) {
+		repairs.notes?.push(
+			`${at}: ${remarks.join(", ")} not recorded: an answer has only cites, because, answer, search and wouldSettleIt`,
 		);
 	}
-	if (moved.length > 0) {
-		notes.push(
-			`${moved.join(", ")} read from where they were sent and recorded under evidence, where they belong; nothing to resend`,
+	const unknown = Object.keys(raw).filter(
+		(field) => !ANSWER_FIELDS.has(field) && !remarks.includes(field),
+	);
+	if (unknown.length > 0) {
+		problems.push(
+			`${at} has unknown field(s) ${unknown.join(", ")}; an answer has only cites, because, answer, search and wouldSettleIt`,
 		);
 	}
-	if (moved.length > 0 || beside.has("evidence")) {
-		beside.set("evidence", Object.fromEntries(evidence));
-	}
-	return Object.fromEntries(beside);
 }
 
 /**
- * Validate the model output before recording an observation.
- * @param notes receives one line per correction made on the way in — a field moved to its home, a
- *   value filled in from the manifest — so the caller can echo what was recorded.
+ * An observation's own fields: a remark is left out with a note; an outcome, severity or rationale is refused
+ * by name, since the server derives them; any other unknown field is refused.
+ */
+function checkObservationFields(
+	observation: Record<string, unknown>,
+	allowed: ReadonlySet<string>,
+	notes: string[],
+): void {
+	const derived = new Set(["outcome", "severity", "evidenceRationale"]);
+	const remarks = Object.keys(observation).filter((key) => isRemark(key, observation[key]));
+	if (remarks.length > 0) {
+		notes.push(
+			`${remarks.join(", ")} not recorded: an observation has only practiceSlug, scan, evidence, answers and summary`,
+		);
+	}
+	const unknownFields = Object.keys(observation).filter(
+		(key) => !allowed.has(key) && !remarks.includes(key),
+	);
+	if (unknownFields.length > 0) {
+		const stated = unknownFields.filter((key) => derived.has(key));
+		const other = unknownFields.filter((key) => !derived.has(key));
+		throw new Error(
+			[
+				...(stated.length > 0
+					? [
+							`${stated.join(", ")} is not recorded: answer every question in answers, and Hephaestus derives the outcome and severity from the answers`,
+						]
+					: []),
+				...(other.length > 0
+					? [
+							`unknown observation field(s): ${other.join(", ")}; an observation has only practiceSlug, scan, evidence, answers and summary`,
+						]
+					: []),
+			].join("; also: "),
+		);
+	}
+}
+
+/**
+ * A text field named as a note, comment or remark (`note`, `evidence_note`) decides nothing: it is left out
+ * with a note rather than refused. Any other unknown field is refused, since it may state a judgment or carry
+ * what belongs in a field of the contract.
+ */
+function isRemark(field: string, value: unknown): boolean {
+	return typeof value === "string" && /(?:^|_)(?:note|comment|remark)s?$/iu.test(field);
+}
+
+/** The fields one answer has. */
+const ANSWER_FIELDS = new Set([
+	"question",
+	"cites",
+	"because",
+	"answer",
+	"citations",
+	"search",
+	"wouldSettleIt",
+]);
+
+/** An evidence entry that names a derived list of the change's files: not recorded, since the change's lines show what it lists. */
+const FILE_LIST = Symbol("a derived list of the change's files");
+
+/** The views derived here that only list the change's files. */
+const DERIVED_FILE_LISTS = new Set(["work/change/files.json", "work/change/diff_stat.txt"]);
+
+const FILE_LIST_REFUSAL =
+	'a list of the change\'s files derived here, which is not evidence: cite a changed line of the file itself (path and side, lines from diff.patch), or, for which files a commit changed, its "path" lines in commits.json';
+
+/** An observation's evidence list by entry number; an entry naming a derived list of files holds its place. */
+type Evidence = readonly (NormalizedCitation | typeof FILE_LIST)[];
+
+/**
+ * The evidence list. An entry that names a derived list of the change's files is the commonest wrong entry
+ * and has one reading: the answers rest on the change, which their other entries cite. It is left out with a
+ * note rather than refused; an answer that cites nothing else, or a list with nothing else, is refused, saying
+ * what to cite.
+ */
+function normalizeEvidence(sent: unknown, repairs: CitationRepairs): Evidence {
+	if (!Array.isArray(sent)) {
+		return normalizeCitations(sent, repairs);
+	}
+	const lists = sent.flatMap((entry: unknown, index) =>
+		isRecord(entry) && typeof entry.path === "string" && DERIVED_FILE_LISTS.has(entry.path.trim())
+			? [index]
+			: [],
+	);
+	// With nothing else listed there is nothing to rest on: the list itself is refused, once.
+	if (lists.length === 0 || lists.length === sent.length) {
+		return normalizeCitations(sent, repairs);
+	}
+	repairs.notes?.push(
+		`entries ${lists.map((index) => index + 1).join(", ")} name a list of the change's files derived here, so they are not recorded; the change's own lines show what it lists`,
+	);
+	return sent.map((entry: unknown, index) => {
+		if (lists.includes(index)) {
+			return FILE_LIST;
+		}
+		const entryNotes: string[] = [];
+		try {
+			const [citation] = normalizeCitations([entry], { ...repairs, notes: entryNotes });
+			repairs.notes?.push(...entryNotes.map((note) => `citation ${index + 1}: ${note}`));
+			if (citation === undefined) {
+				throw new Error("evidence citation is required");
+			}
+			return citation;
+		} catch (error) {
+			throw new Error(
+				`citation ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+				{
+					cause: error,
+				},
+			);
+		}
+	});
+}
+
+/**
+ * The evidence entries an answer cites, as the numbers the model wrote — 1, "1", "[1]" or "E1" — each
+ * checked against the observation's evidence list.
+ */
+function citedEntries(value: unknown, evidence: number): { cited: number[] } | { problem: string } {
+	let sent: unknown[] = [];
+	if (Array.isArray(value)) {
+		sent = value;
+	} else if (typeof value === "string") {
+		// "1, 2" or "[1] [3]": every number the text names.
+		sent = value.split(/[\s,;]+/u).filter(Boolean);
+	} else if (!nullish(value)) {
+		sent = [value];
+	}
+	const cited: number[] = [];
+	for (const entry of sent) {
+		const written =
+			typeof entry === "number"
+				? entry
+				: Number(/^\s*\[?E?(?<n>\d+)\]?\s*$/iu.exec(String(entry))?.groups?.n ?? Number.NaN);
+		if (!Number.isInteger(written) || written < 1 || written > evidence) {
+			return {
+				problem:
+					evidence === 0
+						? "cites an evidence entry, but the observation lists no evidence"
+						: `cites ${JSON.stringify(entry)}, but the evidence entries are numbered 1 to ${evidence}`,
+			};
+		}
+		if (!cited.includes(written)) {
+			cited.push(written);
+		}
+	}
+	return { cited };
+}
+/** The most an answer's reason may say: one sentence naming the deciding fact, not a rationale. */
+export const MAX_BECAUSE_CHARS = 600;
+/** The most what would settle an open answer may say: the evidence, named, not an explanation. */
+export const MAX_WOULD_SETTLE_IT_CHARS = 600;
+
+/** The answers as sent — keyed by question, or a list naming each question — as one list. */
+function sentAnswers(value: unknown, notes: string[]): Map<string, unknown> {
+	const sent = new Map<string, unknown>();
+	if (Array.isArray(value)) {
+		for (const item of value) {
+			const key = isRecord(item) ? trimmedText(item.question) : "";
+			if (!key) {
+				throw new Error("each answer in a list names its question in `question`");
+			}
+			if (sent.has(key)) {
+				throw new Error(`question '${key}' is answered twice; send one answer per question`);
+			}
+			sent.set(key, item);
+		}
+		notes.push("answers read from a list; nothing to resend");
+		return sent;
+	}
+	if (!isRecord(value)) {
+		throw new Error("answers is required: an object with one answer per question of the practice");
+	}
+	for (const [key, item] of Object.entries(value)) {
+		sent.set(key, isRecord(item) ? { ...item, question: key } : item);
+	}
+	return sent;
+}
+
+/**
+ * An answer object left open takes the next answer inside it: a question of the practice nested in another
+ * answer, and not answered at its own place, is read as its own answer, with a note.
+ */
+function hoistNestedAnswers(
+	sentByKey: Map<string, unknown>,
+	known: ReadonlySet<string>,
+	notes: string[],
+): void {
+	// Read before any is moved, since moving one adds an answer at its own place.
+	const nestedIn = [...sentByKey].flatMap(([key, sent]) =>
+		isRecord(sent)
+			? Object.keys(sent)
+					.filter(
+						(inner) =>
+							inner !== key && known.has(inner) && !sentByKey.has(inner) && isRecord(sent[inner]),
+					)
+					.map((inner) => ({ key, sent, inner }))
+			: [],
+	);
+	for (const { key, sent, inner } of nestedIn) {
+		const answer = sent[inner];
+		const outer = sentByKey.get(key);
+		sentByKey.set(inner, isRecord(answer) ? { ...answer, question: inner } : answer);
+		if (isRecord(outer)) {
+			const { [inner]: _moved, ...rest } = outer;
+			sentByKey.set(key, rest);
+		}
+		notes.push(`answers.${key}.${inner} read as answers.${inner}; nothing to resend`);
+	}
+}
+
+function normalizeAnswer(
+	key: string,
+	raw: unknown,
+	evidence: Evidence | null,
+	used: Set<number>,
+	repairs: CitationRepairs,
+	problems: string[],
+): NormalizedAnswer | undefined {
+	const at = `answers.${key}`;
+	if (!isRecord(raw)) {
+		problems.push(`${at} must be an object with cites, because and answer`);
+		return undefined;
+	}
+	checkAnswerFields(at, raw, repairs, problems);
+	const answer = ANSWER_VALUES.find((value) => value === trimmedText(raw.answer).toUpperCase());
+	if (answer === undefined) {
+		problems.push(`${at}.answer must be one of ${ANSWER_VALUES.join(", ")}`);
+	}
+	const sentBecause = trimmedText(raw.because).replaceAll(/\s+/gu, " ");
+	// Too long, it keeps the sentences that fit: the deciding fact comes first, and a resend costs a whole call.
+	const because = boundedAtSentenceEnd(sentBecause, MAX_BECAUSE_CHARS);
+	if (!sentBecause) {
+		problems.push(
+			`${at}.because is required: one sentence naming the fact in the cited lines that decides it`,
+		);
+	} else if (because === undefined) {
+		problems.push(
+			`${at}.because must be at most ${MAX_BECAUSE_CHARS} characters; name the deciding fact only`,
+		);
+	} else if (because !== sentBecause) {
+		repairs.notes?.push(
+			`${at}.because kept to its sentences within ${MAX_BECAUSE_CHARS} characters`,
+		);
+	}
+	let citations: NormalizedCitation[] | undefined;
+	// Evidence that could not be read is refused once, above; what an answer cites of it is not checked again.
+	const cites = evidence === null ? { cited: [] } : citedEntries(raw.cites, evidence.length);
+	if ("problem" in cites) {
+		problems.push(`${at} ${cites.problem}`);
+	} else if (evidence !== null) {
+		citations = cites.cited.flatMap((entry) => {
+			used.add(entry);
+			const cited = evidence[entry - 1];
+			return cited === undefined || cited === FILE_LIST ? [] : [{ ...cited }];
+		});
+		if (citations.length === 0 && cites.cited.some((entry) => evidence[entry - 1] === FILE_LIST)) {
+			problems.push(`${at} cites only ${FILE_LIST_REFUSAL}`);
+			citations = undefined;
+		}
+	}
+	// Citations written into the answer itself, as an earlier contract had them, are read as its own.
+	if (!nullish(raw.citations)) {
+		const citationNotes: string[] = [];
+		try {
+			citations = [
+				...(citations ?? []),
+				...normalizeCitations(raw.citations, { ...repairs, notes: citationNotes }),
+			];
+			repairs.notes?.push(
+				`${at}: citations read from inside the answer; list them once under evidence instead`,
+			);
+		} catch (error) {
+			problems.push(`${at}: ${error instanceof Error ? error.message : String(error)}`);
+		}
+		repairs.notes?.push(...citationNotes.map((note) => `${at}: ${note}`));
+	}
+	if (citations !== undefined && citations.length === 0 && evidence !== null) {
+		problems.push(
+			`${at}.cites is required: the numbers of the evidence entries that decide it, e.g. [1] for the first`,
+		);
+		citations = undefined;
+	}
+	let search: RecordedSearch | undefined;
+	if (!nullish(raw.search)) {
+		try {
+			search = normalizeSearch(raw.search);
+		} catch (error) {
+			problems.push(`${at}: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+	const wouldSettleIt = normalizeUndecided(raw.wouldSettleIt);
+	if (answer === "UNDETERMINED" && wouldSettleIt === undefined) {
+		problems.push(
+			`${at} is UNDETERMINED and needs wouldSettleIt: the existing evidence that would decide it, e.g. 'the body of issue #7'`,
+		);
+	}
+	if (wouldSettleIt !== undefined && wouldSettleIt.length > MAX_WOULD_SETTLE_IT_CHARS) {
+		problems.push(
+			`${at}.wouldSettleIt must be at most ${MAX_WOULD_SETTLE_IT_CHARS} characters; name the evidence only`,
+		);
+	}
+	if (answer !== undefined && answer !== "UNDETERMINED" && wouldSettleIt !== undefined) {
+		problems.push(
+			`${at}.wouldSettleIt is only for an UNDETERMINED answer; remove it or answer UNDETERMINED`,
+		);
+	}
+	if (answer === undefined || because === undefined || because === "" || citations === undefined) {
+		return undefined;
+	}
+	return {
+		question: key,
+		answer,
+		because,
+		citations,
+		...(search === undefined ? {} : { search }),
+		...(wouldSettleIt === undefined || answer !== "UNDETERMINED" ? {} : { wouldSettleIt }),
+	};
+}
+
+/**
+ * Validate one practice's answers before recording them.
+ * @param questionsOf the questions of a practice admitted to this review, by slug; undefined for any other
+ * @param notes receives one line per correction made on the way in — a value filled in from the manifest,
+ *   a list read as answers — so the caller can echo what was recorded.
  */
 export function normalizeObservation(
 	raw: unknown,
+	questionsOf: (practiceSlug: string) => readonly PracticeQuestion[] | undefined,
 	notes: string[] = [],
 	sourceOf?: (artifactPath: string) => string | undefined,
+	sourceFor?: CitationRepairs["sourceFor"],
 ): NormalizedObservation {
 	if (!isRecord(raw)) {
 		throw new Error("observation must be an object");
 	}
-	const observation = rehomed(raw, notes);
-	const allowed = new Set([
-		"practiceSlug",
-		"summary",
-		"outcome",
-		"severity",
-		"evidence",
-		"evidenceRationale",
-	]);
+	// The scan is the model's working before it answers: read, never recorded.
+	const allowed = new Set(["practiceSlug", "scan", "summary", "evidence", "answers"]);
 	// A stray key with no value (`practiceSlug2: null`) carries nothing: dropped, and said so.
+	const observation = { ...raw };
 	const empty = Object.keys(observation).filter(
 		(key) => !allowed.has(key) && (nullish(observation[key]) || observation[key] === ""),
 	);
@@ -546,31 +765,43 @@ export function normalizeObservation(
 	if (empty.length > 0) {
 		notes.push(`empty field(s) ${empty.join(", ")} dropped`);
 	}
-	const unknownFields = Object.keys(observation).filter((key) => !allowed.has(key));
-	if (unknownFields.length > 0) {
-		throw new Error(
-			`unknown observation field(s): ${unknownFields.join(", ")}; an observation has only ${[...allowed].join(", ")}`,
+	// Answers sent beside summary instead of inside answers: each is named by one of this practice's
+	// questions, so where it belongs is not in doubt. One already inside answers stays where it is and the
+	// stray copy is refused below, because which of the two was meant is.
+	const questionKeys = new Set(
+		questionsOf(normalizePracticeSlug(observation.practiceSlug))?.map((question) => question.key),
+	);
+	const nested = isRecord(observation.answers) ? { ...observation.answers } : undefined;
+	const beside = Object.keys(observation).filter(
+		(key) =>
+			questionKeys.has(key) &&
+			(nested === undefined ? observation.answers === undefined : !(key in nested)),
+	);
+	if (beside.length > 0) {
+		const answers: Record<string, unknown> = nested ?? {};
+		for (const key of beside) {
+			answers[key] = observation[key];
+			Reflect.deleteProperty(observation, key);
+		}
+		observation.answers = answers;
+		notes.push(
+			`answers ${beside.join(", ")} read from beside summary, into answers; nothing to resend`,
 		);
 	}
+	checkObservationFields(observation, allowed, notes);
 	const practiceSlug = normalizePracticeSlug(observation.practiceSlug);
 	if (!practiceSlug) {
 		throw new Error(
-			`practiceSlug is required: each item of observations is one observation object (received keys: ${Object.keys(observation).join(", ") || "none"})`,
+			`practiceSlug is required: each item of observations is one practice's answers (received keys: ${Object.keys(observation).join(", ") || "none"})`,
 		);
 	}
+	const questions = questionsOf(practiceSlug);
+	if (questions === undefined) {
+		throw new Error(`practice '${practiceSlug}' is not one of this review's practices`);
+	}
 	const sent = trimmedText(observation.summary).replaceAll(/\s+/gu, " ");
-	const reasoning = trimmedText(observation.evidenceRationale);
 	// Every problem of the observation is named at once: one per resend costs a model call each.
 	const problems: string[] = [];
-	const attempt = <T>(check: () => T): T | undefined => {
-		try {
-			return check();
-		} catch (error) {
-			problems.push(error instanceof Error ? error.message : String(error));
-			return undefined;
-		}
-	};
-	const result = attempt(() => parseOutcome(observation));
 	if (!sent) {
 		problems.push("summary is required");
 	} else if (!/\S\s+\S/u.test(sent)) {
@@ -583,40 +814,109 @@ export function normalizeObservation(
 	} else if (sent.length > MAX_SUMMARY_CHARS) {
 		// Refused, never shortened: a cut the runner chooses changes what the observation says.
 		problems.push(
-			`summary must be at most ${MAX_SUMMARY_CHARS} characters; this one is ${sent.length}. Resend the ` +
-				"observation with a shorter summary that reads as a complete phrase on its own — name the " +
-				"behavior, and move titles, quotes and reasons into evidenceRationale",
+			`summary must be at most ${MAX_SUMMARY_CHARS} characters; this one is ${sent.length}. Resend it ` +
+				"as a complete phrase that names the behavior; the reasons belong in each answer's because",
 		);
 	}
-	if (!reasoning) {
-		problems.push("evidenceRationale is required");
+	let sentByKey = new Map<string, unknown>();
+	let answersUnreadable = false;
+	try {
+		sentByKey = sentAnswers(observation.answers, notes);
+	} catch (error) {
+		answersUnreadable = true;
+		problems.push(error instanceof Error ? error.message : String(error));
 	}
-	const externalEvidence: Record<string, unknown> = isRecord(observation.evidence)
-		? observation.evidence
-		: {};
-	const evidenceFields = new Set(["citations", "search", "inapplicability", "undecidability"]);
-	const unknownEvidence = Object.keys(externalEvidence).filter((key) => !evidenceFields.has(key));
-	if (unknownEvidence.length > 0) {
-		problems.push(`unknown evidence field(s): ${unknownEvidence.join(", ")}`);
+	const known = new Set(questions.map((question) => question.key));
+	hoistNestedAnswers(sentByKey, known, notes);
+	const foreign = [...sentByKey.keys()].filter((key) => !known.has(key));
+	const misplaced = foreign.filter((key) => ANSWER_FIELDS.has(key));
+	if (misplaced.length > 0) {
+		problems.push(
+			`answers has ${misplaced.join(", ")} beside the questions; it belongs inside one answer, e.g. answers.${questions[0]?.key ?? "<question>"}.${misplaced[0] ?? "search"}`,
+		);
+	} else if (foreign.length > 0) {
+		problems.push(
+			`answers has question(s) ${foreign.join(", ")} that '${practiceSlug}' does not ask; its questions are ${questions.map((question) => question.key).join(", ")}`,
+		);
 	}
-	const evidence =
-		result === undefined
-			? undefined
-			: attempt(() => normalizeEvidence(externalEvidence, result.outcome, { sourceOf, notes }));
-	if (problems.length > 0 || result === undefined || evidence === undefined) {
+	// The evidence list: every line the answers rest on, once, cited by its number.
+	let evidence: Evidence | null = [];
+	if (!nullish(observation.evidence)) {
+		const evidenceNotes: string[] = [];
+		try {
+			evidence = normalizeEvidence(observation.evidence, {
+				sourceOf,
+				sourceFor,
+				notes: evidenceNotes,
+			});
+		} catch (error) {
+			evidence = null;
+			problems.push(
+				`evidence: ${(error instanceof Error ? error.message : String(error)).replace(/^citation (?=\d)/u, "entry ")}`,
+			);
+		}
+		notes.push(
+			...evidenceNotes.map((note) => `evidence: ${note.replace(/^citation (?=\d)/u, "entry ")}`),
+		);
+	}
+	const given = new Map<string, string>();
+	for (const [key, sentAnswer] of sentByKey) {
+		if (isRecord(sentAnswer)) {
+			given.set(key, trimmedText(sentAnswer.answer).toUpperCase());
+		}
+	}
+	const unanswered = questions.filter(
+		(question) => !sentByKey.has(question.key) && !isSkipped(question, given),
+	);
+	const leftOpen = unanswered.filter((question) => question.gradesSeverityOnly === true);
+	if (leftOpen.length > 0 && !answersUnreadable) {
+		notes.push(
+			`${leftOpen.map((question) => question.key).join(", ")} left out, so read as open: it only grades severity, and the lower band holds`,
+		);
+	}
+	const missing = unanswered.filter((question) => question.gradesSeverityOnly !== true);
+	if (missing.length > 0 && !answersUnreadable) {
+		problems.push(
+			`answer every question of '${practiceSlug}' that its answers do not skip; missing: ${missing.map((question) => `${question.key} (${question.title})`).join(", ")}`,
+		);
+	}
+	const answers: NormalizedAnswer[] = [];
+	const used = new Set<number>();
+	for (const question of questions) {
+		if (!sentByKey.has(question.key)) {
+			continue;
+		}
+		const answer = normalizeAnswer(
+			question.key,
+			sentByKey.get(question.key),
+			evidence,
+			used,
+			{ sourceOf, sourceFor, notes },
+			problems,
+		);
+		if (answer !== undefined) {
+			answers.push(answer);
+		}
+	}
+	const uncited = (evidence ?? []).flatMap((entry, index) =>
+		entry === FILE_LIST || used.has(index + 1) ? [] : [index + 1],
+	);
+	if (uncited.length > 0 && problems.length === 0) {
+		notes.push(`evidence ${uncited.join(", ")} cited by no answer, so not recorded`);
+	}
+	if (problems.length > 0) {
 		throw new Error(problems.join("; also: "));
 	}
-	return {
-		practiceSlug,
-		summary: sent,
-		...result,
-		evidence,
-		evidenceRationale: reasoning,
-	};
+	return { practiceSlug, summary: sent, answers };
 }
 
 export function normalizePracticeSlug(value: unknown): string {
 	return trimmedText(value).toLowerCase().replaceAll("_", "-");
+}
+
+/** Every citation of an observation, across its answers. */
+export function citationsOf(observation: NormalizedObservation): NormalizedCitation[] {
+	return observation.answers.flatMap((answer) => answer.citations);
 }
 
 /** Requires each citation to name an artifact staged by its declared source. */
@@ -625,7 +925,7 @@ export function validateEvidenceSources(
 	availableSourceKinds: ReadonlySet<string>,
 	artifactSources: ReadonlyMap<string, string> = new Map(),
 ): void {
-	for (const citation of observation.evidence.citations) {
+	for (const citation of citationsOf(observation)) {
 		const { sourceKind } = citation;
 		if (!availableSourceKinds.has(sourceKind)) {
 			throw new Error(
@@ -660,64 +960,71 @@ function describeAvailableSources(sourceKinds: ReadonlySet<string>): string {
 }
 
 /**
- * Requires searched sources to be staged and every declared exhaustive source to be consulted.
- * MET based on absence additionally requires an exhaustive source policy: a positive absence claim needs a
- * closed search boundary. These checks validate the declared search, not whether the model read it.
+ * An answer resting on absence searched staged sources, and every source the practice holds exhaustive: the
+ * search is what bounds the claim that something is missing, whichever outcome the answer leads to.
+ * These checks validate the declared search, not whether the model read it.
  */
 export function validateSearchScope(
 	observation: NormalizedObservation,
 	exhaustiveSourceKinds: ReadonlySet<string>,
 	availableSourceKinds: ReadonlySet<string>,
+	shownWhole: ReadonlySet<string> = new Set(),
+	notes: string[] = [],
 ): void {
-	const { search } = observation.evidence;
-	if (!search) {
-		return;
-	}
-	if (observation.outcome === "MET" && exhaustiveSourceKinds.size === 0) {
-		throw new Error(
-			`MET for '${observation.practiceSlug}' rests on an absence claim, and the practice declares no ` +
-				`source it searches exhaustively, so no search can bound that claim. Record what the evidence ` +
-				`does show: MET from cited evidence, NOT_APPLICABLE when the work gives the practice no ` +
-				`occasion, or UNDETERMINED with what would settle it`,
-		);
-	}
-	const consulted = new Set(search.consulted);
-	for (const sourceKind of consulted) {
-		if (!availableSourceKinds.has(sourceKind)) {
+	for (const answer of observation.answers) {
+		const { search } = answer;
+		if (!search) {
+			continue;
+		}
+		const consulted = new Set(search.consulted);
+		for (const sourceKind of consulted) {
+			if (!availableSourceKinds.has(sourceKind)) {
+				throw new Error(
+					`answers.${answer.question}: searched source '${sourceKind}' was not available; copy one of these ` +
+						`source kinds from the task-declared manifest: ${describeAvailableSources(availableSourceKinds)}`,
+				);
+			}
+		}
+		if (exhaustiveSourceKinds.size === 0) {
 			throw new Error(
-				`searched source '${sourceKind}' was not available; copy one of these source kinds from ` +
-					`the task-declared manifest: ${describeAvailableSources(availableSourceKinds)}`,
+				`answers.${answer.question} has a search, and this practice reads no source exhaustively, so no search ` +
+					"can bound an absence: drop search and cite the lines that show the answer, or answer UNDETERMINED " +
+					"with wouldSettleIt",
 			);
 		}
-	}
-	const unsearched = [...exhaustiveSourceKinds]
-		.filter((sourceKind) => !consulted.has(sourceKind))
-		.toSorted();
-	if (unsearched.length > 0) {
-		throw new Error(
-			`an absence claim for '${observation.practiceSlug}' rests on searching ${unsearched.join(", ")} as ` +
-				`well: add ${unsearched.length > 1 ? "them" : "it"} to evidence.search.consulted once you have ` +
-				`searched ${unsearched.length > 1 ? "them" : "it"}`,
-		);
-	}
-}
-
-export function validateInapplicabilityScope(
-	observation: NormalizedObservation,
-	availableSourceKinds: ReadonlySet<string>,
-): void {
-	if (observation.outcome !== "NOT_APPLICABLE") {
-		return;
-	}
-	const { inapplicability } = observation.evidence;
-	if (!inapplicability) {
-		throw new Error("a NOT_APPLICABLE observation must say why the practice does not apply");
-	}
-	for (const sourceKind of inapplicability.consulted) {
-		if (!availableSourceKinds.has(sourceKind)) {
+		// A source the practice must search but this review never staged cannot bound an absence: the
+		// review cannot say what is missing from what it did not read.
+		const unstaged = [...exhaustiveSourceKinds]
+			.filter((sourceKind) => !availableSourceKinds.has(sourceKind))
+			.toSorted();
+		if (unstaged.length > 0) {
 			throw new Error(
-				`consulted source '${sourceKind}' was not available; copy one of these source kinds from ` +
-					`the task-declared manifest: ${describeAvailableSources(availableSourceKinds)}`,
+				`answers.${answer.question} rests on an absence, and this review did not stage ${unstaged.join(", ")}, ` +
+					"which the practice must search for one: an absence there cannot be shown. Answer from lines you can " +
+					"cite, or answer UNDETERMINED with wouldSettleIt naming what was not staged",
+			);
+		}
+		// A source the brief showed whole was read in full: an absence in it is bounded by that reading.
+		const read = [...exhaustiveSourceKinds]
+			.filter((sourceKind) => !consulted.has(sourceKind) && shownWhole.has(sourceKind))
+			.toSorted();
+		if (read.length > 0) {
+			search.consulted = [...search.consulted, ...read].toSorted();
+			for (const sourceKind of read) {
+				consulted.add(sourceKind);
+			}
+			notes.push(
+				`answers.${answer.question}: ${read.join(", ")} counted as searched — the brief shows it whole`,
+			);
+		}
+		const unsearched = [...exhaustiveSourceKinds]
+			.filter((sourceKind) => !consulted.has(sourceKind))
+			.toSorted();
+		if (unsearched.length > 0) {
+			const them = unsearched.length > 1 ? "them" : "it";
+			throw new Error(
+				`answers.${answer.question} rests on an absence in ${unsearched.join(", ")} as well: add ${them} ` +
+					`to its search.consulted once you have searched ${them}`,
 			);
 		}
 	}
@@ -727,7 +1034,62 @@ export function validateInapplicabilityScope(
 const MISMATCH_EXCERPT_CHARS = 160;
 
 /** The most a citation by coordinates alone may record; beyond it, the model names a fragment. */
-const COORDINATE_QUOTE_MAX_CHARS = 2000;
+const COORDINATE_QUOTE_MAX_CHARS = 4000;
+
+/**
+ * A range too long to record whole, recorded as its leading lines that fit, so one long range does not cost the
+ * observation a resend; a single line too long for it is still refused.
+ */
+function leadingLinesThatFit(
+	cited: readonly string[],
+	citation: NormalizedCitation,
+	where: string,
+	length: number,
+): ResolvedQuote | { mismatch: string } {
+	let kept = 0;
+	let recorded = 0;
+	for (const line of cited) {
+		if (recorded + line.length > COORDINATE_QUOTE_MAX_CHARS) {
+			break;
+		}
+		recorded += line.length;
+		kept += 1;
+	}
+	if (kept === 0) {
+		return {
+			mismatch: `${where} is ${length} characters, over the ${COORDINATE_QUOTE_MAX_CHARS} one entry may record; cite the few lines that show the fact`,
+		};
+	}
+	return {
+		quote: cited.slice(0, kept).join("").replace(/\n$/u, ""),
+		startLine: citation.startLine,
+		endLine: citation.startLine + kept - 1,
+		shortened: true,
+	};
+}
+
+/** The same for lines of the change: the most leading lines of the cited range whose text fits. */
+function leadingDiffLinesThatFit(
+	citedLines: ReadonlyMap<number, string>,
+	citation: NormalizedCitation,
+	citedLineCount: number,
+	length: number,
+): ResolvedQuote | { mismatch: string } {
+	for (let kept = citedLineCount - 1; kept >= 1; kept -= 1) {
+		const leading = diffLinesMatch(citedLines, citation.startLine, kept, null);
+		if ("text" in leading && leading.text.length <= COORDINATE_QUOTE_MAX_CHARS) {
+			return {
+				quote: leading.text,
+				startLine: citation.startLine,
+				endLine: citation.startLine + kept - 1,
+				shortened: true,
+			};
+		}
+	}
+	return {
+		mismatch: `[L${citation.startLine}]-[L${citation.endLine}] is ${length} characters, over the ${COORDINATE_QUOTE_MAX_CHARS} one entry may record; cite the few lines that show the fact`,
+	};
+}
 
 /** Whether an observation's citation is really in the artifact it names. */
 export function citationMatchesArtifact(citation: NormalizedCitation, content: string): boolean {
@@ -777,11 +1139,15 @@ function resolveQuoteText(
 			.replace(/\n$/u, "");
 		const where = `[L${citation.startLine}]${citation.endLine === citation.startLine ? "" : `-[L${citation.endLine}]`}`;
 		if (quote === "") {
-			return citedText.length > COORDINATE_QUOTE_MAX_CHARS
-				? {
-						mismatch: `${where} is ${citedText.length} characters; cite fewer lines or quote a fragment of them`,
-					}
-				: { quote: citedText };
+			if (citedText.length <= COORDINATE_QUOTE_MAX_CHARS) {
+				return { quote: citedText };
+			}
+			return leadingLinesThatFit(
+				lines.slice(citation.startLine - 1, citation.endLine),
+				citation,
+				where,
+				citedText.length,
+			);
 		}
 		const found = findAsWritten(citedText, quote);
 		if (found !== null) {
@@ -810,7 +1176,7 @@ function resolveQuoteText(
 		return { mismatch: lines };
 	}
 	if (citation.path === DIFF_VIEW) {
-		return placedInDiff(lines, quote);
+		return placedInDiff(lines, citation, quote);
 	}
 	const citedLines = lines.get(diffKey(citation.path, citation.side));
 	if (citedLines === undefined || citedLines.size === 0) {
@@ -826,20 +1192,19 @@ function resolveQuoteText(
 			};
 	// The coordinate may be the line of diff.patch itself, as a numbered view prints it: when that line
 	// of the view is a line of the cited file and side and holds the text, it is the one meant.
-	const viewed = viewLines.get(lines)?.get(citation.startLine);
-	if (!("text" in atCited) && viewed?.key === diffKey(citation.path, citation.side)) {
-		const count = quoteLines?.length ?? citedLineCount;
-		const atView = diffLinesMatch(citedLines, viewed.line, count, quoteLines);
-		if ("text" in atView) {
-			return { quote: atView.text, startLine: viewed.line, endLine: viewed.line + count - 1 };
+	if (!("text" in atCited)) {
+		const atView =
+			readAtViewLines(lines, citedLines, citation, quoteLines) ??
+			(quoteLines === null ? shownPartOf(citedLines, citation) : null);
+		if (atView !== null) {
+			return atView;
 		}
 	}
 	if ("text" in atCited) {
-		return quoteLines === null && atCited.text.length > COORDINATE_QUOTE_MAX_CHARS
-			? {
-					mismatch: `[L${citation.startLine}]-[L${citation.endLine}] is ${atCited.text.length} characters; cite fewer lines or quote a fragment of them`,
-				}
-			: { quote: atCited.text };
+		if (quoteLines !== null || atCited.text.length <= COORDINATE_QUOTE_MAX_CHARS) {
+			return { quote: atCited.text };
+		}
+		return leadingDiffLinesThatFit(citedLines, citation, citedLineCount, atCited.text.length);
 	}
 	// The text may be real with the coordinates guessed, or the span miscounted: when the quoted
 	// block occurs exactly once on that side of that path, it is recorded there.
@@ -888,6 +1253,84 @@ function noLinesToCite(
 	return `the change does not touch ${path}: name the changed file as the \`+++ b/\` header of its hunk does`;
 }
 
+/**
+ * The coordinates may be lines of diff.patch itself, as a numbered view prints them. With a quote, the view's
+ * line names the cited file's line that must hold it. With coordinates alone, the range is a stretch of the view
+ * — a file's header and hunks included — and the cited file's lines among its lines, from the first to the last,
+ * are what it cites: the view's lines are not the file's, since headers and the other side's lines interleave.
+ * Null when the view names no line of the cited file there.
+ */
+function readAtViewLines(
+	lines: ReadonlyMap<string, ReadonlyMap<number, string>>,
+	citedLines: ReadonlyMap<number, string>,
+	citation: NormalizedCitation,
+	quoteLines: readonly string[] | null,
+): ResolvedQuote | null {
+	const view = viewLines.get(lines);
+	const key = diffKey(citation.path, citation.side);
+	if (quoteLines !== null) {
+		const viewed = view?.get(citation.startLine);
+		if (viewed?.key !== key) {
+			return null;
+		}
+		const atView = diffLinesMatch(citedLines, viewed.line, quoteLines.length, quoteLines);
+		return "text" in atView
+			? { quote: atView.text, startLine: viewed.line, endLine: viewed.line + quoteLines.length - 1 }
+			: null;
+	}
+	const inRange: number[] = [];
+	for (let at = citation.startLine; at <= citation.endLine; at += 1) {
+		const viewed = view?.get(at);
+		if (viewed?.key === key) {
+			inRange.push(viewed.line);
+		}
+	}
+	const [first] = inRange;
+	const last = inRange.at(-1);
+	if (first === undefined || last === undefined) {
+		return null;
+	}
+	const count = last - first + 1;
+	const atView = diffLinesMatch(citedLines, first, count, null);
+	if ("text" in atView && atView.text.length <= COORDINATE_QUOTE_MAX_CHARS) {
+		return { quote: atView.text, startLine: first, endLine: last };
+	}
+	// Too long to record whole, or across a hunk boundary where the file's lines are not contiguous: its
+	// leading run that fits is what is recorded.
+	const leading = leadingDiffLinesThatFit(
+		citedLines,
+		{ ...citation, startLine: first, endLine: last },
+		count,
+		"text" in atView ? atView.text.length : 0,
+	);
+	return "quote" in leading ? leading : null;
+}
+
+/**
+ * A range by coordinates alone that the change shows only in part, such as a whole file of which a hunk shows
+ * some lines: the cited file's lines the change shows inside it, from the first, as far as one run goes.
+ */
+function shownPartOf(
+	citedLines: ReadonlyMap<number, string>,
+	citation: NormalizedCitation,
+): ResolvedQuote | null {
+	const shown = [...citedLines.keys()]
+		.filter((line) => line >= citation.startLine && line <= citation.endLine)
+		.toSorted((a, b) => a - b);
+	const [first] = shown;
+	const last = shown.at(-1);
+	if (first === undefined || last === undefined) {
+		return null;
+	}
+	const leading = leadingDiffLinesThatFit(
+		citedLines,
+		{ ...citation, startLine: first, endLine: last },
+		last - first + 2,
+		0,
+	);
+	return "quote" in leading ? leading : null;
+}
+
 /** A quote as recorded, with corrected coordinates when the text was found elsewhere than cited. */
 export interface ResolvedQuote {
 	quote: string;
@@ -896,6 +1339,8 @@ export interface ResolvedQuote {
 	/** The changed file and side the quote is on, when the citation named the diff view itself. */
 	path?: string;
 	side?: DiffSide;
+	/** The cited range was too long to record whole: these are its leading lines that fit. */
+	shortened?: true;
 }
 
 /** The derived view of the change; its own line numbers are not the coordinates a citation needs. */
@@ -963,6 +1408,61 @@ function findAsWritten(text: string, quote: string): string | null {
 	return null;
 }
 
+function squeezed(value: string): string {
+	return value.replaceAll(/\s+/gu, " ").trim();
+}
+
+/** Whether a text holds these words, however the spaces between them ran. */
+export function containsWords(text: string, words: string): boolean {
+	const wanted = squeezed(words);
+	return wanted !== "" && squeezed(text).includes(wanted);
+}
+
+/** Where an anchor's words lie: one line of a file of the change or of an artifact. */
+export interface AnchorLine {
+	path: string;
+	side?: DiffSide;
+	line: number;
+}
+
+/**
+ * The one line an anchor's words are on, matched however their spaces ran: for a citation of the change, among
+ * the lines the diff shows of its file on either side; otherwise among the artifact's lines. Undefined when the
+ * words are on no line or on several, so an anchor never picks between candidates.
+ */
+export function locateAnchor(
+	citation: NormalizedCitation,
+	content: string,
+	anchor: string,
+): AnchorLine | undefined {
+	const wanted = squeezed(anchor);
+	if (!wanted) {
+		return undefined;
+	}
+	const hits: AnchorLine[] = [];
+	if (citation.sourceKind === "scm.pull-request.diff") {
+		const lines = annotatedDiff(content);
+		if (typeof lines === "string") {
+			return undefined;
+		}
+		for (const side of ["NEW", "OLD"] as const) {
+			for (const [line, text] of lines.get(diffKey(citation.path, side)) ?? []) {
+				// The first character is the diff's own marker, not the author's text.
+				if (squeezed(text.slice(1)).includes(wanted)) {
+					hits.push({ path: citation.path, side, line });
+				}
+			}
+		}
+	} else {
+		for (const [index, text] of content.split("\n").entries()) {
+			if (squeezed(text).includes(wanted)) {
+				hits.push({ path: citation.path, line: index + 1 });
+			}
+		}
+	}
+	return hits.length === 1 ? hits[0] : undefined;
+}
+
 function diffKey(path: string | null, side: DiffSide | undefined): string {
 	return `${side ?? "NEW"} ${path ?? ""}`;
 }
@@ -975,6 +1475,12 @@ const viewLines = new WeakMap<
 	ReadonlyMap<string, ReadonlyMap<number, string>>,
 	ReadonlyMap<number, { key: string; line: number }>
 >();
+
+/** Whether the change has a line a citation can quote: one that is only binary files, renames or mode changes has none. */
+export function changeHasCitableLines(diffPatch: string): boolean {
+	const lines = annotatedDiff(diffPatch);
+	return typeof lines !== "string" && [...lines.values()].some((byLine) => byLine.size > 0);
+}
 
 /**
  * The annotated diff's lines by file and side (keyed by {@link diffKey}), each by its line number, or
@@ -1045,19 +1551,51 @@ function annotatedDiff(content: string): Map<string, Map<number, string>> | stri
 }
 
 /**
+ * A range of the diff view by coordinates alone, when the view's lines in it are lines of one changed file
+ * and side: what it cites is those lines, recorded as that file's. A range across files names no one file.
+ */
+function viewRangeOfOneFile(
+	lines: ReadonlyMap<string, ReadonlyMap<number, string>>,
+	citation: NormalizedCitation,
+): ResolvedQuote | null {
+	const view = viewLines.get(lines);
+	const keys = new Set<string>();
+	for (let at = citation.startLine; at <= citation.endLine; at += 1) {
+		const viewed = view?.get(at);
+		if (viewed !== undefined) {
+			keys.add(viewed.key);
+		}
+	}
+	const [key] = keys;
+	const fileLines = key === undefined ? undefined : lines.get(key);
+	if (keys.size !== 1 || key === undefined || fileLines === undefined) {
+		return null;
+	}
+	const [side, ...path] = key.split(" ");
+	const asFile = {
+		...citation,
+		path: path.join(" "),
+		side: side === "OLD" ? "OLD" : "NEW",
+	} as const;
+	const read = readAtViewLines(lines, fileLines, asFile, null);
+	return read === null ? null : { ...read, path: asFile.path, side: asFile.side };
+}
+
+/**
  * A citation that names the diff view is a citation of a changed file: when its quote occurs once in
  * the change, the file, side and [L<n>] it occurs at are what it cites. Otherwise the session is told
  * what a citation of the change names.
  */
 function placedInDiff(
 	lines: ReadonlyMap<string, ReadonlyMap<number, string>>,
+	citation: NormalizedCitation,
 	quote: string,
 ): ResolvedQuote | { mismatch: string } {
 	const how =
 		`${DIFF_VIEW} is the view of the change, not a file in it: cite the changed file's path (the ` +
 		"`+++ b/<path>` above its hunk) and the [L<n>] that prefixes the line";
 	if (quote === "") {
-		return { mismatch: `${how}, with the quoted text` };
+		return viewRangeOfOneFile(lines, citation) ?? { mismatch: `${how}, with the quoted text` };
 	}
 	const quoteLines = quote.split(/\r\n|\r|\n/u);
 	const found = [...lines].flatMap(([key, fileLines]) =>

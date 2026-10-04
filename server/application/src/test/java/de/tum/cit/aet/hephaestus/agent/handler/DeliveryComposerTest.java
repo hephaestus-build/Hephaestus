@@ -700,7 +700,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         observations.add(negativeObservation(
                 "accessibility",
                 "Missing labels",
-                Severity.INFO,
+                Severity.MINOR,
                 List.of(new LocationSpec("Views/F.swift", 60)),
                 null,
                 "Add accessibility labels."));
@@ -1325,27 +1325,6 @@ class DeliveryComposerTest extends BaseUnitTest {
     }
 
     @Test
-    void compose_keepsMinorOverInfo_infoIsTheFirstToCollapse() {
-        List<ValidatedObservation> observations = new ArrayList<>();
-        observations.add(negativeObservation("minor-1", "Minor one", Severity.MINOR));
-        observations.add(negativeObservation("minor-2", "Minor two", Severity.MINOR));
-        observations.add(negativeObservation("minor-3", "Minor three", Severity.MINOR));
-        observations.add(negativeObservation("info-1", "Info one", Severity.INFO));
-        observations.add(negativeObservation("info-2", "Info two", Severity.INFO));
-
-        DeliveryContent result = DeliveryComposer.compose(observations, ArtifactKinds.PULL_REQUEST);
-
-        assertThat(result).isNotNull();
-        String mrNote = result.mrNote();
-        assertThat(reachedTheDeveloper(result)).contains("2 more minor suggestions are not shown");
-        assertThat(reachedTheDeveloper(result)).contains("Minor one");
-        assertThat(reachedTheDeveloper(result)).contains("Minor two");
-        assertThat(reachedTheDeveloper(result)).contains("Minor three");
-        assertThat(mrNote).doesNotContain("Info one");
-        assertThat(mrNote).doesNotContain("Info two");
-    }
-
-    @Test
     void undesirablePracticeObservedObservationIsTreatedAsAProblem() {
         JsonNode evidence =
                 buildEvidence(List.of(new LocationSpec("Views/StockView.swift", 42)), List.of("let u = URL(s)!"));
@@ -1506,11 +1485,11 @@ class DeliveryComposerTest extends BaseUnitTest {
     }
 
     @Test
-    void compose_withWhyBySlug_skipsPrincipleOnInfoNudge() {
+    void compose_withWhyBySlug_skipsPrincipleOnMinorNudge() {
         var info = negativeObservation(
                 "leaves-the-code-clean-with-intent-revealing-comments",
                 "A stray TODO remains",
-                Severity.INFO,
+                Severity.MINOR,
                 List.of(),
                 List.of(),
                 "One leftover TODO.");

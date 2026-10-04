@@ -126,6 +126,7 @@ class PracticeDefinitionTest extends BaseUnitTest {
                 ActorRole.AUTHOR,
                 null,
                 "Criteria.",
+                automatedReview.canAttemptAutomatedReview() ? PracticeJudgment.holistic() : null,
                 null,
                 new PracticeAutomatedReviewPolicy(
                         new SourceContractVersion("1.2.0"),

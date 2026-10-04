@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
@@ -370,6 +371,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         var practice = new Practice();
         practice.setSlug("describe-what-and-why");
         practice.setCriteria("Different current criteria");
+        practice.setJudgment(PracticeJudgment.holistic());
         var observation = Observation.builder()
                 .id(UUID.randomUUID())
                 .agentJobId(UUID.randomUUID())

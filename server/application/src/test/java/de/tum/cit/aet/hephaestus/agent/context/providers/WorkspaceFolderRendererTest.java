@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -327,6 +328,7 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
         var practice = new de.tum.cit.aet.hephaestus.practices.model.Practice();
         practice.setSlug("review quality");
         practice.setCriteria("Practice prose");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setUpdatedAt(Instant.EPOCH);
         when(practices.findByWorkspaceId(1L)).thenReturn(List.of(practice));
         var captured = source.capture(new ContextRequest.ConversationReviewRequest(job), selected);

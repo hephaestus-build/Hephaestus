@@ -19,6 +19,7 @@ class PracticeDefinitionSnapshotTest extends BaseUnitTest {
         practice.setName("Focused reviews");
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_REVIEWED, ScmSignals.PULL_REQUEST_OPENED);
         practice.setCriteria("abc");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setPrecomputeScript("console.log('x')");
         practice.setAutomatedReviewPolicy(new PracticeAutomatedReviewPolicy(
                 new SourceContractVersion("1.2.0"),

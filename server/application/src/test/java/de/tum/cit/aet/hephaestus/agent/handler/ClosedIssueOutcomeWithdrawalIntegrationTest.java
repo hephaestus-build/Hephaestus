@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -293,6 +294,7 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
         practice.setSlug(slug);
         practice.setName("Confirm the outcome before closing the issue");
         practice.setCriteria("Judge the closure from the current checklist.");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setSourceCuratedSlug(sourceCuratedSlug);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.ISSUE));
         practice.setSignals(List.of(ScmSignals.ISSUE_CLOSED));

@@ -35,7 +35,7 @@ belongs to one contract:
 | You are changing                                                  | Start with                                                    |
 | ----------------------------------------------------------------- | ------------------------------------------------------------- |
 | A source, its capture states, retention, or permitted uses        | [Artifact-source contract](./artifact-source-contract.mdx)    |
-| A practice's criteria, occasion, or evidence requirements         | [Practice catalogue](./practice-catalogue.md)                 |
+| A practice's criteria, questions, rules, occasion, or evidence    | [Practice catalogue](./practice-catalogue.md)                 |
 | Observation or feedback persistence, identity, or API projections | [Practice review data model](./practice-feedback-schema.md)   |
 | Product and model-facing terminology                              | [Practice feedback language](./practice-feedback-language.md) |
 | Run provenance and evaluation joins                              | [Evaluation provenance](./evaluation-provenance.md)           |
@@ -306,15 +306,18 @@ rules; neither bypass removes consent, evidence, attribution or withdrawal check
 
 The immutable definition digest includes scheduling and assessment fields. The review-rule fingerprint
 excludes only `signals` and `reviewWhen`, because moving a review to a different moment does not change
-what the same evidence establishes. Artifact kind, criteria, evidence requirements, subject, precondition, precompute
+what the same evidence establishes. Artifact kind, criteria, judgment, evidence requirements, subject, precondition, precompute
 script, assessment policy, name and group remain part of the assessment basis.
 
 ## Observation
 
-An observation is one practice's answer about one piece of work, written once and immutable. Its
-[outcome](./practice-feedback-language.md#observation-outcomes) remains unchanged from
-the sandbox tool through server admission, persistence and read projections. Severity is required
-exactly for `NOT_MET`; contradictory fields are rejected, never silently removed.
+An observation is one practice's result about one piece of work, written once and immutable. The
+review answers the practice's questions; it never states an outcome. Admission
+[derives](./practice-review-glossary.mdx#deriving-the-outcome) the
+[outcome](./practice-feedback-language.md#observation-outcomes), its severity and the deciding rule
+from the answers with the judgment of the practice revision the job pinned, and persistence and read
+projections carry them unchanged. Severity is present exactly for `NOT_MET`; incomplete or
+contradictory answers are rejected, never silently repaired.
 
 A final review records at most one observation per practice. Duplicate practice results are refused
 as a whole, before quote verification can remove one side of a contradiction. The runtime may revise
@@ -329,11 +332,14 @@ Current summaries first select each claim's latest valid run, then check its rev
 An outdated or unknown basis does not restore an older current claim. Standing snapshots
 apply the same order before visibility filtering at each time boundary.
 
-Admission validates the outcome and its evidence warrants against the practice's criteria.
-`MET` and `NOT_MET` are decided results. `NOT_APPLICABLE` requires an evidence-backed
-applicability reason; `UNDETERMINED` requires an unresolved question and what would settle it.
-A submitted absence claim includes a recorded search checked against captured sources. A `MET`
-absence claim also requires an exhaustive corpus declared by the practice.
+Admission refuses an observation that leaves out a question its own answers do not make a
+[skipped question](./practice-review-glossary.mdx#deriving-the-outcome) or answers one the practice
+does not ask, an answer without a reason or a citation, an open answer that does not say what would settle it, and a search
+that does not cover the sources the practice holds exhaustive. `MET` and `NOT_MET` are decided results;
+`NOT_APPLICABLE` and `UNDETERMINED` carry warrants built from the deciding answers
+([evidence warrants](./practice-feedback-schema.md#evidence-warrants)). An answer resting on absence
+includes a recorded search checked against captured sources. A `MET` absence claim also requires an
+exhaustive corpus declared by the practice.
 
 Warrants and citations are enforced both inside the sandbox and by the server. Capture failure
 remains a readiness decision and creates no observation. Abstentions create no feedback and do not
@@ -349,9 +355,11 @@ Identity is assigned at persistence, not in the sandbox: an occurrence key dedup
 Different behaviors can share a location; this key does not establish that a concern persisted or resolved.
 
 **Observations describe the work; feedback contains advice.** An observation carries a concise `summary`
-and an `evidenceRationale` that explains the assessment, for example: “The change adds a tax-exempt branch,
-and no changed test calls `total`.” It has no `guidance` field. Composition decides whether and how to give
-advice from admitted observations.
+and the answers the review gave, a skipped question having none, each with one sentence about the cited
+lines, for example: “The change adds a tax-exempt
+branch, and no changed test calls `total`.” The deciding rule's reason heads it. It has no `guidance`
+field. Composition decides whether and how to give advice from admitted observations, building on the
+deciding rule and the answers it used.
 
 ### Recorded-result coverage
 
@@ -360,8 +368,9 @@ sources were inspected. A practice with at least one recorded observation is cou
 a practice without one is counted as unevaluated and may be retried. This does not establish that
 all relevant behaviors were reviewed, or that a practice without a result was never inspected.
 
-The current runner cannot complete successfully with zero recorded observations. A supported
-`NOT_APPLICABLE` observation can record that no practice subject applies to the captured work; missing required sources remain
+The current runner cannot complete successfully with zero recorded observations. A supported answer
+to a practice's occasion question can lead its rules to record `NOT_APPLICABLE` when no practice
+subject applies to the captured work; missing required sources remain
 readiness failures, and no verdict may be invented to satisfy execution coverage. Report this
 protocol limitation separately from source completeness, judgment quality and delivery.
 
@@ -374,7 +383,9 @@ unchanged. A call with repeated practices changes no drafts. Server admission re
 repeated practices before recording observations. After admission, recorded observations stay immutable;
 correction uses the existing [invalidation flow](./practice-review-glossary.mdx#invalidated-observations).
 
-Measurement and composition are separate phases in one model session. An authenticated callback admits
+Measurement and composition are separate phases. Measurement runs in up to three model sessions at
+once, one practice group per turn, and composition resumes the first of them
+([runtime](./practice-review-runtime.mdx#execution-sequence)). An authenticated callback admits
 observations between them; composition can reference only the persisted projection.
 
 An observation states a claim that can be checked against the captured work. Feedback proposes an action
@@ -416,7 +427,7 @@ per-channel limits still apply after composition.
 
 ### Composition inputs and outputs
 
-After Java admits observations, the runner resumes the same model session with the composition prompt. The
+After Java admits observations, the runner resumes the first measuring session with the composition prompt. The
 measurement tool is closed, and feedback may bind only to the durable observations returned by admission.
 The resumed session retains artifact context without weakening the server boundary.
 

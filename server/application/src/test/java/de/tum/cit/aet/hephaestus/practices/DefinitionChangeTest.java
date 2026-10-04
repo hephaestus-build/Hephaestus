@@ -28,6 +28,7 @@ class DefinitionChangeTest extends BaseUnitTest {
                 subject,
                 precondition,
                 "Assess the review",
+                PracticeJudgment.holistic(),
                 null,
                 PracticeTestEvidence.pullRequest(),
                 null,

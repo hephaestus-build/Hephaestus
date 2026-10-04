@@ -20,7 +20,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
-import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.Task;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
@@ -213,13 +212,9 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         int pullRequestNumber = requireInt(metadata, "pr_number");
         String repoName = requireText(metadata, "repository_full_name");
 
-        String prompt = "Review merge request #" + pullRequestNumber
-                + " in "
-                + repoName
-                + ". Read the context files, then persist every justified observation via the report_observation tool. "
-                + "Follow "
-                + SandboxLayout.ORCHESTRATOR_PATH
-                + " for the schema and rules.";
+        String prompt = "Review merge request #" + pullRequestNumber + " in " + repoName
+                + " against the practices each turn names: answer their questions from the brief and the records, and"
+                + " record one observation per practice with report_observation.";
         log.info("Built orchestrator prompt: {} chars, jobId={}", prompt.length(), job.getId());
         return prompt;
     }
@@ -299,12 +294,14 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                         observation.getOccurrenceKey(), observation.getRecurrenceKey(), observation.getId()),
                 observation.getPracticeRevision() == null
                         ? observation.getPractice().getDeliveryBehavior()
-                        : observation.getPracticeRevision().getDeliveryBehavior());
+                        : observation.getPracticeRevision().getDeliveryBehavior(),
+                observation.getAnswers(),
+                observation.getRuleId());
     }
 
     @Override
     public PreparedObservations prepareObservations(AgentJob job, JsonNode observations) {
-        var parsed = resultParser.parseObservations(observations);
+        var parsed = resultParser.parseObservations(observations, deliveryService.judgments(job));
         if (!parsed.discarded().isEmpty()) {
             log.info(
                     "Discarded {} observations during parsing: jobId={}, reasons={}",

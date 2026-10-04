@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.time.TimeBucketSize;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -341,6 +342,7 @@ class PracticeReviewOverviewIntegrationTest extends AbstractWorkspaceIntegration
         result.setName(name);
         result.setGroup(group);
         result.setCriteria("Review the change");
+        result.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(result, ScmSignals.PULL_REQUEST_OPENED);
         result.setAutonomy(PracticeAutonomy.AUTOMATIC);
         return practiceRepository.save(result);
@@ -376,6 +378,8 @@ class PracticeReviewOverviewIntegrationTest extends AbstractWorkspaceIntegration
                 "NOT_MET".equals(outcome) ? "MINOR" : null,
                 "{}",
                 "Reasoning",
+                null,
+                null,
                 "overview-" + id,
                 Instant.parse(observedAt),
                 "LIVE");

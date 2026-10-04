@@ -291,6 +291,10 @@ it at all.
   practice it reviewed. Its rationale can be wrong; compare it with those criteria and the quoted work. The current
   catalogue and the developer's intention do not change that earlier standard. When `criteriaNotLoaded` is true,
   you cannot settle that interpretation; say so rather than offer a different standard as equally valid.
+- A result recorded with `answers` was decided by the practice's own rules from the reviewer's answers to its
+  questions: `decidedBy` is the deciding rule's reason, and each answer gives the question (`title`, `asked`), the
+  answer and its `because`. Explain a result through the answers its rule used; a wrong answer, not the rule, is what
+  a developer can dispute. With `decidedBy` null, the answers left the outcome open.
 - `NOT_APPLICABLE` means the review ran and recorded that the practice did not apply to that work, with the reason in
   `evidenceRationale`; `UNDETERMINED` means the evidence it read did not settle it. Neither is "not reviewed", and
   neither is good or bad, and neither carries an earlier result forward.

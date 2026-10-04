@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -204,6 +205,7 @@ class LlmUsageLedgerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         practice.setSlug("budget-review");
         practice.setName("Budget review");
         practice.setCriteria("Review the pull request");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         practices.save(practice);

@@ -194,7 +194,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
         PracticeRevision revision = org.mockito.Mockito.mock(PracticeRevision.class);
         lenient().when(revision.getId()).thenReturn(11L);
-        lenient().when(revision.getReviewRuleFingerprint()).thenReturn("v5:" + "a".repeat(64));
+        lenient().when(revision.getReviewRuleFingerprint()).thenReturn("v6:" + "a".repeat(64));
         lenient().when(revision.getSlug()).thenReturn("pr-description-quality");
         lenient().when(revision.getPractice()).thenReturn(testPractice);
         lenient().when(revision.getAutomatedReviewPolicy()).thenReturn(testPractice.getAutomatedReviewPolicy());
@@ -240,6 +240,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         anyLong(),
                         any(),
                         anyString(),
+                        any(),
+                        any(),
                         any(),
                         any(),
                         any(),
@@ -397,6 +399,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         any(),
                         any(),
                         any(),
+                        any(),
+                        any(),
                         anyString(),
                         any(),
                         anyString());
@@ -438,7 +442,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 .put("revisionId", revisionId);
         PracticeRevision revision = org.mockito.Mockito.mock(PracticeRevision.class);
         lenient().when(revision.getId()).thenReturn(revisionId);
-        lenient().when(revision.getReviewRuleFingerprint()).thenReturn("v5:" + "a".repeat(64));
+        lenient().when(revision.getReviewRuleFingerprint()).thenReturn("v6:" + "a".repeat(64));
         lenient().when(revision.getSlug()).thenReturn(practice.getSlug());
         lenient().when(revision.getPractice()).thenReturn(practice);
         lenient().when(revision.getAutomatedReviewPolicy()).thenReturn(practice.getAutomatedReviewPolicy());
@@ -1264,6 +1268,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                             isNull(), // severity
                             anyString(),
                             isNull(),
+                            any(),
+                            any(),
                             fingerprintCaptor.capture(), // recurrence key
                             any(),
                             eq("LIVE") // an event-triggered review is the unbiased population
@@ -1334,6 +1340,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                             isNull(),
                             anyString(),
                             isNull(),
+                            any(),
+                            any(),
                             anyString(),
                             any(),
                             eq("LIVE"));
@@ -1502,6 +1510,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                             severityCaptor.capture(),
                             any(),
                             any(),
+                            any(),
+                            any(),
                             anyString(),
                             any(),
                             anyString());
@@ -1551,6 +1561,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                             any(),
                             any(),
                             any(),
+                            any(),
+                            any(),
                             anyString(),
                             any(),
                             anyString()))
@@ -1584,6 +1596,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                             any(),
                             anyString(),
                             isNull(),
+                            any(),
+                            any(),
                             any(),
                             any(),
                             anyString(),
@@ -1656,6 +1670,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                             anyString(),
                             eq("NOT_MET"), // outcome
                             anyString(),
+                            any(),
+                            any(),
                             any(),
                             any(),
                             anyString(),

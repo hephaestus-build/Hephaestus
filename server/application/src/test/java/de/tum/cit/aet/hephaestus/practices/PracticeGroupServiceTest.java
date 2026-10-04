@@ -385,6 +385,7 @@ class PracticeGroupServiceTest extends BaseUnitTest {
         PracticeTestEvidence.configure(practice, ArtifactKinds.PULL_REQUEST);
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setCriteria("criteria");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         return practice;
     }

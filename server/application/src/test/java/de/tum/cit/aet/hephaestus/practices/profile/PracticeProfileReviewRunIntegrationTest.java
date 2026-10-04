@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawal;
@@ -524,6 +525,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
         Practice changedSince = persistPractice(workspace, null, "changed-since", "Changed since", null);
         observe(changedSince, run, 38L, developer, NOT_MET, Severity.MINOR, at);
         changedSince.setCriteria("Criteria the workspace changed after this review");
+        changedSince.setJudgment(PracticeJudgment.holistic());
         changedSince.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(changedSince, 2)));
         practiceRepository.saveAndFlush(changedSince);
 

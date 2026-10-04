@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalog.BundledEntry;
 import java.io.IOException;
@@ -173,6 +174,7 @@ public class BundledPracticeCatalogLoader {
                 occasion.subject() == null ? ActorRole.AUTHOR : occasion.subject(),
                 occasion.precondition(),
                 criteria,
+                judgment(objectMapper, node, slug),
                 loadPrecomputeScript(node, slug),
                 policy(objectMapper, evidenceDefaults.policyFor(artifactKind), node, slug),
                 whyItMatters,
@@ -199,6 +201,18 @@ public class BundledPracticeCatalogLoader {
             return defaults.withdrawnFor(mapper.treeToValue(reason, PracticeEvidenceLimitation.class));
         } catch (RuntimeException exception) {
             throw new IllegalStateException("invalid insufficiency reason: " + slug, exception);
+        }
+    }
+
+    private static @Nullable PracticeJudgment judgment(JsonMapper mapper, JsonNode node, String slug) {
+        JsonNode value = node.get("judgment");
+        if (value == null) {
+            return null;
+        }
+        try {
+            return mapper.treeToValue(value, PracticeJudgment.class);
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("invalid bundled practice judgment: " + slug, exception);
         }
     }
 

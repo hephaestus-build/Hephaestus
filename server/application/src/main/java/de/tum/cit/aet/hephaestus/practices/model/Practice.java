@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.Column;
@@ -186,6 +187,15 @@ public class Practice {
     @Column(name = "precondition", columnDefinition = "jsonb")
     @ToString.Exclude
     private @Nullable PracticePrecondition precondition;
+
+    /**
+     * The questions a review answers and the rules that decide the outcome from the answers; present exactly when
+     * the practice is reviewed automatically.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "judgment", columnDefinition = "jsonb")
+    @ToString.Exclude
+    private @Nullable PracticeJudgment judgment;
 
     /**
      * The practice criteria the runtime evaluates the reviewed work against; normative text for contextual

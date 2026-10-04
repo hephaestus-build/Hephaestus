@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -347,6 +348,7 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
         p.setSlug(slug);
         p.setName(name);
         p.setCriteria("Test " + slug);
+        p.setJudgment(PracticeJudgment.holistic());
         p.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         PracticeTestEvidence.configure(p, ScmSignals.PULL_REQUEST_OPENED);
         p = practiceRepository.saveAndFlush(p);
@@ -607,13 +609,12 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
         void shouldRefuseOpposingResultsBeforeAnyObservationIsRecorded() {
             var submitted = OBJECT_MAPPER.createArrayNode();
             for (Outcome outcome : List.of(Outcome.MET, Outcome.NOT_MET)) {
-                var observation = submitted.addObject();
-                observation.put("practiceSlug", "pr-description-quality");
-                observation.put("summary", "Test: pr-description-quality");
-                observation.put("outcome", outcome.name());
-                observation.put("severity", outcome == Outcome.NOT_MET ? "MINOR" : null);
-                observation.put("evidenceRationale", "The captured diff is the scope of this observation.");
-                observation.set("evidence", evidence(outcome));
+                submitted.add(AnsweredObservations.observation(
+                        "pr-description-quality",
+                        "Test: pr-description-quality",
+                        outcome,
+                        outcome == Outcome.NOT_MET ? Severity.MINOR : null,
+                        evidence(outcome).path("citations").get(0)));
             }
 
             agentJob.setStatus(AgentJobStatus.RUNNING);

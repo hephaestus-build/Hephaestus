@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceSufficiency;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.curated.CuratedCatalogService;
@@ -130,7 +131,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .jsonPath("$.initialAutonomy")
                 .isEqualTo("HUMAN_APPROVAL")
                 .jsonPath("$.sourceReviewRuleFingerprint")
-                .value(value -> assertThat((String) value).matches("v5:[0-9a-f]{64}"))
+                .value(value -> assertThat((String) value).matches("v6:[0-9a-f]{64}"))
                 .jsonPath("$.definition.automatedReviewValidation.status")
                 .isEqualTo("AUTHOR_DECLARED");
     }
@@ -217,7 +218,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
         assertThat(practice.getSourceCuratedSlug()).isEqualTo(PRACTICE);
         assertThat(practice.getAdoptedBase()).isEqualTo(PracticeDefinition.from(practice));
         assertThat(practice.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.EXACT_ADOPTION);
-        assertThat(practice.getSourceCuratedFingerprint()).matches("v5:[0-9a-f]{64}");
+        assertThat(practice.getSourceCuratedFingerprint()).matches("v6:[0-9a-f]{64}");
         assertThat(practice.getAutonomy()).isEqualTo(PracticeAutonomy.HUMAN_APPROVAL);
         assertThat(groupRepository.findByWorkspaceIdAndSlug(workspace.getId(), GROUP))
                 .isPresent();
@@ -225,7 +226,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .get()
                 .extracting(revision -> revision.getReviewRuleFingerprint())
                 .asString()
-                .matches("v5:[0-9a-f]{64}");
+                .matches("v6:[0-9a-f]{64}");
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT count(*) FROM config_audit_event WHERE workspace_id = ? AND entity_type IN ('PRACTICE_GROUP', 'PRACTICE_DEFINITION', 'PRACTICE_USAGE')",
                         Long.class,
@@ -313,6 +314,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 shipped.subject(),
                 guidanceOnly ? null : shipped.precondition(),
                 "Judge the closure with a mentor.",
+                guidanceOnly ? null : PracticeJudgment.holistic(),
                 null,
                 policy,
                 shipped.whyItMatters(),
@@ -364,6 +366,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 shipped.subject(),
                 shipped.precondition(),
                 "Judge the closure from the current checklist.",
+                PracticeJudgment.holistic(),
                 null,
                 evidenceDefaults.policyFor(shipped.artifactKind()),
                 shipped.whyItMatters(),

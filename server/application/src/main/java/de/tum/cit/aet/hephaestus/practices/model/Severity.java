@@ -6,8 +6,6 @@ public enum Severity {
     CRITICAL,
     /** A real problem that should be fixed before the work is considered done. */
     MAJOR,
-    /** A minor issue or style nit; worth raising but not blocking. */
+    /** A bounded shortfall with a specific edit to make; nobody would block the work on it alone. */
     MINOR,
-    /** Informational only — a low-stakes note, no action expected. */
-    INFO,
 }

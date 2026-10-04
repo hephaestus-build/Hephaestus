@@ -98,6 +98,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         practice.setName(name);
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setCriteria("Detect prompt for " + slug);
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         practice.setAutonomy(active ? PracticeAutonomy.AUTOMATIC : PracticeAutonomy.OFF);
         return practiceRepository.save(practice);
@@ -145,6 +146,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 shown.subject(),
                 shown.precondition(),
                 criteria,
+                null,
                 shown.precomputeScript(),
                 shown.automatedReviewPolicy(),
                 shown.whyItMatters(),
@@ -191,6 +193,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 ActorRole.AUTHOR,
                 null,
                 "Detect if the PR follows best practices",
+                PracticeJudgment.holistic(),
                 null,
                 PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                 null,
@@ -208,6 +211,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 ActorRole.AUTHOR,
                 null,
                 request.criteria(),
+                PracticeJudgment.holistic(),
                 request.precomputeScript(),
                 request.automatedReviewPolicy(),
                 request.whyItMatters(),
@@ -227,6 +231,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 request.subject(),
                 request.precondition(),
                 request.criteria(),
+                automatedReview ? request.judgment() : null,
                 automatedReview ? request.precomputeScript() : null,
                 evidence,
                 request.whyItMatters(),
@@ -729,6 +734,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     "Minimal criteria",
+                    PracticeJudgment.holistic(),
                     null,
                     null,
                     null,
@@ -920,6 +926,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     null,
+                    PracticeJudgment.holistic(),
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                     null,
@@ -971,6 +978,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     // The rest of the request is valid, so this exercises the signal check.
                     "Reviewable criteria",
+                    PracticeJudgment.holistic(),
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                     null,
@@ -1011,6 +1019,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     "Reviewable criteria",
+                    PracticeJudgment.holistic(),
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                     null,
@@ -1045,6 +1054,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     null,
+                    PracticeJudgment.holistic(),
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                     null,
@@ -1086,6 +1096,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     null,
+                    PracticeJudgment.holistic(),
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                     null,
@@ -1118,6 +1129,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     null,
+                    PracticeJudgment.holistic(),
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                     null,
@@ -1191,7 +1203,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             practiceRepository.save(practice);
 
             var request = new UpdatePracticeRequestDTO(
-                    "Updated Name", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    "Updated Name", null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
             PracticeDTO result = webTestClient
                     .patch()
@@ -1247,6 +1259,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     null,
                     null,
+                    null,
                     null);
 
             PracticeDTO result = webTestClient
@@ -1274,7 +1287,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             Practice practice = persistPractice("remove-automated-review", "Remove assessment", true);
             PracticeAutomatedReviewPolicy requirements = withoutAutomatedReview(practice.getAutomatedReviewPolicy());
             var request = new UpdatePracticeRequestDTO(
-                    null, null, null, null, null, null, null, null, requirements, null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, requirements, null, null, null, null, null);
 
             PracticeDTO result = webTestClient
                     .patch()
@@ -1319,6 +1332,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     "New prompt",
+                    null,
                     null,
                     null,
                     null,
@@ -1372,6 +1386,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
             var request = new UpdatePracticeRequestDTO(
                     "Changed Name",
+                    null,
                     null,
                     null,
                     null,
@@ -1485,7 +1500,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             ensureAdminMembership(workspace);
 
             var request = new UpdatePracticeRequestDTO(
-                    "Name", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    "Name", null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -1506,7 +1521,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             persistPractice("bad-update", "Name", true);
 
             var request = new UpdatePracticeRequestDTO(
-                    "AB", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    "AB", null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
             ProblemDetail problem = webTestClient
                     .patch()
@@ -1536,7 +1551,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             persistPractice("ws-name", "Name", true);
 
             var request = new UpdatePracticeRequestDTO(
-                    "   ", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    "   ", null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
             ProblemDetail problem = webTestClient
                     .patch()
@@ -1566,7 +1581,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             persistPractice("ws-criteria", "Name", true);
 
             var request = new UpdatePracticeRequestDTO(
-                    null, null, null, null, null, null, "   ", null, null, null, null, null, null, null);
+                    null, null, null, null, null, null, "   ", null, null, null, null, null, null, null, null);
 
             ProblemDetail problem = webTestClient
                     .patch()
@@ -1609,6 +1624,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     null,
                     null,
+                    null,
                     null);
 
             webTestClient
@@ -1631,7 +1647,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             persistPractice("forbidden-update", "Name", true);
 
             var request = new UpdatePracticeRequestDTO(
-                    "New Name", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    "New Name", null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -1649,7 +1665,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         @DisplayName("returns 401 when not logged in")
         void shouldReturnUnauthorized() {
             var request = new UpdatePracticeRequestDTO(
-                    "Name", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    "Name", null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -2200,6 +2216,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             practice.setSlug("isolated-practice");
             practice.setName("Isolated");
             practice.setCriteria("Description");
+            practice.setJudgment(PracticeJudgment.holistic());
             PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
             practiceRepository.save(practice);
 
@@ -2239,6 +2256,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             practice.setSlug("only-in-a");
             practice.setName("Only in A");
             practice.setCriteria("Description");
+            practice.setJudgment(PracticeJudgment.holistic());
             PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
             practiceRepository.save(practice);
 
@@ -2304,11 +2322,12 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             practice.setSlug("write-isolated");
             practice.setName("Write Isolated");
             practice.setCriteria("Desc");
+            practice.setJudgment(PracticeJudgment.holistic());
             PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
             practiceRepository.save(practice);
 
             var request = new UpdatePracticeRequestDTO(
-                    "Hacked Name", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    "Hacked Name", null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
             webTestClient
                     .patch()
@@ -2364,7 +2383,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             assertThat(revisions.get(0).getSignals())
                     .containsExactly(ScmSignals.PULL_REQUEST_OPENED, ScmSignals.PULL_REQUEST_REVIEWED);
             assertThat(revisions.get(0).getCriteria()).isEqualTo("Detect if the PR follows best practices");
-            assertThat(revisions.get(0).getReviewRuleFingerprint()).hasSize(67).startsWith("v5:");
+            assertThat(revisions.get(0).getReviewRuleFingerprint()).hasSize(67).startsWith("v6:");
             assertThat(revisions.get(0).getCreatedAt()).isNotNull();
         }
 
@@ -2393,6 +2412,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     null,
                     "A revised detection rubric",
+                    null,
                     null,
                     null,
                     null,
@@ -2439,7 +2459,21 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .expectBody(Void.class);
 
             var request = new UpdatePracticeRequestDTO(
-                    "Renamed Practice", null, null, null, null, null, null, null, null, null, null, null, null, null);
+                    "Renamed Practice",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
 
             webTestClient
                     .patch()
@@ -2493,6 +2527,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     null,
                     null,
+                    null,
                     null);
 
             webTestClient
@@ -2533,6 +2568,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                             null,
                             null,
                             null,
+                            null,
                             null));
 
             int threads = 2;
@@ -2552,7 +2588,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                                     "raced-practice",
                                     new UpdatePracticeRequestDTO(
                                             null, null, null, null, null, null, criteria, null, null, null, null, null,
-                                            null, null));
+                                            null, null, null));
                         } catch (Throwable t) {
                             failures.add(t);
                         } finally {
@@ -2601,6 +2637,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     "Review something",
+                    PracticeJudgment.holistic(),
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.ISSUE),
                     null,
@@ -2642,6 +2679,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     "Review something",
+                    PracticeJudgment.holistic(),
                     null,
                     null,
                     null,
@@ -2676,6 +2714,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     "Detect constructive conversations",
+                    PracticeJudgment.holistic(),
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.CONVERSATION_THREAD),
                     null,
@@ -2722,6 +2761,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     "INTERNAL detection rubric — must never reach a developer",
+                    PracticeJudgment.holistic(),
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                     "Small, focused PRs are easier to review.",
@@ -2774,6 +2814,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     "Detect prompt",
+                    PracticeJudgment.holistic(),
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                     "Why it matters.",
@@ -2840,6 +2881,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     ActorRole.AUTHOR,
                     null,
                     "Detect prompt",
+                    PracticeJudgment.holistic(),
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                     "The error handler is PRESENT in every case.",
@@ -2886,6 +2928,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             persistPractice("guard-update", "Guard Update", true);
 
             var request = new UpdatePracticeRequestDTO(
+                    null,
                     null,
                     null,
                     null,

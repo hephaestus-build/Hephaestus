@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicyDigest;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +28,7 @@ record CuratedPracticeSnapshot(
         Map<String, Set<String>> reviewWhen,
         ActorRole subject,
         @Nullable PracticePrecondition precondition,
+        @Nullable PracticeJudgment judgment,
         String criteriaSha256,
         @Nullable String precomputeScriptSha256,
         String automatedReviewPolicySha256,
@@ -50,6 +52,7 @@ record CuratedPracticeSnapshot(
                 definition.reviewWhen(),
                 definition.subject(),
                 definition.precondition(),
+                definition.judgment(),
                 CanonicalDigest.sha256Hex(definition.criteria()),
                 definition.precomputeScript() == null ? null : CanonicalDigest.sha256Hex(definition.precomputeScript()),
                 PracticeAutomatedReviewPolicyDigest.digest(definition.automatedReviewPolicy()),

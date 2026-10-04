@@ -5,7 +5,8 @@ description: How the catalog that ships with Hephaestus is written, reviewed and
 
 # Practice catalog curation
 
-The practice catalog turns defined engineering practices into review criteria. Product terminology
+The practice catalog turns defined engineering practices into review criteria, and the questions and
+rules a review decides by. Product terminology
 lives in the [practice feedback language guide](practice-feedback-language.md); this page covers how
 to maintain the catalog.
 
@@ -66,6 +67,9 @@ The practice editor follows the decisions an author can make confidently:
    applies to, and optionally place it in a group.
 2. **Review guidance** — describe what to look for, why it matters, and one concrete example.
 3. **How Hephaestus can help** — choose AI-supported mentoring, human review, or guidance only.
+4. **How the review decides** — while Hephaestus reviews the practice, the questions the review
+   answers and the rules that decide the outcome. A new practice starts from the
+   [starting judgment](./practice-review-glossary.mdx#deriving-the-outcome).
 
 The generated identifier, review signals, and optional static-analysis script are under
 **Technical settings**. A new practice starts with the signals and evidence requirements recommended
@@ -81,7 +85,9 @@ second declaration that could contradict them.
 Write **What to look for** as a review boundary, not as a personality or a score. Define one
 observable way of working, the signals that demonstrate it, and the cases where a reviewer should stay
 silent. Do not require intent, private context, runtime behavior, or any other fact outside the
-selected work and evidence boundary.
+selected work and evidence boundary. The criteria guide the answers; the questions and rules decide.
+The editor and the server refuse rules that are not total and reachable, a question no rule uses, and
+an automated review without a judgment.
 
 ## Choose how Hephaestus can help
 
@@ -93,8 +99,10 @@ settings:
   while a developer, peer, or mentor may still review it from context the system does not collect.
   It still names its occasion — that is where its artifact kind comes from, and saying what a
   practice is about was never the same claim as asking Hephaestus to act on it — but it cannot define
-  a static-analysis script and its autonomy is forced to `OFF`.
-- **Guidance only** keeps the criteria and guidance without configuring Hephaestus to review it.
+  a static-analysis script and its autonomy is forced to `OFF`. It may keep its questions for the
+  person who answers them.
+- **Guidance only** keeps the criteria and guidance without configuring Hephaestus to review it, and
+  has no questions or rules.
 
 The practice starts with the recommended evidence for its kind of work. Most authors should keep it.
 **Customize evidence** reveals each source's display name, privacy class, the capture quality its
@@ -113,6 +121,7 @@ workspace integrations remain separate gates.
 | What to look for         | Look for a description that explains the behavior change and why. Stay silent for automated dependency updates. |
 | Why it matters           | Reviewers can judge a change faster when they understand its purpose.                                           |
 | What good looks like     | “This changes retry behavior so temporary network failures no longer end the sync.”                             |
+| How the review decides   | *The change is an automated dependency update* and *States why the change exists*; rules decide Not applicable, Not met, then Met |
 | Hephaestus support       | AI-supported mentoring with the recommended review configuration and evidence                                   |
 
 The author does not choose source-contract identifiers or runtime states in this common path. If the
@@ -296,7 +305,9 @@ standard as an experiment or a convention as a proven outcome.
 
 1. State the user problem and supported reviewed work.
 2. Cite and classify the evidence.
-3. Draft applicability, signals, exclusions, evidence requirements, and severity.
+3. Draft signals, exclusions and evidence requirements, then the questions — the occasion first — and
+   the rules with their severities, following
+   [Writing effective practices](/admin/writing-practices#write-the-questions).
 4. Confirm every source applies to the practice's artifact kind and that its governance decision permits
    the product purpose, audience, processor egress, and retention. A new source follows the
    [artifact-source governance gate](../admin/dsms/artifact-source-governance).
@@ -305,7 +316,8 @@ standard as an experiment or a convention as a proven outcome.
    occasion directly as `signals`, with `reviewWhen` and `subject`. Declare sources as
    `evidenceRequirements` explicitly. A review needs at least one required or exhaustive source;
    a guidance-only practice uses an empty list. Declare a mechanical gate as `precondition`. `reviewWhen` is a map of descriptor-supported state dimensions to nonempty value sets. An empty map is unrestricted; omitting a dimension permits all its values. There is no occasion array or
-   string-or-object shorthand. Reference any precompute script explicitly; a script must be named
+   string-or-object shorthand. Give every practice a `judgment`, including one shipped as needing
+   human review. Reference any precompute script explicitly; a script must be named
    after the practice slug, and an unreferenced one fails validation. What a script is and what the
    library owns is in [Precompute scripts](#precompute-scripts) below. Give the practice a `holdsAs`
    sentence — [Holds as](./practice-feedback-language.md) in the feedback language: one present-tense
@@ -343,8 +355,8 @@ hints, metrics and directions, not observations.
 
 - **Practice-specific predicates belong in the script.** Shared readers and scanning mechanics live
   in `docker/agents/precompute/lib/`. Keep the predicates consistent with the practice criteria.
-- **A candidate is not a judgment.** A matched line or review thread directs inspection; the model
-  must check its context against the criteria. The purity test rejects observation vocabulary in
+- **A candidate is not an answer.** A matched line or review thread directs inspection; the model
+  must check its context against the criteria and the question it bears on. The purity test rejects observation vocabulary in
   scripts, but does not establish that their output is complete or correct.
 - **Missing and empty differ.** Context readers return `null` when a capture file is absent and `[]`
   when a captured list is empty. Scripts must preserve that distinction.
@@ -367,21 +379,23 @@ script, shared review instructions and developer guidance. Check these seams exp
 - A preamble cannot declare a source unavailable when the review captures it, or infer absence from
   an unavailable quotation. The actual capture manifest establishes availability; practice criteria
   establish permitted use.
-- A precompute candidate is a lead, not a judgment. A count or path match alone cannot establish a
+- A precompute candidate is a lead, not an answer. A count or path match alone cannot establish a
   developer's intent, a runtime outcome or the adequacy of a rationale.
-- An applicability exclusion and an assessed outcome cannot both describe the same case. Read all
-  exceptions together with the final decision instructions, not just the opening behavior statement.
+- An occasion question and a shortfall question cannot both describe the same case. Read the
+  questions together with the order of the rules, not just the opening behavior statement.
 - Exceptions for deliberately generated files, version ranges or repository conventions must survive
   the final outcome rules. Severity follows the evidenced consequence, not the number of matches.
-- Guidance and examples cannot silently add requirements absent from the criteria. Shared instructions
+- Guidance and examples cannot silently add requirements absent from the criteria and questions. Shared instructions
   define the observation protocol; individual practices define the occasion and evidence needed for
   their expectation.
 
 Keep the cases and evaluation evidence with the relevant test or benchmark, and explain the change
-in the pull request. Every bundled practice is written in the decision-procedure shape of
-[Writing effective practices](/admin/writing-practices#write-the-criteria-as-a-decision-procedure),
-and `CatalogCriteriaShapeTest` checks that shape (the sections, their order, the size bound). That
-test checks structure, not semantic quality. Schema and fixture tests prove loading and faithful presentation; evidence-based case review
+in the pull request. Every bundled practice's criteria take the shape in
+[Writing effective practices](/admin/writing-practices#write-the-criteria), and
+`CatalogCriteriaShapeTest` checks it: the review focus, the sections and their order, no occasion,
+judge or severity section, no outcome or severity named, the size bound, and rules that decide both
+`MET` and `NOT_MET` for every practice not shipped as needing human review. That test checks
+structure, not semantic quality. Schema and fixture tests prove loading and faithful presentation; evidence-based case review
 and model evaluation are separate checks. The shared preambles are one artifact-framing paragraph
 each; the grounding rules live once, in the shared review instructions. Changing a preamble affects
 every entry that uses it, so inspect every affected kind of work and preserve the existing

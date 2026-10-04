@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSou
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -65,6 +66,7 @@ class ReviewHistoryConsentGateIntegrationTest extends AbstractSlackConsentGateIn
         practice.setSlug("test-practice");
         practice.setName("Test Practice");
         practice.setCriteria("Test description");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.saveAndFlush(practice);
@@ -126,6 +128,8 @@ class ReviewHistoryConsentGateIntegrationTest extends AbstractSlackConsentGateIn
                 "NOT_MET",
                 "MAJOR",
                 evidence(artifactKind),
+                null,
+                null,
                 null,
                 null,
                 Instant.now(),

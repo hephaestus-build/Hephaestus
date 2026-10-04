@@ -348,6 +348,7 @@ erDiagram
         JSONB review_when
         VARCHAR(16) subject
         JSONB precondition
+        JSONB judgment
     }
 
     DeliveryPolicyEvaluation {
@@ -911,6 +912,8 @@ erDiagram
         BIGINT workspace_id FK,UK "NOT NULL"
         TIMESTAMPTZ superseded_at
         VARCHAR(16) outcome "NOT NULL"
+        JSONB answers
+        VARCHAR(40) rule_id
     }
 
     ObservationInvalidation {
@@ -1034,6 +1037,7 @@ erDiagram
         JSONB review_when "NOT NULL"
         VARCHAR(16) subject "NOT NULL"
         JSONB precondition
+        JSONB judgment
     }
 
     PracticeCatalogInstallation {
@@ -1095,6 +1099,7 @@ erDiagram
         JSONB review_when
         VARCHAR(16) subject
         JSONB precondition
+        JSONB judgment
     }
 
     ProductFeedback {

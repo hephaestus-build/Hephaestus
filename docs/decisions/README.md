@@ -90,5 +90,6 @@ do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
 | [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md) | Installed clients sign in with a PKCE handoff to their own revocable session | Accepted. Amends [0017](0017-replace-keycloak-with-spring-native-auth.md) for clients that cannot hold the cookie. |
 | [0049](0049-browser-extension-report-in-the-page.md) | The browser extension shows its report in the page and confirms changes in its own window | Accepted |
 | [0050](0050-one-practice-standard-one-outcome.md) | One practice standard, one outcome | Accepted |
+| [0051](0051-practices-decide-from-answered-questions.md) | Practices decide outcomes from answered questions | Proposed, on hold |
 
 Template: [0000-template.md](0000-template.md).

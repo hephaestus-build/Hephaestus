@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
@@ -276,6 +277,8 @@ class SlackRetentionErasureIntegrationTest extends BaseIntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 Instant.now(),
                 "LIVE");
         return observationId;
@@ -293,6 +296,7 @@ class SlackRetentionErasureIntegrationTest extends BaseIntegrationTest {
         p.setSlug("retain-practice-" + ws.getId());
         p.setName("Retention Practice");
         p.setCriteria("Test description");
+        p.setJudgment(PracticeJudgment.holistic());
         p.setSignals(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
         p.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()));
         p.setReviewWhen(Map.of());

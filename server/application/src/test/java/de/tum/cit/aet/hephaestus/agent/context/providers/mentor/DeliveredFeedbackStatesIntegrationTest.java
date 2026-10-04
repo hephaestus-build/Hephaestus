@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -102,6 +103,7 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
         practice.setSlug("issue-linking");
         practice.setName("Issue linking");
         practice.setCriteria("Link the issue the change resolves.");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.saveAndFlush(practice);
@@ -578,6 +580,8 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
                 "MET",
                 null,
                 evidence(artifactKind),
+                null,
+                null,
                 null,
                 null,
                 Instant.now(),

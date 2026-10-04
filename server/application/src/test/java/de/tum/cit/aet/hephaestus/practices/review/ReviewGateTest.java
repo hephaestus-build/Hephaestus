@@ -1048,6 +1048,7 @@ class ReviewGateTest extends BaseUnitTest {
                                     null,
                                     "Criteria",
                                     null,
+                                    null,
                                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST)
                                             .withdrawnFor(reason),
                                     null,

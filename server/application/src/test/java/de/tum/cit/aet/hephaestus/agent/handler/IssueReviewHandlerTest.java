@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
@@ -170,9 +171,11 @@ class IssueReviewHandlerTest extends BaseUnitTest {
         var practice = new Practice();
         practice.setSlug("issue-practice");
         practice.setCriteria("Review the issue.");
+        practice.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(practice, ArtifactKinds.ISSUE);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.ISSUE));
         var revision = new PracticeRevision();
+        ReflectionTestUtils.setField(revision, "judgment", PracticeJudgment.holistic());
         ReflectionTestUtils.setField(revision, "id", 12L);
         practice.setCurrentRevision(revision);
         when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.ISSUE))
@@ -314,16 +317,14 @@ class IssueReviewHandlerTest extends BaseUnitTest {
     @Nested
     class PrepareObservations {
 
-        private static final String OBSERVATION = """
-            [{
-              "practiceSlug": "explains-why",
-              "summary": "States the motivation",
-              "outcome": "MET",
-              "severity": null,
-              "evidenceRationale": "The text says why.",
-              "evidence": {}
-            }]
-            """;
+        private static final tools.jackson.databind.JsonNode OBSERVATION =
+                AnsweredObservations.submitted(AnsweredObservations.observation(
+                        "explains-why",
+                        "States the motivation",
+                        de.tum.cit.aet.hephaestus.practices.model.Outcome.MET,
+                        null,
+                        AnsweredObservations.recordCitation(
+                                "context/description.md", 1, "Because the cache stalled.")));
 
         @Test
         void shouldRefuseRatherThanFailWhenNothingSubmittedIsAnObservation() {
@@ -335,7 +336,10 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                     .isInstanceOfSatisfying(
                             de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException.class,
                             e -> assertThat(e.reasonCode()).isEqualTo("no_valid_observations"));
-            org.mockito.Mockito.verifyNoInteractions(deliveryService);
+            org.mockito.Mockito.verify(deliveryService, org.mockito.Mockito.never())
+                    .prepare(any(), any());
+            org.mockito.Mockito.verify(deliveryService, org.mockito.Mockito.never())
+                    .publish(any(), any());
         }
 
         @Test
@@ -348,8 +352,9 @@ class IssueReviewHandlerTest extends BaseUnitTest {
             var admissible = mock(ReviewOutputService.PreparedObservations.class);
             when(deliveryService.prepare(org.mockito.ArgumentMatchers.eq(job), any()))
                     .thenReturn(admissible);
+            when(deliveryService.judgments(job)).thenReturn(AnsweredObservations.judgments("explains-why"));
 
-            var prepared = handler.prepareObservations(job, objectMapper.readTree(OBSERVATION));
+            var prepared = handler.prepareObservations(job, OBSERVATION);
             org.mockito.Mockito.verify(deliveryService, org.mockito.Mockito.never())
                     .publish(any(), any());
 

@@ -19,7 +19,7 @@ export default async function commitsAreAtomicAndCohesive(
 	const directions =
 		authored.length < 2
 			? [
-					`${authored.length} authored commit(s) in the reviewed range: with fewer than two there is no partition to judge.`,
+					`${authored.length} authored commit(s) in the reviewed range: a single commit is the whole partition, and it holds one logical change or a bundle like any other.`,
 				]
 			: [
 					describeCommitCount(facts),

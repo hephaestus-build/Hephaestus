@@ -9,6 +9,8 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
+import de.tum.cit.aet.hephaestus.practices.PracticeQuestion;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -283,6 +285,34 @@ class PracticeCatalogInjector {
                 throw new JobPreparationException("Practice has no current revision: " + p.getSlug());
             }
             entry.put("revisionId", p.getCurrentRevision().getId());
+            // The questions the review answers, from the revision admission derives against. The rules that
+            // decide the outcome are never staged: the reviewer answers what it observes, not toward an outcome.
+            // What is staged of them is when a question cannot decide anything, so it is not asked, and which
+            // questions only grade severity, so one left out is read as open.
+            PracticeJudgment judgment = p.getCurrentRevision().getJudgment();
+            if (judgment == null) {
+                throw new JobPreparationException("Practice revision has no questions to answer: " + p.getSlug());
+            }
+            ArrayNode questions = entry.putArray("questions");
+            var skips = judgment.skipConditions();
+            var severityOnly = judgment.gradesSeverityOnly();
+            for (PracticeQuestion question : judgment.questions()) {
+                ObjectNode staged = questions
+                        .addObject()
+                        .put("key", question.key())
+                        .put("title", question.title())
+                        .put("question", question.question())
+                        .put("yes", question.yes())
+                        .put("no", question.no());
+                if (severityOnly.contains(question.key())) staged.put("gradesSeverityOnly", true);
+                ArrayNode skipWhen = staged.putArray("skipWhen");
+                for (PracticeJudgment.SkipCondition skip :
+                        java.util.Objects.requireNonNull(skips.get(question.key()))) {
+                    skipWhen.addObject()
+                            .put("question", skip.question())
+                            .put("answer", skip.answer().name());
+                }
+            }
             // A pointer, not a fence: what may be CITED is what the run staged (inputs/manifest.json), so
             // reading beyond this list is expected, not a violation.
             ArrayNode readsSources = entry.putArray("readsSources");
@@ -315,7 +345,8 @@ class PracticeCatalogInjector {
                         + "The listed paths are intentionally committed generated output. Keep the evidence, but do not judge these paths as hand-written work, "
                         + "count them toward hand-written review size, or report their presence as unwanted generated/build artifacts. "
                         + "For excludes-generated-and-build-artifacts, judge only artifacts outside the listed paths. "
-                        + "For a practice about hand-written changes, record NOT_APPLICABLE if no hand-written changed files remain; "
+                        + "For a practice about hand-written changes, a question about whether the change adds hand-written work "
+                        + "is answered NO when no hand-written changed files remain; "
                         + "do not claim a strength or a missing behavior from an empty hand-written change. "
                         + "Other evidence, such as review comments, commits, title and body, remains reviewable. "
                         + "Precompute hints and provider totals do not override this policy.\n";

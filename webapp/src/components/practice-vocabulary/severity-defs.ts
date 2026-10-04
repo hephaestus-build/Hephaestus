@@ -1,4 +1,4 @@
-import { CircleAlertIcon, InfoIcon, OctagonAlertIcon, TriangleAlertIcon } from "lucide-react";
+import { CircleAlertIcon, OctagonAlertIcon, TriangleAlertIcon } from "lucide-react";
 
 import type { ReviewObservation } from "@/api/types.gen";
 
@@ -30,11 +30,5 @@ export const SEVERITY_DEFS: StatusDefs<Severity> = {
 		icon: CircleAlertIcon,
 		badgeVariant: "warning",
 		description: "Worth knowing about, but it does not block anything.",
-	},
-	INFO: {
-		label: "Informational",
-		icon: InfoIcon,
-		badgeVariant: "secondary",
-		description: "Context for the author, with nothing being asked of them.",
 	},
 };

@@ -180,22 +180,13 @@ public class IssueReviewHandler implements JobTypeHandler {
     }
 
     private String buildPrompt(int issueNumber, String repoName, AgentJob job) {
-        String prompt = "Review issue #" + issueNumber
-                + " in "
-                + repoName
-                + ". This is an ISSUE, not a pull request — there is no code diff. Read the issue context files "
-                + "("
-                + SandboxLayout.CONTEXT_PREFIX
-                + "metadata.json, "
-                + SandboxLayout.CONTEXT_PREFIX
-                + "comments.json, and "
-                + SandboxLayout.CONTEXT_PREFIX
-                + "project_inventory.json for cross-artifact checks like duplicate/overlapping issues), then "
-                + "evaluate each practice in inputs/practices/ against the issue and persist every justified observation via the "
-                + "report_observation tool. Evidence citations should reference the issue thread/metadata, not source files. "
-                + "Follow "
-                + SandboxLayout.ORCHESTRATOR_PATH
-                + " for the observation schema and rules.";
+        String prompt = "Review issue #" + issueNumber + " in " + repoName
+                + " against the practices each turn names. This is an issue, not a pull request: there is no code"
+                + " diff. Its records are " + SandboxLayout.CONTEXT_PREFIX + "metadata.json and "
+                + SandboxLayout.CONTEXT_PREFIX + "comments.json; " + SandboxLayout.CONTEXT_PREFIX
+                + "project_inventory.json holds the workspace's other issues and pull requests, for duplicate and"
+                + " overlap checks. Answer the practices' questions and record one observation per practice with"
+                + " report_observation.";
         log.info("Built issue orchestrator prompt: {} chars, jobId={}", prompt.length(), job.getId());
         return prompt;
     }
@@ -266,12 +257,14 @@ public class IssueReviewHandler implements JobTypeHandler {
                         observation.getOccurrenceKey(), observation.getRecurrenceKey(), observation.getId()),
                 observation.getPracticeRevision() == null
                         ? observation.getPractice().getDeliveryBehavior()
-                        : observation.getPracticeRevision().getDeliveryBehavior());
+                        : observation.getPracticeRevision().getDeliveryBehavior(),
+                observation.getAnswers(),
+                observation.getRuleId());
     }
 
     @Override
     public PreparedObservations prepareObservations(AgentJob job, JsonNode observations) {
-        var parsed = resultParser.parseObservations(observations);
+        var parsed = resultParser.parseObservations(observations, deliveryService.judgments(job));
         if (parsed.validObservations().isEmpty()) {
             throw new ObservationsRefusedException(
                     "no_valid_observations", "No valid observations in agent output: jobId=" + job.getId());

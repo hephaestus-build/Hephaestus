@@ -4,10 +4,12 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.ClosedPracticeInput;
 import de.tum.cit.aet.hephaestus.practices.DefinitionChange;
+import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewMode;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -49,6 +51,13 @@ public record CuratedPracticeRequestDTO(
         @NonNull
         String criteria,
 
+        @Valid
+        @Schema(
+                description = "Questions the review answers and the rules that decide the outcome; required when the"
+                        + " practice is reviewed automatically")
+        @Nullable
+        PracticeJudgment judgment,
+
         @Size(
                 max = PracticeDefinition.MAX_PRECOMPUTE_SCRIPT_LENGTH,
                 message = "Precompute script must be at most 100000 characters")
@@ -84,6 +93,7 @@ public record CuratedPracticeRequestDTO(
             @Nullable ActorRole subject,
             @Nullable PracticePrecondition precondition,
             String criteria,
+            @Nullable PracticeJudgment judgment,
             @Nullable String precomputeScript,
             @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy,
             @Nullable String whyItMatters,
@@ -98,6 +108,7 @@ public record CuratedPracticeRequestDTO(
                 subject == null ? ActorRole.AUTHOR : subject,
                 precondition,
                 criteria,
+                judgment,
                 precomputeScript,
                 automatedReviewPolicy,
                 whyItMatters,
@@ -117,6 +128,7 @@ public record CuratedPracticeRequestDTO(
                 subject == null ? ActorRole.AUTHOR : subject,
                 precondition,
                 criteria,
+                resolvedEvidence.automatedReview().mode() == PracticeAutomatedReviewMode.NONE ? null : judgment,
                 precomputeScript,
                 resolvedEvidence,
                 whyItMatters,

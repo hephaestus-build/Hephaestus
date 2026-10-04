@@ -45,8 +45,10 @@ Suppose a developer opens **Update dependencies** with no explanation in its des
 2. Coverage decides whether to look at all: the repository, the base branch and the author must all be
    admitted. Then the review gate selects practices whose occasions match that pull request, and capture must
    satisfy each selected practice's evidence requirements before that practice can run.
-3. A practice about explaining why a change is needed can record that the explanation is absent, bounded
-   to the description it searched. This is the observation; it is retained even if nobody is contacted.
+3. The review answers each practice's questions from the evidence. For a practice about explaining why a
+   change is needed, it answers **No** to *States why the change exists*, bounded to the description it
+   searched, and the practice's rules decide the outcome from the answers. This is the observation; it
+   is retained even if nobody is contacted.
 4. Composition considers that observation alongside recent observations and feedback. It may propose a
    public summary, private process feedback, mentor context, or no feedback.
 5. Server-side policy admits or refuses each proposal. Feedback waiting for a decision is listed first on
@@ -121,6 +123,14 @@ over the page you are on. Links inside a panel open the next record over it, and
 takes you back. The address of the page names the open panels, so you can share it.
 
 ### Correct an observation that was wrong
+
+An observation's panel shows **How it was decided**: the reason of the rule that decided it, then
+each question the review answered — **Yes**, **No** or **Open** — with its reason; a question the
+other answers made irrelevant was skipped and is not listed. The answers that **Decided the outcome** are marked; an open answer says what **Would settle
+it**, a **No** resting on an absence says what it **Looked for**, and **Cites** names the evidence each
+answer rests on. Read it to tell a wrong answer, which is a wrong observation, from a rule that decided
+badly, which you fix by editing the practice. Observations recorded before reviews answered questions
+show the review's explanation instead.
 
 Open the observation under **Practices → Practice reviews → Observations** and choose **Mark as
 incorrect** at the bottom of the panel, with a reason the developer will read. The review record stays as it was, and the observation
@@ -486,8 +496,8 @@ repository accepts at most 100 patterns, with at most 512 characters per pattern
 workspace policy. It must not judge those paths as hand-written work or count them toward hand-written
 review size. The `excludes-generated-and-build-artifacts` practice does not treat intentionally
 committed output on those paths as unwanted artifacts; it can still assess artifacts outside them.
-If a practice requires hand-written changes and none remain, the result is **Not applicable**, not a
-strength or a problem. Other evidence, such as the title, body, commits and review comments, remains
+If a practice asks whether the change adds hand-written work and none remains, the review answers **No**,
+and the bundled practices' rules record **Not applicable**, not a strength or a problem. Other evidence, such as the title, body, commits and review comments, remains
 available. Mark only paths your repository generates intentionally; a broad pattern can hide useful
 practice feedback.
 

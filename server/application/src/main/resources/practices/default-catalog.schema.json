@@ -5,11 +5,7 @@
 	"description": "Repository-managed practice definitions installed into the curated instance catalog.",
 	"type": "object",
 	"additionalProperties": false,
-	"required": [
-		"$schema",
-		"criteriaPreambles",
-		"groups"
-	],
+	"required": ["$schema", "criteriaPreambles", "groups"],
 	"properties": {
 		"$schema": {
 			"description": "Schema used by editors and CI to validate this catalog.",
@@ -38,11 +34,7 @@
 			"description": "A named group of related practices.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": [
-				"slug",
-				"name",
-				"practices"
-			],
+			"required": ["slug", "name", "practices"],
 			"properties": {
 				"slug": {
 					"description": "Stable group identifier used for provenance and URLs.",
@@ -83,19 +75,11 @@
 			"description": "One bundled engineering-practice definition.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": [
-				"slug",
-				"name",
-				"signals",
-				"criteria"
-			],
 			"if": {
 				"properties": {
 					"insufficiencyReason": true
 				},
-				"required": [
-					"insufficiencyReason"
-				]
+				"required": ["insufficiencyReason"]
 			},
 			"then": {
 				"properties": {
@@ -106,10 +90,9 @@
 				"properties": {
 					"holdsAs": true
 				},
-				"required": [
-					"holdsAs"
-				]
+				"required": ["holdsAs"]
 			},
+			"required": ["slug", "name", "signals", "criteria", "judgment"],
 			"properties": {
 				"slug": {
 					"description": "Stable practice identifier used for provenance, observations, and URLs.",
@@ -135,10 +118,7 @@
 					"items": {
 						"type": "object",
 						"additionalProperties": false,
-						"required": [
-							"sourceKind",
-							"stance"
-						],
+						"required": ["sourceKind", "stance"],
 						"properties": {
 							"sourceKind": {
 								"description": "Stable source identifier from the shipped source contract.",
@@ -147,23 +127,14 @@
 							},
 							"stance": {
 								"description": "REQUIRED: the claim reads it. EXHAUSTIVE: the claim asserts something is absent from it, so a partial capture cannot satisfy it. CONTEXTUAL: used if present, never fatal.",
-								"enum": [
-									"REQUIRED",
-									"EXHAUSTIVE",
-									"CONTEXTUAL"
-								]
+								"enum": ["REQUIRED", "EXHAUSTIVE", "CONTEXTUAL"]
 							}
 						}
 					}
 				},
 				"subject": {
 					"description": "Whose conduct a review occasioned this way judges, and therefore which person its observations are filed against. Defaults to AUTHOR. A practice about reviewing somebody else's work names REVIEWER; one about the act of merging names MERGER, reviewed only when the merger is the author the run is about.",
-					"enum": [
-						"AUTHOR",
-						"ASSIGNEE",
-						"REVIEWER",
-						"MERGER"
-					]
+					"enum": ["AUTHOR", "ASSIGNEE", "REVIEWER", "MERGER"]
 				},
 				"precondition": {
 					"description": "What must be in the work for this practice to have anything to judge. Decided from staged evidence before the practice is put to a model, so a practice whose prerequisite is provably absent is not asked. Omit to apply to every artifact of this kind.",
@@ -180,10 +151,14 @@
 					"minLength": 1
 				},
 				"criteria": {
-					"description": "Markdown rules used by any reviewer and by Hephaestus when automated review is enabled.",
+					"description": "Markdown guidance any reviewer reads: the standard, the sources and their limits, what to cite, and what other practices own. It never decides the outcome; the judgment does.",
 					"type": "string",
 					"minLength": 3,
 					"maxLength": 50000
+				},
+				"judgment": {
+					"description": "Yes/no questions the review answers from evidence, and ordered rules that decide the outcome from the answers. A practice Hephaestus never reviews keeps them for the person who answers them.",
+					"$ref": "#/$defs/judgment"
 				},
 				"whyItMatters": {
 					"description": "Optional developer guidance explaining the value of the practice.",
@@ -212,10 +187,7 @@
 					"description": "Present only when the evidence Hephaestus collects cannot support this practice's question: the practice ships as needing human review, Hephaestus never reviews it, and this says why. Such a practice carries no holdsAs: nothing it recorded can support one.",
 					"type": "object",
 					"additionalProperties": false,
-					"required": [
-						"code",
-						"description"
-					],
+					"required": ["code", "description"],
 					"properties": {
 						"code": {
 							"type": "string",
@@ -245,9 +217,7 @@
 		"deliveryBehavior": {
 			"description": "Declared feedback placement and co-occurrence choices for a practice.",
 			"type": "object",
-			"required": [
-				"summaryOnly"
-			],
+			"required": ["summaryOnly"],
 			"additionalProperties": false,
 			"properties": {
 				"summaryOnly": {
@@ -288,10 +258,7 @@
 			"description": "A mechanical review precondition: what has to be in a piece of work for a practice to have anything to judge about it, and the sentence to show a reader when it is not.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": [
-				"skipReason",
-				"anyOf"
-			],
+			"required": ["skipReason", "anyOf"],
 			"properties": {
 				"skipReason": {
 					"description": "Sentence shown wherever the resulting silence is explained, in the practice author's voice and phrased as a fact about the work, e.g. 'the change touches no dependency manifest or lockfile'.",
@@ -348,6 +315,123 @@
 			},
 			"minProperties": 1,
 			"maxProperties": 1
+		},
+		"judgment": {
+			"description": "Questions a review answers and the rules that turn the answers into an outcome; the first matching rule decides, and every combination of answers reaches a rule.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["questions", "rules"],
+			"properties": {
+				"questions": {
+					"description": "The yes/no questions a review answers, in the order it answers them.",
+					"type": "array",
+					"minItems": 1,
+					"maxItems": 8,
+					"items": {
+						"$ref": "#/$defs/question"
+					}
+				},
+				"rules": {
+					"description": "Ordered rules; the first whose conditions match the answers decides, and the last has no conditions.",
+					"type": "array",
+					"minItems": 2,
+					"maxItems": 32,
+					"items": {
+						"$ref": "#/$defs/rule"
+					}
+				}
+			}
+		},
+		"question": {
+			"description": "One yes/no question, answerable on its own from the practice's sources.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["key", "title", "question", "yes", "no"],
+			"properties": {
+				"key": {
+					"description": "Stable identifier rules and recorded answers refer to.",
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_]{1,39}$"
+				},
+				"title": {
+					"description": "Short statement a YES affirms, without a final period.",
+					"type": "string",
+					"minLength": 3,
+					"maxLength": 60,
+					"pattern": "^[^\\n]*[^.\\s]$"
+				},
+				"question": {
+					"description": "The question as the reviewer reads it: what counts and what does not.",
+					"type": "string",
+					"minLength": 20,
+					"maxLength": 2400,
+					"pattern": "\\?"
+				},
+				"yes": {
+					"description": "What a YES means for the reviewed work.",
+					"type": "string",
+					"minLength": 10,
+					"maxLength": 600
+				},
+				"no": {
+					"description": "What a NO means for the reviewed work.",
+					"type": "string",
+					"minLength": 10,
+					"maxLength": 600
+				}
+			}
+		},
+		"rule": {
+			"description": "When every named question has the stated answer, this rule decides the outcome.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["id", "when", "outcome", "reason"],
+			"properties": {
+				"id": {
+					"description": "Stable identifier an observation records as the rule that decided it.",
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9-]{1,39}$"
+				},
+				"when": {
+					"description": "Question key to the answer it requires; {} matches every combination.",
+					"type": "object",
+					"additionalProperties": {
+						"enum": ["YES", "NO"]
+					}
+				},
+				"outcome": {
+					"description": "The outcome this rule decides.",
+					"enum": ["MET", "NOT_MET", "NOT_APPLICABLE", "UNDETERMINED"]
+				},
+				"severity": {
+					"description": "How much a shortfall costs; present exactly when the outcome is NOT_MET.",
+					"enum": ["MINOR", "MAJOR", "CRITICAL"]
+				},
+				"reason": {
+					"description": "One sentence about the work: the observation's headline and its warrant.",
+					"type": "string",
+					"minLength": 10,
+					"maxLength": 200
+				}
+			},
+			"if": {
+				"properties": {
+					"outcome": {
+						"const": "NOT_MET"
+					}
+				}
+			},
+			"then": {
+				"properties": {
+					"severity": true
+				},
+				"required": ["severity"]
+			},
+			"else": {
+				"properties": {
+					"severity": false
+				}
+			}
 		}
 	}
 }

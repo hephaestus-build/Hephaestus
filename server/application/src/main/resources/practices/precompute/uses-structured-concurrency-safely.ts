@@ -61,7 +61,7 @@ export default async function usesStructuredConcurrencySafely(
 	}
 	if (scan.hints.length > 0 && metrics.mainActorMarks === 0) {
 		directions.push(
-			"No @MainActor mark arrived with the added concurrency; check the isolation of each type whose UI state an await mutates.",
+			"No @MainActor mark arrived with the added concurrency; check the isolation of each type whose UI state an await mutates. A SwiftUI view is main-actor isolated, and so is every type of a target whose default actor isolation is MainActor.",
 		);
 	}
 	return { hints: scan.hints, metrics, directions };

@@ -2,6 +2,7 @@ import { cn } from "cn";
 import type { CuratedPracticeDefinition, PracticeDefinitionOptions } from "@/api/types.gen";
 import { deliveryBehaviorSentences } from "@/components/admin/practice-editor/delivery-behavior-text";
 import { PracticeEvidenceSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
+import { PracticeJudgmentSummary } from "@/components/admin/practice-editor/PracticeJudgmentSummary";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { Section } from "@/components/layout/Section";
 import {
@@ -64,8 +65,14 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 						/>
 					</AccordionContent>
 				</AccordionItem>
-				<AccordionItem value="review-rule">
+				<AccordionItem value="review-judgment">
 					<AccordionTrigger>How it decides</AccordionTrigger>
+					<AccordionContent>
+						<PracticeJudgmentSummary judgment={definition.judgment} />
+					</AccordionContent>
+				</AccordionItem>
+				<AccordionItem value="review-rule">
+					<AccordionTrigger>What it looks for</AccordionTrigger>
 					<AccordionContent>
 						{/* The editor promises "Markdown is supported", and this is the one definition field
 						    that uses it. `max-w-2xl` because the drawer reaches 62rem. */}

@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluation;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluationRepository;
@@ -851,6 +852,7 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
         practice.setSlug(slug);
         practice.setName(name);
         practice.setCriteria("Criteria for " + slug);
+        practice.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(practice, signal);
         practice.setAutonomy(autonomy);
         return practiceRepository.save(practice);
@@ -958,6 +960,8 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                 null,
                 "{\"citations\":[]}",
                 "Because the diff says so",
+                null,
+                null,
                 "recurrence-1",
                 READY_AT,
                 "LIVE");

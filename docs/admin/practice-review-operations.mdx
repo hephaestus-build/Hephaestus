@@ -43,7 +43,10 @@ it has recorded.
 `PRACTICE_REVIEW_SAMPLING_TEMPERATURE` sets the sampling temperature for practice-review
 model calls, not mentor calls. If unset, the provider default applies. Use a value supported by the
 selected model and confirm that your deployment forwards the setting. A low temperature does not
-guarantee repeatable judgments; evaluate changes against representative cases.
+guarantee repeatable judgments; evaluate changes against representative cases. Do not set `0` for an
+open model whose vendor advises against greedy decoding: such a model can repeat the same tool call
+until the review stops that group of practices. Its recommended sampling, or the provider default, is
+the better choice.
 
 See the
 [server configuration](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/application.yml)
@@ -227,8 +230,8 @@ These behaviors matter independently of configured capacity:
   unavailable and the review stops without recording anything about that work. If the work reappears,
   the next ordinary sync clears the mark and a later review reads it again.
 - **No screen edits what the model is told.** What Hephaestus observes is shaped by each practice's
-  criteria; the wording it then chooses is shaped by a prompt that ships with the release. Changing the
-  latter is a code change.
+  criteria and questions, and the practice's rules decide the outcome from the answers; the wording it
+  then chooses is shaped by a prompt that ships with the release. Changing the latter is a code change.
 
 ## Rollback
 

@@ -111,7 +111,7 @@ public class SlackConversationProjector implements ConversationThreadProjection 
             conv.put("threadTs", key.threadTs());
             conv.put("messageCount", key.messageCount());
             ArrayNode messages = conv.putArray("messages");
-            appendThreadMessages(workspaceId, key, messages);
+            appendThreadMessages(workspaceId, key, messages, null);
         }
         root.put("totalThreads", conversations.size());
         return root;
@@ -129,7 +129,7 @@ public class SlackConversationProjector implements ConversationThreadProjection 
      * @param threadTs    the thread root {@code ts} (aggregate key)
      */
     @Override
-    public ObjectNode buildThreadPayload(long workspaceId, String channelId, String threadTs) {
+    public ObjectNode buildThreadPayload(long workspaceId, String channelId, String threadTs, long reviewedMemberId) {
         ObjectNode root = objectMapper.createObjectNode();
 
         ObjectNode meta = root.putObject("_meta");
@@ -143,7 +143,8 @@ public class SlackConversationProjector implements ConversationThreadProjection 
         root.put("threadTs", threadTs);
 
         ArrayNode messages = root.putArray("messages");
-        boolean truncated = appendThreadMessages(workspaceId, new ThreadKey(channelId, null, threadTs, 0), messages);
+        boolean truncated = appendThreadMessages(
+                workspaceId, new ThreadKey(channelId, null, threadTs, 0), messages, reviewedMemberId);
         root.put("messageCount", messages.size());
         root.put("truncated", truncated);
         return root;
@@ -196,7 +197,8 @@ public class SlackConversationProjector implements ConversationThreadProjection 
      * channel paused or revoked between enqueue and execution: a non-ACTIVE channel yields zero messages,
      * atomically with the read.
      */
-    private boolean appendThreadMessages(long workspaceId, ThreadKey key, ArrayNode messages) {
+    private boolean appendThreadMessages(
+            long workspaceId, ThreadKey key, ArrayNode messages, @Nullable Long reviewedMemberId) {
         List<SlackThreadMessageRow> rows = messageRepository.findThreadMessages(
                 workspaceId, key.channelId(), key.threadTs(), org.springframework.data.domain.Pageable.unpaged());
         for (int index = 0; index < rows.size(); index++) {
@@ -211,6 +213,9 @@ public class SlackConversationProjector implements ConversationThreadProjection 
                 node.put("authorName", row.authorName());
             }
             node.put("text", row.text());
+            if (reviewedMemberId != null) {
+                node.put("underReview", reviewedMemberId.equals(row.authorMemberId()));
+            }
             if (row.editedAt() != null) {
                 node.put("edited", true);
             }

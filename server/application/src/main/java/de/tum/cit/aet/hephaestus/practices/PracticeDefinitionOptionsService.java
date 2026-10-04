@@ -36,7 +36,8 @@ public class PracticeDefinitionOptionsService {
                 catalog.version(),
                 signalOptions.authorableKinds().stream()
                         .map(artifact -> options(catalog, artifact))
-                        .toList());
+                        .toList(),
+                PracticeJudgment.holistic());
     }
 
     private PracticeWorkTypeDefinitionOptionsDTO options(ArtifactSourceCatalog catalog, ArtifactKind artifact) {

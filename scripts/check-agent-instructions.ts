@@ -150,6 +150,11 @@ const INTENTIONALLY_MISSING_PATHS = [
 		reason: "the staged history record, written into the agent workspace",
 	},
 	{
+		document: "docs/contributor/agent/workspace-abi.mdx",
+		value: "inputs/practices/index.json",
+		reason: "the staged practice index and its questions, written into the agent workspace",
+	},
+	{
 		document: "docs/contributor/practice-catalogue.md",
 		value: "work/precompute-out/<slug>.md",
 		reason: "a practice's precompute section, written inside the agent workspace for its turn",

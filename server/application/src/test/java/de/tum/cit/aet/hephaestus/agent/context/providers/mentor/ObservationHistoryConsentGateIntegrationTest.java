@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -71,6 +72,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
         practice.setSlug("test-practice");
         practice.setName("Test Practice");
         practice.setCriteria("Test description");
+        practice.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.saveAndFlush(practice);
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 1));
@@ -366,6 +368,8 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
                 evidence(artifactKind),
                 null,
                 null,
+                null,
+                null,
                 Instant.now(),
                 "LIVE");
         return observationRepository.findById(id).orElseThrow();
@@ -427,6 +431,8 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
                 evidence,
                 rationale,
                 null,
+                null,
+                null,
                 observedAt,
                 "LIVE");
         return id;
@@ -438,6 +444,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
         created.setSlug(slug);
         created.setName(slug);
         created.setCriteria("Criteria");
+        created.setJudgment(PracticeJudgment.holistic());
         created.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
         PracticeTestEvidence.configure(created, ScmSignals.PULL_REQUEST_OPENED);
         created = practiceRepository.saveAndFlush(created);

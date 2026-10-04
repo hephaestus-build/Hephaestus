@@ -34,6 +34,13 @@ public record PracticeDefinition(
 
         @Nullable PracticePrecondition precondition,
         @NonNull String criteria,
+
+        @Schema(
+                description = "Questions the review answers and the rules that decide the outcome; required exactly"
+                        + " when the practice is reviewed automatically")
+        @Nullable
+        PracticeJudgment judgment,
+
         @Nullable String precomputeScript,
         @NonNull PracticeAutomatedReviewPolicy automatedReviewPolicy,
         @Nullable String whyItMatters,
@@ -69,6 +76,14 @@ public record PracticeDefinition(
         if (!automatedReviewDisabled && evidenceRequirements.stream().noneMatch(PracticeEvidenceRequirement::refuses)) {
             throw new IllegalArgumentException("Automated review requires at least one required evidence source");
         }
+        if (automatedReviewDisabled && judgment != null) {
+            throw new IllegalArgumentException("A practice without automated review asks no questions");
+        }
+        // A practice withdrawn for insufficient evidence keeps the questions it would be reviewed with.
+        if (automatedReviewPolicy.automatedReview().canAttemptAutomatedReview() && judgment == null) {
+            throw new IllegalArgumentException(
+                    "Automated review needs questions and rules that decide the outcome. Add at least one question.");
+        }
         precomputeScript = blankToNull(precomputeScript);
         whyItMatters = blankToNull(whyItMatters);
         whatGoodLooksLike = blankToNull(whatGoodLooksLike);
@@ -82,6 +97,7 @@ public record PracticeDefinition(
             ActorRole subject,
             @Nullable PracticePrecondition precondition,
             String criteria,
+            @Nullable PracticeJudgment judgment,
             @Nullable String precomputeScript,
             PracticeAutomatedReviewPolicy automatedReviewPolicy,
             @Nullable String whyItMatters,
@@ -95,6 +111,7 @@ public record PracticeDefinition(
                 subject,
                 precondition,
                 criteria,
+                judgment,
                 precomputeScript,
                 automatedReviewPolicy,
                 whyItMatters,
@@ -112,6 +129,7 @@ public record PracticeDefinition(
                 practice.getSubject(),
                 practice.getPrecondition(),
                 practice.getCriteria(),
+                practice.getJudgment(),
                 practice.getPrecomputeScript(),
                 practice.getAutomatedReviewPolicy(),
                 practice.getWhyItMatters(),
@@ -122,7 +140,8 @@ public record PracticeDefinition(
 
     /**
      * The definition a revision recorded, or null when the revision predates recording a complete one: a
-     * missing field stays unknown rather than borrowing today's value.
+     * missing field stays unknown rather than borrowing today's value. A reviewed practice's revision from before
+     * judgments were recorded is incomplete in the same way.
      */
     public static @Nullable PracticeDefinition recordedBy(PracticeRevision revision) {
         if (revision.getSlug() == null
@@ -130,7 +149,10 @@ public record PracticeDefinition(
                 || revision.getEvidenceRequirements() == null
                 || revision.getReviewWhen() == null
                 || revision.getSubject() == null
-                || revision.getAutomatedReviewPolicy() == null) {
+                || revision.getAutomatedReviewPolicy() == null
+                || (revision.getJudgment() == null
+                        && revision.getAutomatedReviewPolicy().automatedReview().mode()
+                                != PracticeAutomatedReviewMode.NONE)) {
             return null;
         }
         return new PracticeDefinition(
@@ -141,6 +163,7 @@ public record PracticeDefinition(
                 revision.getSubject(),
                 revision.getPrecondition(),
                 revision.getCriteria(),
+                revision.getJudgment(),
                 revision.getPrecomputeScript(),
                 revision.getAutomatedReviewPolicy(),
                 revision.getWhyItMatters(),
@@ -158,16 +181,17 @@ public record PracticeDefinition(
         if (automatedReviewPolicy.automatedReview().mode() == PracticeAutomatedReviewMode.NONE) {
             return this;
         }
+        boolean shippedWithdrawn =
+                shipped.automatedReviewPolicy().automatedReview().mode() == PracticeAutomatedReviewMode.NONE;
         return new PracticeDefinition(
                 name,
                 signals,
-                shipped.automatedReviewPolicy().automatedReview().mode() == PracticeAutomatedReviewMode.NONE
-                        ? List.of()
-                        : evidenceRequirements,
+                shippedWithdrawn ? List.of() : evidenceRequirements,
                 reviewWhen,
                 subject,
                 null,
                 criteria,
+                shippedWithdrawn ? null : judgment,
                 null,
                 shipped.automatedReviewPolicy(),
                 whyItMatters,
@@ -190,6 +214,7 @@ public record PracticeDefinition(
                 subject,
                 precondition,
                 criteria,
+                judgment,
                 precomputeScript,
                 automatedReviewPolicy,
                 groupSlug);

@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.event.WorkspacesInitializedEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -52,6 +53,7 @@ class CatalogInstallationConcurrencyIntegrationTest extends AbstractWorkspaceInt
                 definition.subject(),
                 definition.precondition(),
                 "Committed catalog criteria",
+                PracticeJudgment.holistic(),
                 definition.precomputeScript(),
                 definition.automatedReviewPolicy(),
                 definition.whyItMatters(),

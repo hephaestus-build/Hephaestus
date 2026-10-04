@@ -18,11 +18,35 @@ import { isRecord } from "../../../main/resources/agent/pi-observation-normalize
 // The runner reads /workspace and the environment at module scope, so each scenario is a child
 // process: this file re-enters itself with the SDK mocked and drives one review through it.
 
+/** The questions every staged practice asks, as the practice index stages them. */
+const QUESTIONS = [
+	{
+		key: "calls_insecure",
+		title: "Insecure call",
+		question: "Does the change add a call to insecure()?",
+		yes: "A changed line calls insecure().",
+		no: "No changed line calls insecure().",
+	},
+	{
+		key: "call_guarded",
+		title: "Guarded call",
+		question: "Is every insecure() call the change adds guarded by a check?",
+		yes: "Each added call sits behind a check.",
+		no: "An added call runs unguarded.",
+	},
+];
+
+// The server decides the outcome from the answers; what it admits carries both, and the rule that decided.
 const admittedObservation = {
 	outcome: "NOT_MET",
 	id: "observation-1",
 	practiceSlug: "test-practice",
 	severity: "MAJOR",
+	ruleId: "unguarded-insecure-call",
+	answers: [
+		{ question: "calls_insecure", answer: "YES" },
+		{ question: "call_guarded", answer: "NO" },
+	],
 	anchorable: true,
 	citations: [
 		{
@@ -43,26 +67,50 @@ const admittedObservation = {
 	},
 };
 
-const changeCitation = {
+/** The changed line as the model names it: the file, its side and its line; never its text. */
+const changeLine = { path: "src/Auth.java", side: "NEW", startLine: 10 };
+
+/** The same line with the source and artifact spelled out, as an earlier contract asked for them. */
+const sourcedChangeLine = {
+	...changeLine,
 	sourceKind: "scm.pull-request.diff",
 	artifactPath: "evidence/change.json",
-	path: "src/Auth.java",
-	side: "NEW",
-	startLine: 10,
-	endLine: 10,
-	quote: "+ insecure();",
 };
+
+/** A line of the change that is not there: the diff adds only [L10]. */
+const missingLine = (startLine: number) => ({ ...changeLine, startLine });
 
 const OVERLONG_SUMMARY = "A summary that runs on ".repeat(8).trim();
 
-function observation(slug: string, summary: string, citation: unknown = changeCitation) {
+/**
+ * One practice's answers as the model submits them: evidence listed once, each answer citing it by number. The
+ * first question rests on `entry`, the second on the changed line. `guarded` is the second answer, so the same
+ * practice can be answered both ways.
+ */
+function observation(
+	slug: string,
+	summary: string,
+	entry: unknown = changeLine,
+	guarded: "YES" | "NO" = "NO",
+) {
+	const ownEntry = entry !== changeLine;
 	return {
 		practiceSlug: slug,
 		summary,
-		outcome: "NOT_MET",
-		severity: "MAJOR",
-		evidenceRationale: "The changed authentication code calls insecure().",
-		evidence: { citations: [citation] },
+		evidence: ownEntry ? [entry, changeLine] : [changeLine],
+		answers: {
+			calls_insecure: {
+				cites: [1],
+				because: "The changed authentication code calls insecure().",
+				answer: "YES",
+			},
+			call_guarded: {
+				cites: [ownEntry ? 2 : 1],
+				because:
+					guarded === "YES" ? "The call sits behind a check." : "Nothing checks before the call.",
+				answer: guarded,
+			},
+		},
 	};
 }
 
@@ -78,30 +126,71 @@ function feedbackUnit(practiceSlug: string, observationId: string) {
 	};
 }
 
-/** An observation that decides nothing; it must show it read the change, as admission demands. */
-const undecided = (consulted: string[]) => ({
+/** An observation whose guard question the evidence leaves open, settled by `wouldSettleIt` when given. */
+function guardUndetermined(slug: string, summary: string, wouldSettleIt?: string) {
+	const answered = observation(slug, summary);
+	return {
+		...answered,
+		answers: {
+			...answered.answers,
+			call_guarded: {
+				...answered.answers.call_guarded,
+				answer: "UNDETERMINED",
+				because: "The guard, if any, is in a caller outside this change.",
+				...(wouldSettleIt === undefined ? {} : { wouldSettleIt }),
+			},
+		},
+	};
+}
+
+/** The pull request's record, named by its staged path: a record is its own artifact and source. */
+const metadataLine = { path: "evidence/metadata.json", startLine: 1 };
+
+/**
+ * Answers that cite only the pull request's record, the absence resting on a search of `consulted`: a
+ * practice that reads the change must show it read it, by citing it or searching it.
+ */
+const fromMetadata = (consulted: string[]) => ({
 	practiceSlug: "test-practice",
 	summary: "Nothing to assess in this change",
-	outcome: "NOT_APPLICABLE",
-	severity: null,
-	evidenceRationale: "The change touches only metadata.",
-	evidence: {
-		citations: [
-			{
-				sourceKind: "scm.pull-request.core",
-				artifactPath: "evidence/metadata.json",
-				path: "evidence/metadata.json",
-				startLine: 1,
-				quote: '"title": "Add login"',
-			},
-		],
-		inapplicability: {
-			consulted,
-			subject: "authentication calls",
-			ruledOutBy: "no code changed",
+	evidence: [metadataLine],
+	answers: {
+		calls_insecure: {
+			cites: [1],
+			because: "The change touches only metadata.",
+			answer: "NO",
+			search: { consulted, lookedFor: "a call to insecure()", boundary: "the staged change only" },
+		},
+		call_guarded: {
+			cites: [1],
+			because: "With no call added there is no guard to look for.",
+			answer: "UNDETERMINED",
+			wouldSettleIt: "the callers of Auth outside this change",
 		},
 	},
 });
+
+/** What one recorded observation answered, by question key, as the runner wrote it to out/. */
+function answersOf(recorded: Record<string, unknown> | undefined): Record<string, unknown> {
+	assert.ok(recorded !== undefined && Array.isArray(recorded.answers));
+	const answers: unknown[] = recorded.answers;
+	return Object.fromEntries(
+		answers.map((item) => {
+			assert.ok(isRecord(item) && typeof item.question === "string");
+			return [item.question, item.answer];
+		}),
+	);
+}
+
+/** The citations each answer of one recorded observation carries, in answer order. */
+function citationsOf(recorded: Record<string, unknown> | undefined): unknown[] {
+	assert.ok(recorded !== undefined && Array.isArray(recorded.answers));
+	const answers: unknown[] = recorded.answers;
+	return answers.map((item) => {
+		assert.ok(isRecord(item));
+		return item.citations;
+	});
+}
 
 function readObservations(path: string) {
 	const payload: unknown = JSON.parse(readFileSync(path, "utf8"));
@@ -128,8 +217,39 @@ interface CustomTool {
 	name: string;
 	description: string;
 	parameters: unknown;
+	prepareArguments?: (args: unknown) => unknown;
 	execute: (id: string, input: unknown) => Promise<unknown>;
 }
+
+/** A call as the SDK makes it: the arguments put in shape by the tool first, then executed. */
+async function viaSdk(tool: CustomTool, id: string, args: unknown): Promise<unknown> {
+	return tool.execute(id, tool.prepareArguments === undefined ? args : tool.prepareArguments(args));
+}
+
+/** The text of a tool result, as the model reads it. */
+function textOf(result: unknown): string {
+	const content: unknown = isRecord(result) ? result.content : undefined;
+	const first: unknown = Array.isArray(content) ? content[0] : undefined;
+	return isRecord(first) && typeof first.text === "string" ? first.text : "";
+}
+
+/** What a call answered: its text when it stored something, the refusal's message when it did not. */
+async function answerOf(call: Promise<unknown>): Promise<string> {
+	try {
+		return `accepted ${JSON.stringify(await call)}`;
+	} catch (error) {
+		return error instanceof Error ? error.message : String(error);
+	}
+}
+
+/** The practices a measuring turn asks about, as its prompt lists them. */
+function practicesAsked(text: string): string[] {
+	return (/Evaluate these practices: (?<slugs>[^.\n]+)\./u.exec(text)?.groups?.slugs ?? "")
+		.split(", ")
+		.filter(Boolean);
+}
+
+/** Scenarios whose practices span several catalog groups, so each group is a turn of its own. */
 
 const scenario = process.env.PI_ORCHESTRATION_SCENARIO;
 if (scenario !== undefined && scenario !== "") {
@@ -141,9 +261,13 @@ if (scenario !== undefined && scenario !== "") {
 	const admitted = (): unknown[] => {
 		switch (scenario) {
 			case "compose-abstention": {
-				// Admission answers with every recorded outcome, abstentions included, as it was measured.
+				// Admission answers with an outcome for every recorded observation, abstentions included, as it
+				// derived them from the answers.
+				const derived = ["MET", "NOT_APPLICABLE", "UNDETERMINED"];
 				return readObservations(nodePath.join(cwd, "admission.json")).map((posted, index) => ({
 					...posted,
+					outcome: derived[index],
+					severity: null,
 					id: `observation-${index + 1}`,
 					citations: [],
 					anchorable: false,
@@ -170,7 +294,11 @@ if (scenario !== undefined && scenario !== "") {
 		}
 	};
 	mock.method(globalThis, "fetch", async (_input: unknown, init?: RequestInit) => {
-		if (scenario === "draft-revision" || scenario === "compose-abstention") {
+		if (
+			scenario === "draft-revision" ||
+			scenario === "compose-abstention" ||
+			scenario === "anchor"
+		) {
 			assert.ok(typeof init?.body === "string");
 			writeFileSync(nodePath.join(cwd, "admission.json"), init.body);
 		}
@@ -206,8 +334,19 @@ if (scenario !== undefined && scenario !== "") {
 		settleIdle();
 		await promise;
 	};
-	/** The session's event handler, so a scenario can emit what the SDK would. */
-	let emit: (event: unknown) => void = noHandler;
+	let sessions = 0;
+	/** What the loader is given to frame every session: a file, since some scenarios expect no events. */
+	const keepLoaderOptions = (options: {
+		systemPrompt?: unknown;
+		agentsFilesOverride?: () => unknown;
+	}) =>
+		writeFileSync(
+			nodePath.join(cwd, "system-prompt.json"),
+			JSON.stringify({
+				systemPrompt: options.systemPrompt,
+				agentsFiles: options.agentsFilesOverride?.(),
+			}),
+		);
 	mock.module("@earendil-works/pi-coding-agent", {
 		namedExports: {
 			defineTool: (tool: unknown) => tool,
@@ -215,6 +354,9 @@ if (scenario !== undefined && scenario !== "") {
 			getAgentDir: () => cwd,
 			DefaultResourceLoader: class {
 				readonly loaded = Promise.resolve();
+				constructor(options: { systemPrompt?: unknown; agentsFilesOverride?: () => unknown }) {
+					keepLoaderOptions(options);
+				}
 				async reload() {
 					await this.loaded;
 				}
@@ -233,6 +375,8 @@ if (scenario !== undefined && scenario !== "") {
 				},
 			},
 			async createAgentSession(options: { tools: string[]; customTools: CustomTool[] }) {
+				sessions += 1;
+				const sessionNumber = sessions;
 				record(`create:session tools=${options.tools.join(",")}`);
 				if (scenario === "session-init") {
 					throw new Error("session initialization failed");
@@ -240,6 +384,8 @@ if (scenario !== undefined && scenario !== "") {
 				for (const custom of options.customTools) {
 					record(`exposure:${custom.name}=${String(Reflect.get(custom, "exposure"))}`);
 				}
+				/** This session's event handler, so a scenario can emit what the SDK would. */
+				let emit: (event: unknown) => void = noHandler;
 				const tool = (name: string) => {
 					const found = options.customTools.find((item) => item.name === name);
 					assert.ok(found, `${name} is registered`);
@@ -291,6 +437,7 @@ if (scenario !== undefined && scenario !== "") {
 						async prompt(text: string) {
 							prompts += 1;
 							record(`prompt:${prompts}`);
+							record(`session-${sessionNumber}:prompt-${prompts}`);
 							writeFileSync(nodePath.join(cwd, `prompt-${prompts}.md`), text);
 							if (scenario === "provider-error") {
 								// The provider answers every call with an error the SDK does not retry.
@@ -411,6 +558,22 @@ if (scenario !== undefined && scenario !== "") {
 										],
 									});
 									record(`draft-closed:${JSON.stringify(closed)}`);
+									return;
+								}
+								if (scenario === "groups") {
+									// Composition, once, in the session that measured.
+									record(`composed-in:session-${sessionNumber}`);
+									const decided = await tool("report_feedback").execute("f-groups", {
+										units: [
+											{
+												channel: "IN_CONTEXT",
+												practiceSlug: "test-practice",
+												action: "WITHHOLD",
+												withholdReason: "BELOW_BAR",
+											},
+										],
+									});
+									record(`feedback-groups:${JSON.stringify(decided)}`);
 									return;
 								}
 								// The composition turn, in the same session.
@@ -543,19 +706,30 @@ if (scenario !== undefined && scenario !== "") {
 										error instanceof Error ? error.message : String(error),
 									);
 								record(`feedback-alone:${alone}`);
+								// The list is typed as one; a list sent as JSON text anyway is read before the SDK
+								// checks the call, so the call is not refused whole for its type.
+								assert.match(
+									schema,
+									/"units":\{"description":"The units, as a JSON array","type":"array"/u,
+								);
+								const withhold = {
+									channel: "IN_CONTEXT",
+									practiceSlug: "test-practice",
+									basedOn: ["observation-1"],
+									action: "WITHHOLD",
+									withholdReason: "ALREADY_SAID",
+								};
+								assert.deepEqual(
+									feedback.prepareArguments?.({ units: JSON.stringify([withhold]) }),
+									{
+										units: [withhold],
+									},
+								);
 								// A decision to stay quiet on the work, stored before the card: written after it,
-								// since the server reads the first thirty units and delivers no WITHHOLD.
-								await feedback.execute("f-w", {
-									units: [
-										{
-											channel: "IN_CONTEXT",
-											practiceSlug: "test-practice",
-											basedOn: ["observation-1"],
-											action: "WITHHOLD",
-											withholdReason: "ALREADY_SAID",
-										},
-									],
-								});
+								// since the server reads the first thirty units and delivers no WITHHOLD. Sent as
+								// JSON text, and stored all the same.
+								const quiet = await viaSdk(feedback, "f-w", { units: JSON.stringify([withhold]) });
+								record(`feedback-text:${JSON.stringify(quiet)}`);
 								mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
 								// An earlier review of this same merge request is the same piece of work, not a second.
 								writeFileSync(
@@ -708,24 +882,181 @@ if (scenario !== undefined && scenario !== "") {
 							// The SDK checks a call against this schema all or nothing, so it carries the shape and
 							// the vocabulary and no rule: a rule is applied per observation, by the tool.
 							const schema = JSON.stringify(report.parameters);
-							for (const keyword of ["maxLength", "additionalProperties", "enum", "pattern"]) {
+							for (const keyword of [
+								"maxLength",
+								'"additionalProperties":false',
+								"enum",
+								"pattern",
+							]) {
 								assert.ok(
-									!schema.includes(`"${keyword}"`),
+									!schema.includes(keyword.startsWith('"') ? keyword : `"${keyword}"`),
 									`${keyword} in ${schema.slice(0, 200)}`,
 								);
 							}
-							assert.match(schema, /One of: evidence\/change\.json, evidence\/metadata\.json/u);
 							assert.match(schema, /One of: OLD, NEW/u);
-							// Container types go, so items are answered one by one; scalar types stay as the model's hint.
+							assert.match(schema, /One of: scm\.pull-request\.core, scm\.pull-request\.diff\b/u);
+							// Types stay, containers included: a model shown a list writes a list, and one sent as
+							// JSON text anyway is read before the SDK checks the call (prepareArguments).
 							const parameters: unknown = report.parameters;
-							assert.ok(typeof parameters === "object" && parameters !== null);
-							const properties: unknown = Reflect.get(parameters, "properties");
-							assert.ok(typeof properties === "object" && properties !== null);
-							const items = JSON.stringify(Reflect.get(properties, "observations"));
-							assert.ok(!items.includes('"type":"object"'), items.slice(0, 200));
-							assert.ok(!items.includes('"type":"array"'), items.slice(0, 200));
+							assert.ok(isRecord(parameters) && isRecord(parameters.properties));
+							const listed: unknown = parameters.properties.observations;
+							assert.ok(isRecord(listed));
+							assert.equal(listed.type, "array");
+							assert.ok(isRecord(listed.items) && listed.items.type === "object");
+							const items = JSON.stringify(listed);
+							assert.ok(!/"anyOf"|"oneOf"|JSON-encoded/u.test(items), items.slice(0, 200));
 							assert.match(items, /"startLine":\{"description":"[^"]*","type":"integer"\}/u);
-							assert.match(items, /Required: practiceSlug, summary/u);
+							assert.match(items, /Required: practiceSlug, summary, evidence, answers\./u);
+							// Evidence names lines, never their text, and the runner works out where they are.
+							for (const field of ['"quote"', '"sourceKind"', '"artifactPath"']) {
+								assert.ok(!items.includes(field), `${field} in ${items.slice(0, 200)}`);
+							}
+							assert.match(items, /"cites":\{"description":"The numbers of the evidence entries/u);
+							// One answer shape for every key: the schema rides on every call, so it does not grow with
+							// the questions of the review's practices; the turn prompt names each practice's keys.
+							assert.equal(items.split('"because"').length - 1, 1, items.slice(0, 400));
+							assert.match(items, /"answers":\{"description":"[^"]*keyed by the question's key/u);
+							assert.ok(!items.includes('"calls_insecure"'), items.slice(0, 400));
+							if (scenario === "groups") {
+								const asked = practicesAsked(text);
+								record(`asked:session-${sessionNumber}:${asked.join(",")}`);
+								await report.execute(`groups-${prompts}`, {
+									observations: asked.map((slug) => observation(slug, `Recorded for ${slug}`)),
+								});
+								return;
+							}
+							if (scenario === "skip") {
+								// A question its practice says to skip, given another's answer, may be left out; one it
+								// does not may not.
+								const { call_guarded: _guard, ...answeredYes } = observation(
+									"test-practice",
+									"Unsafe authentication call",
+								).answers;
+								const unskippable = await answerOf(
+									report.execute("s-yes", {
+										observations: [
+											{
+												...observation("test-practice", "Unsafe authentication call"),
+												answers: answeredYes,
+											},
+										],
+									}),
+								);
+								record(`skip-refused:${unskippable}`);
+								const noCall = fromMetadata(["scm.pull-request.core", "scm.pull-request.diff"]);
+								const { call_guarded: _moot, ...answeredNo } = noCall.answers;
+								const skipped = await answerOf(
+									report.execute("s-no", { observations: [{ ...noCall, answers: answeredNo }] }),
+								);
+								record(`skip-stored:${skipped}`);
+								return;
+							}
+							if (scenario === "answers") {
+								// Every problem of an item is named at once, and each item is answered on its own.
+								const { call_guarded: _unanswered, ...partial } = observation(
+									"test-practice",
+									"Unsafe authentication call",
+								).answers;
+								const missing = await report
+									.execute("a-missing", {
+										observations: [
+											{
+												...observation("test-practice", "Unsafe authentication call"),
+												answers: partial,
+											},
+										],
+									})
+									.then(() => "accepted")
+									.catch((error: unknown) =>
+										error instanceof Error ? error.message : String(error),
+									);
+								record(`answers-missing:${missing}`);
+								const foreign = await report
+									.execute("a-foreign", {
+										observations: [
+											{
+												...observation("test-practice", "Unsafe authentication call"),
+												answers: { ...partial, guarded: partial.calls_insecure },
+											},
+										],
+									})
+									.then(() => "accepted")
+									.catch((error: unknown) =>
+										error instanceof Error ? error.message : String(error),
+									);
+								record(`answers-foreign:${foreign}`);
+								// The outcome is the server's to derive: a model that states one is told so.
+								const stated = await report
+									.execute("a-stated", {
+										observations: [
+											{
+												...observation("test-practice", "Unsafe authentication call"),
+												outcome: "NOT_MET",
+												severity: "MAJOR",
+											},
+										],
+									})
+									.then(() => "accepted")
+									.catch((error: unknown) =>
+										error instanceof Error ? error.message : String(error),
+									);
+								record(`answers-stated:${stated}`);
+								const unsettled = await report
+									.execute("a-unsettled", {
+										observations: [
+											guardUndetermined("test-practice", "Unsafe authentication call"),
+										],
+									})
+									.then(() => "accepted")
+									.catch((error: unknown) =>
+										error instanceof Error ? error.message : String(error),
+									);
+								record(`answers-unsettled:${unsettled}`);
+								// Answers sent as a list, each naming its question, are keyed before the SDK checks the
+								// call, and are the same answers.
+								const undetermined = guardUndetermined(
+									"test-practice",
+									"Unsafe authentication call",
+									"the callers of Auth outside this change",
+								);
+								const answerList = await viaSdk(report, "a-list", {
+									observations: [
+										{
+											...undetermined,
+											answers: Object.entries(undetermined.answers).map(([question, answer]) => ({
+												question,
+												...answer,
+											})),
+										},
+									],
+								});
+								record(`answers-list:${JSON.stringify(answerList)}`);
+								// Citations written inside an answer, as an earlier contract had them, still count.
+								const inline = await viaSdk(report, "a-inline", {
+									observations: [
+										{
+											revises: "test-practice",
+											practiceSlug: "test-practice",
+											summary: "Cited inside the answers",
+											answers: {
+												calls_insecure: {
+													citations: [changeLine],
+													because: "The changed authentication code calls insecure().",
+													answer: "YES",
+												},
+												call_guarded: {
+													citations: [changeLine],
+													because: "The guard, if any, is in a caller outside this change.",
+													answer: "UNDETERMINED",
+													wouldSettleIt: "the callers of Auth outside this change",
+												},
+											},
+										},
+									],
+								});
+								record(`answers-inline:${JSON.stringify(inline)}`);
+								return;
+							}
 							if (scenario === "repeat") {
 								// A codemode script reading one file six times is the script's work: its nested
 								// calls carry the script's call id and never trip the guard on the model's calls.
@@ -752,12 +1083,13 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							if (scenario === "refusal-cap") {
 								// The first item is sent three times as it was; the rest each differ, as a session's
-								// attempts at a fix do.
+								// attempts at a fix do. Each cites a line the change does not have.
 								const wrong = (attempt: number) =>
-									observation("test-practice", "Wrong quote", {
-										...changeCitation,
-										quote: `+ notInTheDiff${attempt <= 3 ? "" : String(attempt)}();`,
-									});
+									observation(
+										"test-practice",
+										"Wrong line",
+										missingLine(attempt <= 3 ? 11 : 10 + attempt),
+									);
 								for (let attempt = 1; attempt <= 9; attempt += 1) {
 									await report
 										.execute(`o-${attempt}`, { observations: [wrong(attempt)] })
@@ -772,81 +1104,57 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							if (scenario === "tree-citation") {
 								let hasDraft = false;
+								// A path outside the staged records and the change is a file of the checkout: the
+								// runner records it against the captured HEAD without being told the source.
 								const cite = async (
 									path: string,
-									quote: string,
+									startLine: number,
 									summary = "Unsafe authentication call",
 								) =>
 									report.execute("o-1", {
 										observations: [
 											{
-												...observation("test-practice", summary, {
-													sourceKind: "scm.repository.tree",
-													artifactPath: "repos/primary/.git/HEAD",
-													path,
-													startLine: 2,
-													quote,
-												}),
+												...observation("test-practice", summary, { path, startLine }),
 												...(hasDraft ? { revises: "test-practice" } : {}),
 											},
 										],
 									});
+								await assert.rejects(cite("src/Auth.java", 9), /there is no \[L9\]/u);
+								await assert.rejects(cite("src/Missing.java", 2), /no such file/u);
 								await assert.rejects(
-									cite("src/Auth.java", "insecure(user);"),
-									/\[L2\] reads " {2}insecure\(\);", not "insecure\(user\);"/u,
-								);
-								await assert.rejects(cite("src/Missing.java", "insecure();"), /no such file/u);
-								await assert.rejects(
-									cite("src/logo.png", "PNG"),
+									cite("src/logo.png", 1),
 									/binary and has no lines to quote; cite the commit that adds it in evidence\/commits\.json/u,
 								);
-								await assert.rejects(cite("../task.json", "schemaVersion"), /no such file/u);
+								await assert.rejects(cite("../task.json", 1), /no such file/u);
 								record("citation:refused");
-								await cite("src/Auth.java", "insecure();");
+								await cite("src/Auth.java", 2);
 								hasDraft = true;
 								record("citation:stored");
-								// A citation at a revision in the history is read through .git; a wrong line is
-								// corrected there too, and an unknown revision is refused.
+								// A citation at a revision in the history is read through .git, where the line holds
+								// what it held then, and an unknown revision is refused.
 								const historySha = readFileSync(nodePath.join(cwd, "history-sha"), "utf8");
 								const atRevision = async (revision: string, startLine: number) =>
 									report.execute("o-2", {
 										observations: [
 											{
 												...observation("test-practice", `At revision ${startLine}`, {
-													sourceKind: "scm.repository.tree",
-													artifactPath: "repos/primary/.git/HEAD",
 													path: "src/Auth.java",
 													revision,
 													startLine,
-													quote: "insecure();",
 												}),
 												revises: "test-practice",
 											},
 										],
 									});
-								const relocated: unknown = await atRevision(historySha, 3);
+								const atHistory = textOf(await atRevision(historySha, 3));
 								record(
-									`citation:history:${typeof relocated === "object" && relocated !== null && "details" in relocated && typeof relocated.details === "object" && relocated.details !== null && "revised" in relocated.details ? String(relocated.details.revised) : "?"}`,
+									`citation:history:${/src\/Auth\.java:3-3 recorded (?<text>"[^"]*")/u.exec(atHistory)?.groups?.text ?? atHistory}`,
 								);
 								await assert.rejects(atRevision("b".repeat(40), 2), /no such file at revision/u);
 								record("citation:history-refused");
-								// Coordinates alone: the runner records the line and echoes what it recorded.
-								const echoed: unknown = await cite("src/Auth.java", "", "Cited by line alone");
-								const firstContent: unknown =
-									typeof echoed === "object" &&
-									echoed !== null &&
-									"content" in echoed &&
-									Array.isArray(echoed.content)
-										? echoed.content[0]
-										: undefined;
-								const echoedText =
-									typeof firstContent === "object" &&
-									firstContent !== null &&
-									"text" in firstContent &&
-									typeof firstContent.text === "string"
-										? firstContent.text
-										: "";
-								record(`citation:echo:${echoedText.split("\n")[1] ?? ""}`);
+								// The runner records what the line says and echoes it, so the model checks its draft by it.
+								const echoed = textOf(await cite("src/Auth.java", 2, "Cited by line alone"));
+								record(`citation:echo:${echoed.split("\n")[1] ?? ""}`);
 								writeFileSync(nodePath.join(cwd, "out", "stray.txt"), "left by a session");
 								return;
 							}
@@ -863,10 +1171,10 @@ if (scenario !== undefined && scenario !== "") {
 								await assert.rejects(
 									report.execute("replacement-without-diff", {
 										observations: [
-											{ ...undecided(["scm.pull-request.core"]), revises: "test-practice" },
+											{ ...fromMetadata(["scm.pull-request.core"]), revises: "test-practice" },
 										],
 									}),
-									/must show it read the change/u,
+									/rests on an absence in scm\.pull-request\.diff as well: add it to its search\.consulted/u,
 								);
 								assert.equal(
 									readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
@@ -875,12 +1183,87 @@ if (scenario !== undefined && scenario !== "") {
 								record("replacement-witness:preserved");
 								return;
 							}
+							if (
+								scenario === "anchor" ||
+								scenario === "anchor-side" ||
+								scenario === "anchor-words"
+							) {
+								// One evidence entry both answers cite, its line number or side off, its anchor right.
+								const anchoredAt = (summary: string, entry: Record<string, unknown>) => ({
+									...observation("test-practice", summary),
+									evidence: [entry],
+								});
+								// A reply on one line of the events file, whether it stored or refused.
+								const sent = async (id: string, item: unknown) =>
+									JSON.stringify(
+										await report
+											.execute(id, { observations: [item] })
+											.then(textOf)
+											.catch((error: unknown) =>
+												error instanceof Error ? error.message : String(error),
+											),
+									);
+								if (scenario === "anchor") {
+									record(
+										`anchor-nowhere:${await sent(
+											"an-nowhere",
+											anchoredAt("Anchored nowhere", {
+												...changeLine,
+												startLine: 12,
+												anchor: "guard(token);",
+											}),
+										)}`,
+									);
+								}
+								// The whole line, a few words of it, or the whole line on the other side.
+								const entry = {
+									anchor: { ...changeLine, startLine: 12, anchor: " insecure(); " },
+									"anchor-words": { ...changeLine, startLine: 12, anchor: "insecure(" },
+									"anchor-side": { ...changeLine, side: "OLD", anchor: "insecure();" },
+								}[scenario];
+								record(
+									`anchor-moved:${await sent("an-moved", anchoredAt("Anchored at the changed line", entry))}`,
+								);
+								return;
+							}
+							if (scenario === "brief-search") {
+								// The absence rests on a search of the change alone; the record is in the brief, whole.
+								record(
+									`brief-search:${JSON.stringify(
+										textOf(
+											await report.execute("bs-1", {
+												observations: [fromMetadata(["scm.pull-request.diff"])],
+											}),
+										),
+									)}`,
+								);
+								return;
+							}
+							if (scenario === "revise-first") {
+								// The first send already names the draft it corrects: the one an earlier, refused send was.
+								record(
+									`revise-first:${JSON.stringify(
+										textOf(
+											await report.execute("rf-1", {
+												observations: [
+													{
+														...observation("test-practice", "Revised before any draft was stored"),
+														revises: "test-practice",
+													},
+												],
+											}),
+										),
+									)}`,
+								);
+								return;
+							}
 							if (scenario === "draft-revision") {
-								const positive = {
-									...observation("test-practice", "Authentication call"),
-									outcome: "MET",
-									severity: null,
-								};
+								const positive = observation(
+									"test-practice",
+									"Authentication call",
+									changeLine,
+									"YES",
+								);
 								const negative = observation("test-practice", "Authentication call");
 								const readState = () =>
 									readObservations(nodePath.join(cwd, "out/review-state.json"));
@@ -906,17 +1289,14 @@ if (scenario !== undefined && scenario !== "") {
 									report.execute("invalid", {
 										observations: [
 											{
-												...negative,
+												...observation("test-practice", "Authentication call", missingLine(11)),
 												revises: "test-practice",
-												evidence: {
-													citations: [{ ...changeCitation, quote: "+ notInTheDiff();" }],
-												},
 											},
 										],
 									}),
-									/citation does not match/u,
+									/does not hold/u,
 								);
-								assert.equal(readState()[0]?.outcome, "MET");
+								assert.equal(answersOf(readState()[0]).call_guarded, "YES");
 								const corrected = await report.execute("correct", {
 									observations: [{ ...negative, revises: "test-practice" }],
 								});
@@ -945,27 +1325,16 @@ if (scenario !== undefined && scenario !== "") {
 							if (scenario === "compose-abstention") {
 								await report.execute("o-mixed", {
 									observations: [
+										observation("test-practice", "Authentication call", changeLine, "YES"),
 										{
-											...observation("test-practice", "Authentication call"),
-											outcome: "MET",
-											severity: null,
-										},
-										{
-											...undecided(["scm.pull-request.core", "scm.pull-request.diff"]),
+											...fromMetadata(["scm.pull-request.core", "scm.pull-request.diff"]),
 											practiceSlug: "second-practice",
 										},
-										{
-											...observation("third-practice", "Whether the call is reachable"),
-											outcome: "UNDETERMINED",
-											severity: null,
-											evidence: {
-												citations: [changeCitation],
-												undecidability: {
-													openQuestion: "Is insecure() reachable from the login flow?",
-													wouldSettleIt: "The callers of Auth outside this change.",
-												},
-											},
-										},
+										guardUndetermined(
+											"third-practice",
+											"Whether the call is reachable",
+											"The callers of Auth outside this change.",
+										),
 									],
 								});
 								return;
@@ -1000,59 +1369,93 @@ if (scenario !== undefined && scenario !== "") {
 								}
 								return;
 							}
+							// An absence the practice's subject makes the change's must have searched the change.
 							await assert.rejects(
-								report.execute("o-na", { observations: [undecided(["scm.pull-request.core"])] }),
-								/must show it read the change/u,
+								report.execute("o-na", { observations: [fromMetadata(["scm.pull-request.core"])] }),
+								/rests on an absence in scm\.pull-request\.diff as well: add it to its search\.consulted/u,
+							);
+							// With no absence to search, an answer that cites only the record still owes a changed line:
+							// the brief withholds this change, so nothing shows it was read.
+							await assert.rejects(
+								report.execute("o-unread", {
+									observations: [
+										{
+											...observation(
+												"test-practice",
+												"Answered from the record alone",
+												metadataLine,
+											),
+											evidence: [metadataLine],
+											answers: {
+												calls_insecure: {
+													cites: [1],
+													because: "The record says so.",
+													answer: "YES",
+												},
+												call_guarded: { cites: [1], because: "The record says so.", answer: "YES" },
+											},
+										},
+									],
+								}),
+								/'test-practice' reads the change, and none of its answers shows it did/u,
 							);
 							await report.execute("o-na2", {
-								observations: [undecided(["scm.pull-request.core", "scm.pull-request.diff"])],
+								observations: [fromMetadata(["scm.pull-request.core", "scm.pull-request.diff"])],
 							});
-							const revise = (summary: string, citation: unknown = changeCitation) => ({
+							const revise = (summary: string, entry: unknown = changeLine) => ({
 								revises: "test-practice",
-								...observation("test-practice", summary, citation),
+								...observation("test-practice", summary, entry),
 							});
 							const oneBraceTooMany = `${JSON.stringify([revise("Sent as a string with an extra brace")]).slice(0, -1)}}]`;
 							await report.execute("o-00", { observations: oneBraceTooMany });
 							const intact = JSON.stringify([revise("Sent as a string closed one brace early")]);
-							const early = intact.replace(',"evidence":{', '},"evidence":{');
+							const early = intact.replace(',"answers":{', '},"answers":{');
 							assert.notEqual(early, intact);
 							await report.execute("o-01", { observations: early });
 							const two = JSON.stringify([
-								revise("First of two, its evidence left open"),
+								revise("First of two, its answers left open"),
 								observation("second-practice", "Second of two, starting inside the first"),
 							]);
-							const unclosed = two.replace('}]}},{"practiceSlug"', '}]},{"practiceSlug"');
+							const unclosed = two.replace('"NO"}}},{"practiceSlug"', '"NO"}},{"practiceSlug"');
 							assert.notEqual(unclosed, two);
 							await report.execute("o-02", { observations: unclosed });
-							// The evidence object left open, so the item's own keys land inside it: closed before them.
-							// Keys in the order the model writes them, so evidence comes before the item's own keys.
-							const sorted = Object.fromEntries(
-								Object.entries(revise("Evidence left open before the item's own keys")).toSorted(
-									([a], [b]) => a.localeCompare(b),
-								),
+							// The answers object left open, so the item's own keys land inside it: closed before them.
+							// Keys in an order a model may write them, the answers before the item's own keys.
+							const { evidence, answers, ...own } = revise(
+								"Answers left open before the item's own keys",
 							);
-							const whole = JSON.stringify([sorted]);
-							const evidenceOpen = whole.replace(/\}(?<next>,"evidenceRationale")/u, "$<next>");
-							assert.notEqual(evidenceOpen, whole);
-							const evidenceOpenReply = await report.execute("o-03", {
-								observations: evidenceOpen,
+							const whole = JSON.stringify([{ evidence, answers, ...own }]);
+							const answersOpen = whole.replace(/\}(?<next>,"revises")/u, "$<next>");
+							assert.notEqual(answersOpen, whole);
+							const answersOpenReply = await report.execute("o-03", {
+								observations: answersOpen,
 							});
-							record(`repaired-evidence-open:${JSON.stringify(evidenceOpenReply)}`);
-							await report
-								.execute("o-0", { observations: "[{not json" })
-								.then(() => record("unparsed:accepted"))
-								.catch((error: unknown) =>
-									record(`unparsed:${error instanceof Error ? error.message : String(error)}`),
-								);
-							const { side: _side, ...sideless } = changeCitation;
+							record(`repaired-answers-open:${JSON.stringify(answersOpenReply)}`);
+							// As the SDK sends it: a list that arrives as JSON text is read before the call is checked,
+							// a line written as the view prints it included, and recorded like any other.
+							const asText = await viaSdk(report, "o-text", {
+								observations: JSON.stringify([
+									{
+										...revise("Sent as JSON text"),
+										evidence: [{ ...changeLine, startLine: "[L10]" }],
+									},
+								]),
+							});
+							record(`text-recorded:${JSON.stringify(asText)}`);
+							// One nobody can read is refused by the tool, with where it broke, and charges no practice.
+							record(
+								`unparsed:${await answerOf(viaSdk(report, "o-0", { observations: "[{not json" }))}`,
+							);
+							const { side: _side, ...sideless } = sourcedChangeLine;
 							const reply = await report.execute("o-1", {
 								observations: [
 									revise("Unsafe authentication call", sideless),
 									{
-										...observation("second-practice", "A quote that is not in the change", {
-											...changeCitation,
-											quote: "+ somethingElse();",
-										}),
+										...observation(
+											"second-practice",
+											"A line that is not in the change",
+											missingLine(11),
+										),
 										revises: "second-practice",
 									},
 								],
@@ -1065,7 +1468,7 @@ if (scenario !== undefined && scenario !== "") {
 							const kind = await report.execute("o-kind", {
 								observations: [
 									revise("Cited under the wrong source kind", {
-										...changeCitation,
+										...sourcedChangeLine,
 										sourceKind: "scm.pull-request.core",
 									}),
 								],
@@ -1082,7 +1485,6 @@ if (scenario !== undefined && scenario !== "") {
 										side: "NEW",
 										revision: "c".repeat(40),
 										startLine: 1,
-										quote: '"title": "Add login"',
 									}),
 								],
 							});
@@ -1090,15 +1492,23 @@ if (scenario !== undefined && scenario !== "") {
 							const withSide = readObservations(nodePath.join(cwd, "out/review-state.json")).find(
 								(item) => item.practiceSlug === "test-practice",
 							);
-							record(`side-recorded:${JSON.stringify(withSide)}`);
+							// The answer that cited the record; the other one quotes the change, side and all.
+							const sideAnswers: unknown[] = Array.isArray(withSide?.answers)
+								? withSide.answers
+								: [];
+							const citedRecord = sideAnswers.find(
+								(answer) => isRecord(answer) && answer.question === "calls_insecure",
+							);
+							record(
+								`side-recorded:${JSON.stringify({ summary: withSide?.summary, answer: citedRecord })}`,
+							);
 							const path = await report.execute("o-path", {
 								observations: [
-									revise("A record quoted under the change", {
-										...changeCitation,
+									revise("A record cited under the change", {
+										...sourcedChangeLine,
 										path: "evidence/metadata.json",
 										startLine: 1,
 										endLine: 1,
-										quote: '"title": "Add login"',
 									}),
 								],
 							});
@@ -1134,12 +1544,20 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-settle-deadline",
 		"provider-error",
 		"batch",
+		"answers",
+		"skip",
+		"no-questions",
 		"replacement-witness",
 		"draft-revision",
 		"finish",
 		"refusal-cap",
 		"repeat",
 		"tree-citation",
+		"anchor",
+		"anchor-words",
+		"anchor-side",
+		"brief-search",
+		"revise-first",
 		"compose",
 		"compose-foreign-provider",
 		"compose-overflow",
@@ -1150,6 +1568,7 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-abstention",
 		"compose-unknown-outcome",
 		"compose-null-outcome",
+		"groups",
 	]) {
 		void test(
 			{
@@ -1167,6 +1586,10 @@ if (scenario !== undefined && scenario !== "") {
 				"provider-error":
 					"a provider error the SDK does not retry is a failure of the provider, not a review that found nothing",
 				batch: "normalizes corrections and answers distinct practices per item",
+				answers:
+					"refuses an observation that leaves a question unanswered, answers one its practice does not ask, or states its own outcome",
+				skip: "stores an observation that leaves out only the questions its answers make moot",
+				"no-questions": "refuses to start a review of a practice that has no questions to answer",
 				"draft-revision":
 					"replaces only an explicitly corrected valid draft and refuses an ambiguous batch atomically",
 				"replacement-witness": "refuses a replacement that relies on its superseded diff witness",
@@ -1175,6 +1598,14 @@ if (scenario !== undefined && scenario !== "") {
 				repeat: "nudges a turn that repeats one call and ends it when the call keeps coming",
 				"tree-citation":
 					"verifies a HEAD repository citation against the checkout and finalizes out/",
+				anchor:
+					"records an entry whose line number misses at the line its anchor names, says so, and never records the anchor",
+				"anchor-words":
+					"finds a line of the change by a few words of it, as the anchor is asked for",
+				"anchor-side": "moves an entry cited on the wrong side to the side its anchor is on",
+				"brief-search":
+					"counts an exhaustive source the brief shows whole as searched by an answer resting on absence",
+				"revise-first": "stores a revision of a draft that was never stored as its first draft",
 				compose: "counts an issue and a merge request with the same number as distinct work",
 				"compose-foreign-provider":
 					"counts matching work numbers at different providers as distinct work",
@@ -1193,6 +1624,8 @@ if (scenario !== undefined && scenario !== "") {
 					"refuses an admitted outcome outside the vocabulary before composing",
 				"compose-null-outcome":
 					"refuses an admitted observation without an outcome before composing",
+				groups:
+					"reviews each practice group in a turn of its own, in one session that also composes",
 			}[stage] ?? stage,
 			() => {
 				const cwd = mkdtempSync(nodePath.join(tmpdir(), "pi-orchestration-"));
@@ -1200,7 +1633,11 @@ if (scenario !== undefined && scenario !== "") {
 					mkdirSync(nodePath.join(cwd, "catalog/practices"), { recursive: true });
 					mkdirSync(nodePath.join(cwd, "evidence"), { recursive: true });
 					mkdirSync(nodePath.join(cwd, "work/change"), { recursive: true });
-					writeFileSync(nodePath.join(cwd, "AGENTS.md"), "Review the staged evidence.");
+					// The orchestrator is the session's whole system prompt, its placeholders the task's own paths.
+					writeFileSync(
+						nodePath.join(cwd, "AGENTS.md"),
+						"Review the staged evidence in <contextRoot>; the checkout is <repositoryRoot>, the practices are under <practiceRoot> and the history under <historyRoot>.",
+					);
 					writeFileSync(
 						nodePath.join(cwd, "feedback-composer.md"),
 						"Compose from admitted observations.",
@@ -1218,9 +1655,17 @@ if (scenario !== undefined && scenario !== "") {
 						JSON.stringify({ base_sha: "b".repeat(40), head_sha: "a".repeat(40) }),
 					);
 					// The change view the container derives from the checkout before the runner starts.
+					// Where the practice's subject is the change, a change too large for the brief: one the brief shows
+					// whole counts as read, so only a withheld one shows that a record must cite a changed line.
+					const largeFile = ["batch", "replacement-witness"].includes(stage)
+						? `diff --git a/src/Big.txt b/src/Big.txt\n--- /dev/null\n+++ b/src/Big.txt\n@@ -0,0 +1,1400 @@\n${Array.from(
+								{ length: 1400 },
+								(_, index) => `[L${index + 1}] +${"a generated line of padding text ".repeat(2)}\n`,
+							).join("")}`
+						: "";
 					writeFileSync(
 						nodePath.join(cwd, "work/change/diff.patch"),
-						"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,0 +10,1 @@\n[L10] + insecure();\n",
+						`diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10,0 +10,1 @@\n[L10] + insecure();\n${largeFile}`,
 					);
 					writeFileSync(
 						nodePath.join(cwd, "catalog/practices/test-practice.md"),
@@ -1232,7 +1677,7 @@ if (scenario !== undefined && scenario !== "") {
 						nodePath.join(cwd, "work/precompute-out/test-practice.md"),
 						"- `src/Auth.java` [L10] — insecure call: `insecure();`\n",
 					);
-					if (stage.startsWith("compose") || stage === "draft-revision") {
+					if (stage.startsWith("compose") || stage === "draft-revision" || stage === "groups") {
 						writeFileSync(
 							nodePath.join(cwd, "evidence/composition.json"),
 							JSON.stringify({
@@ -1318,19 +1763,46 @@ if (scenario !== undefined && scenario !== "") {
 					writeFileSync(
 						nodePath.join(cwd, "catalog/practices/index.json"),
 						JSON.stringify(
-							stage === "finish" ||
-								stage === "batch" ||
-								stage === "draft-revision" ||
-								stage === "compose-fold" ||
-								stage === "compose-abstention"
+							(stage === "finish" ||
+							stage === "batch" ||
+							stage === "draft-revision" ||
+							stage === "compose-fold" ||
+							stage === "compose-abstention" ||
+							stage === "groups"
 								? [
-										{ slug: "test-practice", group: "code" },
-										{ slug: "second-practice", group: "code" },
-										...(stage === "compose-abstention"
-											? [{ slug: "third-practice", group: "code" }]
+										"test-practice",
+										"second-practice",
+										...(stage === "compose-abstention" || stage === "groups"
+											? ["third-practice"]
 											: []),
 									]
-								: [{ slug: "test-practice", group: "code" }],
+								: ["test-practice"]
+							).map((slug, index) => ({
+								slug,
+								// A group is a turn: the groups scenario gives each practice a group of its own.
+								group: stage === "groups" ? ["code", "docs", "process"][index] : "code",
+								readsSources: ["scm.pull-request.core", "scm.pull-request.diff"],
+								// An absence is bounded only by a source read exhaustively: the record is one, and where
+								// the practice's subject is the change — so it owes a changed line — the change is too.
+								exhaustiveSources: ["brief-search", "batch", "replacement-witness"].includes(stage)
+									? ["scm.pull-request.core", "scm.pull-request.diff"]
+									: ["scm.pull-request.core"],
+								...(stage === "no-questions"
+									? {}
+									: {
+											questions:
+												stage === "skip"
+													? QUESTIONS.map((question) =>
+															question.key === "call_guarded"
+																? {
+																		...question,
+																		skipWhen: [{ question: "calls_insecure", answer: "NO" }],
+																	}
+																: question,
+														)
+													: QUESTIONS,
+										}),
+							})),
 						),
 					);
 					writeFileSync(
@@ -1383,9 +1855,11 @@ if (scenario !== undefined && scenario !== "") {
 						.trim()
 						.split("\n")
 						.filter(Boolean);
-					const coverage: unknown = JSON.parse(
-						readFileSync(nodePath.join(cwd, "out/practice-coverage.json"), "utf8"),
-					);
+					// A review refused before it reads its practices has no coverage to report.
+					const coverage: unknown =
+						stage === "no-questions"
+							? null
+							: JSON.parse(readFileSync(nodePath.join(cwd, "out/practice-coverage.json"), "utf8"));
 					const reached = (slugs: Record<string, "EVALUATED" | "NOT_REACHED">) =>
 						assert.deepEqual(coverage, {
 							eligible: Object.keys(slugs).length,
@@ -1395,7 +1869,83 @@ if (scenario !== undefined && scenario !== "") {
 								outcome,
 							})),
 						});
+					/** The text a scenario recorded under a name: one reply, written as one JSON string. */
+					const recordedReply = (name: string): string => {
+						const event = events.find((item) => item.startsWith(`${name}:`));
+						assert.ok(event !== undefined, `no ${name} event: ${child.stderr}`);
+						const text: unknown = JSON.parse(event.slice(name.length + 1));
+						assert.ok(typeof text === "string");
+						return text;
+					};
 					switch (stage) {
+						case "no-questions": {
+							assert.notEqual(child.status, 0, child.stderr);
+							assert.match(
+								child.stderr,
+								/the task-declared practice index: test-practice has no questions to answer/u,
+							);
+							assert.deepEqual(events, []);
+							assert.ok(!existsSync(nodePath.join(cwd, "out/result.json")));
+							break;
+						}
+						case "answers": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.match(
+								events.find((event) => event.startsWith("answers-missing:")) ?? "",
+								/#1 test-practice: refused — answer every question of 'test-practice' that its answers do not skip; missing: call_guarded \(Guarded call\)/u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("answers-foreign:")) ?? "",
+								/answers has question\(s\) guarded that 'test-practice' does not ask; its questions are calls_insecure, call_guarded/u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("answers-stated:")) ?? "",
+								/outcome, severity is not recorded: answer every question in answers, and Hephaestus derives the outcome and severity from the answers/u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("answers-unsettled:")) ?? "",
+								/answers\.call_guarded is UNDETERMINED and needs wouldSettleIt/u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("answers-list:")) ?? "",
+								/#1 test-practice: stored — calls_insecure YES, call_guarded UNDETERMINED\./u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("answers-inline:")) ?? "",
+								/#1 test-practice: revised — calls_insecure YES, call_guarded UNDETERMINED\.[\s\S]*citations read from inside the answer; list them once under evidence instead/u,
+							);
+							// What was recorded is the answers, each with what decides it; never an outcome.
+							const [recorded] = readObservations(nodePath.join(cwd, "out/result.json"));
+							assert.equal(recorded?.summary, "Cited inside the answers");
+							assert.deepEqual(answersOf(recorded), {
+								calls_insecure: "YES",
+								call_guarded: "UNDETERMINED",
+							});
+							assert.equal(recorded.outcome, undefined);
+							assert.equal(recorded.severity, undefined);
+							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
+						case "skip": {
+							assert.equal(child.status, 0, child.stderr);
+							// The turn says when a question may be left out, and nowhere else may one be.
+							assert.match(
+								readFileSync(nodePath.join(cwd, "prompt-1.md"), "utf8"),
+								/##### `call_guarded` — Guarded call\n[^\n]*\n- YES: [^\n]*\n- NO: [^\n]*\n- Skip it when `calls_insecure` \(Insecure call\) is NO: it cannot change the outcome then\./u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("skip-refused:")) ?? "",
+								/#1 test-practice: refused — answer every question of 'test-practice' that its answers do not skip; missing: call_guarded \(Guarded call\)/u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("skip-stored:")) ?? "",
+								/^skip-stored:accepted .*#1 test-practice: stored — calls_insecure NO\./u,
+							);
+							const [recorded] = readObservations(nodePath.join(cwd, "out/result.json"));
+							assert.deepEqual(answersOf(recorded), { calls_insecure: "NO" });
+							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
 						case "replacement-witness": {
 							assert.equal(child.status, 0, child.stderr);
 							assert.ok(events.includes("replacement-witness:preserved"), child.stderr);
@@ -1526,7 +2076,7 @@ if (scenario !== undefined && scenario !== "") {
 								result.filter((item) => item.practiceSlug === "test-practice").length,
 								1,
 							);
-							assert.equal(result[0]?.outcome, "NOT_MET");
+							assert.equal(answersOf(result[0]).call_guarded, "NO");
 							const admission = readObservations(nodePath.join(cwd, "admission.json"));
 							assert.deepEqual(admission, result);
 							assert.ok(!JSON.stringify(admission).includes("revises"));
@@ -1535,13 +2085,16 @@ if (scenario !== undefined && scenario !== "") {
 								/Measurement is closed/u,
 							);
 							const notes = readFileSync(nodePath.join(cwd, "work/notes/review.md"), "utf8");
-							assert.match(notes, /test-practice: NOT_MET/u);
-							assert.doesNotMatch(notes, /test-practice: MET —/u);
+							assert.match(notes, /test-practice: calls_insecure YES, call_guarded NO —/u);
+							assert.doesNotMatch(notes, /test-practice: calls_insecure YES, call_guarded YES/u);
 							// The finishing turn continues the session, which holds the current drafts: it repeats no
 							// record, so the replaced draft cannot reappear in it.
 							const finishing = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
 							assert.doesNotMatch(finishing, /Recorded so far/u);
-							assert.doesNotMatch(finishing, /test-practice: MET —/u);
+							assert.doesNotMatch(
+								finishing,
+								/test-practice: calls_insecure YES, call_guarded YES/u,
+							);
 							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
 							break;
 						}
@@ -1552,22 +2105,43 @@ if (scenario !== undefined && scenario !== "") {
 								/already recorded; this item changed nothing, so do not send it again/u,
 							);
 							assert.match(
-								events.find((event) => event.startsWith("repaired-evidence-open:")) ?? "",
+								events.find((event) => event.startsWith("repaired-answers-open:")) ?? "",
 								/#1 test-practice: revised/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("unparsed:")) ?? "",
-								/observations refused — the list arrived as a string that is not valid JSON \(.*\); it breaks here: "\[\{" ⟵ "not json\}\]"/u,
+								/^unparsed:observations refused — the list arrived as a string that is not valid JSON \(.*\); it breaks here: "\[\{" ⟵ "not json\}\]"/u,
 							);
+							const asText = events.find((event) => event.startsWith("text-recorded:")) ?? "";
+							assert.match(
+								asText,
+								/#1 test-practice: revised — calls_insecure YES, call_guarded NO\./u,
+							);
+							// The line written as the view prints it was a number before the tool saw it.
+							assert.doesNotMatch(asText, /read as/u);
 							const reply = events.find((event) => event.startsWith("batch:")) ?? "";
-							assert.match(reply, /#1 test-practice: revised \(negative\)/u, child.stderr);
+							// The reply echoes what each answer recorded, so the model checks its draft by it.
+							assert.match(
+								reply,
+								/#1 test-practice: revised — calls_insecure YES, call_guarded NO\./u,
+								child.stderr,
+							);
 							assert.match(reply, /#2 second-practice: refused/u);
 							assert.match(reply, /Every practice of this turn has a recorded result/u);
 							// Nothing is left for the turn to record, so the run ends with this call.
 							assert.match(reply, /"terminate":true/u);
 							assert.match(
 								events.find((event) => event.startsWith("create:session")) ?? "",
-								/tools=read,grep,find,ls,write,edit,bash,codemode,report_observation$/u,
+								/tools=read,grep,find,ls,bash,codemode,report_observation$/u,
+							);
+							// The orchestrator is the whole system prompt, with the task's own paths written in.
+							assert.deepEqual(
+								JSON.parse(readFileSync(nodePath.join(cwd, "system-prompt.json"), "utf8")),
+								{
+									systemPrompt:
+										"Review the staged evidence in evidence; the checkout is repos/primary, the practices are under catalog/practices and the history under history.",
+									agentsFiles: { agentsFiles: [] },
+								},
 							);
 							assert.ok(
 								events.includes("exposure:report_observation=model-only"),
@@ -1575,7 +2149,7 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								readFileSync(nodePath.join(cwd, "prompt-1.md"), "utf8"),
-								/### Practice `test-practice`\n[\s\S]*# Test practice\nCriteria\.\n\n#### Precomputed leads for `test-practice` — starting points to check against the criteria, not verdicts\n- `src\/Auth\.java` \[L10\] — insecure call/u,
+								/### Practice `test-practice`\nExhaustive sources \(an absence claim must have searched all of them\): scm\.pull-request\.core, scm\.pull-request\.diff\.\nIt reads the change: at least one answer cites a changed line \(path and side\) or searches the diff\.\n\n# Test practice\nCriteria\.\n\n#### Questions for `test-practice`[^\n]*\n##### `calls_insecure` — Insecure call\nDoes the change add a call to insecure\(\)\?\n- YES: A changed line calls insecure\(\)\.\n- NO: No changed line calls insecure\(\)\.\n\n##### `call_guarded` — Guarded call\n[\s\S]*\n\n#### Precomputed leads for `test-practice` — starting points to check against the criteria, not verdicts\n- `src\/Auth\.java` \[L10\] — insecure call/u,
 							);
 							assert.match(
 								events.find((event) => event.startsWith("corrected-kind:")) ?? "",
@@ -1583,7 +2157,7 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								events.find((event) => event.startsWith("corrected-side:")) ?? "",
-								/#1 test-practice: revised \(negative\)\.[^#]*evidence\/metadata\.json is staged by scm\.pull-request\.core, not scm\.pull-request\.diff; recorded as scm\.pull-request\.core/u,
+								/#1 test-practice: revised — calls_insecure YES, call_guarded NO\.[^#]*evidence\/metadata\.json is staged by scm\.pull-request\.core, not scm\.pull-request\.diff; recorded as scm\.pull-request\.core/u,
 							);
 							const recordedSide = events.find((event) => event.startsWith("side-recorded:")) ?? "";
 							assert.match(recordedSide, /"summary":"A record cited with a diff side"/u);
@@ -1603,10 +2177,12 @@ if (scenario !== undefined && scenario !== "") {
 							assert.equal(result.length, 2);
 							assert.equal(result[0]?.summary, "The login change calls an insecure helper");
 							assert.equal(result[1]?.summary, "Second of two, starting inside the first");
-							const { evidence } = result[0];
-							assert.ok(isRecord(evidence));
-							assert.ok(Array.isArray(evidence.citations));
-							const citation: unknown = evidence.citations[0];
+							const { answers } = result[0];
+							assert.ok(Array.isArray(answers));
+							const first: unknown = answers[0];
+							assert.ok(isRecord(first) && Array.isArray(first.citations));
+							assert.equal(first.question, "calls_insecure");
+							const citation: unknown = first.citations[0];
 							assert.ok(isRecord(citation));
 							assert.equal(citation.quote, " insecure();");
 							assert.equal(citation.side, "NEW");
@@ -1626,10 +2202,22 @@ if (scenario !== undefined && scenario !== "") {
 							// The first turn carries the brief and shows how an observation is written, with this review's own
 							// artifact paths; the finishing turn continues the same session, which still holds both.
 							assert.ok(first.includes("### `evidence/metadata.json`"), first.slice(0, 300));
-							assert.match(
-								first,
-								/## How report_observation takes observations[\s\S]*"artifactPath": "evidence\/change\.json"/u,
+							assert.match(first, /cite the file and that number, never its text/u);
+							const exampleStart = first.indexOf("## How report_observation takes observations");
+							const example = first.slice(
+								exampleStart,
+								first.indexOf("\n```\n", first.indexOf("```json", exampleStart)),
 							);
+							// Evidence listed once and cited by number, with this review's own paths; a skipped
+							// question shown left out; no line's text and no outcome.
+							assert.match(
+								example,
+								/"evidence":\[\{"path":"evidence\/description\.md","startLine":4\}/u,
+							);
+							assert.match(example, /"cites":\[1\]/u);
+							assert.match(example, /Skip it when `changes_behaviour` is NO/u);
+							assert.doesNotMatch(example, /"quote"|"artifactPath"|"sourceKind"|"outcome"/u);
+							assert.match(first, /list the lines your answers rest on once under evidence/u);
 							assert.doesNotMatch(
 								second,
 								/### `evidence\/metadata\.json`|How report_observation takes|Recorded so far/u,
@@ -1697,7 +2285,7 @@ if (scenario !== undefined && scenario !== "") {
 							// An identical resend is answered at once with the reason it already had.
 							assert.match(
 								refusals[1] ?? "",
-								/identical to an item this turn already refused, so the answer is the same: citation does not match/u,
+								/identical to an item this turn already refused, so the answer is the same: evidence src\/Auth\.java:11-11 \(NEW\) in 'evidence\/change\.json' does not hold/u,
 							);
 							// The third identical send is a loop, and the circuit breaker ends the turn.
 							assert.match(
@@ -1731,7 +2319,7 @@ if (scenario !== undefined && scenario !== "") {
 								[
 									"citation:refused",
 									"citation:stored",
-									"citation:history:1",
+									'citation:history:"}"',
 									"citation:history-refused",
 									'citation:echo:   src/Auth.java:2-2 recorded "  insecure();"',
 								],
@@ -1745,6 +2333,94 @@ if (scenario !== undefined && scenario !== "") {
 								typeof result === "object" && result !== null && "admissionDigest" in result,
 							);
 							assert.equal(result.admissionDigest, "admitted-digest");
+							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
+						case "anchor":
+						case "anchor-words":
+						case "anchor-side": {
+							assert.equal(child.status, 0, child.stderr);
+							if (stage === "anchor") {
+								// An anchor found nowhere settles nothing: the refusal is the one the line number earns.
+								const nowhere = recordedReply("anchor-nowhere");
+								assert.match(
+									nowhere,
+									/evidence src\/Auth\.java:12-12 \(NEW\) in 'evidence\/change\.json' does not hold: the diff has no \[L12\] on that side of that path/u,
+								);
+								assert.doesNotMatch(nowhere, /did not hold/u);
+							}
+							const moved = recordedReply("anchor-moved");
+							assert.match(
+								moved,
+								/#1 test-practice: stored — calls_insecure YES, call_guarded NO\./u,
+							);
+							const missed = {
+								anchor: 'src/Auth.java:12-12 did not hold "insecure();"',
+								"anchor-words": 'src/Auth.java:12-12 did not hold "insecure("',
+								"anchor-side": 'src/Auth.java:10-10 did not hold "insecure();"',
+							}[stage];
+							const note = `${missed}; recorded at src/Auth.java:10-10 (NEW), where it is`;
+							// Both answers cite the one entry: it is moved, and the move said, once.
+							assert.equal(moved.split(note).length - 1, 1, moved);
+							const result = readObservations(nodePath.join(cwd, "out/result.json"));
+							const state = readObservations(nodePath.join(cwd, "out/review-state.json"));
+							assert.deepEqual(result, state);
+							const changedLine = {
+								sourceKind: "scm.pull-request.diff",
+								artifactPath: "evidence/change.json",
+								path: "src/Auth.java",
+								side: "NEW",
+								startLine: 10,
+								endLine: 10,
+								quote: " insecure();",
+							};
+							assert.deepEqual(citationsOf(result[0]), [[changedLine], [changedLine]]);
+							// The anchor found the line; it is no part of what is recorded or sent for admission.
+							const sentOn = [
+								result,
+								...(stage === "anchor"
+									? [readObservations(nodePath.join(cwd, "admission.json"))]
+									: []),
+							];
+							for (const recorded of sentOn) {
+								assert.ok(!JSON.stringify(recorded).includes('"anchor"'), JSON.stringify(recorded));
+							}
+							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
+						case "brief-search": {
+							assert.equal(child.status, 0, child.stderr);
+							const stored = recordedReply("brief-search");
+							assert.match(
+								stored,
+								/#1 test-practice: stored — calls_insecure NO, call_guarded UNDETERMINED\./u,
+							);
+							assert.ok(
+								stored.includes(
+									"answers.calls_insecure: scm.pull-request.core counted as searched — the brief shows it whole",
+								),
+								stored,
+							);
+							const [recorded] = readObservations(nodePath.join(cwd, "out/result.json"));
+							assert.ok(recorded !== undefined && Array.isArray(recorded.answers));
+							const answers: unknown[] = recorded.answers;
+							const absence: unknown = answers[0];
+							assert.ok(isRecord(absence) && isRecord(absence.search));
+							assert.deepEqual(absence.search.consulted, [
+								"scm.pull-request.core",
+								"scm.pull-request.diff",
+							]);
+							reached({ "test-practice": "EVALUATED" });
+							break;
+						}
+						case "revise-first": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.match(
+								recordedReply("revise-first"),
+								/#1 test-practice: stored — calls_insecure YES, call_guarded NO\.[\s\S]*\n +no draft 'test-practice' existed to revise; stored as its first draft\n/u,
+							);
+							const [recorded] = readObservations(nodePath.join(cwd, "out/result.json"));
+							assert.equal(recorded?.summary, "Revised before any draft was stored");
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
@@ -1770,6 +2446,10 @@ if (scenario !== undefined && scenario !== "") {
 							assert.match(
 								events.find((event) => event.startsWith("feedback-unresolved:")) ?? "",
 								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NOT_MET on 1/u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("feedback-text:")) ?? "",
+								/#1: stored a IN_CONTEXT unit for test-practice \(WITHHOLD\)/u,
 							);
 							const reply = events.find((event) => event.startsWith("feedback:")) ?? "";
 							// The composition turn goes on to its summary; only the retry ends on its last decision.
@@ -1812,14 +2492,16 @@ if (scenario !== undefined && scenario !== "") {
 							assert.match(second, /Compose from admitted observations\./u);
 							assert.match(second, /"id": "observation-1"/u);
 							// The quoted lines and the verification records stay on disk, where the composer
-							// can read them if it must; the search it recorded is still shown. (The shared opening
-							// above the composer's turn carries the observation example, quotes and all.)
+							// can read them if it must; the search it recorded is still shown.
 							const composerTurn = second.slice(
 								second.indexOf("Compose from admitted observations."),
 							);
 							assert.doesNotMatch(composerTurn, /"quote"/u);
 							assert.doesNotMatch(composerTurn, /"verification"/u);
 							assert.match(second, /"lookedFor": "x"/u);
+							// The rule admission decided by, and the answers it decided from, are what the composer explains.
+							assert.match(composerTurn, /"ruleId": "unguarded-insecure-call"/u);
+							assert.match(composerTurn, /"question": "call_guarded",\s*"answer": "NO"/u);
 							assert.match(
 								readFileSync(nodePath.join(cwd, "work/composition/observations.json"), "utf8"),
 								/"quote": "\+ insecure\(\);"/u,
@@ -1973,11 +2655,22 @@ if (scenario !== undefined && scenario !== "") {
 								const payload: unknown = JSON.parse(readFileSync(nodePath.join(cwd, file), "utf8"));
 								assert.ok(isRecord(payload));
 								assert.equal(payload.admissionDigest, "admitted-digest");
-								assert.deepEqual(
-									readObservations(nodePath.join(cwd, file)).map((item) => item.outcome),
-									["MET", "NOT_APPLICABLE", "UNDETERMINED"],
-								);
 							}
+							// The review records the answers; the outcomes are what admission derived from them.
+							assert.deepEqual(
+								readObservations(nodePath.join(cwd, "out/result.json")).map(answersOf),
+								[
+									{ calls_insecure: "YES", call_guarded: "YES" },
+									{ calls_insecure: "NO", call_guarded: "UNDETERMINED" },
+									{ calls_insecure: "YES", call_guarded: "UNDETERMINED" },
+								],
+							);
+							assert.deepEqual(
+								readObservations(nodePath.join(cwd, "out/feedback.json")).map(
+									(item) => item.outcome,
+								),
+								["MET", "NOT_APPLICABLE", "UNDETERMINED"],
+							);
 							const feedback: unknown = JSON.parse(
 								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
 							);
@@ -2041,6 +2734,64 @@ if (scenario !== undefined && scenario !== "") {
 							assert.ok(typeof composition === "object" && composition !== null);
 							assert.equal(Reflect.get(composition, "toolErrors"), 24);
 							assert.equal(Reflect.get(composition, "recordingCalls"), 24);
+							break;
+						}
+						case "groups": {
+							assert.equal(child.status, 0, child.stderr);
+							// One session measures every turn and composes; its tools are declared once.
+							const created = events.filter((event) => event.startsWith("create:session"));
+							assert.equal(created.length, 1, events.join("\n"));
+							assert.match(
+								created[0] ?? "",
+								/,report_observation,report_feedback,report_summary$/u,
+							);
+							assert.match(child.stderr, /3 turn\(s\); brief=/u);
+							// Each turn asked about its own group's practice, one turn after another.
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("asked:")),
+								[
+									"asked:session-1:test-practice",
+									"asked:session-1:second-practice",
+									"asked:session-1:third-practice",
+								],
+							);
+							// The first turn carries the opening; a later turn in the same session does not.
+							const turnPrompts = events
+								.filter((event) => /^session-\d+:prompt-\d+$/u.test(event))
+								.map((event) =>
+									readFileSync(
+										nodePath.join(cwd, `${event.slice(event.indexOf(":") + 1)}.md`),
+										"utf8",
+									),
+								)
+								.filter((text) => text.includes("Evaluate these practices:"));
+							assert.equal(turnPrompts.length, 3);
+							assert.equal(
+								turnPrompts.filter((text) =>
+									text.includes("## How report_observation takes observations"),
+								).length,
+								1,
+							);
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("composed-in:")),
+								["composed-in:session-1"],
+							);
+							assert.match(
+								events.find((event) => event.startsWith("feedback-groups:")) ?? "",
+								/stored a IN_CONTEXT unit for test-practice \(WITHHOLD\)/u,
+							);
+							assert.ok(!events.some((event) => event.startsWith("finish:")), events.join("\n"));
+							assert.deepEqual(
+								readObservations(nodePath.join(cwd, "out/result.json"))
+									.map((item) => String(item.practiceSlug))
+									.toSorted((a, b) => a.localeCompare(b)),
+								["second-practice", "test-practice", "third-practice"],
+							);
+							reached({
+								"test-practice": "EVALUATED",
+								"second-practice": "EVALUATED",
+								"third-practice": "EVALUATED",
+							});
 							break;
 						}
 						default: {

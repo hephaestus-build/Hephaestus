@@ -10,6 +10,7 @@ import type {
 	UpdatePracticeRequest,
 	PracticeDefinitionOptions,
 	PracticeEvidenceOutcome,
+	PracticeJudgment,
 	PracticeWorkTypeDefinitionOptions,
 } from "@/api/types.gen";
 import {
@@ -18,10 +19,15 @@ import {
 	workArtifactHint,
 } from "@/components/admin/practice-editor/constants";
 import { canAttemptAutomatedReview } from "@/components/admin/practice-editor/evidence-presentation";
+import { judgmentProblems } from "@/components/admin/practice-editor/practice-judgment";
 import {
 	gatePresentation,
 	parseGate,
 } from "@/components/admin/practice-editor/practice-precondition";
+import {
+	PRACTICE_JUDGMENT_FOCUS_ID,
+	PracticeJudgmentEditor,
+} from "@/components/admin/practice-editor/PracticeJudgmentEditor";
 import {
 	PracticeMentoringSupportEditor,
 	practicePolicyError,
@@ -104,6 +110,8 @@ export interface PracticeDefinitionValue {
 	precondition?: PracticePrecondition;
 	definitionChanges?: DefinitionChange[];
 	criteria: string;
+	/** Absent when no automated review runs, which asks no questions. */
+	judgment?: PracticeJudgment;
 	whyItMatters?: string;
 	whatGoodLooksLike?: string;
 	precomputeScript?: string;
@@ -162,6 +170,11 @@ interface FormState {
 	definitionChanges: DefinitionChange[];
 	gateText: string;
 	criteria: string;
+	/**
+	 * Kept while automated review is off, so turning it back on does not discard the questions; sent
+	 * only while a review runs.
+	 */
+	judgment: PracticeJudgment;
 	whyItMatters: string;
 	whatGoodLooksLike: string;
 	precomputeScript: string;
@@ -186,10 +199,14 @@ function initialState(
 	initialData?: PracticeDefinitionValue,
 ): FormState {
 	const fallback = orderedWorkTypes(definitionOptions)[0];
-	return initialData ? stateOf(initialData, fallback) : blankState(fallback);
+	const starting = definitionOptions.startingJudgment;
+	return initialData ? stateOf(initialData, fallback, starting) : blankState(fallback, starting);
 }
 
-function blankState(fallback: PracticeWorkTypeDefinitionOptions | undefined): FormState {
+function blankState(
+	fallback: PracticeWorkTypeDefinitionOptions | undefined,
+	starting: PracticeJudgment,
+): FormState {
 	return {
 		name: "",
 		slug: "",
@@ -199,6 +216,7 @@ function blankState(fallback: PracticeWorkTypeDefinitionOptions | undefined): Fo
 		definitionChanges: [],
 		gateText: "",
 		criteria: "",
+		judgment: starting,
 		whyItMatters: "",
 		whatGoodLooksLike: "",
 		precomputeScript: "",
@@ -210,6 +228,7 @@ function blankState(fallback: PracticeWorkTypeDefinitionOptions | undefined): Fo
 function stateOf(
 	initialData: PracticeDefinitionValue,
 	fallback: PracticeWorkTypeDefinitionOptions | undefined,
+	starting: PracticeJudgment,
 ): FormState {
 	return {
 		name: initialData.name,
@@ -220,6 +239,7 @@ function stateOf(
 		definitionChanges: [],
 		gateText: initialData.precondition ? JSON.stringify(initialData.precondition, null, 2) : "",
 		criteria: initialData.criteria,
+		judgment: initialData.judgment ?? starting,
 		whyItMatters: initialData.whyItMatters ?? "",
 		whatGoodLooksLike: initialData.whatGoodLooksLike ?? "",
 		precomputeScript: initialData.precomputeScript ?? "",
@@ -258,6 +278,7 @@ interface FormErrors {
 	policy?: string;
 	reviewSettings?: ReviewSettingsProblem;
 	gate?: string;
+	judgment: string[];
 	subject?: string;
 	delivery?: string;
 	/**
@@ -268,7 +289,7 @@ interface FormErrors {
 	summary: FormError[];
 }
 
-const NO_ERRORS: FormErrors = { summary: [] };
+const NO_ERRORS: FormErrors = { judgment: [], summary: [] };
 
 function formErrors(
 	form: FormState,
@@ -283,6 +304,10 @@ function formErrors(
 	const policy = practicePolicyError(form.automatedReviewPolicy);
 	const reviewSettings = reviewSettingsProblem(form, form.automatedReviewPolicy, selectedWorkType);
 	const gateError = parseGate(form.gateText, selectedWorkType).error;
+	const judgment =
+		form.automatedReviewPolicy.automatedReview.mode === "NONE"
+			? []
+			: judgmentProblems(form.judgment);
 	const subjectError =
 		selectedWorkType && !selectedWorkType.subjectRoles.includes(form.subject)
 			? "Choose a person this kind of work can identify."
@@ -308,6 +333,13 @@ function formErrors(
 		reviewSettings && { fieldId: reviewSettings.focusId, message: reviewSettings.message },
 		hasText(subjectError) && { fieldId: "practice-subject", message: subjectError },
 		hasText(gateError) && { fieldId: "practice-gate", message: gateError },
+		judgment.length > 0 && {
+			fieldId: PRACTICE_JUDGMENT_FOCUS_ID,
+			message:
+				judgment.length === 1
+					? `How the review decides: ${judgment.join("")}`
+					: `How the review decides has ${judgment.length} problems to fix.`,
+		},
 		slugInvalid && {
 			fieldId: "practice-slug",
 			message: "The identifier must be lowercase letters, numbers and hyphens.",
@@ -327,10 +359,18 @@ function formErrors(
 		policy,
 		reviewSettings,
 		gate: gateError,
+		judgment,
 		subject: subjectError,
 		delivery: deliveryError,
 		summary,
 	};
+}
+
+/** The questions are sent only while a review runs; with none, the server keeps none. */
+function judgmentToSubmit(form: FormState): { judgment?: PracticeJudgment } {
+	return form.automatedReviewPolicy.automatedReview.mode === "NONE"
+		? {}
+		: { judgment: form.judgment };
 }
 
 function submitLabel(mode: PracticeDefinitionFormProps["mode"], isPending: boolean): string {
@@ -540,6 +580,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 			...normalizeReviewSettings(form),
 			definitionChanges: form.definitionChanges.length > 0 ? form.definitionChanges : undefined,
 			criteria: form.criteria.trim(),
+			...judgmentToSubmit(form),
 			...(form.groupSlug === NO_GROUP ? {} : { groupSlug: form.groupSlug }),
 			...(form.whyItMatters.trim() ? { whyItMatters: form.whyItMatters.trim() } : {}),
 			...(form.whatGoodLooksLike.trim()
@@ -872,6 +913,16 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 							)}
 						</section>
 
+						<JudgmentSection
+							policy={form.automatedReviewPolicy}
+							value={form.judgment}
+							starting={definitionOptions.startingJudgment}
+							saved={initialData}
+							disabled={formDisabled}
+							problems={shownErrors.judgment}
+							onChange={(judgment) => setForm((previous) => ({ ...previous, judgment }))}
+						/>
+
 						{afterFields}
 
 						<Separator />
@@ -1018,6 +1069,29 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 				</Button>
 			</DrawerFooter>
 		</form>
+	);
+}
+
+interface JudgmentSectionProps {
+	policy: PracticeAutomatedReviewPolicy;
+	value: PracticeJudgment;
+	starting: PracticeJudgment;
+	saved: PracticeDefinitionValue | undefined;
+	disabled: boolean;
+	problems: readonly string[];
+	onChange: (judgment: PracticeJudgment) => void;
+}
+
+/** The questions and rules, while a review runs to answer them. */
+function JudgmentSection({ policy, saved, ...editor }: JudgmentSectionProps) {
+	if (policy.automatedReview.mode === "NONE") {
+		return null;
+	}
+	return (
+		<>
+			<Separator />
+			<PracticeJudgmentEditor {...editor} saved={saved?.judgment} />
+		</>
 	);
 }
 

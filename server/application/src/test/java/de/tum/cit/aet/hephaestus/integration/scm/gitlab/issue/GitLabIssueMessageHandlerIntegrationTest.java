@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookUser;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.dto.GitLabIssueEventDTO;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -523,6 +524,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             practice.setSlug("trackable-subtasks");
             practice.setName("Trackable subtasks");
             practice.setCriteria("Break the work into trackable subtasks");
+            practice.setJudgment(PracticeJudgment.holistic());
             practice.setSignals(PracticeTestEvidence.signals(ScmSignals.ISSUE_UPDATED));
             practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.ISSUE_UPDATED.artifactKind()));
             practice.setReviewWhen(Map.of());
@@ -549,6 +551,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             "The work is not broken into trackable subtasks",
                             "NOT_MET",
                             "MAJOR",
+                            null,
+                            null,
                             null,
                             null,
                             null,

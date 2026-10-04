@@ -28,6 +28,11 @@ area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not 
 | **Practice group**                   | A named collection of related practices                                                                                                                               | category, goal, learning objective                                   |
 | **Unassigned**                      | Practices that are not in a practice group                                                                                                                  | ungrouped, unbound                                                   |
 | **Observation**                     | One recorded result of reviewing one practice against one piece of reviewed work                                                                           | finding, detection, verdict                                          |
+| **Question**                        | One yes/no question a practice asks about the work, with a title a yes affirms; a practice asks one to eight                                              | criterion, check, rubric item                                        |
+| **Answer**                          | How one review answered one question — **Yes**, **No** or **Open** — with one sentence why and the lines it cites                                         | score, label, vote                                                   |
+| **Open answer**                     | An answer the captured evidence the review read does not settle, naming what would settle it (`UNDETERMINED`). Never a negative                           | unknown, skipped, failed                                             |
+| **Rule**                            | One ordered line of a practice's judgment: conditions on answers, an outcome, a severity for **Not met**, and a one-sentence reason about the work         | verdict, scoring rule, threshold                                     |
+| **Deciding rule**                   | The rule whose reason heads an observation, because it decided the outcome from the answers; absent when open answers left the outcome undetermined     | matched rule, verdict                                                |
 | **Marked incorrect**                | An observation a workspace admin [invalidated](./practice-review-glossary.mdx#invalidated-observations) because it was wrong when made; it stays in history  | deleted, retracted, superseded                                       |
 | **Withdrawn**                       | A Practice profile card a workspace admin [withdrew](./practice-review-glossary.mdx#withdrawn-feedback) because its words were wrong; its observations are unchanged | deleted, retracted, invalidated                                      |
 | **Disputed**                        | Feedback the developer answered as wrong, with an explanation workspace admins read on its observations; a later review of the same work holds the same claim back while it stands ([ADR 0022](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0022-observation-presence-assessment-and-schema-cleanup.md)) | rejected, contested, flagged                                         |
@@ -54,7 +59,7 @@ area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not 
 | **Hephaestus default**              | A practice or group bundled with the running Hephaestus release                                                                                             | shipped entry                                                        |
 | **Instance catalog**                | The set of practices a workspace may adopt from                                                                                                                              | curated catalog                                                      |
 | **Workspace practices**             | Independent definitions used for reviews in one workspace                                                                                                  | workspace catalog                                                    |
-| **Review rules**                    | Inputs and criteria that determine review behavior                                                                                                         | detector configuration                                               |
+| **Review rules**                    | Inputs, criteria, questions and rules that determine review behavior                                                                                       | detector configuration                                               |
 | **Developer guidance**              | Explanatory text that does not change review behavior                                                                                                      | learner guidance                                                     |
 | **Customize**                       | Change a default or catalog-based definition                                                                                                               | override                                                             |
 | **Include / exclude**               | Whether an instance entry is available for workspaces to adopt                                                                                                    | offer, retire                                                        |
@@ -165,45 +170,61 @@ those terms expose implementation or depend on who is reading.
 
 ## Observation outcomes
 
-An observation records whether the reviewed work meets one practice's criteria within the recorded
-evidence boundary. It does not establish a developer's mastery or the correctness of the entire project.
+An observation records whether the reviewed work meets one practice within the recorded evidence
+boundary. It does not establish a developer's mastery or the correctness of the entire project.
+
+The review answers the practice's questions; the practice's rules decide the outcome from the answers, and the review never states an outcome or a severity. How an open
+answer is resolved is the glossary's
+([Deriving the outcome](./practice-review-glossary.mdx#deriving-the-outcome)).
 
 | Outcome | Meaning | Severity |
 | --- | --- | --- |
-| `MET` | The captured evidence establishes conformance to the practice standard. | None |
-| `NOT_MET` | The captured evidence establishes a material shortfall against that standard. | Required |
-| `NOT_APPLICABLE` | An evidenced fact rules out the occasion to apply the practice. | None |
-| `UNDETERMINED` | Adequate captured evidence was read, but a material question remains unresolved. | None |
+| `MET` | A rule found the answers establish conformance to the practice standard. | None |
+| `NOT_MET` | A rule found the answers establish a material shortfall against that standard. | Required |
+| `NOT_APPLICABLE` | A rule found an answered fact rules out the occasion to apply the practice. | None |
+| `UNDETERMINED` | Open answers could decide the outcome either way, or a rule found the evidence cannot settle the practice. | None |
 
-`outcome` is the only result field. There is no separate presence, desirability, or derived result axis.
-Criteria states the positive standard. An undesirable action and a required action that is missing can
-both establish `NOT_MET`; the summary explains the actual shortfall without a second taxonomy.
-`MET` requires conformance to the standard, not merely the presence of one desirable behavior.
+| Severity | Product label | Meaning |
+| --- | --- | --- |
+| `CRITICAL` | **Critical** | A consequence that is expensive or impossible to undo, such as a leaked credential or lost data |
+| `MAJOR` | **Major** | A real problem to fix before the work is considered done |
+| `MINOR` | **Minor** | A bounded shortfall with a specific edit to make; nobody would block the work on it alone |
+
+*Informational* (`INFO`) is retired: feedback either asks for a change or it does not, and observations
+recorded with it are `MINOR`
+([ADR 0051](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0051-practices-decide-from-answered-questions.md)).
+
+`outcome` is the only result field. The answers and the deciding rule say why it holds; they are not a
+second result axis. The criteria state the positive standard and the questions test it. An undesirable
+action and a required action that is missing can both lead a rule to `NOT_MET`; the deciding rule's
+reason names the shortfall without a second taxonomy. `MET` requires conformance to the standard, not
+merely the presence of one desirable behavior.
 
 A review records at most one observation per practice. Its outcome applies to the complete standard
-within the evidence boundary; the rationale can describe several independent shortfalls. Do not
-record both `MET` and `NOT_MET` for one practice. Provisional runtime submissions may be corrected
-before server admission; admitted observations are immutable. A met observation does not require praise
-or delivery.
+within the evidence boundary; its answers can show several independent shortfalls, and the deciding
+rule names the one that decided. Provisional runtime submissions may be corrected before server
+admission; admitted observations are immutable. A met observation does not require praise or delivery.
 
-A claim based on absence requires a complete bounded search, recorded in `evidence.search`.
+A **No** that rests on an absence requires a complete bounded search, recorded with the answer.
 Conformance based on avoiding harm requires exhaustive coverage of the relevant corpus. Missing an
-optional improvement is not a shortfall. Citations and the rationale name the reviewed boundary.
+optional improvement is not a shortfall. Citations and the answers name the reviewed boundary.
 
-`NOT_APPLICABLE` requires an inapplicability warrant identifying the fact that excludes the occasion.
-`UNDETERMINED` requires an undecidability warrant naming the open question and what would settle it.
-Neither contributes to the decided-outcome denominator. Report both separately when measuring
-coverage: combining them hides the difference between no occasion and unresolved assessment.
-Missing, truncated, or failed required capture is a review readiness failure and creates no observation.
+`NOT_APPLICABLE` and `UNDETERMINED` each carry a warrant derived from the answers that decided them
+([evidence warrants](./practice-feedback-schema.md#evidence-warrants)). Neither contributes to the
+decided-outcome denominator. Report both separately when measuring coverage: combining them hides the
+difference between no occasion and unresolved assessment. Missing, truncated, or failed required
+capture is a review readiness failure and creates no observation.
 
-For a change to saved settings, complete non-destructive restart instructions can establish `MET`.
-Missing a required restart check, or instructions that erase the state under test, establishes
-`NOT_MET`. An empty change may establish `NOT_APPLICABLE`. Conflicting captured requirements that
-prevent a judgment may establish `UNDETERMINED`. A missing captured description establishes none of
+For a change to saved settings, a rule can decide `MET` when complete non-destructive restart
+instructions answer every question favourably. A **No** to whether the instructions check the restart,
+or a **Yes** to whether they erase the state under test, can lead a rule to `NOT_MET`. An empty change
+can lead the occasion question to `NOT_APPLICABLE`. Conflicting captured requirements leave a question
+open and may leave the outcome `UNDETERMINED`. A missing captured description establishes none of
 these outcomes: capture must succeed first.
 
-The sandbox, server, and database reject invalid outcomes and severity combinations. Delivery remains
-an independent decision; see the [review pipeline](./practice-review-pipeline.mdx).
+The editor and the server refuse a judgment whose rules are incomplete or unreachable, or that gives a
+severity to anything but `NOT_MET`; the database rejects any other severity combination. Delivery
+remains an independent decision; see the [review pipeline](./practice-review-pipeline.mdx).
 
 ## Member onboarding and AI choices
 

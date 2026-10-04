@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -227,10 +228,12 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         p.setSlug(slug);
         p.setName(name);
         p.setCriteria(criteria);
+        p.setJudgment(PracticeJudgment.holistic());
         p.setAutonomy(PracticeAutonomy.AUTOMATIC);
         PracticeTestEvidence.configure(p, ArtifactKinds.PULL_REQUEST);
         p.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         var revision = new PracticeRevision();
+        ReflectionTestUtils.setField(revision, "judgment", PracticeJudgment.holistic());
         ReflectionTestUtils.setField(revision, "id", Math.abs((long) slug.hashCode()) + 1);
         p.setCurrentRevision(revision);
         return p;
@@ -398,8 +401,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                             StandardCharsets.UTF_8))
                     .contains(
                             "Repository generated-path policy",
-                            "NOT_APPLICABLE",
-                            "excludes-generated-and-build-artifacts");
+                            "is answered NO when no hand-written changed files remain",
+                            "excludes-generated-and-build-artifacts")
+                    .doesNotContain("NOT_APPLICABLE");
         }
 
         @Test
@@ -561,9 +565,12 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         }
 
         private void admit(AgentJob job, String rawOutputJson) {
-            handler.prepareObservations(
-                            job, objectMapper.readTree(rawOutputJson).path("observations"))
-                    .record(job);
+            JsonNode observations = objectMapper.readTree(rawOutputJson).path("observations");
+            lenient()
+                    .when(deliveryService.judgments(job))
+                    .thenReturn(AnsweredObservations.judgments(
+                            observations.findValuesAsString("practiceSlug").toArray(String[]::new)));
+            handler.prepareObservations(job, observations).record(job);
         }
 
         private de.tum.cit.aet.hephaestus.practices.model.Observation persisted(
@@ -591,11 +598,14 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         void shouldAdmitDesirableBehaviorWithinSecurityPractice() {
             String rawOutput = """
                 {"observations": [{
-                  "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
-                  "summary": "The harmful behaviour is good",
-                  "outcome": "MET", "severity": null,
-                  "evidenceRationale": "Original evidence rationale",
-                  "evidence": {}
+                    "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
+                    "summary": "The harmful behaviour is good",
+                    "answers": [
+                      { "question": "has_occasion", "answer": "YES", "because": "The cited line shows it.", "citations": [{ "sourceKind": "scm.pull-request.core", "artifactPath": "context/metadata.json", "path": "context/metadata.json", "startLine": 1, "endLine": 1, "quote": "{" }] },
+                      { "question": "meets_standard", "answer": "YES", "because": "The cited line shows it.", "citations": [{ "sourceKind": "scm.pull-request.core", "artifactPath": "context/metadata.json", "path": "context/metadata.json", "startLine": 1, "endLine": 1, "quote": "{" }] },
+                      { "question": "major_shortfall", "answer": "NO", "because": "The cited line shows it.", "citations": [{ "sourceKind": "scm.pull-request.core", "artifactPath": "context/metadata.json", "path": "context/metadata.json", "startLine": 1, "endLine": 1, "quote": "{" }] },
+                      { "question": "critical_shortfall", "answer": "NO", "because": "The cited line shows it.", "citations": [{ "sourceKind": "scm.pull-request.core", "artifactPath": "context/metadata.json", "path": "context/metadata.json", "startLine": 1, "endLine": 1, "quote": "{" }] }
+                    ]
                 }]}
                 """;
             AgentJob job = jobWithOutput(rawOutput);
@@ -890,10 +900,12 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "avoids-insecure-defaults-and-over-broad-permissions",
                     "summary": "Hard-coded credential",
-                    "outcome": "NOT_MET",
-                    "severity": "CRITICAL",
-                    "evidenceRationale": "A live API key is committed.",
-                    "evidence": { "citations": [{ "path": "Sources/Config.swift", "startLine": 3 }] }
+                    "answers": [
+                      { "question": "has_occasion", "answer": "YES", "because": "The cited line shows it.", "citations": [{ "path": "Sources/Config.swift", "startLine": 3 }] },
+                      { "question": "meets_standard", "answer": "NO", "because": "The cited line shows it.", "citations": [{ "path": "Sources/Config.swift", "startLine": 3 }] },
+                      { "question": "major_shortfall", "answer": "YES", "because": "The cited line shows it.", "citations": [{ "path": "Sources/Config.swift", "startLine": 3 }] },
+                      { "question": "critical_shortfall", "answer": "YES", "because": "The cited line shows it.", "citations": [{ "path": "Sources/Config.swift", "startLine": 3 }] }
+                    ]
                   }]
                 }
                 """;
@@ -915,11 +927,14 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         private static final String NOTHING_DECIDED = """
             {
               "observations": [{
-                "practiceSlug": "pr-description-quality",
-                "summary": "Not applicable here",
-                "outcome": "NOT_APPLICABLE", "severity": null,
-                "evidenceRationale": "The practice has no subject in this change.",
-                "evidence": { "citations": [], "inapplicability": { "reason": "No relevant subject exists." } }
+                    "practiceSlug": "pr-description-quality",
+                    "summary": "Not applicable here",
+                    "answers": [
+                      { "question": "has_occasion", "answer": "NO", "because": "The cited line shows it.", "citations": [{ "sourceKind": "scm.pull-request.core", "artifactPath": "context/metadata.json", "path": "context/metadata.json", "startLine": 1, "endLine": 1, "quote": "{" }] },
+                      { "question": "meets_standard", "answer": "NO", "because": "The cited line shows it.", "citations": [{ "sourceKind": "scm.pull-request.core", "artifactPath": "context/metadata.json", "path": "context/metadata.json", "startLine": 1, "endLine": 1, "quote": "{" }] },
+                      { "question": "major_shortfall", "answer": "NO", "because": "The cited line shows it.", "citations": [{ "sourceKind": "scm.pull-request.core", "artifactPath": "context/metadata.json", "path": "context/metadata.json", "startLine": 1, "endLine": 1, "quote": "{" }] },
+                      { "question": "critical_shortfall", "answer": "NO", "because": "The cited line shows it.", "citations": [{ "sourceKind": "scm.pull-request.core", "artifactPath": "context/metadata.json", "path": "context/metadata.json", "startLine": 1, "endLine": 1, "quote": "{" }] }
+                    ]
               }]
             }
             """;
@@ -936,7 +951,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                             ObservationsRefusedException.class,
                             e -> assertThat(e.reasonCode()).isEqualTo("did_not_read_the_diff"))
                     .hasMessageContaining("answered without reading it");
-            verifyNoInteractions(deliveryService);
+            verify(deliveryService, never()).prepare(any(), any());
         }
 
         @Test
@@ -962,20 +977,12 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                   "observations": [{
                     "practiceSlug": "pr-description-quality",
                     "summary": "Not applicable here",
-                    "outcome": "NOT_APPLICABLE", "severity": null,
-                    "evidenceRationale": "The practice has no subject in this change.",
-                    "evidence": {
-                      "citations": [{
-                        "sourceKind": "scm.pull-request.diff",
-                        "artifactPath": "context/change.json",
-                        "path": "Sources/Auth.swift",
-                        "side": "NEW",
-                        "startLine": 1,
-                        "endLine": 1,
-                        "quote": "+changed"
-                      }],
-                      "inapplicability": { "reason": "No relevant subject exists." }
-                    }
+                    "answers": [
+                      { "question": "has_occasion", "answer": "NO", "because": "The cited line shows it.", "citations": [{ "sourceKind": "scm.pull-request.diff", "artifactPath": "context/change.json", "path": "Sources/Auth.swift", "side": "NEW", "startLine": 1, "endLine": 1, "quote": "+changed" }] },
+                      { "question": "meets_standard", "answer": "NO", "because": "The cited line shows it.", "citations": [{ "sourceKind": "scm.pull-request.diff", "artifactPath": "context/change.json", "path": "Sources/Auth.swift", "side": "NEW", "startLine": 1, "endLine": 1, "quote": "+changed" }] },
+                      { "question": "major_shortfall", "answer": "NO", "because": "The cited line shows it.", "citations": [{ "sourceKind": "scm.pull-request.diff", "artifactPath": "context/change.json", "path": "Sources/Auth.swift", "side": "NEW", "startLine": 1, "endLine": 1, "quote": "+changed" }] },
+                      { "question": "critical_shortfall", "answer": "NO", "because": "The cited line shows it.", "citations": [{ "sourceKind": "scm.pull-request.diff", "artifactPath": "context/change.json", "path": "Sources/Auth.swift", "side": "NEW", "startLine": 1, "endLine": 1, "quote": "+changed" }] }
+                    ]
                   }]
                 }
                 """;

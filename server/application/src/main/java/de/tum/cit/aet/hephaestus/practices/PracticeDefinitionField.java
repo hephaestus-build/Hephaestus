@@ -9,6 +9,7 @@ public enum PracticeDefinitionField {
     SUBJECT,
     PRECONDITION,
     CRITERIA,
+    JUDGMENT,
     PRECOMPUTE_SCRIPT,
     AUTOMATED_REVIEW_POLICY,
     WHY_IT_MATTERS,

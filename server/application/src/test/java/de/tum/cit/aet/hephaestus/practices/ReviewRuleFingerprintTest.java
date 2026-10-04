@@ -80,7 +80,7 @@ class ReviewRuleFingerprintTest extends BaseUnitTest {
         PracticeDefinition reviewer = definition(
                 author.signals(), author.evidenceRequirements(), author.reviewWhen(), ActorRole.REVIEWER, null);
         assertThat(fingerprintOf(reviewer)).isNotEqualTo(fingerprintOf(author));
-        assertThat(fingerprintOf(reviewer)).startsWith("v5:");
+        assertThat(fingerprintOf(reviewer)).startsWith("v6:");
     }
 
     @Test
@@ -100,6 +100,7 @@ class ReviewRuleFingerprintTest extends BaseUnitTest {
                 null,
                 "Criteria.",
                 null,
+                null,
                 policy,
                 null,
                 null,
@@ -112,6 +113,7 @@ class ReviewRuleFingerprintTest extends BaseUnitTest {
                 ActorRole.AUTHOR,
                 null,
                 "Criteria.",
+                null,
                 null,
                 policy,
                 null,
@@ -130,6 +132,7 @@ class ReviewRuleFingerprintTest extends BaseUnitTest {
                 definition.subject(),
                 definition.precondition(),
                 "Criteria.",
+                null,
                 null,
                 new PracticeAutomatedReviewPolicy(
                         new SourceContractVersion("1.2.0"),
@@ -165,6 +168,7 @@ class ReviewRuleFingerprintTest extends BaseUnitTest {
                 subject,
                 precondition,
                 "Criteria.",
+                PracticeJudgment.holistic(),
                 null,
                 PracticeTestEvidence.pullRequest(),
                 null,

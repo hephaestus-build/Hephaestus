@@ -95,6 +95,7 @@ class CatalogOriginTest extends BaseUnitTest {
                 ActorRole.AUTHOR,
                 null,
                 "Seed criteria",
+                PracticeJudgment.holistic(),
                 null,
                 PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                 "Reason",
@@ -116,6 +117,7 @@ class CatalogOriginTest extends BaseUnitTest {
                 ActorRole.AUTHOR,
                 null,
                 criteria,
+                PracticeJudgment.holistic(),
                 null,
                 PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                 "Reason",
@@ -139,6 +141,7 @@ class CatalogOriginTest extends BaseUnitTest {
         PracticeTestEvidence.configure(practice, ArtifactKinds.PULL_REQUEST);
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setCriteria(criteria);
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         practice.setWhyItMatters("Reason");
         if (copiedFromFingerprint != null) {

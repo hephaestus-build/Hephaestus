@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -131,6 +132,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         practice.setSlug("test-practice");
         practice.setName("Test Practice");
         practice.setCriteria("Test description");
+        practice.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.save(practice);
         practice = pinCurrentRevision(practice);
@@ -163,7 +165,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         ReflectionTestUtils.setField(
                 historical,
                 "reviewRuleFingerprint",
-                scheme.equals("null") ? null : (scheme.equals("v4") ? "v4:" : "v5:") + "b".repeat(64));
+                scheme.equals("null") ? null : (scheme.equals("v4") ? "v4:" : "v6:") + "b".repeat(64));
         historical = practiceRevisionRepository.save(historical);
         Instant first = Instant.parse("2026-03-18T10:00:00Z");
         insertSummaryObservation(agentJob, latestIsHistorical ? current : historical, first);
@@ -198,6 +200,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                 aboutUser.getId(),
                 "The criteria are met",
                 "MET",
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -256,6 +260,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         otherPractice.setSlug("other-issue-practice");
         otherPractice.setName("Other issue practice");
         otherPractice.setCriteria("Other criterion");
+        otherPractice.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(otherPractice, ScmSignals.PULL_REQUEST_OPENED);
         otherPractice = practiceRepository.save(otherPractice);
         AgentJob otherJob = new AgentJob();
@@ -350,6 +355,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 olderAt.plusSeconds(60),
                 "LIVE");
 
@@ -389,6 +396,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                         aboutUser.getId(),
                         "Issue observation",
                         "MET",
+                        null,
+                        null,
                         null,
                         null,
                         null,
@@ -442,6 +451,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 Instant.now(),
                 "LIVE");
         User otherDeveloper =
@@ -481,6 +492,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     null,
                     "Good quality",
                     null,
+                    null,
+                    null,
                     Instant.now(),
                     "LIVE");
 
@@ -517,6 +530,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
                     now,
                     "LIVE");
 
@@ -533,6 +548,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "Should not insert",
                     "NOT_MET",
                     "MAJOR",
+                    null,
+                    null,
                     null,
                     null,
                     null,
@@ -564,6 +581,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "MAJOR",
                     evidence,
                     "Missing error handling",
+                    null,
+                    null,
                     null,
                     Instant.now(),
                     "LIVE");
@@ -601,6 +620,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
                     Instant.now(),
                     "LIVE");
             assertThat(observationRepository.findAll()).hasSize(1);
@@ -623,6 +644,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             practiceB.setSlug("practice-b");
             practiceB.setName("Practice B");
             practiceB.setCriteria("Workspace B practice");
+            practiceB.setJudgment(PracticeJudgment.holistic());
             PracticeTestEvidence.configure(practiceB, ScmSignals.PULL_REQUEST_OPENED);
             practiceB = practiceRepository.save(practiceB);
             practiceB = pinCurrentRevision(practiceB);
@@ -649,6 +671,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
                     Instant.now(),
                     "LIVE");
             observationRepository.insertIfAbsent(
@@ -664,6 +688,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "WS-B finding",
                     "NOT_MET",
                     "MINOR",
+                    null,
+                    null,
                     null,
                     null,
                     null,
@@ -691,6 +717,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             otherPractice.setSlug("other-practice");
             otherPractice.setName("Other Practice");
             otherPractice.setCriteria("Other description");
+            otherPractice.setJudgment(PracticeJudgment.holistic());
             PracticeTestEvidence.configure(otherPractice, ScmSignals.PULL_REQUEST_OPENED);
             otherPractice = practiceRepository.save(otherPractice);
             otherPractice = pinCurrentRevision(otherPractice);
@@ -711,6 +738,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
                     Instant.now(),
                     "LIVE");
             observationRepository.insertIfAbsent(
@@ -725,6 +754,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     aboutUser.getId(),
                     "Cascade test 2",
                     "MET",
+                    null,
+                    null,
                     null,
                     null,
                     null,
@@ -772,6 +803,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "finding",
                     outcome,
                     severity,
+                    null,
+                    null,
                     null,
                     null,
                     null,
@@ -872,6 +905,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     aboutUser.getId(),
                     summary,
                     "MET",
+                    null,
+                    null,
                     null,
                     null,
                     null,
@@ -1007,6 +1042,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
                     Instant.now(),
                     "LIVE");
 
@@ -1044,7 +1081,9 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     aboutUser.getId(),
                     "Tiebreak observation",
                     outcome,
-                    "NOT_MET".equals(outcome) ? "INFO" : null,
+                    "NOT_MET".equals(outcome) ? "MINOR" : null,
+                    null,
+                    null,
                     null,
                     null,
                     null,
@@ -1107,6 +1146,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             otherPractice.setSlug("other-practice");
             otherPractice.setName("Other Practice");
             otherPractice.setCriteria("Other criteria");
+            otherPractice.setJudgment(PracticeJudgment.holistic());
             PracticeTestEvidence.configure(otherPractice, ScmSignals.PULL_REQUEST_OPENED);
             otherPractice = practiceRepository.save(otherPractice);
             otherPractice = pinCurrentRevision(otherPractice);
@@ -1267,6 +1307,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
                     at,
                     "LIVE");
         }
@@ -1285,6 +1327,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "Hidden-repo exclusion observation",
                     "NOT_MET",
                     "MAJOR",
+                    null,
+                    null,
                     null,
                     null,
                     null,
@@ -1361,6 +1405,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "Backfill visibility observation",
                     "NOT_MET",
                     "MAJOR",
+                    null,
+                    null,
                     null,
                     null,
                     null,

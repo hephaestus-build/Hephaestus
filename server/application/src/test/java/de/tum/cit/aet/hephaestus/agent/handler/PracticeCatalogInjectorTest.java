@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -60,8 +61,10 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
         p.setSlug(slug);
         p.setName(slug);
         p.setCriteria("criteria for " + slug);
+        p.setJudgment(PracticeJudgment.holistic());
         p.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         var revision = new PracticeRevision();
+        ReflectionTestUtils.setField(revision, "judgment", PracticeJudgment.holistic());
         ReflectionTestUtils.setField(revision, "id", Math.abs((long) slug.hashCode()) + 1);
         p.setCurrentRevision(revision);
         PracticeTestEvidence.configure(p, signals);
@@ -331,6 +334,10 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
         // is what the run staged, and INDEX.json is where that is stated, once.
         assertThat(index).contains("readsSources").contains("scm.pull-request.diff");
         assertThat(index).doesNotContain("allowedSources");
+        // The holistic escalations only grade severity: staged as such, so one left out is read as open.
+        assertThat(index.replaceAll("\\s", ""))
+                .contains("\"key\":\"major_shortfall\"")
+                .contains("\"gradesSeverityOnly\":true");
         assertThat(files)
                 .containsKey(md("authoring"))
                 .containsKey(md("retrospective"))

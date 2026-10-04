@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationThreadProjection;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
@@ -15,6 +17,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +49,7 @@ class ConversationThreadContentSourceTest extends BaseUnitTest {
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put("slack_channel_id", "C0ABC");
         metadata.put("slack_thread_ts", "1700000000.100000");
+        metadata.put("about_user_id", 42L);
         job.setMetadata(metadata);
         return job;
     }
@@ -64,7 +68,8 @@ class ConversationThreadContentSourceTest extends BaseUnitTest {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("channel", "C0ABC");
         payload.put("messageCount", 3);
-        when(projection.buildThreadPayload(7L, "C0ABC", "1700000000.100000")).thenReturn(payload);
+        when(projection.buildThreadPayload(7L, "C0ABC", "1700000000.100000", 42L))
+                .thenReturn(payload);
 
         Map<String, byte[]> files = new HashMap<>();
         source.contribute(new ContextRequest.ConversationReviewRequest(job), files);
@@ -77,12 +82,24 @@ class ConversationThreadContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRefuseAJobThatNamesNoReviewedParticipant() {
+        AgentJob job = conversationJob();
+        ((ObjectNode) Objects.requireNonNull(job.getMetadata())).remove("about_user_id");
+
+        // Without the participant, every turn would be judged as theirs.
+        assertThatThrownBy(() -> source.contribute(new ContextRequest.ConversationReviewRequest(job), new HashMap<>()))
+                .isInstanceOf(JobPreparationException.class)
+                .hasMessageContaining("no reviewed participant");
+    }
+
+    @Test
     void reportsAnEmptyFullyEnumeratedThreadAsCompleteEmptyEvidence() {
         AgentJob job = conversationJob();
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("messageCount", 0);
         payload.put("truncated", false);
-        when(projection.buildThreadPayload(7L, "C0ABC", "1700000000.100000")).thenReturn(payload);
+        when(projection.buildThreadPayload(7L, "C0ABC", "1700000000.100000", 42L))
+                .thenReturn(payload);
         SourceKind kind = new SourceKind("slack.conversation.thread");
 
         when(projection.threadReadability(7L, "C0ABC", "1700000000.100000"))
@@ -101,7 +118,8 @@ class ConversationThreadContentSourceTest extends BaseUnitTest {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("messageCount", 0);
         payload.put("truncated", false);
-        when(projection.buildThreadPayload(7L, "C0ABC", "1700000000.100000")).thenReturn(payload);
+        when(projection.buildThreadPayload(7L, "C0ABC", "1700000000.100000", 42L))
+                .thenReturn(payload);
         when(projection.threadReadability(7L, "C0ABC", "1700000000.100000"))
                 .thenReturn(ConversationThreadProjection.ThreadReadability.CONSENT_NOT_ACTIVE);
         SourceKind kind = new SourceKind("slack.conversation.thread");
@@ -120,7 +138,8 @@ class ConversationThreadContentSourceTest extends BaseUnitTest {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("messageCount", 0);
         payload.put("truncated", false);
-        when(projection.buildThreadPayload(7L, "C0ABC", "1700000000.100000")).thenReturn(payload);
+        when(projection.buildThreadPayload(7L, "C0ABC", "1700000000.100000", 42L))
+                .thenReturn(payload);
         when(projection.threadReadability(7L, "C0ABC", "1700000000.100000"))
                 .thenReturn(ConversationThreadProjection.ThreadReadability.NOT_FOUND);
         SourceKind kind = new SourceKind("slack.conversation.thread");

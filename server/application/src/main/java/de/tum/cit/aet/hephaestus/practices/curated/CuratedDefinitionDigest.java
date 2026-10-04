@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 final class CuratedDefinitionDigest {
 
     private static final String GROUP_V1 = "group:v1:";
-    private static final String PRACTICE_V2 = "practice:v3:";
+    private static final String PRACTICE = "practice:v4:";
 
     private CuratedDefinitionDigest() {}
 
@@ -15,7 +15,7 @@ final class CuratedDefinitionDigest {
         String prefix =
                 switch (definition) {
                     case GroupDefinition ignored -> GROUP_V1;
-                    case PracticeDefinition ignored -> PRACTICE_V2;
+                    case PracticeDefinition ignored -> PRACTICE;
                     default ->
                         throw new IllegalArgumentException("Unsupported catalog definition: " + definition.getClass());
                 };

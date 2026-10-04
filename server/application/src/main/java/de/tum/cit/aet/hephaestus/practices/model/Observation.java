@@ -17,6 +17,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -189,6 +190,21 @@ public class Observation {
 
     @Column(name = "evidence_rationale", columnDefinition = "TEXT")
     private String evidenceRationale;
+
+    /**
+     * The reviewer's answer to every question of the practice revision's judgment, in question order; the outcome
+     * and severity are derived from them. NULL on an observation recorded before reviews answered questions.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "answers", columnDefinition = "jsonb")
+    private @Nullable List<ObservationAnswer> answers;
+
+    /**
+     * The judgment rule that decided the outcome. NULL when open answers left the outcome UNDETERMINED, and on an
+     * observation recorded before reviews answered questions.
+     */
+    @Column(name = "rule_id", length = 40)
+    private @Nullable String ruleId;
 
     @NotNull
     @Column(name = "observed_at", nullable = false)

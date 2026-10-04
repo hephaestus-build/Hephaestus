@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -49,6 +50,12 @@ public record PracticeDTO(
 
         @NonNull @Schema(description = "Practice review criteria")
         String criteria,
+
+        @Nullable
+        @Schema(
+                description = "Questions the review answers and the rules that decide the outcome; absent when the"
+                        + " practice is not reviewed automatically")
+        PracticeJudgment judgment,
 
         @Nullable @Schema(description = "TypeScript/Node precompute script for static analysis before AI review")
         String precomputeScript,
@@ -113,6 +120,7 @@ public record PracticeDTO(
                 practice.getSubject(),
                 practice.getPrecondition(),
                 practice.getCriteria(),
+                practice.getJudgment(),
                 practice.getPrecomputeScript(),
                 practice.getAutomatedReviewPolicy(),
                 PracticeAutomatedReviewValidation.authorDeclared(practice.getSlug(), PracticeDefinition.from(practice)),

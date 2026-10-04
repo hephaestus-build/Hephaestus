@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.groupdetail;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -58,6 +59,7 @@ class PracticeGroupTrendControllerIntegrationTest extends AbstractWorkspaceInteg
         practice.setSlug("small-functions");
         practice.setName("Keep functions small");
         practice.setCriteria("Keep functions focused on one concern.");
+        practice.setJudgment(PracticeJudgment.holistic());
         practiceRepository.save(practice);
     }
 

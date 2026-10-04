@@ -64,6 +64,7 @@ function asDefinitionValue(practice: Practice): PracticeDefinitionValue {
 		name: practice.name,
 		...normalizeReviewSettings(practice),
 		criteria: practice.criteria,
+		...(practice.judgment ? { judgment: practice.judgment } : {}),
 		...(hasText(practice.groupSlug) ? { groupSlug: practice.groupSlug } : {}),
 		...(hasText(practice.whyItMatters) ? { whyItMatters: practice.whyItMatters } : {}),
 		...(hasText(practice.whatGoodLooksLike)
@@ -103,6 +104,7 @@ export function PracticeForm(props: PracticeFormProps) {
 			{
 				name: definition.name,
 				criteria: definition.criteria,
+				judgment: definition.judgment,
 				signals: definition.signals,
 				evidenceRequirements: definition.evidenceRequirements,
 				reviewWhen: definition.reviewWhen,

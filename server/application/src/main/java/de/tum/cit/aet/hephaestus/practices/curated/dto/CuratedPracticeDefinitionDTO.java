@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewValidation;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -36,6 +37,13 @@ public record CuratedPracticeDefinitionDTO(
 
         @Nullable PracticePrecondition precondition,
         @NonNull String criteria,
+
+        @Schema(
+                description = "Questions the review answers and the rules that decide the outcome; absent when the"
+                        + " practice is not reviewed automatically")
+        @Nullable
+        PracticeJudgment judgment,
+
         @Nullable String precomputeScript,
         @NonNull PracticeAutomatedReviewPolicy automatedReviewPolicy,
         @NonNull PracticeAutomatedReviewValidation automatedReviewValidation,
@@ -53,6 +61,7 @@ public record CuratedPracticeDefinitionDTO(
                 definition.subject(),
                 definition.precondition(),
                 definition.criteria(),
+                definition.judgment(),
                 definition.precomputeScript(),
                 definition.automatedReviewPolicy(),
                 PracticeAutomatedReviewValidation.authorDeclared(practiceSlug, definition),

@@ -719,7 +719,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     /** An observation measured under the practice's current review rules; {@code retired} marks it superseded. */
     private static Observation boundObservation(boolean retired) {
         PracticeRevision revision = org.mockito.Mockito.mock(PracticeRevision.class);
-        lenient().when(revision.getReviewRuleFingerprint()).thenReturn("v5:rules");
+        lenient().when(revision.getReviewRuleFingerprint()).thenReturn("v6:rules");
         Practice practice = new Practice();
         practice.setCurrentRevision(revision);
         return Observation.builder()

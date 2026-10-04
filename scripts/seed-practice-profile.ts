@@ -69,7 +69,7 @@ const EVIDENCE_CONTRACT_VERSION = "1.0.0";
 const IN_APP_POSITION_BASE = 7000;
 
 type Outcome = "MET" | "NOT_MET" | "NOT_APPLICABLE" | "UNDETERMINED";
-type Severity = "CRITICAL" | "MAJOR" | "MINOR" | "INFO";
+type Severity = "CRITICAL" | "MAJOR" | "MINOR";
 
 interface ArtifactRef {
 	kind: "scm.pull_request" | "scm.issue";

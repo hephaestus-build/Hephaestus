@@ -1,0 +1,7 @@
+---
+"hephaestus": minor
+---
+
+A practice review now answers a short list of yes-or-no questions about the work, and the practice's own rules turn the answers into the result. Each observation shows how it was decided: the deciding rule's reason first, then every answer with the lines it rests on, which answers decided it, and what would settle a question the evidence left open. An open question no longer becomes a not-met result: it decides only when every way of settling it leads to the same result. Practice authors write the questions and rules in the practice editor, under **How the review decides**, in the workspace and in the instance catalogue alike; saving checks that every combination of answers reaches a rule. **Restore the starting questions** goes back to the questions a new practice starts with. Every bundled practice ships its own questions and rules. The informational severity is gone: feedback that is not met is minor, major or critical.
+
+**Operators:** This pre-1.0 release changes the practice and observation contract. Back up the database before upgrading, let running reviews finish, and deploy the server, review runtime, webapp and browser extension together. Existing practices that Hephaestus reviews receive starting questions that restate their criteria; informational observations become minor. Read the migration guide before upgrading; restoring the verified backup is the recovery path.

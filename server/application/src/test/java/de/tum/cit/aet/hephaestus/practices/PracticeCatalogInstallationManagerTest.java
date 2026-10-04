@@ -135,6 +135,7 @@ class PracticeCatalogInstallationManagerTest extends BaseUnitTest {
                 ActorRole.AUTHOR,
                 null,
                 "Seed criteria",
+                PracticeJudgment.holistic(),
                 null,
                 PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                 "Reason",

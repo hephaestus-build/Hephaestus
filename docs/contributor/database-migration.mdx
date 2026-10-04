@@ -195,3 +195,16 @@ and the flat practice definition. Restore the verified backup to undo the destru
 
 Preserve schema versions on exported evaluation data. Frozen historical reports must not be silently
 reinterpreted as assessments of the current standard.
+
+## Practice judgment transition before 1.0
+
+The judgment cutover of
+[ADR 0051](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0051-practices-decide-from-answered-questions.md)
+is one forward changeset. Every practice with automated review, its current revision, every reviewed
+instance override and every adopted base receives the
+[starting judgment](./practice-review-glossary.mdx#deriving-the-outcome), which restates what its
+criteria already asked. Earlier revisions and earlier observations keep no judgment and no answers,
+because none were asked or given. `INFO` observations become `MINOR`. The review-rule fingerprint
+scheme becomes `v6:` and the curated catalog digest `practice:v4:`. The changeset's rollback stops:
+restore a verified backup, because the starting judgments and the mapped severities cannot be told
+apart from later edits.

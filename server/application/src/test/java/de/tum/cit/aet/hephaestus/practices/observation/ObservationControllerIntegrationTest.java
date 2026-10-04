@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -117,6 +118,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         practice.setSlug(slug);
         practice.setName(name);
         practice.setCriteria("Description for " + slug);
+        practice.setJudgment(PracticeJudgment.holistic());
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         practice = practiceRepository.saveAndFlush(practice);
@@ -151,6 +153,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 "NOT_MET".equals(outcome) ? severity : null,
                 DIFF_EVIDENCE_JSON,
                 "Test reasoning for " + title,
+                null,
+                null,
                 null,
                 detectedAt,
                 "LIVE");
@@ -383,7 +387,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldReturnOnlyOwnObservations() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "My observation", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "My observation", "MET", null, 0.9f, "scm.pull_request", 1L, now);
 
             // Other user's observation should NOT appear
             User otherUser = persistUser("other-user");
@@ -410,7 +414,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldFilterByPracticeSlug() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "Practice A", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Practice A", "MET", null, 0.9f, "scm.pull_request", 1L, now);
             insertObservation(
                     practiceB, developer, "Practice B", "NOT_MET", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
 
@@ -443,7 +447,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
             practiceRepository.save(practiceA);
 
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "In group", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "In group", "MET", null, 0.9f, "scm.pull_request", 1L, now);
             // practiceB has NO group — the LEFT JOIN must keep it visible when no filter is set.
             insertObservation(practiceB, developer, "No group", "NOT_MET", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
 
@@ -477,7 +481,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("filters by artifact kind so a single integration's events can be shown")
         void shouldFilterByArtifactKinds() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "From a PR", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "From a PR", "MET", null, 0.9f, "scm.pull_request", 1L, now);
             insertObservation(
                     practiceA, developer, "From Slack", "NOT_MET", "MINOR", 0.8f, "chat.conversation_thread", 2L, now);
 
@@ -604,7 +608,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("drops NOT_APPLICABLE rows when displayableOnly is set")
         void shouldDropNotApplicableWhenDisplayableOnly() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "Observed", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Observed", "MET", null, 0.9f, "scm.pull_request", 1L, now);
             insertObservation(
                     practiceA, developer, "Did not apply", "NOT_APPLICABLE", null, 0.9f, "scm.pull_request", 2L, now);
 
@@ -626,7 +630,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldFilterByObservation() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "Good", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Good", "MET", null, 0.9f, "scm.pull_request", 1L, now);
             insertObservation(practiceA, developer, "Bad", "NOT_MET", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
 
             webTestClient
@@ -647,7 +651,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldFilterByPracticeSlugAndObservation() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "A pos", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "A pos", "MET", null, 0.9f, "scm.pull_request", 1L, now);
             insertObservation(practiceA, developer, "A neg", "NOT_MET", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
             insertObservation(practiceB, developer, "B neg", "NOT_MET", "MINOR", 0.7f, "scm.pull_request", 3L, now);
 
@@ -683,7 +687,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                         developer,
                         "Observation " + i,
                         "MET",
-                        "INFO",
+                        null,
                         0.9f,
                         "scm.pull_request",
                         (long) (i + 1),
@@ -803,7 +807,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     developer,
                     "Oldest",
                     "MET",
-                    "INFO",
+                    null,
                     0.9f,
                     "scm.pull_request",
                     1L,
@@ -814,7 +818,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     developer,
                     "Middle",
                     "MET",
-                    "INFO",
+                    null,
                     0.7f,
                     "scm.pull_request",
                     3L,
@@ -841,7 +845,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldNotReturnObservationsFromDifferentWorkspace() {
             Instant now = Instant.now();
             insertObservation(
-                    practiceA, developer, "My WS observation", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+                    practiceA, developer, "My WS observation", "MET", null, 0.9f, "scm.pull_request", 1L, now);
 
             // Create a second workspace with its own practice and observation
             User otherOwner = persistUser("other-ws-owner");
@@ -855,6 +859,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
             otherPractice.setSlug("other-practice");
             otherPractice.setName("Other Practice");
             otherPractice.setCriteria("Desc");
+            otherPractice.setJudgment(PracticeJudgment.holistic());
             PracticeTestEvidence.configure(otherPractice, ScmSignals.PULL_REQUEST_OPENED);
             otherPractice.setAutonomy(PracticeAutonomy.AUTOMATIC);
             otherPractice = practiceRepository.save(otherPractice);
@@ -881,6 +886,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "MAJOR",
                     null,
                     "reasoning",
+                    null,
+                    null,
                     null,
                     now,
                     "LIVE");
@@ -945,13 +952,13 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldReturnCorrectCountsAndFields() {
             Instant now = Instant.now();
             Instant oldest = now.minus(2, ChronoUnit.HOURS);
-            insertObservation(practiceA, developer, "A pos 1", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "A pos 1", "MET", null, 0.9f, "scm.pull_request", 1L, now);
             insertObservation(
                     practiceA,
                     developer,
                     "A pos 2",
                     "MET",
-                    "INFO",
+                    null,
                     0.8f,
                     "scm.pull_request",
                     2L,
@@ -1021,7 +1028,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldExcludeOtherUsersObservations() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "Mine", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Mine", "MET", null, 0.9f, "scm.pull_request", 1L, now);
 
             User otherUser = persistUser("someone-else");
             insertObservation(practiceA, otherUser, "Theirs", "NOT_MET", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
@@ -1239,7 +1246,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldReturn404ForOtherUserObservation() {
             User otherUser = persistUser("other-developer");
             UUID otherId = insertObservation(
-                    practiceA, otherUser, "Not mine", "MET", "INFO", 0.9f, "scm.pull_request", 1L, Instant.now());
+                    practiceA, otherUser, "Not mine", "MET", null, 0.9f, "scm.pull_request", 1L, Instant.now());
 
             webTestClient
                     .get()
@@ -1297,6 +1304,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     evidenceJson,
                     "reasoning",
                     null,
+                    null,
+                    null,
                     Instant.now(),
                     "LIVE");
 
@@ -1341,6 +1350,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     arrayEvidenceJson,
                     "reasoning",
                     null,
+                    null,
+                    null,
                     Instant.now(),
                     "LIVE");
 
@@ -1363,15 +1374,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldReturn404ForObservationInDifferentWorkspace() {
             // Create observation in current workspace
             UUID observationId = insertObservation(
-                    practiceA,
-                    developer,
-                    "WS1 observation",
-                    "MET",
-                    "INFO",
-                    0.9f,
-                    "scm.pull_request",
-                    1L,
-                    Instant.now());
+                    practiceA, developer, "WS1 observation", "MET", null, 0.9f, "scm.pull_request", 1L, Instant.now());
 
             // Create a different workspace
             User otherOwner = persistUser("ws2-owner");
@@ -1403,8 +1406,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
             Instant now = Instant.now();
             insertObservation(
                     practiceA, developer, "Thin PR description", "NOT_MET", "MAJOR", 0.9f, "scm.pull_request", 1L, now);
-            insertObservation(
-                    practiceB, developer, "Thorough review", "MET", "INFO", 0.9f, "scm.pull_request", 2L, now);
+            insertObservation(practiceB, developer, "Thorough review", "MET", null, 0.9f, "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()

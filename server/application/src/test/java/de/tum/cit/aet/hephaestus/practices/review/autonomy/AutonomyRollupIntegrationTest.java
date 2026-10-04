@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.entry;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.dto.AutonomyRollupDTO;
@@ -73,6 +74,7 @@ class AutonomyRollupIntegrationTest extends AbstractWorkspaceIntegrationTest {
         practice.setName("Practice " + slug);
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setCriteria("Detect prompt for " + slug);
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         practice.setGroup(group);
         practice.setAutonomy(autonomy);
@@ -335,6 +337,7 @@ class AutonomyRollupIntegrationTest extends AbstractWorkspaceIntegrationTest {
         theirs.setName("Theirs");
         PracticeTestEvidence.configure(theirs, ScmSignals.PULL_REQUEST_OPENED);
         theirs.setCriteria("Detect prompt for theirs");
+        theirs.setJudgment(PracticeJudgment.holistic());
         theirs.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         theirs.setAutonomy(PracticeAutonomy.OFF);
         practiceRepository.save(theirs);

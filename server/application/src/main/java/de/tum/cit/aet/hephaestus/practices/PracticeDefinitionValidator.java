@@ -38,6 +38,7 @@ public final class PracticeDefinitionValidator {
         }
         rejectDetectorVocabulary("Why it matters", definition.whyItMatters());
         rejectDetectorVocabulary("What good looks like", definition.whatGoodLooksLike());
+        validateJudgment(definition.judgment());
         validateEvidence(definition.artifactKind(), definition);
     }
 
@@ -116,6 +117,34 @@ public final class PracticeDefinitionValidator {
             case REVIEWER -> "Reviewer";
             case MERGER -> "Whoever merged it";
         };
+    }
+
+    /**
+     * The questions are what the reviewer answers, and rule reasons are what people read; neither may carry a
+     * result label, so the reviewer is never steered toward an outcome it does not decide.
+     */
+    private static void validateJudgment(@Nullable PracticeJudgment judgment) {
+        if (judgment == null) {
+            return;
+        }
+        for (PracticeQuestion question : judgment.questions()) {
+            String label = "Question “" + question.title() + "”";
+            rejectResultLabel(label, question.title());
+            rejectResultLabel(label, question.question());
+            rejectResultLabel(label, question.yes());
+            rejectResultLabel(label, question.no());
+        }
+        for (PracticeRule rule : judgment.rules()) {
+            rejectResultLabel("The reason of rule “" + rule.id() + "”", rule.reason());
+        }
+    }
+
+    private static void rejectResultLabel(String field, String value) {
+        Matcher label = DETECTOR_VOCAB.matcher(value);
+        if (label.find()) {
+            throw new IllegalArgumentException(field + " names the review result “" + label.group()
+                    + "”. The rules decide the result; say what the evidence shows in plain words.");
+        }
     }
 
     private static void rejectDetectorVocabulary(String field, @Nullable String value) {

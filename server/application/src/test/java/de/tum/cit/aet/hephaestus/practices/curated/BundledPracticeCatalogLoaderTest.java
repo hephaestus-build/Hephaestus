@@ -20,7 +20,10 @@ import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeQuestion;
+import de.tum.cit.aet.hephaestus.practices.PracticeRule;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -114,8 +117,16 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
     @Test
     void shouldDefinePracticeStandardsWithoutLegacyAxes() {
         assertThat(loader.catalog().practices()).allSatisfy(practice -> {
+            if (practice.definition().automatedReviewPolicy().automatedReview().canAttemptAutomatedReview()) {
+                assertThat(practice.definition().judgment())
+                        .as("%s is reviewed, so its rules decide the outcome", practice.slug())
+                        .isNotNull();
+                assertThat(practice.definition().judgment().rules())
+                        .extracting(PracticeRule::outcome)
+                        .contains(Outcome.MET, Outcome.NOT_MET);
+            }
             assertThat(practice.definition().criteria())
-                    .contains("REVIEW FOCUS:", "MET", "NOT_MET")
+                    .contains("REVIEW FOCUS:")
                     .doesNotContain(
                             "TARGET ASSESSMENT:",
                             "fixed target",
@@ -150,8 +161,21 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                 .filteredOn(practice -> practice.slug().equals("asks-answerable-questions")
                         || practice.slug().equals("posts-clear-status-and-blocker-updates"))
                 .hasSize(2)
-                .allSatisfy(
-                        practice -> assertThat(practice.definition().criteria()).contains("MET", "not NOT_APPLICABLE"));
+                .allSatisfy(practice -> {
+                    // A real question or update whose context the surrounding turns supply is met, never
+                    // inapplicable: no rule that rules the practice out reads a question crediting those turns.
+                    var judgment = java.util.Objects.requireNonNull(
+                            practice.definition().judgment());
+                    var crediting = judgment.questions().stream()
+                            .filter(question -> question.question().contains("surrounding turns"))
+                            .map(PracticeQuestion::key)
+                            .toList();
+                    assertThat(crediting).isNotEmpty();
+                    assertThat(judgment.rules())
+                            .filteredOn(rule -> rule.outcome() == Outcome.NOT_APPLICABLE)
+                            .allSatisfy(
+                                    rule -> assertThat(rule.when().keySet()).doesNotContainAnyElementsOf(crediting));
+                });
     }
 
     @Test

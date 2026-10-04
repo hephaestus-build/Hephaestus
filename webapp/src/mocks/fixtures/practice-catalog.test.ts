@@ -9,7 +9,11 @@ const bundledCatalog = z
 	.object({
 		criteriaPreambles: z.record(z.string(), z.string()),
 		groups: z.array(
-			z.object({ practices: z.array(z.object({ slug: z.string(), criteria: z.string() })) }),
+			z.object({
+				practices: z.array(
+					z.object({ slug: z.string(), criteria: z.string(), judgment: z.unknown() }),
+				),
+			}),
 		),
 	})
 	.parse(
@@ -22,7 +26,7 @@ const bundledCatalog = z
 	);
 
 describe("bundled practice preview fixture", () => {
-	it("renders the actual document preamble and complete practice criteria", () => {
+	it("renders the actual document preamble, complete practice criteria and judgment", () => {
 		const practice = bundledCatalog.groups
 			.flatMap((group) => group.practices)
 			.find((candidate) => candidate.slug === "published-decisions-name-the-alternatives");
@@ -31,5 +35,6 @@ describe("bundled practice preview fixture", () => {
 			`${bundledCatalog.criteriaPreambles["docs.document"]}\n\n---\n\n${practice?.criteria}`,
 		);
 		expect(realPracticeDefinition.criteria).not.toContain("NO_REVIEW_OCCASION");
+		expect(realPracticeDefinition.judgment).toStrictEqual(practice?.judgment);
 	});
 });

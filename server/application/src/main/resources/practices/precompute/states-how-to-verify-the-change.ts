@@ -146,11 +146,11 @@ export default async function statesHowToVerifyTheChange(
 	const directions: string[] = [];
 	if (paths.length === 0 || addedLines + removedLines === 0) {
 		directions.push(
-			"The pinned range changes no lines: an empty diff is one of the kinds the criteria's Occasion section names; cite it through metadata.json changed_files or work/change/files.json.",
+			"The pinned range changes no lines: an empty diff has no runtime result to check (`material_effect`); cite it through metadata.json changed_files or work/change/files.json.",
 		);
 	} else if (kinds.code === 0 && kinds.tests === 0 && kinds.projectConfig === 0) {
 		directions.push(
-			`No code, test or project-configuration file has line changes; the change is ${kinds.images} image(s), ${kinds.diagramFiles} diagram file(s) and ${kinds.prose} prose file(s). Read the prose hunks: if they add setup or run instructions the change is material; if they add an introduction, a glossary, user stories or a diagram's embedding, it is one of the kinds the criteria's Occasion section names.`,
+			`No code, test or project-configuration file has line changes; the change is ${kinds.images} image(s), ${kinds.diagramFiles} diagram file(s) and ${kinds.prose} prose file(s). Read the prose hunks: if they add setup or run instructions the change is material; if they add an introduction, a glossary, user stories or a diagram's embedding, it is one of the kinds with no runtime result to check (\`material_effect\`).`,
 		);
 	} else {
 		directions.push(
@@ -162,15 +162,18 @@ export default async function statesHowToVerifyTheChange(
 			`${unchanged.length} file(s) change no line — moves, renames or binary files: ${unchanged.slice(0, 5).join(", ")}${unchanged.length > 5 ? ", …" : ""}.`,
 		);
 	}
+	// The model reads a bare testing section as "nothing anywhere": say what it settles, once.
+	const elsewhere =
+		" That settles nothing either way: the entry, action and expected result may sit in other sections, an adopted issue, a preview, the documented setup or the author's discussion.";
 	if (testing === null) {
-		directions.push("The description has no testing heading.");
+		directions.push(`The description has no testing heading.${elsewhere}`);
 	} else if (testing.content.length === 0) {
 		directions.push(
-			`The description's testing heading ("${testing.heading}") has no content beneath it once template comments are removed.`,
+			`The description's testing heading ("${testing.heading}") has no content beneath it once template comments are removed.${elsewhere}`,
 		);
 	} else if (PLACEHOLDER_TESTING_TEXT.test(testing.content)) {
 		directions.push(
-			`The description's testing section ("${testing.heading}") holds only "${testing.content}".`,
+			`The description's testing section ("${testing.heading}") holds only "${testing.content}".${elsewhere}`,
 		);
 	} else {
 		directions.push(

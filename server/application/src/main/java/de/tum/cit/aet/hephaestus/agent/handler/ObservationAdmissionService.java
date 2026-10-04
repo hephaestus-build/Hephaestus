@@ -258,6 +258,9 @@ public class ObservationAdmissionService {
                         : observation.getSeverity().name());
         out.put("evidenceRationale", observation.getEvidenceRationale());
         out.set("evidence", observation.getEvidence());
+        // The rule that decided and the answers it decided from: what the composer explains and builds on.
+        out.put("ruleId", observation.getRuleId());
+        out.set("answers", mapper.valueToTree(observation.getAnswers()));
         ArrayNode citations = out.putArray("citations");
         JsonNode source = observation.getEvidence() == null
                 ? null

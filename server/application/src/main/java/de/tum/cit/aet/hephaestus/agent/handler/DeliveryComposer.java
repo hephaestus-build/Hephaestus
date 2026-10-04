@@ -644,7 +644,6 @@ class DeliveryComposer {
             case CRITICAL -> "\uD83D\uDD34"; // 🔴
             case MAJOR -> "\uD83D\uDFE0"; // 🟠
             case MINOR -> "\uD83D\uDFE1"; // 🟡
-            case INFO -> "\u2139\uFE0F"; // ℹ️
         };
     }
 

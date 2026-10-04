@@ -8,9 +8,13 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
+import de.tum.cit.aet.hephaestus.practices.PracticeQuestion;
+import de.tum.cit.aet.hephaestus.practices.PracticeRule;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeveloperTextSanitizer;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationAnswer;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
@@ -31,6 +35,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
@@ -433,6 +438,30 @@ public class ObservationHistoryContentSource implements ContentSource {
             node.set("evidence", o.getEvidence().deepCopy());
         }
         node.put("evidenceRationale", DeveloperTextSanitizer.sanitize(o.getEvidenceRationale()));
+        describeAnswers(node, o, revision == null ? null : revision.getJudgment());
+    }
+
+    /**
+     * The reviewer's answers to the revision's questions and the rule that decided from them: what a result is
+     * interpreted by. Absent on a result recorded before reviews answered questions.
+     */
+    private static void describeAnswers(ObjectNode node, Observation o, @Nullable PracticeJudgment judgment) {
+        List<ObservationAnswer> answers = o.getAnswers();
+        if (answers == null || judgment == null) {
+            return;
+        }
+        ArrayNode list = node.putArray("answers");
+        for (ObservationAnswer answer : answers) {
+            PracticeQuestion question = judgment.question(answer.question());
+            ObjectNode entry = list.addObject();
+            entry.put("question", answer.question());
+            entry.put("title", question == null ? null : question.title());
+            entry.put("asked", question == null ? null : question.question());
+            entry.put("answer", answer.answer().name());
+            entry.put("because", DeveloperTextSanitizer.sanitize(answer.because()));
+        }
+        PracticeRule rule = o.getRuleId() == null ? null : judgment.rule(o.getRuleId());
+        node.put("decidedBy", rule == null ? null : rule.reason());
     }
 
     /**

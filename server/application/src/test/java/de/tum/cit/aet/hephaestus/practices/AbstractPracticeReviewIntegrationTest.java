@@ -93,6 +93,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
         practice.setSlug(slug);
         practice.setName(name);
         practice.setCriteria("Criteria for " + slug);
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setGroup(group);
         practice.setSourceCuratedSlug(sourceCuratedSlug);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
@@ -287,6 +288,8 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
                 severity == null ? null : severity.name(),
                 evidenceJson,
                 "Reasoning for " + summary,
+                null,
+                null,
                 recurrenceKey,
                 observedAt,
                 "LIVE");

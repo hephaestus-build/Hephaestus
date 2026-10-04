@@ -19,12 +19,14 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
 import de.tum.cit.aet.hephaestus.practices.ReviewRuleFingerprint;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationAnswer;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -122,6 +124,24 @@ public class ReviewOutputService {
         }
     }
 
+    /**
+     * The judgment of every practice admitted to this job, by slug: what the submitted answers are parsed and
+     * derived against. Every admitted revision is of the current scheme, so each reviewed one carries a judgment.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, PracticeJudgment> judgments(AgentJob job) {
+        Map<String, PracticeJudgment> judgments = new HashMap<>();
+        admittedRevisions(job, job.getWorkspace().getId()).forEach((slug, revision) -> {
+            PracticeJudgment judgment = revision.getJudgment();
+            if (judgment == null) {
+                throw new JobDeliveryException(
+                        "Admitted practice revision has no judgment: slug=" + slug + ", jobId=" + job.getId());
+            }
+            judgments.put(slug, judgment);
+        });
+        return Map.copyOf(judgments);
+    }
+
     public PreparedObservations prepare(AgentJob job, List<ValidatedObservation> validObservations) {
         Set<String> practices = new HashSet<>();
         for (ValidatedObservation observation : validObservations) {
@@ -172,15 +192,21 @@ public class ReviewOutputService {
             if (observation.outcome() == Outcome.UNDETERMINED) {
                 JsonNode evidence = observation.evidence();
                 JsonNode warrant = evidence == null ? null : evidence.get("undecidability");
+                // An open answer names what would settle it; a rule that decides UNDETERMINED is the warrant itself.
                 if (warrant == null
                         || !warrant.isObject()
                         || !warrant.path("openQuestion").isString()
                         || warrant.path("openQuestion").asString().isBlank()
-                        || !warrant.path("wouldSettleIt").isString()
-                        || warrant.path("wouldSettleIt").asString().isBlank()) {
+                        || (warrant.has("wouldSettleIt")
+                                && (!warrant.path("wouldSettleIt").isString()
+                                        || warrant.path("wouldSettleIt")
+                                                .asString()
+                                                .isBlank()))
+                        || (observation.ruleId() == null && !warrant.has("wouldSettleIt"))) {
                     throw new JobDeliveryException("UNDETERMINED requires an open question and what would settle it");
                 }
             }
+            enforceAnswerSearches(observation, captured, job);
             PracticeRevision revision = revisionsBySlug.get(observation.practiceSlug());
             if (revision == null) {
                 throw new JobDeliveryException(
@@ -197,14 +223,7 @@ public class ReviewOutputService {
             enforceAttribution(observation, revision, job);
             try {
                 var verifiedEvidence = enforceEvidenceBoundary(observation, revision, captured, job, codeQuotes);
-                observation = new ValidatedObservation(
-                        observation.practiceSlug(),
-                        observation.summary(),
-                        observation.outcome(),
-                        observation.severity(),
-                        verifiedEvidence,
-                        observation.evidenceRationale(),
-                        observation.keys());
+                observation = observation.withEvidence(verifiedEvidence);
                 admittedObservations.add(observation);
             } catch (EvidenceQuoteUnverifiedException ex) {
                 var failed = verificationFailures
@@ -357,6 +376,14 @@ public class ReviewOutputService {
             String severityName = observation.outcome() == Outcome.NOT_MET && observation.severity() != null
                     ? observation.severity().name()
                     : null;
+            String answersJson = null;
+            if (observation.answers() != null) {
+                try {
+                    answersJson = objectMapper.writeValueAsString(observation.answers());
+                } catch (JacksonException e) {
+                    throw new JobDeliveryException("Could not serialize the answers: jobId=" + job.getId(), e);
+                }
+            }
 
             int rows = observationRepository.insertIfAbsent(
                     UUID.randomUUID(),
@@ -373,6 +400,8 @@ public class ReviewOutputService {
                     severityName,
                     evidenceJson,
                     observation.evidenceRationale(),
+                    answersJson,
+                    observation.ruleId(),
                     recurrenceKey,
                     observedAt,
                     origin.name());
@@ -400,6 +429,8 @@ public class ReviewOutputService {
                         || !Objects.equals(
                                 stored.getEvidence(), evidenceJson == null ? null : objectMapper.readTree(evidenceJson))
                         || !Objects.equals(stored.getEvidenceRationale(), observation.evidenceRationale())
+                        || !Objects.equals(stored.getAnswers(), observation.answers())
+                        || !Objects.equals(stored.getRuleId(), observation.ruleId())
                         || !Objects.equals(stored.getRecurrenceKey(), recurrenceKey)
                         || stored.getOrigin() != origin) {
                     throw new JobDeliveryException(
@@ -810,6 +841,33 @@ public class ReviewOutputService {
                                 + observation.practiceSlug()
                                 + ", jobId="
                                 + job.getId());
+            }
+        }
+    }
+
+    /**
+     * Every answer that rests on absence names where it searched; a source this run did not stage cannot have been
+     * searched, whichever answer claims it.
+     */
+    private void enforceAnswerSearches(ValidatedObservation observation, CapturedEvidence captured, AgentJob job) {
+        if (observation.answers() == null) return;
+        for (ObservationAnswer answer : observation.answers()) {
+            ObservationAnswer.Search search = answer.search();
+            if (search == null) continue;
+            for (String kind : search.consulted()) {
+                SourceKind sourceKind;
+                try {
+                    sourceKind = new SourceKind(kind);
+                } catch (IllegalArgumentException e) {
+                    throw new JobDeliveryException(
+                            "An answer's search names an invalid source: slug=" + observation.practiceSlug()
+                                    + ", jobId=" + job.getId(),
+                            e);
+                }
+                if (!captured.availableSources().contains(sourceKind)) {
+                    throw new JobDeliveryException("An answer's search claims a source this run did not stage "
+                            + sourceKind + ": slug=" + observation.practiceSlug() + ", jobId=" + job.getId());
+                }
             }
         }
     }

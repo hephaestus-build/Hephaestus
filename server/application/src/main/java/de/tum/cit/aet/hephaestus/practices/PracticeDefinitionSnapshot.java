@@ -19,6 +19,7 @@ record PracticeDefinitionSnapshot(
         Map<String, Set<String>> reviewWhen,
         ActorRole subject,
         @Nullable PracticePrecondition precondition,
+        @Nullable PracticeJudgment judgment,
         @Nullable Integer criteriaRevision,
         String criteriaSha256,
         @Nullable String precomputeScriptSha256,
@@ -42,6 +43,7 @@ record PracticeDefinitionSnapshot(
                 practice.getReviewWhen(),
                 practice.getSubject(),
                 practice.getPrecondition(),
+                practice.getJudgment(),
                 criteriaRevision,
                 CanonicalDigest.sha256Hex(practice.getCriteria()),
                 practice.getPrecomputeScript() == null

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -64,6 +65,10 @@ public class CuratedPracticeOverride {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "precondition", columnDefinition = "jsonb")
     private @Nullable PracticePrecondition precondition;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "judgment", columnDefinition = "jsonb")
+    private @Nullable PracticeJudgment judgment;
 
     @Column(name = "criteria", columnDefinition = "TEXT")
     private @Nullable String criteria;
@@ -139,6 +144,7 @@ public class CuratedPracticeOverride {
                 subject,
                 precondition,
                 criteria,
+                judgment,
                 precomputeScript,
                 automatedReviewPolicy,
                 whyItMatters,
@@ -156,6 +162,7 @@ public class CuratedPracticeOverride {
         this.subject = definition.subject();
         this.precondition = definition.precondition();
         this.criteria = definition.criteria();
+        this.judgment = definition.judgment();
         this.precomputeScript = definition.precomputeScript();
         this.automatedReviewPolicy = definition.automatedReviewPolicy();
         this.deliveryBehavior = definition.deliveryBehavior();
@@ -184,6 +191,7 @@ public class CuratedPracticeOverride {
         this.subject = ActorRole.AUTHOR;
         this.precondition = null;
         this.criteria = null;
+        this.judgment = null;
         this.precomputeScript = null;
         this.automatedReviewPolicy = null;
         this.deliveryBehavior = null;

@@ -25,6 +25,7 @@ import {
 	PROVIDER_COPY_IN_FORCE,
 	PROVIDER_COPY_RESTORED,
 } from "@/components/practice-vocabulary/observation-invalidation-defs";
+import { ObservationAnswerList } from "@/components/practice-vocabulary/ObservationAnswerList";
 import { withholdingReasonSentence } from "@/components/practice-vocabulary/withholding-defs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
@@ -169,12 +170,28 @@ export function ObservationLevel({
 					</ReviewFact>
 				</ReviewFactGrid>
 
-				{hasText(record.evidenceRationale) && (
-					<Section level={3} title="Why this was raised">
-						<p className="text-sm leading-relaxed whitespace-pre-wrap">
-							{record.evidenceRationale}
-						</p>
+				{record.answers ? (
+					<Section level={3} title="How it was decided">
+						<div className="space-y-4">
+							<p className="text-sm leading-relaxed">
+								{hasText(record.answers.decidedBy)
+									? record.answers.decidedBy
+									: "Open answers left the outcome undetermined: settling them one way or the other would decide it differently."}
+							</p>
+							<ObservationAnswerList
+								answers={record.answers}
+								citations={record.evidence?.citations}
+							/>
+						</div>
 					</Section>
+				) : (
+					hasText(record.evidenceRationale) && (
+						<Section level={3} title="Why this was raised">
+							<p className="text-sm leading-relaxed whitespace-pre-wrap">
+								{record.evidenceRationale}
+							</p>
+						</Section>
+					)
 				)}
 
 				<Section level={3} title="Evidence">

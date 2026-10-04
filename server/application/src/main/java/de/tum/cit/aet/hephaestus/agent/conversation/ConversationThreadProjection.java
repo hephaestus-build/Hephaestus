@@ -34,9 +34,11 @@ public interface ConversationThreadProjection {
     /**
      * The ordered-turns payload for a single settled thread (conversation detection). No participant
      * firewall — the detection job judges the thread as a work artifact — but the same
-     * {@code consent_state = 'ACTIVE'} gate and quarantine envelope apply.
+     * {@code consent_state = 'ACTIVE'} gate and quarantine envelope apply. Every turn says whether it is
+     * by {@code reviewedMemberId}, the one participant the review is about ({@code underReview}): the
+     * others' turns are context, never the work under review.
      */
-    ObjectNode buildThreadPayload(long workspaceId, String channelId, String threadTs);
+    ObjectNode buildThreadPayload(long workspaceId, String channelId, String threadTs, long reviewedMemberId);
 
     /**
      * Whether the thread exists and its channel's consent is {@code ACTIVE}.

@@ -280,6 +280,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                 definition.subject(),
                 definition.precondition(),
                 criteria,
+                definition.judgment(),
                 definition.precomputeScript(),
                 definition.automatedReviewPolicy(),
                 definition.whyItMatters(),
@@ -338,6 +339,10 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
             @Nullable PracticeAutomatedReviewPolicy evidence,
             @Nullable String fingerprint) {
         PracticeDefinition shipped = shipped(slug);
+        // A copy seeded from this bundle asks its questions, so only the criteria and policy given here differ.
+        String judgment = shipped.judgment() == null
+                ? null
+                : objectMapper.valueToTree(shipped.judgment()).toString();
         transactionOperations.executeWithoutResult(ignored -> {
             Long groupId = jdbcTemplate.queryForObject("""
                 INSERT INTO practice_group (
@@ -350,9 +355,9 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                     """
                 INSERT INTO practice (
                     workspace_id, practice_group_id, slug, name, applies_to, display_order, signals, evidence_requirements, review_when, subject, precondition,
-                    criteria, automated_review_policy, delivery_behavior, why_it_matters, source_curated_slug,
+                    criteria, judgment, automated_review_policy, delivery_behavior, why_it_matters, source_curated_slug,
                     source_curated_fingerprint, autonomy, created_at
-                ) VALUES (?, ?, ?, ?, ?, 0, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, 'AUTOMATIC', now())
+                ) VALUES (?, ?, ?, ?, ?, 0, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, 'AUTOMATIC', now())
                 RETURNING id
                 """,
                     Long.class,
@@ -369,6 +374,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                             ? null
                             : objectMapper.valueToTree(shipped.precondition()).toString(),
                     criteria,
+                    judgment,
                     evidenceJson(evidence),
                     fingerprint == null ? null : slug,
                     fingerprint);
@@ -376,8 +382,8 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                     """
                 INSERT INTO practice_revision (
                     practice_id, revision_number, slug, name, applies_to, signals, evidence_requirements, review_when, subject, precondition, criteria,
-                    automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
-                ) VALUES (?, 1, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, now())
+                    judgment, automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
+                ) VALUES (?, 1, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, now())
                 RETURNING id
                 """,
                     Long.class,
@@ -393,6 +399,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                             ? null
                             : objectMapper.valueToTree(shipped.precondition()).toString(),
                     criteria,
+                    judgment,
                     evidenceJson(evidence),
                     shipped.groupSlug(),
                     fingerprint);
@@ -401,8 +408,8 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                         """
                     INSERT INTO practice_revision (
                         practice_id, revision_number, slug, name, applies_to, signals, evidence_requirements, review_when, subject, precondition, criteria,
-                        automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
-                    ) VALUES (?, 2, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, NULL, now())
+                        judgment, automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
+                    ) VALUES (?, 2, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, NULL, now())
                     RETURNING id
                     """,
                         Long.class,
@@ -420,6 +427,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                                         .valueToTree(shipped.precondition())
                                         .toString(),
                         criteria,
+                        judgment,
                         evidenceJson(evidence),
                         shipped.groupSlug());
             }

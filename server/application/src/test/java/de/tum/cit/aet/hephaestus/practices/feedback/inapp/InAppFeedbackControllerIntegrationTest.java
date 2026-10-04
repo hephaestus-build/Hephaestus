@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
@@ -327,6 +328,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
         // The measurement stays pinned to revision 1; revision 2 changes the rules, so its claim is stale.
         Instant beforeTheRuleChange = Instant.now();
         practice.setCriteria("A rewritten rubric, measuring something else");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice = practiceRepository.saveAndFlush(practice);
         practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));
         practice = practiceRepository.saveAndFlush(practice);

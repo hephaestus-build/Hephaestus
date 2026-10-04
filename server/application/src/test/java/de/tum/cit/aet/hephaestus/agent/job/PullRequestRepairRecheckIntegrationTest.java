@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.LinkedWorkItemContentSource;
+import de.tum.cit.aet.hephaestus.agent.handler.AnsweredObservations;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
@@ -75,6 +76,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
@@ -661,22 +663,10 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                         .orElseThrow()
                 + 1;
         assertThat(lines.get(line - 1)).contains(expectedBody);
-        var observations = MAPPER.createArrayNode();
-        var result = observations.addObject();
-        result.put("practiceSlug", linked.getSlug())
-                .put("summary", "Linked criteria are complete")
-                .put("outcome", "MET")
-                .put("evidenceRationale", "The captured linked issue shows the completed acceptance criterion.")
-                .putNull("severity");
-        result.putObject("evidence")
-                .putArray("citations")
-                .addObject()
-                .put("sourceKind", "scm.linked-work-items")
-                .put("path", path)
-                .put("artifactPath", path)
-                .put("startLine", line)
-                .put("endLine", line)
-                .put("quote", expectedBody);
+        var citation = AnsweredObservations.recordCitation(path, line, expectedBody)
+                .put("sourceKind", "scm.linked-work-items");
+        var observations = AnsweredObservations.submitted(AnsweredObservations.observation(
+                linked.getSlug(), "Linked criteria are complete", Outcome.MET, null, citation));
         return new LinkedAttempt(job, inputs, observations);
     }
 
@@ -764,19 +754,23 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
 
     private AgentJob admittedLinkedReview(PullRequest pr, Practice linked) throws Exception {
         try (LinkedAttempt capture = captureLinkedAttempt(linkedReviewJob(pr), linked, "- [ ] Confirm repair")) {
-            var observations = MAPPER.createArrayNode();
-            var result = (tools.jackson.databind.node.ObjectNode)
-                    capture.observations().get(0).deepCopy();
-            result.put("summary", "Linked criteria need confirmation")
-                    .put("outcome", "NOT_MET")
-                    .put("severity", "MINOR")
-                    .put("evidenceRationale", "The captured criterion remains unchecked.");
-            var search = ((tools.jackson.databind.node.ObjectNode) result.path("evidence")).putObject("search");
-            search.putArray("consulted").add("scm.linked-work-items");
-            search.put("lookedFor", "confirmation of the acceptance criterion");
-            search.put("boundary", "the captured closing issue #18");
-            observations.add(result);
-            admissionService.admit(capture.identity(), observations);
+            JsonNode citation = capture.observations()
+                    .path(0)
+                    .path("answers")
+                    .path(0)
+                    .path("citations")
+                    .path(0);
+            var result = AnsweredObservations.observation(
+                    linked.getSlug(), "Linked criteria need confirmation", Outcome.NOT_MET, Severity.MINOR, citation);
+            // The shortfall rests on an absence, so the answer that decides it records where it searched.
+            for (JsonNode answer : result.path("answers")) {
+                if (!answer.path("question").asString().equals("meets_standard")) continue;
+                var search = ((tools.jackson.databind.node.ObjectNode) answer).putObject("search");
+                search.putArray("consulted").add("scm.linked-work-items");
+                search.put("lookedFor", "confirmation of the acceptance criterion");
+                search.put("boundary", "the captured closing issue #18");
+            }
+            admissionService.admit(capture.identity(), AnsweredObservations.submitted(result));
             AgentJob completed =
                     agentJobRepository.findById(capture.job().getId()).orElseThrow();
             completed.setStatus(AgentJobStatus.COMPLETED);
@@ -1001,6 +995,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 java.sql.Timestamp.from(NOW.plusSeconds(90)),
                 supersededId);
         obsolete.setCriteria("Changed review criteria");
+        obsolete.setJudgment(PracticeJudgment.holistic());
         obsolete.setCurrentRevision(practiceRevisionRepository.save(
                 new de.tum.cit.aet.hephaestus.practices.model.PracticeRevision(obsolete, 2)));
         practiceRepository.saveAndFlush(obsolete);

@@ -276,7 +276,7 @@ describe("catalog adoption over practice setup", () => {
 		expect(changed.textContent).toContain("The catalog changed while you were reading");
 		// The rule is what a 412 is about, so open the disclosure that holds it and check the panel
 		// is showing the refetched one rather than the plan that was just rejected.
-		fireEvent.click(await screen.findByRole("button", { name: "How it decides" }));
+		fireEvent.click(await screen.findByRole("button", { name: "What it looks for" }));
 		await screen.findByText("Updated review rule that must be reviewed.");
 	});
 

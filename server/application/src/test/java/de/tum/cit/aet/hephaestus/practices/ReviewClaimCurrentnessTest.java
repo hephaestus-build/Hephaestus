@@ -17,13 +17,13 @@ class ReviewClaimCurrentnessTest {
     @Test
     void shouldNotTreatHistoricalBehaviorClaimsAsCurrentPracticeOutcomes() {
         assertThat(ReviewClaimCurrentness.of("v4:one", "v4:one")).isEqualTo(ReviewClaimCurrentness.UNVERIFIABLE);
-        assertThat(ReviewClaimCurrentness.of("v4:one", "v5:one")).isEqualTo(ReviewClaimCurrentness.UNVERIFIABLE);
+        assertThat(ReviewClaimCurrentness.of("v4:one", "v6:one")).isEqualTo(ReviewClaimCurrentness.UNVERIFIABLE);
     }
 
     @Test
     void shouldDeriveCurrentnessFromDetectionSemantics() {
-        assertThat(ReviewClaimCurrentness.of("v5:one", "v5:one")).isEqualTo(ReviewClaimCurrentness.CURRENT);
-        assertThat(ReviewClaimCurrentness.of("v5:old", "v5:one")).isEqualTo(ReviewClaimCurrentness.STALE);
-        assertThat(ReviewClaimCurrentness.of(null, "v5:one")).isEqualTo(ReviewClaimCurrentness.UNVERIFIABLE);
+        assertThat(ReviewClaimCurrentness.of("v6:one", "v6:one")).isEqualTo(ReviewClaimCurrentness.CURRENT);
+        assertThat(ReviewClaimCurrentness.of("v6:old", "v6:one")).isEqualTo(ReviewClaimCurrentness.STALE);
+        assertThat(ReviewClaimCurrentness.of(null, "v6:one")).isEqualTo(ReviewClaimCurrentness.UNVERIFIABLE);
     }
 }

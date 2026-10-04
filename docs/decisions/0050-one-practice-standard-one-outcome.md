@@ -1,6 +1,6 @@
 # ADR 0050: One practice standard, one outcome
 
-**Status:** Accepted
+**Status:** Accepted; [ADR 0051](0051-practices-decide-from-answered-questions.md) proposes to amend it (on hold)
 **Date:** 2026-10-02
 **Supersedes:** The observation axes in [ADR 0022](0022-observation-presence-assessment-and-schema-cleanup.md).
 

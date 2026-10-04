@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -170,6 +171,8 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
                         "criteria",
                         "Initial private criteria",
+                        "judgment",
+                        PracticeJudgment.holistic(),
                         "precomputeScript",
                         "return { hints: [] };"))
                 .exchange()

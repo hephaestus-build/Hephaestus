@@ -27,6 +27,10 @@ function withPractice(change: (practice: Record<string, unknown>) => void) {
 	return copy;
 }
 
+function judgmentOf(practice: Record<string, unknown>) {
+	return asRecord(practice.judgment, "judgment");
+}
+
 await test("all shipped practices use the flat occasion schema", () => {
 	assert.equal(validate(catalogue), true, JSON.stringify(validate.errors));
 });
@@ -110,6 +114,67 @@ for (const [name, change] of [
 			};
 		},
 	],
+	[
+		"a practice without a judgment",
+		(p) => {
+			delete p.judgment;
+		},
+	],
+	[
+		"a judgment without questions",
+		(p) => {
+			p.judgment = { questions: [], rules: judgmentOf(p).rules };
+		},
+	],
+	[
+		"a rule that requires an undetermined answer",
+		(p) => {
+			const judgment = judgmentOf(p);
+			const { key } = asRecord(asArray(judgment.questions, "questions")[0], "question");
+			asRecord(asArray(judgment.rules, "rules")[0], "rule").when = {
+				[String(key)]: "UNDETERMINED",
+			};
+		},
+	],
+	[
+		"a not met rule without a severity",
+		(p) => {
+			const rule = asArray(judgmentOf(p).rules, "rules")
+				.map((value) => asRecord(value, "rule"))
+				.find((value) => value.outcome === "NOT_MET");
+			delete rule?.severity;
+		},
+	],
+	[
+		"a met rule with a severity",
+		(p) => {
+			asRecord(asArray(judgmentOf(p).rules, "rules").at(-1), "rule").severity = "MINOR";
+		},
+	],
+	[
+		"the removed informational severity",
+		(p) => {
+			const rule = asArray(judgmentOf(p).rules, "rules")
+				.map((value) => asRecord(value, "rule"))
+				.find((value) => value.outcome === "NOT_MET");
+			if (rule) {
+				rule.severity = "INFO";
+			}
+		},
+	],
+	[
+		"a rule without a reason",
+		(p) => {
+			delete asRecord(asArray(judgmentOf(p).rules, "rules")[0], "rule").reason;
+		},
+	],
+	[
+		"a question title with a final period",
+		(p) => {
+			asRecord(asArray(judgmentOf(p).questions, "questions")[0], "question").title =
+				"Title names the change.";
+		},
+	],
 ] satisfies [string, (practice: Record<string, unknown>) => void][]) {
 	await test(`the catalogue rejects ${name}`, () => {
 		assert.equal(validate(withPractice(change)), false);
@@ -124,4 +189,13 @@ await test("the schema permits omitted optional occasion fields", () => {
 		delete p.precondition;
 	});
 	assert.equal(validate(value), true, JSON.stringify(validate.errors));
+});
+
+await test("every bundled practice asks its questions, reviewed or not", () => {
+	for (const group of asArray(catalogue.groups, "groups")) {
+		for (const value of asArray(asRecord(group, "group").practices, "practices")) {
+			const practice = asRecord(value, "practice");
+			assert.notEqual(practice.judgment, undefined, `${String(practice.slug)}: no judgment`);
+		}
+	}
 });

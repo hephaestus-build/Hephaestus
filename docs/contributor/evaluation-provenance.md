@@ -20,7 +20,7 @@ stable:
 | Prompt scaffolding | `agent_job.prompt_digest` | preparation |
 | Injected files | `agent_job.inputs_digest` | preparation |
 | Repository revision, where applicable | job metadata and the evidence manifest | submission and preparation |
-| Admitted practice criteria | evidence snapshot and `observation.practice_revision_id` | preparation and persistence |
+| Admitted practice criteria and judgment | evidence snapshot and `observation.practice_revision_id` | preparation and persistence |
 | Model identity, usage, and cost | `agent_job` and `llm_usage_event` | completion |
 
 Use the complete versioned configuration snapshot as the behaviour-configuration identity. A selected
@@ -53,7 +53,9 @@ types define delivery outcomes and suppression reasons.
 ## Evaluation joins
 
 - **Observation to review:** join `observation.agent_job_id` to `agent_job` for configuration, digests,
-  repository metadata, and usage. Join `observation.practice_revision_id` to the admitted criteria.
+  repository metadata, and usage. Join `observation.practice_revision_id` to the admitted criteria and
+  judgment. `observation.answers` and `observation.rule_id` record what the review answered and which
+  rule decided, so agreement with reference answers can be measured per question, not only per outcome.
 - **Observation to feedback:** join through `feedback_observation`. Absence of a link means no feedback
   was composed from that observation; it says nothing about why.
 - **Feedback to placement:** join `feedback_placement` and inspect its channel reference. Feedback state

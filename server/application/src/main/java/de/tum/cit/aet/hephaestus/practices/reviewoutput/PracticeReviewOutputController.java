@@ -74,7 +74,7 @@ public class PracticeReviewOutputController {
             @RequestParam(defaultValue = "50") @Min(1) @Max(100) int size,
             @Parameter(
                             description =
-                                    "Sorting strategy. ACTIONABILITY orders NOT_MET by severity (CRITICAL, MAJOR, MINOR, INFO), "
+                                    "Sorting strategy. ACTIONABILITY orders NOT_MET by severity (CRITICAL, MAJOR, MINOR), "
                                             + "then MET, then NOT_APPLICABLE and UNDETERMINED together. Within each rank, "
                                             + "observation time and ID are descending.")
                     @RequestParam(defaultValue = "NEWEST")

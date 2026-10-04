@@ -309,6 +309,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
                 DIFF_EVIDENCE_JSON,
                 null);
         superseded.setCriteria("New criteria");
+        superseded.setJudgment(PracticeJudgment.holistic());
         superseded.setGroup(group);
         superseded.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(superseded, 2)));
         practiceRepository.saveAndFlush(superseded);
@@ -357,6 +358,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
     void shouldKeepARunMeasuredAgainstSupersededReviewRulesAsHistorical() {
         observe("Motivation is clear", MET, null, ArtifactKinds.PULL_REQUEST.value(), 1L);
         practice.setCriteria("Rewritten criteria, which is what makes the fingerprint differ");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setGroup(group);
         practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));
         practiceRepository.saveAndFlush(practice);

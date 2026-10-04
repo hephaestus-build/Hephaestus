@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.dto;
 
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
@@ -20,4 +21,11 @@ public record PracticeDefinitionOptionsDTO(
                 example = ArtifactSourceCatalogRegistry.CURRENT_VERSION_VALUE)
         SourceContractVersion sourceContractVersion,
 
-        @NonNull List<PracticeWorkTypeDefinitionOptionsDTO> workTypes) {}
+        @NonNull List<PracticeWorkTypeDefinitionOptionsDTO> workTypes,
+
+        @NonNull
+        @Schema(
+                description =
+                        "The questions and rules a practice starts from when its author turns on automated review: "
+                                + "whether the occasion arises, whether the standard is met, and how severe a shortfall is")
+        PracticeJudgment startingJudgment) {}

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import test from "node:test";
 
-import { buildBrief } from "../../../main/resources/agent/pi-review-brief.ts";
+import { buildBrief, shownLabels } from "../../../main/resources/agent/pi-review-brief.ts";
 
 const paths = { contextRoot: "context", repositoryRoot: "repos/reviewed" };
 
@@ -98,12 +98,14 @@ void test("a file over its bound is named with its size instead of shown, and an
 			totalChars: 10_000,
 		});
 		assert.match(brief, /### `context\/metadata\.json`/u);
-		// An empty record file is not shown; it is named as empty, with the record files the capture
-		// did not write at all, so the review does not go looking for them.
+		// An empty record file is not shown but named as captured and empty; the record files the capture
+		// did not write at all are named apart, as unknown, so the review neither looks for them nor reads
+		// them as empty.
 		assert.doesNotMatch(brief, /### `context\/comments\.json`/u);
+		assert.match(brief, /### Captured and empty\n`context\/comments\.json`\n/u);
 		assert.match(
 			brief,
-			/### Not captured — do not look for these\n`context\/description\.md`, `context\/comments\.json` \(empty\), `context\/review_threads\.json`, `context\/general_comments\.json`, `context\/linked_work_items\.json`/u,
+			/### Not captured — do not look for these\nNothing is known about what they would hold: leave open an answer that depends on one\.\n`context\/description\.md`, `context\/review_threads\.json`, `context\/general_comments\.json`, `context\/linked_work_items\.json`/u,
 		);
 		assert.match(brief, /Too large to show here[\s\S]*- `work\/change\/diff\.patch` \(60 KB\)/u);
 		assert.doesNotMatch(brief, /```diff/u);
@@ -171,6 +173,37 @@ for (const [name, content] of [
 		}
 	});
 }
+
+void test("the labels shown are the files the brief shows whole, captured and derived, never a withheld or absent one", () => {
+	const root = workspace({
+		"context/metadata.json": '{"title": "t"}',
+		"context/comments.json": "",
+		"context/linked_work_items.json": '{"workItems": []}',
+		"context/linked_work_items/7.md": "# Seven\n",
+		"work/change/files.json": '{"files": []}',
+		"work/change/diff.patch": `${"+".repeat(100)}\n`.repeat(600),
+	});
+	try {
+		const brief = buildBrief(root, paths, {
+			filePerChars: 1000,
+			diffChars: 2000,
+			totalChars: 10_000,
+		});
+		assert.deepEqual(
+			[...shownLabels(brief)].toSorted(),
+			[
+				"context/linked_work_items.json",
+				"context/linked_work_items/7.md",
+				"context/metadata.json",
+				"work/change/files.json",
+			],
+			brief,
+		);
+		assert.deepEqual(shownLabels(""), new Set());
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
 
 void test("an oversized capture index gives a complete fallback instruction within the bound", () => {
 	const root = workspace({ "context/document.md": "x".repeat(1000) });

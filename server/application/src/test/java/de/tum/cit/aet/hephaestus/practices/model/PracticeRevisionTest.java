@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.model;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.practices.PracticeJudgment;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ class PracticeRevisionTest extends BaseUnitTest {
         practice.setName("Clear feedback");
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setCriteria("Detect clear feedback");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setPrecomputeScript("export default {}");
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         practice.setWhyItMatters("Prevents rework");
@@ -50,6 +52,6 @@ class PracticeRevisionTest extends BaseUnitTest {
                         PracticeRevision::getGroupIcon,
                         PracticeRevision::getGroupColor)
                 .containsExactly("review-quality", "Review quality", "Review work", "MessageSquare", "cyan");
-        assertThat(revision.getReviewRuleFingerprint()).hasSize(67).startsWith("v5:");
+        assertThat(revision.getReviewRuleFingerprint()).hasSize(67).startsWith("v6:");
     }
 }

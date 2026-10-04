@@ -322,6 +322,8 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 Instant.now(),
                 "LIVE");
         return observationId;

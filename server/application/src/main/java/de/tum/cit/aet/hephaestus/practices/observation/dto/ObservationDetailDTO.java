@@ -51,6 +51,12 @@ public record ObservationDetailDTO(
 
         @Nullable
         @Schema(
+                description = "The answers the observation was decided from and the deciding rule; null for an "
+                        + "observation recorded before reviews answered questions, and whenever evidence is withheld")
+        ObservationAnswersDTO answers,
+
+        @Nullable
+        @Schema(
                 description = "What to do — the text of the newest feedback that said something about this "
                         + "observation to this developer (null if nothing was said)")
         String deliveredFeedback,
@@ -117,6 +123,7 @@ public record ObservationDetailDTO(
                 observation.getSeverity(),
                 includeEvidence ? ObservationEvidenceDTO.from(observation.getEvidence()) : null,
                 observation.getEvidenceRationale(),
+                includeEvidence ? ObservationAnswersDTO.from(observation) : null,
                 feedback == null ? null : feedback.getBody(),
                 nextStep,
                 responseTo(feedback),

@@ -41,6 +41,7 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
         PracticeTestEvidence.configure(practice, ArtifactKinds.PULL_REQUEST);
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setCriteria("Give specific feedback");
+        practice.setJudgment(PracticeJudgment.holistic());
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         when(practiceRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(practice));
         when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -57,7 +58,7 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
 
         PracticeRevision current = service.forReview(practice);
         assertThat(current.getRevisionNumber()).isEqualTo(5);
-        assertThat(current.getReviewRuleFingerprint()).startsWith("v5:");
+        assertThat(current.getReviewRuleFingerprint()).startsWith("v6:");
         assertThat(historical.getReviewRuleFingerprint()).startsWith("v4:");
         assertThat(service.forReview(practice)).isSameAs(current);
         org.mockito.Mockito.verify(revisionRepository).save(current);
@@ -87,7 +88,7 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
         PracticeRevision appended = service.append(practice);
 
         assertThat(appended.getCriteria()).isEqualTo("Give specific feedback");
-        assertThat(appended.getReviewRuleFingerprint()).hasSize(67).startsWith("v5:");
+        assertThat(appended.getReviewRuleFingerprint()).hasSize(67).startsWith("v6:");
         assertThat(practice.getCurrentRevision()).isSameAs(appended);
     }
 
@@ -109,6 +110,7 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
         String before = service.append(practice).getReviewRuleFingerprint();
 
         practice.setCriteria("Changed detector criteria");
+        practice.setJudgment(PracticeJudgment.holistic());
 
         assertThat(service.append(practice).getReviewRuleFingerprint()).isNotEqualTo(before);
     }

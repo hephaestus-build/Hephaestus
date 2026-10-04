@@ -122,12 +122,12 @@ function filterFeedback(rows: ReviewFeedback[], url: URL) {
  * only that the parameter was sent would pass a story whose control sets the wrong value, or whose
  * screen re-orders the answer on the way in.
  */
-const ACTIONABILITY_RANK: Record<string, number> = { CRITICAL: 0, MAJOR: 1, MINOR: 2, INFO: 3 };
+const ACTIONABILITY_RANK: Record<string, number> = { CRITICAL: 0, MAJOR: 1, MINOR: 2 };
 
 function actionability(row: ReviewObservation): number {
 	switch (row.outcome) {
 		case "NOT_MET": {
-			return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
+			return ACTIONABILITY_RANK[row.severity ?? "MINOR"] ?? 3;
 		}
 		case "MET": {
 			return 5;

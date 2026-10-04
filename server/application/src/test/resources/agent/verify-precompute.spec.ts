@@ -75,7 +75,7 @@ void test("a diagram-and-README change is named as an occasion-gate kind, with t
 		assert.equal(result.metrics.imageFiles, 1);
 		assert.match(
 			result.directions[0] ?? "",
-			/one of the kinds the criteria's Occasion section names/u,
+			/one of the kinds with no runtime result to check \(`material_effect`\)/u,
 		);
 		assert.match(result.directions.join("\n"), /testing heading .* has no content/u);
 		assert.match(
@@ -124,7 +124,7 @@ void test("an empty range is named as such", async () => {
 	const { root, script, contextDir } = await stage({});
 	try {
 		const result = await script(path.join(root, "repo"), new Map(), metadata(""), contextDir);
-		assert.match(result.directions[0] ?? "", /empty diff is one of the kinds/u);
+		assert.match(result.directions[0] ?? "", /an empty diff has no runtime result to check/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
