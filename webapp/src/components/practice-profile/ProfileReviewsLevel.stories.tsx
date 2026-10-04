@@ -159,8 +159,9 @@ export const ManyReviews: Story = {
 			throw new Error("Expected the table to stand in its own frame.");
 		}
 		await expect(frame.scrollHeight).toBeLessThanOrEqual(frame.clientHeight + 1);
+		// The end of the list loads the next page once it is in view; the press asks for it too.
 		await userEvent.click(screen.getByRole("button", { name: "View earlier reviews" }));
-		await expect(onLoadMoreOf(args.feed)).toHaveBeenCalledOnce();
+		await expect(onLoadMoreOf(args.feed)).toHaveBeenCalled();
 	},
 };
 
@@ -180,7 +181,8 @@ export const EarlierReviewsFailed: Story = {
 	play: async ({ args }) => {
 		await settledDrawerPanel();
 		await expect(screen.getByText("We could not load earlier reviews.")).toBeVisible();
-		await userEvent.click(screen.getByRole("button", { name: "View earlier reviews" }));
+		await expect(onLoadMoreOf(args.feed)).not.toHaveBeenCalled();
+		await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 		await expect(onLoadMoreOf(args.feed)).toHaveBeenCalledOnce();
 	},
 };

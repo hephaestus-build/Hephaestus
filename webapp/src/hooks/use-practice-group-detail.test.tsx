@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PracticeStanding } from "@/api/types.gen";
-import { EMPTY_REVIEW_RUN_FEED } from "@/components/profile/review-runs";
+import { EMPTY_REVIEW_RUN_FEED, type ReviewRunFeedState } from "@/components/profile/review-runs";
 import { server } from "@/mocks/server";
 import { sleep } from "@/test/async";
 
@@ -37,6 +37,23 @@ function renderDetail(selection: { groupSlug?: string; practiceSlug?: string }) 
 	);
 }
 
+/** The feed once its first page is in; a test that reads it earlier fails here. */
+function readyFeed(feed: ReviewRunFeedState): Extract<ReviewRunFeedState, { status: "ready" }> {
+	if (feed.status !== "ready") {
+		throw new Error(`Expected a ready feed, got ${feed.status}.`);
+	}
+	return feed;
+}
+
+/** Two pages of runs, the first saying another follows; every page asked for is recorded. */
+function twoPages(pagesAsked: string[]) {
+	return ({ request }: { request: Request }) => {
+		const page = new URL(request.url).searchParams.get("page") ?? "0";
+		pagesAsked.push(page);
+		return HttpResponse.json({ content: [], hasNext: page === "0", page: Number(page), size: 10 });
+	};
+}
+
 describe("usePracticeGroupDetail", () => {
 	it("reads the open practice's runs once its group is open", async () => {
 		const runs = vi.fn(() => HttpResponse.json({ content: [], hasNext: false, page: 0, size: 10 }));
@@ -52,6 +69,24 @@ describe("usePracticeGroupDetail", () => {
 		await waitFor(() => expect(result.current.feed.status).toBe("ready"));
 		expect(runs).toHaveBeenCalledOnce();
 		expect(result.current.practice?.slug).toBe("scope-one-concern");
+	});
+
+	it("asks for the page after the last one when the feed loads more", async () => {
+		const pagesAsked: string[] = [];
+		server.use(
+			http.get(
+				"*/workspaces/:workspaceSlug/practice-groups/:groupSlug/review-runs",
+				twoPages(pagesAsked),
+			),
+		);
+
+		const { result } = renderDetail({ groupSlug: "packaging", practiceSlug: "scope-one-concern" });
+		await waitFor(() => expect(readyFeed(result.current.feed).hasMore).toBe(true));
+
+		act(() => readyFeed(result.current.feed).onLoadMore());
+
+		await waitFor(() => expect(readyFeed(result.current.feed).hasMore).toBe(false));
+		expect(pagesAsked).toStrictEqual(["0", "1"]);
 	});
 
 	it("reads a practice's runs through its own group when the level opens on its own", async () => {

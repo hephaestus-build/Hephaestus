@@ -2,8 +2,8 @@ import { PulseIcon } from "@primer/octicons-react";
 import type { ReactNode } from "react";
 
 import type { PracticeGroupReviewRun } from "@/api/types.gen";
+import { InfiniteListEnd } from "@/components/common/InfiniteListEnd";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { Button } from "@/components/ui/button";
 import {
 	Empty,
 	EmptyContent,
@@ -39,7 +39,8 @@ export interface ReviewRunFeedProps extends Pick<
 }
 
 /**
- * One practice surface's review-run feed: the runs as a timeline, the earlier ones a press away,
+ * One practice surface's review-run feed: the runs as a timeline, the earlier ones loaded as its
+ * end scrolls into view,
  * and the error, loading and empty states around them, in one home so the rail cannot end one way
  * on one surface and another way on the next.
  */
@@ -75,10 +76,8 @@ export function ReviewRunFeed({
 				<p className="text-sm text-muted-foreground">
 					The latest reviews have no observations here.
 				</p>
-				<div className="flex flex-wrap items-center gap-3">
-					{emptyAction}
-					<EarlierReviewsButton {...feed} />
-				</div>
+				{emptyAction}
+				<EarlierReviews {...feed} loadingRow={RUN_CARD_SKELETON} />
 			</div>
 		);
 	}
@@ -105,40 +104,27 @@ export function ReviewRunFeed({
 				initiallyOpen={initiallyOpen}
 				continues={feed.hasMore}
 			/>
-			<EarlierReviewsButton {...feed} />
+			<EarlierReviews {...feed} loadingRow={RUN_CARD_SKELETON} />
 		</>
 	);
 }
 
+/** One run card's shape, for the feed's skeleton and for the page that loads after it. */
+const RUN_CARD_SKELETON = <Skeleton className="h-24 w-full" />;
+
 /**
- * The pages before these, a press away, in the words every review feed uses. A failed load keeps what
- * was already read and says so beside the same press.
+ * The pages before these, in the words every review feed uses: they load as the end of the list
+ * scrolls into view, and a press asks for them too. A failed load keeps what was already read and
+ * says so beside the press that asks again.
  */
-export function EarlierReviewsButton({
-	hasMore,
-	isLoadingMore,
-	loadMoreError,
-	onLoadMore,
-}: MorePages) {
-	if (!hasMore && loadMoreError == null) {
-		return null;
-	}
+export function EarlierReviews({ loadingRow, ...more }: MorePages & { loadingRow: ReactNode }) {
 	return (
-		<span className="flex flex-wrap items-center gap-2 text-sm">
-			{loadMoreError != null && (
-				<span className="text-muted-foreground">We could not load earlier reviews.</span>
-			)}
-			<Button
-				type="button"
-				variant="link"
-				size="inline"
-				className="w-fit text-sm"
-				onClick={onLoadMore}
-				disabled={isLoadingMore}
-			>
-				{isLoadingMore ? "Loading…" : "View earlier reviews"}
-			</Button>
-		</span>
+		<InfiniteListEnd
+			{...more}
+			moreLabel="View earlier reviews"
+			failedLabel="We could not load earlier reviews."
+			loadingRow={loadingRow}
+		/>
 	);
 }
 
