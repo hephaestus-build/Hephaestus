@@ -131,7 +131,7 @@ function LoadedCuratedPracticeEditor({
 				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 				void releaseQuery.refetch();
 			}
-			toast.error("Could not accept the update", { description: problemDetailOf(error) });
+			toast.error("We could not accept the update", { description: problemDetailOf(error) });
 		},
 	});
 	const declineRelease = useMutation({
@@ -148,7 +148,7 @@ function LoadedCuratedPracticeEditor({
 				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 				void releaseQuery.refetch();
 			}
-			toast.error("Could not decline the update", { description: problemDetailOf(error) });
+			toast.error("We could not decline the update", { description: problemDetailOf(error) });
 		},
 	});
 	const updatePractice = useMutation({
@@ -164,7 +164,7 @@ function LoadedCuratedPracticeEditor({
 				setConflict(true);
 				return;
 			}
-			toast.error("Could not update the practice", { description: problemDetailOf(error) });
+			toast.error("We could not update the practice", { description: problemDetailOf(error) });
 		},
 	});
 	const deleteOverride = useMutation({
@@ -190,7 +190,7 @@ function LoadedCuratedPracticeEditor({
 				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 				return;
 			}
-			toast.error("Could not apply the Hephaestus version", {
+			toast.error("We could not apply the Hephaestus version", {
 				description: problemDetailOf(error),
 			});
 		},
@@ -217,7 +217,7 @@ function LoadedCuratedPracticeEditor({
 				void queryClient.invalidateQueries({ queryKey: adminGetCuratedCatalogQueryKey() });
 				return;
 			}
-			toast.error("Could not keep the saved version", { description: problemDetailOf(error) });
+			toast.error("We could not keep the saved version", { description: problemDetailOf(error) });
 		},
 	});
 
@@ -232,7 +232,7 @@ function LoadedCuratedPracticeEditor({
 			setBasePractice(latest);
 			setConflict(false);
 		} catch (error) {
-			toast.error("Could not load the current version", { description: problemDetailOf(error) });
+			toast.error("We could not load the current version", { description: problemDetailOf(error) });
 		}
 	};
 	let releaseReview: ReactNode;

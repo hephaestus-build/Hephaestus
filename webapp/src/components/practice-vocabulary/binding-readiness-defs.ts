@@ -15,14 +15,14 @@ export const BINDING_READINESS_DEFS: StatusDefs<BindingReadiness> = {
 		label: "Ready",
 		icon: CircleCheckIcon,
 		badgeVariant: "secondary",
-		description: "This model can run for the members this row serves.",
+		description: "This model can run for the members this assignment serves.",
 	},
 	NOT_READY: {
 		label: "Not ready",
 		icon: CircleAlertIcon,
 		badgeVariant: "destructive",
 		description:
-			"This model cannot run: it or its connection is off, or it is no longer declared as this row’s tier.",
+			"This model cannot run: it or its connection is off, or it is no longer declared as this assignment’s tier.",
 	},
 };
 

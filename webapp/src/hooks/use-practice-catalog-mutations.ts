@@ -101,7 +101,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 		onError: (error) => {
 			const status = problemStatusOf(error);
 			toast.error(
-				status === 409 ? "A group with that name already exists" : "Could not create the group",
+				status === 409 ? "A group with that name already exists" : "We could not create the group",
 			);
 		},
 		onSettled: invalidateGroupsAfterLastWrite,
@@ -127,7 +127,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 					patchGroup(groups, previous.slug, selectGroupPatch(previous, variables.body)),
 				);
 			}
-			toast.error("Could not update the group");
+			toast.error("We could not update the group");
 		},
 		onSuccess: (updated, variables) => {
 			queryClient.setQueryData<PracticeGroup[]>(groupsQueryKey, (groups = []) =>
@@ -196,7 +196,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 			});
 			toast.success("Group deleted");
 		},
-		onError: () => toast.error("Could not delete the group"),
+		onError: () => toast.error("We could not delete the group"),
 		onSettled: () => {
 			invalidateGroupsAfterLastWrite();
 			if (queryClient.isMutating({ mutationKey: practiceMutationKey }) === 0) {
@@ -225,7 +225,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 					applyDisplayOrder(groups, previousOrder),
 				);
 			}
-			toast.error("Could not reorder the groups");
+			toast.error("We could not reorder the groups");
 		},
 		onSuccess: (updated) => {
 			const order = [...updated].sort(byDisplayOrder).map((group) => group.slug);
@@ -268,7 +268,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 			if (previous) {
 				applyPlacementCaches(previous);
 			}
-			toast.error("Could not move the practice");
+			toast.error("We could not move the practice");
 		},
 		onSuccess: (updated, variables) => {
 			applyPlacementCaches(
@@ -322,7 +322,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 			void queryClient.invalidateQueries({ queryKey: adoptionCatalogQueryKey });
 			toast.success("Practice deleted");
 		},
-		onError: () => toast.error("Could not delete the practice"),
+		onError: () => toast.error("We could not delete the practice"),
 		onSettled: invalidatePracticesAfterLastWrite,
 	});
 

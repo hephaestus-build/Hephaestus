@@ -33,7 +33,7 @@ export const WITHHOLDING_FAMILY_DEFS: StatusDefs<WithholdingFamily> = {
 		icon: VolumeOffIcon,
 		badgeVariant: "outline",
 		description:
-			"A setting somebody chose — a volume limit, a practice’s autonomy, or silent mode.",
+			"A setting somebody chose, such as a volume limit, a practice’s autonomy or silent mode.",
 	},
 	DEVELOPER_CHOICE: {
 		label: "The developer’s choice",

@@ -325,7 +325,7 @@ describe("workspace AI models route", () => {
 						type: "about:blank",
 						title: "Conflict",
 						status: 409,
-						detail: "This model is declared as a different tier; assign it to that row.",
+						detail: "This model is declared as a different tier. Assign it under that tier.",
 						declaredTier: "CLOUD",
 					},
 					{ status: 409 },
@@ -337,7 +337,7 @@ describe("workspace AI models route", () => {
 		fireEvent.click(saveButton("Practice reviews", "In-house"));
 
 		const inHouse = row("Practice reviews", "In-house");
-		await within(inHouse).findByText("This model is declared as Cloud. Assign it to that row.");
+		await within(inHouse).findByText("This model is declared as Cloud. Assign it under Cloud.");
 		expect(pickerOf(inHouse).getAttribute("aria-invalid")).toBe("true");
 		expect(within(row("Practice reviews")).queryByRole("alert")).toBeNull();
 		expect(screen.queryByRole("status")).toBeNull();

@@ -140,7 +140,7 @@ export function FeedbackFilters({
 					onChange={(values) => onPatch({ deliveryState: nonEmpty(values) })}
 				/>
 				<FacetMultiSelect
-					title="Place"
+					title="Channel"
 					options={PLACE_OPTIONS}
 					selected={search.channel ?? []}
 					onChange={(values) => onPatch({ channel: nonEmpty(values) })}
@@ -174,7 +174,7 @@ export function FeedbackFilters({
 					...facetPills("Outcome", OUTCOME_OPTIONS, search.deliveryState, (values) =>
 						onPatch({ deliveryState: nonEmpty(values) }),
 					),
-					...facetPills("Place", PLACE_OPTIONS, search.channel, (values) =>
+					...facetPills("Channel", PLACE_OPTIONS, search.channel, (values) =>
 						onPatch({ channel: nonEmpty(values) }),
 					),
 					...facetPills("Why withheld", WITHHELD_FAMILY_OPTIONS, search.withheldFamily, (values) =>

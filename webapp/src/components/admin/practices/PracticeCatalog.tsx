@@ -421,7 +421,7 @@ function GroupActions({
 					onSetDashboardVisibility(group.slug, visibleInPracticeDashboards)
 				}
 				disabled={pending}
-				aria-label={`Show ${group.name} on practice dashboards`}
+				aria-label={`Show ${group.name} on practice profiles`}
 			/>
 			<DropdownMenu>
 				<DropdownMenuTrigger
@@ -446,8 +446,8 @@ function GroupActions({
 						onClick={() => onSetDashboardVisibility(group.slug, !group.visibleInPracticeDashboards)}
 					>
 						{group.visibleInPracticeDashboards
-							? "Hide from practice dashboards"
-							: "Show on practice dashboards"}
+							? "Hide from practice profiles"
+							: "Show on practice profiles"}
 					</DropdownMenuItem>
 					<DropdownMenuSeparator />
 					<DropdownMenuGroup>

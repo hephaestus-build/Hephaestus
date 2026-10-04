@@ -164,7 +164,7 @@ describe("product feedback wire contract", () => {
 		});
 		await waitFor(() =>
 			expect(result.current.error).toBe(
-				"Could not send. The response does not answer a required question. Your draft is still here.",
+				"We could not send that. The response does not answer a required question. Your draft is still here.",
 			),
 		);
 	});

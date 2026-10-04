@@ -136,7 +136,7 @@ function AdminLlmPage() {
 			);
 			toast.success("Connection added");
 		},
-		onError: (error) => reportConnectionError(error, "Could not add the connection"),
+		onError: (error) => reportConnectionError(error, "We could not add the connection"),
 	});
 
 	const updateConnection = useMutation({
@@ -146,7 +146,7 @@ function AdminLlmPage() {
 			setConnectionDialogOpen(false);
 			toast.success("Connection updated");
 		},
-		onError: (error) => reportConnectionError(error, "Could not update the connection"),
+		onError: (error) => reportConnectionError(error, "We could not update the connection"),
 	});
 
 	const deleteConnection = useMutation({
@@ -158,7 +158,7 @@ function AdminLlmPage() {
 			}
 			toast.success("Connection deleted");
 		},
-		onError: (error) => reportConnectionError(error, "Could not delete the connection"),
+		onError: (error) => reportConnectionError(error, "We could not delete the connection"),
 	});
 
 	const mutatingConnectionIds = usePendingMutationIds(CONNECTION_WRITE_MUTATION_KEY, (variables) =>
@@ -181,7 +181,7 @@ function AdminLlmPage() {
 			toast.success("Model deleted");
 		},
 		onError: (error) =>
-			toast.error("Could not delete the model", { description: problemDetailOf(error) }),
+			toast.error("We could not delete the model", { description: problemDetailOf(error) }),
 	});
 
 	const mutatingModelIds = usePendingMutationIds(MODEL_WRITE_MUTATION_KEY, (variables) =>
@@ -195,7 +195,7 @@ function AdminLlmPage() {
 			toast.success("Settings saved");
 		},
 		onError: (error) =>
-			toast.error("Could not save settings", { description: problemDetailOf(error) }),
+			toast.error("We could not save settings", { description: problemDetailOf(error) }),
 	});
 
 	const isModelSaving =
@@ -233,7 +233,7 @@ function AdminLlmPage() {
 					description: "Review the model and save again before activating it.",
 				});
 			} else {
-				toast.error("Could not save the model", { description: problemDetailOf(error) });
+				toast.error("We could not save the model", { description: problemDetailOf(error) });
 			}
 		}
 	};
@@ -442,7 +442,7 @@ function AdminLlmPage() {
 								toast.success("Workspace access updated");
 							},
 							onError: (error) => {
-								toast.error("Could not update workspace access", {
+								toast.error("We could not update workspace access", {
 									description: problemDetailOf(error),
 								});
 							},

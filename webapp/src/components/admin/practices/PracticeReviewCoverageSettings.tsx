@@ -467,8 +467,8 @@ function CoverageWorkflowStatus({ workflow, dirty }: { workflow: Workflow; dirty
 		return (
 			<p role="alert" className="max-w-md text-sm text-destructive">
 				{workflow.action === "preview"
-					? "Could not estimate the impact. Your draft is unchanged. Try again."
-					: "Could not save the coverage. Your draft is unchanged. Try again."}
+					? "We could not estimate the impact. Your draft is unchanged. Try again."
+					: "We could not save the coverage. Your draft is unchanged. Try again."}
 			</p>
 		);
 	}

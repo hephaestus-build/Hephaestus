@@ -97,13 +97,13 @@ export function useFeedbackResponseWrite(
 		...filedUnder(FEEDBACK_RESPONSE_WRITE_KEY, replaceFeedbackResponseMutation()),
 		onSuccess: written,
 		onError: (error) =>
-			toast.error(problemDetailOf(error, "Could not save your feedback response")),
+			toast.error(problemDetailOf(error, "We could not save your feedback response")),
 	});
 	const deleteMutation = useMutation({
 		...filedUnder(FEEDBACK_RESPONSE_WRITE_KEY, deleteFeedbackResponseMutation()),
 		onSuccess: written,
 		onError: (error) =>
-			toast.error(problemDetailOf(error, "Could not withdraw your feedback response")),
+			toast.error(problemDetailOf(error, "We could not withdraw your feedback response")),
 	});
 	const pending = useMutationState<
 		[string, FeedbackResponseRequest] | undefined,

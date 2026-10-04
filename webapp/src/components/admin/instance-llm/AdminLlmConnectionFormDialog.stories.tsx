@@ -56,7 +56,11 @@ export const Probing: Story = {
 export const DiscoveryUnsupported: Story = {
 	args: {
 		onProbe: fn<AdminLlmConnectionFormDialogProps["onProbe"]>((_request, callbacks) =>
-			callbacks.onSuccess({ reachable: false, models: [], message: "Connection timed out" }),
+			callbacks.onSuccess({
+				reachable: false,
+				models: [],
+				message: "The provider answered with HTTP 404.",
+			}),
 		),
 	},
 	play: async () => {
@@ -72,7 +76,7 @@ export const ValidationError: Story = {
 		await userEvent.click(
 			await screen.findByRole("button", { name: /save inactive connection/iu }),
 		);
-		await expectSettledVisible(await screen.findByText(/display name is required/iu));
+		await expectSettledVisible(await screen.findByText(/enter a display name/iu));
 	},
 };
 

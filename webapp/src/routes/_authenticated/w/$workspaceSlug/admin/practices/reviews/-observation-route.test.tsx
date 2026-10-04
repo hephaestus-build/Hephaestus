@@ -167,7 +167,7 @@ describe("observation level", () => {
 		assert(submit);
 		await user.click(submit);
 
-		await screen.findByText("Could not change this observation");
+		await screen.findByText("We could not change this observation");
 		expect(screen.getByRole("textbox", { name: "Reason" })).toHaveProperty(
 			"value",
 			"The 404 comes from the router.",

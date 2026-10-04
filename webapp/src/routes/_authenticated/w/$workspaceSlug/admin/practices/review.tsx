@@ -122,7 +122,7 @@ function HowMuchSection({
 	const autonomyMutations = usePracticeAutonomyMutations(workspaceSlug);
 	const updateSettings = usePracticeReviewSettingsMutation(workspaceSlug, {
 		success: "Review settings updated",
-		error: "Could not update review settings",
+		error: "We could not update review settings",
 	});
 
 	if (settingsQuery.isPending || rollupQuery.isPending || practicesQuery.isPending) {
@@ -209,11 +209,11 @@ function WhenAndWhereSection({ workspaceSlug }: { workspaceSlug: string }) {
 
 	const updatePracticeReviewSettings = usePracticeReviewSettingsMutation(workspaceSlug, {
 		success: "Review settings updated",
-		error: "Could not update review settings",
+		error: "We could not update review settings",
 	});
 	const updateFeatures = useUpdateWorkspaceFeatures(workspaceSlug, {
 		success: "Practice review settings updated",
-		error: "Could not update practice review settings",
+		error: "We could not update practice review settings",
 	});
 	const schedules = useSweepScheduleMutations(workspaceSlug);
 
@@ -384,7 +384,7 @@ function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 			void invalidate();
 		},
 		onError: (error) => {
-			toast.error("Could not estimate this backfill", { description: problemDetailOf(error) });
+			toast.error("We could not estimate this backfill", { description: problemDetailOf(error) });
 		},
 	});
 
@@ -399,7 +399,7 @@ function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 			}
 		},
 		onError: (error) => {
-			toast.error("Could not update this backfill", { description: problemDetailOf(error) });
+			toast.error("We could not update this backfill", { description: problemDetailOf(error) });
 		},
 	});
 

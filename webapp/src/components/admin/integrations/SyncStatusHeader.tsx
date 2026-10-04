@@ -89,7 +89,9 @@ function rateLimitReading(rateLimit: RateLimitSnapshot, now: number): ReactNode 
 	const throttledUntil = asDate(rateLimit.throttledUntil);
 	if (throttledUntil && throttledUntil.getTime() > now) {
 		return (
-			<span className="text-warning">Throttled · retry {relativeTime(throttledUntil, now)}</span>
+			<span className="text-warning">
+				Throttled · try again {relativeTime(throttledUntil, now)}
+			</span>
 		);
 	}
 

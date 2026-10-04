@@ -55,7 +55,7 @@ function PracticeReleaseInbox() {
 			if (problemStatusOf(error) === 412) {
 				refresh();
 			}
-			toast.error("Could not accept the update", { description: problemDetailOf(error) });
+			toast.error("We could not accept the update", { description: problemDetailOf(error) });
 		},
 	});
 	const decline = useMutation({
@@ -68,7 +68,7 @@ function PracticeReleaseInbox() {
 			if (problemStatusOf(error) === 412) {
 				refresh();
 			}
-			toast.error("Could not decline the update", { description: problemDetailOf(error) });
+			toast.error("We could not decline the update", { description: problemDetailOf(error) });
 		},
 	});
 	const proposals = query.data ?? [];

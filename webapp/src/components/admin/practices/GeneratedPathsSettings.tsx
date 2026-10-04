@@ -80,7 +80,7 @@ function RepositoryGeneratedPaths({
 	});
 	const errorMessage = conflicted
 		? "Saved patterns changed while you were editing. Your draft has not been saved."
-		: "Could not save generated paths. Check the patterns and try again.";
+		: "We could not save generated paths. Check the patterns and try again.";
 	const save = async () => {
 		setState("saving");
 		try {

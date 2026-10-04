@@ -102,7 +102,7 @@ function LoadedCuratedGroupEditor({
 			setBaseGroup(latest);
 			setConflict(false);
 		} catch (error) {
-			toast.error("Could not load the current version", {
+			toast.error("We could not load the current version", {
 				description: problemDetailOf(error),
 			});
 		}
@@ -125,7 +125,7 @@ function LoadedCuratedGroupEditor({
 				setConflict(true);
 				return;
 			}
-			toast.error("Could not update the group", { description: problemDetailOf(error) });
+			toast.error("We could not update the group", { description: problemDetailOf(error) });
 		},
 	});
 	const deleteOverride = useMutation({
@@ -151,7 +151,7 @@ function LoadedCuratedGroupEditor({
 				invalidateCatalog();
 				return;
 			}
-			toast.error("Could not apply the Hephaestus version", {
+			toast.error("We could not apply the Hephaestus version", {
 				description: problemDetailOf(error),
 			});
 		},
@@ -178,7 +178,7 @@ function LoadedCuratedGroupEditor({
 				invalidateCatalog();
 				return;
 			}
-			toast.error("Could not keep the saved version", { description: problemDetailOf(error) });
+			toast.error("We could not keep the saved version", { description: problemDetailOf(error) });
 		},
 	});
 

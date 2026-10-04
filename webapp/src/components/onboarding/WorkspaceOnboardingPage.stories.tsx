@@ -413,13 +413,13 @@ export const OptionUncovered: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
 		await expect(inHouse).toHaveAccessibleName(/Not set up in Engineering yet/u);
-		await expect(canvas.queryByText(/is set up within this answer yet/u)).toBeNull();
+		await expect(canvas.queryByText(/has nothing set up for this choice yet/u)).toBeNull();
 		await expect(inHouse).not.toHaveAttribute("aria-disabled");
 		await userEvent.click(inHouse);
 		await expect(inHouse).toBeChecked();
 		await expect(
 			canvas.getByText(
-				"Nothing in Engineering is set up within this answer yet. You get no AI here until a workspace owner adds a model that fits. Your choice still counts.",
+				"Engineering has nothing set up for this choice yet. You get no AI here until a workspace owner adds a model that fits. Your choice still counts.",
 			),
 		).toBeVisible();
 		await expect(
@@ -455,13 +455,13 @@ export const HephNotCovered: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Practice reviews run in Engineering within this answer. Heph is not set up here yet.",
+				"Practice reviews run in Engineering for this choice. Heph is not set up here yet.",
 			),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
 		await expect(
 			canvas.getByText(
-				"Heph runs in Engineering within this answer. Practice reviews are not set up here yet.",
+				"Heph runs in Engineering for this choice. Practice reviews are not set up here yet.",
 			),
 		).toBeVisible();
 	},

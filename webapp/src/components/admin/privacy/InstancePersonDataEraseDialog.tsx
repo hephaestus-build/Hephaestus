@@ -75,7 +75,7 @@ export function InstancePersonDataEraseDialog({
 					<AlertDialogDescription>
 						{resume
 							? "Stores that were already erased stay erased. The job continues with the remaining stores."
-							: `This erases or anonymises ${rowCount} rows in ${storeCount} stores and blocks further processing of these identities. You cannot undo this.`}
+							: `This erases or anonymizes ${rowCount} ${rowCount === 1 ? "row" : "rows"} in ${storeCount} ${storeCount === 1 ? "store" : "stores"} and blocks further processing of these identities. You cannot undo this.`}
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<form onSubmit={confirm} className="grid gap-4">

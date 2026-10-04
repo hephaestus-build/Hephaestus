@@ -145,7 +145,7 @@ export const RedeclareLeavesRows: Story = {
 
 		await userEvent.click(within(dialog).getByRole("radio", { name: "Your organization" }));
 		await expectSettledVisible(
-			within(dialog).getByText("Rows holding this model as Cloud stop serving"),
+			within(dialog).getByText("Assignments holding this model as Cloud stop serving"),
 		);
 
 		await userEvent.click(within(dialog).getByRole("radio", { name: "A provider" }));
@@ -202,8 +202,8 @@ export const EditKeepsAccessSeparate: Story = {
 export const ValidationError: Story = {
 	play: async () => {
 		await userEvent.click(await screen.findByRole("button", { name: /add model/iu }));
-		await expectSettledVisible(await screen.findByText(/display name is required/iu));
-		await expectSettledVisible(await screen.findByText(/upstream model id is required/iu));
+		await expectSettledVisible(await screen.findByText(/enter a display name/iu));
+		await expectSettledVisible(await screen.findByText(/enter the upstream model ID/iu));
 	},
 };
 

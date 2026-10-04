@@ -226,7 +226,7 @@ describe("practice profile route", () => {
 		await screen.findByRole("tab", { name: /^Every practice/u }, ROUTE_RENDER_WAIT);
 		// A quiet practice's reason comes only from the activity, asked for this review.
 		await screen.findByText(
-			"The review ended before reaching this practice.",
+			"The review ended before it reached this practice.",
 			undefined,
 			ROUTE_RENDER_WAIT,
 		);
@@ -403,7 +403,7 @@ describe("practice profile route", () => {
 			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS / 2);
 			firstActivity.resolve();
 			await vi.waitFor(
-				() => screen.getByText("The review ended before reaching this practice."),
+				() => screen.getByText("The review ended before it reached this practice."),
 				ROUTE_RENDER_WAIT,
 			);
 

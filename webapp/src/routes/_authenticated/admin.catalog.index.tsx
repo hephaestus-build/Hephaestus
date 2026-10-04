@@ -80,7 +80,7 @@ function structureError(error: unknown) {
 	toast.error(
 		problemStatusOf(error) === 412
 			? "The catalog order changed before this move was saved. We reloaded the latest order."
-			: "Could not save the catalog order",
+			: "We could not save the catalog order",
 		{ description: problemDetailOf(error) },
 	);
 }
@@ -129,7 +129,7 @@ function AdminCuratedCatalogPage() {
 			toast.error(
 				problemStatusOf(error) === 412
 					? "The catalog changed before this action was saved. We reloaded the practice."
-					: "Could not update the practice",
+					: "We could not update the practice",
 				{ description: problemDetailOf(error) },
 			);
 		},
@@ -146,7 +146,7 @@ function AdminCuratedCatalogPage() {
 			toast.error(
 				problemStatusOf(error) === 412
 					? "The catalog changed before this action was saved. We reloaded the group."
-					: "Could not update the group",
+					: "We could not update the group",
 				{ description: problemDetailOf(error) },
 			);
 		},

@@ -278,7 +278,7 @@ function AdminLlmConnectionFormDialogContent({
 						{probeResult && !probeResult.reachable && (
 							<Alert variant="warning">
 								<AlertDescription>
-									Could not fetch the model list.{" "}
+									We could not fetch the model list.{" "}
 									{probeResult.message ?? "The provider did not answer."} You can still save the
 									connection and enter a model id.
 								</AlertDescription>
@@ -287,8 +287,8 @@ function AdminLlmConnectionFormDialogContent({
 						{hasText(probeError) && (
 							<Alert variant="warning">
 								<AlertDescription>
-									Could not fetch the model list. {probeError} You can still save the connection and
-									enter a model id.
+									We could not fetch the model list. {probeError} You can still save the connection
+									and enter a model id.
 								</AlertDescription>
 							</Alert>
 						)}

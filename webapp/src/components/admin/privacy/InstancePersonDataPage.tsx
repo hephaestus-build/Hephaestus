@@ -308,7 +308,8 @@ function RequestCard({
 			<CardHeader>
 				<CardTitle>{REQUEST_STATE_TITLES[request.state]}</CardTitle>
 				<CardDescription>
-					{rowCount} rows in {heldStores.length} of {stores.length} stores.{" "}
+					{rowCount} {rowCount === 1 ? "row" : "rows"} in {heldStores.length} of {stores.length}{" "}
+					{stores.length === 1 ? "store" : "stores"}.{" "}
 					{request.state === "PREVIEW" && (
 						<>
 							Export and erasure use exactly these rows. If the data changes, preview again. This
@@ -409,7 +410,8 @@ function RequestCard({
 					<Collapsible>
 						<CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
 							<ChevronDownIcon aria-hidden />
-							{emptyStores.length} stores hold no rows
+							{emptyStores.length === 1 ? "1 store holds" : `${emptyStores.length} stores hold`} no
+							rows
 						</CollapsibleTrigger>
 						<CollapsibleContent>
 							<ul className="mt-2 columns-1 text-sm text-muted-foreground sm:columns-2 lg:columns-3">

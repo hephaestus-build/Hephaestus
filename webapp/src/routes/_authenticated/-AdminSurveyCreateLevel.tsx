@@ -44,7 +44,7 @@ export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreat
 			onPublished(survey.id);
 		},
 		onError: (error) =>
-			toast.error("Could not publish the survey. Your draft is still here.", {
+			toast.error("We could not publish the survey. Your draft is still here.", {
 				description: problemDetailOf(error),
 			}),
 	});

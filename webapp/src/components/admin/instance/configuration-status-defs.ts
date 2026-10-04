@@ -33,7 +33,7 @@ export const CONFIGURATION_STATUS_DEFS: StatusDefs<ConfigurationStatus> = {
 		description: "Optional settings you have not set. Nothing is broken.",
 	},
 	SATISFIED: {
-		label: "Satisfied",
+		label: "Passed",
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
 		description: "The check passed.",

@@ -71,7 +71,7 @@ function targetKeyOf(variables: unknown): string | undefined {
 function slotRefusalOf(error: unknown): string {
 	const declaredTier = isRecord(error) ? error.declaredTier : undefined;
 	return isDataHandlingTier(declaredTier)
-		? `This model is declared as ${DATA_HANDLING_DEFS[declaredTier].label}. Assign it to that row.`
+		? `This model is declared as ${DATA_HANDLING_DEFS[declaredTier].label}. Assign it under ${DATA_HANDLING_DEFS[declaredTier].label}.`
 		: problemDetailOf(error);
 }
 
@@ -155,7 +155,7 @@ function ModelsContainer() {
 				setSaveError(target, slotRefusalOf(error));
 				return;
 			}
-			toast.error(`Could not save ${PURPOSE_TITLES[target.purpose].toLowerCase()}`, {
+			toast.error(`We could not save ${PURPOSE_TITLES[target.purpose].toLowerCase()}`, {
 				description: problemDetailOf(error),
 			});
 		},
@@ -177,7 +177,7 @@ function ModelsContainer() {
 			toast.success(`${PURPOSE_TITLES[target.purpose]} turned off`);
 		},
 		onError: (error, { target }) => {
-			toast.error(`Could not turn off ${PURPOSE_TITLES[target.purpose].toLowerCase()}`, {
+			toast.error(`We could not turn off ${PURPOSE_TITLES[target.purpose].toLowerCase()}`, {
 				description: problemDetailOf(error),
 			});
 		},

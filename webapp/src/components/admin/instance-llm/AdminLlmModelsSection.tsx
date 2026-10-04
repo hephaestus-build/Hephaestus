@@ -68,7 +68,9 @@ function shareLabel(model: LlmModel, workspaces: WorkspaceOption[]): string {
 		(workspace) => workspace.id === model.grantedWorkspaceIds[0],
 	)?.displayName;
 	if (!hasText(firstName)) {
-		return `${model.grantedWorkspaceIds.length} workspaces`;
+		return model.grantedWorkspaceIds.length === 1
+			? "1 workspace"
+			: `${model.grantedWorkspaceIds.length} workspaces`;
 	}
 	return model.grantedWorkspaceIds.length === 1
 		? firstName

@@ -13,9 +13,9 @@ import { Toaster } from "@/components/ui/sonner";
 describe("sonner toast politeness", () => {
 	it("announces an error toast politely, because there is no per-toast role to set", async () => {
 		render(<Toaster />);
-		toast.error("Could not delete the model");
+		toast.error("We could not delete the model");
 
-		await screen.findByText("Could not delete the model");
+		await screen.findByText("We could not delete the model");
 		const region = document.querySelector("section[aria-live]");
 		expect(region?.getAttribute("aria-live")).toBe("polite");
 

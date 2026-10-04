@@ -142,7 +142,7 @@ export function OutlineCollectionRow({
 											variant="ghost"
 											size="icon-xs"
 											className="text-warning"
-											aria-label={`${collection.exportsSkippedForBudget} exports skipped for budget for ${label}`}
+											aria-label={`${collection.exportsSkippedForBudget} ${collection.exportsSkippedForBudget === 1 ? "export" : "exports"} skipped for budget for ${label}`}
 										>
 											<TriangleAlertIcon aria-hidden />
 										</Button>

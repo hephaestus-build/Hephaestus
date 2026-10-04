@@ -242,7 +242,7 @@ export const RateLimitThrottled: Story = {
 	},
 	play: async ({ canvas }) => {
 		const reading = canvas.getByText(/throttled/iu);
-		await expect(reading).toHaveTextContent(/retry in/iu);
+		await expect(reading).toHaveTextContent(/try again in/iu);
 		await expect(canvas.queryByText(/^\/\s*[\d,]+$/u)).not.toBeInTheDocument();
 	},
 };

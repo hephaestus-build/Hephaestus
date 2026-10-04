@@ -437,7 +437,7 @@ export function LlmModelFields({
 					<Alert variant="warning">
 						<AlertTriangle aria-hidden />
 						<AlertTitle>
-							Rows holding this model as {DATA_HANDLING_DEFS[leftTier].label} stop serving
+							Assignments holding this model as {DATA_HANDLING_DEFS[leftTier].label} stop serving
 						</AlertTitle>
 						<AlertDescription>
 							A row holds only models declared as its own tier. Nothing runs on this model there

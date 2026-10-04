@@ -43,7 +43,7 @@ export function CuratedPracticeCreateLevel({
 			onDone();
 		},
 		onError: (error) =>
-			toast.error("Could not create the practice", { description: problemDetailOf(error) }),
+			toast.error("We could not create the practice", { description: problemDetailOf(error) }),
 	});
 
 	let body: ReactNode;

@@ -103,7 +103,7 @@ export const Default: Story = {
 			within(table).getByText("A dependency bump rode along with the behaviour change"),
 		).toBeVisible();
 		await expect(
-			within(table).getByText("The review ended before reaching this practice."),
+			within(table).getByText("The review ended before it reached this practice."),
 		).toBeVisible();
 		// The unfiltered table states no count: the tab already carries it.
 		await expect(screen.queryByText(/^\d+ practices?\.$/u)).toBeNull();
@@ -203,7 +203,7 @@ export const WhatWeNoticed: Story = {
 		await settledDrawerPanel();
 		await expect(screen.getByRole("heading", { name: "What we noticed" })).toBeVisible();
 		await expect(
-			screen.getByText(/already had a review within the cooldown period of this workspace/u),
+			screen.getByText(/already had a review within this workspace’s cooldown period/u),
 		).toBeVisible();
 	},
 };

@@ -282,7 +282,7 @@ describe("instance surveys route", () => {
 		const drawer = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
 		await user.click(await within(drawer).findByRole("button", { name: "Export CSV" }));
 
-		await screen.findByText("Could not export the responses. Try again.");
+		await screen.findByText("We could not export the responses. Try again.");
 	});
 
 	it("publishes a survey from the composer and opens its results", async () => {

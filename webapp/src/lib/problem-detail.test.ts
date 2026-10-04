@@ -42,7 +42,9 @@ describe("problemDetailOf", () => {
 		expect(problemDetailOf(new TypeError("Failed to fetch"), "Could not save the model")).toBe(
 			"Could not save the model",
 		);
-		expect(problemDetailOf({ message: "boom" })).toBe("An unexpected error occurred. Try again.");
+		expect(problemDetailOf({ message: "boom" })).toBe(
+			"We could not finish that. Try again. If it keeps failing, contact your workspace admin.",
+		);
 	});
 
 	it("still prefers `detail` over a `message` sitting beside it", () => {
@@ -56,10 +58,18 @@ describe("problemDetailOf", () => {
 	});
 
 	it("falls back to a generic message for unhandled shapes", () => {
-		expect(problemDetailOf(null)).toBe("An unexpected error occurred. Try again.");
-		expect(problemDetailOf(undefined)).toBe("An unexpected error occurred. Try again.");
-		expect(problemDetailOf({ status: 500 })).toBe("An unexpected error occurred. Try again.");
-		expect(problemDetailOf(42)).toBe("An unexpected error occurred. Try again.");
+		expect(problemDetailOf(null)).toBe(
+			"We could not finish that. Try again. If it keeps failing, contact your workspace admin.",
+		);
+		expect(problemDetailOf(undefined)).toBe(
+			"We could not finish that. Try again. If it keeps failing, contact your workspace admin.",
+		);
+		expect(problemDetailOf({ status: 500 })).toBe(
+			"We could not finish that. Try again. If it keeps failing, contact your workspace admin.",
+		);
+		expect(problemDetailOf(42)).toBe(
+			"We could not finish that. Try again. If it keeps failing, contact your workspace admin.",
+		);
 	});
 });
 

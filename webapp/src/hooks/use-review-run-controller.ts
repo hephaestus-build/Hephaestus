@@ -110,7 +110,7 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 			toast.success("Review cancelled");
 		},
 		onError: (error) =>
-			toast.error("Could not cancel the review", {
+			toast.error("We could not cancel the review", {
 				description: problemDetailOf(error, "Try again in a moment."),
 			}),
 	});
@@ -118,10 +118,10 @@ export function useReviewRunController(workspaceSlug: string, jobId: string): Re
 		...retryAgentJobDeliveryMutation(),
 		onSuccess: (job) => {
 			updateJob(job);
-			toast.success("Result processing queued for retry");
+			toast.success("Result processing will run again");
 		},
 		onError: (error) =>
-			toast.error("Could not retry result processing", {
+			toast.error("We could not run result processing again", {
 				description: problemDetailOf(error, "Try again in a moment."),
 			}),
 	});

@@ -66,7 +66,7 @@ export const MENTOR_PREFERENCE_COPY = {
 	unavailable: {
 		title: "Heph is not set up for your AI choice yet",
 		description: {
-			before: "No Heph model is within ",
+			before: "No Heph model is set up for ",
 			after: " yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
 		},
 		cta: "Change your AI choice",

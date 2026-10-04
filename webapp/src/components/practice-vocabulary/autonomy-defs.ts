@@ -16,7 +16,7 @@ export const AUTONOMY_DEFS: StatusDefs<PracticeAutonomy> = {
 		icon: UserRoundCheckIcon,
 		badgeVariant: "warning",
 		description:
-			"Feedback on the work waits for an authorized person to approve or reject it. The developer’s own practice pages and the mentor are written regardless.",
+			"Feedback on the work waits for an authorized person to approve or reject it. The developer’s own practice pages and Heph do not wait.",
 	},
 	AUTOMATIC: {
 		label: "Send automatically",

@@ -116,7 +116,7 @@ export function WorkspaceLlmProviderPanel({
 			if (problemStatusOf(error) === 403) {
 				setRegistrationDisabled(true);
 			}
-			toast.error("Could not connect your provider", { description: problemDetailOf(error) });
+			toast.error("We could not connect your provider", { description: problemDetailOf(error) });
 		},
 	});
 	const updateConnection = useMutation({
@@ -127,7 +127,7 @@ export function WorkspaceLlmProviderPanel({
 			toast.success("Provider updated");
 		},
 		onError: (error) =>
-			toast.error("Could not update your provider", { description: problemDetailOf(error) }),
+			toast.error("We could not update your provider", { description: problemDetailOf(error) }),
 	});
 	const deleteConnection = useMutation({
 		...filedUnder(connectionWriteKey, workspaceDeleteLlmConnectionMutation()),
@@ -137,7 +137,7 @@ export function WorkspaceLlmProviderPanel({
 			toast.success("Provider disconnected");
 		},
 		onError: (error) =>
-			toast.error("Could not disconnect your provider", { description: problemDetailOf(error) }),
+			toast.error("We could not disconnect your provider", { description: problemDetailOf(error) }),
 	});
 	const probeConnection = useMutation({
 		...filedUnder(probeKey, workspaceProbeLlmConnectionMutation()),
@@ -150,7 +150,7 @@ export function WorkspaceLlmProviderPanel({
 								ok: true,
 								message: `Connected. ${result.modelCount} model${result.modelCount === 1 ? "" : "s"} available.`,
 							}
-						: { ok: false, message: result.message ?? "Could not reach the provider." },
+						: { ok: false, message: result.message ?? "We could not reach the provider." },
 				),
 			);
 		},
@@ -158,7 +158,7 @@ export function WorkspaceLlmProviderPanel({
 			setTestResults((current) =>
 				new Map(current).set(variables.path.id, {
 					ok: false,
-					message: problemDetailOf(error, "Could not reach the provider."),
+					message: problemDetailOf(error, "We could not reach the provider."),
 				}),
 			);
 		},
@@ -181,7 +181,7 @@ export function WorkspaceLlmProviderPanel({
 			if (problemStatusOf(error) === 403) {
 				setRegistrationDisabled(true);
 			}
-			toast.error("Could not add the model", { description: problemDetailOf(error) });
+			toast.error("We could not add the model", { description: problemDetailOf(error) });
 		},
 	});
 	const updateModel = useMutation({
@@ -192,7 +192,7 @@ export function WorkspaceLlmProviderPanel({
 			toast.success("Model updated");
 		},
 		onError: (error) =>
-			toast.error("Could not update the model", { description: problemDetailOf(error) }),
+			toast.error("We could not update the model", { description: problemDetailOf(error) }),
 	});
 	const deleteModel = useMutation({
 		...filedUnder(modelWriteKey, workspaceDeleteLlmModelMutation()),
@@ -201,7 +201,7 @@ export function WorkspaceLlmProviderPanel({
 			toast.success("Model deleted");
 		},
 		onError: (error) =>
-			toast.error("Could not delete the model", { description: problemDetailOf(error) }),
+			toast.error("We could not delete the model", { description: problemDetailOf(error) }),
 	});
 	const mutatingModelIds = usePendingMutationIds(modelWriteKey, (variables) =>
 		pathNumber(variables, "id"),

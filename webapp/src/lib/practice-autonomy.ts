@@ -25,7 +25,7 @@ export const PRACTICE_AUTONOMY_DESCRIPTIONS: Record<PracticeAutonomy, string> = 
 export const PRACTICE_AUTONOMY_ADDS: Record<PracticeAutonomy, string> = {
 	OFF: "Nothing runs. No review, no record, nothing said.",
 	HUMAN_APPROVAL:
-		"Adds assisted delivery. Feedback on the work waits for an authorized reviewer to approve or reject it. Practice pages and the mentor are written regardless.",
+		"Adds assisted delivery. Feedback on the work waits for an authorized reviewer to approve or reject it. Practice pages and Heph do not wait.",
 	AUTOMATIC:
 		"Adds automatic delivery. Eligible feedback is sent onto the work without waiting for approval.",
 };

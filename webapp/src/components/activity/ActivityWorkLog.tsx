@@ -55,7 +55,7 @@ export interface ActivityWorkLogProps {
 
 const SKELETON_ROWS = 4;
 
-const LOAD_MORE_FAILED = "Could not load more activity.";
+const LOAD_MORE_FAILED = "We could not load more activity.";
 
 /**
  * What happened, one row per pull request or issue rather than per event — forty comments on one

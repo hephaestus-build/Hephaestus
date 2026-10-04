@@ -92,7 +92,7 @@ const PURPOSES: PurposeMeta[] = [
 	{
 		purpose: "MENTOR",
 		description:
-			"Powers conversations with Heph. Every member is offered Heph once a row here is ready.",
+			"Powers conversations with Heph. Every member is offered Heph once an assignment here is ready.",
 	},
 ];
 
@@ -566,7 +566,7 @@ function BindingRow({
 								<span className="font-medium">
 									{DATA_HANDLING_DEFS[boundModel.dataHandlingTier].label}
 								</span>{" "}
-								and no longer serves this row.{" "}
+								and no longer serves this assignment.{" "}
 								{noModels ? (
 									<>
 										Clear the assignment, or ask your host for a model declared as{" "}

@@ -69,7 +69,7 @@ it("keeps an existing conversation readable under No AI and restores its compose
 	expect(screen.queryByRole("heading", { name: "Heph is off for you" })).toBeNull();
 });
 
-it("names the saved choice when no Heph model is within it", async () => {
+it("names the saved choice when no Heph model is set up for it", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
@@ -95,7 +95,7 @@ it("names the saved choice when no Heph model is within it", async () => {
 		ROUTE_RENDER_WAIT,
 	);
 	expect(screen.getByText("Cloud", { selector: "em" }).parentElement?.textContent).toBe(
-		"No Heph model is within Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
+		"No Heph model is set up for Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
 	);
 	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
 		"/w/acme/onboarding?returnTo=%2Fw%2Facme%2Fmentor",

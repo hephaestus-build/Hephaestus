@@ -48,14 +48,14 @@ export const DELIVERY_STATE_DEFS: StatusDefs<DeliveryState> = {
 		icon: ClockIcon,
 		badgeVariant: "secondary",
 		description:
-			"Composed, and waiting for the moment that delivers it — which differs by channel.",
+			"Composed, and waiting for the moment that delivers it. That moment differs by channel.",
 	},
 	PARTIALLY_DELIVERED: {
 		label: "Partially delivered",
 		icon: CircleAlertIcon,
 		badgeVariant: "warning",
 		description:
-			"Some approved comments reached the provider. The remaining comments are retrying or were withheld for the reason shown.",
+			"Some approved comments reached the provider. The remaining comments are being tried again or were withheld for the reason shown.",
 	},
 	PARTIALLY_FAILED: {
 		label: "Partially delivered · retries exhausted",

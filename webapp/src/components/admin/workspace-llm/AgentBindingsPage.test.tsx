@@ -129,7 +129,7 @@ describe("AgentBindingsPage", () => {
 			true,
 		);
 		expect(inHouse.getByText(/is now declared as/u).textContent).toBe(
-			"GPT Other is now declared as Cloud and no longer serves this row. Clear the assignment, or ask your host for a model declared as In-house.",
+			"GPT Other is now declared as Cloud and no longer serves this assignment. Clear the assignment, or ask your host for a model declared as In-house.",
 		);
 	});
 
@@ -153,12 +153,12 @@ describe("AgentBindingsPage", () => {
 	it("shows the server's refusal on the row it refused", () => {
 		renderPage({
 			saveErrors: {
-				"PRACTICE_REVIEW:IN_HOUSE": "This model is declared as Cloud. Assign it to that row.",
+				"PRACTICE_REVIEW:IN_HOUSE": "This model is declared as Cloud. Assign it under Cloud.",
 			},
 		});
 		const inHouse = reviewsInHouse();
 		expect(inHouse.getByRole("alert").textContent).toBe(
-			"This model is declared as Cloud. Assign it to that row.",
+			"This model is declared as Cloud. Assign it under Cloud.",
 		);
 		expect(inHouse.getByRole("combobox", { name: /In-house/u }).getAttribute("aria-invalid")).toBe(
 			"true",

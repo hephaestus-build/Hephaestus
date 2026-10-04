@@ -220,7 +220,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 		);
 
 		fireEvent.click(screen.getByRole("button", { name: "Leave undeclared" }));
-		screen.getByText("Rows holding this model as Cloud stop serving");
+		screen.getByText("Assignments holding this model as Cloud stop serving");
 		fireEvent.click(screen.getByRole("radio", { name: "Your organization" }));
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onUpdate).toHaveBeenCalledTimes(3);

@@ -136,7 +136,7 @@ export const AllSatisfied: Story = {
 		await expect(canvas.queryByText("Action required")).toBeNull();
 		// Folded, but one press away.
 		await expect(canvas.queryByText("spring.datasource.url")).toBeNull();
-		await userEvent.click(canvas.getByRole("button", { name: /Satisfied/u }));
+		await userEvent.click(canvas.getByRole("button", { name: /Passed/u }));
 		await expect(canvas.getByText("spring.datasource.url")).toBeVisible();
 	},
 };

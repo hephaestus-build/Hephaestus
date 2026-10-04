@@ -40,7 +40,7 @@ const DRAFT_KEPT = "Your draft is still here.";
 function submissionError(error: unknown, subject: "survey" | "feedback"): string {
 	const status = problemStatusOf(error);
 	if (status === undefined) {
-		return `Could not send. ${DRAFT_KEPT} Check your connection and try again.`;
+		return `We could not send that. ${DRAFT_KEPT} Check your connection and try again.`;
 	}
 	if (status === 429) {
 		return `Wait a minute before sending more feedback. ${DRAFT_KEPT}`;
@@ -54,7 +54,7 @@ function submissionError(error: unknown, subject: "survey" | "feedback"): string
 	if (subject === "survey" && status === 404) {
 		return "This survey is no longer available. Your answers have not been sent.";
 	}
-	return `Could not send. ${problemDetailOf(error, "The server refused the request.")} ${DRAFT_KEPT}`;
+	return `We could not send that. ${problemDetailOf(error, "The server refused the request.")} ${DRAFT_KEPT}`;
 }
 
 /** What a member needs to know about a survey to be thanked for it: `submit` takes it from the dialog. */
@@ -117,7 +117,9 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 			toast.success("Decline undone. The survey is back in the header’s feedback menu.");
 		},
 		onError: () =>
-			toast.error("Could not undo the decline. The survey may no longer be available. Try again."),
+			toast.error(
+				"We could not undo the decline. The survey may no longer be available. Try again.",
+			),
 	});
 	const decline = useMutation({
 		...declineProductSurveyMutation(),

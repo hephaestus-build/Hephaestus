@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 
-const COPY_FAILED = "Could not copy that to the clipboard.";
+const COPY_FAILED = "We could not copy that to the clipboard.";
 
 /**
  * A refused write — a denied permission, an unfocused document — is the reader's to hear about;

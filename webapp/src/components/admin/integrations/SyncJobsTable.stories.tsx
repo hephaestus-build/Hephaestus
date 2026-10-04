@@ -183,7 +183,7 @@ export const ExpandProgressDetail: Story = {
 				...runningJob,
 				progress: {
 					phase: "pullRequests",
-					currentStep: "Backfill of ls1intum/Artemis: issues #4812 → #3200",
+					currentStep: "Backfilling ls1intum/Artemis: issues #4812 → #3200",
 					currentRepository: "ls1intum/Artemis",
 					unitsCompleted: 1612,
 					unitsTotal: 4812,
@@ -196,7 +196,7 @@ export const ExpandProgressDetail: Story = {
 		// Only the job with a progress report is expandable.
 		await expect(canvas.getAllByRole("button", { name: /show details for job/iu })).toHaveLength(1);
 		await userEvent.click(canvas.getByRole("button", { name: /show details for job 3/iu }));
-		await expectSettledVisible(await canvas.findByText(/backfill of ls1intum\/artemis/iu));
+		await expectSettledVisible(await canvas.findByText(/backfilling ls1intum\/artemis/iu));
 		canvas.getByText("Pull requests");
 	},
 };

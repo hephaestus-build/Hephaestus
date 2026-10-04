@@ -260,7 +260,7 @@ function PracticeCatalogRoute() {
 			].filter(Boolean);
 			toast.success("Group updated", { description: changes.join(", ") });
 		},
-		onError: () => toast.error("Could not add the group. Nothing was changed. Try again."),
+		onError: () => toast.error("We could not add the group. Nothing was changed. Try again."),
 	});
 	const adoptCatalogPractice = useMutation({
 		...adoptPracticeMutation(),
@@ -303,7 +303,7 @@ function PracticeCatalogRoute() {
 				}
 				return;
 			}
-			toast.error("Could not add the practice. Try again.");
+			toast.error("We could not add the practice. Try again.");
 		}
 	};
 

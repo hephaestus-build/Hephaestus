@@ -79,7 +79,7 @@ export interface ConnectionStateNoticeProps {
 export function ConnectionStateNotice({
 	connectionState,
 	credentialsUnreadableSince,
-	credentialRecovery = "The connection's page says how to replace it",
+	credentialRecovery = "The connection’s page says how to replace it",
 	displayName,
 	className,
 }: ConnectionStateNoticeProps) {

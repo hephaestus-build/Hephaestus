@@ -64,7 +64,7 @@ export const CredentialUnreadable: Story = {
 	args: { connectionState: "ACTIVE", credentialsUnreadableSince: new Date("2026-09-05T08:00:00Z") },
 	play: async ({ canvas }) => {
 		canvas.getByText(/the stored token cannot be read/iu);
-		await expect(canvas.getByText(/the connection's page says how to replace it/iu)).toBeVisible();
+		await expect(canvas.getByText(/the connection’s page says how to replace it/iu)).toBeVisible();
 	},
 };
 

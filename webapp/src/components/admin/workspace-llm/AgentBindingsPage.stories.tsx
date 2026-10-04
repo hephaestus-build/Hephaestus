@@ -161,7 +161,7 @@ export const SlotRejected: Story = {
 		bindings: partiallyCovered,
 		saveErrors: {
 			[bindingTargetKey({ purpose: "PRACTICE_REVIEW", tier: "IN_HOUSE" })]:
-				"This model is declared as Cloud. Assign it to that row.",
+				"This model is declared as Cloud. Assign it under Cloud.",
 		},
 	},
 	play: async ({ canvas, args }) => {
@@ -174,10 +174,10 @@ export const SlotRejected: Story = {
 		const picker = inHouse.getByRole("combobox", { name: /In-house/u });
 		await expect(picker).toHaveAttribute("aria-invalid", "true");
 		await expect(inHouse.getByRole("alert")).toHaveTextContent(
-			"This model is declared as Cloud. Assign it to that row.",
+			"This model is declared as Cloud. Assign it under Cloud.",
 		);
 		await expect(picker).toHaveAccessibleDescription(
-			/This model is declared as Cloud\. Assign it to that row\./u,
+			/This model is declared as Cloud\. Assign it under Cloud\./u,
 		);
 	},
 };
@@ -193,7 +193,7 @@ export const BoundModelMoved: Story = {
 		const picker = inHouse.getByRole("combobox", { name: /In-house/u });
 		await expect(picker).toHaveTextContent("GPT-5");
 		await expect(picker).toHaveAccessibleDescription(
-			"GPT-5 is now declared as Cloud and no longer serves this row. Choose another model, or clear the assignment.",
+			"GPT-5 is now declared as Cloud and no longer serves this assignment. Choose another model, or clear the assignment.",
 		);
 	},
 };
@@ -209,7 +209,7 @@ export const BoundModelMovedNoAlternative: Story = {
 		const picker = inHouse.getByRole("combobox", { name: /In-house/u });
 		await expect(picker).toBeDisabled();
 		await expect(picker).toHaveAccessibleDescription(
-			"GPT-5 is now declared as Cloud and no longer serves this row. Clear the assignment, or ask your host for a model declared as In-house.",
+			"GPT-5 is now declared as Cloud and no longer serves this assignment. Clear the assignment, or ask your host for a model declared as In-house.",
 		);
 		await expect(inHouse.getByRole("button", { name: /^Clear assignment/u })).toBeEnabled();
 	},

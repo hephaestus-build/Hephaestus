@@ -101,7 +101,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 			sync.invalidateSyncActivity();
 		},
 		onError: (e) => {
-			toast.error("Could not connect Outline", { description: problemDetailOf(e) });
+			toast.error("We could not connect Outline", { description: problemDetailOf(e) });
 		},
 	});
 
@@ -113,7 +113,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 			sync.invalidateSyncActivity();
 		},
 		onError: (e) => {
-			toast.error("Could not disconnect Outline", { description: problemDetailOf(e) });
+			toast.error("We could not disconnect Outline", { description: problemDetailOf(e) });
 		},
 	});
 
@@ -124,7 +124,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 			sync.invalidateSyncActivity();
 		},
 		onError: (e) => {
-			toast.error("Could not add the collection", { description: problemDetailOf(e) });
+			toast.error("We could not add the collection", { description: problemDetailOf(e) });
 		},
 	});
 
@@ -135,7 +135,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 			sync.invalidateSyncActivity();
 		},
 		onError: (e) => {
-			toast.error("Could not update the collection", { description: problemDetailOf(e) });
+			toast.error("We could not update the collection", { description: problemDetailOf(e) });
 		},
 	});
 
@@ -146,7 +146,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 			sync.invalidateSyncActivity();
 		},
 		onError: (e) => {
-			toast.error("Could not remove the collection", { description: problemDetailOf(e) });
+			toast.error("We could not remove the collection", { description: problemDetailOf(e) });
 		},
 	});
 

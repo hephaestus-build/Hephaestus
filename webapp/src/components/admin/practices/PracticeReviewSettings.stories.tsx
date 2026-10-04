@@ -304,7 +304,9 @@ export const CoveragePreviewUnavailable: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("radio", { name: "All monitored repositories" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Save coverage" }));
-		await expect(canvas.getByRole("alert")).toHaveTextContent(/^Could not estimate the impact\./u);
+		await expect(canvas.getByRole("alert")).toHaveTextContent(
+			/^We could not estimate the impact\./u,
+		);
 		await userEvent.click(canvas.getByRole("button", { name: "Save coverage" }));
 		await expect(args.coverage.preview).toHaveBeenCalledTimes(2);
 	},
@@ -357,7 +359,7 @@ export const CoverageSaveRollsBack: Story = {
 		await userEvent.click(canvas.getByRole("radio", { name: "Selected people" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Save coverage" }));
 		await expect(args.policy.onUpdate).toHaveBeenCalledTimes(1);
-		await expect(canvas.getByRole("alert")).toHaveTextContent(/^Could not save the coverage\./u);
+		await expect(canvas.getByRole("alert")).toHaveTextContent(/^We could not save the coverage\./u);
 		await expect(canvas.getByRole("radio", { name: "Selected repositories" })).toBeChecked();
 		await expect(canvas.getByRole("radio", { name: "Selected people" })).toBeChecked();
 	},

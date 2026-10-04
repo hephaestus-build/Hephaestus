@@ -31,9 +31,7 @@ export const SignalsExplainThemselves: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Marked ready for review")).toBeVisible();
 		await expect(
-			canvas.getByText(
-				"This work already had a review within the cooldown period of this workspace.",
-			),
+			canvas.getByText("This work already had a review within this workspace’s cooldown period."),
 		).toBeVisible();
 		await expect(
 			canvas.getByText("This work waited too long for a review to start."),
@@ -61,9 +59,7 @@ export const MembersAreOfferedNoAdminLinks: Story = {
 	args: { canAdminister: false },
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText(
-				"The review settings of this workspace did not allow a review of this work.",
-			),
+			canvas.getByText("This workspace’s review settings did not allow a review of this work."),
 		).toBeVisible();
 		await expect(canvas.queryByRole("link", { name: /^Open |^Set up /u })).not.toBeInTheDocument();
 	},

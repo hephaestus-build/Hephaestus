@@ -148,7 +148,7 @@ export const ReflowWithLongDetail: Story = {
 
 /**
  * The server said nothing useful. The guidance stands on its own rather than being padded with a
- * generic "An unexpected error occurred" it would only repeat.
+ * generic "We could not finish that" it would only repeat.
  */
 export const NoServerDetail: Story = {
 	args: {

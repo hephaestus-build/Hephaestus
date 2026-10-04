@@ -146,8 +146,8 @@ export const MobileReflow: Story = {
 export const ValidationError: Story = {
 	play: async () => {
 		await userEvent.click(await screen.findByRole("button", { name: /add inactive model/iu }));
-		await expectSettledVisible(await screen.findByText(/display name is required/iu));
-		await expectSettledVisible(await screen.findByText(/upstream model id is required/iu));
+		await expectSettledVisible(await screen.findByText(/enter a display name/iu));
+		await expectSettledVisible(await screen.findByText(/enter the upstream model ID/iu));
 	},
 };
 

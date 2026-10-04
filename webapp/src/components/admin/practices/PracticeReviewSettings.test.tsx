@@ -266,7 +266,7 @@ describe("PracticeReviewSettings", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Save coverage" }));
 
 		const alert = await screen.findByRole("alert");
-		expect(alert.textContent).toMatch(/^Could not save the coverage\./u);
+		expect(alert.textContent).toMatch(/^We could not save the coverage\./u);
 		expect(
 			screen.getByRole("radio", { name: "Selected repositories" }).getAttribute("aria-checked"),
 		).toBe("true");

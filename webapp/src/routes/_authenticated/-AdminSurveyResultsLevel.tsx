@@ -55,14 +55,16 @@ export function AdminSurveyResultsLevel({
 				queryKey: adminPreviewSurveyEmailInvitationsQueryKey({ path }),
 			});
 			toast.success(
-				`${summary.queued} invitations queued in this batch. Relay acceptance appears separately.`,
+				`${summary.queued} ${summary.queued === 1 ? "invitation" : "invitations"} queued in this batch. Relay acceptance appears separately.`,
 			);
 		},
 		onError: async () => {
 			await queryClient.invalidateQueries({
 				queryKey: adminPreviewSurveyEmailInvitationsQueryKey({ path }),
 			});
-			toast.error("Could not confirm the invitation request. Refresh counts before trying again.");
+			toast.error(
+				"We could not confirm the invitation request. Refresh counts before trying again.",
+			);
 		},
 	});
 	let emailState: SurveyEmailInvitationsState;
@@ -108,7 +110,7 @@ export function AdminSurveyResultsLevel({
 			}
 			saveTextFile(data, `survey-${surveyId}-responses.csv`, "text/csv;charset=utf-8;");
 		},
-		onError: () => toast.error("Could not export the responses. Try again."),
+		onError: () => toast.error("We could not export the responses. Try again."),
 	});
 
 	let state: AdminSurveyResultsState;
