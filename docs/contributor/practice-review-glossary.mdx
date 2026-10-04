@@ -6,10 +6,11 @@ description: The review operation, the evidence contract, and the exact API, Jav
 # Practice review glossary
 
 This glossary is the canonical language for AI-supported practice mentoring and the versioned evidence contract.
-Use product terms in human-facing copy and the corresponding machine terms in contracts; do not invent synonyms.
+Use product terms in human-facing copy and the corresponding machine terms in contracts.
+Do not invent synonyms.
 The broader [practice feedback language](./practice-feedback-language.md) remains canonical for observations and feedback.
-For how the words fit together at runtime — the four stages, and the refusal vocabulary each one owns — see the
-[practice review pipeline](./practice-review-pipeline.mdx).
+
+For how the words fit together at runtime — the four stages, and the refusal vocabulary each one owns — see the [practice review pipeline](./practice-review-pipeline.mdx).
 
 ## Product terms
 
@@ -23,7 +24,7 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Guidance only**                   | Keep the practice's criteria and guidance without asking Hephaestus to review it.                                                                                                                                                          | practice guidance only, invalid practice, human-only              |
 | **Review mode**                     | The implementation Hephaestus uses when automated review is configured.                                                                                                                                                                    | observability, mechanical/semantic classification                 |
 | **No automated review**             | Hephaestus does not review work against this practice.                                                                                                                                                                                     | human-only, unobservable                                          |
-| **Automated-review policy**         | The frame a review runs in for one practice: the source-contract version, the review mode, the refusal behaviour, and the known limits. Evidence requirements belong to the flat review configuration, not here.                                                          | evidence requirements                                             |
+| **Automated-review policy**         | The frame a review runs in for one practice: the source-contract version, the review mode, the refusal behavior, and the known limits. Evidence requirements belong to the flat review configuration, not here.                                                          | evidence requirements                                             |
 | **Review occasion**                | The one occasion a practice is reviewed on, and the evidence a review occasioned that way reads. A practice declares exactly one.                                                                                                          | trigger, review event, schedule, bare "binding"                   |
 | **Model binding**                   | Which AI model, with which execution limits, a workspace runs a given purpose on. Lives in Administration &rarr; AI models, not in the practice catalogue.                                                                                 | bare "binding", practice binding, agent config                    |
 | **Signal**                          | The name of an ingested event a practice can be reviewed on, such as `scm.pull_request.merged`. Its prefix is the artifact kind, which is why a practice never states its artifact kind separately. On screen it is a **moment**, in the editor and in the filters alike. | trigger event, webhook, hook                                      |
@@ -52,20 +53,21 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Delivery status**                 | Whether new external practice feedback may leave a workspace (`ACTIVE` or `PAUSED`). Pausing does not stop review or erase coverage.                                                                                                       | review status, practice autonomy, Silent Mode                     |
 | **Delivery family**                 | Defined in the [practice feedback language](./practice-feedback-language.md).                                                                                                                                                              | delivery status, delivery state                                   |
 
-A practice author defines requirements. That definition is not proof that the evidence is sufficient or that a
-review is accurate, and the product says so rather than implying otherwise: every shipped policy is its
-author's declaration, and `AUTHOR_DECLARED` is the only status the API can return. Nothing validates a policy
-independently, so no surface may suggest something did.
+A practice author defines requirements.
+That definition does not prove sufficient evidence or an accurate review.
+The product states this instead of implying otherwise.
+Every shipped policy is its author's declaration.
+`AUTHOR_DECLARED` is the only status the API can return.
+Nothing validates a policy independently, so no surface may suggest something did.
 
-“Mentoring” describes the product goal, not an anthropomorphic claim. Hephaestus does not know a developer's
-intent, private conversations, runtime conditions, or learning needs unless an authorized source explicitly
-provides that context. An observation is a bounded record of observed work, not a grade, diagnosis, or ground truth.
+“Mentoring” describes the product goal, not an anthropomorphic claim.
+Hephaestus does not know a developer's intent, private conversations, runtime conditions, or learning needs unless an authorized source explicitly provides that context.
+An observation is a bounded record of observed work, not a grade, diagnosis, or ground truth.
 
 ### A value with no words
 
-A stored value can outlive the module that declared it, and a browser can hold an older webapp than
-the server it talks to. Whichever side meets a value it has no words for shows these, never the
-identifier:
+A stored value can outlive the module that declared it, and a browser can hold an older webapp than the server it talks to.
+Whichever side meets a value it has no words for shows these, never the identifier:
 
 | Value                                     | Words shown                              |
 | ----------------------------------------- | ---------------------------------------- |
@@ -77,30 +79,31 @@ identifier:
 
 ## Who may review
 
-Review is relational: it has a reviewer, reviewed work, a practice, a procedure, evidence, and a time. Do not
-label a practice as universally observable or unobservable.
+Review is relational: it has a reviewer, reviewed work, a practice, a procedure, evidence, and a time.
+Do not label a practice as universally observable or unobservable.
 
 | Reviewer         | Current system support                                                                                                        |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | **Hephaestus**   | Modeled by `automatedReview` and the governed evidence each practice declares. It can only use authorized, connected evidence. |
-| **Developer**    | A self-review may be possible for a specific practice; Hephaestus does not collect it.                                        |
-| **Peer**         | A peer review may be possible from team context; Hephaestus does not collect it.                                              |
-| **Human mentor** | A mentor review may be possible from interpersonal or private context; Hephaestus does not collect it.                        |
+| **Developer**    | A self-review may be possible for a specific practice. Hephaestus does not collect it.                                        |
+| **Peer**         | A peer review may be possible from team context. Hephaestus does not collect it.                                              |
+| **Human mentor** | A mentor review may be possible from interpersonal or private context. Hephaestus does not collect it.                        |
 
-Human practice assessment is outside the product. Proposal approval authorizes delivery of Hephaestus's
-existing feedback; it is not a second assessment. None of the three human reviewers above has consent, provenance,
-retention, access, a rubric or a validation model here, and a human review would need all six plus a record of
-who reviewed and in what relationship to the author. Human reviews may use different rubrics and evidence, and
-disagreement between two of them is two provenance-bearing reviews, not a contradiction to resolve into one
-ground truth. A statement that a person *could* observe something must never let Hephaestus attempt an
-automated review.
+Human practice assessment is outside the product.
+Proposal approval authorizes delivery of Hephaestus's existing feedback.
+It is not a second assessment.
+None of the three human reviewers above has consent, provenance, retention, access, a rubric, or a validation model here.
+A human review would need all six.
+It would also need a record of the reviewer and their relationship to the author.
+
+Human reviews can use different rubrics and evidence.
+Disagreement between two is two provenance-bearing reviews, not a contradiction to resolve into one ground truth.
+A statement that a person *could* observe something must never let Hephaestus attempt an automated review.
 
 ## How a review was occasioned
 
-Three separate words describe the start of a review, and they are not synonyms. The **door** is what a
-person or a provider did. `DiscoveredVia` is how we came to know about the occurrence, recorded on every
-signal. `ObservationOrigin` is the population any resulting observation belongs to, derived from
-`DiscoveredVia` once and never re-decided.
+Three separate words describe the start of a review, and they are not synonyms.
+The **door** is what a person or a provider did. `DiscoveredVia` is how we came to know about the occurrence, recorded on every signal. `ObservationOrigin` is the population any resulting observation belongs to, derived from `DiscoveredVia` once and never re-decided.
 
 | Door                                            | Recorded as (`DiscoveredVia`) | UI label                   | Observation origin | Starts a review                      |
 | ----------------------------------------------- | ----------------------------- | -------------------------- | ------------------ | ------------------------------------ |
@@ -111,55 +114,53 @@ signal. `ObservationOrigin` is the population any resulting observation belongs 
 | A confirmed campaign over past work             | `BACKFILL`                    | Backfill of past work      | `BACKFILL`         | yes                                  |
 | A recurring sweep schedule                      | `SWEEP`                       | Found by a recurring check | `LIVE`             | yes                                  |
 
-- **The comment command and the button are indistinguishable afterwards.** Both record `MANUAL`; nothing
+- **The comment command and the button are indistinguishable afterwards.** Both record `MANUAL`. Nothing
   downstream can tell them apart. (A third path, the dev trigger, records `MANUAL` too.)
 - **`SYNC` is a dead end for connected project work** — the SCM listeners return before submitting, leaving
   the row `RECORDED`. The exception is the Slack thread sweep, which records `SYNC` and does submit. Never
   write "reconciliation never starts a review" without saying which artifact kind you mean.
-- **Asking by hand is a door, never an occasion.** A hand-requested review reviews every practice on that
-  kind of work whatever state the work is in, so there is nothing for a practice to opt into;
+- **Asking by hand is a door, never an occasion.** A hand-requested review reviews every practice on that kind of work, whatever its state.
+  Thus, there is nothing for a practice to opt into.
   `PracticeDefinitionValidator` refuses a practice that names a manual-request signal. Do not present it as
   a moment an author can tick.
 - **A recurring sweep is `LIVE`, not `BACKFILL`.** `SWEEP` records how the work was *found*, and the work
   it finds is current work that never raised an event. Its observations therefore compose and deliver
   exactly like an event-triggered review. Only a confirmed past-work campaign carries `BACKFILL`, and only
-  `BACKFILL` is measured-and-never-delivered. A sweep is a standing authorisation to spend *and* to speak.
+  `BACKFILL` is measured-and-never-delivered. A sweep is a standing authorization to spend *and* to speak.
 
-`MANUAL` and `BACKFILL` are self-selected samples and `LIVE` is not, which is why they are held apart in
-every behavioural read. A `BACKFILL` observation is additionally entitled only to `IN_APP` — the
-developer's own practice feedback — and that entitlement is a ceiling, not an instruction: the in-app
-router refuses a cluster made entirely of backfilled measurements (`BACKFILL_QUIET`), so a backfill
-observation is measured and never delivered, by construction rather than by configuration.
+`MANUAL` and `BACKFILL` are self-selected samples and `LIVE` is not, which is why they are held apart in every behavioral read.
+A `BACKFILL` observation is also entitled only to `IN_APP`: the developer's own practice feedback.
+That entitlement is a ceiling, not an instruction.
+The in-app router refuses a cluster made entirely of backfilled measurements (`BACKFILL_QUIET`).
+Thus, a backfill observation is measured but never delivered, by construction rather than configuration.
 
 ## Signal state reasons
 
-`SignalStateReason` is the occasion stage's refusal vocabulary, and each value declares the `SignalState`
-it resolves to, so the enum itself is the list. What the enum cannot say is which value to reach for. A
-reason is retryable exactly when the condition it names can clear on its own — an operator action, a budget
-refill, or an ordinary sync — without the work occurring again.
+`SignalStateReason` is the occasion stage's refusal vocabulary, and each value declares the `SignalState` it resolves to, so the enum itself is the list.
+What the enum cannot say is which value to reach for.
+A reason is retryable exactly when its condition can clear without the work occurring again.
+An operator action, budget refill, or ordinary sync can clear it.
 
-`ARTIFACT_GONE` is terminal: the work is missing or unreviewable, or a person requested a review while
-it was tombstoned. `ARTIFACT_NOT_VISIBLE` holds automatic occasions for a reversible mirror tombstone,
-including live events and pending retries. Ordinary sync can restore the row
-([ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)).
-A manual request is not retried after restoration; the person can request another review.
+`ARTIFACT_GONE` is terminal: the work is missing or unreviewable, or a person requested a review while it was tombstoned. `ARTIFACT_NOT_VISIBLE` holds automatic occasions for a reversible mirror tombstone, including live events and pending retries.
+Ordinary sync can restore the row ([ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)).
+A manual request is not retried after restoration.
+The person can request another review.
 
-`MERGE_ACTOR_UNAVAILABLE` holds a merge occasion whose matched practices judge the merger while the mirror
-does not know who merged. It is not `SUBJECT_UNLINKED`: the author may be a known member, and the missing
-fact is the merger. Reviewing without it would pass over the merger practice silently, and naming the author
-or the hook's sender instead would judge someone who may not have merged. A provider read or an ordinary
-sync that records the merger clears it.
+`MERGE_ACTOR_UNAVAILABLE` holds a merge occasion whose matched practices judge the merger while the mirror does not know who merged.
+It is not `SUBJECT_UNLINKED`: the author may be a known member, and the missing fact is the merger.
+Reviewing without it would silently pass over the merger practice.
+Naming the author or hook's sender instead would judge someone who might not have merged.
+A provider read or an ordinary sync that records the merger clears it.
 
-`COALESCED` means an issue-update snapshot was displaced before admission. It is suppressed, not pending:
-the reaper does not retry it, but a later live transition back to that content can offer it again.
-It says nothing about whether earlier observations were resolved. See
-[Issue lifecycle occasions](./practice-review-pipeline.mdx#issue-lifecycle-occasions) for revision identity.
+`COALESCED` means an issue-update snapshot was displaced before admission.
+It is suppressed, not pending: the reaper does not retry it, but a later live transition back to that content can offer it again.
+It says nothing about whether earlier observations were resolved.
+See [Issue lifecycle occasions](./practice-review-pipeline.mdx#issue-lifecycle-occasions) for revision identity.
 
 ## Practice autonomy
 
-`PracticeAutonomy` answers one question: **who may authorize feedback pushed onto the work for this
-practice?** It is not the whole delivery policy; recipient preferences, workspace controls, artifact
-validity, suppression and the final egress guard still apply.
+`PracticeAutonomy` answers one question: **who may authorize feedback pushed onto the work for this practice?** It is not the whole delivery policy.
+Recipient preferences, workspace controls, artifact validity, suppression and the final egress guard still apply.
 
 | Autonomy         | Review runs | Feedback is composed | Release authority on the work          | Practice page and mentor |
 | ---------------- | ----------- | -------------------- | -------------------------------------- | ------------------------ |
@@ -167,26 +168,27 @@ validity, suppression and the final egress guard still apply.
 | `HUMAN_APPROVAL` | yes         | yes                  | a workspace owner or administrator     | delivered                |
 | `AUTOMATIC`      | yes         | yes                  | the system, subject to delivery policy | delivered                |
 
-At `HUMAN_APPROVAL`, feedback **pushed** onto the work needs approval before release. Feedback on a
-practice page or in a mentor turn is **pulled** by the developer and does not need comment approval.
-It remains subject to channel access controls, the origin rule and delivery rules such as attribution,
-corroboration and cooldown. The rule has one home, `PracticeAutonomy.delivers(channel)` over
-`FeedbackChannel.pushed()`.
+At `HUMAN_APPROVAL`, feedback **pushed** onto the work needs approval before release.
+Feedback on a practice page or in a mentor turn is **pulled** by the developer and does not need comment approval.
+It remains subject to channel access controls, the origin rule and delivery rules such as attribution, corroboration and cooldown.
+The rule has one home, `PracticeAutonomy.delivers(channel)` over `FeedbackChannel.pushed()`.
 
-`HUMAN_APPROVAL` is an operational mode, not silent observation. An in-context unit enters
-`AWAITING_APPROVAL` with its immutable content and target — only `IN_CONTEXT` feedback is approvable at
-all. A workspace owner or administrator can approve that exact proposal or reject it, optionally recording
-a structured reason. Approval moves the unit to `PREPARED`; rejection moves it to the terminal `DISCARDED`
-state. Release then re-verifies that the approved content still matches what is about to be sent
-(`APPROVAL_STALE`) and that every contributing practice still requires approval
-(`APPROVAL_NO_LONGER_ELIGIBLE`), walks [the delivery policy check order](#the-delivery-policy-check-order)
-again at the `APPROVED` stage, and reconciles a deterministic provider marker so a retry cannot post
-twice. An approval overrides none of those controls.
+`HUMAN_APPROVAL` is an operational mode, not silent observation.
+An in-context unit enters `AWAITING_APPROVAL` with its immutable content and target — only `IN_CONTEXT` feedback is approvable at all.
+A workspace owner or administrator can approve that exact proposal or reject it, optionally recording a structured reason.
+Approval moves the unit to `PREPARED`.
 
-Changing a practice to `AUTOMATIC` affects newly composed feedback only. Existing proposals remain explicit
-workflow items; a configuration change must never release historical proposals implicitly. `OFF` is for a
-practice that should not be measured. Moving `AUTOMATIC` back to `HUMAN_APPROVAL` is the normal quality
-rollback because measurement continues while release returns to human control.
+Rejection moves it to the terminal `DISCARDED` state.
+Release re-verifies that approved content still matches what is about to be sent (`APPROVAL_STALE`).
+It re-verifies that every contributing practice still requires approval (`APPROVAL_NO_LONGER_ELIGIBLE`).
+It walks [the delivery policy check order](#the-delivery-policy-check-order) again at the `APPROVED` stage.
+It reconciles a deterministic provider marker so a retry cannot post twice.
+An approval overrides none of those controls.
+
+Changing a practice to `AUTOMATIC` affects newly composed feedback only.
+Existing proposals remain explicit workflow items.
+A configuration change must never release historical proposals implicitly. `OFF` is for a practice that should not be measured.
+Moving `AUTOMATIC` back to `HUMAN_APPROVAL` is the normal quality rollback because measurement continues while release returns to human control.
 
 ## Autonomy inheritance
 
@@ -196,86 +198,92 @@ Autonomy is resolved server-side through one nullable override chain:
 effective autonomy = practice.autonomy ?? group.autonomy ?? workspace default ?? HUMAN_APPROVAL
 ```
 
-Null means “this level has not decided,” not `OFF`. Every API projection therefore carries the effective
-autonomy, the raw override, its `AutonomySource` (`PRACTICE`, `GROUP`, or `WORKSPACE`), and whether it
-was inherited. New unset chains fail safe at `HUMAN_APPROVAL`; an explicit `AUTOMATIC` is required before the
-system may release feedback onto the work without a person.
+Null means “this level has not decided,” not `OFF`.
+Every API projection therefore carries the effective autonomy, the raw override, its `AutonomySource` (`PRACTICE`, `GROUP`, or `WORKSPACE`), and whether it was inherited.
+New unset chains fail safe at `HUMAN_APPROVAL`.
+An explicit `AUTOMATIC` is required before the system may release feedback onto the work without a person.
 
 Set or clear an override with:
 
 - `PATCH /workspaces/{workspaceSlug}/practices/{practiceSlug}/autonomy`
 - `PATCH /workspaces/{workspaceSlug}/practice-groups/{groupSlug}/autonomy`
 
-The body is `{"autonomy":"HUMAN_APPROVAL"}` or `{"autonomy":null}` to inherit. The catalogue filter is
-`?autonomy=<VALUE>`, and autonomy rollups are returned by
-`GET /workspaces/{workspaceSlug}/practices/autonomy`. Workspace review settings expose
-`defaultAutonomy`; name `DEFAULT_AUTONOMY` in the PATCH reset set to clear the workspace override.
+The body is `{"autonomy":"HUMAN_APPROVAL"}` or `{"autonomy":null}` to inherit.
+The catalogue filter is `?autonomy=<VALUE>`, and autonomy rollups are returned by `GET /workspaces/{workspaceSlug}/practices/autonomy`.
+Workspace review settings expose `defaultAutonomy`.
+Name `DEFAULT_AUTONOMY` in the PATCH reset set to clear the workspace override.
 
-A practice whose automated-review policy cannot run is explicitly `OFF` and cannot inherit an autonomy
-that admits review. Missing autonomy resolution fails closed for external delivery.
+A practice whose automated-review policy cannot run is explicitly `OFF` and cannot inherit an autonomy that admits review.
+Missing autonomy resolution fails closed for external delivery.
 
 ## Review coverage and delivery status
 
-`WorkspaceReviewScope` defines the workspace population that practice review may admit. It has two
-independent modes:
+`WorkspaceReviewScope` defines the workspace population that practice review may admit.
+It has two independent modes:
 
 | Axis       | Broad mode      | Narrow mode                                                              | Selected-empty means |
 | ---------- | --------------- | ------------------------------------------------------------------------ | -------------------- |
 | Repository | `ALL_MONITORED` | `SELECTED` repositories, each optionally narrowed to exact base branches | no repository work   |
 | Person     | `ALL_ELIGIBLE`  | `SELECTED` people                                                        | no people            |
 
-Both axes must admit repository-backed work; within one axis, any entry matches. An empty base-branch
-list on a selected repository means every branch in that repository. Branch restrictions apply to pull
-and merge requests; issues have no base branch and are matched by repository and person only. Names are
-exact — there are no glob or path rules.
+Both axes must admit repository-backed work.
+Within one axis, any entry matches.
+An empty base-branch list on a selected repository means every branch in that repository.
+Branch restrictions apply to pull and merge requests.
 
-Documents and conversations have no repository. Only the person axis applies to their review coverage;
-source collection permissions, participant consent and AI choices remain independent gates. Their
-repository and branch match facts are `NOT_APPLICABLE`. An empty person selection excludes every kind
-of work; an empty repository selection excludes only repository-backed work.
+Issues have no base branch and are matched by repository and person only.
+Names are exact — there are no glob or path rules.
 
-**`ALL_ELIGIBLE` means every human `WorkspaceMembership`, and that is the only definition.** Eligibility is
-a membership row plus `User.Type.USER`; nothing consults accounts, sign-ins or identity links, so never
-write that a person must have signed in — an operator will believe it and go looking for a screen that
-enrols people. How a membership row comes to exist is
-[Who counts as a person](/admin/practice-review#who-counts-as-a-person). `SELECTED` is validated against
-the same population, so a person who is not an eligible member cannot be selected.
+Documents and conversations have no repository.
+Only the person axis applies to their review coverage. Source collection permissions, participant consent and AI choices remain independent gates.
+Their repository and branch match facts are `NOT_APPLICABLE`.
+An empty person selection excludes every kind of work.
 
-The review subject for pull requests, merge requests, and issues is their author, and a reviewer run
-is about the reviewer it names. A practice may declare another relation as its `subject`: `REVIEWER`
-for the review practices, `MERGER` for a practice about the act of merging. A review is filed against one
-person, so a `MERGER` practice is reviewed in an author run only when the author is the one who merged
-(`merged_by` is staged in `metadata.json`) and is withheld otherwise — a lapse at the merge is never filed
-against someone who did not merge. `ReviewSubjectStatus` records which of four things the subject turned
-out to be:
-`RESOLVED_LINKED_HUMAN`, `MISSING`, `NON_HUMAN`, or `UNLINKED`. Only the first can be matched against the
-person axis; the other three are never expanded to the whole eligible population. This makes coverage an
-operator-selected population while preserving the recipient's delivery preference as a separate veto.
+An empty repository selection excludes only repository-backed work.
 
-Coverage is returned as `reviewScope` by
-`GET /workspaces/{workspaceSlug}/practices/review-settings`. A `PATCH` on the same path replaces the
-complete coverage value and requires the current resource ETag in `If-Match`; that ETag is the settings'
-`configVersion`, not the rollout revision, so a write that changes nothing policy-relevant still
-invalidates a stale client. `POST /workspaces/{workspaceSlug}/practices/review-settings/coverage-preview`
-returns authoritative current and proposed repository/member counts plus whether the proposal widens.
+**`ALL_ELIGIBLE` means every human `WorkspaceMembership`, and that is the only definition.** Eligibility is a membership row plus `User.Type.USER`.
+Nothing consults accounts, sign-ins, or identity links.
+Never write that a person must have signed in.
+
+An operator would believe it and look for a screen that enrolls people.
+How a membership row comes to exist is [Who counts as a person](/admin/practice-review#who-counts-as-a-person). `SELECTED` is validated against the same population, so a person who is not an eligible member cannot be selected.
+
+The review subject for pull requests, merge requests, and issues is their author, and a reviewer run is about the reviewer it names.
+A practice may declare another relation as its `subject`: `REVIEWER` for the review practices, `MERGER` for a practice about the act of merging.
+A review is filed against one person.
+An author run reviews a `MERGER` practice only when the author merged, and withholds it otherwise.
+`merged_by` is staged in `metadata.json`.
+
+A lapse at the merge is never filed against someone who did not merge. `ReviewSubjectStatus` records which of four things the subject turned out to be: `RESOLVED_LINKED_HUMAN`, `MISSING`, `NON_HUMAN`, or `UNLINKED`.
+Only the first can be matched against the person axis.
+
+The other three are never expanded to the whole eligible population.
+This makes coverage an operator-selected population while preserving the recipient's delivery preference as a separate veto.
+
+Coverage is returned as `reviewScope` by `GET /workspaces/{workspaceSlug}/practices/review-settings`.
+A `PATCH` on the same path replaces the complete coverage value and requires the current resource ETag in `If-Match`.
+That ETag is the settings' `configVersion`, not the rollout revision, so a write that changes nothing policy-relevant still invalidates a stale client. `POST /workspaces/{workspaceSlug}/practices/review-settings/coverage-preview` returns authoritative current and proposed repository/member counts plus whether the proposal widens.
 The two autonomy `PATCH` endpoints take no `If-Match`.
 
-`deliveryStatus` is a separate workspace brake. `PAUSED` stops external practice feedback without stopping
-review or deleting coverage. Resuming does not release automatic feedback admitted under an earlier
-rollout revision. Undecided proposals remain explicit workflow items and are checked against current policy
-if later approved. Instance Silent Mode remains the stronger instance-wide egress boundary.
+`deliveryStatus` is a separate workspace brake. `PAUSED` stops external practice feedback without stopping review or deleting coverage.
+Resuming does not release automatic feedback admitted under an earlier rollout revision.
+Undecided proposals remain explicit workflow items and are checked against current policy if later approved.
+Instance Silent Mode remains the stronger instance-wide egress boundary.
 
-Automatic admission records the current workspace `revision`. Any change to coverage, delivery status, the
-workspace default autonomy, or post-merge delivery advances it — narrowing as well as widening; the
-cooldown does not. Group and practice autonomy changes remain prospective through the proposal lifecycle
-and the practice-authority check rather than a second revision counter. An artifact refused before review
-records a typed terminal reason; changing coverage affects later work, not the refused occurrence.
+Automatic admission records the current workspace `revision`.
+Any change to coverage, delivery status, the workspace default autonomy, or post-merge delivery advances it — narrowing as well as widening.
+The cooldown does not.
+Group and practice autonomy changes remain prospective through the proposal lifecycle and the practice-authority check rather than a second revision counter.
+
+An artifact refused before review records a typed terminal reason.
+Changing coverage affects later work, not the refused occurrence.
 
 ### The delivery policy check order
 
-`DeliveryPolicyResolver` is the one place that turns facts into a delivery decision, and it walks a single
-ordered list. **The first `DENIED` decides**; every check after it is `NOT_REACHED`. A question that cannot
-be asked at this point in the pipeline is `NOT_APPLICABLE` — not a denial, and not a pass.
+`DeliveryPolicyResolver` is the one place that turns facts into a delivery decision, and it walks a single ordered list.
+**The first `DENIED` decides**.
+Every check after it is `NOT_REACHED`.
+A question that cannot be asked at this point in the pipeline is `NOT_APPLICABLE` — not a denial, and not a pass.
 
 | # | `DeliveryPolicyCheck`  | Denial records                |
 | - | ---------------------- | ----------------------------- |
@@ -288,216 +296,239 @@ be asked at this point in the pipeline is `NOT_APPLICABLE` — not a denial, and
 | 7 | `RECIPIENT_CONSENT`    | `RECIPIENT_OPTED_OUT`         |
 | 8 | `ARTIFACT_ELIGIBILITY` | the artifact's own reason     |
 
-The order is the argument. Instance-wide controls precede workspace ones, the rollout fence precedes every
-question it could make moot, and the artifact is judged last because a closed pull request is the least
-interesting thing to say about feedback that policy would have refused anyway. `ARTIFACT_ELIGIBILITY`
-records `ARTIFACT_CLOSED`, `ARTIFACT_MERGED` or, when nothing more specific is known, `ARTIFACT_GONE`.
+The order is the argument.
+Instance-wide controls precede workspace controls.
+The rollout fence precedes every question it could make moot.
+The artifact is judged last.
+A closed pull request is the least useful explanation for feedback that policy would already refuse. `ARTIFACT_ELIGIBILITY` records `ARTIFACT_CLOSED`, `ARTIFACT_MERGED` or, when nothing more specific is known, `ARTIFACT_GONE`.
 
-The same list runs at each `DeliveryPolicyStage` — `COMPOSITION`, `AUTOMATIC`, `APPROVED`, `EGRESS` — and
-two checks read the stage:
+The same list runs at each `DeliveryPolicyStage` — `COMPOSITION`, `AUTOMATIC`, `APPROVED`, `EGRESS` — and two checks read the stage:
 
-- **`PRACTICE_AUTHORITY`** asks whether *every* contributing practice sits at the autonomy this stage
-  needs: `AUTOMATIC` when the system is releasing on its own, `HUMAN_APPROVAL` when a person's approval is
-  being honoured. There is deliberately no separate `HUMAN_APPROVAL` check — it could only ever report
-  `PASSED` or `NOT_APPLICABLE`, and approval authority is exactly what this check already resolves.
+- **`PRACTICE_AUTHORITY`** asks whether *every* contributing practice sits at the autonomy this stage needs.
+  This is `AUTOMATIC` when the system releases on its own.
+  It is `HUMAN_APPROVAL` when a person's approval is honored. There is deliberately no separate `HUMAN_APPROVAL` check.
+  It could only report `PASSED` or `NOT_APPLICABLE`.
+  This check already resolves approval authority.
 - **At `COMPOSITION` the contributing practices are not yet known**, so `PRACTICE_AUTHORITY` is
-  `NOT_APPLICABLE`. A document or conversation still has a review subject:
-  [review coverage](#review-coverage-and-delivery-status), recipient consent and target eligibility are
-  checked when that subject is resolved. External surfaces also apply Silent Mode and the delivery pause;
+  `NOT_APPLICABLE`. A document or conversation still has a review subject.
+  When that subject is resolved, [review coverage](#review-coverage-and-delivery-status), recipient consent, and target eligibility are checked. External surfaces also apply Silent Mode and the delivery pause.
   `IN_APP` does not, because it never leaves Hephaestus.
 
-The artifact lane is evaluated again at `AUTOMATIC`, at `APPROVED` when a person released it, and at `EGRESS`
-immediately before the provider call. The `IN_APP` and `CONVERSATION` surfaces are checked at `COMPOSITION`;
-each lane's router also applies its origin-and-autonomy predicate and per-lane rules, recording routing
-refusals separately. Prepared conversation feedback must pass an `EGRESS` policy evaluation before it
-enters mentor context; source visibility and Slack consent gates can exclude it before that evaluation.
+The artifact lane is evaluated again at `AUTOMATIC`, at `APPROVED` when a person released it, and at `EGRESS` immediately before the provider call.
+The `IN_APP` and `CONVERSATION` surfaces are checked at `COMPOSITION`. Each lane's router also applies its origin-and-autonomy predicate and per-lane rules, recording routing refusals separately.
+Prepared conversation feedback must pass an `EGRESS` policy evaluation before it enters mentor context.
+Source visibility and Slack consent gates can exclude it before that evaluation.
 
-Each evaluation appends an immutable `delivery_policy_evaluation` row: the resolver version, the admitted
-and evaluated rollout revisions, the `surface` (`ARTIFACT`, `IN_APP`, `CONVERSATION`), the stage, whether
-delivery was allowed, the first decisive reason, the ordered check results, and a bounded fact snapshot —
-artifact kind, repository, base branch, subject resolution, both coverage modes with their three match
-flags, recipient consent, delivery status, trigger mode, and each contributing practice's effective
-autonomy. The trace must not persist feedback bodies or member profile data.
+Each evaluation appends an immutable `delivery_policy_evaluation` row.
+It records the resolver version, admitted and evaluated rollout revisions, `surface` (`ARTIFACT`, `IN_APP`, `CONVERSATION`), and stage.
+It records whether delivery was allowed, the first decisive reason, and ordered check results.
+It records a bounded fact snapshot:
+
+- Artifact kind, repository, base branch, and subject resolution.
+- Both coverage modes with their three match flags.
+- Recipient consent, delivery status, and trigger mode.
+- Each contributing practice's effective autonomy.
+
+The trace must not persist feedback bodies or member profile data.
 
 ## Measurement and intervention
 
 A practice review does two things, in two model turns, and the words for them are not interchangeable.
-**Measurement** records what is there; **intervention** decides to say something to a person and chooses
-the words. The test is whether the sentence can be checked against the artifact: if you can settle it by
-reading the work, it is measurement, and if you can only settle it by watching what the person does next,
-it is intervention. The seam is
-[ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md);
-how it runs is in the [practice review pipeline](./practice-review-pipeline.mdx#measurement-and-intervention).
+**Measurement** records what is there.
+**Intervention** decides to say something to a person and chooses the words.
+The test is whether the sentence can be checked against the artifact.
+If reading the work settles it, it is measurement.
+If only watching what the person does next settles it, it is intervention.
+
+The seam is [ADR 0029](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0029-measurement-intervention-seam-and-channel-levels.md). How it runs is in the [practice review pipeline](./practice-review-pipeline.mdx#measurement-and-intervention).
 
 | Term                       | Plain meaning                                                                                                                                                                                                                                        | Do not use for this concept                                |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| **Measurement**            | The first phase: reading one piece of work against each practice and recording one [observation](./practice-feedback-language.md) per practice — immutable for as long as it is retained, carrying an `evidenceRationale` and never advice.           | detection pass, scan, phase one                            |
+| **Measurement**            | The first phase reads one piece of work against each practice and records one [observation](./practice-feedback-language.md) per practice. The observation is immutable while retained. It carries an `evidenceRationale`, never advice.           | detection pass, scan, phase one                            |
 | **Intervention**           | The second phase: deciding what is worth saying now, to whom, and on which surface.                                                                                                                                                                  | synthesis, rendering, formatting                           |
 | **Composition**            | The second LLM turn in the review's existing agent session. It starts only after Java has admitted the final measurements.                                                                                                                           | the composer's turn as part of the review, second pass     |
 | **Composed feedback unit** | One intervention the composition turn proposes for one channel and one practice, before any server gate has admitted it. Once admitted it is [feedback](./practice-feedback-language.md) in the ledger, with its channel, delivery state and the observations it rests on. | feedback row, draft feedback                               |
 | **Withhold**               | The composer's own decision that a lane is not worth writing on, recorded with a reason.                                                                                                                                                             | suppress, skip, drop                                       |
 | **Suppress**               | The *server's* refusal to deliver feedback it was given, recorded as `FeedbackSuppressionReason`.                                                                                                                                                    | withhold, silence                                          |
 | **Notes**                  | What is composed for the mentor conversation: `situation`, `capability`, `evidenceSummary`, and `inConversationSignal`. Notes *to* the mentor, never a sentence for it to say — it writes the turn from the live conversation and admitted evidence. | move, opener, conversation message, prepared reply, script |
-| **Placement**              | Where in-context feedback belongs: `DIFF` names an admitted observation and citation for server-resolved coordinates; `ARTIFACT` stays at summary level.                                                                                             | model-authored path, model-authored line number            |
+| **Placement**              | Where in-context feedback belongs: `DIFF` names an admitted observation and citation for server-resolved coordinates. `ARTIFACT` stays at summary level.                                                                                             | model-authored path, model-authored line number            |
 | **Thread key**             | The identity of one continuing conversation about one thing with one person on one channel.                                                                                                                                                          | correlation key, idempotency key                           |
 | **Supersession**           | Replacing feedback with newer feedback on the same thread: prepared, still-unread feedback on the conversation lane, and the still-open card on the Practice profile.                                                                                | edit, update, delete                                       |
 
-**Withhold and suppress are two different refusals and must never be merged.** A withhold reason
-(`NO_MATERIAL_CHANGE`, `ALREADY_SAID`, `BELOW_BAR`) is the composer saying nothing was worth saying. A
-suppression reason is the system saying it had something and refused to send it — for example, the recipient
-opted out, the artifact closed, a cap was reached, or the measurement came from a backfill. Merging them makes "we had nothing to say" indistinguishable from
-"we were not allowed to say it", which is the exact distinction the whole refusal vocabulary exists for.
+**Withhold and suppress are two different refusals and must never be merged.** A withhold reason (`NO_MATERIAL_CHANGE`, `ALREADY_SAID`, `BELOW_BAR`) is the composer saying nothing was worth saying.
+A suppression reason says the system had something but refused to send it.
+For example, the recipient opted out, the artifact closed, a cap was reached, or the measurement came from a backfill.
+Merging them makes "we had nothing to say" indistinguishable from "we were not allowed to say it".
+The refusal vocabulary exists to preserve exactly this distinction.
 
 ### The three channels are three levels
 
-What each `FeedbackChannel` value is and where it lands is defined in the
-[practice feedback language](./practice-feedback-language.md). Each value is a different level of Hattie
-& Timperley's model — `IN_CONTEXT` the task level, "what is worth changing or reinforcing here?";
-`IN_APP` the process level, "what keeps happening in how I work?"; `IN_CHAT` the self-regulation level,
-"what capability could this conversation support?" — and the level is **derived from the channel and
-never stored**: there is no `level` column, and a stored copy would be a second truth that can disagree.
+What each `FeedbackChannel` value is and where it lands is defined in the [practice feedback language](./practice-feedback-language.md).
+Each value is a different level of Hattie & Timperley's model:
 
-Two exact names are close enough to be tempting and are still wrong.
-[**Activity**](./practice-feedback-language.md) is the member-readable page of counted work at
-`/w/{workspaceSlug}/activity`, not `IN_APP`; and
-`chat.conversation_thread` is a kind of work Hephaestus *reviews*, not the place `IN_CHAT` delivers to.
+- `IN_CONTEXT`: the task level, "what is worth changing or reinforcing here?".
+- `IN_APP`: the process level, "what keeps happening in how I work?".
+- `IN_CHAT`: the self-regulation level, "what capability could this conversation support?".
+
+The level is **derived from the channel and never stored**.
+There is no `level` column.
+A stored copy would be a second truth that can disagree.
+
+Two exact names are close enough to be tempting and are still wrong. [**Activity**](./practice-feedback-language.md) is the member-readable page of counted work at `/w/{workspaceSlug}/activity`, not `IN_APP`.
+And `chat.conversation_thread` is a kind of work Hephaestus *reviews*, not the place `IN_CHAT` delivers to.
 
 ### Thread key and supersession
 
-A **thread** is a chain of feedback about one thing to one person on one channel, identified by a hash
-(`FeedbackThreadKey`) rather than by prose. The longitudinal channels key on the *practice*, because a
-claim about a way of working is about the practice and not about one merge request; the in-context channel keys on the
-artifact. `thread_key` groups related feedback; it does not enforce a unique `PREPARED` item.
+A **thread** is a chain of feedback about one thing to one person on one channel, identified by a hash (`FeedbackThreadKey`) rather than by prose.
+The longitudinal channels key on the *practice*, because a claim about a way of working is about the practice and not about one merge request.
+The in-context channel keys on the artifact. `thread_key` groups related feedback.
+It does not enforce a unique `PREPARED` item.
+
 Supersession atomically retires a selected `PREPARED` item, but new feedback can coexist on the thread.
 
-On the conversation lane supersession only ever claims `PREPARED` feedback. Say **superseded** for
-feedback that was prepared but replaced before anybody read it, and **continued** for newer feedback
-written beside feedback that was already read: nothing received is ever un-said, and the newer row still
-records what it follows through `replaces_id`. On the Practice profile a new card about a practice
-replaces the card still **open** about it, read or not, so the page holds one open card per practice; a
-card that is closed — resolved by the work or by the developer, or closed because the practice changed —
-is never superseded and stays as the record beside the new one (`FeedbackSupersession#replaceOpen`,
-decided from `PreviousInAppFeedback`). Issue
-reviews may edit the prior issue comment in place, so their ledger entry is retired when that visible text
-is replaced. Pull request reviews do not: every new review posts a new summary, while a retry of the same
-review reconciles its existing comment by marker.
+On the conversation lane supersession only ever claims `PREPARED` feedback.
+Say **superseded** for prepared feedback replaced before anybody read it.
+Say **continued** for newer feedback written beside feedback already read.
+
+Nothing received is ever un-said.
+The newer row still records what it follows through `replaces_id`.
+On the Practice profile, a new card about a practice replaces its still **open** card, read or not.
+Thus, the page holds one open card per practice.
+A closed card is never superseded and stays as the record beside the new one.
+
+This includes cards resolved by the work or developer, or closed because the practice changed.
+`FeedbackSupersession#replaceOpen` decides this from `PreviousInAppFeedback`.
+
+Issue reviews may edit the prior issue comment in place, so their ledger entry is retired when that visible text is replaced.
+Pull request reviews do not: every new review posts a new summary, while a retry of the same review reconciles its existing comment by marker.
 
 ### Recorded review history
 
 The history context contains each recorded observation and the feedback already delivered or prepared.
-A location groups observations about the same piece of work; it does not establish semantic equivalence
-between their behaviors. Comparing outcomes at a shared location or omitting a prior observation does
-not establish that a concern was resolved or regressed. Responses apply to the specific observations
-bound to the feedback the developer received.
+A location groups observations about the same piece of work.
+It does not establish semantic equivalence between their behaviors.
+Comparing outcomes at a shared location or omitting a prior observation does not establish that a concern was resolved or regressed.
+
+Responses apply to the specific observations bound to the feedback the developer received.
 
 ### Invalidated observations
 
-A workspace admin **invalidates** an observation that was wrong when it was recorded, with a reason; the
-reverse is **restore**, with its own reason. Neither changes the observation: each correction is an
-`observation_invalidation` row keeping both actors, reasons and times, and at most one is in force per
-observation. While one is in force:
+A workspace admin **invalidates** an observation that was wrong when it was recorded, with a reason.
+The reverse is **restore**, with its own reason.
+Neither changes the observation: each correction is an `observation_invalidation` row keeping both actors, reasons and times, and at most one is in force per observation.
+While one is in force:
 
-- Every current read treats the claim as never made: the standing, the Practice profile, Heph's context,
-  composition history and new feedback. The latest-run rule skips it too, so an earlier valid review of
-  the same work speaks again unless the same run left another valid observation of that practice there.
-- Review history keeps it, labelled with the reason; the developer sees the reason, not who gave it.
+- Every current read treats the claim as never made.
+  This includes the standing, Practice profile, Heph's context, composition history, and new feedback. The latest-run rule skips it too.
+  An earlier valid review of the same work speaks again.
+  The exception is when the same run left another valid observation of that practice there.
+- Review history keeps it, labeled with the reason. The developer sees the reason, not who gave it.
 - Feedback citing it that has not reached anyone is suppressed as a whole with `OBSERVATION_INVALIDATED`.
   A Practice profile card citing it is hidden, however many other observations it cites.
-- A correction and a delivery citing the same observation never overlap. A delivery attempt, automatic,
-  approved or retried, is admitted only while its claim is live and a short transaction share-locking the
-  observations it cites finds none invalidated. The correction takes its observation `FOR UPDATE` and is
+- A correction and a delivery citing the same observation never overlap. An automatic, approved, or retried delivery attempt is admitted only while its claim is live.
+  A short transaction must also share-lock its cited observations and find none invalidated. The correction takes its observation `FOR UPDATE` and is
   refused with a conflict while a claim citing it is live. An automatic package cites the observations it was
-  written from, or its whole run if it predates recording them; an approved one, those bound to it. No connection is
+  written from, or its whole run if it predates recording them. An approved one, those bound to it. No connection is
   held across provider calls. A claim whose lease expired mid-write is no longer counted, which is the one
   window this leaves.
-- Before an invalidated delivery is withheld, every write an earlier attempt started is accounted for by
-  lookup, never by re-posting: the summary by its marker, inline notes by delivery key, including notes an
-  adapter reported `FAILED`, since a lost response reads that way too. Only positive evidence settles a started
-  write, because a POST may still land after its lease expired; a lookup that finds nothing, or cannot finish
+- Before an invalidated delivery is withheld, every write an earlier attempt started is accounted for by lookup, never by re-posting.
+  The summary uses its marker.
+  Inline notes use the delivery key.
+  This includes notes an adapter reported `FAILED`, since a lost response reads that way too. Only positive evidence settles a started
+  write, because a POST may still land after its lease expired. A lookup that finds nothing, or cannot finish
   its scan, keeps the delivery uncertain and never terminal. Its correction reads `PENDING` for a day from when
-  the write began, then `UNRESOLVED`; both keep being checked, every six hours after that day, and change to
-  the real outcome once the copy is found.
-- Delivered feedback keeps its state and stored text. Its posted copies get a durable **provider copy**
-  outcome on the correction: a summary comment is edited in place to open with a correction notice naming
-  the practice, never the reason. `INLINE_REMAINS` means inline comments are still there, since they have
-  no edit path; `UNRESOLVED` means a summary could not be edited, or the provider confirmed a comment without returning its id, so nothing can find it again; that copy is kept on the ledger rather than read as absent. A delivery still settling records each
-  copy it has confirmed on its one feedback unit as it goes, so a known summary is corrected at once while
-  the rest stays unknown. `PENDING` lasts while a delivery citing it is unsettled or an edit must be retried; each retry moves the correction behind every other due one, with
-  a backoff of half its time pending, from a minute to six hours.
+  the write began, then `UNRESOLVED`. Both remain checked, every six hours after that day.
+  They change to the real outcome once the copy is found.
+- Delivered feedback keeps its state and stored text. Its posted copies get a durable **provider copy** outcome on the correction.
+  A summary comment is edited in place to open with a correction notice.
+  The notice names the practice, never the reason. `INLINE_REMAINS` means inline comments are still there, since they have
+  no edit path. `UNRESOLVED` means a summary could not be edited.
+  It also applies if the provider confirmed a comment without returning its id.
+  Then nothing can find it again. That copy is kept on the ledger rather than read as absent. A delivery still settling records each confirmed copy on its one feedback unit as it goes.
+  Thus, a known summary is corrected at once while the rest stays unknown. `PENDING` lasts while a delivery citing it is unsettled or an edit must be retried. Each retry moves the correction behind every other due one.
+  Its backoff is half its time pending, from a minute to six hours.
 
-Restoring makes the observation count again from then on and removes the notice it added. Feedback the
-invalidation stopped stays stopped.
-Say **invalidated** or **marked incorrect**, never *deleted*, *retracted* or *superseded*: superseded is
-the word for [feedback replaced on its thread](#thread-key-and-supersession).
+Restoring makes the observation count again from then on and removes the notice it added.
+Feedback the invalidation stopped stays stopped.
+Say **invalidated** or **marked incorrect**, never *deleted*, *retracted* or *superseded*: superseded is the word for [feedback replaced on its thread](#thread-key-and-supersession).
 
 ### Withdrawn feedback
 
-A workspace admin **withdraws** an `IN_APP` card, `PREPARED` or `DELIVERED`, whose words were wrong while its
-observations are valid; the reverse is **restore**, each with a reason. The feedback row is `@Immutable` and
-does not change: each withdrawal is a `feedback_withdrawal` row keeping both actors, reasons and times, and at
-most one is open per feedback (`uk_feedback_withdrawal_active`). The feedback row lock serializes the two
-actions with each other, with a recipient's answer, and with a newer card replacing it; the replacement
-re-checks for a withdrawal after taking that lock and, finding one, is written without retiring the card. A
-repeat of either action changes nothing.
+A workspace admin **withdraws** an `IN_APP` card, `PREPARED` or `DELIVERED`, whose words were wrong while its observations are valid.
+The reverse is **restore**, each with a reason.
+The feedback row is `@Immutable` and does not change.
+Each withdrawal is a `feedback_withdrawal` row that keeps both actors, reasons, and times.
+At most one is open per feedback (`uk_feedback_withdrawal_active`).
+The feedback row lock serializes the two actions with each other, with a recipient's answer, and with a newer card replacing it.
+
+The replacement re-checks for a withdrawal after taking that lock and, finding one, is written without retiring the card.
+A repeat of either action changes nothing.
 
 While one is open:
 
-- The Practice profile shows a `DELIVERED` card as a notice carrying only its practice, with no body, next
-  step or evidence, for 30 days after the withdrawal, ranked by that time among the page's cards and within its
-  card limit. It omits a `PREPARED` one, which is never marked delivered.
+- The Practice profile shows a `DELIVERED` card as a notice for 30 days after withdrawal.
+  It carries only its practice, with no body, next step, or evidence.
+  Withdrawal time ranks it among the page's cards, within the card limit. It omits a `PREPARED` one, which is never marked delivered.
 - Composition history and Heph's context stage the row with `withdrawn: true` and without its body.
-- It is not an open card and not a replacement target, but it still marks where the next card's evidence
-  starts, and the in-app cooldown still counts it.
-- It takes no new answer (`409`); the developer's earlier answer stays readable and can still be removed.
+- It is not an open card or a replacement target.
+  It still marks where the next card's evidence starts.
+  The in-app cooldown still counts it.
+- It takes no new answer (`409`). The developer's earlier answer stays readable and can still be removed.
 - Observations, standings and review history are unchanged, and nothing else — notes on the work,
   `IN_CHAT` feedback — is touched.
 
-A read already in flight when the withdrawal commits may still show and deliver the card. Restoring reopens
-the ordinary read, subject to observation visibility and consent, and never re-sends.
-Say **withdrawn**, never *deleted*, *retracted* or *invalidated*: invalidated is the word for an
-[observation that was wrong](#invalidated-observations).
+A read already in flight when the withdrawal commits may still show and deliver the card.
+Restoring reopens the ordinary read, subject to observation visibility and consent, and never re-sends.
+Say **withdrawn**, never *deleted*, *retracted* or *invalidated*: invalidated is the word for an [observation that was wrong](#invalidated-observations).
 
 ### How feedback resolves
 
-A piece of [feedback](./practice-feedback-language.md) on the Practice profile resolves in one of two
-ways, and the two are held apart everywhere the resolution is shown.
+A piece of [feedback](./practice-feedback-language.md) on the Practice profile resolves in one of two ways, and the two are held apart everywhere the resolution is shown.
 
 | Term                     | Plain meaning                                                                                                                                                                                                                                                                                                                  | Do not use for this concept                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| **Resolved by the work** | Three pieces of the developer's reviewed work in a row, reviewed after the feedback was prepared, came back clean on the practice. Computed from the observations when the feedback is read and never stored; a problem starts the count over, and a piece of work reviewed several times counts once, at its newest review. | auto-resolved, closed by the system, streak, passed |
-| **Marked as addressed**  | The developer answered the card with *Addressed* or *Not applicable*; pressing the answer again takes it back and reopens the card. A dispute leaves it open. Whichever way resolved the feedback first is the one the card and the summary report.                                                                        | dismissed, acknowledged, done                       |
-| **Fell back**            | Open feedback the developer's work had started to answer, with at least one clean piece of work toward the three, until a piece of work reviewed in the overview's window raised the problem again and the count went back to none. Closed feedback never falls back.                                                        | reset, regressed, reopened                          |
+| **Resolved by the work** | Three pieces of the developer's reviewed work in a row, reviewed after the feedback was prepared, came back clean on the practice. Computed from the observations when the feedback is read and never stored. A problem starts the count over, and a piece of work reviewed several times counts once, at its newest review. | auto-resolved, closed by the system, streak, passed |
+| **Marked as addressed**  | The developer answered the card with *Addressed* or *Not applicable*. Pressing the answer again takes it back and reopens the card. A dispute leaves it open. Whichever way resolved the feedback first is the one the card and the summary report.                                                                        | dismissed, acknowledged, done                       |
+| **Fell back**            | Open feedback the developer's work had started to answer, with at least one clean piece of work toward the three. A piece of work reviewed in the overview's window raised the problem again. The count went back to none. Closed feedback never falls back.                                                        | reset, regressed, reopened                          |
 
 A run of three that completed once stays a resolution: a later slip is new feedback's business.
-The profile summary reports a `FEEDBACK_RESOLVED` change with who resolved it, `WORK` or `DEVELOPER`,
-and never merges the two into one count.
+The profile summary reports a `FEEDBACK_RESOLVED` change with who resolved it, `WORK` or `DEVELOPER`, and never merges the two into one count.
 
-A card is **closed** when it is resolved either way, and also when its practice changed its review rules
-after the card was prepared: the card stays on the page with `closedBy: PRACTICE_CHANGED` and says so, is not
-resolved by anything, and its evidence is kept even though it is no longer current, whereas evidence whose
-source may no longer be cited still hides the card. A closed card leaves the Practice profile 30 days after
-it closed, applied when the page is read and never by changing the row
-(`InAppFeedbackService.CLOSED_CARD_STAYS`); the ledger keeps it.
+A card is **closed** when it is resolved either way.
+It also closes when its practice changed its review rules after preparation.
+Then it stays on the page with `closedBy: PRACTICE_CHANGED` and states this reason.
+Nothing resolves it, and its evidence stays even though it is no longer current.
+
+Evidence whose source can no longer be cited still hides the card.
+A closed card leaves the Practice profile 30 days after it closed, applied when the page is read and never by changing the row (`InAppFeedbackService.CLOSED_CARD_STAYS`).
+The ledger keeps it.
 
 ### Practice profile overview
 
-The overview is the Practice profile's account of what held and what changed, read off the standings
-and the feedback ledger and composed into sentences on the page; nothing in it is a second standing or
-resolution rule. Its rules, in one place:
+The overview is the Practice profile's account of what held and what changed.
+It reads standings and the feedback ledger and composes sentences on the page.
+Nothing in it is a second standing or resolution rule.
+Its rules, in one place:
 
 - **The window** every change is measured over opens at the review run before the latest one and
-  closes now. With fewer than two runs it spans the standing's own look-back of 90 days, and a previous
-  run older than that is clamped to it, since no standing reaches further back.
-- **Only feedback prepared inside the look-back** is reported. Older feedback is left out even when
-  the developer answers it inside the window, because the work that may have closed it first lies
-  before anything the overview reads.
-- **One change per practice and type, the newest.** A practice that got two pieces of feedback in the
-  window is reported once for each type of change, by the newer piece.
-- **Precedence** when the page names one event per practice: resolved feedback, then feedback that
-  fell back, then new feedback, then a standing that slipped, then one that moved up, then a first
-  observation, then a trend that turned, then a practice that held.
-- **A held practice is dropped** from what held when the same practice slipped, fell back or got new
-  feedback in the window: holding and moving up are not a contradiction, holding and slipping are.
+  closes now. With fewer than two runs, it spans the standing's own look-back of 90 days.
+  An older previous run is clamped to that look-back, since no standing reaches further back.
+- **Only feedback prepared inside the look-back** is reported. Older feedback is left out even if the developer answers it inside the window.
+  Work that might have closed it first lies before anything the overview reads.
+- **One change per practice and type, the newest.** If a practice got two pieces of feedback in the window, each change type is reported once.
+  The newer piece supplies the report.
+- **Precedence** when the page names one event per practice follows this order:
+  1. Resolved feedback.
+  2. Feedback that fell back.
+  3. New feedback.
+  4. A standing that slipped.
+  5. A standing that moved up.
+  6. A first observation.
+  7. A trend that turned.
+  8. A practice that held.
+- **A held practice is dropped** from what held if it slipped, fell back, or got new feedback in the window.
+  Holding and moving up are not a contradiction.
+  Holding and slipping are.
 
 ## Machine names
 
@@ -514,7 +545,7 @@ resolution rule. Its rules, in one place:
 | Person judged | `subject` | `ActorRole` | `subject` |
 | Review precondition | `precondition` | `PracticePrecondition` | `precondition` |
 | Artifact kind                | `artifactKind`                     | `ArtifactKind`                             | `applies_to`                                                                  |
-| Reviewed work                | `reviewedWork` in the HTTP DTOs; `artifactKind`, `artifactId` in webapp search params and routes | `ReviewedWorkRefDTO` | `artifact_kind`, `artifact_id`                                              |
+| Reviewed work                | `reviewedWork` in the HTTP DTOs. `artifactKind`, `artifactId` in webapp search params and routes | `ReviewedWorkRefDTO` | `artifact_kind`, `artifact_id`                                              |
 | Source display name          | `displayName`                      | `ArtifactSourceContract.displayName`       | source catalog                                                                |
 | Required capture quality     | `requiredQuality`                  | `RequiredCaptureQuality`                   | source catalog                                                                |
 | Identity policy              | `identity`                         | `IdentityPolicy`                           | source catalog                                                                |
@@ -561,15 +592,15 @@ resolution rule. Its rules, in one place:
 | Closed feedback              | `closedAt`, `closedBy`             | `FeedbackClosure`                          | derived, never stored                                                         |
 | Who resolved feedback        | `resolvedBy`                       | `ProfileChangeDTO.ResolvedBy`              | derived, never stored                                                         |
 | Fell back                    | `FEEDBACK_RESET`                   | `ProfileChangeDTO.Type.FEEDBACK_RESET`     | derived, never stored                                                         |
-| Standing move direction      | `direction: UP`, `DOWN` on a standing or group move; absent for a move into or out of a silence | `ProfileChangeDTO.Direction`, from `PracticeStandingDTO.Standing.rank()` | derived, never stored |
+| Standing move direction      | `direction: UP`, `DOWN` on a standing or group move. Absent for a move into or out of a silence | `ProfileChangeDTO.Direction`, from `PracticeStandingDTO.Standing.rank()` | derived, never stored |
 | Holds as                     | `holdsAs`                          | `BundledPracticeCatalog`                   | bundled catalog, never stored — defined in the [feedback language](./practice-feedback-language.md) |
 | Signal refusal reason        | —                                  | `SignalStateReason`                        | `artifact_signal.state_reason`                                                |
 | Group dashboard visibility    | `visibleInPracticeDashboards`      | `PracticeGroup.visibleInPracticeDashboards` | `visible_in_practice_dashboards`                                              |
 | Claim currentness            | `claimCurrentness`                 | `ReviewClaimCurrentness`                   | derived API value                                                             |
 | Review-rule fingerprint      | `reviewRuleFingerprint`            | `ReviewRuleFingerprint`                    | `review_rule_fingerprint`                                                     |
 
-The contract uses stable uppercase values. Author-facing UI combines the implementation fields into one
-mentoring choice:
+The contract uses stable uppercase values.
+Author-facing UI combines the implementation fields into one mentoring choice:
 
 - `LANGUAGE_MODEL` + `SUFFICIENT_WHEN_REQUIREMENTS_MET` → **AI-supported mentoring**
 - `LANGUAGE_MODEL` + `DECLARED_EVIDENCE_INSUFFICIENT` → **Human review needed**
@@ -577,33 +608,36 @@ mentoring choice:
 
 ## Source states
 
-Availability, content, completeness, and collection outcome are four separate facts about one capture,
-never one field. The [artifact-source contract](./artifact-source-contract.mdx#capture-state) defines
-them and the states each may take; write about a capture in its words, and in particular do not write
-that a capture is *stale* — there is no such state, and the contract says why.
+Availability, content, completeness, and collection outcome are four separate facts about one capture, never one field.
+The [artifact-source contract](./artifact-source-contract.mdx#capture-state) defines them and the states each may take.
+Write about a capture in its words.
+Do not write that a capture is *stale*.
+There is no such state, and the contract says why.
 
 ## Outcome states
 
-The [product vocabulary](./practice-feedback-language.md#observation-outcomes) owns observation
-outcome labels. The same outcome values are used by the generation tool, persisted observation and
-read DTOs; the [feedback schema](./practice-feedback-schema.md#evidence-warrants) owns their warrants.
+The [product vocabulary](./practice-feedback-language.md#observation-outcomes) owns observation outcome labels.
+The same outcome values are used by the generation tool, persisted observation and read DTOs.
+The [feedback schema](./practice-feedback-schema.md#evidence-warrants) owns their warrants.
 
-A readiness refusal belongs to the capture stage and creates no observation. It is not an observation outcome. NOT_APPLICABLE and UNDETERMINED describe distinct facts established by reading available
-evidence, and neither contributes to the decided-result denominator.
+A readiness refusal belongs to the capture stage and creates no observation.
+It is not an observation outcome.
+NOT_APPLICABLE and UNDETERMINED describe distinct facts established by reading available evidence, and neither contributes to the decided-result denominator.
 
 ## Lifecycle
 
 1. A practice author chooses **AI-supported mentoring**, **Human review needed**, or **Guidance only**.
-2. For AI-supported mentoring, the occasion's recommended evidence is applied automatically; an author customizes it only when that occasion needs different evidence or limitations. Reading different evidence at a different moment is a second practice, not a second occasion.
+2. For AI-supported mentoring, the occasion's recommended evidence is applied automatically. An author customizes it only when that occasion needs different evidence or limitations. Reading different evidence at a different moment is a second practice, not a second occasion.
 3. Only AI-supported mentoring can be reviewed. The other choices force the practice autonomy to `OFF` and never start an automated review.
 4. An instance operator authorizes each source and product use through a reviewed governance decision.
 5. A workspace integration makes authorized sources available.
-6. A workspace administrator sets repository and member coverage, delivery status, and the workspace default autonomy, then overrides autonomy per group or practice only where the default is wrong.
+6. A workspace administrator sets repository and member coverage, delivery status, and the workspace default autonomy.
+   They override autonomy per group or practice only where the default is wrong.
 7. Each review captures evidence and records explicit source states.
 8. Source readiness checks decide whether every required source meets its requirements.
 9. Hephaestus reviews the work or records that the practice was skipped.
 10. Observations retain the exact practice revision, source contract, and evidence provenance.
-11. Changes to the assessment standard or source contract move the review-rule fingerprint. Scheduling-only changes (`signals`, `reviewWhen`) do not. Earlier claims derive as stale from their recorded basis; nothing marks a claim stale by hand.
+11. Changes to the assessment standard or source contract move the review-rule fingerprint. Scheduling-only changes (`signals`, `reviewWhen`) do not. Earlier claims derive as stale from their recorded basis. Nothing marks a claim stale by hand.
 12. Automated review validation — always `AUTHOR_DECLARED` — is separate from source authorization, practice autonomy, and per-run readiness.
 
 ## Writing rules
@@ -621,13 +655,15 @@ evidence, and neither contributes to the decided-result denominator.
 
 ## Member AI choice
 
-The [product vocabulary](./practice-feedback-language#member-onboarding-and-ai-choices) defines member
-onboarding, data handling, its tiers, and the AI choice as a ceiling. An admin declares one fact
-per model, who operates it, and Hephaestus derives the tier from it: **In-house**, **Cloud** or
-**Not declared**. A developer answers **In-house**, **Cloud** or **No AI**. The choice belongs to the
-account and holds in every workspace. A practice review uses the loosest model binding of the
-reviewing workspace within the ceiling of the developer it is about. Submission, queued execution,
-model requests, and feedback delivery recheck that choice. A developer no account resolves to has
-not answered; only a workspace that requires the choice keeps AI off their work.
-A missing required choice or No AI is an intentional refusal, never missing evidence. Suppressed
-occurrences do not automatically replay when the developer later enables AI.
+The [product vocabulary](./practice-feedback-language#member-onboarding-and-ai-choices) defines member onboarding, data handling, its tiers, and the AI choice as a ceiling.
+An admin declares one fact per model, who operates it, and Hephaestus derives the tier from it: **In-house**, **Cloud** or **Not declared**.
+A developer answers **In-house**, **Cloud** or **No AI**.
+The choice belongs to the account and holds in every workspace.
+
+A practice review uses the loosest model binding of the reviewing workspace within the ceiling of the developer it is about.
+Submission, queued execution, model requests, and feedback delivery recheck that choice.
+A developer no account resolves to has not answered.
+Only a workspace that requires the choice keeps AI off their work.
+
+A missing required choice or No AI is an intentional refusal, never missing evidence.
+Suppressed occurrences do not automatically replay when the developer later enables AI.
