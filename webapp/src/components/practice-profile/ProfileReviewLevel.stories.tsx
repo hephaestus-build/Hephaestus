@@ -18,11 +18,21 @@ import { daysBefore } from "@/stories/story-clock";
 import { reviewLevel, REVIEWS_LEVEL, REVIEWS_OF_YOUR_WORK } from "./practice-profile-search";
 import { type ProfileReviewDetailState, ProfileReviewLevel } from "./ProfileReviewLevel";
 
+/**
+ * The trace as the endpoint answers it for this review. The shared fixture spans every review of the
+ * work, and its failed row from another review rests on this review's occurrence, which the named
+ * endpoint never offers.
+ */
+const namedTrace = {
+	...artifactTrace,
+	practices: artifactTrace.practices.filter((entry) => entry.practiceSlug !== "dependency-risk"),
+};
+
 const loaded = {
 	status: "ready",
 	run: openProfileReviewRun,
 	observations: openProfileRunObservations,
-	activity: { status: "ready", trace: artifactTrace },
+	activity: { status: "ready", trace: namedTrace },
 } satisfies ProfileReviewDetailState;
 
 const practiceTable = () => screen.getByRole("table", { name: "Every practice on this work" });
@@ -114,6 +124,63 @@ export const Default: Story = {
 		await userEvent.click(screen.getByRole("button", { name: "Thin controllers" }));
 		await expect(args.onOpenPractice).toHaveBeenCalledWith("thin-controllers");
 		await expectNoPanelOverflow(panel);
+	},
+};
+
+const REUSED =
+	"An earlier review checked this practice on the same code, so this review did not assess it again.";
+
+const PUSHED = { signal: "scm.pull_request.synchronized", displayName: "New commits pushed" };
+
+/**
+ * This review asked some practices and reused an earlier review's answer for another. The reused row
+ * belongs to this review through the push it started, reads the reuse reason with no observation of
+ * this review's own, and never claims a clean result.
+ */
+export const AnsweredByAnEarlierReview: Story = {
+	args: {
+		state: {
+			...loaded,
+			run: { ...openProfileReviewRun, triggerMode: "AUTO" },
+			activity: {
+				status: "ready",
+				trace: {
+					...namedTrace,
+					signals: namedTrace.signals.map((signal) =>
+						signal.id === "sig-ready" ? { ...signal, ...PUSHED } : signal,
+					),
+					practices: [
+						...namedTrace.practices.map((entry) =>
+							entry.occasionedById === "sig-ready"
+								? { ...entry, watches: [PUSHED], occasionedBy: PUSHED }
+								: entry,
+						),
+						{
+							practiceSlug: "commit-subjects",
+							practiceName: "Commit subjects explain each change",
+							autonomy: "AUTOMATIC",
+							outcome: "REVIEWED",
+							explanation: REUSED,
+							watches: [PUSHED],
+							occasionedBy: PUSHED,
+							occasionedById: "sig-ready",
+							reviewId: "aaaaaaaa-1111-1111-1111-111111111111",
+							observationCount: 0,
+							deliveredCount: 0,
+							withheldReasons: [],
+						},
+					],
+				},
+			},
+		},
+	},
+	play: async () => {
+		await settledDrawerPanel();
+		await expect(screen.getByRole("tab", { name: "Every practice 5" })).toBeVisible();
+		const table = within(practiceTable());
+		await expect(table.getByText(REUSED)).toBeVisible();
+		await expect(table.getByText("The refactor and the fix arrived together")).toBeVisible();
+		await expect(table.queryByText(/nothing to report/u)).toBeNull();
 	},
 };
 

@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -66,6 +68,23 @@ class ReviewOutcomeLookupAdapterTest extends BaseUnitTest {
         assertThat(adapter.blockers(guidanceOnly)).isEmpty();
         assertThat(ReviewOutcomeLookupAdapter.limitation(mapper.readTree("{\"reasonCodes\": []}")))
                 .isNull();
+    }
+
+    /**
+     * One unreadable entry voids the whole record: a partly read record would attribute some practices and leave
+     * the rest reading as unreached, from the same run.
+     */
+    @Test
+    void shouldReadTheAnsweringReviewsOnlyFromAWhollyReadableRecord() {
+        UUID ready = UUID.fromString("aaaaaaaa-1111-1111-1111-111111111111");
+        String valid = "[{\"practiceSlug\":\"tests\",\"revisionId\":7,\"reviewId\":\"" + ready + "\"},"
+                + "{\"practiceSlug\":\"naming\",\"revisionId\":8,\"reviewId\":\"" + ready + "\"}]";
+        String oneMalformed = "[{\"practiceSlug\":\"tests\",\"revisionId\":7,\"reviewId\":\"" + ready + "\"},"
+                + "{\"practiceSlug\":\"naming\",\"revisionId\":8,\"reviewId\":\"not-a-review\"}]";
+
+        assertThat(ReviewOutcomeLookupAdapter.answeredBy(valid)).isEqualTo(Map.of("tests", ready, "naming", ready));
+        assertThat(ReviewOutcomeLookupAdapter.answeredBy(oneMalformed)).isEmpty();
+        assertThat(ReviewOutcomeLookupAdapter.answeredBy("{not json")).isEmpty();
     }
 
     @Test

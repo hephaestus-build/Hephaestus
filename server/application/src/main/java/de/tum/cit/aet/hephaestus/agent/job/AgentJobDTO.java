@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.net.URI;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.StreamSupport;
 import org.jspecify.annotations.NonNull;
@@ -33,8 +34,10 @@ public record AgentJobDTO(
                 description =
                         "Why a COMPLETED run produced the observations it did. INSUFFICIENT_EVIDENCE means no model "
                                 + "ran because required evidence was missing, unreadable, stale, or unauthorized — so no observations "
-                                + "means nothing was assessed, not that nothing was wrong. REVIEWED means the model ran against "
-                                + "sufficient evidence.")
+                                + "means nothing was assessed, not that nothing was wrong. COALESCED means no model ran because a "
+                                + "completed review had already answered every ready practice on exactly the same code — its "
+                                + "answers are listed in answeredPractices, and this run assessed nothing anew. REVIEWED "
+                                + "means the model ran against sufficient evidence.")
         ReviewRunOutcome reviewOutcome,
 
         @NonNull
@@ -119,7 +122,15 @@ public record AgentJobDTO(
                 description =
                         "Frozen generated-path policy and changed paths marked generated; available on review detail after evidence capture")
         @Nullable
-        GeneratedPathReviewDTO generatedPaths) {
+        GeneratedPathReviewDTO generatedPaths,
+
+        @Schema(
+                description =
+                        "Ready practices this review did not ask because a completed review had already answered them on "
+                                + "the same code; available on review detail after evidence capture. Empty when every ready "
+                                + "practice was asked.")
+        @Nullable
+        List<AnsweredPracticeDTO> answeredPractices) {
     public static AgentJobDTO from(AgentJob job, Target target) {
         JsonNode snapshot = job.getConfigSnapshot();
         return new AgentJobDTO(
@@ -150,7 +161,8 @@ public record AgentJobDTO(
                 job.getLlmTotalReasoningTokens(),
                 job.getLlmCacheReadTokens(),
                 job.getLlmCacheWriteTokens(),
-                generatedPaths(job.getEvidenceSnapshot()));
+                generatedPaths(job.getEvidenceSnapshot()),
+                answeredPractices(job.getEvidenceSnapshot()));
     }
 
     /**
@@ -188,7 +200,18 @@ public record AgentJobDTO(
                 row.getLlmTotalReasoningTokens(),
                 row.getLlmCacheReadTokens(),
                 row.getLlmCacheWriteTokens(),
+                null,
                 null);
+    }
+
+    private static @Nullable List<AnsweredPracticeDTO> answeredPractices(@Nullable JsonNode snapshot) {
+        if (snapshot == null || !snapshot.has("answeredPractices")) return null;
+        return StreamSupport.stream(snapshot.path("answeredPractices").spliterator(), false)
+                .map(entry -> new AnsweredPracticeDTO(
+                        entry.path("practiceSlug").asString(),
+                        entry.path("revisionId").asLong(),
+                        UUID.fromString(entry.path("reviewId").asString())))
+                .toList();
     }
 
     private static @Nullable GeneratedPathReviewDTO generatedPaths(@Nullable JsonNode snapshot) {

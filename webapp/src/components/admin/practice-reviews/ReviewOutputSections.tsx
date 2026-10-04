@@ -24,11 +24,23 @@ import { ReviewResultsSkeleton } from "./ReviewResultsSkeleton";
 import { ReviewRowList } from "./ReviewRow";
 
 /**
- * Not "nothing was found": the review never got as far as looking, so reading its empty result as a
- * clean bill of health would be backwards.
+ * Not "nothing was found": a review that ran no model never got as far as looking, so reading its
+ * empty result as a clean bill of health would be backwards.
  */
-const INSUFFICIENT_EVIDENCE_EXPLANATION =
-	"The review stopped before it assessed anything. The material it needed was missing, unreadable, out of date, or not something it was allowed to read. No practice was judged. This is not a review that looked and found nothing.";
+const NO_ASSESSMENT: Partial<
+	Record<AgentJob["reviewOutcome"], { title: string; description: string }>
+> = {
+	INSUFFICIENT_EVIDENCE: {
+		title: "Nothing was assessed",
+		description:
+			"The review stopped before it assessed anything. The material it needed was missing, unreadable, out of date, or not something it was allowed to read. No practice was judged. This is not a review that looked and found nothing.",
+	},
+	COALESCED: {
+		title: "Answered by an earlier review",
+		description:
+			"An earlier review had already checked every ready practice on the same code, so this review did not assess them again. Open the earlier review to see its observations.",
+	},
+};
 
 export interface ReviewOutputScope {
 	agentJobId?: string;
@@ -140,6 +152,7 @@ function PreviewSection<T>({
 	children: (items: T[]) => ReactNode;
 }) {
 	const noun = title.toLowerCase();
+	const unassessed = outcome === undefined ? undefined : NO_ASSESSMENT[outcome];
 	return (
 		<Section
 			level={3}
@@ -178,11 +191,9 @@ function PreviewSection<T>({
 					<Empty variant="outlined">
 						<EmptyHeader>
 							<EmptyMedia variant="icon">{icon}</EmptyMedia>
-							<EmptyTitle>
-								{outcome === "INSUFFICIENT_EVIDENCE" ? "Nothing was assessed" : empty}
-							</EmptyTitle>
-							{outcome === "INSUFFICIENT_EVIDENCE" && (
-								<EmptyDescription>{INSUFFICIENT_EVIDENCE_EXPLANATION}</EmptyDescription>
+							<EmptyTitle>{unassessed?.title ?? empty}</EmptyTitle>
+							{unassessed !== undefined && (
+								<EmptyDescription>{unassessed.description}</EmptyDescription>
 							)}
 						</EmptyHeader>
 					</Empty>

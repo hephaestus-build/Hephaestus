@@ -123,8 +123,8 @@ export function ProfileReviewLevel({
 	const run = state.status === "ready" ? state.run : undefined;
 	const activity = state.status === "ready" ? state.activity : undefined;
 	const trace = activity?.status === "ready" ? activity.trace : undefined;
-	const practices = runPractices(trace?.practices ?? [], run?.reviewId);
 	const signals = trace?.signals ?? [];
+	const practices = runPractices(trace?.practices ?? [], signals, run?.reviewId);
 
 	let body: ReactNode;
 	if (state.status === "error") {

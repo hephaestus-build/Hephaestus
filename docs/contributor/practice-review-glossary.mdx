@@ -157,6 +157,10 @@ It is suppressed, not pending: the reaper does not retry it, but a later live tr
 It says nothing about whether earlier observations were resolved.
 See [Issue lifecycle occasions](./practice-review-pipeline.mdx#issue-lifecycle-occasions) for revision identity.
 
+The review outcome `COALESCED` is a different fact, which is recorded on a completed review.
+An earlier completed review had already answered every ready practice on the same code, so no model ran.
+[Push and edit coalescing](./practice-review-pipeline.mdx#push-and-edit-coalescing) owns the rule.
+
 ## Practice autonomy
 
 `PracticeAutonomy` answers one question: **who may authorize feedback pushed onto the work for this practice?** It is not the whole delivery policy.
