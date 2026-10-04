@@ -45,6 +45,9 @@ Two consecutive stalls end the review with its recorded results.
 `PRACTICE_REVIEW_SAMPLING_TEMPERATURE` sets the sampling temperature for practice-review model calls, not mentor calls.
 If unset, the provider default applies.
 A low temperature does not guarantee repeatable judgments.
+Do not set `0` for an open model whose vendor advises against greedy decoding.
+Such a model can repeat the same tool call until the review stops that practice group.
+Use the model's recommended sampling or the provider default.
 
 Before you change an environment variable:
 

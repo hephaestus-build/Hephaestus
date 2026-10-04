@@ -101,10 +101,10 @@ void test("the crash practice lists the operators the author wrote, with where e
 		const result = await script(
 			path.join(root, "repo"),
 			new Map([
-				hunk("App/Views/PersonCardView.swift", 40, [
+				hunk("App/Views/NoteRowView.swift", 40, [
 					" #Preview {",
-					"+    let container = try! ModelContainer(for: Person.self, configurations: config)",
-					"     return PersonCardView().modelContainer(container)",
+					"+    let container = try! ModelContainer(for: Note.self, configurations: config)",
+					"     return NoteRowView().modelContainer(container)",
 					" }",
 				]),
 				added("App/Services/Movies.swift", movies),
@@ -122,7 +122,7 @@ void test("the crash practice lists the operators the author wrote, with where e
 					"swift:force unwrap",
 					{ inPreview: false, testFile: false },
 				],
-				["App/Views/PersonCardView.swift", 41, "swift:try!", { inPreview: true, testFile: false }],
+				["App/Views/NoteRowView.swift", 41, "swift:try!", { inPreview: true, testFile: false }],
 				["AppTests/ParserTests.swift", 1, "swift:try!", { inPreview: false, testFile: true }],
 			],
 		);

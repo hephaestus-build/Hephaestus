@@ -3,7 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.handler.spi;
 import java.io.Serial;
 
 /**
- * An observation quoted evidence that does not appear where it said the evidence was.
+ * An observation quoted evidence that does not appear where it said the evidence was, or that does not
+ * show what the observation claims.
  *
  * <p>Distinct from every other refusal in the evidence gate because it is the one that says nothing
  * about the run: the sources were staged, the citation was well formed and authorized, and the model
@@ -17,13 +18,24 @@ public class EvidenceQuoteUnverifiedException extends JobDeliveryException {
     private static final long serialVersionUID = 1L;
 
     private final int citationIndex;
+    private final String reasonCode;
 
     public EvidenceQuoteUnverifiedException(String message, int citationIndex) {
+        this(message, citationIndex, "QUOTE_LOCATION_MISMATCH");
+    }
+
+    public EvidenceQuoteUnverifiedException(String message, int citationIndex, String reasonCode) {
         super(message);
         this.citationIndex = citationIndex;
+        this.reasonCode = reasonCode;
     }
 
     public int citationIndex() {
         return citationIndex;
+    }
+
+    /** The code recorded against the citation in the review's verification failures. */
+    public String reasonCode() {
+        return reasonCode;
     }
 }
