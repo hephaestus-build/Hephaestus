@@ -47,7 +47,6 @@ import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overvie
 import { usePracticeStandings } from "@/hooks/use-practice-standings";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { pageHead } from "@/lib/page-title";
-import { useSearchState } from "@/lib/search-params";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
 /**
@@ -85,7 +84,6 @@ function PracticesAcrossTheWorkspace() {
 	const { workspaceSlug } = Route.useParams();
 	const { window, detail, practiceTab } = Route.useSearch();
 	const readOnly = useAuth().userView !== undefined;
-	const setSearch = useSearchState();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 	// Read only where this workspace reviews practices, and only the window shown: each window is
 	// its own request, checked against CohortPrivacyPolicy on its own.
@@ -167,9 +165,7 @@ function PracticesAcrossTheWorkspace() {
 			<PracticesAcrossTheWorkspacePage
 				state={state}
 				window={window}
-				onWindowChange={(next) => {
-					void setSearch((previous) => ({ ...previous, window: next }), { replace: true });
-				}}
+				onWindowChange={(next) => stackControls.setView({ window: next })}
 				openGroupSlug={openGroupSlug}
 				onOpenGroup={(groupSlug) => stackControls.open({ kind: "practice-group", id: groupSlug })}
 			/>
@@ -194,11 +190,7 @@ function PracticesAcrossTheWorkspace() {
 								skeletonRows={REVIEW_RUN_PAGE_SIZE}
 								onOpenGroup={group && (() => stackControls.close(level.depth))}
 								tab={practiceTab}
-								onTabChange={(tab) => {
-									void setSearch((previous) => ({ ...previous, practiceTab: tab }), {
-										replace: true,
-									});
-								}}
+								onTabChange={(tab) => stackControls.setView({ practiceTab: tab })}
 								observations={{
 									onRespond: readOnly ? undefined : practiceDetail.respond,
 									pendingResponses: practiceDetail.pendingResponses,

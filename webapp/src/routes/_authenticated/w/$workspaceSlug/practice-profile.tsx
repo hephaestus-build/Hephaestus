@@ -38,7 +38,6 @@ import { usePracticeProfileReviewRuns } from "@/hooks/use-practice-profile-revie
 import { usePracticeStandings } from "@/hooks/use-practice-standings";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { pageHead } from "@/lib/page-title";
-import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
 import { useAuth } from "@/runtime/auth/AuthContext";
@@ -64,16 +63,11 @@ function PracticeProfile() {
 	const membership = useQuery(workspaceMembershipQueryOptions(workspaceSlug));
 	const isAdmin = !readOnly && hasMinimumWorkspaceRole(membership.data?.role, "ADMIN");
 	const search = Route.useSearch();
-	const setSearch = useSearchState();
 
 	const detailStack = parseDetailStack(search.detail, PRACTICE_PROFILE_LEVEL_KINDS);
 	const stackControls = useDetailStack(detailStack, { levelParams: PRACTICE_PROFILE_LEVEL_PARAMS });
 
-	// A tab or a sort is a view of what is open, not a place: rewritten in place, keeping the history
-	// entry's state — the stamp `useDetailStack` reads to dismiss a level by going back.
-	const setView = (view: Partial<PracticeProfileSearch>) => {
-		void setSearch((previous) => ({ ...previous, ...view }), { state: true, replace: true });
-	};
+	const setView = (view: Partial<PracticeProfileSearch>) => stackControls.setView(view);
 
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 	const { groups, groupStandings, practiceStandings, practicesByGroup, ...standings } =

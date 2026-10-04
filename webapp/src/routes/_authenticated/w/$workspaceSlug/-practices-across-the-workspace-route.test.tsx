@@ -192,6 +192,40 @@ describe("Practices across the workspace", () => {
 		});
 	});
 
+	it("keeps a practice dismissed after its tab changed, so Back does not open it again", async () => {
+		const router = await renderPage();
+		await userEvent.click(
+			screen.getByRole("button", { name: "Open group Packaging work for review" }),
+		);
+		const level = await screen.findByRole(
+			"table",
+			{ name: "Practices of Packaging work for review" },
+			ROUTE_RENDER_WAIT,
+		);
+		await userEvent.click(
+			within(level).getByRole("button", { name: "Open practice Scope the change to one concern" }),
+		);
+		await userEvent.click(
+			await screen.findByRole("tab", { name: /About this practice/u }, ROUTE_RENDER_WAIT),
+		);
+		await waitFor(() => {
+			expect(router.state.location.search).toMatchObject({ practiceTab: "about" });
+		});
+		// A tab is a view of the open practice, so its entry keeps the mark that it was pushed.
+		expect(router.state.location.state.detailPush).toBe(true);
+
+		await userEvent.keyboard("{Escape}");
+		await waitFor(() => {
+			expect(router.state.location.search.detail).toStrictEqual([
+				"practice-group:review-ready-work",
+			]);
+		});
+		router.history.back();
+		await waitFor(() => {
+			expect(router.state.location.search.detail).toBeUndefined();
+		});
+	});
+
 	it("opens the reader's own group over the group without leaving the page, and Back closes it", async () => {
 		const { router } = renderRouteAtWithRouter(
 			`${PAGE}?detail=%5B%22practice-group%3Areview-ready-work%22%5D`,
