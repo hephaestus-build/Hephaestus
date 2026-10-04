@@ -143,7 +143,7 @@ The page does not guard two reads against each other [8].
 
 Two kinds of difference in a single read are also not guarded:
 
-- The bars' total less the tiles' total in a window counts the developers with only older evidence. The page accepts this. It shows a time span of reviews, not a standing.
+- The bars' total less the tiles' total in a window counts the developers whose standing rests only on older work. The page accepts this, because the difference reveals no standing level. It only shows that their evidence is older than the window.
 - The difference per standing between two shown splits. It shows an aggregate over the developers in both splits, as a part does.
 
 Three changes can decrease the risk of windows and time:

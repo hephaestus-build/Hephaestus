@@ -640,6 +640,32 @@ async function seed(client: Client, workspaceId: number, appendedRevisionIds: nu
 	};
 }
 
+/**
+ * Rolls back a failed seed and rewinds the revisions the server appended for it, since the first job
+ * that records them rolled back too. Rethrows the seed's error, joined by the rewind's if that failed.
+ */
+async function rewindAfterFailure(
+	client: Client,
+	workspaceId: number,
+	appendedIds: number[],
+	error: unknown,
+): Promise<never> {
+	await client.query("ROLLBACK");
+	try {
+		await client.query("BEGIN");
+		await rewindRevisions(client, workspaceId, appendedIds);
+		await client.query("COMMIT");
+	} catch (rewindError) {
+		await client.query("ROLLBACK").catch(() => undefined);
+		throw new AggregateError(
+			[error, rewindError],
+			"The seed failed, and so did the rewind of the revisions the server appended for it",
+			{ cause: rewindError },
+		);
+	}
+	throw error;
+}
+
 async function main(): Promise<void> {
 	const [mode = "seed", ...rest] = positionals;
 	if ((mode !== "seed" && mode !== "remove") || rest.length > 0) {
@@ -694,12 +720,9 @@ async function main(): Promise<void> {
 		);
 		const appendedIds = appended.map((revision) => revision.revisionId);
 		await client.query("BEGIN");
-		const seeded = await seed(client, workspaceId, appendedIds).catch(async (error: unknown) => {
-			// The first job that records the appended revisions rolls back too, so rewind them here.
-			await client.query("ROLLBACK");
-			await rewindRevisions(client, workspaceId, appendedIds);
-			throw error;
-		});
+		const seeded = await seed(client, workspaceId, appendedIds).catch(async (error: unknown) =>
+			rewindAfterFailure(client, workspaceId, appendedIds, error),
+		);
 		await client.query("COMMIT");
 		// After the commit: the server reads the observations the feedback stands on.
 		await postDev(
