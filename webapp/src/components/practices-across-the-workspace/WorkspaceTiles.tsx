@@ -99,7 +99,7 @@ export function WorkspaceTiles({ overview }: WorkspaceTilesProps) {
 						figure={overview.openFeedback}
 						noneSentence="Most developers here have no open feedback."
 						qualifier={`${open === 1 ? "piece" : "pieces"} open now`}
-						note="Feedback your Practice profile shows open right now, whatever the range; its typical range is the middle half of every developer in this workspace, reviewed or not."
+						note="Feedback that your Practice profile shows as open now. The range does not change it. Its typical range is the middle half of all developers that this page counts, reviewed or not."
 					/>
 				</li>
 			</ul>

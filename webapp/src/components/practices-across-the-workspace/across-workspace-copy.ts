@@ -61,7 +61,7 @@ export const PAGE_PURPOSE =
 /**
  * The line under the tiles on when the three tiles read over the range compare: a middle half shows
  * from twice K other developers, so neither quarter outside it can be one developer's value. Open
- * feedback counts every developer in the workspace now, so its own note names its reference group.
+ * feedback reads every developer the page counts, reviewed or not, so its own note names its group.
  */
 export function tilesHint(
 	minimumOthers: number,
