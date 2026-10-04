@@ -68,17 +68,24 @@ Only `CohortPrivacyPolicy` decides what the page can show.
 
 ### What the page can show
 
-K is the smallest number of other developers that a shown count can stand for. K is 3.
+K is 3.
+Every count that the page shows holds K + 1 = 4 developers or more.
+Every group of developers that a reader can count by subtraction holds 0 or 4 developers or more.
+These limits apply whether the reader is in the count or not.
+Thus, every reader sees the same page, and each count stands for 3 or more other developers, whoever reads it.
 
-- A split shows its four parts only when each part holds K + 1 developers or more, the reader included.
-- Thus, each part stands for K or more other developers, and every reader sees the same split.
-- If one part is too small, the page holds back all parts. The total is shown, so one missing part is the total less the rest.
-- A split that is held back still shows its total while the total holds K + 1 developers or more.
-- The total of developers with a standing shows only when it holds K or more other developers.
-- A reader can subtract a practice split from its group split. Each difference must be 0 or K or more.
-- If a difference is between 1 and K − 1, the page holds back the practice split.
-- The practice splits can add up to more developers than the group split. If the excess is 1 to K − 1, all practice splits are held back.
-- A tile shows the value of the reader and the middle half of the other developers. The middle half needs 2K other developers.
+- A split shows its four parts, *none yet* included, only when each part holds 4 developers or more.
+- Otherwise, the split shows only its total when that total holds 4 developers or more, and nothing below that.
+- The page total and the total of the tiles in a window show only at 4 developers or more.
+- A group can have 1 to 3 more developers with a standing than one of its practices. Then that practice is held back.
+- All practice splits of a group are held back when they exceed the group by 1 to 3 developers.
+- All splits show only their totals when the shown groups exceed the page total by 1 to 3.
+
+With two groups, that last excess is the number of developers in both groups.
+For example, 11 developers only in group A, 11 only in group B, and 1 in both give 12 + 12 against 23.
+
+- A tile shows the value of the reader and the middle half of the developers counted, the reader included.
+- The middle half shows only when 2K + 1 = 7 developers or more are counted. This rule includes the open feedback tile.
 
 ### What the page shows of the reader
 
@@ -99,12 +106,12 @@ These conditions make it acceptable here:
 - A workspace has 30 to 40 developers. With K = 10, the page shows almost nothing.
 
 The page accepts a risk.
-A reader who knows the standings of two developers in a part of four can find the standing of the third.
+A reader who knows the standings of all but one developer in a part of four can find the standing of the last one.
 
 ### The middle half
 
 The ABS asks for about 20 contributors for each quartile [6].
-The page shows the middle half from 6 other developers, which is much less.
+The page shows the middle half from 7 developers, which is much less.
 These rules limit the risk:
 
 - Only the 25th and the 75th percentile leave the server. They are interpolated linearly and rounded.
@@ -123,18 +130,27 @@ The page never says whose value it is.
 
 ## Known limitation
 
-The page guards each read. It does not guard two reads against each other [8].
+The page does not guard two reads against each other [8].
 
 - **Windows.** The bars have no window. The middle half of a tile changes with the window. Two windows together can isolate one developer.
 - **Time.** The figures are live. A reader can compare the page before and after the review of a colleague.
 
-Three changes can decrease this risk: one window for the tiles, figures that change once each day, and counts rounded to K.
+One pair in a single read is also not guarded.
+The bars' total less the tiles' total in a window counts the developers with only older evidence.
+The page accepts this, because it shows a time span of reviews and not a standing.
+
+Three changes can decrease the risk of windows and time:
+
+- One window for the tiles.
+- Figures that change once each day.
+- Counts rounded to K.
+
 Each change makes the page less useful, so the page does not use them now.
 
 ## Open decisions
 
-- **Source use.** The page reads observations of other developers under `PRACTICE_FEEDBACK_DELIVERY`. The maintainer and the controller decide if a count needs its own purpose (`docs/admin/dsms/artifact-source-governance.md`).
-- **Zero counts.** A part with no other developer is too small. Thus, the page holds back more splits than necessary.
+- **Source use.** The page reads observations of other developers under `PRACTICE_FEEDBACK_DELIVERY`. The maintainer and the controller decide if a count needs its own purpose. See `docs/admin/dsms/artifact-source-governance.md`.
+- **Zero counts.** A part with no developer holds back its split. Thus, the page holds back more splits than necessary.
 
 ## Revisit trigger
 

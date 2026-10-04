@@ -37,7 +37,8 @@ import {
  *
  * What it writes, its flags, and its safety checks: docs/contributor/local-development.mdx
  * § Seeding the practices demo. The seed keeps the ids of the practice revisions the server appended
- * for it on its first job, so a removal rewinds those and no revision a real review appended.
+ * for it on its first job, so a removal rewinds those and no revision a real review appended. A seed
+ * that fails after the server appended them rewinds them at once.
  */
 
 const { values: settings, positionals } = parseArgs({
@@ -160,6 +161,34 @@ async function artifactsOf(client: Client, kind: Kind): Promise<Artifact[]> {
 	}));
 }
 
+/**
+ * Rewinds the practice revisions that the server appended for the seed. A revision goes back only
+ * while it is current, differs from the one before it in its fingerprint alone, and no observation
+ * pins it: the next review would append the same revision again.
+ */
+async function rewindRevisions(client: Client, workspaceId: number, ids: number[]): Promise<void> {
+	const rewound = await client.query<{ id: number }>(
+		`WITH appended AS (
+			SELECT p.id AS practice_id, cur.id AS current_id, prev.id AS previous_id
+			FROM practice p
+			JOIN practice_revision cur ON cur.id = p.current_revision_id
+			JOIN practice_revision prev ON prev.practice_id = p.id
+			 AND prev.revision_number = cur.revision_number - 1
+			WHERE p.workspace_id = $1
+			  AND cur.id = ANY($2::bigint[])
+			  AND to_jsonb(cur) - $3::text[] = to_jsonb(prev) - $3::text[]
+			  AND NOT EXISTS (SELECT 1 FROM observation o WHERE o.practice_revision_id = cur.id)
+		)
+		UPDATE practice p SET current_revision_id = appended.previous_id
+		FROM appended WHERE p.id = appended.practice_id
+		RETURNING appended.current_id AS id`,
+		[workspaceId, ids, ["id", "revision_number", "review_rule_fingerprint", "created_at"]],
+	);
+	await client.query("DELETE FROM practice_revision WHERE id = ANY($1::bigint[])", [
+		rewound.rows.map((row) => row.id),
+	]);
+}
+
 async function removeSeed(client: Client, workspaceId: number): Promise<void> {
 	const busy = await client.query(
 		"SELECT 1 FROM agent_job WHERE workspace_id = $1 AND status IN ('RUNNING', 'QUEUED') LIMIT 1",
@@ -189,42 +218,19 @@ async function removeSeed(client: Client, workspaceId: number): Promise<void> {
 		[pattern],
 	);
 	await client.query(`DELETE FROM agent_job WHERE id IN (${jobs})`, [pattern]);
-	// A revision goes back only while it is current, differs from the one before it in its fingerprint
-	// alone, and no observation pins it: the next review would append the same revision again.
-	const rewound = await client.query<{ id: number }>(
-		`WITH appended AS (
-			SELECT p.id AS practice_id, cur.id AS current_id, prev.id AS previous_id
-			FROM practice p
-			JOIN practice_revision cur ON cur.id = p.current_revision_id
-			JOIN practice_revision prev ON prev.practice_id = p.id
-			 AND prev.revision_number = cur.revision_number - 1
-			WHERE p.workspace_id = $1
-			  AND cur.id = ANY($2::bigint[])
-			  AND to_jsonb(cur) - $3::text[] = to_jsonb(prev) - $3::text[]
-			  AND NOT EXISTS (SELECT 1 FROM observation o WHERE o.practice_revision_id = cur.id)
-		)
-		UPDATE practice p SET current_revision_id = appended.previous_id
-		FROM appended WHERE p.id = appended.practice_id
-		RETURNING appended.current_id AS id`,
-		[
-			workspaceId,
-			appended.rows[0]?.ids ?? [],
-			["id", "revision_number", "review_rule_fingerprint", "created_at"],
-		],
-	);
-	await client.query("DELETE FROM practice_revision WHERE id = ANY($1::bigint[])", [
-		rewound.rows.map((row) => row.id),
-	]);
+	await rewindRevisions(client, workspaceId, appended.rows[0]?.ids ?? []);
 	// The organization sync may already have dropped a synthetic membership, so the user goes once no
 	// workspace holds them.
-	const synthetic = `SELECT id FROM "user" WHERE login LIKE '${LOGIN_PREFIX}%' AND native_id >= ${NATIVE_ID_BASE}`;
+	const synthetic = `SELECT id FROM "user" WHERE login LIKE $1 AND native_id >= $2`;
+	const syntheticParameters = [`${LOGIN_PREFIX}%`, NATIVE_ID_BASE];
 	await client.query(
-		`DELETE FROM workspace_membership WHERE workspace_id = $1 AND user_id IN (${synthetic})`,
-		[workspaceId],
+		`DELETE FROM workspace_membership WHERE workspace_id = $3 AND user_id IN (${synthetic})`,
+		[...syntheticParameters, workspaceId],
 	);
 	await client.query(
 		`DELETE FROM "user" WHERE id IN (${synthetic})
 		 AND NOT EXISTS (SELECT 1 FROM workspace_membership wm WHERE wm.user_id = "user".id)`,
+		syntheticParameters,
 	);
 }
 
@@ -686,12 +692,14 @@ async function main(): Promise<void> {
 		console.log(
 			`Practice revisions a review would pin: ${pinned.map((revision) => `${revision.slug}@${revision.revisionNumber}`).join(" ")}; ${appended.length} appended for the seed`,
 		);
+		const appendedIds = appended.map((revision) => revision.revisionId);
 		await client.query("BEGIN");
-		const seeded = await seed(
-			client,
-			workspaceId,
-			appended.map((revision) => revision.revisionId),
-		);
+		const seeded = await seed(client, workspaceId, appendedIds).catch(async (error: unknown) => {
+			// The first job that records the appended revisions rolls back too, so rewind them here.
+			await client.query("ROLLBACK");
+			await rewindRevisions(client, workspaceId, appendedIds);
+			throw error;
+		});
 		await client.query("COMMIT");
 		// After the commit: the server reads the observations the feedback stands on.
 		await postDev(
