@@ -48,15 +48,25 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
     }
 
     /**
-     * The surveillance guard. A practice about how somebody REVIEWS is filed against the artifact's
-     * author today, so showing it on the author's own page would hand them a judgement of work they did
-     * not do — and it must be refused before any question about the evidence, since the evidence is the
+     * The surveillance guard. A practice about how somebody reviews or holds the work may be filed against
+     * the artifact's author, so showing it on the author's own page would hand them a judgement of work they
+     * did not do — and it must be refused before any question about the evidence, since the evidence is the
      * part that is wrong.
      */
     @Test
     void refusesAPracticeThatJudgesSomebodyOtherThanTheAuthor() {
         assertThat(route(problems(5, ObservationOrigin.LIVE), PracticeAutonomy.AUTOMATIC, ActorRole.REVIEWER, null))
                 .isEqualTo(InAppRoutingDecision.REVIEWER_ATTRIBUTED);
+        assertThat(route(problems(5, ObservationOrigin.LIVE), PracticeAutonomy.AUTOMATIC, ActorRole.ASSIGNEE, null))
+                .isEqualTo(InAppRoutingDecision.REVIEWER_ATTRIBUTED);
+    }
+
+    @Test
+    void admitsAPracticeAboutTheAuthorAsMergerOnTheSameEvidenceRules() {
+        assertThat(route(problems(2, ObservationOrigin.LIVE), PracticeAutonomy.AUTOMATIC, ActorRole.MERGER, null))
+                .isEqualTo(InAppRoutingDecision.ADMIT);
+        assertThat(route(problems(1, ObservationOrigin.LIVE), PracticeAutonomy.AUTOMATIC, ActorRole.MERGER, null))
+                .isEqualTo(InAppRoutingDecision.UNCORROBORATED);
     }
 
     @Test
