@@ -10,7 +10,7 @@ import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, asStringArray, parseJson } from "./lib/json.ts";
 import { steRoot } from "./lib/ste-words.ts";
-import { prepareVale, valeAlerts, type ValeAlert } from "./lib/vale.ts";
+import { prepareVale, valeAlerts, type Vale, type ValeAlert } from "./lib/vale.ts";
 
 export const enforcedList = ".vale/enforced-paths.json";
 
@@ -128,14 +128,22 @@ export function issueFormProse(source: string) {
 	return fields;
 }
 
-export function issueFormAlerts(binary: string, file: string, level = "error") {
-	return proseFieldAlerts(binary, file, issueFormProse(readFileSync(file, "utf8")), level);
+export function issueFormAlerts(
+	vale: Pick<Vale, "binary" | "config">,
+	file: string,
+	level = "error",
+) {
+	return proseFieldAlerts(vale, file, issueFormProse(readFileSync(file, "utf8")), level);
 }
 
-export function skillMetadataAlerts(binary: string, file: string, level = "error") {
+export function skillMetadataAlerts(
+	vale: Pick<Vale, "binary" | "config">,
+	file: string,
+	level = "error",
+) {
 	const metadata = asRecord(parseJson(readFileSync(file, "utf8")), "skill metadata");
 	return proseFieldAlerts(
-		binary,
+		vale,
 		file,
 		[{ field: "abstract", text: asString(metadata.abstract, "abstract") }],
 		level,
@@ -143,7 +151,7 @@ export function skillMetadataAlerts(binary: string, file: string, level = "error
 }
 
 function proseFieldAlerts(
-	binary: string,
+	vale: Pick<Vale, "binary" | "config">,
 	file: string,
 	fields: readonly { field: string; text: string }[],
 	level: string,
@@ -161,7 +169,7 @@ function proseFieldAlerts(
 		const files = inputs.map(({ target }) => target);
 		const alerts = new Map<string, ValeAlert[]>();
 		for (let offset = 0; offset < files.length; offset += 50) {
-			for (const [target, list] of valeAlerts(binary, files.slice(offset, offset + 50), level)) {
+			for (const [target, list] of valeAlerts(vale, files.slice(offset, offset + 50), level)) {
 				alerts.set(target, list);
 			}
 		}
@@ -190,7 +198,7 @@ if (process.argv[1] === import.meta.filename) {
 		// Small batches stay below the Windows command-line limit as the list grows.
 		for (let offset = 0; offset < files.length; offset += 50) {
 			const alerts = valeAlerts(
-				vale.binary,
+				vale,
 				files.slice(offset, offset + 50),
 				args.length > 0 ? "suggestion" : "error",
 			);
@@ -202,7 +210,7 @@ if (process.argv[1] === import.meta.filename) {
 		}
 		for (const file of paths.filter((item) => /\.ya?ml$/u.test(item))) {
 			for (const { field, alert } of issueFormAlerts(
-				vale.binary,
+				vale,
 				file,
 				args.length > 0 ? "suggestion" : "error",
 			)) {
@@ -214,7 +222,7 @@ if (process.argv[1] === import.meta.filename) {
 		}
 		for (const file of paths.filter((item) => item.endsWith(".json"))) {
 			for (const { field, alert } of skillMetadataAlerts(
-				vale.binary,
+				vale,
 				file,
 				args.length > 0 ? "suggestion" : "error",
 			)) {
