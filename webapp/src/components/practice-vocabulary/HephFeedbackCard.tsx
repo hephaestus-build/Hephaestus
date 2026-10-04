@@ -34,7 +34,7 @@ export interface HeldPracticeRow {
 	 */
 	statement?: string;
 	/**
-	 * The evidence phrase — `met across four pull requests`, or `after !421, !423 and !425 came
+	 * The evidence phrase: `met across four pull requests`, or `after !421, !423 and !425 came
 	 * back clean` with its work references as links. It sits inside the statement's own text flow,
 	 * so a wrap never strands it alone on a line.
 	 */

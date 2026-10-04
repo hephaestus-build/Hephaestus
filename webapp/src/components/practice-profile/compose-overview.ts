@@ -565,7 +565,7 @@ function composeHeldRows(deduped: ProfileEvent[]): {
 /**
  * The sentence under the rows: what the limit left out, counted by kind and said in one sentence.
  * Feedback is uncountable, so it is counted in pieces. The first count of one is named rather than
- * numbered — "Another practice was met too.", never "another one practice".
+ * numbered: "Another practice was met too.", never "another one practice".
  */
 function heldRowsNote(resolvedHidden: number, heldHidden: number): string | undefined {
 	const [feedbackClause, practiceClause] = countsTogether([
