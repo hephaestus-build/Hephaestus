@@ -1,0 +1,24 @@
+name: Utilize the form.
+description: Utilize the form.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use the form.
+        Utilize the form.
+  - type: textarea
+    id: machine-value
+    attributes:
+      label: Utilize the form.
+      description: Utilize the form.
+      placeholder: Utilize the form.
+      value: Use the form.
+    validations:
+      required: true
+  - type: checkboxes
+    attributes:
+      options:
+        - label: Utilize the form.
+contact_links:
+  - name: Utilize the form.
+    url: https://example.invalid/help

@@ -7,7 +7,7 @@ tags: rendering, svg, css, animation, performance
 
 ## Animate SVG Wrapper Instead of SVG Element
 
-Many browsers don't have hardware acceleration for CSS3 animations on SVG elements. Wrap SVG in a `<div>` and animate the wrapper instead.
+Many browsers do not have hardware acceleration for CSS3 animations on SVG elements. Wrap SVG in a `<div>` and animate the wrapper instead.
 
 **Incorrect (animating SVG directly - no hardware acceleration):**
 

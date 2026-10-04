@@ -2,11 +2,12 @@
 id: practice-review-pipeline
 sidebar_position: 1
 title: Practice review pipeline
-description: The four stages a practice review passes through, the refusal vocabulary each one owns, the seam between measuring and saying something, and where the work actually runs.
+description: The four practice review stages and their refusal vocabulary. The seam between measurement and delivery, and where the work runs.
 ---
 
 A practice review passes through four stages, in this order: **Occasion**, **Capture**, **Observation**,
-**Delivery**. Each stage can stop independently and records a different reason.
+**Delivery**.
+Each stage can stop independently and records a different reason.
 
 ```mermaid
 flowchart TB
@@ -24,13 +25,13 @@ flowchart TB
     Deliver -->|yes| Said[Feedback recorded and routed to an eligible surface]
 ```
 
-Use the stage that stopped the review to decide what to fix. Do not translate one stage's reason into
-another stage's vocabulary.
+Use the stage that stopped the review to decide what to fix.
+Do not translate one stage's reason into another stage's vocabulary.
 
 ## Choose the page for your change
 
-This page owns the runtime sequence and the seams between its stages. Start elsewhere when your change
-belongs to one contract:
+This page owns the runtime sequence and the seams between its stages.
+Start elsewhere when your change belongs to one contract:
 
 | You are changing                                                  | Start with                                                    |
 | ----------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -41,8 +42,8 @@ belongs to one contract:
 | Run provenance and evaluation joins                              | [Evaluation provenance](./evaluation-provenance.md)           |
 | An exact enum meaning after you know the stage                    | [Practice review glossary](./practice-review-glossary.mdx)    |
 
-Use this page for changes across stages. Capture failures must not become observations, and delivery
-choices must not erase observations.
+Use this page for changes across stages.
+Capture failures must not become observations, and delivery choices must not erase observations.
 
 ## Where a review can stop
 
@@ -55,83 +56,103 @@ choices must not erase observations.
 | Observation | `Outcome.UNDETERMINED`                                                      | `observation.outcome`                                                     | We looked and could not tell     |
 | Delivery    | `FeedbackSuppressionReason`                                                  | `feedback.suppression_reason`                                              | We know, and chose to stay quiet |
 
-A missing source is not a claim about behavior and must not become an `Outcome` value. A delivery refusal
-or pending approval does not erase the observation. Add each reason to the stage that owns the decision;
-use separate reasons when more than one stage stops.
+A missing source is not a claim about behavior and must not become an `Outcome` value.
+A delivery refusal or pending approval does not erase the observation.
+Add each reason to the stage that owns the decision. Use separate reasons when more than one stage stops.
 
 ## Occasion
 
-An occasion is one named signal on one revision of one artifact. It is recorded in
-`artifact_signal` before admission, so a review that does not start still has an auditable outcome.
+An occasion is one named signal on one revision of one artifact.
+It is recorded in `artifact_signal` before admission, so a review that does not start still has an auditable outcome.
 
 ### Issue snapshot supersession
 
-An issue observation is current only while both its practice review rule and its supporting issue
-snapshot are current. A change to title, body, state, state reason, native type, milestone, labels or
-assignees advances the issue's review snapshot in the mirror transaction and marks earlier issue
-observations historical. An identical replay does neither. A return to earlier content is a **new**
-transition: the snapshot token changes even though its content digest matches an older one, and the
-older observations do not become current again. The snapshot-deduplicated automatic occasion may
-already be settled for that content; in that case there is no new current observation until a new
-review is requested. A failed, refused, or undecided later review never implies that the earlier
-judgment was correct or incorrect.
+An issue observation is current only while both its practice review rule and its supporting issue snapshot are current.
+A change to title, body, state, state reason, native type, milestone, labels, or assignees advances the issue's review snapshot.
+This occurs in the mirror transaction and marks earlier issue observations historical.
+An identical replay does neither.
+A return to earlier content is a **new** transition.
 
-One mirrored issue can be reviewed in several workspaces. Its transition retires observations in
-every workspace that recorded that issue, without exposing one workspace's history to another.
-Each monitoring workspace records and settles its own issue-update occasion; a later monitor change
-cannot redirect a queued review to a different workspace.
+The snapshot token changes even though its content digest matches an older one.
+The older observations do not become current again.
 
-At observation publication, the review must still name the issue's current snapshot token. The
-publication transaction locks the issue row; a concurrent mirror update either completes first and
-rejects the old review, or completes afterwards and marks its observations historical. A historical
-observation keeps its evidence, job, feedback links and original developer. It is not a human
-retraction ([#1507](https://github.com/hephaestus-build/Hephaestus/issues/1507)). Existing issue
-observations with no reliable snapshot token become historical at migration, rather than being
-presented as verified current claims. Operator review history reports `STALE`; current developer
-standings and Heph context omit superseded claims.
+The snapshot-deduplicated automatic occasion may already be settled for that content.
+In that case there is no new current observation until a new review is requested.
+A failed, refused, or undecided later review never implies that the earlier judgment was correct or incorrect.
 
-The webhook sender is the **initiating actor**, not necessarily the issue author or the developer
-under review. Issue-update occasions retain the actor in the deferred ledger and carry it into the
-review job; sync discoveries have no initiating actor. Coalescing uses the actor of the final
-reviewed snapshot. GitHub issues webhooks name `sender`; GitLab issue webhooks name `user`
-([GitHub payload](https://docs.github.com/en/webhooks/webhook-events-and-payloads#issues),
-[GitLab payload](https://docs.gitlab.com/user/project/integrations/webhook_events/#issue-events)).
-GitLab still has no advertised live native-type transition. This policy does not merge evidence
-sufficiency, review execution and semantic outcome; those remain separate as described in
-[#1428](https://github.com/hephaestus-build/Hephaestus/issues/1428) and
-[#1429](https://github.com/hephaestus-build/Hephaestus/issues/1429).
+One mirrored issue can be reviewed in several workspaces.
+Its transition retires observations in every workspace that recorded that issue, without exposing one workspace's history to another.
+Each monitoring workspace records and settles its own issue-update occasion.
+A later monitor change cannot redirect a queued review to a different workspace.
 
-`SignalState` has six values: `RECORDED` for an occurrence nobody has decided on yet, `DEFERRED` for one
-queued in the [update coalescer](#durable-update-coalescing), `TRIGGERED` for one that started a review,
-terminal `SUPPRESSED`, retryable `PENDING`, and retired `LAPSED`. Terminal rows never reopen — a coalesced
-`SUPPRESSED` row is the one exception, moving to `DEFERRED` rather than reopening when a later live
-transition repeats its content, because that content has never itself been decided on. Pending rows are
-re-offered until their reason clears or their deadline passes. Retryability belongs to the reason, not to
-the caller: each `SignalStateReason` declares the state it resolves to. Which reason to reach for, and the
-two that are easy to confuse, are in
-[Signal state reasons](./practice-review-glossary.mdx#signal-state-reasons); provenance mapping and UI
-labels are in [How a review was occasioned](./practice-review-glossary.mdx#how-a-review-was-occasioned).
+At observation publication, the review must still name the issue's current snapshot token.
+The publication transaction locks the issue row.
+A concurrent mirror update either completes first and rejects the old review, or completes afterwards and marks its observations historical.
+A historical observation keeps its evidence, job, feedback links and original developer.
+
+It is not a human retraction ([#1507](https://github.com/hephaestus-build/Hephaestus/issues/1507)).
+Existing issue observations with no reliable snapshot token become historical at migration, rather than being presented as verified current claims.
+Operator review history reports `STALE`.
+Current developer standings and Heph context omit superseded claims.
+
+The webhook sender is the **initiating actor**, not necessarily the issue author or the developer under review.
+Issue-update occasions retain the actor in the deferred ledger and carry it into the review job.
+Sync discoveries have no initiating actor.
+Coalescing uses the actor of the final reviewed snapshot.
+
+GitHub issues webhooks name `sender`.
+GitLab issue webhooks name `user` ([GitHub payload](https://docs.github.com/en/webhooks/webhook-events-and-payloads#issues), [GitLab payload](https://docs.gitlab.com/user/project/integrations/webhook_events/#issue-events)).
+GitLab still has no advertised live native-type transition.
+This policy does not merge evidence sufficiency, review execution and semantic outcome.
+
+Those remain separate as described in [#1428](https://github.com/hephaestus-build/Hephaestus/issues/1428) and [#1429](https://github.com/hephaestus-build/Hephaestus/issues/1429).
+
+`SignalState` has six values:
+
+- `RECORDED`: an occurrence nobody has decided on yet.
+- `DEFERRED`: an occurrence queued in the [update coalescer](#durable-update-coalescing).
+- `TRIGGERED`: an occurrence that started a review.
+- `SUPPRESSED`: terminal.
+- `PENDING`: retryable.
+- `LAPSED`: retired.
+
+Terminal rows never reopen, with one exception.
+A coalesced `SUPPRESSED` row moves to `DEFERRED` when a later live transition repeats its content.
+This does not reopen a decision: that content has never itself been decided on.
+Pending rows are re-offered until their reason clears or their deadline passes.
+Retryability belongs to the reason, not to the caller: each `SignalStateReason` declares the state it resolves to.
+
+Which reason to reach for, and the two that are easy to confuse, are in [Signal state reasons](./practice-review-glossary.mdx#signal-state-reasons).
+Provenance mapping and UI labels are in [How a review was occasioned](./practice-review-glossary.mdx#how-a-review-was-occasioned).
 Operator remediation is in [When a workspace goes quiet](/admin/practice-review#when-a-workspace-goes-quiet).
 
-A live GitHub or GitLab event whose work is tombstoned holds its occasion with
-`ARTIFACT_NOT_VISIBLE` (`PENDING`) instead of starting a review, so the pending-signal reaper
-re-offers it and an ordinary sync can restore reviewability without another webhook. The check reads
-committed mirror state at admission; work deleted during capture or delivery belongs to that stage's
-refusal policy.
+A live GitHub or GitLab event whose work is tombstoned holds its occasion with `ARTIFACT_NOT_VISIBLE` (`PENDING`).
+It does not start a review.
+The pending-signal reaper re-offers it.
+An ordinary sync can restore reviewability without another webhook.
+The check reads committed mirror state at admission.
+Work deleted during capture or delivery belongs to that stage's refusal policy.
 
-A GitLab merge occasion is offered only after the merge hook's read of the merge request has completed and
-recorded what it could, so a read that names the merger admits at once. When the read fails or names no merger,
-the occasion is still offered with live provenance, and if its matched practices include one about the merger
-(`subject: MERGER`) it waits as `PENDING / MERGE_ACTOR_UNAVAILABLE`, in the live listener and in pending
-retries alike, until an ordinary sync records the merger and the reaper re-offers it. GitHub's merge event
-names the merger itself and keeps its path. The job is built from the merge request as stored at admission
-rather than as the event saw it. A self-merge then makes the merger practice attributable to the author; another merger leaves
-it withheld as before. The merger is never inferred; an occasion whose merger stays unknown lapses at the
-ledger deadline. Merge commit and merge time are recorded when the provider names them and are not
-admission conditions.
+A GitLab merge occasion is offered only after the merge hook completes its merge-request read and records what it could.
+A read that names the merger admits at once.
+When the read fails or names no merger, the occasion is still offered with live provenance.
+If its matched practices include one about the merger (`subject: MERGER`), it waits as `PENDING / MERGE_ACTOR_UNAVAILABLE`.
+This applies in the live listener and in pending retries.
+It waits until an ordinary sync records the merger and the reaper re-offers it.
 
-The occurrence ledger has no pruning job; capacity planning must treat it as append-only. Retry and lapse
-thresholds are `hephaestus.signal-ledger.pending-retry-after` and `pending-lapse-after`.
+GitHub's merge event names the merger itself and keeps its path.
+The job is built from the merge request as stored at admission rather than as the event saw it.
+
+A self-merge then makes the merger practice attributable to the author.
+Another merger leaves it withheld as before.
+The merger is never inferred.
+An occasion whose merger stays unknown lapses at the ledger deadline.
+
+Merge commit and merge time are recorded when the provider names them and are not admission conditions.
+
+The occurrence ledger has no pruning job.
+Capacity planning must treat it as append-only.
+Retry and lapse thresholds are `hephaestus.signal-ledger.pending-retry-after` and `pending-lapse-after`.
 
 ### Issue lifecycle occasions
 
@@ -143,62 +164,79 @@ Issue practices bind to three lifecycle occasions:
 | `scm.issue.updated` | The review-relevant snapshot changes, including reopening | The whole snapshot |
 | `scm.issue.closed` | The issue enters a closed state | The close timestamp |
 
-The snapshot is the title, body, native type, labels, assignees, milestone, state, and state reason — the
-fields the issue evidence a bundled practice reads is built from. Labels and assignees are sorted while the
-digest is built, so provider ordering does not change the revision. A closed issue's snapshot also covers its
-mirrored discussion: each comment's id, author, body and edit time. Empty comments and comments identified
-by Hephaestus's recorded provider delivery identities are left out. A human comment that quotes a
-Hephaestus marker remains evidence. Live comment changes update the closed issue's snapshot in the comment
-transaction. Sync batches collect changed issue ids and read each discussion once before commit, then use that revision for
-snapshot advancement and signal recording. GitHub and GitLab persist comment pages as batches.
-Each snapshot change locks the issue row
-`FOR NO KEY UPDATE` (which a new comment's foreign-key `FOR KEY SHARE` does not conflict with) and reads the
-issue again before computing the digest, so concurrent writers record the committed body and comments.
+The snapshot contains the title, body, native type, labels, assignees, milestone, state, and state reason.
+These fields build the issue evidence that a bundled practice reads.
+Labels and assignees are sorted while the digest is built, so provider ordering does not change the revision.
+A closed issue's snapshot also covers its mirrored discussion: each comment's id, author, body and edit time.
+Empty comments and comments identified by Hephaestus's recorded provider delivery identities are left out.
 
-Updates review the current snapshot of both open and closed issues. A later outcome confirmation or repair
-in a closed issue's body or discussion can therefore occasion another update review, through the same
-coalescing and current-snapshot fences. It does not repeat the close occasion or establish what the record said
-at the close; only practices bound to updates are selected. A closed issue's title or body change also retains
-the separate repair occasion for assessments of merged pull or merge requests that close it.
+A human comment that quotes a Hephaestus marker remains evidence.
+Live comment changes update the closed issue's snapshot in the comment transaction.
+Sync batches collect changed issue ids and read each discussion once before commit, then use that revision for snapshot advancement and signal recording.
+GitHub and GitLab persist comment pages as batches.
 
-A close review is admitted with the issue's snapshot token. If the token has moved by the time its evidence is
-captured, capture stops before writing evidence files and the review records no observation. An issue edit,
-a change to its closed discussion, or a reopen can move the token. The update occasion reviews the current record. Publication checks the same token again under the issue row lock.
+Each snapshot change locks the issue row `FOR NO KEY UPDATE`.
+A new comment's foreign-key `FOR KEY SHARE` does not conflict with this lock.
+The change reads the issue again before computing the digest.
+Thus, concurrent writers record the committed body and comments.
 
-Only `scm.issue.updated` keys on the whole snapshot. The other two deliberately do not, because a past-work
-campaign or a recurring sweep re-derives their keys from the artifact as it stands: an opening keys on the prose and a
-close on the moment it closed, so triage between two sweeps moves neither and buys no second review.
+Updates review the current snapshot of both open and closed issues.
+A later outcome confirmation or repair in a closed issue's body or discussion can therefore occasion another update review.
+The same coalescing and current-snapshot fences apply.
+It does not repeat the close occasion or establish what the record said at the close.
+Only practices bound to updates are selected.
 
-Unlike a merged pull request, a closed issue is not in a state it cannot leave. Keying the close on its
-timestamp keeps a redelivery of one close inert while making the close that follows a reopen a second
-occasion, so the retrospective at-close review runs for each round of work rather than only the first.
-Neither provider guarantees a close timestamp; a mirror row without one falls back to a single close
-occasion, since there is then nothing to tell two closes apart.
+A closed issue's title or body change also retains the separate repair occasion for assessments of merged pull or merge requests that close it.
 
-The close is the occasion, not the evidence. The issue sources read the mirror when the review runs, after
-the close, so a body, sub-issue rollup or comment text edited since then is what the review sees, and a
-comment's `created_at` does not date its present text. Nothing captured shows the issue as it stood at the
-close, and [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion)
-rules out keeping a copy of it in PostgreSQL or job metadata. That is why the bundled practice asking whether
-an issue's outcome was confirmed at its close ships needing human review: a close-time practice may judge
-the issue as it now is, but never its state at the close.
+A close review is admitted with the issue's snapshot token.
+If the token has moved by the time its evidence is captured, capture stops before writing evidence files and the review records no observation.
+An issue edit, a change to its closed discussion, or a reopen can move the token.
+The update occasion reviews the current record.
+
+Publication checks the same token again under the issue row lock.
+
+Only `scm.issue.updated` keys on the whole snapshot.
+The other two deliberately do not.
+A past-work campaign or recurring sweep re-derives their keys from the artifact as it stands.
+An opening keys on the prose.
+A close keys on the moment it closed.
+
+Thus, triage between two sweeps moves neither key and buys no second review.
+
+Unlike a merged pull request, a closed issue is not in a state it cannot leave.
+The close's timestamp keeps a redelivery of one close inert.
+It makes the close after a reopen a second occasion.
+Thus, the retrospective at-close review runs for each round of work, not only the first.
+Neither provider guarantees a close timestamp.
+A mirror row without one falls back to a single close occasion, since there is then nothing to tell two closes apart.
+
+The close is the occasion, not the evidence.
+The issue sources read the mirror when the review runs, after the close.
+The review sees body, sub-issue rollup, or comment text edited since then.
+A comment's `created_at` does not date its present text.
+Nothing captured shows the issue as it stood at the close.
+[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion) rules out keeping a copy of it in PostgreSQL or job metadata.
+
+Thus, the bundled practice that asks whether an issue's outcome was confirmed at its close ships needing human review.
+A close-time practice can judge the issue as it now is, but never its state at the close.
 
 Two consequences are worth stating because neither is obvious:
 
-- **A return to a previously-seen snapshot occasions nothing.** Adding a label occasions a review, removing
-  it occasions another, and adding it back matches a revision already in the ledger and occasions none.
-  Reverse states are symmetric in what they raise, not in what they spend. A reopen is the exception: it
-  moves the state field, so it occasions an update review, and the close after it occasions its own close
-  review because that close is a different moment.
+- **A return to a previously-seen snapshot occasions nothing.** Adding a label occasions a review.
+  Removing it occasions another.
+  Adding it back matches a revision already in the ledger and occasions none.
+  Reverse states are symmetric in what they raise, not in what they spend. A reopen is the exception.
+  It moves the state field, so it occasions an update review.
+  The close after it occasions its own close review because that close is a different moment.
 - **A burst of distinct intermediate snapshots is coalesced, not deduplicated by content alone.** Five
-  triage actions on one issue arrive as five deliveries carrying five different snapshots; only the
+  triage actions on one issue arrive as five deliveries carrying five different snapshots. Only the
   snapshot still current when the burst settles is submitted — see
   [Durable update coalescing](#durable-update-coalescing).
 
 | Transition | GitHub webhook action | GitLab webhook action | Review decision |
 | --- | --- | --- | --- |
 | Title or body changed | `edited` | `update` | Updated |
-| Native type set or removed | `typed`, `untyped` | Not exposed by the validated webhook contract | GitHub: updated; GitLab: synchronization only |
+| Native type set or removed | `typed`, `untyped` | Not exposed by the validated webhook contract | GitHub: updated. GitLab: synchronization only |
 | Label added or removed | `labeled`, `unlabeled` | `update` | Updated |
 | Assignee added or removed | `assigned`, `unassigned` | `update` | Updated |
 | Milestone set or removed | `milestoned`, `demilestoned` | `update` | Updated |
@@ -206,195 +244,226 @@ Two consequences are worth stating because neither is obvious:
 | Closed | `closed` | `close` | Closed |
 | Locked, pinned, due date, weight, time tracking | `locked`, `pinned` | `update` | Nothing |
 
-Both adapters report what a delivery moved as a field set, and an update that moves none of the snapshot's
-fields occasions nothing: GitHub compares the mirrored row against the incoming one, and GitLab reads the
-`changes` diff its `update` action carries, which is the only thing distinguishing a retitling from a
-due-date, weight or time-tracking edit.
+Both adapters report what a delivery moved as a field set.
+An update that moves none of the snapshot's fields occasions nothing.
+GitHub compares the mirrored row against the incoming one.
+GitLab reads the `changes` diff its `update` action carries.
 
-Synchronization updates the issue projection without starting a live review. When GitLab sync finds
-changed review evidence on an existing issue, it advances the snapshot and records the update
-occasion as sync-discovered. This retires stale observations without coaching on historical work.
-GitLab synchronization includes native type, but its webhook contract does not provide a reliable
-type transition; the GitLab adapter therefore does not advertise live type-change reviews.
+Only that diff distinguishes a retitling from a due-date, weight, or time-tracking edit.
 
-Every practice bound to `scm.issue.updated` is reevaluated. Practice definitions declare occasions and evidence
-sources, not dependencies on individual issue fields, so there is no second, per-field dependency model
-to keep in step with the snapshot.
+Synchronization updates the issue projection without starting a live review.
+When GitLab sync finds changed review evidence on an existing issue, it advances the snapshot and records the update occasion as sync-discovered.
+This retires stale observations without coaching on historical work.
+GitLab synchronization includes native type, but its webhook contract does not provide a reliable type transition.
+
+The GitLab adapter therefore does not advertise live type-change reviews.
+
+Every practice bound to `scm.issue.updated` is reevaluated.
+Practice definitions declare occasions and evidence sources, not dependencies on individual issue fields.
+Thus, there is no second, per-field dependency model to keep in step with the snapshot.
 
 #### Durable update coalescing
 
-`IssueAgentJobEventListener` records live updates in the mirror transaction. `IssueUpdateCoalescer` consumes
-those `DEFERRED` rows on a locked, single-replica sweep in the server role. Sync-only rows are ineligible
-until a live delivery promotes them. [Queue timing](/admin/practice-review-operations#issue-update-queue) is
-based on newly queued snapshots, not every transition or provider timestamps.
+`IssueAgentJobEventListener` records live updates in the mirror transaction. `IssueUpdateCoalescer` consumes those `DEFERRED` rows on a locked, single-replica sweep in the server role.
+Sync-only rows are ineligible until a live delivery promotes them. [Queue timing](/admin/practice-review-operations#issue-update-queue) is based on newly queued snapshots, not every transition or provider timestamps.
 
-Each artifact's queued rows are locked and eligibility is rechecked in the settlement transaction, which
-also re-resolves the issue's workspace: a repository re-keyed to a different workspace inside the queue's
-window (§ re-keying,
-[ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md))
-settles as `SUPPRESSED / OUT_OF_REVIEW_SCOPE` rather than under the workspace that recorded it. Submission
-and settlement commit together; a rollback leaves the occasions available. Locks cover the whole group
-because [skipping individual locked rows](https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE)
-could split a burst between consumers. Attempt timestamps order retries independently of eligibility,
-so a repeatedly failing artifact does not monopolize a batch.
+The settlement transaction locks each artifact's queued rows and rechecks eligibility.
+It also re-resolves the issue's workspace.
+A repository re-keyed to a different workspace inside the queue's window settles as `SUPPRESSED / OUT_OF_REVIEW_SCOPE`.
+It does not settle under the workspace that recorded it.
 
-Only a revision matching the current mirror reaches admission. Displaced revisions become
-`SUPPRESSED / COALESCED`, including updates overtaken by a close. Missing work lapses; tombstoned work
-is held as `PENDING / ARTIFACT_NOT_VISIBLE`. Pending retries also compare revisions before admission.
+See § re-keying in [ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md).
+Submission and settlement commit together.
+A rollback leaves the occasions available.
+Locks cover the whole group because [skipping individual locked rows](https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE) could split a burst between consumers.
+
+Attempt timestamps order retries independently of eligibility, so a repeatedly failing artifact does not monopolize a batch.
+
+Only a revision matching the current mirror reaches admission.
+Displaced revisions become `SUPPRESSED / COALESCED`, including updates overtaken by a close.
+Missing work lapses.
+Tombstoned work is held as `PENDING / ARTIFACT_NOT_VISIBLE`.
+
+Pending retries also compare revisions before admission.
 See [Signal state reasons](./practice-review-glossary.mdx#signal-state-reasons) for retry semantics.
 
-Issue-update jobs retain the admitted revision. Capture compares it against the issue's canonical digest and
-reports the source unavailable (`SourceAbsenceReason.NOT_FOUND`) on a missing or mismatched revision, rather
-than making an observation about the developer. This check does not fence edits after capture or invalidate
-earlier observations and feedback. Closure jobs use the same source-unavailable reason when their admitted
-snapshot token is missing or no longer current. The recorded source and practice readiness checks explain
-why capture stopped; no observation is recorded. The final publication check still rejects a token that
-moves after capture.
+Issue-update jobs retain the admitted revision.
+Capture compares it against the issue's canonical digest.
+For a missing or mismatched revision, it reports the source unavailable (`SourceAbsenceReason.NOT_FOUND`).
+It does not make an observation about the developer.
+This check does not fence edits after capture or invalidate earlier observations and feedback.
+Closure jobs use the same source-unavailable reason when their admitted snapshot token is missing or no longer current.
+
+The recorded source and practice readiness checks explain why capture stopped.
+No observation is recorded.
+The final publication check still rejects a token that moves after capture.
 
 #### Push and edit coalescing
 
-`scm.pull_request.synchronized` and `scm.pull_request.edited` are coalesced together, as one group per pull
-request. GitHub names a push; GitLab raises it when a merge-request update carries `oldrev` or moves the
-stored head, since GitLab omits `oldrev` on some pushes. An edit is a title or description change, read
-from the stored row before and after the write on both providers, because GitLab's `changes` may be empty
-and a sync carries none; its revision digests the head with the title and body, so the same text written
-again after a push is new work while a redelivery or a label change is not.
+`scm.pull_request.synchronized` and `scm.pull_request.edited` are coalesced together, as one group per pull request.
+GitHub names a push.
+GitLab raises it when a merge-request update carries `oldrev` or moves the stored head, since GitLab omits `oldrev` on some pushes.
+An edit is a title or description change.
+Both providers read it from the stored row before and after the write.
+GitLab's `changes` can be empty, and a sync carries none.
 
-`AgentJobEventListener` defers a live push or edit before the mirror write commits, in the same
-transaction, and `PullRequestPushCoalescer` takes the pull request's row lock before it locks the group, so
-every occasion the mirror reflects is in the group it drains. A group becomes due after ten quiet minutes or
-one hour from its first member. The workspace cooldown, after the last review under either occasion, can
-delay settlement beyond that hour; it does not discard the group. Scheduler timing, admission and queue
-capacity also affect when a review starts. A group with a push is reviewed under `synchronized`, otherwise
-under `edited`; every other member becomes `SUPPRESSED / COALESCED`. A group overtaken by a merge or a close
-is left to that occasion.
+Its revision digests the head with the title and body.
+Thus, the same text written again after a push is new work.
+A redelivery or label change is not.
 
-Either review also rechecks the practices whose current claim about the author on that work is `NOT_MET`,
-whatever occasion they are bound to: each claim's latest live or requested run, not superseded or
-invalidated, measured against the practice's current revision and with evidence authorized for automated
-review. The `NOT_MET` run's staged `reviewedWork` must establish a different head, title or description
-from the current mirror, using only comparisons that the captured source contract permits for automated
-review. A deferred initial edit cannot recheck a Ready review of the same capture;
-missing, malformed or differently bound capture identities establish nothing. Admission and completion
-timestamps are not revision evidence. This extra comparison does not restrict practices explicitly bound
-to the occasion or manual requests. A later `MET` result or abstention stands. The job records these as
-`rechecked_practices` and reads
-each with its own evidence requirements. Draft, coverage, consent, withdrawal and autonomy gates apply as usual, and only
-open work is rechecked. A recheck that records nothing for a practice leaves the earlier claim current.
+`AgentJobEventListener` defers a live push or edit before the mirror write commits, in the same transaction.
+`PullRequestPushCoalescer` takes the pull request's row lock before it locks the group.
+Thus, every occasion the mirror reflects is in the group it drains.
+A group becomes due after ten quiet minutes or one hour from its first member.
+The workspace cooldown, after the last review under either occasion, can delay settlement beyond that hour.
+It does not discard the group.
 
-`PullRequestPushCoalescer` is also the pending-signal reaper's resubmitter for pull requests. A push or edit
-whose admission was held back (`PENDING`, for example for budget or an unavailable model) is re-offered
-through the same locked settlement: the group includes held-back as well as queued members, queued members'
-quiet period and maximum wait still decide when it settles, and a group of held-back members only is
-re-offered at once. A merge or close committed before the settlement takes the pull request's lock settles
-the group as above. Other pull-request occasions go straight to `PullRequestSignalResubmitter`. Every
-re-offer is evaluated for the workspace that queued it and for the subject it named: a repository monitored
-elsewhere since settles it as `SUPPRESSED / OUT_OF_REVIEW_SCOPE` instead of reviewing it there. Merge, close
-and submitted-review occasions, and reviews asked for by hand, keep their own rules.
+Scheduler timing, admission and queue capacity also affect when a review starts.
+A group with a push is reviewed under `synchronized`, otherwise under `edited`.
+Every other member becomes `SUPPRESSED / COALESCED`.
+A group overtaken by a merge or a close is left to that occasion.
+
+Either review also rechecks practices whose current claim about the author on that work is `NOT_MET`, whatever occasion they are bound to.
+It uses each claim's latest live or requested run that is neither superseded nor invalidated.
+The run is measured against the practice's current revision, with evidence authorized for automated review.
+The `NOT_MET` run's staged `reviewedWork` must establish a different head, title, or description from the current mirror.
+Only comparisons permitted for automated review by the captured source contract can establish this.
+
+A deferred initial edit cannot recheck a Ready review of the same capture. Missing, malformed or differently bound capture identities establish nothing.
+Admission and completion timestamps are not revision evidence.
+
+This extra comparison does not restrict practices explicitly bound to the occasion or manual requests.
+A later `MET` result or abstention stands.
+The job records these as `rechecked_practices` and reads each with its own evidence requirements.
+Draft, coverage, consent, withdrawal and autonomy gates apply as usual, and only open work is rechecked.
+
+A recheck that records nothing for a practice leaves the earlier claim current.
+
+`PullRequestPushCoalescer` is also the pending-signal reaper's resubmitter for pull requests.
+A push or edit whose admission was held back is re-offered through the same locked settlement.
+For example, admission can be `PENDING` for budget or an unavailable model.
+The group includes held-back and queued members.
+Queued members' quiet period and maximum wait still decide when it settles.
+
+A group with only held-back members is re-offered at once.
+A merge or close committed before the settlement takes the pull request's lock settles the group as above.
+Other pull-request occasions go straight to `PullRequestSignalResubmitter`.
+
+Every re-offer is evaluated for the workspace that queued it and the subject it named.
+If the repository is now monitored elsewhere, it settles as `SUPPRESSED / OUT_OF_REVIEW_SCOPE`.
+It is not reviewed there.
+Merge, close and submitted-review occasions, and reviews asked for by hand, keep their own rules.
 
 ## Capture
 
-Capture stages **every source the contract says applies to the artifact kind under review** — all of them,
-every time. Practice definitions decide which practices may run, never which files reach the sandbox; there is
-no per-run source selection. What a capture then reports about each source (available, not collected,
-unavailable, redacted, errored — with a typed reason) and how a practice's stances turn those reports into
-a readiness decision is the whole subject of the
-[artifact-source contract](./artifact-source-contract.mdx), which is versioned and validated at startup.
+Capture stages **every source the contract says applies to the artifact kind under review** — all of them, every time.
+Practice definitions decide which practices may run, never which files reach the sandbox.
+There is no per-run source selection.
+Capture reports each source as available, not collected, unavailable, redacted, or errored, with a typed reason.
+A practice's stances turn those reports into a readiness decision.
 
-Capture stages source records, not practice judgments. A pull-request capture pins `base_sha` and
-`head_sha` in `inputs/context/change.json` beside the checkout. The sandbox derives the patch, statistics
-and changed-file list with `git` under `work/change/`. Commit messages and file changes are staged
-as captured input so admission can verify their citations. Practice-specific precompute
-scripts run on these inputs inside the sandbox. The server also reads the change to evaluate declared
-practice subjects and verify citations. The [workspace ABI](./agent/workspace-abi.mdx) owns the file layout.
+The versioned [artifact-source contract](./artifact-source-contract.mdx) owns this subject.
+Startup validates the contract.
 
-Readiness is stored in `agent_job.review_readiness`, separately from `evidence_snapshot`, so status reads
-need not load the full artifact manifest.
+Capture stages source records, not practice judgments.
+A pull-request capture pins `base_sha` and `head_sha` in `inputs/context/change.json` beside the checkout.
+The sandbox derives the patch, statistics and changed-file list with `git` under `work/change/`.
+Commit messages and file changes are staged as captured input so admission can verify their citations.
+
+Practice-specific precompute scripts run on these inputs inside the sandbox.
+The server also reads the change to evaluate declared practice subjects and verify citations.
+The [workspace ABI](./agent/workspace-abi.mdx) owns the file layout.
+
+Readiness is stored in `agent_job.review_readiness`, separately from `evidence_snapshot`, so status reads need not load the full artifact manifest.
 
 ## Scheduling and assessment identity
 
 Automatic admission matches the signal and the practice's descriptor-owned `reviewWhen` selections.
-Admission records the available categorical state in job metadata as `review_state`; preparation uses
-that snapshot rather than the artifact's later state. Unknown required facts do not match. Manual
-requests bypass scheduling explicitly by trigger mode. Repair rechecks keep their separate eligibility
-rules; neither bypass removes consent, evidence, attribution or withdrawal checks.
+Admission records the available categorical state in job metadata as `review_state`.
+Preparation uses that snapshot rather than the artifact's later state.
+Unknown required facts do not match.
 
-The immutable definition digest includes scheduling and assessment fields. The review-rule fingerprint
-excludes only `signals` and `reviewWhen`, because moving a review to a different moment does not change
-what the same evidence establishes. Artifact kind, criteria, evidence requirements, subject, precondition, precompute
-script, assessment policy, name and group remain part of the assessment basis.
+Manual requests bypass scheduling explicitly by trigger mode.
+Repair rechecks keep their separate eligibility rules.
+Neither bypass removes consent, evidence, attribution or withdrawal checks.
+
+The immutable definition digest includes scheduling and assessment fields.
+The review-rule fingerprint excludes only `signals` and `reviewWhen`, because moving a review to a different moment does not change what the same evidence establishes.
+Artifact kind, criteria, evidence requirements, subject, precondition, precompute script, assessment policy, name and group remain part of the assessment basis.
 
 ## Observation
 
-An observation is one practice's answer about one piece of work, written once and immutable. Its
-[outcome](./practice-feedback-language.md#observation-outcomes) remains unchanged from
-the sandbox tool through server admission, persistence and read projections. Severity is required
-exactly for `NOT_MET`; contradictory fields are rejected, never silently removed.
+An observation is one practice's answer about one piece of work, written once and immutable.
+Its [outcome](./practice-feedback-language.md#observation-outcomes) remains unchanged from the sandbox tool through server admission, persistence and read projections.
+Severity is required exactly for `NOT_MET`.
+Contradictory fields are rejected, never silently removed.
 
-A final review records at most one observation per practice. Duplicate practice results are refused
-as a whole, before quote verification can remove one side of a contradiction. The runtime may revise
-its provisional result before submission; persisted observations do not change.
+A final review records at most one observation per practice.
+Duplicate practice results are refused as a whole, before quote verification can remove one side of a contradiction.
+The runtime may revise its provisional result before submission.
+Persisted observations do not change.
 
-Earlier behavior-level observations remain authorized history, but their fingerprint scheme does
-not establish conformance under the current whole-practice standard. They are `UNVERIFIABLE`, not
-current evidence. A new review appends a current-standard practice revision without rewriting the
-revision cited by historical observations.
+Earlier behavior-level observations remain authorized history, but their fingerprint scheme does not establish conformance under the current whole-practice standard.
+They are `UNVERIFIABLE`, not current evidence.
+A new review appends a current-standard practice revision without rewriting the revision cited by historical observations.
 
 Current summaries first select each claim's latest valid run, then check its review basis.
-An outdated or unknown basis does not restore an older current claim. Standing snapshots
-apply the same order before visibility filtering at each time boundary.
+An outdated or unknown basis does not restore an older current claim.
+Standing snapshots apply the same order before visibility filtering at each time boundary.
 
-Admission validates the outcome and its evidence warrants against the practice's criteria.
-`MET` and `NOT_MET` are decided results. `NOT_APPLICABLE` requires an evidence-backed
-applicability reason; `UNDETERMINED` requires an unresolved question and what would settle it.
-A submitted absence claim includes a recorded search checked against captured sources. A `MET`
-absence claim also requires an exhaustive corpus declared by the practice.
+Admission validates the outcome and its evidence warrants against the practice's criteria. `MET` and `NOT_MET` are decided results. `NOT_APPLICABLE` requires an evidence-backed applicability reason. `UNDETERMINED` requires an unresolved question and what would settle it.
+A submitted absence claim includes a recorded search checked against captured sources.
+A `MET` absence claim also requires an exhaustive corpus declared by the practice.
 
-Warrants and citations are enforced both inside the sandbox and by the server. Capture failure
-remains a readiness decision and creates no observation. Abstentions create no feedback and do not
-move the decided-result trend denominator; their counts remain visible separately.
+Warrants and citations are enforced both inside the sandbox and by the server.
+Capture failure remains a readiness decision and creates no observation.
+Abstentions create no feedback and do not move the decided-result trend denominator.
+Their counts remain visible separately.
 
-Admission is single-flight per attempt. Verifying a historical citation reads the attempt's repository
-snapshot, so a runner that repeats a submission whose answer did not arrive joins the admission already
-running and receives its answer; a repeat carrying a different payload is refused as a conflict, and an
-attempt that was already admitted answers with the recorded result.
+Admission is single-flight per attempt.
+Historical citation verification reads the attempt's repository snapshot.
+If a runner repeats a submission whose answer did not arrive, it joins the admission already running and receives its answer.
+A repeat carrying a different payload is refused as a conflict, and an attempt that was already admitted answers with the recorded result.
 
-Identity is assigned at persistence, not in the sandbox: an occurrence key dedupes within a run
-(`insertIfAbsent`, `ON CONFLICT DO NOTHING`), and a recurrence key groups the evidence location across runs.
-Different behaviors can share a location; this key does not establish that a concern persisted or resolved.
+Persistence assigns identity, not the sandbox.
+An occurrence key dedupes within a run (`insertIfAbsent`, `ON CONFLICT DO NOTHING`).
+A recurrence key groups the evidence location across runs.
+Different behaviors can share a location.
+This key does not establish that a concern persisted or resolved.
 
-**Observations describe the work; feedback contains advice.** An observation carries a concise `summary`
-and an `evidenceRationale` that explains the assessment, for example: “The change adds a tax-exempt branch,
-and no changed test calls `total`.” It has no `guidance` field. Composition decides whether and how to give
-advice from admitted observations.
+**Observations describe the work.
+Feedback contains advice.** An observation carries a concise `summary` and an `evidenceRationale` that explains the assessment, for example: “The change adds a tax-exempt branch, and no changed test calls `total`.” It has no `guidance` field.
+Composition decides whether and how to give advice from admitted observations.
 
 ### Recorded-result coverage
 
-The runtime's per-practice execution ledger measures **recorded results**, not how thoroughly the
-sources were inspected. A practice with at least one recorded observation is counted as evaluated;
-a practice without one is counted as unevaluated and may be retried. This does not establish that
-all relevant behaviors were reviewed, or that a practice without a result was never inspected.
+The runtime's per-practice execution ledger measures **recorded results**, not how thoroughly the sources were inspected.
+A practice with at least one recorded observation is counted as evaluated. a practice without one is counted as unevaluated and may be retried.
+This does not establish that all relevant behaviors were reviewed, or that a practice without a result was never inspected.
 
-The current runner cannot complete successfully with zero recorded observations. A supported
-`NOT_APPLICABLE` observation can record that no practice subject applies to the captured work; missing required sources remain
-readiness failures, and no verdict may be invented to satisfy execution coverage. Report this
-protocol limitation separately from source completeness, judgment quality and delivery.
+The current runner cannot complete successfully with zero recorded observations.
+A supported `NOT_APPLICABLE` observation can record that no practice subject applies to the captured work.
+Missing required sources remain readiness failures, and no verdict may be invented to satisfy execution coverage.
+Report this protocol limitation separately from source completeness, judgment quality and delivery.
 
 ## Measurement and intervention
 
-Measurement records one final observation per practice in a review. Before admission, the runtime can
-explicitly revise its local draft by naming the returned draft reference and supplying a complete
-replacement. The replacement passes the same evidence checks; a refusal leaves the previous draft
-unchanged. A call with repeated practices changes no drafts. Server admission refuses a package with
-repeated practices before recording observations. After admission, recorded observations stay immutable;
-correction uses the existing [invalidation flow](./practice-review-glossary.mdx#invalidated-observations).
+Measurement records one final observation per practice in a review.
+Before admission, the runtime can explicitly revise its local draft by naming the returned draft reference and supplying a complete replacement.
+The replacement passes the same evidence checks.
+A refusal leaves the previous draft unchanged.
 
-Measurement and composition are separate phases in one model session. An authenticated callback admits
-observations between them; composition can reference only the persisted projection.
+A call with repeated practices changes no drafts.
+Server admission refuses a package with repeated practices before recording observations.
+After admission, recorded observations stay immutable. Correction uses the existing [invalidation flow](./practice-review-glossary.mdx#invalidated-observations).
 
-An observation states a claim that can be checked against the captured work. Feedback proposes an action
-for a recipient and considers the surface, history and conversation. Keeping these phases separate allows
-an observation to remain recorded even when advice would be repetitive, poorly timed or unnecessary.
+Measurement and composition are separate phases in one model session.
+An authenticated callback admits observations between them.
+Composition can reference only the persisted projection.
+
+An observation states a claim that can be checked against the captured work.
+Feedback proposes an action for a recipient and considers the surface, history and conversation.
+Keeping these phases separate allows an observation to remain recorded even when advice would be repetitive, poorly timed or unnecessary.
 
 ```mermaid
 flowchart TB
@@ -426,17 +495,16 @@ flowchart TB
     quiet --> compositionResult["Composition output only:<br/>retained until job payload stripping"]
 ```
 
-**The model proposes; the server admits.** Origin, effective autonomy, routing, placement checks and
-per-channel limits still apply after composition.
+**The model proposes.
+The server admits.** Origin, effective autonomy, routing, placement checks and per-channel limits still apply after composition.
 
 ### Composition inputs and outputs
 
-After Java admits observations, the runner resumes the same model session with the composition prompt. The
-measurement tool is closed, and feedback may bind only to the durable observations returned by admission.
+After Java admits observations, the runner resumes the same model session with the composition prompt.
+The measurement tool is closed, and feedback may bind only to the durable observations returned by admission.
 The resumed session retains artifact context without weakening the server boundary.
 
-The composer receives the current admitted observations, bounded recent observation and feedback history,
-unread prepared feedback, practice definitions, and the enabled lanes with their limits.
+The composer receives the current admitted observations, bounded recent observation and feedback history, unread prepared feedback, practice definitions, and the enabled lanes with their limits.
 The exact files belong to the [agent workspace ABI](agent/workspace-abi.mdx), not this guide.
 
 Three constraints shape how that context may be used:
@@ -444,19 +512,19 @@ Three constraints shape how that context may be used:
 - Only pull-request and issue handlers enable composition, and not for backfills. Document and conversation
   reviews record observations but compose no feedback.
 - History is bounded. Claims about repeated behavior require the specific evidence from each reviewed
-  artifact; absence from the history does not establish that a behavior never occurred.
+  artifact. Absence from the history does not establish that a behavior never occurred.
 - Shared practice or location keys do not establish semantic equivalence. A changed outcome or an
   omitted observation does not establish that a concern was resolved or regressed.
 
-Accepted tool calls update the composition output incrementally. The server parses proposed units and applies
-all delivery gates; the model never writes the feedback ledger directly.
+Accepted tool calls update the composition output incrementally.
+The server parses proposed units and applies all delivery gates.
+The model never writes the feedback ledger directly.
 
 ### Channels are distinct interventions
 
-What each channel is and where it lands is defined in the
-[practice feedback language](./practice-feedback-language.md); which level each one is, in the
-[practice review glossary](./practice-review-glossary.mdx#the-three-channels-are-three-levels). The
-composition turn must not render one advice string three ways:
+What each channel is and where it lands is defined in the [practice feedback language](./practice-feedback-language.md).
+Which level each one is, in the [practice review glossary](./practice-review-glossary.mdx#the-three-channels-are-three-levels).
+The composition turn must not render one advice string three ways:
 
 - `IN_CONTEXT` is public task-level feedback about the current work. It binds to a current admitted
   observation and uses either server-resolved `DIFF` placement or artifact-level placement. History alone
@@ -466,13 +534,14 @@ composition turn must not render one advice string three ways:
   `evidenceSummary`, and `inConversationSignal` as notes, not dialogue. The mentor receives the original
   evidence and live conversation, then may adapt, defer, or discard the note.
 
-An issue has no diff and therefore permits only artifact-level in-context placement. Pull requests permit
-both placements. Per-lane limits are supplied in composition configuration, not fixed in this guide.
+An issue has no diff and therefore permits only artifact-level in-context placement.
+Pull requests permit both placements.
+Per-lane limits are supplied in composition configuration, not fixed in this guide.
 
 ### What the composer is not allowed to do
 
-Recording-tool validation and server admission enforce these constraints independently. An invalid
-feedback unit is dropped and logged without invalidating admitted observations.
+Recording-tool validation and server admission enforce these constraints independently.
+An invalid feedback unit is dropped and logged without invalidating admitted observations.
 
 - **No verdict fields.** `report_feedback` takes no outcome or severity.
 - **No model-authored path or line number.** `placement.kind: "DIFF"` names an admitted
@@ -482,69 +551,74 @@ feedback unit is dropped and logged without invalidating admitted observations.
 - **No invented supersession target.** `action: "SUPERSEDE"` must name, in `supersedesThreadKey`, a
   `threadKey` that was staged in `prepared.json`.
 - **No second unit on the same lane about the same practice.** One unit per `(channel,
-practiceSlug)`; the rest are dropped.
+practiceSlug)`.
+The rest are dropped.
 
-Staying quiet is the fourth action, not a gap: `action: "WITHHOLD"` with `NO_MATERIAL_CHANGE`,
-`ALREADY_SAID` or `BELOW_BAR`. Those three are the composer's own vocabulary and are deliberately not
-`FeedbackSuppressionReason` values — the glossary says
-[why the two must never be merged](./practice-review-glossary.mdx#measurement-and-intervention).
+Staying quiet is the fourth action, not a gap: `action: "WITHHOLD"` with `NO_MATERIAL_CHANGE`, `ALREADY_SAID` or `BELOW_BAR`.
+Those three are the composer's own vocabulary and are deliberately not `FeedbackSuppressionReason` values — the glossary says [why the two must never be merged](./practice-review-glossary.mdx#measurement-and-intervention).
 
-Supersession is likewise the glossary's, under
-[Thread key and supersession](./practice-review-glossary.mdx#thread-key-and-supersession). The only part
-this stage owns is that composition proposes the thread action; the server, not the model, decides whether
-the named thread may be superseded at all.
+Supersession is likewise the glossary's, under [Thread key and supersession](./practice-review-glossary.mdx#thread-key-and-supersession).
+The only part this stage owns is that composition proposes the thread action.
+The server, not the model, decides whether the named thread may be superseded at all.
 
 ### When composition does not run
 
-A composition failure does not invalidate admitted observations. An empty result is distinct from a turn
-that never ran. In-context feedback about a problem may fall back to the admitted observation's summary
-and grounded location, but invents no next step; a strength reaches the work only as a composed unit. The evidence rationale remains an audit explanation, not prose to
-publish to the developer. Longitudinal channels have no content fallback.
+A composition failure does not invalidate admitted observations.
+An empty result is distinct from a turn that never ran.
+In-context feedback about a problem may fall back to the admitted observation's summary and grounded location, but invents no next step.
+A strength reaches the work only as a composed unit.
+
+The evidence rationale remains an audit explanation, not prose to publish to the developer.
+Longitudinal channels have no content fallback.
 Per-channel preparation marks distinguish a successful empty result from unfinished preparation.
-The sweeper retries preparation from existing review outputs, not model composition; its
-[recovery window is bounded](/admin/practice-review-operations#limits-you-should-know-about).
+The sweeper retries preparation from existing review outputs, not model composition.
+
+Its [recovery window is bounded](/admin/practice-review-operations#limits-you-should-know-about).
 
 ## Delivery and human approval
 
-Composition creates immutable feedback units before release authority is applied. A composer `WITHHOLD`
-means there was nothing useful to say and creates no feedback row; the observations it covers on the work
-are recorded `SUPPRESSED` with `COMPOSER_WITHHELD`, so a withheld practice is a recorded decision and never
-a bare headline rendered without a note. A composed unit is rendered at an observation it cites by id, and
-one citing anything the delivery does not admit is not used. Feedback is bound only to the observations its
-text was written from, including every observation a unit cites, and only those decide whether it waits for
-approval: a not-applicable result beside it does not. Each line note carries its own; a line note that never
-lands is recorded `FAILED` rather than bound to the delivered comment. The composer's opening sentence names
-no observation, so it appears only on a proposal a person approves, never on automatic delivery. A policy
-refusal is instead persisted as
-`SUPPRESSED` with a server-owned reason. These outcomes must not be conflated with a human rejection.
+Composition creates immutable feedback units before release authority is applied.
+A composer `WITHHOLD` means there was nothing useful to say and creates no feedback row.
+The observations it covers on the work are recorded `SUPPRESSED` with `COMPOSER_WITHHELD`.
+Thus, a withheld practice is a recorded decision, never a bare headline rendered without a note.
+A composed unit is rendered at an observation it cites by id, and one citing anything the delivery does not admit is not used.
 
-Autonomy is only the authority step, and the glossary owns it in full — the resolution chain and the three
-values in [Practice autonomy](./practice-review-glossary.mdx#practice-autonomy), the approval lifecycle
-alongside them, and the ordered list of gates every delivery walks in
-[the delivery policy check order](./practice-review-glossary.mdx#the-delivery-policy-check-order). Read
-those before changing anything here, and do not restate them.
+Feedback is bound only to the observations its text was written from, including every observation a unit cites.
+Only those observations decide whether it waits for approval.
+A not-applicable result beside it does not.
+Each line note carries its own.
+A line note that never lands is recorded `FAILED` rather than bound to the delivered comment.
+The composer's opening sentence names no observation, so it appears only on a proposal a person approves, never on automatic delivery.
 
-Each channel router applies `PracticeAutonomyPolicy`: the observation's `ObservationOrigin` must permit
-the channel, and effective autonomy must permit delivery there. `HUMAN_APPROVAL` requires approval for
-pushed comments on the work, but allows on-demand practice pages and chat; `OFF` blocks all channels.
-Backfill origin permits only the practice-page channel, regardless of autonomy. That permission is a
-ceiling: `InAppFeedbackRouter` holds a pattern supported only by backfilled observations. Other delivery
-gates still apply.
+A policy refusal is instead persisted as `SUPPRESSED` with a server-owned reason.
+These outcomes must not be conflated with a human rejection.
+
+Autonomy is only the authority step.
+The glossary owns it in full.
+[Practice autonomy](./practice-review-glossary.mdx#practice-autonomy) owns the resolution chain, three values, and approval lifecycle.
+[The delivery policy check order](./practice-review-glossary.mdx#the-delivery-policy-check-order) owns the ordered gates that every delivery walks.
+Read those before changing anything here, and do not restate them.
+
+Each channel router applies `PracticeAutonomyPolicy`: the observation's `ObservationOrigin` must permit the channel, and effective autonomy must permit delivery there. `HUMAN_APPROVAL` requires approval for pushed comments on the work, but allows on-demand practice pages and chat. `OFF` blocks all channels.
+Backfill origin permits only the practice-page channel, regardless of autonomy.
+That permission is a ceiling: `InAppFeedbackRouter` holds a pattern supported only by backfilled observations.
+Other delivery gates still apply.
 
 ## Runtime and extension points
 
-The server records an occasion and enqueues an `agent_job`; a worker claims it, captures evidence, runs the
-sandbox, admits observations, resumes composition, applies delivery gates, and calls the provider. Runtime
-roles, transaction boundaries, extension ownership, and change guidance are documented in
-[Practice review runtime](./practice-review-runtime.mdx).
+The server records an occasion and enqueues an `agent_job`.
+A worker claims it, captures evidence, runs the sandbox, admits observations, resumes composition, applies delivery gates, and calls the provider.
+Runtime roles, transaction boundaries, extension ownership, and change guidance are documented in [Practice review runtime](./practice-review-runtime.mdx).
 
 ## Reading a real review back
 
-`PracticeTraceEntryDTO` is the derived answer to "what did every practice make of this piece of work", and
-it is what **Every practice** renders on a piece of work: for workspace admins under **Practice reviews →
-Work**, and for the developer on a review under **Reviews of your work**, which reads it only for a review
-that observed them. It is derived, never stored:
-`PracticeTraceDeriver` walks an ordered precedence list to a single `PracticeTraceOutcome`.
+`PracticeTraceEntryDTO` derives the answer to "what did every practice make of this piece of work".
+**Every practice** renders that answer on a piece of work.
+Workspace admins see it under **Practice reviews → Work**.
+The developer sees it on a review under **Reviews of your work**.
+
+That view reads it only for a review that observed them.
+It is derived, never stored: `PracticeTraceDeriver` walks an ordered precedence list to a single `PracticeTraceOutcome`.
 
 The trace separates measurement from delivery:
 
@@ -553,19 +627,17 @@ The trace separates measurement from delivery:
   `LAPSED`, `FAILED`.
 - **`observationCount`, `deliveredCount` and `withheldReasons` are about the intervention.**
 
-At `HUMAN_APPROVAL`, `REVIEWED` and a positive observation count describe the measurement; the proposal's
-`AWAITING_APPROVAL`, `PREPARED`, `DISCARDED`, or eventual `DELIVERED` state describes the intervention. Do
-not represent a pending human decision as suppression: it is an actionable workflow state.
+At `HUMAN_APPROVAL`, `REVIEWED` and a positive observation count describe the measurement.
+The proposal's `AWAITING_APPROVAL`, `PREPARED`, `DISCARDED`, or eventual `DELIVERED` state describes the intervention.
+Do not represent a pending human decision as suppression: it is an actionable workflow state.
 
-The precedence rule is not "configuration beats mechanics" — it is **what a run recorded beats what today's
-configuration implies.** A verdict a run wrote against this practice by name (`REVIEWED`, `SKIPPED`,
-`NOT_REACHED`, `NOT_ASSESSABLE`) is returned even after the practice is switched off, because it happened. `TURNED_OFF`
-comes next, and therefore outranks everything merely re-derived from the occurrence ledger — `FAILED`,
-`LAPSED`, `PENDING` — so a practice the workspace switched off reads as switched off rather than as broken.
+The precedence rule is not "configuration beats mechanics" — it is **what a run recorded beats what today's configuration implies.** A run's verdict against this practice by name is returned even after the practice is switched off, because it happened.
+These verdicts are `REVIEWED`, `SKIPPED`, `NOT_REACHED`, and `NOT_ASSESSABLE`. `TURNED_OFF` comes next.
+It outranks everything merely re-derived from the occurrence ledger: `FAILED`, `LAPSED`, and `PENDING`.
+
+Thus, a practice the workspace switched off reads as switched off, not broken.
 A new outcome has to be placed on the right side of that line, not ranked against the others by severity.
 
-Operator-facing guidance for reading the same screen is on
-[Practice review](/admin/practice-review); the vocabulary both pages use is defined in the
-[practice review glossary](practice-review-glossary.mdx). Persistence concepts and evaluation joins are in
-[Practice review data model](practice-feedback-schema.md) and
-[Evaluation provenance](evaluation-provenance.md).
+Operator-facing guidance for reading the same screen is on [Practice review](/admin/practice-review).
+The vocabulary both pages use is defined in the [practice review glossary](practice-review-glossary.mdx).
+Persistence concepts and evaluation joins are in [Practice review data model](practice-feedback-schema.md) and [Evaluation provenance](evaluation-provenance.md).

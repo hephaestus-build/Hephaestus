@@ -7,7 +7,7 @@ tags: javascript, dom, css, performance, reflow
 
 ## Batch DOM CSS Changes
 
-Avoid changing styles one property at a time. Group multiple CSS changes together via classes or `cssText` to minimize browser reflows.
+Avoid changing styles one property at a time. Group multiple CSS changes together through classes or `cssText` to minimize browser reflows.
 
 **Incorrect (multiple reflows):**
 

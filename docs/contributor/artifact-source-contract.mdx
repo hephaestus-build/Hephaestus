@@ -7,24 +7,24 @@ description: Versioned evidence sources, explicit absence states, practice evide
 
 # Artifact-source contract
 
-Hephaestus may review work against a practice only from evidence with explicit semantics. Contract `1.3.0` defines the
-logical source catalog, its capture states, and how well each source must be captured. A folder index records
-what was supplied to one run; it does not prove that a practice is empirically observable.
+Hephaestus may review work against a practice only from evidence with explicit semantics.
+Contract `1.3.0` defines the logical source catalog, its capture states, and how well each source must be captured.
+A folder index records what was supplied to one run.
+It does not prove that a practice is empirically observable.
 
 > If any required evidence clause is unsatisfied, refuse the review and create no observation.
-> A source failure is never `NOT_APPLICABLE`, a strength, or evidence that desired behaviour is absent.
+> A source failure is never `NOT_APPLICABLE`, a strength, or evidence that desired behavior is absent.
 
 ## One frozen job folder
 
-The worker renders permitted database records in one read-only repeatable-read transaction. Integration-owned
-projections and history visibility checks remain the authorization boundary. `INDEX.md` describes the folder;
-`INDEX.json` holds primary reviewed-work readiness facts separately from all rendered artifact digests and typed
-area, repository and record refusals. Another repository's records cannot make a missing primary source ready.
+The worker renders permitted database records in one read-only repeatable-read transaction.
+Integration-owned projections and history visibility checks remain the authorization boundary. `INDEX.md` describes the folder. `INDEX.json` holds primary reviewed-work readiness facts separately from all rendered artifact digests and typed area, repository and record refusals.
+Another repository's records cannot make a missing primary source ready.
 The [workspace ABI](./agent/workspace-abi.mdx) owns paths, quote coordinates, transfer budget and retention.
 
-The capped review capture path is removed. The evaluation benchmark
-[#1436](https://github.com/hephaestus-build/Hephaestus/issues/1436) explicitly does not gate 1.0;
-this change makes no before-and-after quality claim. Heph 1.x remains a separate, purpose-bound runtime.
+The capped review capture path is removed.
+The evaluation benchmark [#1436](https://github.com/hephaestus-build/Hephaestus/issues/1436) explicitly does not gate 1.0. This change makes no before-and-after quality claim.
+Heph 1.x remains a separate, purpose-bound runtime.
 
 ## Contract boundary
 
@@ -37,21 +37,24 @@ The contract separates three identities:
    practice may name.
 3. **Folder index:** the state, provenance facts, and materialized artifacts for one invocation.
 
-A practice's `evidenceRequirements` decide **readiness**, not staging. Every source permitted for the workspace and purpose
-is rendered for every review, whether or not a practice named it: relevance is a
-question for the practice criteria and the reviewing model, not a reason to withhold data from it. A practice
-that names a source with a refusing stance still refuses the review when that source did not arrive, and an
-`EXHAUSTIVE` stance still fences what the review may assert an absence over. Neither cuts the sandbox down.
+A practice's `evidenceRequirements` decide **readiness**, not staging.
+Every source permitted for the workspace and purpose is rendered for every review, whether or not a practice named it.
+Practice criteria and the reviewing model decide relevance.
+Relevance is not a reason to withhold data from the model.
+A practice with a refusing stance still refuses the review if its named source did not arrive.
 
-Paths are materializations, not source identities. Prompts, practice files, task envelopes, runner code, model
-settings, and executables are invocation inputs and require separate evaluation provenance.
+An `EXHAUSTIVE` stance still bounds what the review can assert an absence over.
+Neither cuts the sandbox down.
 
-Runtime components must reference the exact contract version and catalog digest they implement. Inputs
-outside the catalog cannot satisfy a practice requirement.
+Paths are materializations, not source identities.
+Prompts, practice files, task envelopes, runner code, model settings, and executables are invocation inputs and require separate evaluation provenance.
 
-This contract governs automated-review evidence, not every file used by the separate Mentor conversation
-runtime. Mentor inputs remain subject to Mentor consent and integration controls and cannot support an automated
-practice review. Reusing one for review requires registering it as a source kind first.
+Runtime components must reference the exact contract version and catalog digest they implement.
+Inputs outside the catalog cannot satisfy a practice requirement.
+
+This contract governs automated-review evidence, not every file used by the separate Mentor conversation runtime.
+Mentor inputs remain subject to Mentor consent and integration controls and cannot support an automated practice review.
+Reusing one for review requires registering it as a source kind first.
 
 ## Source vocabulary
 
@@ -64,35 +67,36 @@ practice review. Reusing one for review requires registering it as a source kind
 | `DETERMINISTIC_DERIVATION` | A deterministic transform of declared dependencies.                               |
 | `LOSSY_DERIVATION`         | A sample, excerpt, aggregation, heuristic, or other information-losing transform. |
 
-A source's authority constrains what it may claim. Only a capture anchored to an immutable upstream
-identity may declare `PINNED_IDENTITY` — a `SYNCHRONIZED_MIRROR` reflects state that moves independently of
-the capture — and a `LOSSY_DERIVATION` may never claim completeness. Both rules are enforced in
-`ArtifactSourceContract`'s constructor, so a catalog that breaks either one fails at startup.
+A source's authority constrains what it may claim.
+Only a capture anchored to an immutable upstream identity can declare `PINNED_IDENTITY`.
+A `SYNCHRONIZED_MIRROR` reflects state that moves independently of the capture.
+A `LOSSY_DERIVATION` can never claim completeness.
+Both rules are enforced in `ArtifactSourceContract`'s constructor, so a catalog that breaks either one fails at startup.
 
 A database row is not automatically authoritative for the current state of GitHub, GitLab, Slack, or Outline.
 
 ### Required capture quality
 
-How well a source must be captured is a fact about the source, recorded once in the catalog as
-`requiredQuality`, rather than restated by every practice that names it.
+Required capture quality is a fact about the source, recorded once in the catalog as `requiredQuality`.
+Each practice that names the source does not restate it.
 
 | Value                    | Meaning                                                                                                |
 | ------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `ANY_CAPTURE`            | The capture must have succeeded. Whatever it holds, including nothing, is reviewable.                  |
-| `COMPLETE`               | The capture must cover the whole selected scope; a fragment cannot ground a judgement about the whole. |
+| `COMPLETE`               | The capture must cover the whole selected scope. A fragment cannot ground a judgment about the whole. |
 | `COMPLETE_AND_NON_EMPTY` | Complete, and containing something.                                                                    |
 
-The three values are a ladder rather than two independent booleans, because the fourth cell of the
-cross-product — non-empty but possibly partial — asserts something no source can support: a partial capture
-that happens to contain something cannot rule out that what it omitted was the part that mattered.
+The three values form a ladder, not two independent booleans.
+The fourth cell of the cross-product, non-empty but possibly partial, asserts something no source can support.
+A partial capture that contains something cannot rule out that the omitted part mattered.
 
-A source that cannot report `COMPLETE` may not demand it, and a source that can never be validly empty may
-not demand non-emptiness. Both are rejected when the catalog is read, so a requirement that would refuse
-every review permanently cannot be stated.
+A source that cannot report `COMPLETE` may not demand it, and a source that can never be validly empty may not demand non-emptiness.
+Both are rejected when the catalog is read, so a requirement that would refuse every review permanently cannot be stated.
 
 ### Privacy classes
 
-Privacy class describes risk; it does not authorize collection, disclosure, or model egress.
+Privacy class describes risk.
+It does not authorize collection, disclosure, or model egress.
 
 | Class                | Scope                                                                            | Minimum treatment                                                  |
 | -------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -100,147 +104,157 @@ Privacy class describes risk; it does not authorize collection, disclosure, or m
 | `PERSONAL`           | User-linked project content, authorship, reviews, comments, or activity          | Personal-data access, export, and erasure coverage                 |
 | `SENSITIVE_PERSONAL` | Private conversations or derived person-level review observations                | Restricted audience and stricter disclosure and retention controls |
 
-Each catalog source references separate source-use decisions whose purposes are machine-enforced. Capture requires
-`AUTOMATED_PRACTICE_REVIEW`; observation persistence, delivery, and contributor evidence APIs require
-`PRACTICE_FEEDBACK_DELIVERY`; mentor reuse requires `CONVERSATIONAL_MENTORING`; and workspace-admin evidence review
-requires `OPERATOR_EVIDENCE_REVIEW`. Processor, region, transfer, and model-egress controls remain separate
-deployment obligations. A source allowed in an internal mirror is not thereby allowed in an external model request.
+Each catalog source references separate source-use decisions whose purposes are machine-enforced.
+Capture requires `AUTOMATED_PRACTICE_REVIEW`.
+Observation persistence, delivery, and contributor evidence APIs require `PRACTICE_FEEDBACK_DELIVERY`.
+Mentor reuse requires `CONVERSATIONAL_MENTORING`.
+
+And workspace-admin evidence review requires `OPERATOR_EVIDENCE_REVIEW`.
+Processor, region, transfer, and model-egress controls remain separate deployment obligations.
+A source allowed in an internal mirror is not thereby allowed in an external model request.
 
 ## Source catalog (`1.3.0`)
 
-The machine-readable [catalog](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/source-use/1.3.0/catalog.json),
-its adjacent JSON Schemas, and the checks in
-[`gate:contracts`](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/validate-source-use-contracts.ts)
-jointly define conformance. Schema validation alone is insufficient because standard JSON Schema `uniqueItems`
-compares whole values rather than a selected identity property, so the script also rejects duplicate source
-kinds and holds each schema's pinned `catalogDigest` to the catalog's actual hash. The cross-resource rules
-that bind a source to its governance decisions run when the server reads the catalog, not in the script.
+The machine-readable [catalog](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/source-use/1.3.0/catalog.json), its adjacent JSON Schemas, and the checks in [`gate:contracts`](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/validate-source-use-contracts.ts) jointly define conformance.
+Schema validation alone is insufficient.
+Standard JSON Schema `uniqueItems` compares whole values, not a selected identity property.
+The script also rejects duplicate source kinds.
+It holds each schema's pinned `catalogDigest` to the catalog's actual hash.
+The cross-resource rules that bind a source to its governance decisions run when the server reads the catalog, not in the script.
 
-Prose does not maintain a second field-by-field catalog. Authoring tools resolve source kinds through the
-catalog and reject unknown kinds; a source declares the artifact kinds it applies to, so a practice on one
-kind of work can only name sources that suit it.
+Prose does not maintain a second field-by-field catalog.
+Authoring tools resolve source kinds through the catalog and reject unknown kinds.
+A source declares the artifact kinds it applies to, so a practice on one kind of work can only name sources that suit it.
 
 The constraints with direct authoring consequences are:
 
 - Only sources anchored to an immutable upstream identity — the pull-request diff and the repository tree —
   declare `PINNED_IDENTITY`. Every mirrored source, including the pull-request and issue records themselves,
-  has identity policy `NOT_APPLICABLE`. A source's `authority` decides whether it may anchor at all: a `SYNCHRONIZED_MIRROR`
-  reflects upstream state that moves independently of the capture, so calling one pinned would describe a
-  copy that has since drifted as demonstrably current.
-- A `LOSSY_DERIVATION` cannot satisfy `COMPLETE`. It is a bounded summary of its subject rather than the
-  subject, so it cannot answer "is all of it here?" — which is exactly what an author asserting an absence is
-  asking. Linked-work number extraction cannot establish that it found every relationship. Outline renders every
+  has identity policy `NOT_APPLICABLE`. A source's `authority` decides whether it can anchor at all.
+  A `SYNCHRONIZED_MIRROR` reflects upstream state that moves independently of the capture.
+  Calling it pinned would describe a copy that has drifted as demonstrably current.
+- A `LOSSY_DERIVATION` cannot satisfy `COMPLETE`. It is a bounded summary of its subject, not the subject itself.
+  It cannot answer "is all of it here?".
+  An author who asserts an absence asks exactly this question. Linked-work number extraction cannot establish that it found every relationship. Outline renders every
   permitted mirrored document and can report `COMPLETE` for that mirror scope, not upstream currentness.
 - Three sources cannot be logically empty — the pull-request, issue, and document core records.
   Every other source may be validly empty.
 - Two cannot be partial: the pull-request diff and the document core record. An available diff is
-  additionally pinned. Its `requiredQuality` is `COMPLETE`: a verified empty range is available evidence.
-  Each practice still needs its own occasion and supported observation; capture readiness assigns neither
+  also pinned. Its `requiredQuality` is `COMPLETE`: a verified empty range is available evidence.
+  Each practice still needs its own occasion and supported observation. Capture readiness assigns neither
   applicability nor an outcome. Missing, failed or incomplete required captures remain unready.
 
-`ENGINEERING_BASELINE` with `ENGINEERING_APPROVED` records maintainer approval of the shipped, minimized product
-scope. Contract `1.3.0` records explicit maintainer engineering approval of the wider permitted workspace
-scope in [#1732](https://github.com/hephaestus-build/Hephaestus/issues/1732). It is not controller or DPO approval.
-A later expansion of source, purpose, audience, processor, retention policy or collection scope needs its own decision. It is also the only basis the contract can express, and the only outcome:
-a use nobody approved carries no decision rather than a recorded refusal, so no entry here can read as a
-controller sign-off. The controller's own record remains separate. Approval is the gate that runtime
-configuration cannot waive: a source whose decision is missing or expired is never read, whatever the
-deployment sets. Within that boundary, connecting a workspace
-integration and enabling a practice is what authorizes the everyday code sources the product exists to read, so a
-default deployment reviews pull requests, issues and conversations without further configuration. Privacy
-class does not gate collection — it records what treatment a source needs.
+`ENGINEERING_BASELINE` with `ENGINEERING_APPROVED` records maintainer approval of the shipped, minimized product scope.
+Contract `1.3.0` records explicit maintainer engineering approval of the wider permitted workspace scope in [#1732](https://github.com/hephaestus-build/Hephaestus/issues/1732).
+It is not controller or DPO approval.
+A later expansion of source, purpose, audience, processor, retention policy or collection scope needs its own decision.
 
-Changing a source's meaning, selection scope, limit, mapping, identity policy, required capture quality,
-dependency, or normalization requires a new contract version. Contract `1.2.0` introduced a checkout with the Git history reachable from the
-reviewed commit and the mirrored branches and tags, under the source's governance and retention
-policies. The reviewed commit and tree identify the checkout; the folder index additionally digests the
-`repos/reviewed/.git/HEAD` and captured-refs witnesses, which pin the exported refs — those can change between two
-captures of the same commit.
+It is also the only basis and outcome the contract can express.
+A use nobody approved carries no decision, not a recorded refusal.
+Thus, no entry here can read as a controller sign-off.
+The controller's own record remains separate.
+Approval is the gate that runtime configuration cannot waive: a source whose decision is missing or expired is never read, whatever the deployment sets.
+
+Within that boundary, a connected workspace integration and an enabled practice authorize the everyday code sources that the product reads.
+Thus, a default deployment reviews pull requests, issues, and conversations without further configuration.
+
+Privacy class does not gate collection — it records what treatment a source needs.
+
+Changing a source's meaning, selection scope, limit, mapping, identity policy, required capture quality, dependency, or normalization requires a new contract version.
+Contract `1.2.0` introduced a checkout with Git history reachable from the reviewed commit, plus mirrored branches and tags.
+The source's governance and retention policies apply.
+The reviewed commit and tree identify the checkout.
+The folder index also digests the `repos/reviewed/.git/HEAD` and captured-refs witnesses, which pin the exported refs — those can change between two captures of the same commit.
 
 ## Capture state
 
-Source absence is separate from quality so the folder index does not collapse unavailable, partial, and empty evidence
-into one state.
+Source absence is separate from quality so the folder index does not collapse unavailable, partial, and empty evidence into one state.
 
 ### Availability
 
 - `AVAILABLE`: capture facts and logical content state are present.
 - `NOT_COLLECTED`: no unexpired use decision permits the source for this purpose, or collection is
-  switched off for it in this deployment. Never "no practice wanted it": every source that applies to the
-  artifact kind is staged for every review, so relevance is not a reason a source can be missing.
+  switched off for it in this deployment. Never "no practice wanted it".
+  Every source that applies to the artifact kind is staged for every review.
+  Relevance is not a reason a source can be missing.
 - `UNAVAILABLE`: the source could not be retrieved for a non-error reason.
 - `REDACTED`: the entire source was withheld for privacy or security.
 - `COLLECTION_ERROR`: an attempted collection failed.
 
-A non-available source contains no artifacts or source identifiers, and carries a typed
-`SourceAbsenceReason` saying *why* — `GOVERNANCE_NOT_EFFECTIVE`, `NO_PROVIDER`, `NO_WORKING_COPY`,
-`CONSENT_NOT_ACTIVE`, and the rest. Safe, typed reason codes may be role-filtered; free-form exception text
-must not enter the folder index.
+A non-available source contains no artifacts or source identifiers, and carries a typed `SourceAbsenceReason` saying *why* — `GOVERNANCE_NOT_EFFECTIVE`, `NO_PROVIDER`, `NO_WORKING_COPY`, `CONSENT_NOT_ACTIVE`, and the rest.
+Safe, typed reason codes may be role-filtered.
+Free-form exception text must not enter the folder index.
 
 ### Available-source dimensions
 
 Only `AVAILABLE` has:
 
-- logical content: `EMPTY` or `NON_EMPTY`;
-- completeness: `COMPLETE`, `PARTIAL`, or `UNKNOWN`;
+- logical content: `EMPTY` or `NON_EMPTY`.
+- completeness: `COMPLETE`, `PARTIAL`, or `UNKNOWN`.
 - capture facts: `capturedAt` — the only required one — plus an optional `observedAt`, an optional
-  `sourceEffectiveAt` watermark, and an optional pinned identity;
+  `sourceEffectiveAt` watermark, and an optional pinned identity.
 - artifacts.
 
-Capture facts hold only what could not be known before the capture ran. Everything derivable from the
-catalog the folder index pins by digest — selection scope, limits, required capture quality, the states a source
-may report — is read from the catalog, never copied into the capture.
+Capture facts hold only what could not be known before the capture ran.
+The folder index pins the catalog by digest.
+Everything derivable from that catalog is read from it, never copied into the capture.
+This includes selection scope, limits, required capture quality, and states a source can report.
 
 Logical content is independent of serialized bytes: a JSON file containing `[]` represents an `EMPTY` source.
-Field-level redaction remains an available, usually partial source; whole-source redaction uses `REDACTED`.
+Field-level redaction remains an available, usually partial source.
+Whole-source redaction uses `REDACTED`.
 
-There is no staleness verdict, and there is deliberately no age-based mode. An age threshold needs a
-watermark recording when a copy was last *verified* against upstream; the mirror records only when a row was
-last *written*, so an age derived from it measures time since the last upstream change — reporting a
-correctly mirrored quiet record as stale and a record modified moments ago as current. Adding one therefore
-has a prerequisite: a reconciliation pass that advances a verified-as-of watermark after confirming a record
-is unchanged. Until that watermark exists, a currentness guarantee on a mirrored source would be a claim the
-system cannot substantiate, so `IdentityPolicy` records only the honest half — whether a capture can be
-anchored to something immutable at all.
+There is no staleness verdict, and there is deliberately no age-based mode.
+An age threshold needs a watermark recording when a copy was last *verified* against upstream.
+The mirror records only when a row was last *written*.
+An age derived from it measures time since the last upstream change.
+It reports a correctly mirrored quiet record as stale and a record modified moments ago as current.
+Adding one therefore has a prerequisite: a reconciliation pass that advances a verified-as-of watermark after confirming a record is unchanged.
 
-A readiness report names the contract version, the catalog digest it was interpreted under, the artifact
-kind, the folder index's capture time, and one decision per practice. A folder index captured under a contract
-version the runtime no longer ships is *unreplayable* rather than invalid: the recorded result stands, and
-only the ability to re-derive it is unavailable.
+Until that watermark exists, the system cannot substantiate a currentness guarantee on a mirrored source.
+`IdentityPolicy` records only whether a capture can be anchored to something immutable at all.
+
+A readiness report names the contract version and the catalog digest used to interpret it.
+It names the artifact kind, the folder index's capture time, and one decision per practice.
+A folder index captured under a contract version the runtime no longer ships is *unreplayable*, not invalid.
+The recorded result stands.
+Only the ability to re-derive it is unavailable.
 
 ## Practice automated-review policy
 
-The [practice review glossary](./practice-review-glossary.mdx) defines the canonical product and machine
-terms. A practice makes two separate statements.
+The [practice review glossary](./practice-review-glossary.mdx) defines the canonical product and machine terms.
+A practice makes two separate statements.
 
-**The policy** is the frame the review runs in: the contract version that names the sources, whether a model
-runs at all, the refusal behaviour, and the claims that kind of evidence can never support whatever the
-occasion. It does not itself list sources.
+**The policy** is the frame the review runs in.
+It states the contract version that names the sources, whether a model runs at all, and the refusal behavior.
+It states which claims that kind of evidence can never support, whatever the occasion.
+It does not itself list sources.
 
-**The definition** carries the review signals, evidence requirements, draft behavior, subject, and
-optional precondition as flat fields. Different evidence or expectations at another review moment
-belong in another practice, not a nested occasion list. One practice has one autonomy setting and
-one feedback history.
+**The definition** carries the review signals, evidence requirements, draft behavior, subject, and optional precondition as flat fields.
+Different evidence or expectations at another review moment belong in another practice, not a nested occasion list.
+One practice has one autonomy setting and one feedback history.
 
-A practice may name several signals, but all must refer to one artifact kind. The runtime derives
-that kind from the signals; it does not store a second declaration that can contradict them.
+A practice may name several signals, but all must refer to one artifact kind.
+The runtime derives that kind from the signals.
+It does not store a second declaration that can contradict them.
 
-A signal that names a hand-requested review is refused: such a review already covers every practice on that
-kind of work whatever state the work is in, so it is a door rather than an occasion an author opts into.
+A signal that names a hand-requested review is refused.
+Such a review already covers every practice on that kind of work, whatever its state.
+It is a door, not an occasion an author opts into.
 
 Each entry in `evidenceRequirements` names a source and the stance the practice takes towards it:
 
 | Stance       | Meaning                                                                                                                                                                               |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `REQUIRED`   | The claim reads this source. If it could not be captured to the quality its contract demands, the review is refused rather than run.                                                  |
-| `EXHAUSTIVE` | The claim reads this source and asserts something is *not* in it. Required, and additionally not satisfiable by a partial capture whatever the source contract's floor happens to be. |
+| `EXHAUSTIVE` | The claim reads this source and asserts something is *not* in it. Required, and also not satisfiable by a partial capture whatever the source contract's floor happens to be. |
 | `CONTEXTUAL` | Used when present, noted when absent, never a reason to refuse.                                                                                                                       |
 
-`EXHAUSTIVE` exists because an absence is the one claim a fragment cannot support: a partial capture of the
-review threads is consistent both with "nobody resolved this one" and with "the resolution was in the part we
-did not fetch", and a review that cannot tell those apart still tells a developer they merged past an
-unresolved thread. Where the corpus was not whole, the honest answer is `INSUFFICIENT_EVIDENCE`, never a
-quiet `NOT_APPLICABLE`.
+`EXHAUSTIVE` exists because an absence is the one claim a fragment cannot support.
+A partial capture of review threads is consistent with "nobody resolved this one".
+It is also consistent with "the resolution was in the part we did not fetch".
+A review that cannot distinguish these still tells a developer they merged past an unresolved thread.
+Where the corpus was not whole, the honest answer is `INSUFFICIENT_EVIDENCE`, never a quiet `NOT_APPLICABLE`.
 
 ```json
 {
@@ -269,202 +283,253 @@ quiet `NOT_APPLICABLE`.
 }
 ```
 
-`reviewWhen` selects finite state values supplied by the work type's descriptor. Values within one
-dimension are alternatives; every selected dimension must match. An omitted dimension is unrestricted,
-and `{}` imposes no state restriction. A missing required state fact does not match. Pull and merge
-requests recommend `draftStatus: ["NOT_DRAFT"]`; issues, documents and conversations recommend `{}`.
+`reviewWhen` selects finite state values supplied by the work type's descriptor.
+Values within one dimension are alternatives.
+Every selected dimension must match.
+An omitted dimension is unrestricted, and `{}` imposes no state restriction.
+
+A missing required state fact does not match.
+Pull and merge requests recommend `draftStatus: ["NOT_DRAFT"]`.
+Issues, documents and conversations recommend `{}`.
 Manual requests bypass scheduling, not consent, source requirements or the automated-review policy.
 
-The descriptor owns supported dimensions, their values, and precondition capabilities. Pull and merge
-requests expose draft status and lifecycle; issues expose open or closed; documents expose active or
-archived from the stored source state. Conversations expose no invented lifecycle. Unsupported keys,
-values, precondition aspects and evidence collections are rejected. Signals and evidence requirements
-are explicit arrays; no shorthand supplies hidden defaults.
+The descriptor owns supported dimensions, their values, and precondition capabilities.
+Pull and merge requests expose draft status and lifecycle.
+Issues expose open or closed.
+Documents expose active or archived from the stored source state.
 
-Validation rejects unknown source-contract versions or source kinds, unregistered signals, manual
-request signals, empty or duplicate signals, mixed artifact kinds, unsupported subjects, duplicate
-sources, sources that do not apply to the practice's artifact kind, and an `EXHAUSTIVE` stance over a
-source that cannot report complete capture. Evidence requirements belong on the practice definition,
-not inside its automated-review policy.
+Conversations expose no invented lifecycle.
+Unsupported keys, values, precondition aspects and evidence collections are rejected.
+Signals and evidence requirements are explicit arrays.
+No shorthand supplies hidden defaults.
+
+Validation rejects:
+
+- Unknown source-contract versions or source kinds.
+- Unregistered signals, manual request signals, and empty or duplicate signals.
+- Mixed artifact kinds and unsupported subjects.
+- Duplicate sources or sources that do not apply to the practice's artifact kind.
+- An `EXHAUSTIVE` stance over a source that cannot report complete capture.
+
+Evidence requirements belong on the practice definition, not inside its automated-review policy.
 
 `knownLimitations` records the claims the selected evidence cannot support even when every requirement passes.
-The runtime appends them to the criteria it stages for the reviewing model, because a limitation the author records
-and then withholds constrains nobody: the model still reaches the conclusion the author knew the evidence could not
-carry. `insufficiencyReason` is separate and is present only when `evidenceSufficiency` is
-`DECLARED_EVIDENCE_INSUFFICIENT`: it says why a person is needed, which is a different question from what the
-evidence cannot show. Folded into the limitation list it stops being answerable, since a limitation on a
-practice nobody reviews reads as one more caveat rather than the reason there is no review.
+The runtime appends them to the criteria it stages for the reviewing model.
+
+A recorded limitation withheld from the model constrains nobody.
+The model still reaches the conclusion the author knew the evidence could not carry. `insufficiencyReason` is separate and present only when `evidenceSufficiency` is `DECLARED_EVIDENCE_INSUFFICIENT`.
+It says why a person is needed.
+This differs from what the evidence cannot show.
+
+Inside the limitation list, this question stops being answerable.
+A limitation on a practice nobody reviews reads as another caveat, not the reason there is no review.
 
 Every bundled practice that requires the pull-request diff lists `scm.repository.tree` as `CONTEXTUAL`.
-The tree supplies surrounding code that the diff may not show. These requirements do not remove the
-repository requirement for capturing the pinned diff: if that required capture fails, the practice
-cannot proceed. A missing local mirror can be cloned during review preparation.
+The tree supplies surrounding code that the diff may not show.
+These requirements do not remove the repository requirement for capturing the pinned diff: if that required capture fails, the practice cannot proceed.
+A missing local mirror can be cloned during review preparation.
 
-`automatedReview` is explicitly relative to Hephaestus, the pinned source contract, the declared evidence requirements, and
-the governed integrations. It does not claim that a practice is universally observable. A developer, peer, or human mentor may have different context for a particular practice. This contract makes no claim that human review is always possible.
+`automatedReview` is explicitly relative to Hephaestus, the pinned source contract, the declared evidence requirements, and the governed integrations.
+It does not claim that a practice is universally observable.
+A developer, peer, or human mentor may have different context for a particular practice.
+This contract makes no claim that human review is always possible.
 
-`mode` is `LANGUAGE_MODEL` or `NONE`. `evidenceSufficiency` says whether passing every requirement is
-enough, the declared sources cannot support review, or automated review is not configured. These are author-defined
-settings, not empirical validation. `automatedReviewValidation` is bound to the exact automated-review
-policy and review-rule fingerprint. Its only status is `AUTHOR_DECLARED`: nothing in the product validates a
-policy independently, so the status carries no evaluator provenance and the type refuses to hold any. A
-status the API can never return would describe a system other than this one.
+`mode` is `LANGUAGE_MODEL` or `NONE`. `evidenceSufficiency` says whether passing every requirement is enough, the declared sources cannot support review, or automated review is not configured.
+These are author-defined settings, not empirical validation. `automatedReviewValidation` is bound to the exact automated-review policy and review-rule fingerprint.
+Its only status is `AUTHOR_DECLARED`.
+Nothing in the product validates a policy independently.
 
-Only `LANGUAGE_MODEL` with `SUFFICIENT_WHEN_REQUIREMENTS_MET` runs a model. These skip:
+Thus, the status carries no evaluator provenance and the type refuses to hold any.
+A status the API can never return would describe a system other than this one.
 
-- `LANGUAGE_MODEL` with `DECLARED_EVIDENCE_INSUFFICIENT`;
+Only `LANGUAGE_MODEL` with `SUFFICIENT_WHEN_REQUIREMENTS_MET` runs a model.
+These skip:
+
+- `LANGUAGE_MODEL` with `DECLARED_EVIDENCE_INSUFFICIENT`.
 - `NONE` with `NONE`.
 
-Neither can be reviewed, so a practice declaring one is forced to `OFF` when it is created or
-edited. The [glossary](./practice-review-glossary.mdx#machine-names) maps each pair to the mentoring choice
-an author sees. A skipped practice is omitted from that review request. Source readiness checks contain only
-source-quality reasons — `SOURCE_NOT_AVAILABLE`, `SOURCE_INCOMPLETE`, `SOURCE_EMPTY` — so review-mode
-limitations are never misreported as defective sources. Missing evidence never becomes a fabricated
-`NOT_APPLICABLE` observation.
+Neither can be reviewed, so a practice declaring one is forced to `OFF` when it is created or edited.
+The [glossary](./practice-review-glossary.mdx#machine-names) maps each pair to the mentoring choice an author sees.
+A skipped practice is omitted from that review request.
+Source readiness checks contain only source-quality reasons — `SOURCE_NOT_AVAILABLE`, `SOURCE_INCOMPLETE`, `SOURCE_EMPTY` — so review-mode limitations are never misreported as defective sources.
 
-Human review is outside this contract. A self-review, peer-review, or human-mentor channel carries its own
-review target, reviewer relationship, rubric, evidence provenance, consent, access, retention, result
-vocabulary, and validation status, none of which this contract supplies. Declaring that a person could observe
-a practice neither collects a human review nor makes an automated review ready to run, and a human review read
-back as automated-review input needs a governed source kind and purpose authorization of its own.
+Missing evidence never becomes a fabricated `NOT_APPLICABLE` observation.
+
+Human review is outside this contract.
+A self-review, peer-review, or human-mentor channel carries its own review target, reviewer relationship, rubric, and evidence provenance.
+It carries its own consent, access, retention, result vocabulary, and validation status.
+This contract supplies none of these.
+Declaring that a person could observe a practice does not collect a human review or make an automated review ready.
+A human review used as automated-review input needs its own governed source kind and purpose authorization.
 
 ## What runs before evidence
 
-The workspace gate decides whether a review is admitted at all, before any source is captured. It refuses
-the signal with a typed reason rather than silently doing nothing, and the reason — not the caller —
-decides whether the occurrence is terminal or re-offered later.
+The workspace gate decides whether a review is admitted at all, before any source is captured.
+It refuses the signal with a typed reason instead of silently doing nothing.
+The reason, not the caller, decides whether the occurrence is terminal or re-offered later.
 
-Two of its checks bear on evidence, and only these two; the rest (is the workspace active, is practice
-review switched on, is a model bound, is a budget left, has this artifact been reviewed too recently) are
-in [When a workspace goes quiet](/admin/practice-review#when-a-workspace-goes-quiet).
+Two of its checks bear on evidence, and only these two.
+[When a workspace goes quiet](/admin/practice-review#when-a-workspace-goes-quiet) owns the other checks:
+
+- Is the workspace active?
+- Is practice review switched on?
+- Is a model bound?
+- Is a budget left?
+- Has this artifact been reviewed too recently?
 
 - **Review coverage**, checked first. The repository/base-branch axis and the person axis are intersected,
-  and both must admit the work. A repository or base branch outside the selection, a selected list left
-  empty, a member the person selection leaves out, or a bot author is refused with terminal
-  `OUT_OF_REVIEW_SCOPE`. Work with no identifiable author, or whose author is not a member the workspace
-  reviews, is refused with retryable `SUBJECT_UNLINKED` instead, because an identity or a membership can still
-  arrive with the next link or member sync.
-- **Practice autonomy.** A practice at `OFF` admits no review; `HUMAN_APPROVAL` and `AUTOMATIC` both run it
-  and differ only in whether a person must authorize release onto the work. When every practice bound to a signal sits at
-  `OFF`, the signal is refused with retryable `PRACTICE_AUTONOMY_OFF`, so turning a practice back on lets
-  the waiting occurrence through.
+  and both must admit the work. Terminal `OUT_OF_REVIEW_SCOPE` refuses a repository or base branch outside the selection.
+  It also refuses an empty selected list, an excluded member, or a bot author. Work with no identifiable author is refused with retryable `SUBJECT_UNLINKED`.
+  This also applies if the author is not a member the workspace reviews.
+  An identity or membership can still arrive with the next link or member sync.
+- **Practice autonomy.** A practice at `OFF` admits no review. `HUMAN_APPROVAL` and `AUTOMATIC` both run it
+  and differ only in whether a person must authorize release onto the work. When every practice bound to a signal sits at `OFF`, retryable `PRACTICE_AUTONOMY_OFF` refuses the signal.
+  Turning a practice back on lets the waiting occurrence through.
 
-Both are defined in the [practice review glossary](./practice-review-glossary.mdx). Neither is an evidence
-concern — they decide whether evidence is collected at all.
+Both are defined in the [practice review glossary](./practice-review-glossary.mdx).
+Neither is an evidence concern — they decide whether evidence is collected at all.
 
 ## Conservative examples
 
 ### Required evidence is insufficient
 
-`scope-one-reviewable-change` is bound to `scm.pull_request.opened` and `scm.pull_request.ready`, and
-requires `scm.pull-request.core` and `scm.pull-request.diff` and reads `scm.repository.tree`
-contextually. The diff's contract demands a complete capture, including a verified empty range. If the diff cannot be read, or the
-pinned commit is gone from the mirror, readiness refuses the practice and no observation is created. The
-runtime makes no claim that the change is focused, sprawling, or `NOT_APPLICABLE`. No stance can demand
-a currentness the pull-request record cannot demonstrate; nothing available could substantiate one.
+`scope-one-reviewable-change` is bound to `scm.pull_request.opened` and `scm.pull_request.ready`, and requires `scm.pull-request.core` and `scm.pull-request.diff` and reads `scm.repository.tree` contextually.
+The diff's contract demands a complete capture, including a verified empty range.
+If the diff cannot be read, or the pinned commit is gone from the mirror, readiness refuses the practice and no observation is created.
+The runtime makes no claim that the change is focused, sprawling, or `NOT_APPLICABLE`.
+
+No stance can demand a currentness the pull-request record cannot show.
+Nothing available could substantiate one.
 
 ### Empty evidence is valid
 
-A complete pull-request comment query may materialize as `[]`. Its state is
-`AVAILABLE + EMPTY + COMPLETE`, and `scm.pull-request.comments` sits at `ANY_CAPTURE`, so that is valid
-evidence rather than `UNAVAILABLE`. A redacted or failed query cannot support the same practice claim, and a
-practice taking an `EXHAUSTIVE` stance is refused by a partial one.
+A complete pull-request comment query may materialize as `[]`.
+Its state is `AVAILABLE + EMPTY + COMPLETE`, and `scm.pull-request.comments` sits at `ANY_CAPTURE`, so that is valid evidence rather than `UNAVAILABLE`.
+A redacted or failed query cannot support the same practice claim, and a practice taking an `EXHAUSTIVE` stance is refused by a partial one.
 
 ## Runtime behavior
 
-The runtime resolves exact practice revisions before capture and then stages **every governed source the
-purpose permits in the workspace** — all of them, on every review. There is no per-run
-source selection: practice review configuration decide which practices may run, never which sources are captured, so a
-source listed as anything other than `AVAILABLE` always says why in a typed reason code and never because
-no practice asked for it. Bindings enter afterwards, in the readiness check. Readiness is evaluated per
-practice. A `CONTEXTUAL` failure does not skip an otherwise eligible practice; a `REQUIRED` or `EXHAUSTIVE`
-failure does. If no practice is eligible, no model request is made.
+The runtime resolves exact practice revisions before capture.
+It then stages **every governed source the purpose permits in the workspace**, on every review.
+There is no per-run source selection.
+Practice review configuration decides which practices can run, never which sources are captured.
+A source listed as anything other than `AVAILABLE` always gives a typed reason code.
+That reason is never that no practice asked for it.
 
-One invocation may contain the governed union needed by several practices. The model can technically read that
-union; this runtime uses an attribution boundary rather than process isolation. The practice index lists each
-practice's admissible logical source kinds. Every model-authored observation must cite an exact quote and artifact path.
-The sandbox and server independently verify that the source is declared and available, the path belongs to that
-source in the pinned folder index, and the quote occurs in the digest-addressed artifact. Delivery fails atomically on
-any mismatch.
-This proves traceable grounding, not model causality; evaluations requiring non-interference must still run
-practices in isolated evidence views.
+Bindings enter afterwards, in the readiness check.
+Readiness is evaluated per practice.
 
-A quote of code is verified against the captured repository, whichever of its two sources it names. A
-repository citation names `scm.repository.tree`, the captured `repos/reviewed/.git/HEAD` witness as its
-`artifactPath`, a repository-relative `path`, the exact quote and line range, and optionally a
-`revision` — a full commit id from the captured history; omitted, it means the reviewed commit. A change
-citation names `scm.pull-request.diff`, the pinned `context/change.json` as its `artifactPath`, the
-`OLD` or `NEW` side, and the same path, quote and lines; its revision is the side's commit of the pinned
-range, and a path the change does not touch withholds the observation. The server never stages a diff:
-the container derives `work/change/diff.patch` from the checkout with `git`, and the line annotations it
-carries are the coordinates a change citation names. The
-server answers every code citation of a review by opening, with JGit, the snapshot it pins by the
-`repos/reviewed/.git/HEAD` and captured-refs digests: an object the snapshot never captured, a path that does not exist at that revision, or a
-quote that does not match those lines, withholds that observation and records
-`QUOTE_LOCATION_MISMATCH` against the citation. Shell output is not an artifact — a
-quote is verified against the Git object, never against what a command printed — and only
-`scm.repository.tree` citations may select a revision, only `scm.pull-request.diff` citations a side.
+A `CONTEXTUAL` failure does not skip an otherwise eligible practice.
+A `REQUIRED` or `EXHAUSTIVE` failure does.
+If no practice is eligible, no model request is made.
 
-The internal readiness report records whether each practice is ready or skipped, and it is the one document
-that stays server-side: it is persisted to `agent_job.review_readiness` and never staged. The **folder index is
-not internal** — the same bytes persisted to `agent_job.evidence_snapshot` are staged into the sandbox at
-`INDEX.json`, carrying every absence reason code including `GOVERNANCE_NOT_EFFECTIVE`,
-`CONSENT_NOT_ACTIVE`, and `CONTENT_EVICTED`. There is no redacted model-facing variant. Treat a reason code
-you add to a capture state as model-visible, and put anything that must not be as a readiness decision
-instead.
+One invocation may contain the governed union needed by several practices.
+The model can technically read that union.
+This runtime uses an attribution boundary rather than process isolation.
+The practice index lists each practice's admissible logical source kinds.
+
+Every model-authored observation must cite an exact quote and artifact path.
+The sandbox and server independently verify these facts:
+
+- The source is declared and available.
+- The path belongs to that source in the pinned folder index.
+- The quote occurs in the digest-addressed artifact.
+
+Delivery fails atomically on any mismatch.
+This proves traceable grounding, not model causality.
+
+Evaluations requiring non-interference must still run practices in isolated evidence views.
+
+A quote of code is verified against the captured repository, whichever of its two sources it names.
+A repository citation names `scm.repository.tree` and the captured `repos/reviewed/.git/HEAD` witness as its `artifactPath`.
+It names a repository-relative `path`, the exact quote, and the line range.
+It can also name a `revision`: a full commit id from the captured history.
+Omitted, it means the reviewed commit.
+A change citation names `scm.pull-request.diff`, the pinned `context/change.json` as its `artifactPath`, the `OLD` or `NEW` side, and the same path, quote and lines.
+
+Its revision is the side's commit of the pinned range, and a path the change does not touch withholds the observation.
+The server never stages a diff.
+The container derives `work/change/diff.patch` from the checkout with `git`.
+Its line annotations are the coordinates a change citation names.
+
+The server answers every code citation by opening the snapshot with JGit.
+It pins the snapshot by the `repos/reviewed/.git/HEAD` and captured-refs digests.
+An uncaptured object, a nonexistent path at that revision, or a quote mismatch withholds the observation.
+The server records `QUOTE_LOCATION_MISMATCH` against the citation.
+Shell output is not an artifact.
+A quote is verified against the Git object, never against what a command printed.
+
+Only `scm.repository.tree` citations can select a revision.
+Only `scm.pull-request.diff` citations can select a side.
+
+The internal readiness report records whether each practice is ready or skipped.
+It is the one document that stays server-side.
+It is persisted to `agent_job.review_readiness` and never staged.
+The **folder index is not internal** — the same bytes persisted to `agent_job.evidence_snapshot` are staged into the sandbox at `INDEX.json`, carrying every absence reason code including `GOVERNANCE_NOT_EFFECTIVE`, `CONSENT_NOT_ACTIVE`, and `CONTENT_EVICTED`.
+There is no redacted model-facing variant.
+Treat a reason code you add to a capture state as model-visible, and put anything that must not be as a readiness decision instead.
 
 ## Change and staleness
 
-Historical records keep their original contract and practice revision. Currentness is derived:
+Historical records keep their original contract and practice revision.
+Currentness is derived:
 
-- source resources are immutable within a published contract version; any semantic change creates a new
-  version;
-- moving a practice to that version changes what its evidence requirements may name and stales that practice's earlier claims;
-- changing a practice's review configuration or automated-review policy stales that practice's claims;
-- adding a source cannot silently alter existing requirements because each practice names its sources explicitly;
-- governance withdrawal disables its exact future use, including collection, observation persistence and delivery,
-  mentoring reuse, or evidence disclosure, without rewriting historical semantics; and
+- source resources are immutable within a published contract version. Any semantic change creates a new
+  version.
+- moving a practice to that version changes what its evidence requirements may name and stales that practice's earlier claims.
+- changing a practice's review configuration or automated-review policy stales that practice's claims.
+- adding a source cannot silently alter existing requirements because each practice names its sources explicitly.
+- governance withdrawal disables its exact future use without rewriting historical semantics.
+  This includes collection, observation persistence and delivery, mentoring reuse, or evidence disclosure.
 - erasure or expiry may make a claim unreplayable without making the historical result false.
 
 Semantic currentness, automated-review-validation status, governance eligibility, and replayability remain separate.
-Observation and review APIs expose `claimCurrentness` as `CURRENT`, `STALE`, or `UNVERIFIABLE` by comparing the
-evaluated practice revision's review-rule fingerprint with the current revision's fingerprint, and as `STALE` once the
-observation carries a superseded marker. `IssueObservationSuperseder` sets that marker on an issue's observations in
-the transaction that records a change to its reviewable content, before and independently of any new review.
-Presentation-only edits retain semantic currentness; rows without comparable versioned fingerprints are
-`UNVERIFIABLE`. Neither value says whether a later review ran, and pull request work is never compared.
+Observation and review APIs expose `claimCurrentness` as `CURRENT`, `STALE`, or `UNVERIFIABLE`.
+They compare the evaluated practice revision's review-rule fingerprint with the current revision's fingerprint.
+Once the observation carries a superseded marker, they expose `STALE`. `IssueObservationSuperseder` sets that marker on an issue's observations in the transaction that records a change to its reviewable content.
+This occurs before and independently of any new review.
 
-Whether what a review read differs from the stored work is a separate fact. A pull request or issue review records
-`reviewedWork` in `agent_job.evidence_snapshot` beside the folder index: the artifact it is bound to, a content digest of
-the staged title and description, the pinned head of a pull request, and the folder index's capture time — all taken from
-the staged bytes, never from the work read again. The mentor compares it with the stored work on the workspace's
-connected instance, only where the core source may be used in conversation and the capture is bound to the same
-artifact, and reports the fields it could check. A difference says the fields differ, not when the work changed: a
-queued review can pin a head the mirror has already moved past.
-A match is with the synchronized mirror over those fields alone, not with the provider, and not with comments,
-checks, approvals, linked work or behaviour. Reviews captured before `reviewedWork` existed can show only that the
-archived description or pinned head differs; they never establish that a title is unchanged.
+Presentation-only edits retain semantic currentness.
+Rows without comparable versioned fingerprints are `UNVERIFIABLE`.
+
+Neither value says whether a later review ran, and pull request work is never compared.
+
+Whether what a review read differs from the stored work is a separate fact.
+A pull request or issue review records `reviewedWork` in `agent_job.evidence_snapshot` beside the folder index.
+It records its bound artifact, a content digest of the staged title and description, and the folder index's capture time.
+For a pull request, it records the pinned head.
+All values come from the staged bytes, never from the work read again.
+The mentor compares it with stored work on the workspace's connected instance and reports the fields it could check.
+
+This requires that the core source permits conversation use and the capture is bound to the same artifact.
+A difference says the fields differ, not when the work changed: a queued review can pin a head the mirror has already moved past.
+
+A match is with the synchronized mirror over those fields alone, not with the provider, and not with comments, checks, approvals, linked work or behavior.
+Reviews captured before `reviewedWork` existed can show only that the archived description or pinned head differs.
+They never establish that a title is unchanged.
 
 ## Adding or changing a source
 
-Complete the [artifact-source governance decision](../admin/dsms/artifact-source-governance) before enabling a new
-or expanded source use. Accuracy or product benefit alone does not authorize collection.
+Complete the [artifact-source governance decision](../admin/dsms/artifact-source-governance) before enabling a new or expanded source use.
+Accuracy or product benefit alone does not authorize collection.
 
 The rules are enforced mechanically, in two places:
 
-- `gate:contracts` validates every contract resource and the bundled practice catalog against their schemas,
-  rejects duplicate source kinds, holds each schema's pinned catalog digest to the catalog's actual hash, and
-  exercises the policy schema against deliberately broken fixtures — including a retired evidence profile and
-  evidence requirements written onto a policy instead of the definition — because a guard whose failure path never runs is
-  indistinguishable from one that cannot fail.
-- The server, when it reads the catalog at startup, rejects a mirror that pins an identity, a lossy derivation
-  that claims completeness, a required capture quality the source can never report, a source whose use
-  decisions do not cover every product purpose, and a decision whose retention or erasure policy disagrees
-  with its source.
+- `gate:contracts` validates every contract resource and the bundled practice catalog against their schemas.
+  It rejects duplicate source kinds.
+  It holds each schema's pinned catalog digest to the catalog's actual hash.
+  It exercises the policy schema against deliberately broken fixtures.
+  These include a retired evidence profile and evidence requirements written onto a policy instead of the definition.
+  A guard whose failure path never runs is indistinguishable from one that cannot fail.
+- When it reads the catalog at startup, the server rejects a mirror that pins an identity.
+  It rejects a lossy derivation that claims completeness.
+  It rejects required capture quality that the source can never report.
+  It rejects a source whose use decisions do not cover every product purpose.
+  It rejects a decision whose retention or erasure policy disagrees with its source.
 
 ## Prior art
 
-- [Gebru et al., "Datasheets for Datasets"](https://doi.org/10.1145/3458723) — the source catalog is a
-  datasheet: composition, selection scope, uses, and limitations recorded alongside the data.
+- [Gebru et al., "Datasheets for Datasets"](https://doi.org/10.1145/3458723) — the source catalog is a datasheet.
+  It records composition, selection scope, uses, and limitations alongside the data.
 - [GDPR Article 5](https://eur-lex.europa.eu/eli/reg/2016/679/art_5/oj) — purpose limitation, minimization,
   accuracy, and storage limitation, which the source-use decisions record per source and purpose.

@@ -29,36 +29,36 @@ section before any rule file.
 
 | Rule | Why |
 |------|-----|
-| `async-api-routes` | Next.js API routes; the backend is Spring Boot |
-| `async-suspense-boundaries` | About streaming an RSC tree; nothing in the SPA renders on a server |
+| `async-api-routes` | Next.js API routes. The backend is Spring Boot |
+| `async-suspense-boundaries` | About streaming an RSC tree. Nothing in the SPA renders on a server |
 | `server-cache-react` | `React.cache()` is RSC-only |
 | `server-cache-lru` | Server-side caching, which is the backend's problem |
 | `server-serialization` | RSC client/server boundary |
-| `server-parallel-fetching` | RSC data fetching; TanStack Query is the equivalent here |
+| `server-parallel-fetching` | RSC data fetching. TanStack Query is the equivalent here |
 | `server-after-nonblocking` | `after()` from `next/server` |
-| `rendering-hydration-no-flicker` | SSR hydration; the build is pure CSR |
-| `client-swr-dedup` | SWR; this repo uses TanStack Query, which dedups by query key |
+| `rendering-hydration-no-flicker` | SSR hydration. The build is pure CSR |
+| `client-swr-dedup` | SWR. This repo uses TanStack Query, which dedups by query key |
 | `rerender-memo` | React Compiler is on — see below |
 
 ### Apply, with the API substituted
 
 | Rule | Read it as |
 |------|-----------|
-| `bundle-dynamic-imports` | The reasoning holds and the repo has the rule's own example (`@monaco-editor/react`); the mechanism is `React.lazy()` plus TanStack Router's `autoCodeSplitting`, not `next/dynamic` |
+| `bundle-dynamic-imports` | The reasoning holds and the repo has the rule's own example (`@monaco-editor/react`). The mechanism is `React.lazy()` plus TanStack Router's `autoCodeSplitting`, not `next/dynamic` |
 
 ### Apply as written
 
-`async-defer-await`, `async-parallel`, `async-dependencies`; `bundle-barrel-imports`,
-`bundle-defer-third-party`, `bundle-conditional`, `bundle-preload`; `client-event-listeners`;
-every `rerender-*` except `rerender-memo`; every `rendering-*` except `rendering-hydration-no-flicker`
-(this includes `rendering-activity` — React is 19.2+, so `<Activity>` exists); every `js-*`; every
+`async-defer-await`, `async-parallel`, `async-dependencies`, `bundle-barrel-imports`,
+`bundle-defer-third-party`, `bundle-conditional`, `bundle-preload`, `client-event-listeners`.
+Every `rerender-*` except `rerender-memo`. Every `rendering-*` except `rendering-hydration-no-flicker`
+(this includes `rendering-activity` — React is 19.2+, so `<Activity>` exists). Every `js-*`. Every
 `advanced-*`.
 
 ### React Compiler
 
 `webapp/vite.shared.ts` passes `compiler: true` to `@vitejs/plugin-react` for every build of app
 source, so **do not add `useMemo`, `useCallback` or `React.memo`**. A hand-written one that survives
-in the tree is load-bearing; deleting it breaks something that still type-checks
+in the tree is load-bearing. Deleting it breaks something that still type-checks
 (`webapp/AGENTS.md` § React Compiler).
 
 ## When to Apply
@@ -116,7 +116,7 @@ Reference these guidelines when:
 
 ### 5. Re-render Optimization (MEDIUM)
 
-- `rerender-defer-reads` - Don't subscribe to state only used in callbacks
+- `rerender-defer-reads` - Do not subscribe to state only used in callbacks
 - `rerender-memo` - Extract expensive work into memoized components
 - `rerender-dependencies` - Use primitive dependencies in effects
 - `rerender-derived-state` - Subscribe to derived booleans, not raw values
@@ -136,7 +136,7 @@ Reference these guidelines when:
 
 ### 7. JavaScript Performance (LOW-MEDIUM)
 
-- `js-batch-dom-css` - Group CSS changes via classes or cssText
+- `js-batch-dom-css` - Group CSS changes through classes or cssText
 - `js-index-maps` - Build Map for repeated lookups
 - `js-cache-property-access` - Cache object properties in loops
 - `js-cache-function-results` - Cache function results in module-level Map

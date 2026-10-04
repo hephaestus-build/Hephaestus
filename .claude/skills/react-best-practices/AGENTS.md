@@ -86,7 +86,7 @@ Waterfalls are the #1 performance killer. Each sequential await adds full networ
 
 **Impact: HIGH (avoids blocking unused code paths)**
 
-Move `await` operations into the branches where they're actually used to avoid blocking code paths that don't need them.
+Move `await` operations into the branches where they are actually used to avoid blocking code paths that do not need them.
 
 **Incorrect: blocks both branches**
 
@@ -194,7 +194,7 @@ Reference: [https://github.com/shuding/better-all](https://github.com/shuding/be
 
 **Impact: CRITICAL (2-10× improvement)**
 
-In API routes and Server Actions, start independent operations immediately, even if you don't await them yet.
+In API routes and Server Actions, start independent operations immediately, even if you do not await them yet.
 
 **Incorrect: config waits for auth, data waits for both**
 
@@ -340,7 +340,7 @@ Both components share the same promise, so only one fetch occurs. Layout renders
 
 - SEO-critical content above the fold
 
-- Small, fast queries where suspense overhead isn't worth it
+- Small, fast queries where suspense overhead is not worth it
 
 - When you want to avoid layout shift (loading → content jump)
 
@@ -362,7 +362,7 @@ Import directly from source files instead of barrel files to avoid loading thous
 
 Popular icon and component libraries can have **up to 10,000 re-exports** in their entry file. For many React packages, **it takes 200-800ms just to import them**, affecting both development speed and production cold starts.
 
-**Why tree-shaking doesn't help:** When a library is marked as external (not bundled), the bundler can't optimize it. If you bundle it to enable tree-shaking, builds become substantially slower analyzing the entire module graph.
+**Why tree-shaking does not help:** When a library is marked as external (not bundled), the bundler cannot optimize it. If you bundle it to enable tree-shaking, builds become substantially slower analyzing the entire module graph.
 
 **Incorrect: imports entire library**
 
@@ -440,7 +440,7 @@ The `typeof window !== 'undefined'` check prevents bundling this module for SSR,
 
 **Impact: MEDIUM (loads after hydration)**
 
-Analytics, logging, and error tracking don't block user interaction. Load them after hydration.
+Analytics, logging, and error tracking do not block user interaction. Load them after hydration.
 
 **Incorrect: blocks initial bundle**
 
@@ -516,7 +516,7 @@ function CodePanel({ code }: { code: string }) {
 
 **Impact: MEDIUM (reduces perceived latency)**
 
-Preload heavy bundles before they're needed to reduce perceived latency.
+Preload heavy bundles before they are needed to reduce perceived latency.
 
 **Example: preload on hover/focus**
 
@@ -950,7 +950,7 @@ Reducing unnecessary re-renders minimizes wasted computation and improves UI res
 
 **Impact: MEDIUM (avoids unnecessary subscriptions)**
 
-Don't subscribe to dynamic state (searchParams, localStorage) if you only read it inside callbacks.
+Do not subscribe to dynamic state (searchParams, localStorage) if you only read it inside callbacks.
 
 **Incorrect: subscribes to all searchParams changes**
 
@@ -1137,7 +1137,7 @@ function TodoList() {
 
 **Benefits:**
 
-1. **Stable callback references** - Callbacks don't need to be recreated when state changes
+1. **Stable callback references** - Callbacks do not need to be recreated when state changes
 
 2. **No stale closures** - Always operates on the latest state value
 
@@ -1161,9 +1161,10 @@ function TodoList() {
 
 - Setting state from props/arguments only: `setName(newName)`
 
-- State doesn't depend on previous value
+- State does not depend on previous value
 
-**Note:** If your project has [React Compiler](https://react.dev/learn/react-compiler) enabled, the compiler can automatically optimize some cases, but functional updates are still recommended for correctness and to prevent stale closure bugs.
+**Note:** If your project enables [React Compiler](https://react.dev/learn/react-compiler), the compiler can automatically optimize some cases.
+Functional updates remain recommended for correctness and to prevent stale closure bugs.
 
 ### 5.6 Use Lazy State Initialization
 
@@ -1267,7 +1268,7 @@ Optimizing the rendering process reduces the work the browser needs to do.
 
 **Impact: LOW (enables hardware acceleration)**
 
-Many browsers don't have hardware acceleration for CSS3 animations on SVG elements. Wrap SVG in a `<div>` and animate the wrapper instead.
+Many browsers do not have hardware acceleration for CSS3 animations on SVG elements. Wrap SVG in a `<div>` and animate the wrapper instead.
 
 **Incorrect: animating SVG directly - no hardware acceleration**
 
@@ -1410,7 +1411,9 @@ pnpm dlx svgo --precision=1 --multipass icon.svg
 
 **Impact: MEDIUM (avoids visual flicker and hydration errors)**
 
-When rendering content that depends on client-side storage (localStorage, cookies), avoid both SSR breakage and post-hydration flickering by injecting a synchronous script that updates the DOM before React hydrates.
+If content depends on client-side storage such as localStorage or cookies, inject a synchronous script.
+The script updates the DOM before React hydrates.
+This prevents SSR breakage and post-hydration flickering.
 
 **Incorrect: breaks SSR**
 
@@ -1554,7 +1557,7 @@ Micro-optimizations for hot paths can add up to meaningful improvements.
 
 **Impact: MEDIUM (reduces reflows/repaints)**
 
-Avoid changing styles one property at a time. Group multiple CSS changes together via classes or `cssText` to minimize browser reflows.
+Avoid changing styles one property at a time. Group multiple CSS changes together through classes or `cssText` to minimize browser reflows.
 
 **Incorrect: multiple reflows**
 
@@ -1955,7 +1958,7 @@ function validateUsers(users: User[]) {
 
 **Impact: LOW-MEDIUM (avoids recreation)**
 
-Don't create RegExp inside render. Hoist to module scope or memoize with `useMemo()`.
+Do not create RegExp inside render. Hoist to module scope or memoize with `useMemo()`.
 
 **Incorrect: new RegExp every render**
 
@@ -2159,7 +2162,7 @@ Advanced patterns for specific cases that require careful implementation.
 
 **Impact: LOW (stable subscriptions)**
 
-Store callbacks in refs when used in effects that shouldn't re-subscribe on callback changes.
+Store callbacks in refs when used in effects that should not re-subscribe on callback changes.
 
 **Incorrect: re-subscribes on every render**
 
@@ -2187,7 +2190,7 @@ function useWindowEvent(event: string, handler: () => void) {
 }
 ```
 
-**Alternative: use `useEffectEvent` if you're on latest React:**
+**Alternative: use `useEffectEvent` if you are on latest React:**
 
 `useEffectEvent` provides a cleaner API for the same pattern: it creates a stable function reference that always calls the latest version of the handler.
 

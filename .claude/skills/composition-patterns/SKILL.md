@@ -44,8 +44,8 @@ Reference these guidelines when:
 
 ### 1. Component Architecture (HIGH)
 
-- `architecture-avoid-boolean-props` - Don't add boolean props to customize
-  behavior; use composition
+- `architecture-avoid-boolean-props` - Do not add boolean props to customize
+  behavior. Use composition
 - `architecture-compound-components` - Structure complex components with shared
   context
 
@@ -68,7 +68,7 @@ Reference these guidelines when:
 
 > **⚠️ React 19+ only.** Skip this section if using React 18 or earlier.
 
-- `react19-no-forwardref` - Don't use `forwardRef`; use `use()` instead of `useContext()`
+- `react19-no-forwardref` - Do not use `forwardRef`. Use `use()` instead of `useContext()`
 
 ## How to Use
 

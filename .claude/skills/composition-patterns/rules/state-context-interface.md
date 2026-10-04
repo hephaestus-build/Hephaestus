@@ -138,7 +138,7 @@ function ChannelProvider({ channelId, children }: Props) {
 **Custom UI outside the component can access state and actions:**
 
 The provider boundary is what matters—not the visual nesting. Components that
-need shared state don't have to be inside the `Composer.Frame`. They just need
+need shared state do not have to be inside the `Composer.Frame`. They just need
 to be within the provider.
 
 ```tsx

@@ -5,73 +5,91 @@ title: Pi Agent Workspace ABI
 description: Reserved paths, task envelope, and exit codes for the Pi sandbox workspace.
 ---
 
-This ABI covers the one-shot practice runner's container workspace at `/workspace/`. The interactive mentor uses
-a separate workspace contract.
+This ABI covers the one-shot practice runner's container workspace at `/workspace/`.
+The interactive mentor uses a separate workspace contract.
 
 ## Layout
 
-The worker renders one folder for each claimed attempt. It reads every permitted database area in one
-read-only repeatable-read transaction. PostgreSQL supplies one snapshot for both the integration-owned
-projections and the reviewed-work projections. The worker reuses each source owner's visibility, consent,
-withdrawal, tenancy, processor, retention and erasure checks; engineering approval does not replace them.
-See [PostgreSQL transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html) and
-[Spring transaction attributes](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/annotations.html).
+The worker renders one folder for each claimed attempt.
+It reads every permitted database area in one read-only repeatable-read transaction.
+PostgreSQL supplies one snapshot for both the integration-owned projections and the reviewed-work projections.
+The worker reuses each source owner's visibility, consent, withdrawal, tenancy, processor, retention and erasure checks.
 
-`INDEX.md` describes the folder, its source-use decisions and typed refusals. `INDEX.json` records the
-reviewed-work readiness facts separately from the path, source kind, size and SHA-256 proof for each frozen
-source artifact. A missing primary source cannot become available because another repository has that kind
-of record. A refused area or repository has no source files; citing one fails admission.
+Engineering approval does not replace them.
+See [PostgreSQL transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html) and [Spring transaction attributes](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/annotations.html).
 
-All source records carry `synced_at`. Where the integration has no record-level synchronization watermark,
-its value is `null`, not an invented freshness claim. Markdown records carry it in front matter; JSONL rows
-carry it on each record. Internal practice and history records use their recorded materialization times.
+`INDEX.md` describes the folder, its source-use decisions and typed refusals. `INDEX.json` records the reviewed-work readiness facts separately from the path, source kind, size and SHA-256 proof for each frozen source artifact.
+A missing primary source cannot become available because another repository has that kind of record.
+A refused area or repository has no source files.
+Citing one fails admission.
+
+All source records carry `synced_at`.
+Where the integration has no record-level synchronization watermark, its value is `null`, not an invented freshness claim.
+Markdown records carry it in front matter.
+JSONL rows carry it on each record.
+
+Internal practice and history records use their recorded materialization times.
 Source text is untrusted data, not instructions.
 
 Repository names in paths are stable local repository IDs. `reviewed` is the task's primary repository alias.
-Collection, channel and document path segments use UTF-8 percent encoding. Repository copies contain the full
-reachable history from the worker's bare mirrors, with the existing safe-entry and captured-reference checks.
+Collection, channel and document path segments use UTF-8 percent encoding.
+Repository copies contain the full reachable history from the worker's bare mirrors, with the existing safe-entry and captured-reference checks.
 
-The complete folder is read-only in the sandbox. `work/` is writable scratch; only `out/` is collected.
-Reviewed-work JSON, the complete inventory used by precompute, and subject/composition history are derived
-views in this same folder. They have no record-count caps or review history windows. They are not a second
-capped evidence path.
+The complete folder is read-only in the sandbox. `work/` is writable scratch.
+Only `out/` is collected.
+Reviewed-work JSON, the complete inventory used by precompute, and subject/composition history are derived views in this same folder.
+They have no record-count caps or review history windows.
 
-The initializer reads the gateway's advertised archive budget and downloads the tar to a temporary file
-under `/workspace`. It checks the byte count before extraction. A dropped or short transfer is retried
-from byte zero; an archive above the advertised budget is refused. The gateway serves the same staged
-tar file for each retry while the attempt is active.
+They are not a second capped evidence path.
+
+The initializer reads the gateway's advertised archive budget and downloads the tar to a temporary file under `/workspace`.
+It checks the byte count before extraction.
+A dropped or short transfer is retried from byte zero.
+An archive above the advertised budget is refused.
+
+The gateway serves the same staged tar file for each retry while the attempt is active.
 The gateway accepts one `area` or `repo` selector on the same authenticated `/workspace` endpoint.
 Areas are `scm`, `chat`, `docs`, `people`, and `practices`, selected under `context/<area>/`.
-Repositories are selected under `repos/<repo>/`. A selector returns only files already present in
-the frozen, permission-checked archive. Unknown, refused, duplicate, and combined selectors receive
-`404`; a selector cannot trigger a new database read or extend the attempt's permissions.
+Repositories are selected under `repos/<repo>/`.
 
-The workspace archive budget is 512 MiB. Registration refuses an initial archive above the budget
-before attempt volumes or containers are created, with `WORKSPACE_BUDGET_EXCEEDED`. Each first
-successful selection spends its archive bytes from the same cumulative budget. A retry serves the
-cached, identical selection and spends nothing more. Failed selections leave no staged archive.
-This limit includes tar headers and padding; it is not a limit on the number of source records.
+A selector returns only files already present in the frozen, permission-checked archive.
+Unknown, refused, duplicate, and combined selectors receive `404`.
+A selector cannot trigger a new database read or extend the attempt's permissions.
 
-Admission removes the uncited artifact inventory from the database receipt; accepted citation verdicts and
-source-use/readiness facts remain, not a replayable workspace. Expired unsuccessful attempts also discard their
-artifact inventory under the attempt fence.
+The workspace archive budget is 512 MiB.
+Registration refuses an initial archive above the budget before attempt volumes or containers are created, with `WORKSPACE_BUDGET_EXCEEDED`.
+Each first successful selection spends its archive bytes from the same cumulative budget.
+A retry serves the cached, identical selection and spends nothing more.
 
-The worker deletes its verified evidence folder after the admission transaction commits, even if
-the runtime is still composing feedback. An attempt without an admitted result retains its folder
-for one hour after it ends. On worker startup, unknown and finished attempt folders are deleted
-without the grace period; matching running attempts are preserved. The scheduled cleaner retries
-local removal failures without changing a committed admission.
+Failed selections leave no staged archive.
+This limit includes tar headers and padding.
+It is not a limit on the number of source records.
+
+Admission removes the uncited artifact inventory from the database receipt.
+Accepted citation verdicts and source-use/readiness facts remain, not a replayable workspace.
+Expired unsuccessful attempts also discard their artifact inventory under the attempt fence.
+
+The worker deletes its verified evidence folder after the admission transaction commits, even if the runtime is still composing feedback.
+An attempt without an admitted result retains its folder for one hour after it ends.
+On worker startup, unknown and finished attempt folders are deleted without the grace period.
+Matching running attempts are preserved.
+
+The scheduled cleaner retries local removal failures without changing a committed admission.
 
 For result upload, the runner sends `Content-Digest: sha-256=:<base64>:` over the complete tar.
-The gateway checks it against the received bytes before it keeps the first complete result. Both
-the first success and a repeat `409` return the first result's strong `ETag`; the runner accepts
-either only when the tag matches its archive. Other `409` responses are failures, not acknowledgements.
-An authenticated upload sent to a worker that does not own the running attempt receives `409`
-without an `ETag`. The batch runtime URL contains the job ID; a token for another job cannot
-produce this ownership response for that URL.
-The runner stops its child at the work deadline, then retries the complete result archive with
-bounded exponential delay until the ten-minute upload deadline. The attempt token expires at that
-upload deadline. A terminal upload failure has exit code `43`; it is not a successful review.
+The gateway checks it against the received bytes before it keeps the first complete result.
+Both the first success and a repeat `409` return the first result's strong `ETag`.
+The runner accepts either only when the tag matches its archive.
+
+Other `409` responses are failures, not acknowledgements.
+An authenticated upload sent to a worker that does not own the running attempt receives `409` without an `ETag`.
+The batch runtime URL contains the job ID.
+A token for another job cannot produce this ownership response for that URL.
+
+The runner stops its child at the work deadline, then retries the complete result archive with bounded exponential delay until the ten-minute upload deadline.
+The attempt token expires at that upload deadline.
+A terminal upload failure has exit code `43`.
+It is not a successful review.
 
 ```text
 /workspace/
@@ -122,148 +140,166 @@ upload deadline. A terminal upload failure has exit code `43`; it is not a succe
 └── .run-pi.ts                       # Runner script entry point.
 ```
 
-The mentor uses a separate `context/target/`, `context/user/`, and `scratch/` layout. Both runners
-execute on Node; see
-[ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md).
+The mentor uses a separate `context/target/`, `context/user/`, and `scratch/` layout.
+Both runners execute on Node.
+See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md).
 
 ## Path conventions
 
-- **`context/`, `repos/`, `inputs/`, `INDEX.md`, `INDEX.json` and `task.json`** — read-only inputs. Read-only-ness is a **mount** property, not a path
-  guard: a workspace initializer container downloads the attempt's workspace tar from the sandbox
-  gateway onto the attempt's `/workspace` volume, and the runtime container then mounts that volume
-  read-only. `work/`, `out/`, the Pi session directories `.pi` and `.sessions` are separate writable volumes of the same
-  attempt, removed with it. There is no runtime allowlist of `inputs/`; the server validates every
+- **`context/`, `repos/`, `inputs/`, `INDEX.md`, `INDEX.json` and `task.json`** — read-only inputs. Read-only-ness is a **mount** property, not a path guard.
+  A workspace initializer container downloads the attempt's workspace tar from the sandbox gateway onto the attempt's `/workspace` volume.
+  The runtime container then mounts that volume read-only. `work/`, `out/`, the Pi session directories `.pi` and `.sessions` are separate writable volumes of the same
+  attempt, removed with it. There is no runtime allowlist of `inputs/`. The server validates every
   path it packs into the tar before the container exists.
 - **`context/`** — captured records of the artifact under review, including metadata,
   descriptions, comments, threads and commit metadata. `INDEX.json` records primary readiness and all folder artifact digests.
-  `change.json` pins the reviewed range (`base_sha`, `head_sha`) and is the artifact a citation of the
-  change names; the change itself is read from the checkout. `linked_work_items/<n>.md` is each linked
-  issue as text, title first, then its dates and a line saying the body is the text mirrored at capture and the
-  dates are not when its lines were written, for quoting. `description.md` is the description as its
-  author wrote it, for quoting; `metadata.json` carries the same text escaped, for programs. Every
-  projection is pretty-printed, one field per line, so a line citation into it is possible. A source with nothing to report still
-  writes its file, holding an empty list: "the record was read and held nothing" is a fact a review may
-  reason from, and "the file is not there" is not.
+  `change.json` pins the reviewed range (`base_sha`, `head_sha`).
+  A citation of the change names this artifact. The change itself is read from the checkout. `linked_work_items/<n>.md` gives each linked issue as text for quotes.
+  It puts the title first, then the dates.
+  A line states that the body is the text mirrored at capture.
+  It states that the dates do not date when its lines were written. `description.md` is the description as its
+  author wrote it, for quoting. `metadata.json` carries the same text escaped, for programs. Every
+  projection is pretty-printed, one field per line, so a line citation into it is possible. A source with nothing to report still writes its file with an empty list.
+  "The record was read and held nothing" is a fact a review can reason from.
+  "The file is not there" is not.
 - **`inputs/history/`** — earlier observations and feedback, present on every review. These are uncapped authorized subject projections from the same snapshot. `COMPLETE` means complete
   for that permitted mirror scope, not a guarantee about upstream records.
 - **`INDEX.json`** — the source and artifact index, and the authoritative statement of what a run
-  staged. **Every source permitted for the workspace and purpose is rendered on every review** — practice definitions decide which practices may run, never which files the agent can see. A
+  staged. **Every source permitted for the workspace and purpose is rendered on every review**.
+  Practice definitions decide which practices can run, never which files the agent can see. A
   source listed as anything other than `AVAILABLE` says why in a typed reason code (`NO_PROVIDER`,
-  `GOVERNANCE_NOT_EFFECTIVE`, `COLLECTION_ERROR`, …); none of those reasons is "no practice asked for it".
+  `GOVERNANCE_NOT_EFFECTIVE`, `COLLECTION_ERROR`, …). None of those reasons is "no practice asked for it".
   It indexes context files but is not itself a source artifact.
-- **`repos/reviewed/`** — a read-only checkout at the manifest's immutable commit
-  identity, with the Git history reachable from that commit, the mirrored remote-tracking branches
-  and tags, and the list of captured refs in `repos/reviewed/.git/hephaestus-captured-refs`. Upstream remote
+- **`repos/reviewed/`** — a read-only checkout at the manifest's immutable commit identity.
+  It contains the Git history reachable from that commit, plus the mirrored remote-tracking branches and tags.
+  `repos/reviewed/.git/hephaestus-captured-refs` lists the captured refs. Upstream remote
   configuration, credentials, hooks, and unreachable objects are not exported. A symbolic link is
-  checked out as a regular file holding its target path, never followed; a submodule is not
+  checked out as a regular file holding its target path, never followed. A submodule is not
   hydrated, and its presence makes the capture `PARTIAL` with `SUBMODULE_EXCLUDED` recorded in
-  `INDEX.json`. Only the `repos/reviewed/.git/HEAD` and captured-refs witnesses carry manifest digests;
+  `INDEX.json`. Only the `repos/reviewed/.git/HEAD` and captured-refs witnesses carry manifest digests.
   the checkout itself is transferred by traversal.
-- **`work/change/`** — what `pi-change.ts` derives from `repos/reviewed/` with `git` before
-  the precompute scripts and the model run: `git diff` from `base_sha` to `head_sha` with renames
-  detected and every hunk line prefixed `[L<n>]` and a space (the coordinate a change citation names),
-  `git diff --stat` and the changed files with their status letters. The commits of the range are not
-  derived here: they are staged as `context/commits.json`, so a quote of a commit message cites
-  an artifact admission can verify. Absent when no change was captured (an issue review). A precompute script
+- **`work/change/`** — what `pi-change.ts` derives from `repos/reviewed/` with `git` before the precompute scripts and model run.
+  It derives `git diff` from `base_sha` to `head_sha`, with renames detected.
+  Every hunk line has the prefix `[L<n>]` and a space: the coordinate a change citation names.
+  It also derives `git diff --stat` and the changed files with their status letters. The commits of the range are not derived here.
+  They are staged as `context/commits.json`.
+  Thus, a commit-message quote cites an artifact that admission can verify. Absent when no change was captured (an issue review). A precompute script
   receives this directory as its fifth argument and reads it through `lib/change.ts`.
-- **`work/`** — agent + precompute scratch. The Pi agent may write here; the server never
+- **`work/`** — agent + precompute scratch. The Pi agent may write here. The server never
   collects it.
-- **`out/`** — the *only* directory the sandbox collects after the run. `runner-debug.json` carries the
-  per-turn trace — calls, tool calls by name, observations stored and refused with the refusal reasons,
-  compactions, provider retries — which the server keeps in the job output, so friction in production
-  is read from the job record rather than from a transcript.
+- **`out/`** — the *only* directory the sandbox collects after the run. `runner-debug.json` carries the per-turn trace.
+  This covers calls, tool calls by name, stored and refused observations with refusal reasons, compactions, and provider retries.
+  The server keeps this trace in the job output.
+  Thus, production friction is read from the job record, not a transcript.
 - **`node_modules`** — a symlink to `/opt/pi-sdk/node_modules`, so the runner's bare-specifier
   import of `@earendil-works/pi-coding-agent` resolves. The runner, precompute scripts, and SDK native
   bindings execute on Node.
 - **`task.json`** — the [task envelope](#task-envelope).
 - **`.pi*`** / `inputs/practices/` / `work/precompute*` / `work/analysis/` / `out/`
   — internal control surfaces. AI-readable as configured by the orchestrator, but
-  *not* part of the public agent ABI; subject to change without a `schemaVersion` bump.
+  *not* part of the public agent ABI. Subject to change without a `schemaVersion` bump.
 
 ## Pull request records
 
-What each `context/` file of a pull request review carries, field by field. A key listed as
-*when present* is absent — never `null` — when the provider recorded nothing. Comment and review lists run oldest
-first. Lists have no record-count cap. Folder size is checked against the advertised workspace budget before launch.
+What each `context/` file of a pull request review carries, field by field.
+A key listed as *when present* is absent — never `null` — when the provider recorded nothing.
+Comment and review lists run oldest first.
+Lists have no record-count cap.
 
-**`metadata.json`** — the pull request as the provider holds it. `pr_number`, `pr_url`,
-`repository_full_name`, `source_branch`, `target_branch`, `commit_sha`, `title`, `body`, `state`,
-`is_draft`, `is_merged`, `additions`, `deletions`, `changed_files`, `labels` (names, sorted) and
-`assignees` (logins, sorted) are always written. `is_merged` is stated apart from `state` because a
-webhook-synced pull request closed by its merge is stored `CLOSED` with `merged_at` set. When present:
-`created_at`, `closed_at`, `merged_at` (ISO instants), `author`, `merged_by`, `milestone` (its title),
-and `merge_state_status` and `review_decision`, which only the GraphQL sync fills (GitLab's is left out
-until the sync reads every reviewer and approver again after a webhook changed someone's review), and `head_checks`
-— `SUCCESS`, `FAILURE`, `PENDING`, `CANCELLED` or `NONE`, what the provider's checks said about the
-head (GitHub's status check rollup, GitLab's head pipeline), written only when the state was observed
-for the head under review and left out for a head no sync or check event has reported on. `author_bot: true`
-is written when the adapter classified the author as automation (GitHub's bot type, GitLab's
-`group_<id>_bot_<hash>` / `project_<id>_bot_<hash>` token identities); absent means a person. The
-same rule gives every `author` below its `bot: true`, so a reader never guesses from a login.
+Folder size is checked against the advertised workspace budget before launch.
 
-**`commits.json`** — `commits`: the commits of `base_sha..head_sha`, oldest first, the newest 500 of
-them when there are more. Written whenever the checkout was prepared, and staged rather than derived
-in the container because a quote of a commit message is verified against the artifact it cites, and
-admission verifies only what the server staged. Each entry: `sha`, `parents` (shas), `author` and
-`committer` (names, never addresses), `authoredAt` and `committedAt` (ISO instants), `message` (the
-whole message, subject and body) and `files`, each with `path`, `status` (`A`, `M`, `D`, `R`, `C`, as
-`git diff --name-status` prints it), `additions`, `deletions` and, for a rename or copy, `oldPath`.
+**`metadata.json`** — the pull request as the provider holds it. `pr_number`, `pr_url`, `repository_full_name`, `source_branch`, `target_branch`, `commit_sha`, `title`, `body`, `state`, `is_draft`, `is_merged`, `additions`, `deletions`, `changed_files`, `labels` (names, sorted) and `assignees` (logins, sorted) are always written. `is_merged` is stated apart from `state` because a webhook-synced pull request closed by its merge is stored `CLOSED` with `merged_at` set.
+When present: `created_at`, `closed_at`, `merged_at` (ISO instants), `author`, `merged_by`, and `milestone` (its title).
+Only the GraphQL sync fills `merge_state_status` and `review_decision`.
 
-**`comments.json`** — the line-anchored review comments people wrote, as a list; a comment carrying the
-`<!-- hephaestus` marker is the tool's own earlier note and is left out at the query. Each entry:
-`id` (the stored id), `path`, `body`; when present, `thread` (the `id` of an entry in
-`review_threads.json`), `in_reply_to` (the `id` of the comment it answers), `line` (absent for a
-file-level comment), `side` (`LEFT` for a line of the base, `RIGHT` for a line of the head; absent
-when the provider does not say), `outdated` (only when `true`), `created_at`, `author` and `bot` (only
-when `true`). `general_comments.json` entries carry `bot` the same way beside their `author`.
+GitLab's is left out until the sync rereads every reviewer and approver after a webhook changes someone's review.
+`head_checks` reports what the provider's checks said about the head: `SUCCESS`, `FAILURE`, `PENDING`, `CANCELLED`, or `NONE`.
 
-**`review_threads.json`** — `threads`, `reviewDecisions` and `truncated`. A thread: `id` (what a
-comment's `thread` names), `state` (`RESOLVED` or `UNRESOLVED`); when present, `path`, `line`,
-`resolvedBy`, `resolvedAt`, `outdated` and `createdAt`. `resolvedAt` is the moment the provider
-recorded: GitLab can supply it on the discussion; GitHub's
-GraphQL thread carries no such moment, so on GitHub it is the time of the resolved webhook event and
-is absent for a resolution only the sync saw. A thread holding a Hephaestus note is left out. A decision is
-a submitted review that decided something: `state` (`APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`,
-`DISMISSED`), and when present `author`, `bot` (only when `true`), `submittedAt`, `body` (what the
-reviewer wrote with it) and `dismissed` (only when `true`). Unsubmitted and unmapped reviews are never listed, and neither is a
-`COMMENTED` review with no body — GitHub's container for a batch of inline comments, or the row
-GitLab's sync makes per discussion and author — because its substance is already in `comments.json`.
-There is no history window, so an approval on a busy merge request is
-never pushed out by discussion rows.
+This uses GitHub's status check rollup or GitLab's head pipeline.
+It is written only when the state was observed for the head under review.
+It is absent for a head that no sync or check event has reported on. `author_bot: true` is written when the adapter classified the author as automation (GitHub's bot type, GitLab's `group_<id>_bot_<hash>` / `project_<id>_bot_<hash>` token identities).
+Absent means a person.
+The same rule gives every `author` below its `bot: true`, so a reader never guesses from a login.
 
-**`linked_work_items.json`** and **`linked_work_items/<n>.md`** — the issues this repository stores
-that the provider records as closing candidates for the pull request (GitHub's closing references,
-GitLab's closes-issues), and the ones named by every `#N` the title, the description (HTML comments
-removed), the branch name and the full commit messages of the change mention. Each item says `how`:
-`closesOnMerge` for a provider-recorded candidate — linked by a keyword or in the provider's UI; a
-candidate in another repository is left out, since its number is not this repository's — and
-`mentions` when only the text names it; `mentions` is read from the text, not a provider relation. A candidate closes
-only on an eligible merge, and a project can turn automatic closing off; whether the issue closed is
-its `state` and `closedAt`, as last synced. A `#N` that continues another
-name — `owner/repo#12`, `v1.2#3`, `GH-12` — is not this repository's issue and is not looked up.
-`unresolvedReferences[]` lists the mentioned numbers this repository does not hold. Every mentioned number and provider closing candidate is read; `truncated` is false. An item's `subIssuesTotal` and `subIssuesCompleted` come with
-`subIssuesSource`: `provider` when the provider synced the rollup (GitHub), `children` when the record
-counted the issues this repository stores as the item's children, closed ones as completed (GitLab,
-whose sync links a child to its parent and never totals them). All three are absent when there is
-neither a provider count nor a child.
+**`commits.json`** — `commits`: the commits of `base_sha..head_sha`, oldest first, the newest 500 of them when there are more.
+It is written whenever the checkout was prepared.
+It is staged, not derived in the container.
+
+A commit-message quote is verified against its cited artifact.
+Admission verifies only what the server staged.
+Each entry contains `sha`, `parents` (shas), `author`, and `committer` (names, never addresses).
+It contains `authoredAt` and `committedAt` (ISO instants), plus `message` (the whole message, subject and body).
+
+It also contains `files`, each with `path`, `status`, `additions`, and `deletions`.
+`status` is `A`, `M`, `D`, `R`, or `C`, as `git diff --name-status` prints it.
+
+For a rename or copy, a file also has `oldPath`.
+
+**`comments.json`** — the line-anchored review comments people wrote, as a list.
+A comment carrying the `<!-- hephaestus` marker is the tool's own earlier note and is left out at the query.
+Each entry: `id` (the stored id), `path`, `body`.
+When present, `thread` names the `id` of an entry in `review_threads.json`.
+`in_reply_to` names the `id` of the comment it answers.
+
+`line` is absent for a file-level comment.
+`side` is `LEFT` for a base line or `RIGHT` for a head line.
+
+It is absent when the provider does not say.
+Other optional fields are `outdated` (only when `true`), `created_at`, `author`, and `bot` (only when `true`). `general_comments.json` entries carry `bot` the same way beside their `author`.
+
+**`review_threads.json`** — `threads`, `reviewDecisions` and `truncated`.
+A thread: `id` (what a comment's `thread` names), `state` (`RESOLVED` or `UNRESOLVED`).
+When present, `path`, `line`, `resolvedBy`, `resolvedAt`, `outdated` and `createdAt`. `resolvedAt` is the moment the provider recorded: GitLab can supply it on the discussion.
+GitHub's GraphQL thread carries no such moment.
+
+On GitHub, it is the time of the resolved webhook event.
+It is absent for a resolution that only the sync saw.
+
+A thread holding a Hephaestus note is left out.
+A decision is a submitted review that decided something: `state` (`APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, `DISMISSED`), and when present `author`, `bot` (only when `true`), `submittedAt`, `body` (what the reviewer wrote with it) and `dismissed` (only when `true`).
+Unsubmitted and unmapped reviews are never listed.
+Neither is a `COMMENTED` review with no body, because its substance is already in `comments.json`.
+This is GitHub's container for a batch of inline comments, or GitLab sync's row per discussion and author.
+There is no history window, so an approval on a busy merge request is never pushed out by discussion rows.
+
+**`linked_work_items.json`** and **`linked_work_items/<n>.md`** contain issues that this repository stores.
+They include provider-recorded closing candidates for the pull request: GitHub's closing references or GitLab's closes-issues.
+They also include issues named by every `#N` in the title, description, branch name, and full commit messages of the change.
+HTML comments are removed from the description.
+Each item says `how`: `closesOnMerge` for a provider-recorded candidate — linked by a keyword or in the provider's UI.
+
+A candidate in another repository is left out, since its number is not this repository's — and `mentions` when only the text names it. `mentions` is read from the text, not a provider relation.
+A candidate closes only on an eligible merge, and a project can turn automatic closing off.
+
+Whether the issue closed is its `state` and `closedAt`, as last synced.
+A `#N` that continues another name — `owner/repo#12`, `v1.2#3`, `GH-12` — is not this repository's issue and is not looked up. `unresolvedReferences[]` lists the mentioned numbers this repository does not hold.
+
+Every mentioned number and provider closing candidate is read. `truncated` is false.
+An item's `subIssuesTotal` and `subIssuesCompleted` come with `subIssuesSource`.
+It is `provider` when the provider synced the rollup (GitHub).
+
+It is `children` when the record counted this repository's stored children of the item, with closed ones counted as completed.
+This applies to GitLab, whose sync links a child to its parent but never totals them.
+
+All three are absent when there is neither a provider count nor a child.
 
 ## History records
 
-**`inputs/history/observations.json`** — every authorized prior verdict about the reviewed developer,
-newest first, with no age window or per-practice cap. Entries carry `practiceSlug`, `summary`,
-`outcome`, `severity`, `observedAt` and `artifact`. `outcome` is one of `MET`, `NOT_MET`,
-`NOT_APPLICABLE` and `UNDETERMINED`; only `NOT_MET` carries severity.
+**`inputs/history/observations.json`** — every authorized prior verdict about the reviewed developer, newest first, with no age window or per-practice cap.
+Entries carry `practiceSlug`, `summary`, `outcome`, `severity`, `observedAt` and `artifact`. `outcome` is one of `MET`, `NOT_MET`, `NOT_APPLICABLE` and `UNDETERMINED`.
+Only `NOT_MET` carries severity.
 The composition projections use the same snapshot and visibility checks as person-scoped JSONL.
+
 They omit hidden, withdrawn, stale or otherwise refused bodies through the existing source-owner checks.
-The prompt can summarize or point to a file; prompt-size bounds never remove records from the folder.
+The prompt can summarize or point to a file.
+Prompt-size bounds never remove records from the folder.
 
 ## Task envelope
 
-`task.json` is one flat record with `schemaVersion: 3`, `jobId`, `workspaceId`, `prompt`,
-`pullRequestNumber`, `repositoryFullName` and the seven input-location fields below. There is no
-`kind` discriminator, nested `task` or nested `paths` object. The practice runner requires a
-non-empty `prompt`. Unreadable or invalid JSON, unsupported versions, blank prompts and invalid
-paths exit with `42`.
+`task.json` is one flat record with `schemaVersion: 3`, `jobId`, `workspaceId`, `prompt`, `pullRequestNumber`, `repositoryFullName` and the seven input-location fields below.
+There is no `kind` discriminator, nested `task` or nested `paths` object.
+The practice runner requires a non-empty `prompt`.
+Unreadable or invalid JSON, unsupported versions, blank prompts and invalid paths exit with `42`.
 
 All seven input-location fields are required:
 
@@ -272,41 +308,42 @@ All seven input-location fields are required:
 | `contextRoot` | Captured context directory, including `metadata.json` and `change.json` when applicable |
 | `repositoryRoot` | Captured repository directory |
 | `manifest` | Source and artifact index (`INDEX.json`) |
-| `practiceIndex` | Practice index file; practice documents share its directory |
+| `practiceIndex` | Practice index file. Practice documents share its directory |
 | `compositionRequest` | Feedback-composition request file |
-| `preparedFeedback` | Previously prepared feedback file; review history shares its directory |
+| `preparedFeedback` | Previously prepared feedback file. Review history shares its directory |
 | `precomputeScripts` | Per-practice TypeScript script directory |
 
-Values are relative to `/workspace`, use `/` separators, and cannot be empty or consist only of
-Unicode separators. Absolute paths, `.` or `..` components, empty components, backslashes, colons
-and control characters are rejected. Validation is lexical; it does not establish filesystem
-ownership or prevent symlink traversal.
+Values are relative to `/workspace`, use `/` separators, and cannot be empty or consist only of Unicode separators.
+Absolute paths, `.` or `..` components, empty components, backslashes, colons and control characters are rejected.
+Validation is lexical.
+It does not establish filesystem ownership or prevent symlink traversal.
 
-A declared location does not guarantee content exists there. For example, a review without a
-repository has no repository tree, and feedback composition runs only when its request is present.
+A declared location does not guarantee content exists there.
+For example, a review without a repository has no repository tree, and feedback composition runs only when its request is present.
 The runner and precompute resolve input locations from these fields, not from the layout shown above.
-Precompute receives the relative `contextRoot` for record citations as well as its absolute path
-for file reads, so a relocated job folder does not leave stale citation paths.
+Precompute receives the relative `contextRoot` for record citations and its absolute path for file reads.
+Thus, a relocated job folder does not leave stale citation paths.
+
 Scratch and output locations remain fixed by this ABI.
 
 ## Output archive validation
 
-Output collection is all-or-nothing. Unavailable or invalid output fails execution even after exit
-code `0`; an already-known timeout or exit code `42` retains its original failure classification.
+Output collection is all-or-nothing.
+Unavailable or invalid output fails execution even after exit code `0`.
+An already-known timeout or exit code `42` retains its original failure classification.
 
-Output must be an uncompressed tar containing regular files beneath `out/` and zero-length directory
-entries. Links, sparse files, devices, PAX/GNU extension records, invalid checksums, unsafe or
-duplicate normalized paths, truncation, and nonzero data after the end markers are rejected.
+Output must be an uncompressed tar containing regular files beneath `out/` and zero-length directory entries.
+Links, sparse files, devices, PAX/GNU extension records, invalid checksums, unsafe or duplicate normalized paths, truncation, and nonzero data after the end markers are rejected.
 
-`gateway-run.ts` packages output with `tar --format=ustar`; packaging failure fails the review.
-The runner's `outputPath` accepts portable ASCII names and limits the complete `out/<name>` path to
-100 bytes. This producer restriction avoids extension records, which the reader rejects to prevent
-sparse-file expansion beyond declared sizes.
+`gateway-run.ts` packages output with `tar --format=ustar`.
+Packaging failure fails the review.
+The runner's `outputPath` accepts portable ASCII names and limits the complete `out/<name>` path to 100 bytes.
+This producer restriction avoids extension records, which the reader rejects to prevent sparse-file expansion beyond declared sizes.
 
-Limits are 50 MiB for the entire archive, including headers, end markers and padding; 50 MiB of file
-contents in total; 10 MiB per file; and 10,000 entries, including directories. Rejected transfers are
-aborted without draining the remaining body. Files are read into memory, never extracted to the
-worker filesystem.
+Limits are 50 MiB for the entire archive, including headers, end markers and padding. 50 MiB of file contents in total. 10 MiB per file.
+And 10,000 entries, including directories.
+Rejected transfers are aborted without draining the remaining body.
+Files are read into memory, never extracted to the worker filesystem.
 
 ## Exit codes
 
@@ -315,118 +352,147 @@ worker filesystem.
 | 0    | Success — `out/result.json` is complete, from the first attempt or from the recovery retry |
 | 1    | No complete review output after the initial attempt *and* the recovery retry |
 | 2    | Fatal runner error — an unhandled rejection or uncaught exception. Debug and usage files are persisted first |
-| 3    | Watchdog hard-kill (budget + grace exceeded); writes `out/watchdog-killed.json` first |
+| 3    | Watchdog hard-kill (budget + grace exceeded). Writes `out/watchdog-killed.json` first |
 | 42   | Task-envelope contract drift: malformed envelope, unsupported version, blank prompt, or invalid paths |
 | 43   | Result archive upload did not complete before the upload deadline or was refused |
 | 75   | The review finished, but the call admitting its observations never reached the server |
 | 76   | No practice was reached, and every model call the run made went unanswered |
-| 124  | The work deadline stopped the runner child; result upload was still attempted |
+| 124  | The work deadline stopped the runner child. Result upload was still attempted |
 
-`137` is a container SIGKILL from the runtime, not a runner code. The server treats `0` as success,
-`42` as drift, `124` as a timeout, and `75` and `76` as attempts to repeat; every other non-zero code is a generic failure.
+`137` is a container SIGKILL from the runtime, not a runner code.
+The server treats `0` as success, `42` as drift, `124` as a timeout, and `75` and `76` as attempts to repeat.
+Every other non-zero code is a generic failure.
 
-The gateway address is fixed for an attempt. If it becomes unreachable, runner retries cannot follow
-a relocated worker. Exit `75` requeues the job with a new token and backoff unless an admission already
-committed; the admission digest is checked under the job-row lock before requeueing. A lost admission
-response therefore cannot repeat an admitted review. The retry cap still applies.
+The gateway address is fixed for an attempt.
+If it becomes unreachable, runner retries cannot follow a relocated worker.
+Exit `75` requeues the job with a new token and backoff unless an admission already committed.
+The admission digest is checked under the job-row lock before requeueing.
 
-Exit `76` uses the same retry policy when no practice was reached and every model call went
-unanswered. It records a provider failure, not an observation about the reviewed work.
+A lost admission response therefore cannot repeat an admitted review.
+The retry cap still applies.
+
+Exit `76` uses the same retry policy when no practice was reached and every model call went unanswered.
+It records a provider failure, not an observation about the reviewed work.
 
 ## Versioning policy
 
-`task.json.schemaVersion` versions the flat practice-review record. Bump it when an existing
-producer or consumer must change: for example, adding a required field, removing a field, or
-changing a field's meaning. An additive optional field does not require a bump.
+`task.json.schemaVersion` versions the flat practice-review record.
+Bump it when an existing producer or consumer must change: for example, adding a required field, removing a field, or changing a field's meaning.
+An additive optional field does not require a bump.
 
-The server creates the envelope and stages the runner and its sidecars from its own classpath for
-each attempt. They evolve together; there is no cross-version envelope compatibility layer.
+The server creates the envelope and stages the runner and its sidecars from its own classpath for each attempt.
+They evolve together.
+There is no cross-version envelope compatibility layer.
 
-The agent image's `hephaestus.agent.runtime-contract` label versions its runtime dependencies and
-launch contract separately. Its value is `3`, independent of the envelope schema version. See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md)
-for the image contract.
+The agent image's `hephaestus.agent.runtime-contract` label versions its runtime dependencies and launch contract separately.
+Its value is `3`, independent of the envelope schema version.
+See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md) for the image contract.
 
 ## Precompute validation and limits
 
-Precompute is advisory. In production, the image runner validates every script's default export
-and returned hints, directions and finite numeric metrics. An invalid result or a thrown exception
-becomes a recorded script error with no hints; it does not become an observation about the reviewed work.
+Precompute is advisory.
+In production, the image runner validates every script's default export and returned hints, directions and finite numeric metrics.
+An invalid result or a thrown exception becomes a recorded script error with no hints.
+It does not become an observation about the reviewed work.
 
-The server-staged bootstrap bounds the **entire stage**, including copying scripts, module imports
-and synchronous execution, to one tenth of the job timeout, capped at 30 seconds. This fits inside
-the existing 60-second non-model allowance. The image runner's per-script asynchronous timeout is
-not a substitute for this outer deadline. Ordinary child processes are killed when the stage ends,
-including after success. Failed precompute remains best-effort: the practice review continues without
-its hints.
+The server-staged bootstrap bounds the **entire stage** to one tenth of the job timeout, capped at 30 seconds.
+The stage includes script copies, module imports, and synchronous execution.
+This fits inside the existing 60-second non-model allowance.
+The image runner's per-script asynchronous timeout is not a substitute for this outer deadline.
+Ordinary child processes are killed when the stage ends, including after success.
 
-Each practice's result reaches the model as a section under that practice's criteria in the turn that
-evaluates it, not in the opening brief: a busy script bounds its own section, never another practice's.
+Failed precompute remains best-effort: the practice review continues without its hints.
+
+Each practice's result reaches the model as a section under that practice's criteria in its evaluation turn, not in the opening brief.
+A busy script bounds its own section, never another practice's.
 The [practice catalogue](../practice-catalogue.md) owns what a section holds and its bound.
 
-The bootstrap clears the inherited environment, runs Node under filesystem permission grants scoped to
-the workspace, the precompute library and its own stage and output directories, and
-applies a **10 MiB per-file limit** in its subshell, including the diagnostic log. On failure, at most
-8 KiB of diagnostics is passed onward. The subsequent review does not inherit that file limit.
-These are safeguards against broken scripts, not hostile-code isolation: a per-file limit is not a
-cumulative disk quota, Node child-process permission is not a security boundary, and a deliberately
-detached process can escape process-group cleanup. Container resource limits and teardown remain the
-outer boundary.
+The bootstrap clears the inherited environment.
+It runs Node under filesystem permission grants scoped to the workspace, precompute library, and its own stage and output directories.
+It applies a **10 MiB per-file limit** in its subshell, including the diagnostic log.
+
+On failure, at most 8 KiB of diagnostics is passed onward.
+The subsequent review does not inherit that file limit.
+These safeguards protect against broken scripts, not hostile code.
+A per-file limit is not a cumulative disk quota.
+
+Node child-process permission is not a security boundary.
+A deliberately detached process can escape process-group cleanup.
+
+Container resource limits and teardown remain the outer boundary.
 
 ## Practice review tools
 
-One review is one session, and its tool set is fixed when the runner creates it, in `pi-runner.ts`:
-the native Pi tools `read`, `grep`, `find`, `ls`, `write`, `edit` and `bash`, Pi's `codemode`, plus
-`report_observation` for the measuring turns and, when composition was requested, `report_feedback` and
-`report_summary` for the composition turn. `codemode` runs one JavaScript script in a QuickJS sandbox
-that calls the native tools, so a chain of searches and reads costs one model call; only what the script
-prints returns to the model. The recording tools are declared `model-only`, so a script cannot call them:
-what a turn records is always a call the model made. A script's own tool calls appear in the per-turn
-trace as `codemode.<tool>` and do not count toward the repetition limits, which watch the model's calls.
-A measuring turn ends with the `report_observation` call that leaves each of its practices with a
-recorded result, rather than on a further model call. The two feedback tools store nothing until the server has admitted the recorded
-observations. `report_observation` and `report_feedback` take a list — several observations or units in
-one call, each stored or refused on its own with the reason — and accept that list as a JSON string as
-well as an array, because a smaller model sends the string form often and, offered the array alone,
-re-sends the same string against the SDK's schema error indefinitely. A string with a closing brace too
-many or too few is repaired where the repair is unambiguous and checked field by field afterwards; one
-that does not parse is refused with the parse error. A turn that calls the recording tool many times
-without recording anything is ended. A citation's quote is optional: by
-coordinates alone, the runner records the cited lines and echoes them back. A quote given with a diff
-marker, a `[L<n>]` prefix, a non-breaking space read as a space, or a JSON string's text read without
-its escapes is recorded as the artifact's own bytes, because admission verifies those bytes; a quote
-whose lines were miscounted is recorded at the lines where the text is, when it occurs once; a citation
-that names `work/change/diff.patch` itself, by the view's own line numbers, is recorded at the changed
-file, side and `[L<n>]` its quote occurs at, when that is one place; a side or revision on a citation that
-settles on another source than the change or the checkout is dropped, since admission refuses either
-there; a refused citation is answered with what the cited lines really hold. The
-mentor runner exposes no native tool at all: its context arrives through `fetch_context`, and it gives
-feedback about an observation with `link_observation`, whose `text` the reply shows the developer once
-the server admits that observation for them; a refused link fails the call and shows nothing.
+One review is one session.
+The runner fixes its tool set when it creates the session in `pi-runner.ts`.
+The set includes the native Pi tools `read`, `grep`, `find`, `ls`, `write`, `edit`, and `bash`, plus Pi's `codemode`.
+It includes `report_observation` for the measuring turns.
 
-The image provides Bash, Git, ripgrep, fd-find, and standard shell utilities. `PI_OFFLINE=1`
-disables tool downloads. Use `work/` or `$TMPDIR` for scratch files; scratch files are not
-captured evidence. Native search honors ignore rules; use explicit paths and
-`rg --hidden --no-ignore` when those exclusions are inappropriate. Use streaming shell commands for
-lines too large for the read tool.
+When composition was requested, it also includes `report_feedback` and `report_summary` for the composition turn. `codemode` runs one JavaScript script in a QuickJS sandbox that calls the native tools.
+Thus, a chain of searches and reads costs one model call.
+Only what the script prints returns to the model.
+The recording tools are declared `model-only`, so a script cannot call them: what a turn records is always a call the model made.
+A script's own tool calls appear in the per-turn trace as `codemode.<tool>` and do not count toward the repetition limits, which watch the model's calls.
+
+A measuring turn ends with the `report_observation` call that leaves each of its practices with a recorded result, rather than on a further model call.
+The two feedback tools store nothing until the server has admitted the recorded observations. `report_observation` and `report_feedback` take a list of several observations or units in one call.
+Each is stored or refused on its own with the reason.
+The tools accept the list as a JSON string or an array.
+A smaller model often sends the string form.
+
+If offered only the array, it resends the same string against the SDK's schema error indefinitely.
+A string with a closing brace too many or too few is repaired where the repair is unambiguous and checked field by field afterwards.
+One that does not parse is refused with the parse error.
+
+A turn that calls the recording tool many times without recording anything is ended.
+A citation's quote is optional: by coordinates alone, the runner records the cited lines and echoes them back.
+A quote is recorded as the artifact's own bytes, because admission verifies those bytes.
+This also applies to a quote given with a diff marker or `[L<n>]` prefix.
+It applies to a non-breaking space read as a space, or a JSON string's text read without its escapes.
+A quote whose lines were miscounted is recorded at the lines where the text is, when it occurs once.
+
+A citation can name `work/change/diff.patch` itself by the view's own line numbers.
+If its quote occurs at one place, the citation is recorded at that changed file, side, and `[L<n>]`.
+A side or revision on a citation that settles on another source than the change or the checkout is dropped, since admission refuses either there.
+A refused citation is answered with what the cited lines really hold.
+The mentor runner exposes no native tool.
+Its context arrives through `fetch_context`.
+
+It gives feedback about an observation with `link_observation`.
+The reply shows its `text` to the developer once the server admits that observation for them.
+
+A refused link fails the call and shows nothing.
+
+The image provides Bash, Git, ripgrep, fd-find, and standard shell utilities. `PI_OFFLINE=1` disables tool downloads.
+Use `work/` or `$TMPDIR` for scratch files.
+Scratch files are not captured evidence.
+Native search honors ignore rules.
+
+Use explicit paths and `rg --hidden --no-ignore` when those exclusions are inappropriate.
+Use streaming shell commands for lines too large for the read tool.
 
 The runner rewrites `out/` from its in-memory state and removes unexpected files before packaging.
-Output remains untrusted; server-side admission verifies its observations and citations.
+Output remains untrusted.
+Server-side admission verifies its observations and citations.
 
-The root filesystem and captured inputs are mounted read-only; scratch directories are separate
-writable mounts. The practice runner starts Node without permission flags, because a subprocess
-would bypass them anyway; the mount and container isolation are the boundary. The
-[sandbox threat model](/admin/threat-model#boundary-2-llm-agent-sandbox) owns the isolation
-requirements. Deployment connectivity is covered in
-[practice-review operations](/admin/practice-review-operations).
+The root filesystem and captured inputs are mounted read-only.
+Scratch directories are separate writable mounts.
+The practice runner starts Node without permission flags, because a subprocess would bypass them anyway.
+The mount and container isolation are the boundary.
+
+The [sandbox threat model](/admin/threat-model#boundary-2-llm-agent-sandbox) owns the isolation requirements.
+Deployment connectivity is covered in [practice-review operations](/admin/practice-review-operations).
 
 ### Composed views and live citation access
 
 The normalized history under `inputs/history/` supports readiness and composition, not citations.
 The project inventory is also a navigation view, not a citable source.
-Cite the person-scoped canonical JSONL record so admission and delivery can recheck that record's
-current visibility and withdrawal state. The citation inventory excludes composed history.
-Normalized primary document citations bind to the job's document identity. Normalized thread
-citations bind to every message in that frozen projection; withdrawal of any included message
-refuses that citation. Use canonical chat JSONL lines for message-specific checks. Primary SCM
-projections bind to the reviewed repository, with the same live repository permission check as
-canonical SCM paths.
+Cite the person-scoped canonical JSONL record so admission and delivery can recheck that record's current visibility and withdrawal state.
+The citation inventory excludes composed history.
+
+Normalized primary document citations bind to the job's document identity.
+Normalized thread citations bind to every message in that frozen projection.
+Withdrawal of any included message refuses that citation.
+Use canonical chat JSONL lines for message-specific checks.
+
+Primary SCM projections bind to the reviewed repository, with the same live repository permission check as canonical SCM paths.

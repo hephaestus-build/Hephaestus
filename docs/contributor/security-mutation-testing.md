@@ -7,8 +7,8 @@ description: How PIT mutation testing is scoped to security-boundary classes, an
 # Security mutation testing
 
 PIT mutates a curated set of security-boundary classes and runs their focused unit tests. The
-advisory result measures whether those tests reject injected changes; it is not a security guarantee
-or a mutation-score gate.
+advisory result measures whether those tests reject injected changes.
+It is not a security guarantee or a mutation-score gate.
 
 ## Run the suite
 
@@ -20,15 +20,15 @@ with JDK 21:
 vp run test:server:mutation
 ```
 
-The command invokes the native PIT task, which builds its own prerequisites. Analysis always reruns;
-unchanged compilation can use Gradle's cache. It fails if any
+The command invokes the native PIT task, which builds its own prerequisites. Analysis always reruns.
+Unchanged compilation can use Gradle's cache. It fails if any
 Gradle task fails, the report is missing or invalid, or PIT leaves a mutation in a technical or
 incomplete state. The job summary reports timing and outcomes. PIT's HTML/XML reports and a Markdown
 summary are written below the application module's `build/reports/pitest` directory and uploaded by
 the workflow even on failure.
 
-The command evaluates the full target set without incremental analysis. CI limits it to eight
-minutes within a ten-minute job; local runs have no wrapper timeout.
+The command evaluates the full target set without incremental analysis. CI limits it to eight minutes within a ten-minute job.
+Local runs have no wrapper timeout.
 
 ## Triage
 

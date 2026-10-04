@@ -1,5 +1,5 @@
 name: ✨ Plan a feature
-description: Define implementation-ready user-facing functionality
+description: Define user-facing behavior that is ready to implement
 type: Feature
 body:
   - type: markdown
@@ -11,8 +11,8 @@ body:
     id: problem
     attributes:
       label: User problem
-      description: Who has the problem, what are they trying to accomplish, and why can they not do it today?
-      placeholder: A workspace admin needs to add a repository without reinstalling the GitHub App so that a newly created repository can be reviewed immediately.
+      description: Who has the problem? What do they want to do? Why can they not do it today?
+      placeholder: A workspace admin needs to add a repository without reinstalling the GitHub App. This lets Hephaestus review a new repository immediately.
     validations:
       required: true
 
@@ -28,10 +28,10 @@ body:
     id: criteria
     attributes:
       label: Acceptance criteria
-      description: Observable behavior that shows the problem is solved. Each bullet is a change that ships; a measurement alone is not one (CONTRIBUTING.md § Issues).
+      description: Observable behavior that shows the problem is solved. Each bullet is a change that ships. A measurement alone is not one (CONTRIBUTING.md § Issues).
       placeholder: |
         - [ ] A workspace admin can add a repository by entering owner/name.
-        - [ ] A clear error explains when the repository cannot be accessed.
+        - [ ] If Hephaestus cannot access the repository, a clear error explains the problem.
         - [ ] The repository remains listed after a page reload.
     validations:
       required: true
