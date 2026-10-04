@@ -433,7 +433,7 @@ base.describe("complete processes, keyboard only", () => {
 		const dialog = page.getByRole("dialog", { name: "Create group" });
 		await expect(dialog.getByRole("textbox", { name: "Name" })).toBeFocused();
 		await page.keyboard.type(name);
-		await tabTo(page, dialog.getByRole("button", { name: "Create", exact: true }));
+		await tabTo(page, dialog.getByRole("button", { name: "Create group", exact: true }));
 		await page.keyboard.press("Enter");
 
 		await expect(dialog).toBeHidden();
