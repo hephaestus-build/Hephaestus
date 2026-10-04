@@ -68,6 +68,14 @@ public final class CohortPrivacyPolicy {
     }
 
     /**
+     * The reader's standing as a split may mark it: only where the reader sits in a part the split shows, so a split
+     * held back, or a reader it does not count, carries no marker.
+     */
+    public static <S> @Nullable S marker(Split split, boolean readerCounted, S standing) {
+        return readerCounted && split.shape() == Shape.SPLIT ? standing : null;
+    }
+
+    /**
      * The total of developers with a standing as it may be shown, the reader included when the reader is counted:
      * only while it holds K others, otherwise null.
      *

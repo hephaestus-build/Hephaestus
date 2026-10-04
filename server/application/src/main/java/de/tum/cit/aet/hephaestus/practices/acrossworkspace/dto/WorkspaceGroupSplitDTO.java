@@ -13,10 +13,11 @@ public record WorkspaceGroupSplitDTO(
         @Nullable @Schema(description = "Group icon name") String groupIcon,
         @Nullable @Schema(description = "Group colour name") String groupColor,
 
-        @NonNull
+        @Nullable
         @Schema(
                 description = "The reader's current standing in the group, the one their practice profile shows:"
-                        + " the part of the split the reader is marked in")
+                        + " the part they are marked in. Absent unless the split shows its parts and counts the"
+                        + " reader")
         Standing yourStanding,
 
         @NonNull @Schema(description = "How the developers with a standing split across the group")

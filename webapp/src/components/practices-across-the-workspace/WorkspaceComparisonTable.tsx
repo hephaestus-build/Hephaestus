@@ -22,7 +22,8 @@ export interface ComparisonRow {
 	name: string;
 	/** The name as the subject cell draws it: a group's pill, a practice's pill. */
 	subject: ReactNode;
-	yourStanding: PracticeGroupStandingValue;
+	/** The part the You marker is on; absent where the split marks no one. */
+	yourStanding?: PracticeGroupStandingValue;
 	split: WorkspaceSplit;
 }
 

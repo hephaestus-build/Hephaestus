@@ -23,7 +23,7 @@ const onOpen = fn();
 const ROWS: ComparisonRow[] = [
 	row("acting", "Acting on review feedback", "MIXED", threeWay([6, 7, 7])),
 	row("failure", "Handling failure well", "DEVELOPING", threeWay([4, 9, 9])),
-	row("craft", "Writing maintainable code", "STRENGTH", TOTAL_ONLY),
+	row("craft", "Writing maintainable code", undefined, TOTAL_ONLY),
 	row("testing", "Testing your changes", "NOT_OBSERVED", threeWay([6, 6, 8])),
 ];
 

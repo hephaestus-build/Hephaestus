@@ -117,11 +117,11 @@ export const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
 		"MIXED",
 		threeWay([6, 7, 8]),
 	),
-	practice("scope-to-one-concern", "Scope the change to one concern", "STRENGTH", TOTAL_ONLY),
+	practice("scope-to-one-concern", "Scope the change to one concern", undefined, TOTAL_ONLY),
 	practice(
 		"mark-ready-and-link",
 		"Mark the change ready and link its issue",
-		"NOT_OBSERVED",
+		undefined,
 		TOTAL_ONLY,
 	),
 	practice("keep-history-clean", "Keep the history readable", "STRENGTH", threeWay([6, 6, 9])),
@@ -152,12 +152,12 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	groups: [
 		group(ACTING, "MIXED", threeWay([6, 7, 7])),
 		group(COMMUNICATION, "DEVELOPING", threeWay([7, 7, 6])),
-		group(FAILURE, "MIXED", TOTAL_ONLY),
+		group(FAILURE, undefined, TOTAL_ONLY),
 		PACKAGING_GROUP,
 		group(REVIEWING, "STRENGTH", threeWay([6, 6, 8])),
 		group(TESTING, "NOT_OBSERVED", threeWay([6, 6, 7])),
 		group(ISSUES, "NO_OPPORTUNITY", threeWay([6, 6, 7])),
-		group(MAINTAINABLE, "STRENGTH", TOTAL_ONLY),
+		group(MAINTAINABLE, undefined, TOTAL_ONLY),
 	],
 };
 
@@ -188,8 +188,9 @@ export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
 	openFeedback: { yours: 3 },
 	groups: ACROSS_WORKSPACE.groups.map((each) => ({
 		...each,
+		yourStanding: undefined,
 		split: WITHHELD,
-		practices: each.practices.map((one) => ({ ...one, split: WITHHELD })),
+		practices: each.practices.map((one) => ({ ...one, yourStanding: undefined, split: WITHHELD })),
 	})),
 };
 

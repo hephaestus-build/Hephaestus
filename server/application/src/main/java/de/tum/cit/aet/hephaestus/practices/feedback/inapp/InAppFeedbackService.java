@@ -47,8 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>The cards are self-scoped with no way to ask about anybody else: the recipient is resolved from the
  * security context, never from a parameter. That is not a convenience — the pull is what makes this surface
  * safe, and a {@code userId} parameter would turn a private surface into a roster. {@link #countOpen} takes
- * developers but returns only a count per developer, for a caller that shows them inside
- * {@code CohortPrivacyPolicy}.
+ * developers but returns only a count per developer.
  */
 @Service
 @RequiredArgsConstructor

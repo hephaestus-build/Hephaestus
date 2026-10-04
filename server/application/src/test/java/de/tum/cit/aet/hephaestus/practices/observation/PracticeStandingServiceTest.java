@@ -198,7 +198,6 @@ class PracticeStandingServiceTest extends BaseUnitTest {
         when(currentDeveloperLookup.currentDeveloperId()).thenReturn(Optional.of(USER_ID));
     }
 
-    /** The current developer's standings over {@code window}, read through the profile's own path. */
     private List<PracticeStandingDTO> standingsOver(List<Observation> window) {
         theCurrentDeveloper();
         when(observationRepository.findByDeveloperAndWorkspaceBetween(

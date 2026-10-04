@@ -20043,7 +20043,8 @@ components:
         yourStanding:
           type: string
           description: "The reader's current standing in the group, the one their\
-            \ practice profile shows: the part of the split the reader is marked in"
+            \ practice profile shows: the part they are marked in. Absent unless the\
+            \ split shows its parts and counts the reader"
           enum:
           - DEVELOPING
           - STRENGTH
@@ -20055,7 +20056,6 @@ components:
       - groupSlug
       - practices
       - split
-      - yourStanding
     WorkspaceListItem:
       type: object
       description: Summary information about a workspace for list views
@@ -20568,7 +20568,8 @@ components:
         yourStanding:
           type: string
           description: "The reader's current standing in the practice, the one their\
-            \ practice profile shows: the part of the split the reader is marked in"
+            \ practice profile shows: the part they are marked in. Absent unless the\
+            \ split shows its parts and counts the reader"
           enum:
           - DEVELOPING
           - STRENGTH
@@ -20579,7 +20580,6 @@ components:
       - practiceName
       - practiceSlug
       - split
-      - yourStanding
     WorkspaceProviders:
       type: object
       description: Available workspace creation providers and their configuration

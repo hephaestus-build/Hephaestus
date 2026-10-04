@@ -158,7 +158,7 @@ public class PracticeStandingService {
     public record WorkspaceStandings(
             Map<Long, StandingSnapshot> byDeveloper, Map<String, List<Practice>> eligiblePracticesByGroup) {}
 
-    /** The rows a narrowing keeps, then only what the visibility policy lets the reader see, per practice slug. */
+    /** The visible rows of {@code narrowed}, per practice slug. */
     private static Map<String, List<Observation>> visibleByPractice(List<Observation> narrowed, Set<UUID> visible) {
         Map<String, List<Observation>> byPractice = new LinkedHashMap<>();
         for (Observation observation : narrowed) {

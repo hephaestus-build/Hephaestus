@@ -127,7 +127,6 @@ class LatestRunTest extends BaseUnitTest {
                 .build();
     }
 
-    /** A clean run on pull request 7 of the given origin. */
     private static Observation observation(UUID run, Instant observedAt, ObservationOrigin origin) {
         return Observation.builder()
                 .id(UUID.randomUUID())

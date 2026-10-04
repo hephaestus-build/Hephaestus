@@ -13,7 +13,9 @@ import { WorkspaceSplitBar } from "./WorkspaceSplitBar";
  * One bar for a practice group and for a practice. The text alternative names the reference group
  * and every count, and each part carries its count and icon, so the colours carry nothing a screen
  * reader or a color-blind reader misses. The bar is `role="img"` rather than a Base UI `Meter`: a
- * meter announces one value against a range, and a split is four counts of one whole.
+ * meter announces one value against a range, and a split is four counts of one whole. It is CSS
+ * rather than Recharts through `ui/chart.tsx`: one stacked row needs no axis, scale or tooltip, and
+ * each part's count must sit under its own piece at every width.
  */
 const meta = {
 	component: WorkspaceSplitBar,
@@ -65,7 +67,7 @@ export const ReaderNotCounted: Story = {
  * group counts but not how. The reader is not marked.
  */
 export const TotalOnly: Story = {
-	args: { split: TOTAL_ONLY },
+	args: { split: TOTAL_ONLY, yourStanding: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("img")).toHaveAccessibleName(
 			"28 developers with a current standing in this workspace. The split is held back so no one can be singled out.",
@@ -82,7 +84,7 @@ export const TotalOnly: Story = {
  * the bar would be and one short reason, nothing more. The reader is not marked.
  */
 export const Withheld: Story = {
-	args: { split: WITHHELD, yourStanding: "NOT_OBSERVED" },
+	args: { split: WITHHELD, yourStanding: undefined },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("img")).toBeNull();
 		await expect(canvas.getByText("Held back so no one can be singled out.")).toBeVisible();

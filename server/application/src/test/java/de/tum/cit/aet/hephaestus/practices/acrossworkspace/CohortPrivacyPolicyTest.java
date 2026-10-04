@@ -238,6 +238,17 @@ class CohortPrivacyPolicyTest {
     }
 
     @Test
+    @DisplayName("only a split that shows its parts and counts the reader marks the reader")
+    void shouldMarkTheReaderOnlyWhenTheSplitShowsItsPartsAndCountsThem() {
+        Split shown = CohortPrivacyPolicy.split(developers(4, 4, 4, 4));
+
+        assertThat(CohortPrivacyPolicy.marker(shown, true, MIXED)).isEqualTo(MIXED);
+        assertThat(CohortPrivacyPolicy.marker(shown, false, MIXED)).isNull();
+        assertThat(CohortPrivacyPolicy.marker(totalOnly(16), true, MIXED)).isNull();
+        assertThat(CohortPrivacyPolicy.marker(Split.WITHHELD, true, MIXED)).isNull();
+    }
+
+    @Test
     @DisplayName("a window nobody has a standing in withholds every practice it names")
     void shouldWithholdEveryPracticeWhenNobodyHasAStanding() {
         GroupRelease release = CohortPrivacyPolicy.group(List.of(), 2);

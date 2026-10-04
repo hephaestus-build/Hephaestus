@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.GroupRelease;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Row;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Split;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceTilesDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
@@ -42,7 +43,8 @@ import org.springframework.transaction.annotation.Transactional;
  * Composes Practices across the workspace from one scan of the workspace's observations per read, classified by the
  * same standing and group standing rules the practice profile uses, then counted under {@link CohortPrivacyPolicy}.
  * The splits and the open feedback read the current standing, so the reader's marker is the standing their profile
- * shows; only the tiles read a window.
+ * shows; only the tiles read a window. Aggregating in SQL instead would put a second copy of the standing rules
+ * beside the profile's, free to disagree with it.
  */
 @Service
 @RequiredArgsConstructor
@@ -81,18 +83,23 @@ public class PracticesAcrossWorkspaceService {
             List<WorkspacePracticeSplitDTO> practiceSplits = new ArrayList<>();
             for (int index = 0; index < practices.size(); index++) {
                 Practice practice = practices.get(index);
+                Split split = release.practices().get(index);
                 practiceSplits.add(new WorkspacePracticeSplitDTO(
                         practice.getSlug(),
                         practice.getName(),
-                        standingIn(yours, practice.getSlug()),
-                        WorkspaceSplitDTO.from(release.practices().get(index))));
+                        CohortPrivacyPolicy.marker(
+                                split, current.readerCounted(), standingIn(yours, practice.getSlug())),
+                        WorkspaceSplitDTO.from(split)));
             }
             rows.add(new WorkspaceGroupSplitDTO(
                     group.getSlug(),
                     group.getName(),
                     group.getIcon(),
                     group.getColor(),
-                    current.groupStandingOf(members.reader(), group.getSlug()),
+                    CohortPrivacyPolicy.marker(
+                            release.group(),
+                            current.readerCounted(),
+                            current.groupStandingOf(members.reader(), group.getSlug())),
                     WorkspaceSplitDTO.from(release.group()),
                     practiceSplits));
         }

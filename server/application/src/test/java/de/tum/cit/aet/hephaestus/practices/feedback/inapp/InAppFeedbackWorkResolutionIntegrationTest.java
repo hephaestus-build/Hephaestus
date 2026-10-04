@@ -312,7 +312,6 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
                 .doesNotExist();
     }
 
-    /** A review of pull request {@code #number} that the developer asked for by hand. */
     private void requestedReview(int number, Outcome outcome, Instant at) {
         AgentJob requested = persistPullRequestReview(workspace, number, at);
         UUID id = observe(practice, requested, number, developer, outcome, null, at);

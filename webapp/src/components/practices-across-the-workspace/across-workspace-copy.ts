@@ -129,19 +129,44 @@ export const HELD_BACK = "Held back so no one can be singled out";
 /** Under the neutral bar of a split shown only as its total, for every reason the parts are held back. */
 export const SPLIT_HELD_BACK = "Split held back";
 
-/** A shown split's total as the bar prints it: "24 developers". The server sets it for every shape but `WITHHELD`. */
-export const splitTotalText = (split: WorkspaceSplit): string => developers(split.developers ?? 0);
+/** A split the page may draw, with the counts its shape promises. */
+export type ShownSplit =
+	| { shape: "SPLIT"; parts: WorkspaceSplit["parts"]; developers: number; noneYet: number }
+	| { shape: "TOTAL_ONLY"; developers: number };
+
+/**
+ * The wire's split narrowed by its shape. The DTO types every count as optional, so a split
+ * missing a count its shape promises is held back rather than drawn with an invented 0.
+ */
+export function shownSplit({
+	shape,
+	parts,
+	developers: total,
+	noneYet,
+}: WorkspaceSplit): ShownSplit | undefined {
+	if (shape === "WITHHELD" || total === undefined) {
+		return undefined;
+	}
+	if (shape === "TOTAL_ONLY") {
+		return { shape, developers: total };
+	}
+	return noneYet === undefined ? undefined : { shape, parts, developers: total, noneYet };
+}
+
+/** "24 developers", as the bar prints a shown split's total. */
+export const splitTotalText = (split: ShownSplit): string => developers(split.developers);
 
 /**
  * The bar's text alternative: the reference group, every count in the registry's words and the
  * server's order, and the part the You marker is on, so the bar's text says what its legend says.
  */
 export function splitDescription(
-	split: WorkspaceSplit,
-	yourStanding: PracticeGroupStandingValue,
+	wire: WorkspaceSplit,
+	yourStanding: PracticeGroupStandingValue | undefined,
 	readerCounted: boolean,
 ): string {
-	if (split.shape === "WITHHELD") {
+	const split = shownSplit(wire);
+	if (split === undefined) {
 		return `${HELD_BACK}.`;
 	}
 	const whole = `${splitTotalText(split)} with a current standing in this workspace`;
@@ -151,10 +176,13 @@ export function splitDescription(
 	const parts = split.parts.map(
 		(part) => `${part.developers} ${PRACTICE_GROUP_STANDING_DEFS[part.standing].label}`,
 	);
-	const noneYet = `${split.noneYet ?? 0} ${NONE_YET_SEGMENT.inSentence}`;
+	const noneYet = `${split.noneYet} ${NONE_YET_SEGMENT.inSentence}`;
+	const counts = `${whole}: ${[...parts, noneYet].join(", ")}.`;
+	if (!readerCounted || yourStanding === undefined) {
+		return counts;
+	}
 	const yourPart = isSettledStanding(yourStanding)
 		? PRACTICE_GROUP_STANDING_DEFS[yourStanding].label
 		: NONE_YET_SEGMENT.inSentence;
-	const marker = readerCounted ? ` The You marker is on ${yourPart}.` : "";
-	return `${whole}: ${[...parts, noneYet].join(", ")}.${marker}`;
+	return `${counts} The You marker is on ${yourPart}.`;
 }

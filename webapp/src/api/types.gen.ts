@@ -6809,9 +6809,9 @@ export type WorkspaceGroupSplit = {
    */
   split: WorkspaceSplit;
   /**
-   * The reader's current standing in the group, the one their practice profile shows: the part of the split the reader is marked in
+   * The reader's current standing in the group, the one their practice profile shows: the part they are marked in. Absent unless the split shows its parts and counts the reader
    */
-  yourStanding: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
+  yourStanding?: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
 };
 
 /**
@@ -7172,9 +7172,9 @@ export type WorkspacePracticeSplit = {
    */
   split: WorkspaceSplit;
   /**
-   * The reader's current standing in the practice, the one their practice profile shows: the part of the split the reader is marked in
+   * The reader's current standing in the practice, the one their practice profile shows: the part they are marked in. Absent unless the split shows its parts and counts the reader
    */
-  yourStanding: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
+  yourStanding?: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
 };
 
 /**

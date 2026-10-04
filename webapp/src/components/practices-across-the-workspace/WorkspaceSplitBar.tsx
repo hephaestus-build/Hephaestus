@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import {
 	HELD_BACK,
+	shownSplit,
 	SPLIT_HELD_BACK,
 	splitDescription,
 	splitTotalText,
@@ -26,7 +27,7 @@ import {
 export interface WorkspaceSplitBarProps {
 	split: WorkspaceSplit;
 	/** The part the You marker is on, while the reader is counted and the split shows its parts. */
-	yourStanding: PracticeGroupStandingValue;
+	yourStanding?: PracticeGroupStandingValue;
 	/** Whether the reader is one of the developers the split counts. */
 	readerCounted: boolean;
 }
@@ -79,8 +80,13 @@ function YouMarker() {
  * bar and marks no one. A split held back whole is a dashed track with its reason. All three take
  * the same width and height, so rows of mixed shapes line up.
  */
-export function WorkspaceSplitBar({ split, yourStanding, readerCounted }: WorkspaceSplitBarProps) {
-	if (split.shape === "WITHHELD") {
+export function WorkspaceSplitBar({
+	split: wire,
+	yourStanding,
+	readerCounted,
+}: WorkspaceSplitBarProps) {
+	const split = shownSplit(wire);
+	if (split === undefined) {
 		return (
 			<div className="flex w-full min-w-0 flex-col gap-1">
 				<span aria-hidden className={cn("mt-5 w-full", HELD_BACK_TRACK)} />
@@ -88,7 +94,7 @@ export function WorkspaceSplitBar({ split, yourStanding, readerCounted }: Worksp
 			</div>
 		);
 	}
-	const description = splitDescription(split, yourStanding, readerCounted);
+	const description = splitDescription(wire, yourStanding, readerCounted);
 	const total = (
 		<p aria-hidden className="text-right text-xs text-muted-foreground tabular-nums">
 			{splitTotalText(split)}
@@ -117,8 +123,8 @@ export function WorkspaceSplitBar({ split, yourStanding, readerCounted }: Worksp
 		})),
 		{
 			def: NONE_YET_PART,
-			count: split.noneYet ?? 0,
-			isYours: readerCounted && !isSettledStanding(yourStanding),
+			count: split.noneYet,
+			isYours: readerCounted && yourStanding !== undefined && !isSettledStanding(yourStanding),
 		},
 	];
 	return (

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { WorkspaceSplit } from "@/api/types.gen";
 
-import { barsHint, splitDescription, tilesHint } from "./across-workspace-copy";
+import { barsHint, shownSplit, splitDescription, tilesHint } from "./across-workspace-copy";
 
 const split = (
 	needsAttention: number,
@@ -40,16 +40,34 @@ describe("splitDescription", () => {
 		expect(splitDescription(split(6, 7, 7, 8), "MIXED", false)).toMatch(/, 8 none yet\.$/u);
 	});
 
+	it("marks no one when the server sends no marker", () => {
+		expect(splitDescription(split(6, 7, 7, 8), undefined, true)).toMatch(/, 8 none yet\.$/u);
+	});
+
 	it("gives a total-only split its total and reason, and nothing of the reader", () => {
-		expect(splitDescription({ shape: "TOTAL_ONLY", parts: [], developers: 1 }, "MIXED", true)).toBe(
+		expect(
+			splitDescription({ shape: "TOTAL_ONLY", parts: [], developers: 1 }, undefined, true),
+		).toBe(
 			"1 developer with a current standing in this workspace. The split is held back so no one can be singled out.",
 		);
 	});
 
 	it("gives a withheld split its reason alone, with no total and no promise about later", () => {
-		expect(splitDescription({ shape: "WITHHELD", parts: [] }, "MIXED", true)).toBe(
+		expect(splitDescription({ shape: "WITHHELD", parts: [] }, undefined, true)).toBe(
 			"Held back so no one can be singled out.",
 		);
+	});
+});
+
+describe("shownSplit", () => {
+	const incomplete: [string, WorkspaceSplit][] = [
+		["a split with no total", { ...split(6, 7, 7, 8), developers: undefined }],
+		["a split with no none yet", { ...split(6, 7, 7, 8), noneYet: undefined }],
+		["a total-only split with no total", { shape: "TOTAL_ONLY", parts: [] }],
+	];
+	it.each(incomplete)("holds back %s rather than drawing a 0", (_, wire) => {
+		expect(shownSplit(wire)).toBeUndefined();
+		expect(splitDescription(wire, undefined, true)).toBe("Held back so no one can be singled out.");
 	});
 });
 

@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Shape;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspacePracticeSplitDTO;
@@ -32,6 +33,7 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import jakarta.persistence.EntityManagerFactory;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -39,6 +41,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -78,6 +82,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private PracticeGroupService practiceGroupService;
+
+    @Autowired
+    private EntityManagerFactory entityManagerFactory;
 
     private Workspace workspace;
     private User reader;
@@ -164,6 +171,9 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 // A split held back still counts every developer with a standing, as the page total does.
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.developers")
                 .isEqualTo(28)
+                // A split held back marks no one, the reader included.
+                .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].yourStanding")
+                .doesNotExist()
                 // Every standing holds eight or more, but only three are left at none yet, the reader among them.
                 .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.shape")
                 .isEqualTo("TOTAL_ONLY")
@@ -247,9 +257,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .singleElement()
                 .satisfies(group -> assertThat(group.practices())
                         .extracting(WorkspacePracticeSplitDTO::practiceSlug, WorkspacePracticeSplitDTO::yourStanding)
-                        .containsExactly(
-                                tuple("atomic", PracticeStandingDTO.Standing.NOT_OBSERVED),
-                                tuple("explain", PracticeStandingDTO.Standing.NOT_OBSERVED)));
+                        .containsExactly(tuple("atomic", null), tuple("explain", null)));
     }
 
     @Test
@@ -270,7 +278,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
                         + ".yourStanding")
-                .isEqualTo("NOT_OBSERVED")
+                .doesNotExist()
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
                         + ".split.shape")
                 .isEqualTo("TOTAL_ONLY")
@@ -368,8 +376,8 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @DisplayName("the reader's marker is the standing their practice profile shows")
     void shouldMarkTheReaderByTheirProfileStandingWhenTheWindowIsShorterThanTheProfile() {
         // Two slips sixty and fifty days back: inside the profile's ninety days, outside the last 30 days.
-        problem(craft, reader, NOW.minus(Duration.ofDays(60)));
-        problem(craft, reader, NOW.minus(Duration.ofDays(50)));
+        problem(packaging, reader, NOW.minus(Duration.ofDays(60)));
+        problem(packaging, reader, NOW.minus(Duration.ofDays(50)));
 
         PracticesAcrossWorkspaceDTO page = readAs(reader);
         CurrentScmIdentityHolder.set(reader.getId(), reader.getLogin(), Set.of(reader.getId()));
@@ -389,18 +397,21 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
             CurrentScmIdentityHolder.clear();
         }
 
-        assertThat(page.groups()).allSatisfy(group -> {
-            assertThat(group.yourStanding()).isEqualTo(profileGroups.get(group.groupSlug()));
-            assertThat(group.practices())
-                    .allSatisfy(practice -> assertThat(practice.yourStanding())
-                            .isEqualTo(profilePractices.get(practice.practiceSlug())));
-        });
-        // Read over the last 30 days alone the slip would be missing; the profile and the marker both show it.
         assertThat(page.groups())
-                .filteredOn(group -> group.groupSlug().equals("code-craftsmanship"))
+                .filteredOn(group -> group.split().shape() == Shape.SPLIT)
+                .isNotEmpty()
+                .allSatisfy(group -> assertThat(group.yourStanding()).isEqualTo(profileGroups.get(group.groupSlug())));
+        assertThat(page.groups().stream().flatMap(group -> group.practices().stream()))
+                .filteredOn(practice -> practice.split().shape() == Shape.SPLIT)
+                .isNotEmpty()
+                .allSatisfy(practice ->
+                        assertThat(practice.yourStanding()).isEqualTo(profilePractices.get(practice.practiceSlug())));
+        // Read over the last 30 days alone the slips would be missing and the marker would say Going well.
+        assertThat(page.groups())
+                .filteredOn(group -> group.groupSlug().equals("review-ready-work"))
                 .singleElement()
                 .extracting(WorkspaceGroupSplitDTO::yourStanding)
-                .isEqualTo(PracticeGroupStandingDTO.Standing.DEVELOPING);
+                .isEqualTo(PracticeGroupStandingDTO.Standing.MIXED);
     }
 
     @Test
@@ -464,6 +475,44 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo(true)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourStanding")
                 .isEqualTo("STRENGTH");
+    }
+
+    /**
+     * Both reads scan the workspace once, so six more developers with a standing add no statement to either: the
+     * count grows with the workspace's practices and groups, never with its developers.
+     */
+    @Test
+    @WithUser
+    @DisplayName("the overview and the tiles run as many statements for six more developers as without them")
+    void shouldRunTheSameStatementsWhenTheWorkspaceCountsMoreDevelopers() {
+        Statistics statistics =
+                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        boolean wasEnabled = statistics.isStatisticsEnabled();
+        statistics.setStatisticsEnabled(true);
+        try {
+            List<Long> before = statementsPerRead(statistics);
+            for (int index = 0; index < 6; index++) {
+                User developer = member("across-more-" + index);
+                standing(packaging, developer, index);
+                standing(craft, developer, index);
+            }
+
+            assertThat(statementsPerRead(statistics)).isEqualTo(before);
+        } finally {
+            statistics.setStatisticsEnabled(wasEnabled);
+        }
+    }
+
+    /** The JDBC statements one overview read and one tiles read prepare, after a read that warms the context. */
+    private List<Long> statementsPerRead(Statistics statistics) {
+        read();
+        tiles("ALL_TIME");
+        statistics.clear();
+        read();
+        long overview = statistics.getPrepareStatementCount();
+        statistics.clear();
+        tiles("ALL_TIME");
+        return List.of(overview, statistics.getPrepareStatementCount());
     }
 
     @Test
