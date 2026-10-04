@@ -292,6 +292,10 @@ A thread is reviewed once for each participant.
 `underReview` is `true` on the turns of the one participant that this review is about.
 The other turns are context, not the reviewed work.
 
+A `NOT_MET` of a conversation review must cite a line inside a turn marked `underReview: true`.
+The runner refuses one that does not, so the model can correct it.
+Admission withholds one that still does not, and records `NOT_THE_REVIEWED_PARTICIPANT` against it.
+
 ## History records
 
 **`inputs/history/observations.json`** — every authorized prior verdict about the reviewed developer, newest first, with no age window or per-practice cap.

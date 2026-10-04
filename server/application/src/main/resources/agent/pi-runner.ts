@@ -25,12 +25,14 @@ import { CHANGE_ROOT } from "./pi-change.ts";
 import { errorText } from "./pi-error-text.ts";
 import { folderCitationIndex } from "./pi-folder-index.ts";
 import {
+	CONVERSATION_THREAD,
 	OUTCOME_VALUES,
 	OUTCOME_DESCRIPTIONS,
 	MAX_SUMMARY_CHARS,
 	SEVERITY_VALUES,
 	SEVERITY_DESCRIPTIONS,
 	boundedAtSentenceEnd,
+	citesReviewedTurn,
 	describeVocabulary,
 	isRecord,
 	type NormalizedCitation,
@@ -896,6 +898,19 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 			citation.endLine = resolved.endLine;
 		}
 		citation.quote = resolved.quote;
+	}
+	// A conversation is reviewed once for each participant; a lapse must be that participant's own.
+	const thread = `${CWD}/${CONVERSATION_THREAD}`;
+	if (
+		observation.outcome === "NOT_MET" &&
+		existsSync(thread) &&
+		!citesReviewedTurn(observation.evidence.citations, readFileSync(thread, "utf8"))
+	) {
+		throw new Error(
+			`a NOT_MET of this conversation review must cite a turn of the participant under review: quote a ` +
+				`line inside a turn of ${CONVERSATION_THREAD} marked "underReview": true. The other turns are ` +
+				"context, and a lapse that only they show is not this participant's",
+		);
 	}
 	return { observation, notes };
 }

@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+	CONVERSATION_THREAD,
 	citationMatchesArtifact,
+	citesReviewedTurn,
 	describeCitationMismatch,
 	MAX_SUMMARY_CHARS,
 	type NormalizedCitation,
@@ -547,6 +549,27 @@ void test("a range copied from a numbered view of diff.patch is read through bot
 	);
 });
 
+void test("a range of diff.patch itself over a hunk that only removes is read on the OLD side", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	// View lines 5-8: an unchanged line, two removed lines, an unchanged line. The evidence is what was removed.
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n" +
+		"@@ -9,4 +9,2 @@\n[L9]  begin();\n[L10] -checkToken();\n[L11] -checkRole();\n[L10]  end();\n";
+	assert.deepEqual(
+		resolveQuote(
+			{ ...citation, path: "work/change/diff.patch", startLine: 1, endLine: 8, quote: "" },
+			diff,
+		),
+		{
+			quote: "checkToken();\ncheckRole();",
+			startLine: 10,
+			endLine: 11,
+			path: "src/Auth.java",
+			side: "OLD",
+		},
+	);
+});
+
 void test("a range of diff.patch itself across two files names no one file", () => {
 	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
 	const diff =
@@ -736,6 +759,27 @@ void test("a citation rejects invented artifact text", () => {
 		false,
 	);
 	assert.equal(citationMatchesArtifact(cite("a rationale the author never wrote"), content), false);
+});
+
+void test("a path under another checkout keeps its prefix, and no note says otherwise", () => {
+	const notes: string[] = [];
+	const evidence = normalizeEvidence(
+		{
+			citations: [
+				{
+					sourceKind: "scm.repository.tree",
+					artifactPath: "repos/reviewed/.git/HEAD",
+					path: "repos/linked/README.md",
+					startLine: 3,
+					quote: "Run make.",
+				},
+			],
+		},
+		"NOT_MET",
+		{ notes },
+	);
+	assert.equal(evidence.citations[0]?.path, "repos/linked/README.md");
+	assert.ok(!notes.some((note) => note.includes("its path inside the checkout")), notes.join("\n"));
 });
 
 void test("a checkout file named by its workspace path is read at its path inside the checkout, with a note", () => {
@@ -1246,4 +1290,41 @@ void test("every problem of an observation is named in one refusal", () => {
 		refusal(baseObservation({ outcome: "NOT_APPLICABLE", severity: null, summary: "Test" })),
 		/^summary must say what was observed[^;]*; also: a NOT_APPLICABLE observation must say why the practice does not apply/u,
 	);
+});
+
+/** A thread as the server writes it: the reviewed participant wrote the second turn. */
+const THREAD = `{
+  "channel" : "C123",
+  "messages" : [ {
+    "ts" : "1700000000.100000",
+    "text" : "Can someone look at the {failing} build?",
+    "underReview" : false
+  }, {
+    "ts" : "1700000000.200000",
+    "text" : "It is \\"broken\\". Fix it.",
+    "underReview" : true
+  } ]
+}
+`;
+
+function threadCitation(line: number): NormalizedCitation {
+	return {
+		...onlyCitation(normalizeObservation(baseObservation()).evidence.citations),
+		sourceKind: "slack.conversation.thread",
+		artifactPath: CONVERSATION_THREAD,
+		path: "conversation_thread.json",
+		startLine: line,
+		endLine: line,
+	};
+}
+
+void test("a conversation citation counts only inside a turn of the participant under review", () => {
+	assert.equal(citesReviewedTurn([threadCitation(5)], THREAD), false);
+	assert.equal(citesReviewedTurn([threadCitation(9)], THREAD), true);
+	assert.equal(citesReviewedTurn([threadCitation(5), threadCitation(9)], THREAD), true);
+	assert.equal(
+		citesReviewedTurn([{ ...threadCitation(9), artifactPath: "context/comments.json" }], THREAD),
+		false,
+	);
+	assert.equal(citesReviewedTurn([threadCitation(9)], "not json"), false);
 });

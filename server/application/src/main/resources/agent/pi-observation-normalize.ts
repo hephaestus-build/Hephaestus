@@ -745,6 +745,90 @@ export function validateInapplicabilityScope(
 	}
 }
 
+/** The thread a conversation review judges. Each turn states whether the reviewed participant wrote it. */
+export const CONVERSATION_THREAD = "context/conversation_thread.json";
+
+/**
+ * Whether a citation lies inside a turn of the conversation record marked `underReview: true`.
+ * Admission applies the same rule to a NOT_MET of a conversation review.
+ */
+export function citesReviewedTurn(
+	citations: readonly NormalizedCitation[],
+	thread: string,
+): boolean {
+	const turns = reviewedTurnLines(thread);
+	return citations.some(
+		(citation) =>
+			citation.artifactPath === CONVERSATION_THREAD &&
+			turns.some((turn) => turn.first <= citation.startLine && citation.endLine <= turn.last),
+	);
+}
+
+/** The first and last line of each turn under review, read from the record as written. */
+function reviewedTurnLines(thread: string): { first: number; last: number }[] {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(thread);
+	} catch {
+		return [];
+	}
+	const messages = isRecord(parsed) && Array.isArray(parsed.messages) ? parsed.messages : [];
+	// JSON.parse keeps no positions, so one pass finds each turn's lines, in the same order.
+	const spans: { first: number; last: number }[] = [];
+	let line = 1;
+	let depth = 0;
+	let inString = false;
+	let escaped = false;
+	let stringStart = 0;
+	let lastString = "";
+	let key = "";
+	let inMessages = false;
+	let first = 0;
+	for (let index = 0; index < thread.length; index += 1) {
+		const char = thread[index];
+		if (char === "\n") {
+			line += 1;
+		}
+		if (inString) {
+			if (escaped) {
+				escaped = false;
+			} else if (char === "\\") {
+				escaped = true;
+			} else if (char === '"') {
+				inString = false;
+				lastString = thread.slice(stringStart, index);
+			}
+			continue;
+		}
+		if (char === '"') {
+			inString = true;
+			stringStart = index + 1;
+		} else if (char === ":" && depth === 1) {
+			key = lastString;
+		} else if (char === "{" || char === "[") {
+			depth += 1;
+			if (char === "[" && depth === 2 && key === "messages") {
+				inMessages = true;
+			}
+			if (char === "{" && inMessages && depth === 3) {
+				first = line;
+			}
+		} else if (char === "}" || char === "]") {
+			if (char === "}" && inMessages && depth === 3) {
+				spans.push({ first, last: line });
+			}
+			if (char === "]" && inMessages && depth === 2) {
+				inMessages = false;
+			}
+			depth -= 1;
+		}
+	}
+	return spans.filter((_, index) => {
+		const message: unknown = messages[index];
+		return isRecord(message) && message.underReview === true;
+	});
+}
+
 /** How much of a diff line a refusal quotes back; enough to see the difference, not the whole line. */
 const MISMATCH_EXCERPT_CHARS = 160;
 
@@ -1110,7 +1194,8 @@ function readAtViewLines(
 
 /**
  * A range of the diff view by coordinates alone, when the view's lines in it are lines of one changed file:
- * what it cites is that file's lines, its NEW side when the range shows both. A range across files names no
+ * what it cites is that file's lines, its NEW side when the range adds a line and its OLD side when it only
+ * removes. Unchanged lines are read on the NEW side, so they do not decide. A range across files names no
  * one file.
  */
 function viewRangeOfOneFile(
@@ -1119,10 +1204,12 @@ function viewRangeOfOneFile(
 ): ResolvedQuote | null {
 	const view = viewLines.get(lines);
 	const keys = new Set<string>();
+	let adds = false;
 	for (let at = citation.startLine; at <= citation.endLine; at += 1) {
 		const viewed = view?.get(at);
 		if (viewed !== undefined) {
 			keys.add(viewed.key);
+			adds ||= lines.get(viewed.key)?.get(viewed.line)?.startsWith("+") === true;
 		}
 	}
 	const paths = new Set([...keys].map((key) => key.slice(key.indexOf(" ") + 1)));
@@ -1130,7 +1217,7 @@ function viewRangeOfOneFile(
 	if (paths.size !== 1 || path === undefined) {
 		return null;
 	}
-	const side = keys.has(diffKey(path, "NEW")) ? "NEW" : "OLD";
+	const side = adds || !keys.has(diffKey(path, "OLD")) ? "NEW" : "OLD";
 	const fileLines = lines.get(diffKey(path, side));
 	if (fileLines === undefined) {
 		return null;
