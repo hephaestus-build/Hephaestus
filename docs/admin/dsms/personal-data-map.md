@@ -117,7 +117,7 @@ The research can use this data of a participant who allowed it:
 - How the participant uses Hephaestus, including conversations with Heph and research survey answers.
 
 The research uses no sign-in credentials or access tokens.
-A participant who stops Hephaestus from using their Slack messages has those messages erased, so research cannot use them.
+A participant who stops Hephaestus from using their Slack messages has those messages erased from the instance database. The research team removes them from datasets that are not yet anonymized, and research does not use them again. Anonymized datasets cannot be linked to the participant and can remain.
 
 ### Where research copies live
 
@@ -132,6 +132,7 @@ The operator must close that gap:
 
 1. Apply the latest `RESEARCH_PARTICIPATION` decision of each account before any export or analysis.
 2. After withdrawal or a verified erasure request, remove the account's data from datasets that are not yet anonymized.
+   After a Slack message-use opt-out, remove the affected messages the same way.
 3. Finish the removal within `[removal time limit, proposed: 30 days]`.
 
 An anonymized dataset holds no link to a person. Withdrawal and erasure cannot reach it, so its data cannot be removed.

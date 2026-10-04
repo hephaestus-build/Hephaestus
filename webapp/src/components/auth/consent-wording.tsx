@@ -127,7 +127,7 @@ function researchDetails(organization: string): readonly Fact[] {
 			icon: DatabaseIcon,
 			term: "What data",
 			detail:
-				"Slack messages that you stopped Hephaestus from using are erased, so research never gets them. Sign-in credentials and access tokens are never used.",
+				"Slack messages that you stop Hephaestus from using stay out of research too. The team removes them from datasets that are not yet anonymized. Sign-in credentials and access tokens are never used.",
 		},
 		{
 			icon: UsersIcon,

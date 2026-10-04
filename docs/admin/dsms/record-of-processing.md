@@ -162,7 +162,7 @@ For research participants only, the research uses these categories in pseudonymi
 - The participant's responses to that feedback.
 - How the participant uses Hephaestus, including conversations with Heph and research survey answers.
 
-Sign-in credentials and access tokens are never used. A participant who stops Hephaestus from using their Slack messages has those messages erased, so they are not available to research.
+Sign-in credentials and access tokens are never used. A participant who stops Hephaestus from using their Slack messages has those messages erased from the instance database. The research team removes them from datasets that are not yet anonymized, and research does not use them again.
 ```
 
 Hephaestus does not intentionally solicit or classify special-category data (Art. 9(1) GDPR) or criminal-offence data (Art. 10 GDPR). Because repository and chat fields contain free text, incidental content may include and therefore cause processing of them. The privacy statement instructs users not to enter third-party personal or sensitive data.

@@ -77,8 +77,9 @@ reviews and chat. It covers Hephaestus's observations and feedback about that wo
 responses to that feedback. It also covers how you use Hephaestus, including your conversations with
 Heph and your answers to research surveys.
 
-**Excluded data.** Sign-in credentials and access tokens are never used. Slack messages that you stopped
-Hephaestus from using are erased, so research never gets them. The research team does not look for data about health, beliefs or other
+**Excluded data.** Sign-in credentials and access tokens are never used. Slack messages that you stop
+Hephaestus from using are erased from the instance database. The research team removes them from datasets that are not yet
+anonymized, and research does not use them again. The research team does not look for data about health, beliefs or other
 special categories of personal data and removes any that it finds.
 
 **Who works with it.** The research organization and the researchers who work for it use the data,

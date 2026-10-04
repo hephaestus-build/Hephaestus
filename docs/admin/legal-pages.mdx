@@ -83,7 +83,7 @@ The data it may use is:
 - How the participant uses Hephaestus, including conversations with Heph and answers to research surveys.
 
 Sign-in credentials and access tokens are never used.
-Slack messages that a participant stopped Hephaestus from using are erased, so research never gets them.
+Slack messages that a participant stops Hephaestus from using stay out of research too.
 
 The consent is optional and separate from the terms.
 Saying no or withdrawing has no disadvantage ([Art. 7(4) GDPR](https://gdpr-info.eu/art-7-gdpr/)).
@@ -159,6 +159,7 @@ Meet all of them before you set `HEPHAESTUS_RESEARCH_ORGANIZATION`, and keep to 
    Use only a grant for the current notice version and the current organization.
 2. Remove the data of withdrawn accounts from datasets that are not yet anonymized within `[removal time limit]`.
    Treat an erasure request for data in such a dataset the same way.
+   Treat a Slack message-use opt-out the same way for the affected messages.
 3. Keep a research information page.
    List the current research projects and the released datasets on it.
    See [EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 161 and 162.
@@ -168,6 +169,7 @@ Meet all of them before you set `HEPHAESTUS_RESEARCH_ORGANIZATION`, and keep to 
    A power imbalance can weaken the free choice of a participant.
    See [EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 16 to 24 and 46 to 48.
    See also [Recital 43](https://gdpr-info.eu/recitals/no-43/).
+   Instance admins can read research survey answers, so give the admin role only to people who meet this rule.
 6. Test a dataset for re-identification before you call it anonymous.
    Release it only if the test passes.
    Free text and code are hard to anonymize ([EDPB 1/2026](https://www.edpb.europa.eu/system/files/2026-05/edpb_guidelines_202601_scientificresearch_en.pdf) paragraph 164).
