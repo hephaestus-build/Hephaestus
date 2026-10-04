@@ -259,7 +259,7 @@ await test("a settings path is not read as a missing package", () => {
 await test("the release history may name a path a later release removed; current directions may not", () => {
 	const docker = { "docker/compose.app.yaml": { kind: "opaque" } } as const;
 	const history =
-		"Run `./setup.sh` in `docker/self-host`, then delete `docker/agent-image-pin.env`.\n";
+		"Run `./setup.sh` in `docker/self-host`, then delete `docker/removed-override.env`.\n";
 	assert.deepEqual(
 		analyse(snapshot({ ...docker, "MIGRATION.md": history, "CHANGELOG.md": history })),
 		[],
