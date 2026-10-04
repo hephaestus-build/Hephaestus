@@ -8,19 +8,17 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** A new wording version reaches every account, once, against the real ledger and its SQL. */
-@TestPropertySource(properties = "hephaestus.consent.research-organization=AET")
 class ConsentRewordingIntegrationTest extends BaseIntegrationTest {
 
     private static final String NARROWER_WORDING = "2026-09-11";
-
-    @Autowired
-    private ConsentService service;
 
     @Autowired
     private ConsentDecisionRepository decisions;
@@ -30,6 +28,23 @@ class ConsentRewordingIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    private ConsentService service;
+
+    // Built here rather than configured, so the test shares the cached application context.
+    @BeforeEach
+    void setUp() {
+        service = new ConsentService(decisions, accounts, new ConsentProperties("AET"));
+    }
+
+    // The service is not a bean here, so the transaction its Spring proxy would open is opened by hand.
+    private ConsentService.ConsentStatusDTO complete(long accountId, ConsentService.FirstLoginConsentDTO request) {
+        return Objects.requireNonNull(new TransactionTemplate(transactionManager)
+                .execute(status -> service.completeFirstLogin(accountId, request)));
+    }
 
     @Test
     void shouldAskAnAccountOnNarrowerWordingExactlyOnceMore() {
@@ -50,11 +65,11 @@ class ConsentRewordingIntegrationTest extends BaseIntegrationTest {
         assertThat(before.participateInResearch()).isFalse();
 
         var request = new ConsentService.FirstLoginConsentDTO(ConsentService.WORDING_VERSION, true, true, "AET");
-        var after = service.completeFirstLogin(id, request);
+        var after = complete(id, request);
         assertThat(after.completed()).isTrue();
         assertThat(after.participateInResearch()).isTrue();
 
-        service.completeFirstLogin(id, request);
+        complete(id, request);
         assertThat(service.status(id).completed()).isTrue();
         assertThat(versionsOf(id))
                 .as("three decisions on the narrower wording stay as history, three more are added once")
