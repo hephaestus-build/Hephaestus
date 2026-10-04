@@ -9,7 +9,14 @@ import { stringify } from "yaml";
 
 import { asArray, asRecord, asString, parseJson } from "./json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
-import { approvedWords, productTerms, steRoot, substitutions, contractions } from "./ste-words.ts";
+import {
+	approvedWords,
+	contractions,
+	negativeContractions,
+	productTerms,
+	steRoot,
+	substitutions,
+} from "./ste-words.ts";
 
 const root = fileURLToPath(steRoot);
 const toolchain = asRecord(
@@ -134,6 +141,16 @@ async function generateWordStyles(directory: string): Promise<void> {
 			ignorecase: true,
 			message: 'Write "%s" instead of "%s". Choose the full form that keeps the meaning.',
 			swap: Object.fromEntries(contractions.map(({ from, to }) => [from, to])),
+		}),
+	);
+	await writeFile(
+		path.join(styles, "STE", "NegativeContractions.yml"),
+		stringify({
+			extends: "substitution",
+			level: "error",
+			ignorecase: true,
+			message: 'Write "%s" instead of "%s". Spell out a negative contraction.',
+			swap: Object.fromEntries(negativeContractions.map(({ from, to }) => [from, to])),
 		}),
 	);
 	await writeFile(

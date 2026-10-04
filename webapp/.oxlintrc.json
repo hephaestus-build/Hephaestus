@@ -214,11 +214,11 @@
 			// UI text follows the writing standard in all of `src`. The next entry turns the rule off
 			// for tests, which assert on text, and for mocks, which reproduce what the server sends.
 			"files": ["src/**"],
-			"rules": { "hephaestus/ste-ui-text": "error" }
+			"rules": { "hephaestus/ui-text-voice": "error" }
 		},
 		{
 			"files": ["**/*.test.ts", "**/*.test.tsx", "src/mocks/**"],
-			"rules": { "hephaestus/ste-ui-text": "off" }
+			"rules": { "hephaestus/ui-text-voice": "off" }
 		},
 		{
 			// Vocabulary maps are consumed indirectly, beyond the plugin's one-hop analysis.

@@ -1,7 +1,7 @@
 import { glob, mkdir, writeFile } from "node:fs/promises";
 
-import { uiAlerts } from "./lib/ste-ui.ts";
-import { contractions } from "./lib/ste-words.ts";
+import { negativeContractions } from "./lib/ste-words.ts";
+import { uiAlerts } from "./lib/ui-text.ts";
 import { prepareVale, valeAlerts } from "./lib/vale.ts";
 
 const counts = new Map<string, Map<string, number>>();
@@ -12,8 +12,8 @@ function uiRule(message: string): string {
 	if (message.includes("semicolon")) {
 		return "STE.Semicolons";
 	}
-	if (contractions.some(({ from }) => message.includes(`instead of "${from}"`))) {
-		return "STE.Contractions";
+	if (negativeContractions.some(({ from }) => message.includes(`instead of "${from}"`))) {
+		return "STE.NegativeContractions";
 	}
 	return "STE.Words";
 }
@@ -40,11 +40,6 @@ try {
 		const rule = uiRule(alert.message);
 		count("webapp/src", rule);
 	}
-	for (const alert of await uiAlerts(["webapp/src"], true)) {
-		if (alert.code.includes("ste-ui-text")) {
-			count("webapp/src", "STE.Vocabulary");
-		}
-	}
 	const rules = [...new Set([...counts.values()].flatMap((items) => [...items.keys()]))].toSorted();
 	const trees = ["docs/user", "docs/admin", "docs/contributor", "webapp/src"];
 	const unsupportedUi = new Set([
@@ -52,6 +47,7 @@ try {
 		"STE.ParagraphLength",
 		"STE.PassiveVoice",
 		"STE.IngForms",
+		"STE.Vocabulary",
 	]);
 	const table = [
 		"| Rule | User docs | Admin docs | Contributor docs | UI source |",

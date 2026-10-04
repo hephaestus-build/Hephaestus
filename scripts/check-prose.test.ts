@@ -16,7 +16,6 @@ import {
 	issueFormAlerts,
 } from "./check-prose.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
-import { uiAlerts } from "./lib/ste-ui.ts";
 import {
 	approvedWords,
 	contractions,
@@ -24,6 +23,7 @@ import {
 	technicalNames,
 	wordAlerts,
 } from "./lib/ste-words.ts";
+import { uiAlerts } from "./lib/ui-text.ts";
 import {
 	assetFor,
 	executableFromArchive,
@@ -81,6 +81,10 @@ await test("the shared words preserve boundaries, case, and technical names", ()
 	assert.deepEqual(
 		wordAlerts("Don't stop it.").map(({ to }) => to),
 		["do not"],
+	);
+	assert.deepEqual(
+		wordAlerts("You're set. Don't stop it. It won’t run.", "voice").map(({ to }) => to),
+		["do not", "will not"],
 	);
 });
 
@@ -202,8 +206,23 @@ await test("each Vale rule has a passing sample, a failing sample, and a repair 
 	}
 });
 
+await test("user docs allow positive contractions and spell out negative ones", async () => {
+	const vale = await prepareVale();
+	try {
+		const checks = (file: string) =>
+			(valeAlerts(vale.binary, [file], "error").get(file) ?? []).map(({ Check }) => Check);
+		assert.deepEqual(checks(".vale/fixtures/docs/user/NegativeContractions-good.md"), []);
+		assert.deepEqual(checks(".vale/fixtures/docs/user/NegativeContractions-bad.md"), [
+			"STE.NegativeContractions",
+		]);
+		assert.deepEqual(checks(".vale/fixtures/Contractions-bad.md"), ["STE.Contractions"]);
+	} finally {
+		await vale.dispose();
+	}
+});
+
 await test("the UI report uses the registered oxlint rule and skips machine props", async () => {
-	const directory = await mkdtemp(path.join(tmpdir(), "ste-ui-fixture-"));
+	const directory = await mkdtemp(path.join(tmpdir(), "ui-text-fixture-"));
 	try {
 		const file = path.join(directory, "sample.tsx");
 		await writeFile(file, '<p title="Utilize it" className="ensure">Use it.</p>');

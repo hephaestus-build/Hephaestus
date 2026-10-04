@@ -1,12 +1,7 @@
 import { defineRule, type ESTree } from "@oxlint/plugins";
 import { decodeHTMLStrict } from "entities";
 
-import { isRecord } from "../../../../scripts/lib/json.ts";
-import {
-	approvedWords,
-	withoutTechnicalNames,
-	wordAlerts,
-} from "../../../../scripts/lib/ste-words.ts";
+import { wordAlerts } from "../../../../scripts/lib/ste-words.ts";
 
 // Names of the JSX props and object keys whose string values are UI text. Object keys cover the
 // vocabulary registries, option lists and form schemas.
@@ -41,7 +36,6 @@ const textNames = new Set([
 	"loading",
 ]);
 const toastCalls = new Set(["error", "success", "info", "warning", "message", "loading"]);
-const dictionary = new Set(approvedWords);
 const sentences = new Intl.Segmenter("en", { granularity: "sentence" });
 
 /** Static text only. Unknown expressions are boundaries, not words that we invent. */
@@ -99,44 +93,30 @@ function propertyName(key: ESTree.Node): string | undefined {
 	return key.type === "Literal" && typeof key.value === "string" ? key.value : undefined;
 }
 
-export const steUiText = defineRule({
+export const uiTextVoice = defineRule({
 	meta: {
 		type: "problem",
 		docs: {
-			description: "Use the STE writing standard for literal UI text.",
+			description: "Write literal UI text in the user-facing voice.",
 		},
-		schema: [
-			{
-				type: "object",
-				properties: { vocabulary: { type: "boolean" } },
-				additionalProperties: false,
-			},
-		],
+		schema: [],
 		messages: {
 			word: 'Write "{{to}}" instead of "{{from}}". Keep the same meaning.',
 			sentence: "Split this sentence. Write no more than 25 words per sentence.",
 			semicolon: "Write two sentences instead of a semicolon.",
-			vocabulary:
-				'Write an approved word instead of "{{word}}", or use a technical name or verb from the product vocabulary.',
+			apostrophe: "Write the apostrophe as ’ in UI text.",
 		},
 	},
 	create(context) {
-		const options = context.options[0];
-		const vocabulary = isRecord(options) && options.vocabulary === true;
 		function check(node: ESTree.Node, text: string): void {
-			if (vocabulary) {
-				for (const match of withoutTechnicalNames(text).matchAll(/\b[a-z]+\b/giu)) {
-					if (!dictionary.has(match[0].toLowerCase())) {
-						context.report({ node, messageId: "vocabulary", data: { word: match[0] } });
-					}
-				}
-				return;
-			}
-			for (const alert of wordAlerts(text)) {
+			for (const alert of wordAlerts(text, "voice")) {
 				context.report({ node, messageId: "word", data: alert });
 			}
 			if (text.includes(";")) {
 				context.report({ node, messageId: "semicolon" });
+			}
+			if (/\p{L}'\p{L}/u.test(text)) {
+				context.report({ node, messageId: "apostrophe" });
 			}
 			// A line break in JSX source ends a sentence for the segmenter, so join the lines first.
 			for (const { segment } of sentences.segment(text.replaceAll(/\s+/gu, " "))) {

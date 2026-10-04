@@ -10,7 +10,7 @@ import { steRoot } from "./ste-words.ts";
 const uiIgnorePatterns = ["**/api/**", "**/routeTree.gen.ts", "**/*.test.*", "**/mocks/**"];
 
 /** Use oxlint's AST and the registered rule, not a second JSX parser for reports. */
-export async function uiAlerts(files: string[], vocabulary = false) {
+export async function uiAlerts(files: string[]) {
 	if (files.length === 0) {
 		return [];
 	}
@@ -26,7 +26,7 @@ export async function uiAlerts(files: string[], vocabulary = false) {
 				categories: { correctness: "off" },
 				ignorePatterns: uiIgnorePatterns,
 				rules: {
-					"hephaestus/ste-ui-text": [vocabulary ? "warn" : "error", { vocabulary }],
+					"hephaestus/ui-text-voice": "error",
 				},
 			}),
 		);
@@ -48,7 +48,7 @@ export async function uiAlerts(files: string[], vocabulary = false) {
 		return asArray(output.diagnostics, "UI diagnostics").map((value) => {
 			const diagnostic = asRecord(value, "UI diagnostic");
 			const code = asString(diagnostic.code, "UI rule");
-			if (!code.includes("ste-ui-text")) {
+			if (!code.includes("ui-text-voice")) {
 				throw new Error(
 					`UI prose check returned ${code}. Fix the source or tool before the prose check.`,
 				);
