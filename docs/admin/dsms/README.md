@@ -13,8 +13,8 @@ Do not assume that the TUM identity, public-task basis, or institutional agreeme
 A setting, a source-use decision, or a successful test cannot establish a legal basis.
 None of these proves that a deployment follows this record.
 
-The TUM privacy notice still needs the legal owner's approval before release.
-This update does not change that approval state.
+The TUM public notice contains no placeholders.
+Its publication does not record a DPO or institutional approval, and the full DPIA is still open (see the [screen](./dpia-prescreen.md)).
 [#1377](https://github.com/hephaestus-build/Hephaestus/issues/1377) still owns the release action.
 
 ## Before collecting data
@@ -27,7 +27,7 @@ Do not publish unresolved placeholders as a valid privacy notice.
 | Decision | Operator must record |
 |---|---|
 | Responsibility | `[controller name, address, representative, privacy contact, DPO where applicable]`. Identify any joint controllers and their actual arrangement. An admin role alone does not establish Art. 26 status. |
-| Purpose and lawful basis | `[basis and necessity per purpose and data-subject group]`, including people who never sign in, employees, students, incidental third parties, and research participants. Terms acceptance and the AI choice do not supply this basis. Research uses a broad consent to an area of research. Record `[research organization, ethics approval reference, research information page URL, retention, removal time limit, privacy contact]`. |
+| Purpose and lawful basis | `[basis and necessity per purpose and data-subject group]`, including people who never sign in, employees, students, incidental third parties, and research participants. Terms acceptance and the AI choice do not supply this basis. Research uses a broad consent to an area of research. Record `[research organization, research information page URL or contact, retention criterion, removal procedure, privacy contact]`. The [research prerequisites](../legal-pages.mdx#what-operators-must-do) decide whether an ethics vote is needed. |
 | Information duties | `[how and when people receive the Art. 13/14 notice]`, including source-only contributors and Slack participants. Record any claimed Art. 14 exception and its safeguards. A footer link alone does not prove that you meet this duty. |
 | Risk | `[full DPIA reference, owner, measures, residual risk and controller decision]`. The [screen](./dpia-prescreen.md) indicates a full DPIA for the current combined scope. |
 | Recipients and transfers | `[exact providers, roles, regions, contracts, subprocessors, transfer safeguards, renewal dates]`, using the [processor checklist](./processor-checklist.md). |

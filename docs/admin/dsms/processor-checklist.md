@@ -115,9 +115,9 @@ Art. 26 GDPR (joint controllership) is equally absent: EDPB 07/2020 §§ 50–65
 
 ## Why the workspace administrator is not an Art. 28 processor
 
-The existing TUM notice describes an Art. 26 arrangement for workspace-configurable decisions (§10). Confirm the actual parties and arrangement with the legal owner. An authorized individual acting within TUM is not a separate controller merely because they administer a workspace.
+TUM is the controller. The public TUM notice (§10) states that workspace administrators make workspace-configurable decisions under TUM's operating responsibility. An administrator acting within TUM is not a separate controller because of that role.
 
-The listed decisions cover repository selection, practices, LLM providers and credentials, automatic review triggers, Slack routing and selected Outline collections. The privacy statement provides data subjects with the Art. 26(2) Satz 1 allocation of duties. It also provides the Art. 26(2) Satz 2 essence of the arrangement.
+The listed decisions cover repository selection, practices, models, automatic review triggers, Slack routing and selected Outline collections. The privacy statement sets out the responsibilities of TUM/AET and of workspace administrators.
 
 TUM/AET is the single point of contact for data-subject rights. The workspace administrator is also a contact for workspace-specific questions.
 

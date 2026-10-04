@@ -79,10 +79,10 @@ They remain mandatory while the determination is pending.
 | Restricted or reviewer-only context is quoted into developer-facing feedback                                                                                                                                                 | Source-use decisions govern automated review and feedback delivery separately. Capture requires the automated-review purpose. Delivery rechecks the feedback-delivery purpose, source authorization, and citation ownership.                                                                                                                                                                                                                                                        |
 | Re-identification of released benchmarks built from free text and code. Git history, authorship and writing or coding style can identify an author. | Run a motivated-intruder style test before release. Do not call a dataset anonymous without it. If the test fails, the dataset stays inside the research team. State the residual risk honestly (EDPB Guidelines 1/2026 para 164). |
 | Pseudonymized data goes to AI model providers during benchmark runs | Pseudonymized data is still personal data (EDPB Guidelines 01/2025). Send only pseudonymized data, under the Art. 28 agreement, region and no-training terms in the [processor checklist](./processor-checklist.md). Apply the participant's AI choice (No AI, In-house or Cloud) to the runs. |
-| A participant withdraws, but the data is already in a dataset | Remove the account's data from datasets that are not yet anonymized within `[removal time limit, proposed: 30 days]`. Anonymized data in a published result or dataset cannot be removed, so release only anonymized data. Test the withdrawal path before the first release. |
+| A participant withdraws, but the data is already in a dataset | The research team removes the account's data from datasets that are not yet anonymized without undue delay, as a manual step. Anonymized data in a published result or dataset cannot be removed, so release only anonymized data. Test the withdrawal path before the first release. |
 | Third-party code in a dataset carries a licence that does not allow the release | This is not a GDPR matter, but it is a release gate. Check the licence of each source before release. |
 | Special-category content in free text reaches a research dataset | The research team does not look for special-category data (Art. 9) and removes any that it finds. Researchers screen for names and remove what they find. Assess this incidental content in the full DPIA. |
-| The broad research purpose is wider than a participant can foresee | Keep a research information page that lists current research projects and released datasets. Hold a positive vote of an ethics board. Restrict access to the research team. See section 7. |
+| The broad research purpose is wider than a participant can foresee | Keep a research information page that lists current research projects and released datasets. Assess whether an ethics committee vote is needed and get it where the institution or study requires it ([research prerequisites](../legal-pages.mdx#what-operators-must-do)). Restrict access to the research team. See section 7. |
 | Consent is not freely given because of a power imbalance | Keep a real refusal path with no disadvantage and equal-weight answers (EDPB Guidelines 3/2022). Keep the research team separate from grading and line management. If doubt remains, do not rely on consent. |
 
 The table records risks and available controls, not measured residual-risk ratings. The full DPIA must assess likelihood and severity with deployment evidence, including affected people and misuse outside the product.
@@ -190,7 +190,7 @@ A broad purpose needs more transparency and safeguards (EDPB Guidelines 05/2020 
 The controller must evidence these controls:
 
 1. A research information page that lists current research projects and released datasets.
-2. A positive vote of an ethics board. For TUM, this is the university ethics body: `[ethics approval reference]`.
+2. An ethics committee vote where the institution or the study requires one ([research prerequisites](../legal-pages.mdx#what-operators-must-do)). TUM has not sought or obtained an ethics vote for this research.
 3. Access restricted to the research team.
 
 ### Safeguards and withdrawal
@@ -203,7 +203,9 @@ The research applies these safeguards under Art. 89(1) GDPR:
 - The team does not look for special-category data (Art. 9) and removes any that it finds.
 
 Withdrawal (Art. 7(3) GDPR) is one switch in User settings. It stops use for new research and research survey invitations.
-The research team removes the account's data from datasets that are not yet anonymized within `[removal time limit, proposed: 30 days]`.
+The research team removes the account's data from datasets that are not yet anonymized without undue delay.
+This is a manual step of the research team, not an automatic product function.
+
 Anonymized data in a published result or dataset cannot be removed. Research done before withdrawal stays lawful.
 
 The [personal-data map](./personal-data-map.md) records how withdrawal reaches research copies.

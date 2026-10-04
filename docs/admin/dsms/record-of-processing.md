@@ -65,7 +65,7 @@ The research uses the participant's work in connected repositories and tools, He
 
 The participant can refuse or withdraw at any time. Refusing or withdrawing has no disadvantage, and practice reviews continue. The consent is separate from the terms of use and is not a condition of service. The research is covered in more detail under *Legal basis* below.
 
-The existing TUM record describes an Art. 26 arrangement for these workspace-level choices. The legal owner must confirm its actual parties and arrangement reference. The choices are listed in "Legal basis" below. Hephaestus focuses on the contributor's own development. Observations serve the contributor and let the workspace administrator deliver targeted feedback during the project.
+TUM is the controller. Workspace administrators make these workspace-level choices under TUM's operating responsibility; an administrator role does not establish separate or joint controllership. The choices are listed in "Legal basis" below. Hephaestus focuses on the contributor's own development. Observations serve the contributor and let the workspace administrator deliver targeted feedback during the project.
 
 Observations are advisory and contestable. The platform makes no automated decisions within the meaning of Art. 22 GDPR. It feeds no grading, assessment, HR, or access-control pipeline. Signed-in contributors can stop new practice-feedback comments and related Slack reminders through the in-app **Comments and Slack reminders** setting. They can respond to individual pieces of feedback by recording whether the feedback was helpful and how they handled it.
 
@@ -278,11 +278,11 @@ Research data
 
 The research team holds research copies outside the instance database, at `[location]`. They are pseudonymized copies of the data that the participant allowed. The key that links codes to people is stored apart from them.
 
-The team keeps pseudonymized research data and the key while the research that they support continues. It then deletes or anonymizes them. `[Proposed for TUM, pending legal-owner approval: at most 10 years after collection, in line with the DFG Guidelines for Safeguarding Good Research Practice, Guideline 17.]` Self-hosters record `[retention period of the research organization]`.
+The team keeps pseudonymized research data and the key while the research that they support continues. It then deletes or anonymizes them. For the TUM deployment, the public notice (§3) states the retention criterion; no fixed period applies. Self-hosters record `[retention period or criterion of the research organization]`.
 
 Anonymized datasets are outside the GDPR. They can remain and can be published with no end date. They cannot be removed.
 
-After withdrawal, the team removes the account's data from datasets that are not yet anonymized within `[removal time limit, proposed: 30 days]`. Consent ledger rows are append-only and unchanged by the research use. See "Legal basis" for the ledger.
+After withdrawal, the team removes the account's data from datasets that are not yet anonymized without undue delay, as a manual step. Consent ledger rows are append-only and unchanged by the research use. See "Legal basis" for the ledger.
 
 Retired leaderboard values (league points, XP)
 
@@ -563,16 +563,7 @@ In DSMS:
 ```text
 TUM/AET as platform operator: Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben der Hochschule) and Art. 4(1) BayDSG.
 
-Per-workspace lawful basis:
-
-1. Confirm the actual parties for the existing TUM Art. 26 arrangement.
-2. Confirm its reference.
-
-An authorized administrator within one controller is not a separate controller because of their role. The administrator invokes the basis that applies to their workspace's contributors. Typically, this is Art. 6(1)(a) GDPR (consent, e.g. the AET capstone course's application phase).
-
-Alternatively, it is Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG for public-task activity by a TUM unit. Examples include regular courses or public open-source repositories such as ls1intum/Artemis.
-
-Administrators outside TUM cannot invoke Art. 6(1)(e) BayHIG. They invoke a basis available to them. Typically, this is Art. 6(1)(a) consent, or Art. 6(1)(f) for private bodies under their own LIA.
+Per-workspace processing: every workspace on the TUM deployment uses the TUM basis above. Workspace administrators make configuration choices under TUM's operating responsibility; their role does not make them a separate or joint controller. The operators of the source platforms process the original work under their own legal bases.
 
 Voluntary sign-in by non-TUM contributors to use personal features: Art. 6(1)(b) GDPR.
 
@@ -590,7 +581,7 @@ The screen links to operator-specific detail in the privacy notice at `/privacy`
 
 Withdrawal (Art. 7(3) GDPR) is one switch in User settings. It is as easy as giving consent. Withdrawal immediately ends authorization for further research processing, and research survey invitations stop. Ordinary practice reviews continue.
 
-On withdrawal, the research team removes the account's data from datasets that are not yet anonymized within `[removal time limit, proposed: 30 days]`. Anonymized data in a published result or dataset cannot be traced back and cannot be removed. Research done before withdrawal stays lawful.
+On withdrawal, the research team removes the account's data from datasets that are not yet anonymized without undue delay, as a manual step. Anonymized data in a published result or dataset cannot be traced back and cannot be removed. Research done before withdrawal stays lawful.
 
 Account erasure removes the ledger's account reference. The resulting non-account-linked event remains, with its notice version, as evidence of how the system managed consent.
 
@@ -615,18 +606,18 @@ The [DPIA pre-screen](./dpia-prescreen.md) records why sharing or publishing a d
 Self-hosters use their own research organization. Replace each bracketed value with the facts of that organization:
 
 - `[research organization name]`.
-- `[retention period of the research organization]`.
-- `[ethics approval reference]`.
+- `[retention period or criterion of the research organization]`.
+- `[ethics approval reference, where a vote is required]`.
 - `[research information page URL]`.
 - `[privacy contact]`.
-- `[removal time limit]`.
+- `[removal procedure]`.
 
 ### Controls that the controller must evidence
 
-A broad purpose needs compensating transparency and safeguards (EDPB Guidelines 05/2020 paras 161-162, EDPB Guidelines 1/2026 paras 48-49). The controller must evidence each of these controls before research use starts:
+A broad purpose needs compensating transparency and safeguards (EDPB Guidelines 05/2020 paras 161-162, EDPB Guidelines 1/2026 paras 48-49). The [research prerequisites](../legal-pages.mdx#what-operators-must-do) are the operator list. This section records the TUM facts. The controller must evidence each of these controls before research use starts:
 
-1. Keep a research information page at `[research information page URL]`. It lists current research projects and released datasets.
-2. Hold a positive vote of an ethics board for the research. For TUM, this is the university ethics body, with `[ethics approval reference]`.
+1. Keep a research information page at `[research information page URL]`. It lists current research projects and released datasets. The TUM public notice currently gives the research group contact for this information.
+2. Assess whether the research needs an ethics committee vote, and get it where the institution or the study requires it. TUM has not sought or obtained an ethics vote for this research.
 3. Restrict access to research data to the research team.
 4. Give `[privacy contact]` as the contact for questions about the research.
 
@@ -638,7 +629,7 @@ The research team must be separate from grading and line management. If doubt re
 
 ### Approval state
 
-The research retention period and the removal time limit are proposals. They are pending legal-owner approval. No text in this section is approved for the TUM deployment.
+The public notice states the research retention criterion and the manual removal step. Their publication does not record a DPO or institutional approval of this section.
 
 ## Source of data
 
