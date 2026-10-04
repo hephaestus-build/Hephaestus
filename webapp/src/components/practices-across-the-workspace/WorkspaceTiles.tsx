@@ -59,7 +59,7 @@ const TILE_DEFS: readonly TileDef[] = [
 	},
 	{
 		key: "going-well",
-		title: "Practices going well",
+		title: PRACTICE_GROUP_STANDING_DEFS.STRENGTH.practicesTitle,
 		icon: (
 			<GoingWellIcon
 				className={cn(
@@ -75,7 +75,7 @@ const TILE_DEFS: readonly TileDef[] = [
 	},
 	{
 		key: "needing-attention",
-		title: "Practices needing attention",
+		title: PRACTICE_GROUP_STANDING_DEFS.DEVELOPING.practicesTitle,
 		icon: (
 			<NeedsAttentionIcon
 				className={cn(

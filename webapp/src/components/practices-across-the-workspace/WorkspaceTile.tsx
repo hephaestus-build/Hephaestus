@@ -2,9 +2,8 @@ import type { ReactNode } from "react";
 
 import { cn } from "cn";
 import type { WorkspaceTile as WorkspaceTileFigure } from "@/api/types.gen";
-import { StatTile } from "@/components/common/StatTile";
+import { StatTile, StatTileSkeleton } from "@/components/common/StatTile";
 import { NEUTRAL_GREY } from "@/components/practice-vocabulary/standing-counts";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export interface WorkspaceTileProps {
@@ -50,7 +49,7 @@ export function WorkspaceTile({
 								<>
 									Typical range:{" "}
 									<span className="font-semibold text-foreground tabular-nums">
-										{middle.low === middle.high ? middle.low : `${middle.low} to ${middle.high}`}
+										{rangeText(middle)}
 									</span>
 								</>
 							)}
@@ -74,6 +73,11 @@ interface MiddleHalf {
 	high: number;
 }
 
+/** The middle half in words, low to high: "11 to 21", or one value where both bounds agree. */
+function rangeText({ low, high }: MiddleHalf): string {
+	return low === high ? `${low}` : `${low} to ${high}`;
+}
+
 /**
  * A track from nought with the reader's value pinned on it, and the middle half as a band on it
  * once the workspace may show.
@@ -81,10 +85,7 @@ interface MiddleHalf {
 function RangeBar({ yours, middle }: { yours: number; middle?: MiddleHalf }) {
 	const scale = scaleOf(yours, middle?.high ?? 0);
 	const at = (value: number) => `${(value / scale) * 100}%`;
-	const range =
-		middle === undefined
-			? ""
-			: ` Typical range here: ${middle.low === middle.high ? middle.low : `${middle.low} to ${middle.high}`}.`;
+	const range = middle === undefined ? "" : ` Typical range here: ${rangeText(middle)}.`;
 	return (
 		<div
 			role="img"
@@ -119,23 +120,14 @@ function RangeBar({ yours, middle }: { yours: number; middle?: MiddleHalf }) {
 	);
 }
 
-/**
- * The tile's shape while the figures load, line for line as `StatTile` lays it out: the title, the
- * figure, then the range in words and its track with the scale under it.
- */
+/** The tile's shape while its figure loads: the range in words, then its track with the scale under it. */
 export function WorkspaceTileSkeleton() {
 	return (
-		<Card size="sm" className="w-full" aria-hidden>
-			<CardHeader>
-				<Skeleton className="h-5 w-40" />
-			</CardHeader>
-			<CardContent className="flex flex-1 flex-col gap-3">
-				<Skeleton className="h-6 w-28" />
-				<div className="mt-auto flex flex-col gap-1.5">
-					<Skeleton className="h-5 w-36" />
-					<Skeleton className="mb-5 h-4 w-full" />
-				</div>
-			</CardContent>
-		</Card>
+		<StatTileSkeleton>
+			<div className="mt-auto flex flex-col gap-1.5">
+				<Skeleton className="h-5 w-36" />
+				<Skeleton className="mb-5 h-4 w-full" />
+			</div>
+		</StatTileSkeleton>
 	);
 }

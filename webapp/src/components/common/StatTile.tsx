@@ -2,6 +2,7 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { cn } from "cn";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * The grid stat tiles sit in: one column, then two, then four across, by the width the grid gets
@@ -67,6 +68,24 @@ export function StatTile({
 					</p>
 					{detail}
 				</div>
+				{children}
+			</CardContent>
+		</Card>
+	);
+}
+
+/**
+ * A tile's shape while its figure loads, line for line as `StatTile` lays it out: the title, the
+ * figure, then the page's own content in the shape it will take.
+ */
+export function StatTileSkeleton({ children }: { children?: ReactNode }) {
+	return (
+		<Card size="sm" className="w-full" aria-hidden>
+			<CardHeader>
+				<Skeleton className="h-5 w-36" />
+			</CardHeader>
+			<CardContent className="flex flex-1 flex-col gap-3">
+				<Skeleton className="h-6 w-24" />
 				{children}
 			</CardContent>
 		</Card>

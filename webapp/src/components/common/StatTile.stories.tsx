@@ -4,7 +4,9 @@ import { expect } from "storybook/test";
 
 import { precedes } from "@/test/dom";
 
-import { StatTile } from "./StatTile";
+import { Skeleton } from "@/components/ui/skeleton";
+
+import { StatTile, StatTileSkeleton } from "./StatTile";
 
 /**
  * The stat tile Activity and Practices across the workspace share: the title with its glyph, the
@@ -65,5 +67,21 @@ export const WithDetail: Story = {
 		// Read in order: the figure, its comparison, then what the page shows under it.
 		await expect(precedes(canvas.getByText("17"), detail)).toBe(true);
 		await expect(precedes(detail, canvas.getByText("Typical range: 11 to 21"))).toBe(true);
+	},
+};
+
+/** The tile's shape while its figure loads, with the page's content in its own shape under it. */
+export const Loading: Story = {
+	render: () => (
+		<StatTileSkeleton>
+			<Skeleton className="h-16 w-full" />
+		</StatTileSkeleton>
+	),
+	play: async ({ canvasElement }) => {
+		// The shape alone, hidden from assistive technology: the page says once that it is loading.
+		await expect(canvasElement.querySelector('[data-slot="card"]')).toHaveAttribute(
+			"aria-hidden",
+			"true",
+		);
 	},
 };

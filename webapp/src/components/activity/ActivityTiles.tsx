@@ -4,9 +4,8 @@ import { cn } from "cn";
 import type { ActivityOverview } from "@/api/types.gen";
 import { FOCUS_RING } from "@/components/common/focus";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { STAT_TILE_GRID, StatTile } from "@/components/common/StatTile";
+import { STAT_TILE_GRID, StatTile, StatTileSkeleton } from "@/components/common/StatTile";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 import { capitalise } from "@/lib/text";
@@ -190,15 +189,9 @@ function TileChart({
 /** A tile's shape while the summary loads: the title, the number, the bars and a chip. */
 function TileSkeleton() {
 	return (
-		<Card size="sm" className="w-full" aria-hidden>
-			<CardHeader>
-				<Skeleton className="h-4 w-24" />
-			</CardHeader>
-			<CardContent className="flex flex-col gap-3">
-				<Skeleton className="h-6 w-16" />
-				<Skeleton className="h-16 w-full" />
-				<Skeleton className="h-4 w-20" />
-			</CardContent>
-		</Card>
+		<StatTileSkeleton>
+			<Skeleton className="h-16 w-full" />
+			<Skeleton className="h-4 w-20" />
+		</StatTileSkeleton>
 	);
 }
