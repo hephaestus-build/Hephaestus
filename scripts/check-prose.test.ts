@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile, mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { once } from "node:events";
+import { readFile, mkdtemp, rm, writeFile, mkdir, readdir, stat } from "node:fs/promises";
+import { createServer, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -16,6 +18,7 @@ import {
 	issueFormAlerts,
 } from "./check-prose.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
+import { output } from "./lib/process.ts";
 import {
 	approvedWords,
 	contractions,
@@ -26,6 +29,7 @@ import {
 import { uiAlerts, uiRuleName } from "./lib/ui-text.ts";
 import {
 	assetFor,
+	installValeBinary,
 	executableFromArchive,
 	prepareVale,
 	parseValeAlerts,
@@ -105,6 +109,125 @@ await test("Vale pins cover every supported OS and reject changed archives", () 
 	assert.throws(() => executableFromArchive(zipSync({ other: bytes }), true), /no vale.exe/u);
 });
 
+await test("concurrent Vale installers publish one verified binary and reuse it offline", async () => {
+	const cache = await mkdtemp(path.join(tmpdir(), "vale-cache-test-"));
+	const executable = new Uint8Array([1, 2, 3]);
+	const archive = zipSync({ "vale.exe": executable });
+	const asset = {
+		name: "vale.zip",
+		sha256: createHash("sha256").update(archive).digest("hex"),
+	};
+	const workers = 4;
+	let downloads = 0;
+	const responses: ServerResponse[] = [];
+	const server = createServer((_request, response) => {
+		downloads += 1;
+		if (downloads > workers) {
+			response.end(archive);
+			return;
+		}
+		responses.push(response);
+		// Hold every download until all processes have observed the empty cache.
+		if (responses.length === workers) {
+			for (const pending of responses) {
+				pending.end(archive);
+			}
+		}
+	});
+	try {
+		server.listen(0, "127.0.0.1");
+		await once(server, "listening");
+		const address = server.address();
+		assert.ok(address !== null && typeof address !== "string");
+		const options = {
+			cache,
+			version: "test",
+			asset,
+			url: `http://127.0.0.1:${address.port}/`,
+			windows: true,
+		};
+		const source = `
+			import { installValeBinary } from ${JSON.stringify(new URL("lib/vale.ts", import.meta.url).href)};
+			const [cache, version, name, sha256, url] = process.argv.slice(1);
+			console.log(await installValeBinary({ cache, version, asset: { name, sha256 }, url, windows: true }));
+		`;
+		const results = await Promise.all(
+			Array.from({ length: workers }, async () =>
+				output(
+					process.execPath,
+					[
+						"--input-type=module",
+						"-e",
+						source,
+						cache,
+						options.version,
+						asset.name,
+						asset.sha256,
+						options.url,
+					],
+					{ signal: AbortSignal.timeout(30_000) },
+				),
+			),
+		);
+		const binary = path.join(cache, `vale-test-${asset.sha256}`, "vale.exe");
+		assert.deepEqual(
+			results.map((stdout) => stdout.trim()),
+			Array.from({ length: workers }, () => binary),
+		);
+		assert.equal(downloads, workers);
+		const other = await installValeBinary({ ...options, version: "other" });
+		assert.equal(other, path.join(cache, `vale-other-${asset.sha256}`, "vale.exe"));
+		await assert.rejects(
+			installValeBinary({ ...options, asset: { ...asset, sha256: "0".repeat(64) } }),
+			/checksum/u,
+		);
+		const closed = once(server, "close");
+		server.close();
+		await closed;
+		assert.deepEqual(await readFile(binary), Buffer.from(executable));
+		const directories = [
+			path.basename(path.dirname(other)),
+			path.basename(path.dirname(binary)),
+		].toSorted();
+		const entries = await readdir(cache);
+		assert.deepEqual(entries.toSorted(), directories);
+		const before = await stat(binary);
+		assert.equal(await installValeBinary(options), binary);
+		const after = await stat(binary);
+		assert.equal(after.ino, before.ino);
+		assert.equal(after.mtimeMs, before.mtimeMs);
+		assert.equal(after.ctimeMs, before.ctimeMs);
+
+		await writeFile(binary, "changed executable");
+		await assert.rejects(installValeBinary(options), /executable differs/u);
+		await writeFile(binary, executable);
+		await writeFile(path.join(path.dirname(binary), asset.name), "changed archive");
+		await assert.rejects(installValeBinary(options), /checksum/u);
+	} finally {
+		server.closeAllConnections();
+		server.close();
+		await rm(cache, { recursive: true, force: true });
+	}
+});
+
+await test("Vale runs share the binary but remove only their own configuration", async () => {
+	const [first, second] = await Promise.all([prepareVale(), prepareVale()]);
+	try {
+		assert.equal(first.binary, second.binary);
+		assert.notEqual(first.config, second.config);
+		assert.notEqual(path.dirname(first.config), path.dirname(first.binary));
+		assert.deepEqual(valeAlerts(first, [".vale/fixtures/Words-good.md"]), new Map());
+		await first.dispose();
+		await assert.rejects(readFile(first.config), { code: "ENOENT" });
+		const bytes = await readFile(first.binary);
+		assert.ok(bytes.length > 0);
+		assert.deepEqual(valeAlerts(second, [".vale/fixtures/Words-good.md"]), new Map());
+	} finally {
+		await first.dispose();
+		await second.dispose();
+	}
+});
+
 await test("Vale output uses repository path separators on every OS", () => {
 	const alert = { Check: "STE.Words", Severity: "error", Message: "Write use.", Line: 1 };
 	for (const filename of [".vale/fixtures/Words-bad.md", String.raw`.vale\fixtures\Words-bad.md`]) {
@@ -168,13 +291,11 @@ await test("each Vale rule has a passing sample, a failing sample, and a repair 
 			const good = `.vale/fixtures/${rule}-good.md`;
 			const bad = `.vale/fixtures/${rule}-bad.md`;
 			assert.equal(
-				(valeAlerts(vale.binary, [good]).get(good) ?? []).some(
-					(alert) => alert.Check === `STE.${rule}`,
-				),
+				(valeAlerts(vale, [good]).get(good) ?? []).some((alert) => alert.Check === `STE.${rule}`),
 				false,
 				`${rule}: good sample`,
 			);
-			const alerts = valeAlerts(vale.binary, [bad]).get(bad) ?? [];
+			const alerts = valeAlerts(vale, [bad]).get(bad) ?? [];
 			const alert = alerts.find((item) => item.Check === `STE.${rule}`);
 			assert.ok(alert, `${rule}: bad sample`);
 			assert.match(alert.Message, /Write|write|Use|use|Name|Split/u);
@@ -184,16 +305,16 @@ await test("each Vale rule has a passing sample, a failing sample, and a repair 
 			);
 		}
 		assert.deepEqual(
-			[...valeAlerts(vale.binary, [".vale/fixtures/markup-good.mdx"], "error").values()].flat(),
+			[...valeAlerts(vale, [".vale/fixtures/markup-good.mdx"], "error").values()].flat(),
 			[],
 		);
 		assert.ok(
-			[...valeAlerts(vale.binary, [".vale/fixtures/markup-bad.mdx"], "error").values()]
+			[...valeAlerts(vale, [".vale/fixtures/markup-bad.mdx"], "error").values()]
 				.flat()
 				.some((alert) => alert.Check === "STE.Words"),
 		);
 		assert.equal(
-			[...valeAlerts(vale.binary, [".vale/fixtures/markup-bad.mdx"], "error").values()]
+			[...valeAlerts(vale, [".vale/fixtures/markup-bad.mdx"], "error").values()]
 				.flat()
 				.filter((alert) => alert.Check === "STE.Words").length,
 			4,
@@ -210,7 +331,7 @@ await test("user docs allow positive contractions and spell out negative ones", 
 	const vale = await prepareVale();
 	try {
 		const checks = (file: string) =>
-			(valeAlerts(vale.binary, [file], "error").get(file) ?? []).map(({ Check }) => Check);
+			(valeAlerts(vale, [file], "error").get(file) ?? []).map(({ Check }) => Check);
 		assert.deepEqual(checks(".vale/fixtures/docs/user/NegativeContractions-good.md"), []);
 		assert.deepEqual(checks(".vale/fixtures/docs/user/NegativeContractions-bad.md"), [
 			"STE.NegativeContractions",
@@ -294,8 +415,8 @@ await test("issue forms select prose fields and ignore configuration values", as
 await test("issue-form fixtures check each prose field through Vale", async () => {
 	const vale = await prepareVale();
 	try {
-		assert.deepEqual(issueFormAlerts(vale.binary, ".vale/fixtures/issue-form-prose-good.yml"), []);
-		const alerts = issueFormAlerts(vale.binary, ".vale/fixtures/issue-form-prose-bad.yml");
+		assert.deepEqual(issueFormAlerts(vale, ".vale/fixtures/issue-form-prose-good.yml"), []);
+		const alerts = issueFormAlerts(vale, ".vale/fixtures/issue-form-prose-bad.yml");
 		assert.equal(alerts.length, 8);
 		assert.ok(
 			alerts.every(({ alert }) => alert.Check === "STE.Words" && alert.Severity === "error"),
@@ -332,14 +453,14 @@ await test("skill metadata checks its abstract and ignores machine fields", asyn
 				references: ["utilize; don't"],
 			}),
 		);
-		assert.deepEqual(skillMetadataAlerts(vale.binary, file), []);
+		assert.deepEqual(skillMetadataAlerts(vale, file), []);
 		await writeFile(file, JSON.stringify({ abstract: "Utilize it." }));
-		const alerts = skillMetadataAlerts(vale.binary, file);
+		const alerts = skillMetadataAlerts(vale, file);
 		assert.equal(alerts.length, 1);
 		assert.equal(alerts[0]?.field, "abstract");
 		assert.equal(alerts[0].alert.Check, "STE.Words");
 		await writeFile(file, JSON.stringify({ abstract: 123 }));
-		assert.throws(() => skillMetadataAlerts(vale.binary, file), /abstract/u);
+		assert.throws(() => skillMetadataAlerts(vale, file), /abstract/u);
 	} finally {
 		await vale.dispose();
 		await rm(directory, { recursive: true, force: true });
@@ -349,7 +470,7 @@ await test("skill metadata checks its abstract and ignores machine fields", asyn
 await test("an exact-source exception affects only its named rule and span", async () => {
 	const vale = await prepareVale();
 	try {
-		const alerts = valeAlerts(vale.binary, [".vale/fixtures/quoted-source-scope.md"], "error");
+		const alerts = valeAlerts(vale, [".vale/fixtures/quoted-source-scope.md"], "error");
 		const list = [...alerts.values()].flat();
 		assert.equal(list.filter(({ Check }) => Check === "STE.Contractions").length, 1);
 		assert.equal(list.find(({ Check }) => Check === "STE.Contractions")?.Line, 11);

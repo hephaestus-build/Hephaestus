@@ -20,7 +20,11 @@ Ask ASD for [Issue 9](https://www.asd-ste100.org/request.html) if you need the f
 `toolchain.json` pins Vale 3.24.0 and the SHA-256 of each release archive.
 It supports Linux, macOS, and Windows on x64 and arm64.
 The first run downloads the archive from the pinned GitHub release.
-Each run checks its hash and extracts a fresh executable into a temporary directory.
+
+The executable stays in `.cache/ste/`, in a directory keyed by version and archive hash.
+Each run checks the archive hash and compares the executable with the verified archive.
+Concurrent installers publish complete directories with a rename and reuse the same executable.
+Only configuration and styles are temporary and removed after each run.
 No system Vale, remote style package, or external MDX parser is used.
 The cache can support later runs without network access.
 

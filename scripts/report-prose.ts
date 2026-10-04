@@ -15,9 +15,7 @@ try {
 	for (const tree of ["docs/user", "docs/admin", "docs/contributor"]) {
 		const files = await Array.fromAsync(glob(`${tree}/**/*.{md,mdx}`));
 		for (let offset = 0; offset < files.length; offset += 50) {
-			for (const alert of [
-				...valeAlerts(vale.binary, files.slice(offset, offset + 50)).values(),
-			].flat()) {
+			for (const alert of [...valeAlerts(vale, files.slice(offset, offset + 50)).values()].flat()) {
 				count(tree, alert.Check);
 			}
 		}
