@@ -8,6 +8,8 @@ const gradlewDir = path.resolve(import.meta.dirname, "..", "server");
 const isWindows = process.platform === "win32";
 
 function main(): void {
+	const runtimePath = path.dirname(process.execPath);
+	const inheritedPath = process.env.PATH ?? (isWindows ? undefined : "/usr/bin:/bin");
 	// Windows batch wrappers require a shell.
 	const result = spawnSync(isWindows ? "gradlew.bat" : "./gradlew", process.argv.slice(2), {
 		stdio: "inherit",
@@ -15,7 +17,10 @@ function main(): void {
 		// Node shims can select another runtime after a test changes HOME or its working directory.
 		env: {
 			...process.env,
-			PATH: `${path.dirname(process.execPath)}${path.delimiter}${process.env.PATH ?? ""}`,
+			PATH:
+				inheritedPath === undefined
+					? runtimePath
+					: `${runtimePath}${path.delimiter}${inheritedPath}`,
 		},
 		shell: isWindows,
 	});
