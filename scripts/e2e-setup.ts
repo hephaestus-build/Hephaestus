@@ -2,7 +2,7 @@ import { Client } from "pg";
 
 import { isLoopbackHost, isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
-import { researchConsentFields } from "./lib/research-consent.ts";
+import { completeTransparencyNotice } from "./lib/research-consent.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -641,16 +641,7 @@ async function main(): Promise<void> {
 			},
 			path,
 		);
-	// A signed-in person may not read anything else until they complete the current transparency
-	// notice, so the seeding account completes it through the endpoint the interstitial uses.
-	const consent = object(await api("GET", "/user/consent"), "consent status");
-	if (consent.completed !== true) {
-		await api("PUT", "/user/consent", {
-			noticeVersion: textField(consent, "noticeVersion", "consent status"),
-			termsAccepted: true,
-			...researchConsentFields(consent.researchOrganization),
-		});
-	}
+	await completeTransparencyNotice(api);
 	const accountId = idField(object(await api("GET", "/user"), "user"), "user");
 	const scm = await resolveScmIdentity(config);
 	const database = new Client({

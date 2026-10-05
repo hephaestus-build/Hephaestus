@@ -14,6 +14,7 @@ import {
 	detailPractices,
 	detailRuns,
 	focusedChanges,
+	requestedCleanRun,
 	unwrittenAbout,
 } from "@/stories/practice-detail-story-mock-data";
 import { ALL_FEEDBACK_CARDS } from "@/stories/practice-feedback-cards-story-mock-data";
@@ -195,6 +196,26 @@ export const Default: Story = {
 		// level's title is the one place the practice is named.
 		await expect(screen.getAllByText(focusedChanges.name)).toHaveLength(1);
 		await expect(screen.getByRole("heading", { name: focusedChanges.name })).toBeVisible();
+		await expect(screen.queryByText(/is evidence only/u)).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * Live reviews found problems, so the standing says "Needs attention", and the newest review is one
+ * the reader requested that found none. The Observations tab says the requested review is evidence
+ * only, where the reader sees both.
+ */
+export const RequestedReviewClean: Story = {
+	args: { feed: { ...readyFeed, runs: [requestedCleanRun, ...detailRuns] } },
+	play: async () => {
+		await expectSettledVisible(await screen.findByRole("heading", { name: "Observations" }));
+		await expect(screen.getAllByText("Needs attention")).not.toHaveLength(0);
+		await expect(
+			screen.getByText(
+				/A review that you requested is evidence only and does not change your standing\./u,
+			),
+		).toBeVisible();
+		await expect(screen.getByText("Requested")).toBeVisible();
 	},
 };
 

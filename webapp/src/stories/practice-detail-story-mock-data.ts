@@ -225,6 +225,30 @@ export const detailRuns: PracticeGroupReviewRun[] = [
 	},
 ];
 
+/**
+ * A review the reader asked for, newer than the three above, that found no problem on the practice
+ * the live reviews still read as needing attention.
+ */
+export const requestedCleanRun: PracticeGroupReviewRun = {
+	reviewId: "00000000-0000-0000-0000-000000000141",
+	reviewedAt: daysBefore(1),
+	reviewedWork: pullRequest(902),
+	observations: [
+		{
+			id: "00000000-0000-0000-0000-000000000142",
+			practiceSlug: focusedChanges.slug,
+			practiceName: focusedChanges.name,
+			summary: "The rename and the caching change are now separate commits",
+			outcome: "MET",
+			observedAt: daysBefore(1),
+			origin: "MANUAL",
+			claimCurrentness: "CURRENT",
+			...reviewedPullRequest,
+			evidenceRationale: "The rename lands in its own commit; the caching change is a small diff.",
+		},
+	],
+};
+
 /** What every warrant fixture below shares: the practice level's own practice, on the same work. */
 const onThatPullRequest = {
 	practiceSlug: focusedChanges.slug,

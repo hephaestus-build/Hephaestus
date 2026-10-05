@@ -8,6 +8,7 @@ import type {
 import {
 	nextRating,
 	nextResolution,
+	opensNoteBand,
 	withComment,
 	withDispute,
 	withoutDispute,
@@ -22,8 +23,8 @@ interface FeedbackRating {
 /**
  * The ratings a story holds in place of the server, keyed by feedback id: the same contract
  * `useInAppFeedback` fulfils on the wire, without a network, and on the hook's own `nextRating`,
- * `withComment` and `nextResolution` rules — a press on a rating opens the comment band; pressing the
- * chosen rating again withdraws it and closes the band; Send and Skip close the band and keep the
+ * `withComment` and `nextResolution` rules — a press on a rating opens the comment band, unless a
+ * dispute stands; pressing the chosen rating again withdraws it and closes the band; Send and Skip close the band and keep the
  * rating; Addressed and Not applicable replace the answer, and a second press takes it back;
  * Disagree opens the dispute's band, whose Send writes the dispute, and takes a standing one back. The
  * card's state is the fixture's, since closing it is the server's to decide.
@@ -43,7 +44,7 @@ export function useFeedbackRatings() {
 		onRate: (usefulness) =>
 			update(feedbackId, (current) => {
 				const response = nextRating(current?.response, usefulness);
-				return { response, openBand: response.usefulness === undefined ? undefined : "comment" };
+				return { response, openBand: opensNoteBand(response) ? "comment" : undefined };
 			}),
 		onSendComment: (comment) =>
 			update(

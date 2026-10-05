@@ -7,11 +7,7 @@ import type { InAppEvidence, ReviewedWorkRef } from "@/api/types.gen";
 import { FOCUS_RING } from "@/components/common/focus";
 import { InlineLink } from "@/components/common/InlineLink";
 import { ResponseButton, toneOf } from "@/components/common/ResponseButton";
-import {
-	type ResponseComment,
-	ResponseCommentBand,
-	type ResponseReason,
-} from "@/components/common/ResponseCommentBand";
+import { ResponseCommentBand } from "@/components/common/ResponseCommentBand";
 import { SectionLabel } from "@/components/common/SectionLabel";
 import { statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -35,18 +31,6 @@ import { OUTCOME_DEFS } from "./outcome-defs";
 import { countedStripWork, type StripPiece, stripPieces } from "./practice-feedback-card-strip";
 import { PracticePill } from "./PracticePill";
 import { StatusIcon } from "./StatusTooltip";
-
-/** Why a piece of feedback was not helpful; the wire's dispute carries the comment beside it. */
-type NotHelpfulReason = "not-accurate" | "not-useful" | "already-doing";
-
-const NOT_HELPFUL_REASONS: ResponseReason<NotHelpfulReason>[] = [
-	{ value: "not-accurate", label: "Not accurate" },
-	{ value: "not-useful", label: "Not useful" },
-	{ value: "already-doing", label: "Already doing this" },
-];
-
-/** The note under a rating; the reason comes only with a "not helpful" one. */
-export type FeedbackComment = ResponseComment<NotHelpfulReason>;
 
 /** The band under a card's footer: the rating's comment, or the sentence a dispute carries. */
 export type FeedbackBand = "comment" | "dispute";
@@ -165,7 +149,7 @@ export interface FeedbackRatingProps {
 	 * rather than disabled.
 	 */
 	onRate?: (usefulness: FeedbackUsefulness) => void;
-	onSendComment?: (comment: FeedbackComment) => void;
+	onSendComment?: (comment: string) => void;
 	/** Skip in either band: the comment's or the dispute's. */
 	onSkipComment?: () => void;
 	/** Without it the card has no Disagree button. The caller decides what a press on a standing dispute does. */
@@ -249,7 +233,6 @@ export function PracticeFeedbackCard({
 	const headingId = useId();
 	const responseId = useId();
 	const shownTimestamp = formatTimestamp(timestamp, state, new Date(useNow()));
-	const sendDispute = onSendDispute && (({ comment }: ResponseComment) => onSendDispute(comment));
 	const resolved = state === "resolved";
 	// No work can tick a closed card, so it draws no count towards the threshold.
 	const closed = state === "closed";
@@ -497,48 +480,23 @@ export function PracticeFeedbackCard({
 					label="What is wrong in this feedback?"
 					placeholder="One or two sentences on what is wrong"
 					required
-					audience={() =>
-						"Workspace admins read your sentence, not the card, and can correct its observations or withdraw it. The card stays open until then."
-					}
+					audience="Workspace admins read your sentence, not the card, and can correct its observations or withdraw it. The card stays open until then."
 					isPending={isPending}
 					sending={saving === "send"}
-					onSend={sendDispute}
+					onSend={onSendDispute}
 					onSkip={onSkipComment}
 				/>
 			)}
-			{openBand === "comment" && usefulness === "HELPFUL" && (
+			{openBand === "comment" && usefulness !== undefined && (
 				<ResponseCommentBand
 					key={usefulness}
-					name="What was helpful"
-					label="What worked about this feedback?"
-					placeholder="Optional: what helped, or what you did"
+					{...FEEDBACK_USEFULNESS_DEFS[usefulness].note}
 					isPending={isPending}
 					sending={saving === "send"}
 					onSend={onSendComment}
 					onSkip={onSkipComment}
 				/>
 			)}
-			{openBand === "comment" &&
-				usefulness === "UNHELPFUL" && (
-					// A reason and a sentence: the sentence is what the dispute has to carry.
-					<ResponseCommentBand
-						key={usefulness}
-						name="What was not helpful"
-						label="Why was this not helpful?"
-						placeholder="One or two sentences on what is wrong"
-						required
-						reasons={NOT_HELPFUL_REASONS}
-						audience={(reason) =>
-							reason === "not-accurate"
-								? "Not accurate disputes this card. Workspace admins read your sentence, not the card. They can mark its observations incorrect or withdraw it."
-								: undefined
-						}
-						isPending={isPending}
-						sending={saving === "send"}
-						onSend={onSendComment}
-						onSkip={onSkipComment}
-					/>
-				)}
 		</article>
 	);
 }

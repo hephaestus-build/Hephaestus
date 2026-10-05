@@ -101,3 +101,9 @@ observations the feedback was written from and on the feedback's record under Pr
 mark an observation incorrect or withdraw the card. Only the explanation crosses: the card's text stays
 withheld from them, and every other response a developer writes — a rating's note, an *Addressed* or *Not
 applicable* note — stays theirs alone.
+
+## Update — 2026-10-05: a dispute has one path
+
+A developer disputes a Practice profile card with **Disagree** only. The **Not accurate** reason in the
+update above is gone, because a rating answers whether the feedback helped and a dispute answers whether it is
+wrong. The decision is unchanged: the explanation of a dispute is written to the workspace admins.

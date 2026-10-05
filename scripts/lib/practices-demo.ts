@@ -60,6 +60,7 @@ export const SPLITS: Record<string, [number, number, number, number]> = {
 	"issue-traceability-and-lifecycle": [1, 1, 1, 37],
 	"actionable-issue-authoring": [9, 9, 10, 12],
 	"code-craftsmanship": [10, 9, 9, 12],
+	"ios-app-craft": [9, 10, 9, 12],
 };
 
 /** How many developers with a standing in a group leave each of its practices unreviewed. */

@@ -135,10 +135,13 @@ To wipe the local database (e.g. after a bad migration or sync), run `vp run dev
 
 The practices demo fills one workspace with data for Practices across the workspace and the Practice profile.
 
-1. Set `HEPHAESTUS_DEV_SEED_ENABLED=true` in `server/.env`.
+1. Set `HEPHAESTUS_DEV_SEED_ENABLED=true` and `HEPHAESTUS_AUTH_DEV_LOGIN_ENABLED=true` in `server/.env`.
+   The seed signs in through dev sign-in.
 2. Start the server with `vp run dev`.
-3. Run `vp run dev:practices-across-the-workspace:seed`.
-4. Sign in as the reader and open the Practice profile of the workspace.
+3. In the workspace, turn on **Start practice reviews** under **Practices → Review settings**.
+   Otherwise the workspace hides both pages, and the seed stops before it writes.
+4. Run `vp run dev:practices-across-the-workspace:seed`.
+5. Sign in as the reader and open the Practice profile of the workspace.
 
 To remove the demo, run `vp run dev:practices-across-the-workspace:remove`.
 Both commands need the running server.
@@ -160,7 +163,9 @@ A flag has priority over its environment variable.
 The server's rules decide them, so only the running page confirms them.
 
 - 40 synthetic members, `synthetic-developer-01` to `synthetic-developer-40`, with reviews over about 75 days.
-- Two groups, testing discipline and issue traceability, held back. All other groups show their split.
+- Two groups, testing discipline and issue traceability, held back by their numbers.
+- Communication held back with no standing, because its practices review conversations and the demo writes none.
+  All other groups show their split.
 - For the reader, an existing member: each standing, a practice that improves, and a practice that declines.
 - For the reader: feedback in each state, from new and unread to marked as not applicable.
 

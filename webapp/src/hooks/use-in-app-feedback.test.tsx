@@ -20,13 +20,17 @@ describe("nextRating", () => {
 		).toStrictEqual({ usefulness: "UNHELPFUL", resolution: "ADDRESSED", comment: "Fixed it" });
 	});
 
-	it("withdraws the dispute with the rating, so the request never carries a comment-less dispute", () => {
+	it("keeps a dispute and its sentence when the rating is withdrawn", () => {
 		expect(
 			nextRating(
 				{ usefulness: "UNHELPFUL", resolution: "DISPUTED", comment: "This is not what happened" },
 				"UNHELPFUL",
 			),
-		).toStrictEqual({ usefulness: undefined, resolution: undefined, comment: undefined });
+		).toStrictEqual({
+			usefulness: undefined,
+			resolution: "DISPUTED",
+			comment: "This is not what happened",
+		});
 	});
 
 	it("keeps a resolution that stands on its own when the rating is withdrawn", () => {
@@ -281,9 +285,7 @@ describe("useInAppFeedback", () => {
 		await waitFor(() => expect(result.current.cards).toHaveLength(1));
 
 		act(() => {
-			result.current
-				.ratingProps(feedbackId)
-				.onSendComment?.({ reason: "not-useful", comment: "  Already do this  " });
+			result.current.ratingProps(feedbackId).onSendComment?.("  Already do this  ");
 		});
 
 		await waitFor(() => expect(written).toHaveLength(1));
@@ -293,14 +295,16 @@ describe("useInAppFeedback", () => {
 		});
 	});
 
-	it("disputes the feedback when the reason is that it is not accurate", async () => {
-		const { result, written } = renderFeedback({ usefulness: "UNHELPFUL" });
+	it("opens no note band for a rating while a dispute stands, so the sentence stays the comment", async () => {
+		const { result, written } = renderFeedback({
+			usefulness: "HELPFUL",
+			resolution: "DISPUTED",
+			comment: "The rename was its own PR",
+		});
 		await waitFor(() => expect(result.current.cards).toHaveLength(1));
 
 		act(() => {
-			result.current
-				.ratingProps(feedbackId)
-				.onSendComment?.({ reason: "not-accurate", comment: "The rename was its own PR" });
+			result.current.ratingProps(feedbackId).onRate?.("UNHELPFUL");
 		});
 
 		await waitFor(() => expect(written).toHaveLength(1));
@@ -312,6 +316,7 @@ describe("useInAppFeedback", () => {
 				comment: "The rename was its own PR",
 			},
 		});
+		expect(result.current.ratingProps(feedbackId).openBand).toBeUndefined();
 	});
 
 	it("opens the dispute's band on Disagree and writes the dispute with its sentence on Send", async () => {

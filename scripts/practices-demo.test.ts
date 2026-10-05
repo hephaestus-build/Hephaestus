@@ -36,12 +36,20 @@ const GROUP_OF = new Map(
 	}),
 );
 
-void test("the demo names only groups and practices that the catalog ships", () => {
+void test("the demo splits every group that the catalog ships, except communication", () => {
 	const groups = new Set(GROUP_OF.values());
 	assert.deepEqual(
 		Object.keys(SPLITS).filter((group) => !groups.has(group)),
 		[],
 	);
+	// Its practices review conversations, and the demo writes reviews of pull requests and issues only.
+	assert.deepEqual(
+		[...groups].filter((group) => !(group in SPLITS)),
+		["communication"],
+	);
+});
+
+void test("the demo names only practices that the catalog ships", () => {
 	const practices = [
 		...READER_RUNS.flatMap((run) => run.observations.map((observation) => observation.practice)),
 		...READER_CARDS.map((card) => card.practice),
