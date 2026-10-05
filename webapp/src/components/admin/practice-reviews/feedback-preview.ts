@@ -40,8 +40,20 @@ interface Flattened {
 	dropped: boolean;
 }
 
+/**
+ * An HTML comment, closed or cut off by the preview. A posted summary opens with Hephaestus's own
+ * `<!-- hephaestus:practice-review:… -->` marker, which GitHub hides and a preview must too.
+ */
+const HTML_COMMENT = /<!--[\s\S]*?(?:-->|$)/gu;
+
+/**
+ * The tags of GitHub's HTML subset a composed or posted body uses, such as the `<sub>` footer.
+ * Named rather than matched as any `<…>`, so a generic in prose, `List<String>`, keeps its words.
+ */
+const GITHUB_HTML_TAG = /<\/?(?:a|b|br|details|em|i|kbd|p|small|strong|sub|summary|sup)\b[^>]*>/giu;
+
 function flattenMarkdown(source: string): Flattened {
-	const lines = source.split("\n");
+	const lines = source.replaceAll(HTML_COMMENT, "").split("\n");
 	const kept: string[] = [];
 	let dropped = false;
 	let insideFence = false;
@@ -94,6 +106,8 @@ function flattenMarkdown(source: string): Flattened {
  */
 function inlineToText(line: string): string {
 	return line
+		.replaceAll(GITHUB_HTML_TAG, "")
+		.replaceAll("&middot;", "·")
 		.replaceAll(/!\[[^\]]*\]\([^)]*\)/gu, "")
 		.replaceAll(/\[(?<text>[^\]]+)\]\([^)]*\)/gu, "$<text>")
 		.replaceAll(/`+/gu, "")

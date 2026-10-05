@@ -64,4 +64,20 @@ describe("feedbackPreviewText", () => {
 	it("reports no text when the preview held nothing but a code fence", () => {
 		expect(preview("```java\nreturn null;\n```")).toBeUndefined();
 	});
+
+	it("leaves out the marker and the HTML tags of a posted comment", () => {
+		expect(
+			preview(
+				"<!-- hephaestus:practice-review:774b9e9b-2c40-4d6b-9e76-7094dda3a7a2 -->\nThe description needs its purpose and coverage.\n\n---\n<sub>Practice review &middot; gpt-6-luna.</sub>",
+			),
+		).toBe("The description needs its purpose and coverage. Practice review · gpt-6-luna…");
+	});
+
+	it("leaves out a marker the preview cut before it closed", () => {
+		expect(preview("<!-- hephaestus:practice-review:774b9e9b", true)).toBeUndefined();
+	});
+
+	it("keeps a generic type in prose", () => {
+		expect(preview("Return a List<String> here.")).toBe("Return a List<String> here.");
+	});
 });

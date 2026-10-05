@@ -2,9 +2,13 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor, within } from "storybook/test";
 
 import { FeedbackBody } from "./FeedbackBody";
+import { POSTED_SUMMARY_COMMENT } from "./fixtures";
 
 const body =
 	"## What worked\n\nThe controller stays focused on HTTP concerns.\n\n[Read the guide](https://example.com/guide).";
+
+/** Streamdown draws bold as a span it marks, not as a `strong` element. */
+const STRONG = '[data-streamdown="strong"]';
 
 const meta = {
 	component: FeedbackBody,
@@ -147,5 +151,71 @@ export const UntrustedMarkdown: Story = {
 			"href",
 			"https://example.com/docs",
 		);
+	},
+};
+
+/**
+ * The stored body of a summary comment is the comment as posted, HTML and all. It renders as GitHub
+ * shows it: the marker is hidden, and the footer is small print under the rule. The Source view
+ * still shows every character that was posted.
+ */
+export const PostedComment: Story = {
+	args: {
+		feedback: { body: POSTED_SUMMARY_COMMENT, channel: "IN_CONTEXT", deliveryState: "DELIVERED" },
+	},
+	play: async ({ canvas, userEvent }) => {
+		const rendered = canvas.getByRole("tabpanel", { name: "Rendered" });
+		await expect(rendered.textContent).not.toMatch(/<!--|<sub>|&middot;/u);
+		await expect(
+			within(rendered).getByRole("link", { name: "Why you see this and how to stop it" }),
+		).toHaveAttribute("href", "https://hephaestus.example/settings#practice-feedback");
+		await expect(rendered.querySelectorAll("small")).toHaveLength(2);
+
+		await userEvent.click(canvas.getByRole("tab", { name: "Source" }));
+		await expect(canvas.getByRole("tabpanel", { name: "Source" }).textContent).toContain(
+			"<!-- hephaestus:practice-review:774b9e9b-2c40-4d6b-9e76-7094dda3a7a2 -->",
+		);
+	},
+};
+
+/**
+ * The composer's Markdown at full range: a heading, bold, inline code, a list, a link, a line
+ * break inside a paragraph, and a collapsed `<details>` block from GitHub's HTML subset.
+ */
+export const ComposerMarkdown: Story = {
+	args: {
+		feedback: {
+			body: [
+				"### What to tighten",
+				"",
+				"The lookup in `CacheService.find` collapses **two different failures** into one 404:",
+				"",
+				"- a cache miss, which the caller can retry",
+				"- a permission failure, which it cannot",
+				"",
+				"Split them before this merges.  ",
+				"The [error-handling guide](https://example.com/guide) shows the shape.",
+				"",
+				"<details><summary>Lines checked</summary>",
+				"",
+				"`server/src/main/java/CacheService.java`, lines 40–52",
+				"",
+				"</details>",
+			].join("\n"),
+			channel: "IN_CONTEXT",
+			deliveryState: "DELIVERED",
+		},
+	},
+	play: async ({ canvas }) => {
+		canvas.getByRole("heading", { level: 4, name: "What to tighten" });
+		await expect(canvas.getByText("CacheService.find", { selector: "code" })).toBeVisible();
+		await expect(canvas.getByText("two different failures", { selector: STRONG })).toBeVisible();
+		await expect(within(canvas.getByRole("list")).getAllByRole("listitem")).toHaveLength(2);
+		await expect(canvas.getByRole("link", { name: "error-handling guide" })).toHaveAttribute(
+			"href",
+			"https://example.com/guide",
+		);
+		await expect(canvas.getByText("Lines checked", { selector: "summary" })).toBeVisible();
+		await expect(canvas.queryByText(/\*\*|<details>/u)).toBeNull();
 	},
 };

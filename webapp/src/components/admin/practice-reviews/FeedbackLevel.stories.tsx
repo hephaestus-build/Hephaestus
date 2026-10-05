@@ -15,6 +15,7 @@ import { FeedbackLevel } from "./FeedbackLevel";
 import {
 	feedbackDetail,
 	longFeedbackDetail,
+	POSTED_SUMMARY_COMMENT,
 	reviewArtifact,
 	reviewFeedbackDetail,
 	workspacePractices,
@@ -168,6 +169,25 @@ export const Delivered: Story = {
 		await expect(
 			panel.queryByRole("button", { name: "Withdraw feedback" }),
 		).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * A summary comment on the pull request: "What it says" shows the posted text as the developer saw
+ * it on GitHub, without the hidden marker and with the footer as small print.
+ */
+export const DeliveredSummaryComment: Story = {
+	args: {
+		feedback: ready({ ...delivered, body: POSTED_SUMMARY_COMMENT, proposedPlacements: [] }),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		const rendered = panel.getByRole("tabpanel", { name: "Rendered" });
+		await expect(rendered.textContent).toContain("The description needs its purpose and coverage.");
+		await expect(rendered.textContent).not.toMatch(/<!--|<sub>/u);
+		await expect(
+			within(rendered).getByRole("link", { name: "Why you see this and how to stop it" }),
+		).toBeVisible();
 	},
 };
 
