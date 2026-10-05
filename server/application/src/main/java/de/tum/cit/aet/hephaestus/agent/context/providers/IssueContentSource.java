@@ -53,7 +53,7 @@ import tools.jackson.databind.node.ObjectNode;
 public class IssueContentSource implements EvidenceSource, ReviewContextBuilder {
 
     public static final SourceKind CORE = new SourceKind("scm.issue.core");
-    private static final SourceKind COMMENTS = new SourceKind("scm.issue.comments");
+    public static final SourceKind COMMENTS = new SourceKind("scm.issue.comments");
 
     /** Checked by the integration framework against every descriptor that calls itself reviewable. */
     @Override

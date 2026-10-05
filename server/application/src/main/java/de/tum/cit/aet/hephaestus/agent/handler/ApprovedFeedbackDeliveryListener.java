@@ -9,12 +9,14 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
+import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.ApprovedFeedbackReadyEvent;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalEligibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -69,7 +71,7 @@ class ApprovedFeedbackDeliveryListener {
         AgentJob job = agentJobRepository
                 .findByIdAndWorkspaceId(feedback.getAgentJobId(), event.workspaceId())
                 .orElse(null);
-        if (job == null || feedback.getBody() == null || feedback.getBody().isBlank()) return;
+        if (job == null || !proposesContent(feedback)) return;
 
         PracticeFeedbackDeliveryPolicy.Decision<?> policy;
         if (ArtifactKinds.ISSUE.equals(feedback.getArtifactKind())) {
@@ -104,11 +106,11 @@ class ApprovedFeedbackDeliveryListener {
             dispatchService.projectApproved(feedback, () -> {
                 feedbackLedgerRecorder.recordApprovedPlacements(
                         feedback, result.externalRef(), result.externalUrl(), result.deliveredSignals());
-                if (result.externalRef() == null) {
-                    stop(feedback, event.workspaceId(), reason);
-                } else {
+                if (result.landed()) {
                     feedbackRepository.markApprovedPartiallyDelivered(
                             event.workspaceId(), feedback.getId(), reason.name());
+                } else {
+                    stop(feedback, event.workspaceId(), reason);
                 }
             });
             return;
@@ -125,19 +127,30 @@ class ApprovedFeedbackDeliveryListener {
             dispatchService.projectApproved(feedback, () -> {
                 feedbackLedgerRecorder.recordApprovedPlacements(
                         feedback, result.externalRef(), result.externalUrl(), result.deliveredSignals());
-                if (result.externalRef() == null) {
-                    feedbackRepository.markApprovedFailed(event.workspaceId(), feedback.getId());
-                } else {
+                if (result.landed()) {
                     feedbackRepository.markApprovedPartiallyFailed(event.workspaceId(), feedback.getId());
+                } else {
+                    feedbackRepository.markApprovedFailed(event.workspaceId(), feedback.getId());
                 }
             });
             return;
         }
-        if (result.externalRef() != null) {
+        if (result.landed()) {
+            feedbackLedgerRecorder.recordApprovedPlacements(
+                    feedback, result.externalRef(), result.externalUrl(), result.deliveredSignals());
             feedbackRepository.markApprovedPartiallyDelivered(event.workspaceId(), feedback.getId(), null);
         } else {
             log.warn("Approved proposal deferred for dispatch reconciliation: feedbackId={}", feedback.getId());
         }
+    }
+
+    /** A proposal approves a summary, line notes, or both; with neither it proposes nothing to deliver. */
+    private static boolean proposesContent(Feedback feedback) {
+        @Nullable String body = feedback.getBody();
+        return (body != null && !body.isBlank())
+                || feedback.getProposedPlacements().stream()
+                        .anyMatch(placement -> placement.type() == PlacementType.INLINE
+                                && !placement.body().isBlank());
     }
 
     private void stop(Feedback feedback, Long workspaceId, FeedbackSuppressionReason reason) {

@@ -504,7 +504,9 @@ A call with repeated practices changes no drafts.
 Server admission refuses a package with repeated practices before recording observations.
 After admission, recorded observations stay immutable. Correction uses the existing [invalidation flow](./practice-review-glossary.mdx#invalidated-observations).
 
-Measurement and composition are separate phases in one model session.
+Measurement and composition are separate phases.
+Public composition starts a fresh session.
+Private composition may resume the measurement session.
 An authenticated callback admits observations between them.
 Composition can reference only the persisted projection.
 
@@ -514,112 +516,115 @@ Keeping these phases separate allows an observation to remain recorded even when
 
 ```mermaid
 flowchart TB
-    accTitle: Measurement and feedback composition are separate turns
-    accDescr: A measurement turn creates grounded observations. A composition turn combines admitted observations with bounded history and proposes feedback for three channels or withholds it.
-    work["A piece of work"] --> measure
-
-    subgraph measurementTurn["Measurement turn"]
-        measure["Read the work against each practice"]
-        measure --> obs["Observations: what is there,<br/>with the citation that proves it.<br/>Immutable while retained."]
-    end
-
-    obs --> compose
-    record["Bounded recent observation history<br/>for this person"] --> compose
-    said["Bounded recent delivered feedback<br/>and feedback prepared but unread"] --> compose
-
-    subgraph compositionTurn["Composition turn"]
-        compose["Decide what is worth saying now,<br/>to whom, and on which surface"]
-        compose --> incontext["IN_CONTEXT: this change, one edit"]
-        compose --> page["IN_APP: the way of working, one thing to try"]
-        compose --> chat["IN_CHAT: notes for a future mentor turn"]
-        compose --> quiet["WITHHOLD: say nothing"]
-    end
-
-    incontext --> gate{"Autonomy, routing, and delivery policy"}
+    accTitle: Public and private composition have separate inputs
+    accDescr: Admitted observations feed a public review of current work and separate private feedback from authorized history. The server admits each complete body before delivery.
+    work["Captured work"] --> measure["Measure practices"]
+    measure --> obs["Admitted observations"]
+    obs --> public["Fresh public composition session"]
+    sameWork["Prior public feedback on the same work"] --> public
+    public --> review["Complete summary and complete line notes"]
+    obs --> private["Private composition session"]
+    history["Authorized bounded history and unread feedback"] --> private
+    private --> page["IN_APP: guidance on the practice page"]
+    private --> chat["IN_CHAT: notes for a future conversation"]
+    review --> gate{"Admission, autonomy and delivery policy"}
     page --> gate
     chat --> gate
-    gate --> ledger["The feedback ledger"]
-    quiet --> compositionResult["Composition output only:<br/>retained until job payload stripping"]
+    gate --> ledger["Feedback ledger"]
 ```
 
 **The model proposes.
-The server admits.** Origin, effective autonomy, routing, placement checks and per-channel limits still apply after composition.
+The server admits.** Origin, effective autonomy, routing and placement checks still apply after composition.
 
 ### Composition inputs and outputs
 
-After Java admits observations, the runner resumes the same model session with the composition prompt.
-The measurement tool is closed, and feedback may bind only to the durable observations returned by admission.
-The resumed session retains artifact context without weakening the server boundary.
+Only pull-request and issue handlers enable composition, and not for backfills.
+Document and conversation reviews record observations without composing feedback.
+An authenticated callback admits observations before composition starts.
+Composition can bind only to the persisted projection returned by that callback.
 
-The composer receives the current admitted observations, bounded recent observation and feedback history, unread prepared feedback, practice definitions, and the enabled lanes with their limits.
-The exact files belong to the [agent workspace ABI](agent/workspace-abi.mdx), not this guide.
+The public session receives eligible current-work observations, prior public feedback on the same work,
+and each owning practice revision's name, purpose and known limitations.
+It receives scope bounds for undecided and unreached practices, which support no claims.
+An observation that cites or consulted a private or unknown source stays out of this session entirely.
+Removing a private citation would not remove the information from the observation's prose.
+The public session has only the recording tool.
+It has no file, search or execution tools and loads no private context.
 
-Three constraints shape how that context may be used:
+The private session retains authorized artifact context and receives bounded observation history,
+feedback history and unread prepared feedback.
+A repeated pattern requires evidence from each work item.
+Absence from history proves no absence of behavior.
+Shared practice or location keys alone establish neither repetition nor resolution.
 
-- Only pull-request and issue handlers enable composition, and not for backfills. Document and conversation
-  reviews record observations but compose no feedback.
-- History is bounded. Claims about repeated behavior require the specific evidence from each reviewed
-  artifact. Absence from the history does not establish that a behavior never occurred.
-- Shared practice or location keys do not establish semantic equivalence. A changed outcome or an
-  omitted observation does not establish that a concern was resolved or regressed.
-
-Accepted tool calls update the composition output incrementally.
-The server parses proposed units and applies all delivery gates.
-The model never writes the feedback ledger directly.
+The exact staged files belong to the [agent workspace ABI](agent/workspace-abi.mdx).
 
 ### Channels are distinct interventions
 
-What each channel is and where it lands is defined in the [practice feedback language](./practice-feedback-language.md).
-Which level each one is, in the [practice review glossary](./practice-review-glossary.mdx#the-three-channels-are-three-levels).
-The composition turn must not render one advice string three ways:
+The [practice feedback language](./practice-feedback-language.md) defines where channels land.
+The [practice review glossary](./practice-review-glossary.mdx#the-three-channels-are-three-levels) defines their levels.
+Composition must not render one advice string three ways:
 
-- `IN_CONTEXT` is public task-level feedback about the current work. It binds to a current admitted
-  observation and uses either server-resolved `DIFF` placement or artifact-level placement. History alone
-  cannot support a public claim.
-- `IN_APP` is private process-level feedback about a pattern across several pieces of the recipient's work.
-- `IN_CHAT` is private context for a later mentor turn. It prepares `situation`, `capability`,
-  `evidenceSummary`, and `inConversationSignal` as notes, not dialogue. The mentor receives the original
-  evidence and live conversation, then may adapt, defer, or discard the note.
+- `IN_CONTEXT` is public task-level feedback. One `report_review` call replaces the whole proposed review:
+  an optional complete summary, complete line notes, and exact observation-scoped withholding decisions.
+  Each body names every admitted decided observation it speaks about in `basedOn`.
+  The model writes the prose.
+  The server never joins fragments or publishes raw observation summaries.
+- `IN_APP` is private process-level feedback about a pattern in the recipient's work.
+- `IN_CHAT` prepares `situation`, `capability`, `evidenceSummary` and `inConversationSignal` as private notes,
+  not dialogue. A later conversational turn may adapt, defer or discard them.
 
-An issue has no diff and therefore permits only artifact-level in-context placement.
-Pull requests permit both placements.
-Per-lane limits are supplied in composition configuration, not fixed in this guide.
+An issue supports only a summary.
+A pull or merge request may carry a summary, line notes, or line notes without a summary.
+A provider may be unable to place an admitted line note beside the diff.
+It may post the same complete body as a separate comment with file and line context.
+It never appends that body to the summary.
 
-### What the composer is not allowed to do
+### Admission preserves complete bodies
 
-Recording-tool validation and server admission enforce these constraints independently.
-An invalid feedback unit is dropped and logged without invalidating admitted observations.
+Recording-tool validation and server admission enforce the contract independently.
+Neither composition tool accepts outcome or severity changes.
+Each public body is indivisible: if any supporting observation fails admission, the whole body stays unsent.
+Unrelated valid bodies may still proceed.
 
-- **No verdict fields.** `report_feedback` takes no outcome or severity.
-- **No model-authored path or line number.** `placement.kind: "DIFF"` names an admitted
-  `{ observationId, citationIndex }`, and the server resolves the file, side, and line from that
-  observation's citation. `placement.kind: "ARTIFACT"` carries no coordinates and stays in the summary.
-  Both forms require a current admitted observation of the same practice.
-- **No invented supersession target.** `action: "SUPERSEDE"` must name, in `supersedesThreadKey`, a
-  `threadKey` that was staged in `prepared.json`.
-- **No second unit on the same lane about the same practice.** One unit per `(channel,
-practiceSlug)`.
-  The rest are dropped.
+Every contributor must identify the same recipient, and all public bodies must address that person.
+An observation that decided nothing cannot support a positive or negative claim.
+A specific positive observation permits a bounded acknowledgement, not a general readiness or approval verdict.
 
-Staying quiet is the fourth action, not a gap: `action: "WITHHOLD"` with `NO_MATERIAL_CHANGE`, `ALREADY_SAID` or `BELOW_BAR`.
-Those three are the composer's own vocabulary and are deliberately not `FeedbackSuppressionReason` values — the glossary says [why the two must never be merged](./practice-review-glossary.mdx#measurement-and-intervention).
+A line note names `{ observationId, citationIndex }` rather than authoring coordinates.
+That observation must be among its own `basedOn` contributors.
+The server resolves a verified location in the reviewed diff from the persisted citation.
+Several independent notes may refer to one practice.
+Two notes cannot occupy the same citation.
+Each body remains complete through admission and posting, apart from provider security escaping and server metadata.
 
-Supersession is likewise the glossary's, under [Thread key and supersession](./practice-review-glossary.mdx#thread-key-and-supersession).
-The only part this stage owns is that composition proposes the thread action.
-The server, not the model, decides whether the named thread may be superseded at all.
+Private feedback retains one unit per `(channel, practiceSlug)`.
+A `SUPERSEDE` action must name an unread thread staged in the prepared targets.
+The server decides whether that target may be replaced.
+The glossary owns [thread keys and supersession](./practice-review-glossary.mdx#thread-key-and-supersession).
 
-### When composition does not run
+A public withholding decision names exact `NOT_MET` observations, never a whole practice or a positive observation.
+`NO_MATERIAL_CHANGE`, `ALREADY_SAID` and `BELOW_BAR` are composition reasons.
+[The glossary](./practice-review-glossary.mdx#measurement-and-intervention) distinguishes them from delivery policy reasons.
+A body cannot both speak about and withhold the same observation.
+
+### Missing composition and recovery
 
 A composition failure does not invalidate admitted observations.
-An empty result is distinct from a turn that never ran.
-In-context feedback about a problem may fall back to the admitted observation's summary and grounded location, but invents no next step.
-A strength reaches the work only as a composed unit.
+Each eligible public `NOT_MET` observation must be named by a body or an explicit withholding decision.
+An empty review is intentional silence only when it leaves no such observation undecided.
+A required review that is missing or breaks its contract is a delivery failure, never silence.
+A later gate refusal of one body holds only that body.
 
-The evidence rationale remains an audit explanation, not prose to publish to the developer.
-Longitudinal channels have no content fallback.
-Per-channel preparation marks distinguish a successful empty result from unfinished preparation.
-The sweeper retries preparation from existing review outputs, not model composition.
+Backfills, disabled public delivery and runs with no eligible decided observations need no public turn.
+There is no fallback from failed composition to raw observations.
+Private channels have no content fallback either.
 
+Previously sealed immutable dispatch and approval packages remain deliverable and recoverable, including pending
+packages that have not attempted a write. They retain the normal delivery and reconciliation checks.
+An earlier runner's fragment output cannot produce a fresh public comment.
+Per-channel preparation marks distinguish successful empty preparation from unfinished preparation.
+The sweeper retries preparation from retained outputs, not model composition.
 Its [recovery window is bounded](/admin/practice-review-operations#limits-you-should-know-about).
 
 ## Delivery and human approval
@@ -628,14 +633,14 @@ Composition creates immutable feedback units before release authority is applied
 A composer `WITHHOLD` means there was nothing useful to say and creates no feedback row.
 The observations it covers on the work are recorded `SUPPRESSED` with `COMPOSER_WITHHELD`.
 Thus, a withheld practice is a recorded decision, never a bare headline rendered without a note.
-A composed unit is rendered at an observation it cites by id, and one citing anything the delivery does not admit is not used.
+A complete body is admitted only when every observation it cites may support delivery.
 
 Feedback is bound only to the observations its text was written from, including every observation a unit cites.
 Only those observations decide whether it waits for approval.
 A not-applicable result beside it does not.
 Each line note carries its own.
 A line note that never lands is recorded `FAILED` rather than bound to the delivered comment.
-The composer's opening sentence names no observation, so it appears only on a proposal a person approves, never on automatic delivery.
+A complete summary may draw on several practices, and its exact contributors decide its approval requirements.
 
 A policy refusal is instead persisted as `SUPPRESSED` with a server-owned reason.
 These outcomes must not be conflated with a human rejection.

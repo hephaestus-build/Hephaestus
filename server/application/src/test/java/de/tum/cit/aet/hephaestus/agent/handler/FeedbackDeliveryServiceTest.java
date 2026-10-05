@@ -123,6 +123,54 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldHandTheComposedReviewToTheDispatcherWordForWordWhenOnlySecurityMarkupNeedsEscaping() {
+        AgentJob job = job();
+        allow(job, Set.of("practice"));
+        // Sentences an earlier sanitizer deleted or rewrote: a reference to the practice, an approval-shaped
+        // phrase inside a longer thought, a numeric bound. Each is part of the composed argument.
+        String paragraphs = "The practice requires the description to say why; this one says what changed only.\n\n"
+                + "Before this is ready for another look, add one sentence on the reason for the new screen.\n\n"
+                + "```swift\nlet fill = Color(red: 0.2, green: 0.6, blue: 0.3)\n```\n\n"
+                + "The diff touches <= 3 files, so a short reason is enough.";
+        String note = "This explicit RGB fill stays the same in Dark Mode.\n\nCheck its contrast in both appearances.";
+        var composed = new DeliveryContent(
+                paragraphs + " Thanks @alice for the preview.",
+                List.of(new DiffNote("App/ContentView.swift", 13, null, note, "observation:occ-1#0", List.of("occ-1"))),
+                List.of(),
+                List.of("occ-1"));
+        when(commentFormatter.format(paragraphs + " Thanks `@alice` for the preview.", job))
+                .thenReturn("Formatted review");
+        when(dispatchService.dispatchAutomaticPackage(eq(job), any(), eq(Set.of("practice"))))
+                .thenReturn(PracticeFeedbackDispatchService.Result.sent("summary-1"));
+        FeedbackDispatch dispatch = dispatchState(FeedbackDispatchState.SENT);
+        when(dispatchService.automaticPackage(job)).thenReturn(dispatch);
+
+        service.deliverFeedback(job, composed, Set.of("practice"));
+
+        var content = ArgumentCaptor.forClass(DeliveryContent.class);
+        verify(dispatchService).dispatchAutomaticPackage(eq(job), content.capture(), eq(Set.of("practice")));
+        assertThat(content.getValue().mrNote()).isEqualTo("Formatted review");
+        assertThat(content.getValue().diffNotes()).singleElement().satisfies(diff -> {
+            assertThat(diff.body()).isEqualTo(note);
+            assertThat(diff.deliveryKey()).isEqualTo("observation:occ-1#0");
+        });
+        assertThat(PullRequestCommentPoster.sanitize(note)).isEqualTo(note);
+    }
+
+    @Test
+    void shouldRecordSuppressionWhenSanitizationLeavesNoProviderContent() {
+        AgentJob job = job();
+        allow(job, Set.of("practice"));
+        var composed = new DeliveryContent("<iframe></iframe>", List.of(), List.of(), List.of("occ-1"));
+
+        service.deliverFeedback(job, composed, Set.of("practice"));
+
+        verify(ledgerRecorder).recordSuppressedUnit(job, composed, FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
+        verifyNoInteractions(dispatchService, commentFormatter);
+        assertThat(job.getDeliveryCommentId()).isNull();
+    }
+
+    @Test
     void nonterminalDispatchResultFailsTheJobForDurableRecovery() {
         AgentJob job = job();
         allow(job, Set.of());

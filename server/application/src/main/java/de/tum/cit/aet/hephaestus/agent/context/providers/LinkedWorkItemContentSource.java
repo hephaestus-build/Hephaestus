@@ -49,7 +49,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Order(200)
 public class LinkedWorkItemContentSource implements EvidenceSource {
 
-    private static final SourceKind KIND = new SourceKind("scm.linked-work-items");
+    public static final SourceKind KIND = new SourceKind("scm.linked-work-items");
 
     @Override
     public Set<SourceKind> sourceKinds() {

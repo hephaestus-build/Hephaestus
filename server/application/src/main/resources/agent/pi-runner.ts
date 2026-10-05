@@ -18,6 +18,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import {
+	PUBLIC_REVIEW_RESOURCE_LOADER_OPTIONS,
+	PUBLIC_REVIEW_TOOLS,
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
 } from "./pi-agent-sandbox.ts";
@@ -31,7 +33,6 @@ import {
 	MAX_SUMMARY_CHARS,
 	SEVERITY_VALUES,
 	SEVERITY_DESCRIPTIONS,
-	boundedAtSentenceEnd,
 	citesReviewedTurn,
 	describeVocabulary,
 	isRecord,
@@ -62,11 +63,24 @@ import {
 	CHANNELS,
 	type ComposedFeedbackEnvelope,
 	type ComposedFeedbackUnit,
+	type ComposedReview,
+	PRIVATE_CHANNELS,
 	type PreparedFeedbackTarget,
+	type ReviewPractice,
+	REVIEW_CONTRACT_VERSION,
+	REVIEW_TOOL_DESCRIPTION,
+	WITHHOLD_REASONS,
+	buildReviewTurn,
+	decidedByReview,
 	notReachedNote,
-	sameLinesNote,
+	priorPublicFeedback,
+	publicObservations,
+	readReview,
+	reviewToolParameters,
+	uncertainOutcomes,
 	undeliverableUnits,
 	validateFeedbackEvidence,
+	workIdentity,
 } from "./pi-runner-composition.ts";
 import { outputPath } from "./pi-runner-output.ts";
 import { isRetryableStatus, isTimeoutAbort, retrying } from "./pi-runner-retry.ts";
@@ -288,6 +302,10 @@ interface PracticeIndexEntry {
 	group?: string;
 	readsSources: string[];
 	exhaustiveSources: string[];
+	/** The public facts of the practice revision, which the review on the work is composed from. */
+	name: string;
+	whyItMatters?: string;
+	knownLimitations: string[];
 }
 
 /** The task this runner was started for. */
@@ -459,6 +477,14 @@ function readPracticeIndex(): PracticeIndexEntry[] {
 			),
 			exhaustiveSources: jsonArray(practice.exhaustiveSources).filter(
 				(kind): kind is string => typeof kind === "string",
+			),
+			name: typeof practice.name === "string" ? practice.name : practice.slug,
+			whyItMatters:
+				typeof practice.whyItMatters === "string" && practice.whyItMatters.trim() !== ""
+					? practice.whyItMatters
+					: undefined,
+			knownLimitations: jsonArray(practice.knownLimitations).filter(
+				(limitation): limitation is string => typeof limitation === "string",
 			),
 		};
 	});
@@ -1100,8 +1126,11 @@ async function refusal<T>(toolCallId: string, text: string): Promise<AgentToolRe
 const RECORDING_TOOLS: ReadonlySet<string> = new Set([
 	"report_observation",
 	"report_feedback",
-	"report_summary",
+	"report_review",
 ]);
+
+/** The tool the composition turn under way records with: the review on the work, or the private lanes. */
+let composerTool: "report_review" | "report_feedback" = "report_feedback";
 
 /** The text of a tool result as the model reads it; empty when the result carries none. */
 function toolResultText(result: unknown): string {
@@ -1646,13 +1675,18 @@ function logPracticeCoverage() {
 	);
 }
 
-/** What a composer that reads instead of writing is told, at the exploration bound and near the budget's end. */
+/** What a private composer that reads instead of writing is told, at the exploration bound and near the budget's end. */
 const COMPOSITION_NUDGE =
 	`Stop reading: the admitted observations and the history are in this turn's prompt and in ` +
 	`work/composition/observations.json, and nothing else decides a unit. Persist the units you have ` +
 	`with report_feedback now — and a WITHHOLD with its reason for each NOT_MET practice you decided ` +
-	`to stay quiet about — then call report_summary once. Use tools only from this point onward; no ` +
-	`planning prose.`;
+	`to stay quiet about. Use tools only from this point onward; no planning prose.`;
+
+/** What the composer of the review on the work is told near its budget's end. */
+const REVIEW_NUDGE =
+	`Everything this review may rest on is in this turn's prompt. Store the review now with one ` +
+	`report_review call: the complete summary, any line notes, and every NOT_MET observation you decided ` +
+	`not to raise under withheld. No prose outside the call.`;
 
 /** Calls a composition may make before its first recording call; at this one it is nudged to persist. */
 const COMPOSITION_EXPLORATION_NUDGE = 12;
@@ -1728,13 +1762,14 @@ console.error(
 const COMPOSITION_REQUEST_PATH = INPUT_PATHS.compositionRequest;
 const FEEDBACK_PATH = outputPath(OUTPUT, "feedback.json");
 const COMPOSER_PROMPT_PATH = `${CWD}/feedback-composer.md`;
+const REVIEW_COMPOSER_PROMPT_PATH = `${CWD}/review-composer.md`;
 const PREPARED_FEEDBACK_PATH = INPUT_PATHS.preparedFeedback;
 const COMPOSITION_OBSERVATIONS_PATH = `${CWD}/work/composition/observations.json`;
 let compositionAdmitted = false;
 let admissionDigest: string | null = null;
-const WITHHOLD_REASONS = ["NO_MATERIAL_CHANGE", "ALREADY_SAID", "BELOW_BAR"] as const;
 
 type Channel = (typeof CHANNELS)[number];
+type PrivateChannel = (typeof PRIVATE_CHANNELS)[number];
 type FeedbackAction = (typeof ACTIONS)[number];
 
 function isChannel(value: unknown): value is Channel {
@@ -1750,13 +1785,6 @@ function optionalString(value: unknown): string | undefined {
 	return typeof value === "string" ? value : undefined;
 }
 
-/** Where an IN_CONTEXT note is to be attached, as the model asked for it. */
-interface Placement {
-	kind: string;
-	observationId?: string;
-	citationIndex?: number;
-}
-
 /** The notes an IN_CHAT unit carries TO the mentor. Kept in step with ConversationBrief by Java. */
 interface ConversationNotes {
 	situation?: string;
@@ -1766,97 +1794,9 @@ interface ConversationNotes {
 	alreadySaid?: string;
 }
 
-const LEAD_MAX_LENGTH = 240;
-
-interface ReportSummaryDetails {
-	stored: number;
-}
-
-/** Refused leads before the tool answers that the review opens on its first piece of feedback and stays quiet. */
-const MAX_LEAD_REFUSALS = 3;
-
-function buildSummaryTool() {
-	let leadRefusals = 0;
-
-	return defineTool({
-		name: "report_summary",
-		exposure: "model-only",
-		label: "Report Summary",
-		description:
-			"Write how this review opens, in your own words: one or two sentences, at most " +
-			`${LEAD_MAX_LENGTH} characters, no counts, no quotes. One call; a second call replaces the ` +
-			"first. Skip it and the review opens on its first piece of feedback.",
-		// Shape and documentation only; the bound is applied below, with the reason, like every rule of
-		// the other recording tools.
-		parameters: {
-			type: "object",
-			required: ["lead"],
-			properties: {
-				lead: documentedShape({
-					type: "string",
-					description: `One or two sentences orienting the reader in this change, within ${LEAD_MAX_LENGTH} characters.`,
-				}),
-			},
-		},
-		execute: async (toolCallId, params): Promise<AgentToolResult<ReportSummaryDetails>> => {
-			const refuse = async (text: string) => refusal<ReportSummaryDetails>(toolCallId, text);
-			if (!compositionAdmitted) {
-				return refuse(
-					"Feedback composition opens only after Java admits the completed observations.",
-				);
-			}
-			// A session that cannot land a lead in three tries is spending the composition on it; the
-			// review opens on its first piece of feedback, which is a fine opening, and the units are what matter.
-			if (leadRefusals >= MAX_LEAD_REFUSALS) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "The review opens on its first piece of feedback; do not call report_summary again — persist the units with report_feedback.",
-						},
-					],
-					details: { stored: 0 },
-				};
-			}
-			const raw = isRecord(params) ? params.lead : undefined;
-			const trimmed = (typeof raw === "string" ? raw : "").replaceAll(/\s+/gu, " ").trim();
-			if (!trimmed) {
-				leadRefusals += 1;
-				return refuse(
-					"lead is required: one or two sentences as a string; skip the call instead of sending nothing.",
-				);
-			}
-			const lead = boundedAtSentenceEnd(trimmed, LEAD_MAX_LENGTH);
-			if (lead === undefined) {
-				leadRefusals += 1;
-				return refuse(
-					`lead must be at most ${LEAD_MAX_LENGTH} characters, or end a sentence within them; this one is ${trimmed.length} with no sentence end inside the bound. Send one shorter sentence.`,
-				);
-			}
-			composedFeedback.lead = lead;
-			persistComposedFeedback();
-			if (currentTurn) {
-				currentTurn.stored += 1;
-			}
-			return {
-				content: [
-					{
-						type: "text",
-						text:
-							lead === trimmed
-								? "Stored the opening line."
-								: `Stored the opening line up to its last sentence end within ${LEAD_MAX_LENGTH} characters: "${lead}"`,
-					},
-				],
-				details: { stored: 1 },
-			};
-		},
-	});
-}
-
-/** Runtime lane and placement choices require per-unit validation in readFeedbackUnit/validateUnit. */
+/** A private-lane unit as read; per-unit validation in readFeedbackUnit/validateUnit. */
 interface FeedbackUnit extends ComposedFeedbackUnit {
-	channel: Channel;
+	channel: PrivateChannel;
 	practiceSlug: string;
 	basedOn: string[];
 	action: FeedbackAction;
@@ -1866,7 +1806,6 @@ interface FeedbackUnit extends ComposedFeedbackUnit {
 	body?: string;
 	nextStep?: string;
 	notes?: ConversationNotes;
-	placement?: Placement;
 }
 
 /** The observation fields the composer is shown: enough to reference one, never enough to author one. */
@@ -1891,20 +1830,22 @@ interface LeanObservation {
 
 /** What gets written to feedback.json, with the fields the reader resolves references against. */
 interface ComposedFeedback extends ComposedFeedbackEnvelope {
+	contractVersion: number;
 	admissionDigest: string | null;
 	observations: LeanObservation[];
 	preparedTargets: PreparedFeedbackTarget[];
 	units: FeedbackUnit[];
-	lead: string | null;
+	review: ComposedReview | null;
 }
 
 // Echo the exact composition inputs so Java validates references against the same snapshot.
 const composedFeedback: ComposedFeedback = {
+	contractVersion: REVIEW_CONTRACT_VERSION,
 	admissionDigest: null,
 	observations: [],
 	preparedTargets: [],
 	units: [],
-	lead: null,
+	review: null,
 };
 
 /**
@@ -2052,9 +1993,8 @@ function buildFeedbackTool(
 	// The reader resolves supersession against the envelope's copy of this list and drops any unit
 	// naming a thread outside it, so the vocabulary is recorded here, where it is decided.
 	composedFeedback.preparedTargets = preparedTargets;
-	const enabledChannels = CHANNELS.filter((channel) => request.channels[channel].enabled);
-	const placementKinds = request.inContextPlacementKinds;
-	const usedPerChannel: Record<Channel, number> = { IN_CONTEXT: 0, IN_APP: 0, IN_CHAT: 0 };
+	const enabledChannels = PRIVATE_CHANNELS.filter((channel) => request.channels[channel].enabled);
+	const usedPerChannel: Record<PrivateChannel, number> = { IN_APP: 0, IN_CHAT: 0 };
 	const seen = new Set<string>();
 
 	/** One unit stored, or the reason it was not. */
@@ -2087,7 +2027,7 @@ function buildFeedbackTool(
 				`${unit.channel} holds at most ${bounds.maxUnits} unit(s) and is full: this one does not fit — WITHHOLD it with BELOW_BAR or leave it out. Skipped.`,
 			);
 		}
-		const rejection = validateUnit(unit, observationsById, preparedTargets, placementKinds);
+		const rejection = validateUnit(unit, observationsById, preparedTargets);
 		if (rejection !== null) {
 			return skipped(rejection);
 		}
@@ -2098,7 +2038,7 @@ function buildFeedbackTool(
 				return skipped(
 					`IN_APP needs a pattern across at least ${request.minDistinctArtifacts} pieces of work, and ` +
 						`${unit.practiceSlug} is NOT_MET on ${pieces} (this work and the history); WITHHOLD it ` +
-						`with BELOW_BAR, and keep the note on the work. Skipped.`,
+						`with BELOW_BAR. Skipped.`,
 				);
 			}
 		}
@@ -2118,10 +2058,11 @@ function buildFeedbackTool(
 		exposure: "model-only",
 		label: "Report Feedback",
 		description:
-			"Persist feedback units, one per channel and practice. Send every unit you have ready in one " +
-			"call; each is stored or skipped on its own, with the reason, and a skipped unit can be sent " +
-			"again corrected without re-sending the stored ones. This is an intervention, not a " +
-			"measurement: it takes no outcome, severity or confidence, and no citation you typed yourself.",
+			"Persist feedback units for the developer's practice pages and the mentor conversation, one per " +
+			"channel and practice. Send every unit you have ready in one call; each is stored or skipped on " +
+			"its own, with the reason, and a skipped unit can be sent again corrected without re-sending the " +
+			"stored ones. This is an intervention, not a measurement: it takes no outcome, severity or " +
+			"confidence, and no citation you typed yourself.",
 		// See documentedShape: validate feedback per unit, not per tool call.
 		parameters: {
 			type: "object",
@@ -2182,7 +2123,7 @@ function buildFeedbackTool(
 									type: "string",
 									maxLength: FEEDBACK_TEXT_BOUNDS.nextStep,
 									description:
-										"IN_CONTEXT: one edit before merging. IN_APP: one repeatable way of working for the next piece of work. Name the missing decision, not a heading/template unless the practice requires one; never provide paste-ready prose.",
+										"IN_APP only: one repeatable way of working for the next piece of work. Name the missing decision, not a heading/template unless the practice requires one; never provide paste-ready prose.",
 								},
 								notes: {
 									type: "object",
@@ -2227,26 +2168,6 @@ function buildFeedbackTool(
 											maxLength: FEEDBACK_TEXT_BOUNDS.alreadySaid,
 											description:
 												"Optional. Where this has already been put to the developer and what has moved without help, from the feedback history. Omit it when the history has nothing on this practice: absent means nothing has been said yet, which the mentor reads differently from nothing to say.",
-										},
-									},
-								},
-								placement: {
-									type: "object",
-									description:
-										"IN_CONTEXT only. DIFF places a note at one verified observation citation and " +
-										"needs observationId and citationIndex; ARTIFACT places it in the issue or change " +
-										"summary without inventing a line and takes no coordinates.",
-									properties: {
-										kind: { type: "string", enum: placementKinds },
-										observationId: {
-											type: "string",
-											description:
-												"DIFF only: the admitted observation whose citation carries the note.",
-										},
-										citationIndex: {
-											type: "integer",
-											description:
-												"DIFF only: the index of that citation in the observation, from 0.",
 										},
 									},
 								},
@@ -2302,6 +2223,102 @@ function buildFeedbackTool(
 	});
 }
 
+interface ReportReviewDetails {
+	stored: number;
+}
+
+/**
+ * report_review: the one tool of the review composition. It reads the review against only the observations the
+ * review may rest on — those admission marked publicEligible — and stores it whole or refuses it with every reason.
+ */
+function buildReviewTool(lineNotes: boolean, reviewable: readonly Record<string, unknown>[]) {
+	const restable = new Map(
+		reviewable.map((observation) => [
+			String(observation.id),
+			{
+				practiceSlug: String(observation.practiceSlug),
+				summaryOnly: observation.summaryOnly === true,
+				outcome: observation.outcome,
+				citations: Array.isArray(observation.citations)
+					? observation.citations.filter((citation: unknown) => isRecord(citation))
+					: [],
+			},
+		]),
+	);
+	return defineTool({
+		name: "report_review",
+		exposure: "model-only",
+		label: "Report Review",
+		description: REVIEW_TOOL_DESCRIPTION,
+		parameters: reviewToolParameters(restable, lineNotes),
+		execute: async (toolCallId, params): Promise<AgentToolResult<ReportReviewDetails>> => {
+			if (!compositionAdmitted) {
+				return refusal<ReportReviewDetails>(
+					toolCallId,
+					"Feedback composition opens only after Java admits the completed observations.",
+				);
+			}
+			const read = readReview(params, restable, lineNotes);
+			if ("errors" in read) {
+				return refusal<ReportReviewDetails>(
+					toolCallId,
+					`review refused, nothing was stored:\n${read.errors.map((error) => `- ${error}`).join("\n")}`,
+				);
+			}
+			composedFeedback.review = read.review;
+			persistComposedFeedback();
+			if (currentTurn) {
+				currentTurn.stored += 1;
+			}
+			const { summary, inline, withheld } = read.review;
+			const said = summary
+				? `a summary resting on ${summary.basedOn.length} observation(s)`
+				: "no summary";
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Stored the review: ${said}, ${inline.length} line note(s), ${withheld.length} withholding decision(s). A later report_review call replaces it whole.`,
+					},
+				],
+				details: { stored: 1 },
+				terminate: turnDemand?.endsWhenPaid === true && turnDemand.owed() === 0,
+			};
+		},
+	});
+}
+
+/** The NOT_MET observations the review may rest on that it neither says nor withholds. */
+function undecidedByReview(reviewable: readonly Record<string, unknown>[]): string[] {
+	const decided = decidedByReview(composedFeedback.review);
+	return reviewable
+		.filter((observation) => observation.outcome === "NOT_MET")
+		.map((observation) => String(observation.id))
+		.filter((id) => !decided.has(id));
+}
+
+/** The review composition's one retry: the observations it left undecided, by id. */
+function finishReviewText(undecided: readonly string[]): string {
+	return (
+		`## Undecided\nThe review leaves these NOT_MET observations undecided: ${undecided.join(", ")}. ` +
+		`Send the whole review again with one report_review call, with each of them spoken about in the summary ` +
+		`or a line note, or named under withheld with its reason. No prose outside the call.`
+	);
+}
+
+/** The public facts of each practice the review's observations were measured against, from the staged index. */
+function practiceFacts(observations: readonly Record<string, unknown>[]): ReviewPractice[] {
+	const slugs = new Set(observations.map((observation) => String(observation.practiceSlug)));
+	return practiceIndex
+		.filter((practice) => slugs.has(practice.slug))
+		.map((practice) => ({
+			slug: practice.slug,
+			name: practice.name,
+			...(practice.whyItMatters === undefined ? {} : { whyItMatters: practice.whyItMatters }),
+			knownLimitations: practice.knownLimitations,
+		}));
+}
+
 /** Match ComposedFeedbackUnit bounds so the model can correct a unit before server admission. */
 const FEEDBACK_TEXT_BOUNDS = {
 	title: 255,
@@ -2326,7 +2343,6 @@ const UNIT_FIELDS = [
 	"body",
 	"nextStep",
 	"notes",
-	"placement",
 ] as const;
 
 const NOTE_FIELDS = [
@@ -2417,6 +2433,9 @@ function readFeedbackUnit(value: unknown, practiceSlugs: readonly string[]): Fee
 	if (!isChannel(channel)) {
 		return `${channel}; skipped.`;
 	}
+	if (channel === "IN_CONTEXT") {
+		return "the review on the work is written in its own turn, not as a unit here; skipped.";
+	}
 	const action = vocabularyWord(value.action, ACTIONS, "action");
 	if (!isFeedbackAction(action)) {
 		return `${action}; skipped.`;
@@ -2475,23 +2494,6 @@ function readFeedbackUnit(value: unknown, practiceSlugs: readonly string[]): Fee
 			notes[field] = read.text;
 		}
 	}
-	let placement: Placement | undefined;
-	if (value.placement !== undefined && value.placement !== null) {
-		if (!isRecord(value.placement)) {
-			return "placement must be an object; skipped.";
-		}
-		const kind = vocabularyWord(value.placement.kind, ["DIFF", "ARTIFACT"], "placement.kind");
-		if (!isPlacementKind(kind)) {
-			return `${kind}; skipped.`;
-		}
-		const citationIndex = integerOrUndefined(value.placement.citationIndex);
-		const observationId = optionalString(value.placement.observationId)?.trim();
-		placement = {
-			kind,
-			...(hasText(observationId) ? { observationId } : {}),
-			citationIndex,
-		};
-	}
 	return {
 		channel,
 		practiceSlug,
@@ -2503,16 +2505,7 @@ function readFeedbackUnit(value: unknown, practiceSlugs: readonly string[]): Fee
 		body: texts.body,
 		nextStep: texts.nextStep,
 		notes,
-		placement,
 	};
-}
-
-/** An integer as sent, as a number or as its digits in a string; anything else is nothing. */
-function integerOrUndefined(value: unknown): number | undefined {
-	if (typeof value === "number") {
-		return value;
-	}
-	return typeof value === "string" && /^\d+$/u.test(value.trim()) ? Number(value) : undefined;
 }
 
 /** A list as sent, or the one value sent bare where a list was asked for. */
@@ -2521,16 +2514,6 @@ function listOrSingle(value: unknown): unknown[] {
 		return value;
 	}
 	return value === undefined || value === null ? [] : [value];
-}
-
-/** Kind and provider URL distinguish work without treating a display number as its identity. */
-function workIdentity(kind: unknown, url: unknown): string | undefined {
-	return typeof kind === "string" &&
-		kind.trim() !== "" &&
-		typeof url === "string" &&
-		url.trim() !== ""
-		? `${kind}:${url}`
-		: undefined;
 }
 
 const THIS_WORK = ((): string | undefined => {
@@ -2604,9 +2587,6 @@ function validateChatUnit(unit: FeedbackUnit): string | null {
 			return `IN_CHAT needs notes.${field}; skipped.`;
 		}
 	}
-	if (unit.placement) {
-		return "Only IN_CONTEXT units may carry a placement; skipped.";
-	}
 	return null;
 }
 
@@ -2618,9 +2598,6 @@ function validateAppUnit(
 	const { body } = unit;
 	if (!hasText(body?.trim())) {
 		return "IN_APP needs a body; skipped.";
-	}
-	if (unit.placement) {
-		return "Only IN_CONTEXT units may carry a placement; skipped.";
 	}
 	const normalizedBody = normalizeQuotedText(body);
 	const repeatsCurrentEvidence = unit.basedOn.some((id) =>
@@ -2639,15 +2616,8 @@ function validateUnit(
 	unit: FeedbackUnit,
 	observationsById: ReadonlyMap<string, AdmittedObservation>,
 	preparedTargets: readonly PreparedFeedbackTarget[],
-	placementKinds: readonly PlacementKind[],
 ): string | null {
-	const evidenceError = validateFeedbackEvidence(
-		unit.practiceSlug,
-		unit.basedOn,
-		observationsById,
-		unit.channel,
-		unit.action,
-	);
+	const evidenceError = validateFeedbackEvidence(unit.practiceSlug, unit.basedOn, observationsById);
 	if (evidenceError !== null) {
 		return evidenceError;
 	}
@@ -2684,50 +2654,7 @@ function validateUnit(
 	if (isBlank(unit.nextStep)) {
 		return `${unit.channel} needs a nextStep; skipped.`;
 	}
-	if (unit.channel === "IN_APP") {
-		return validateAppUnit(unit, observationsById);
-	}
-	if (hasText(unit.body)) {
-		return "IN_CONTEXT takes title, placement, and nextStep only; skipped.";
-	}
-	if (!unit.placement) {
-		return "IN_CONTEXT needs a DIFF or ARTIFACT placement; skipped.";
-	}
-	const { placement } = unit;
-	if (!placementKinds.some((kind) => kind === placement.kind)) {
-		return `${placement.kind} placement is unavailable on this artifact; skipped.`;
-	}
-	if (unit.placement.kind === "ARTIFACT") {
-		if (unit.placement.observationId != null || unit.placement.citationIndex != null) {
-			return "ARTIFACT placement takes no observationId or citationIndex; skipped.";
-		}
-		const grounded = unit.basedOn.some(
-			(id) => observationsById.get(id)?.practiceSlug === unit.practiceSlug,
-		);
-		if (!grounded) {
-			return "ARTIFACT placement must be based on a current observation for this practice; skipped.";
-		}
-		return null;
-	}
-	if (placement.kind !== "DIFF") {
-		return "Unknown IN_CONTEXT placement kind; skipped.";
-	}
-	const { observationId, citationIndex } = placement;
-	if (!hasText(observationId) || citationIndex === undefined || !Number.isInteger(citationIndex)) {
-		return "DIFF placement needs observationId and citationIndex; skipped.";
-	}
-	const observation = observationsById.get(observationId);
-	if (!observation) {
-		return `No observation '${observationId}' in this run; skipped.`;
-	}
-	const citation = observation.citations[citationIndex];
-	if (!citation) {
-		return `Observation '${observation.id}' has no citation ${citationIndex}; skipped.`;
-	}
-	if (citation.anchorable !== true) {
-		return `Citation ${citationIndex} of '${observation.id}' is not on this change's diff, so no note can be placed on it. Skipped.`;
-	}
-	return null;
+	return validateAppUnit(unit, observationsById);
 }
 
 function normalizeQuotedText(value: string): string {
@@ -2775,19 +2702,17 @@ function buildCompositionTurn(
 	observations: readonly AdmittedObservation[],
 	notReached: readonly string[] = [],
 ): string {
-	const lanes = CHANNELS.filter((channel) => request.channels[channel].enabled)
+	const lanes = PRIVATE_CHANNELS.filter((channel) => request.channels[channel].enabled)
 		.map((channel) => `${channel} (at most ${request.channels[channel].maxUnits})`)
 		.join(", ");
-	const closed = CHANNELS.filter((channel) => !request.channels[channel].enabled);
-	const anchorable = observations.filter((observation) => Boolean(observation.anchorable)).length;
+	const closed = PRIVATE_CHANNELS.filter((channel) => !request.channels[channel].enabled);
 	const closedNote =
 		closed.length > 0 ? ` Closed this turn, so write nothing for them: ${closed.join(", ")}.` : "";
-	const placementNote = request.channels.IN_CONTEXT.enabled
-		? ` IN_CONTEXT placements available here: ${request.inContextPlacementKinds.join(", ")}.`
-		: "";
 	const coverageNote = notReachedNote(notReached);
-	const sameLines = sameLinesNote(observations);
 	const admitted = JSON.stringify({ observations: observations.map(composerView) }, null, 1);
+	const onTheWork = composedFeedback.review
+		? `### What the review on this work says\nIt was written separately and may not reach the work if a delivery check holds it; do not repeat it.\n\`\`\`json\n${JSON.stringify(composedFeedback.review, null, 1)}\n\`\`\`\n`
+		: "";
 	const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
 	const context = [
 		shown("The composition request (lanes, caps, placements)", COMPOSITION_REQUEST_PATH),
@@ -2801,17 +2726,18 @@ function buildCompositionTurn(
 		.filter((block) => block !== "")
 		.join("\n");
 	return `## This turn
-The review just finished. Its ${observations.length} admitted measurement(s) follow; ${anchorable} of them cite a line inside this change and can therefore carry a note on the work. The NOT_MET ones carry their rationale and their citations by coordinates, the others only what they found; the full record, quoted lines included, is \`work/composition/observations.json\`. The history follows them.
+The review just finished. Its ${observations.length} admitted measurement(s) follow. The NOT_MET ones carry their rationale and their citations by coordinates, the others only what they found; the full record, quoted lines included, is \`work/composition/observations.json\`. The history follows them.
 
 \`\`\`json
 ${admitted}
 \`\`\`
 
 ${context}
-Lanes open this turn: ${lanes}.${closedNote}${placementNote}
+${onTheWork}
+Lanes open this turn: ${lanes}.${closedNote}
 A pattern claim needs at least ${request.minDistinctArtifacts} distinct pieces of work.
 
-${sameLines}${coverageNote}Persist the units with report_feedback — every unit you have in one call — and call report_summary once for how the review opens. Writing nothing on a lane is a correct and common outcome; say in one line why, and stop.`;
+${coverageNote}Persist the units with report_feedback — every unit you have in one call. Writing nothing on a lane is a correct and common outcome; say in one line why, and stop.`;
 }
 
 /** A transport failure or a server that is not answering yet; a refusal is a decision, not a blip. */
@@ -2939,7 +2865,7 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 		console.error(
 			`[pi-runner] composition: ${COMPOSITION_EXPLORATION_NUDGE} calls without a recording call — nudging to persist`,
 		);
-		void steer(activeSession, COMPOSITION_NUDGE);
+		void steer(activeSession, composerTool === "report_review" ? REVIEW_NUDGE : COMPOSITION_NUDGE);
 	}
 	const signature = `${toolName}:${JSON.stringify(args)}`;
 	const repeats = (repeatedCalls.get(signature) ?? 0) + 1;
@@ -2959,7 +2885,9 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 				: "Record what the evidence you have read supports";
 		void steer(
 			activeSession,
-			`You have run the same ${toolName} call ${repeats} times; its result will not change. ${next}, in one ${measuring ? "report_observation" : "report_feedback"} call. ${PERSIST_DISCIPLINE}`,
+			measuring
+				? `You have run the same ${toolName} call ${repeats} times; its result will not change. ${next}, in one report_observation call. ${PERSIST_DISCIPLINE}`
+				: `You have run the same ${toolName} call ${repeats} times; its result will not change. Correct what its answer names and send one ${composerTool} call.`,
 		);
 	}
 	if (repeats >= (recording ? REPEATED_RECORDING_ABORT : REPEATED_CALL_ABORT)) {
@@ -3316,7 +3244,7 @@ async function askComposerOnceMore(
 
 function finishCompositionText(notMet: readonly string[], request: CompositionRequest): string {
 	// The lanes as they stand: a retry that does not know a lane is full writes units that are skipped.
-	const room = CHANNELS.filter((channel) => request.channels[channel].enabled)
+	const room = PRIVATE_CHANNELS.filter((channel) => request.channels[channel].enabled)
 		.map((channel) => {
 			const { maxUnits } = request.channels[channel];
 			const used = composedFeedback.units.filter(
@@ -3371,10 +3299,11 @@ async function main() {
 			"Hephaestus provider is not configured — pi-provider.json and proxy credentials are required",
 		);
 	}
-	const model = modelRuntime.getModel("hephaestus", providerConfig.modelId);
-	if (!model) {
+	const registeredModel = modelRuntime.getModel("hephaestus", providerConfig.modelId);
+	if (!registeredModel) {
 		throw new Error(`Hephaestus model was not registered: ${providerConfig.modelId}`);
 	}
+	const model = registeredModel;
 	outputLimit = model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY;
 	console.error(
 		`[pi-runner] registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} ` +
@@ -3386,7 +3315,12 @@ async function main() {
 	);
 
 	const compositionRequest = loadCompositionRequest();
-	const feedbackTool = compositionRequest
+	// The private lanes are composed in this session, which holds the person's authorized history; the review on
+	// the work gets a session of its own after admission, and this tool never sees it.
+	const privateLanesOpen =
+		compositionRequest !== null &&
+		PRIVATE_CHANNELS.some((channel) => compositionRequest.channels[channel].enabled);
+	const feedbackTool = privateLanesOpen
 		? buildFeedbackTool(
 				composablePracticeSlugs(),
 				compositionRequest,
@@ -3509,7 +3443,7 @@ async function main() {
 
 	const customTools = [buildReportObservationTool()];
 	if (feedbackTool) {
-		customTools.push(feedbackTool, buildSummaryTool());
+		customTools.push(feedbackTool);
 	}
 	if (tooLate) {
 		logPracticeCoverage();
@@ -3519,11 +3453,7 @@ async function main() {
 	const { session, extensionsResult } = await createAgentSession({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		tools: [
-			...PRACTICE_TOOLS,
-			"report_observation",
-			...(feedbackTool ? ["report_feedback", "report_summary"] : []),
-		],
+		tools: [...PRACTICE_TOOLS, "report_observation", ...(feedbackTool ? ["report_feedback"] : [])],
 		customTools,
 		sessionManager: SessionManager.create(CWD, `${CWD}/.sessions`),
 		settingsManager,
@@ -3685,20 +3615,152 @@ async function main() {
 	await admitObservations();
 	persistComposedFeedback();
 	maybeWriteResultFile();
-	if (compositionRequest && feedbackTool && admittedObservations.length > 0) {
+	if (compositionRequest && admittedObservations.length > 0) {
 		const safetyMs = AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS);
 		if (safetyMs <= 0) {
 			console.error(
 				"[pi-runner] The run reached its safety ceiling before composition — preserving admitted observations",
 			);
 		} else {
-			const instructions = readFileSync(COMPOSER_PROMPT_PATH, "utf8");
 			const safety = scheduleDeadline(safetyMs, () => {
 				stopTurn(
 					"safety",
-					"the run is near its safety ceiling — preserving observations and composed units so far",
+					"the run is near its safety ceiling — preserving observations and composed feedback so far",
 				);
 			});
+			// Only an observation that decided something can carry a claim about the work; a review of
+			// uncertainty alone has nothing to say there, and opens no session.
+			const reviewable = publicObservations(admittedObservations);
+			if (compositionRequest.channels.IN_CONTEXT.enabled && reviewable.length > 0) {
+				await composeReview(compositionRequest, reviewable, notReached, safety);
+			}
+			if (feedbackTool && notMetPractices(admittedObservations).length > 0 && !safety.expired()) {
+				await composePrivately(compositionRequest, safety);
+			}
+			clearTimeout(safety.timer);
+			persistComposedFeedback();
+			const combinedUsage = extractUsageFromSession(session.state, streamUsage);
+			accumulateUsage(measureUsage, combinedUsage);
+			persistUsage();
+		}
+	}
+	await stopSession(session);
+	unsubscribe();
+	console.error(
+		`[pi-runner] SUCCESS: result.json holds ${reviewState.observations.length} observation(s)`,
+	);
+	finalizeOutput();
+	process.exit(0);
+
+	/**
+	 * The review on the work, in a session of its own: fresh, with report_review as its only tool and every input
+	 * inline — the observations of this work it may rest on, what was already said on this work, and the practices.
+	 * It cannot read a file, so nothing about the person beyond this work reaches it.
+	 */
+	async function composeReview(
+		request: CompositionRequest,
+		reviewable: readonly Record<string, unknown>[],
+		notReachedSlugs: readonly string[],
+		safety: ReturnType<typeof scheduleDeadline>,
+	): Promise<void> {
+		const lineNotes = request.inContextPlacementKinds.includes("DIFF");
+		const reviewLoader = new DefaultResourceLoader({
+			cwd: CWD,
+			agentDir: AGENT_DIR,
+			settingsManager,
+			...PUBLIC_REVIEW_RESOURCE_LOADER_OPTIONS,
+			systemPrompt: readFileSync(REVIEW_COMPOSER_PROMPT_PATH, "utf8"),
+			agentsFilesOverride: () => ({ agentsFiles: [] }),
+			extensionFactories: [],
+		});
+		await reviewLoader.reload();
+		const { session: reviewSession } = await createAgentSession({
+			cwd: CWD,
+			agentDir: AGENT_DIR,
+			tools: PUBLIC_REVIEW_TOOLS,
+			customTools: [buildReviewTool(lineNotes, reviewable)],
+			sessionManager: SessionManager.inMemory(),
+			settingsManager,
+			resourceLoader: reviewLoader,
+			modelRuntime,
+			model,
+			thinkingLevel,
+		});
+		const unsubscribeReview = subscribeSession(reviewSession);
+		activeSession = reviewSession;
+		composerTool = "report_review";
+		const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
+		const history = existsSync(`${historyRoot}/feedback.json`)
+			? parseJson(readFileSync(`${historyRoot}/feedback.json`, "utf8"))
+			: null;
+		const text = buildReviewTurn({
+			observations: reviewable,
+			undecided: uncertainOutcomes(admittedObservations),
+			alreadySaid: priorPublicFeedback(history, THIS_WORK),
+			practices: practiceFacts(reviewable),
+			notReached: notReachedSlugs,
+			lineNotes,
+		});
+		const owed = () => undecidedByReview(reviewable).length;
+		const budget = compositionBudget(owed());
+		try {
+			const trace = openTurnTrace("review composition", budget, { owed, nudge: REVIEW_NUDGE });
+			try {
+				if (safety.expired()) {
+					throw new Error("the run reached its safety ceiling before the review was due");
+				}
+				await Promise.race([reviewSession.prompt(text), safety.elapsed]);
+			} catch (error) {
+				console.error(`[pi-runner] review composition failed: ${errorText(error)}`);
+			} finally {
+				if (trace.stoppedBy !== null) {
+					await settleSession(reviewSession, "review composition", ABORT_SETTLE_MS);
+				}
+				closeTurnTrace(trace);
+			}
+			const left = undecidedByReview(reviewable);
+			if (
+				(trace.stoppedBy === null || trace.stoppedBy === "loop") &&
+				left.length > 0 &&
+				(await settleSession(reviewSession, "review composition", ABORT_SETTLE_MS)) &&
+				!safety.expired()
+			) {
+				console.error(
+					`[pi-runner] the review left ${left.length} NOT_MET observation(s) undecided — asking once more`,
+				);
+				const retry = openTurnTrace("review composition once more", budget, {
+					owed,
+					nudge: REVIEW_NUDGE,
+					endsWhenPaid: true,
+				});
+				try {
+					await Promise.race([reviewSession.prompt(finishReviewText(left)), safety.elapsed]);
+				} catch (error) {
+					console.error(`[pi-runner] review composition failed: ${errorText(error)}`);
+				} finally {
+					if (retry.stoppedBy !== null) {
+						await settleSession(reviewSession, "review composition", ABORT_SETTLE_MS);
+					}
+					closeTurnTrace(retry);
+				}
+			}
+		} finally {
+			persistComposedFeedback();
+			unsubscribeReview();
+			await stopSession(reviewSession);
+			activeSession = session;
+			composerTool = "report_feedback";
+		}
+	}
+
+	/** The private lanes, in the measurement session: it holds the person's authorized history. */
+	async function composePrivately(
+		request: CompositionRequest,
+		safety: ReturnType<typeof scheduleDeadline>,
+	): Promise<void> {
+		const instructions = readFileSync(COMPOSER_PROMPT_PATH, "utf8");
+		composerTool = "report_feedback";
+		if (privateLanesOpen) {
 			const notMet = notMetPractices(admittedObservations);
 			// A NOT_MET practice is decided by a unit of its own, or by one that folds its observation in.
 			const practiceOf = new Map(
@@ -3721,7 +3783,7 @@ async function main() {
 				if (!(await settleSession(session, "composition", ABORT_SETTLE_MS)) || safety.expired()) {
 					throw new Error("the session was still busy when composition was due");
 				}
-				const compositionTurn = `${instructions}\n\n${buildCompositionTurn(compositionRequest, admittedObservations, notReached)}`;
+				const compositionTurn = `${instructions}\n\n${buildCompositionTurn(request, admittedObservations, notReached)}`;
 				await makeRoomFor(session, model, compositionTurn);
 				// When room had to be made, the brief goes with the turn again.
 				const compositionText = `${openingIfNeeded(brief, true)}${compositionTurn}`;
@@ -3742,22 +3804,10 @@ async function main() {
 				left.length > 0 &&
 				!safety.expired()
 			) {
-				await askComposerOnceMore(session, left, undecided, compositionRequest, safety);
+				await askComposerOnceMore(session, left, undecided, request, safety);
 			}
-			clearTimeout(safety.timer);
-			persistComposedFeedback();
-			const combinedUsage = extractUsageFromSession(session.state, streamUsage);
-			accumulateUsage(measureUsage, combinedUsage);
-			persistUsage();
 		}
 	}
-	await stopSession(session);
-	unsubscribe();
-	console.error(
-		`[pi-runner] SUCCESS: result.json holds ${reviewState.observations.length} observation(s)`,
-	);
-	finalizeOutput();
-	process.exit(0);
 }
 
 function finalizeOutputQuietly() {

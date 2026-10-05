@@ -1,12 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedReview;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.ReviewRunNarrativeRow;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunNarrativeLookup;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -20,10 +20,9 @@ import tools.jackson.databind.JsonNode;
 /**
  * Reads what a review run wrote about itself out of the job output it was composed into.
  *
- * <p>The next step is taken from the composed feedback rather than from the feedback ledger: feedback the
- * delivery gate suppressed is recorded with the whole rendered note as its body, so the ledger keeps what
- * the work would have been told and not the one sentence written about each observation. The output is the
- * only home for that sentence.
+ * <p>The words are taken from the composition rather than from the feedback ledger: feedback the delivery gate
+ * suppressed is recorded with the whole package as its body, so the ledger keeps what the work would have been
+ * told and not what was written about each observation. The output is the only home for that.
  */
 @Component
 @RequiredArgsConstructor
@@ -48,25 +47,28 @@ class ReviewRunNarrativeLookupAdapter implements ReviewRunNarrativeLookup {
     }
 
     /**
-     * The next step of every piece of in-context feedback this run composed, addressed to each observation it
-     * was based on. Only the lane that speaks about the piece of work under review: in-app feedback is a
-     * message about a way of working across several pieces of work, so attaching its step to one observation would
-     * answer "what should I do about this" with advice that is explicitly not about it.
+     * What the run wrote on the work about each observation by itself: the note it placed on a line that
+     * observation cites, or, for a run composed before the review had one envelope, the next step it wrote about
+     * it. A summary speaks about several observations at once, so it answers for none of them alone. Only the
+     * surface about the piece of work under review counts: in-app feedback is about a way of working across
+     * several pieces of work, so attaching it to one observation would answer "what should I do about this" with
+     * advice that is explicitly not about it.
      */
     private Map<UUID, String> nextStepsByObservation(UUID jobId, @Nullable JsonNode output) {
         Map<UUID, String> nextSteps = new HashMap<>();
-        for (ComposedFeedbackUnit composed : composition.parse(output, FeedbackChannel.IN_CONTEXT)) {
-            String nextStep = composed.nextStep();
-            if (nextStep == null || nextStep.isBlank()) {
-                continue;
-            }
-            for (String basedOn : composed.basedOn()) {
-                UUID observationId = observationId(jobId, basedOn);
-                if (observationId != null) {
-                    nextSteps.putIfAbsent(observationId, nextStep);
-                }
+        ComposedReview review = composition.review(output);
+        for (ComposedReview.InlineNote note : review == null ? List.<ComposedReview.InlineNote>of() : review.inline()) {
+            UUID observationId = observationId(jobId, note.anchor().observationId());
+            if (observationId != null) {
+                nextSteps.putIfAbsent(observationId, note.body());
             }
         }
+        composition.historicalNextSteps(output).forEach((id, nextStep) -> {
+            UUID observationId = observationId(jobId, id);
+            if (observationId != null) {
+                nextSteps.putIfAbsent(observationId, nextStep);
+            }
+        });
         return nextSteps;
     }
 
@@ -78,7 +80,7 @@ class ReviewRunNarrativeLookupAdapter implements ReviewRunNarrativeLookup {
         try {
             return UUID.fromString(basedOn);
         } catch (IllegalArgumentException notAnId) {
-            log.warn("Composed unit names an observation that is not an id: jobId={}", jobId);
+            log.warn("Composed feedback names an observation that is not an id: jobId={}", jobId);
             return null;
         }
     }

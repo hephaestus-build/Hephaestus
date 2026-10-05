@@ -135,7 +135,8 @@ It is not a successful review.
 ├── pi-review-brief.ts               # The first turn's brief: the captured records and the change view, line-numbered.
 ├── pi-review-turns.ts               # Practices as turns per catalog group; the budget's fair shares.
 ├── pi-runner-composition.ts         # Feedback-composition contract and coherence rules.
-├── feedback-composer.md             # Composition-stage prompt; digested with the prompt scaffolding.
+├── feedback-composer.md             # Private-composition prompt; digested with the prompt scaffolding.
+├── review-composer.md               # Public-review prompt; digested with the prompt scaffolding.
 ├── node_modules -> /opt/pi-sdk/…    # Symlink baked into the agent image, not staged.
 └── .run-pi.ts                       # Runner script entry point.
 ```
@@ -454,20 +455,32 @@ Container resource limits and teardown remain the outer boundary.
 
 ## Practice review tools
 
-One review is one session.
+The measuring turns share one session.
 The runner fixes its tool set when it creates the session in `pi-runner.ts`.
 The set includes the native Pi tools `read`, `grep`, `find`, `ls`, `write`, `edit`, and `bash`, plus Pi's `codemode`.
 It includes `report_observation` for the measuring turns.
 
-When composition was requested, it also includes `report_feedback` and `report_summary` for the composition turn. `codemode` runs one JavaScript script in a QuickJS sandbox that calls the native tools.
+When private composition was requested, it also includes `report_feedback` for that turn.
+Public composition creates a fresh in-memory session with only `report_review`.
+It loads no context files, skills or extensions and has no native file or execution tools.
+Its inline input contains the eligible current-work observations, immutable practice facts and prior public feedback on the same work.
+Private history is not part of that session.
+
+`codemode` runs one JavaScript script in a QuickJS sandbox that calls the native tools during measurement.
 Thus, a chain of searches and reads costs one model call.
 Only what the script prints returns to the model.
 The recording tools are declared `model-only`, so a script cannot call them: what a turn records is always a call the model made.
 A script's own tool calls appear in the per-turn trace as `codemode.<tool>` and do not count toward the repetition limits, which watch the model's calls.
 
 A measuring turn ends with the `report_observation` call that leaves each of its practices with a recorded result, rather than on a further model call.
-The two feedback tools store nothing until the server has admitted the recorded observations. `report_observation` and `report_feedback` take a list of several observations or units in one call.
+The feedback tools store nothing until the server has admitted the recorded observations.
+`report_review` records one complete review object, naming the exact observation contributors of each complete body.
+The public tool schema constrains those identifiers to the current eligible decided observations.
+Withholding can name only `NOT_MET` observations.
+
+`report_observation` and private `report_feedback` take a list of several observations or units in one call.
 Each is stored or refused on its own with the reason.
+
 The tools accept the list as a JSON string or an array.
 A smaller model often sends the string form.
 

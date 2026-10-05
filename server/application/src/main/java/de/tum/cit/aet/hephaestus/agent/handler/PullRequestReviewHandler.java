@@ -7,7 +7,7 @@ import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requ
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedReview;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
@@ -28,11 +28,15 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -48,7 +52,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     private static final Logger log = LoggerFactory.getLogger(PullRequestReviewHandler.class);
 
     private final JsonMapper objectMapper;
-    private final PracticeCatalogInjector practiceCatalogInjector;
     private final PracticeReviewPreparation preparation;
     private final ReviewResultParser resultParser;
     private final FeedbackCompositionResultParser compositionResultParser;
@@ -60,7 +63,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
     PullRequestReviewHandler(
             JsonMapper objectMapper,
-            PracticeCatalogInjector practiceCatalogInjector,
             PracticeReviewPreparation preparation,
             ReviewResultParser resultParser,
             FeedbackCompositionResultParser compositionResultParser,
@@ -70,7 +72,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             InContextDeliveryGate inContextDeliveryGate,
             ObservationRepository observationRepository) {
         this.objectMapper = objectMapper;
-        this.practiceCatalogInjector = practiceCatalogInjector;
         this.preparation = preparation;
         this.resultParser = resultParser;
         this.compositionResultParser = compositionResultParser;
@@ -238,26 +239,68 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 .toList();
         if (scopedObservations.isEmpty()) throw new JobDeliveryException("Admitted observation set is empty");
         if (feedbackService.recoverAutomaticPackageIfPresent(job)) return;
+        ComposedReview review = reviewToDeliver(
+                compositionResultParser, job, persisted, FeedbackCompositionInputs.EVENT_REVIEW_CHANNELS);
         List<ReviewResultParser.ValidatedObservation> eligible = feedbackResponseSuppressionFilter
                 .evaluate(job, scopedObservations)
                 .deliverable();
         List<ReviewResultParser.ValidatedObservation> proposals = inContextDeliveryGate.awaitingApproval(job, eligible);
         List<ReviewResultParser.ValidatedObservation> loudEnough = inContextDeliveryGate.admitInContext(job, eligible);
-        List<ComposedFeedbackUnit> units = compositionResultParser.parse(job.getOutput(), FeedbackChannel.IN_CONTEXT);
-        String lead = compositionResultParser.lead(job.getOutput());
-        Map<String, String> why = practiceCatalogInjector.whyBySlug(job.getWorkspace(), ArtifactKinds.PULL_REQUEST);
-        var composition = new AdmittedDelivery.Composition(ArtifactKinds.PULL_REQUEST, why, units, lead);
-        switch (AdmittedDelivery.decide(job.getOutput(), scopedObservations, proposals, loudEnough, composition)) {
-            case AdmittedDelivery.Withheld withheld -> {
-                log.info(
-                        "Withholding an all-clear from a review that did not reach every practice: jobId={}",
-                        job.getId());
-                feedbackService.deliverFeedback(job, withheld.content(), Set.of());
-            }
+        switch (AdmittedDelivery.decide(
+                review, ArtifactKinds.PULL_REQUEST, scopedObservations, subjectsOf(persisted), proposals, loudEnough)) {
             case AdmittedDelivery.Proposed proposed -> feedbackService.recordProposal(job, proposed.content());
             case AdmittedDelivery.Automatic automatic ->
                 feedbackService.deliverFeedback(job, automatic.content(), automatic.contributingPracticeSlugs());
         }
+    }
+
+    /**
+     * The review to deliver on the work. A run owes one unless it is a backfill, its staged channels leave the work
+     * out, or no observation both decided something and may appear on the work; these are read from the run itself,
+     * never from settings that can change after it. An owed review that is missing, malformed, or written under an
+     * earlier fragment contract fails delivery without a claim about the work; a valid empty review is silence.
+     */
+    static ComposedReview reviewToDeliver(
+            FeedbackCompositionResultParser parser,
+            AgentJob job,
+            List<Observation> persisted,
+            Set<FeedbackChannel> stagedChannels) {
+        // A backfill stages no composition (FeedbackCompositionInputs), so it never owes a review.
+        boolean reviewOwed = ReviewOutputService.originOf(job.getMetadata()) != ObservationOrigin.BACKFILL
+                && stagedChannels.contains(FeedbackChannel.IN_CONTEXT)
+                && persisted.stream()
+                        .anyMatch(observation -> observation.getOutcome().isDecided()
+                                && PublicReviewEligibility.admits(observation.getEvidence()));
+        if (!reviewOwed) return ComposedReview.empty();
+        if (!parser.writtenWhole(job.getOutput())) {
+            throw new JobDeliveryException(
+                    "The review on the work was composed before it was written whole; it is not delivered. jobId="
+                            + job.getId());
+        }
+        ComposedReview review = parser.review(job.getOutput());
+        if (review == null) {
+            throw new JobDeliveryException(
+                    "The review on the work was owed and not written as its contract requires; nothing is delivered. jobId="
+                            + job.getId());
+        }
+        Set<String> decided = review.decidedObservationIds();
+        if (persisted.stream()
+                .anyMatch(observation -> observation.getOutcome() == Outcome.NOT_MET
+                        && PublicReviewEligibility.admits(observation.getEvidence())
+                        && !decided.contains(observation.getId().toString()))) {
+            throw new JobDeliveryException(
+                    "Public feedback composition left an eligible observation undecided; jobId=" + job.getId());
+        }
+        return review;
+    }
+
+    /** The person each observation is about, which decides who a part of the review resting on it reaches. */
+    static Map<UUID, Long> subjectsOf(List<Observation> persisted) {
+        Map<UUID, Long> subjects = new HashMap<>();
+        for (Observation observation : persisted) {
+            subjects.put(observation.getId(), observation.getAboutUserId());
+        }
+        return subjects;
     }
 
     private ReviewResultParser.ValidatedObservation validated(Observation observation) {

@@ -6,14 +6,13 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
- * One composition decision for one channel. It references observations but carries no measurement
- * verdict; the server resolves evidence and placement independently.
+ * One composition decision for one private lane: the developer's practice pages or the mentor conversation.
+ * It references observations but carries no measurement verdict. What is said on the reviewed work itself is
+ * a {@link ComposedReview}, not a unit.
  *
  * @param basedOn ids of admitted observations from this run; at least one belongs to {@code practiceSlug}
- * @param body the in-app words, read verbatim. Null on the in-context lane, where the server renders
- *     evidence around {@link #nextStep}, and on the conversation lane, where {@link #notes} carries notes
+ * @param body the in-app words, read verbatim. Null on the conversation lane, where {@link #notes} carries notes
  *     to the mentor
- * @param placement where an in-context note goes: on a verified diff citation or in the artifact summary
  */
 public record ComposedFeedbackUnit(
         FeedbackChannel channel,
@@ -25,8 +24,7 @@ public record ComposedFeedbackUnit(
         @Nullable String title,
         @Nullable String body,
         @Nullable String nextStep,
-        @Nullable ConversationBrief notes,
-        @Nullable InContextPlacement placement) {
+        @Nullable ConversationBrief notes) {
     public static final int MAX_TITLE_LENGTH = 255;
 
     public static final int MAX_BODY_LENGTH = 8_000;
@@ -43,6 +41,9 @@ public record ComposedFeedbackUnit(
         Objects.requireNonNull(channel, "channel");
         Objects.requireNonNull(practiceSlug, "practiceSlug");
         Objects.requireNonNull(action, "action");
+        if (channel == FeedbackChannel.IN_CONTEXT) {
+            throw new IllegalArgumentException("The reviewed work is addressed by a ComposedReview, not by a unit");
+        }
         basedOn = List.copyOf(basedOn);
     }
 
@@ -87,35 +88,6 @@ public record ComposedFeedbackUnit(
         }
     }
 
-    /** In-context placement resolved from an observation citation, never from model-supplied coordinates. */
-    public record ResolvedAnchor(
-            String observationId,
-            int citationIndex,
-            String path,
-            @Nullable String side,
-            int startLine,
-            @Nullable Integer endLine) {
-        public ResolvedAnchor {
-            Objects.requireNonNull(observationId, "observationId");
-            Objects.requireNonNull(path, "path");
-        }
-    }
-
-    public record InContextPlacement(
-            PlacementKind kind, @Nullable ResolvedAnchor diffAnchor) {
-        public InContextPlacement {
-            Objects.requireNonNull(kind, "kind");
-            if ((kind == PlacementKind.DIFF) != (diffAnchor != null)) {
-                throw new IllegalArgumentException("DIFF placement requires an anchor; ARTIFACT placement forbids one");
-            }
-        }
-
-        public enum PlacementKind {
-            DIFF,
-            ARTIFACT,
-        }
-    }
-
     public boolean isComplete() {
         if (action == Action.WITHHOLD) {
             return withholdReason != null;
@@ -124,9 +96,6 @@ public record ComposedFeedbackUnit(
             return false;
         }
         if (channel == FeedbackChannel.IN_CHAT) return notes != null;
-        if (nextStep == null || nextStep.isBlank()) return false;
-        return channel == FeedbackChannel.IN_CONTEXT
-                ? body == null && placement != null
-                : body != null && !body.isBlank();
+        return nextStep != null && !nextStep.isBlank() && body != null && !body.isBlank();
     }
 }

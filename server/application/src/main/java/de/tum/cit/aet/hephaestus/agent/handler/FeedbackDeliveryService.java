@@ -93,6 +93,10 @@ class FeedbackDeliveryService {
         }
 
         DeliveryContent providerPackage = providerPackage(job, delivery);
+        if (providerPackage.mrNote() == null && providerPackage.diffNotes().isEmpty()) {
+            recordGateSuppressed(job, delivery, FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
+            return;
+        }
         PracticeFeedbackDispatchService.Result result =
                 dispatchService.dispatchAutomaticPackage(job, providerPackage, contributingPracticeSlugs);
         FeedbackDispatch dispatch = dispatchService.automaticPackage(job);

@@ -6,7 +6,7 @@ import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requ
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
-import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedReview;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
@@ -32,7 +32,6 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -52,7 +51,6 @@ public class IssueReviewHandler implements JobTypeHandler {
 
     private final JsonMapper objectMapper;
     private final PracticeReviewPreparation preparation;
-    private final PracticeCatalogInjector practiceCatalogInjector;
     private final ReviewResultParser resultParser;
     private final FeedbackCompositionResultParser compositionResultParser;
     private final ReviewOutputService deliveryService;
@@ -69,7 +67,6 @@ public class IssueReviewHandler implements JobTypeHandler {
     IssueReviewHandler(
             JsonMapper objectMapper,
             PracticeReviewPreparation preparation,
-            PracticeCatalogInjector practiceCatalogInjector,
             ReviewResultParser resultParser,
             FeedbackCompositionResultParser compositionResultParser,
             ReviewOutputService deliveryService,
@@ -84,7 +81,6 @@ public class IssueReviewHandler implements JobTypeHandler {
             FeedbackDeliveryService feedbackDeliveryService) {
         this.objectMapper = objectMapper;
         this.preparation = preparation;
-        this.practiceCatalogInjector = practiceCatalogInjector;
         this.resultParser = resultParser;
         this.compositionResultParser = compositionResultParser;
         this.deliveryService = deliveryService;
@@ -210,21 +206,19 @@ public class IssueReviewHandler implements JobTypeHandler {
                 })
                 .toList();
         if (feedbackDeliveryService.recoverAutomaticPackageIfPresent(job)) return;
+        ComposedReview review = PullRequestReviewHandler.reviewToDeliver(
+                compositionResultParser, job, persisted, ISSUE_REVIEW_CHANNELS);
         List<ReviewResultParser.ValidatedObservation> eligible =
                 feedbackResponseSuppressionFilter.evaluate(job, observations).deliverable();
         List<ReviewResultParser.ValidatedObservation> loudEnough = inContextDeliveryGate.admitInContext(job, eligible);
         List<ReviewResultParser.ValidatedObservation> proposals = inContextDeliveryGate.awaitingApproval(job, eligible);
-        Map<String, String> why = practiceCatalogInjector.whyBySlug(job.getWorkspace(), ArtifactKinds.ISSUE);
-        List<ComposedFeedbackUnit> units = compositionResultParser.parse(job.getOutput(), FeedbackChannel.IN_CONTEXT);
-        String lead = compositionResultParser.lead(job.getOutput());
-        var composition = new AdmittedDelivery.Composition(ArtifactKinds.ISSUE, why, units, lead);
-        switch (AdmittedDelivery.decide(job.getOutput(), observations, proposals, loudEnough, composition)) {
-            case AdmittedDelivery.Withheld withheld -> {
-                log.info(
-                        "Withholding an all-clear from a review that did not reach every practice: jobId={}",
-                        job.getId());
-                feedbackLedgerRecorder.recordNothingToPost(job, withheld.content());
-            }
+        switch (AdmittedDelivery.decide(
+                review,
+                ArtifactKinds.ISSUE,
+                observations,
+                PullRequestReviewHandler.subjectsOf(persisted),
+                proposals,
+                loudEnough)) {
             case AdmittedDelivery.Proposed proposed -> feedbackLedgerRecorder.recordProposal(job, proposed.content());
             case AdmittedDelivery.Automatic automatic ->
                 postIssueNote(job, automatic.content(), automatic.contributingPracticeSlugs());

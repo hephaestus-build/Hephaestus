@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -65,14 +66,12 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -124,7 +123,6 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 objectMapper, practiceRepository, InContextDeliveryGateFixtures.workspaceDefaults());
         handler = new PullRequestReviewHandler(
                 objectMapper,
-                practiceCatalogInjector,
                 new PracticeReviewPreparation(
                         workspaceContextBuilder,
                         practiceCatalogInjector,
@@ -248,7 +246,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         p.setAutonomy(PracticeAutonomy.AUTOMATIC);
         PracticeTestEvidence.configure(p, ArtifactKinds.PULL_REQUEST);
         p.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
-        var revision = new PracticeRevision();
+        var revision = new PracticeRevision(p, 1);
         ReflectionTestUtils.setField(revision, "id", Math.abs((long) slug.hashCode()) + 1);
         p.setCurrentRevision(revision);
         return p;
@@ -660,7 +658,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             ObjectNode output = objectMapper.createObjectNode();
             ObjectNode feedback = output.putObject("feedback");
             feedback.put("admissionDigest", "digest-1");
-            feedback.put("lead", lead);
+            feedback.put("contractVersion", 2);
             job.setOutput(output);
 
             Practice approvalGated = createPractice("error-handling", "Error Handling", "criteria");
@@ -674,6 +672,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                             job.getId(), job.getWorkspace().getId()))
                     .thenReturn(List.of(gated, auto));
 
+            composed(job, List.of(gated, auto), summary(lead, gated, auto));
             handler.deliver(job);
 
             var proposal = ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
@@ -689,9 +688,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             metadata.put(ObservationAdmissionService.DIGEST_METADATA_KEY, "digest-1");
             AgentJob job = jobWithMetadata(metadata);
             ObjectNode output = objectMapper.createObjectNode();
-            output.putObject("feedback")
-                    .put("admissionDigest", "digest-1")
-                    .put("lead", "The error path can wait; the description is the thing to fix.");
+            output.putObject("feedback").put("admissionDigest", "digest-1");
             job.setOutput(output);
 
             Practice approvalGated = createPractice("error-handling", "Error Handling", "criteria");
@@ -703,7 +700,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             when(observationRepository.findByAgentJobId(
                             job.getId(), job.getWorkspace().getId()))
                     .thenReturn(List.of(gated, auto));
-            composed(job, List.of(gated, auto), withholding(gated));
+            composed(job, List.of(gated, auto), noteCiting(auto), withholding(gated));
 
             handler.deliver(job);
 
@@ -783,36 +780,44 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         }
 
         /** Stages the admitted observations under their persisted ids, as admission hands them to the runner. */
-        private void composed(AgentJob job, List<Observation> admitted, String... units) {
+        private void composed(AgentJob job, List<Observation> admitted, String... reviewParts) {
             ObjectNode feedback =
                     (ObjectNode) Objects.requireNonNull(job.getOutput()).get("feedback");
+            feedback.put("contractVersion", 2);
             var staged = feedback.putArray("observations");
             for (var observation : admitted) {
                 staged.addObject()
                         .put("id", String.valueOf(observation.getId()))
                         .put("practiceSlug", observation.getPractice().getSlug())
+                        .put("outcome", observation.getOutcome().name())
                         .put("anchorable", false)
                         .putArray("citations");
             }
-            feedback.set("units", objectMapper.readTree("[" + String.join(",", units) + "]"));
+            var review = feedback.putObject("review");
+            for (String part : reviewParts) {
+                objectMapper.readTree(part).properties().forEach(field -> review.set(field.getKey(), field.getValue()));
+            }
         }
 
         private static String withholding(Observation observation) {
             return """
-                    {"channel":"IN_CONTEXT","action":"WITHHOLD","practiceSlug":"%s","basedOn":["%s"],
-                     "withholdReason":"ALREADY_SAID"}""".formatted(observation.getPractice().getSlug(), observation.getId());
+                    {"withheld":[{"basedOn":["%s"],"reason":"ALREADY_SAID"}]}
+                    """.formatted(observation.getId());
         }
 
-        /** A note of the first observation's practice, based on every observation given. */
-        private static String noteCiting(Observation... cited) {
-            return """
-                    {"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"%s","basedOn":[%s],
-                     "title":"Say why the change is needed","nextStep":"Add one sentence of motivation",
-                     "placement":{"kind":"ARTIFACT"}}""".formatted(
-                            cited[0].getPractice().getSlug(),
-                            Arrays.stream(cited)
-                                    .map(observation -> "\"" + observation.getId() + "\"")
-                                    .collect(Collectors.joining(",")));
+        private String summary(String body, Observation... cited) {
+            var review = objectMapper.createObjectNode();
+            var summary = review.putObject("summary").put("body", body);
+            var basedOn = summary.putArray("basedOn");
+            for (Observation observation : cited)
+                basedOn.add(observation.getId().toString());
+            return objectMapper.writeValueAsString(review);
+        }
+
+        private String noteCiting(Observation... cited) {
+            return summary(
+                    "No rationale sentence explains the change. Say why the change is needed, using one sentence of motivation.",
+                    cited);
         }
 
         /** A job past admission, carrying the coverage ledger its run wrote. */
@@ -851,41 +856,40 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldPostNoAllClearButKeepTheWithholdWhenTheReviewDidNotReachEveryPractice() {
+        void shouldKeepAnIntentionalAllMetEmptyReviewQuietWithPartialCoverage() {
             AgentJob job = jobAwaitingDelivery(2, 1);
             var strength = observed(
                     job, createPractice("pr-description-quality", "PR Description Quality", "criteria"), Outcome.MET);
-            composed(job, List.of(strength), withholding(strength));
-
+            composed(job, List.of(strength));
             handler.deliver(job);
-
-            var content = ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
-            verify(feedbackService).deliverFeedback(eq(job), content.capture(), eq(Set.of()));
-            assertThat(content.getValue().mrNote()).isNull();
-            assertThat(content.getValue().withheld())
-                    .extracting(ReviewResultParser.WithheldObservation::occurrenceKey)
-                    .containsExactly("occ-pr-description-quality");
+            verify(feedbackService).deliverFeedback(eq(job), isNull(), eq(Set.of()));
             verify(feedbackService, never()).recordProposal(any(), any());
         }
 
         @Test
         void shouldStillReportWhatAPartialReviewFound() {
             AgentJob job = jobAwaitingDelivery(2, 1);
-            observed(job, createPractice("error-handling", "Error Handling", "criteria"), Outcome.NOT_MET);
-
+            var problem =
+                    observed(job, createPractice("error-handling", "Error Handling", "criteria"), Outcome.NOT_MET);
+            composed(
+                    job,
+                    List.of(problem),
+                    summary("Return the error to the caller rather than swallowing it.", problem));
             handler.deliver(job);
-
             verify(feedbackService).deliverFeedback(eq(job), any(), any());
         }
 
         @Test
-        void shouldPostAnAllClearWhenTheReviewReachedEveryPractice() {
+        void shouldPostABoundedPositiveObservationWithoutManufacturingAnAllClear() {
             AgentJob job = jobAwaitingDelivery(2, 2);
-            observed(job, createPractice("pr-description-quality", "PR Description Quality", "criteria"), Outcome.MET);
-
+            var strength = observed(
+                    job, createPractice("pr-description-quality", "PR Description Quality", "criteria"), Outcome.MET);
+            String body = "The description names the reason for the change.";
+            composed(job, List.of(strength), summary(body, strength));
             handler.deliver(job);
-
-            verify(feedbackService).deliverFeedback(eq(job), any(), any());
+            var content = ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
+            verify(feedbackService).deliverFeedback(eq(job), content.capture(), any());
+            assertThat(content.getValue().mrNote()).isEqualTo(body);
         }
 
         @Test

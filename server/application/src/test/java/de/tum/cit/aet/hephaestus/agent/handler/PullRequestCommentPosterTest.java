@@ -175,18 +175,9 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldRemoveApprovalLanguageWithPunctuation() {
-            assertThat(PullRequestCommentPoster.sanitize("LGTM!")).isBlank();
-            assertThat(PullRequestCommentPoster.sanitize("Approved.")).isBlank();
-            assertThat(PullRequestCommentPoster.sanitize("Ship it!")).isBlank();
-        }
-
-        @Test
-        void shouldRemoveApprovalLanguage() {
-            assertThat(PullRequestCommentPoster.sanitize("LGTM")).isBlank();
-            assertThat(PullRequestCommentPoster.sanitize("Approved")).isBlank();
-            assertThat(PullRequestCommentPoster.sanitize("Ready to merge")).isBlank();
-            assertThat(PullRequestCommentPoster.sanitize("Ship it")).isBlank();
+        void shouldKeepAStandaloneApprovalLineWhenSanitizing() {
+            String body = "Add a test for the empty input.\n\nLGTM\n\nRename the helper.";
+            assertThat(PullRequestCommentPoster.sanitize(body)).isEqualTo(body);
         }
 
         @Test
@@ -205,9 +196,9 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldCollapseExcessiveNewlines() {
-            String result = PullRequestCommentPoster.sanitize("Hello\n\n\n\n\nWorld");
-            assertThat(result).isEqualTo("Hello\n\nWorld");
+        void shouldPreserveComposedParagraphsAndCodeIndentation() {
+            String body = "    let foreground = Color.primary\n\n\n\nDetails about this local change.\n";
+            assertThat(PullRequestCommentPoster.sanitize(body)).isEqualTo(body);
         }
 
         @Test
@@ -330,6 +321,26 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
         void shouldStripEmptyUrlLinks() {
             String result = PullRequestCommentPoster.sanitize("[click me]()");
             assertThat(result).isEqualTo("click me");
+        }
+    }
+
+    @Nested
+    class SpeaksApproval {
+
+        @Test
+        void shouldDetectApprovalWhenALineIsOnlyApproval() {
+            assertThat(PullRequestCommentPoster.speaksApproval("LGTM")).isTrue();
+            assertThat(PullRequestCommentPoster.speaksApproval("Approved.")).isTrue();
+            assertThat(PullRequestCommentPoster.speaksApproval("ready to merge"))
+                    .isTrue();
+            assertThat(PullRequestCommentPoster.speaksApproval("Add a test for the empty input.\n\nLGTM"))
+                    .isTrue();
+        }
+
+        @Test
+        void shouldNotDetectApprovalWhenThePhraseIsPartOfASentence() {
+            assertThat(PullRequestCommentPoster.speaksApproval("Before this is ready to merge, add a test."))
+                    .isFalse();
         }
     }
 

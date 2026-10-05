@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static de.tum.cit.aet.hephaestus.testconfig.TestEntities.agentJob;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
@@ -8,10 +9,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
+import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -31,11 +35,25 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 @Tag("unit")
 class ApprovedFeedbackDeliveryListenerTest {
+
+    private static final UUID LINE_NOTES_ID = UUID.fromString("6c1f0e2a-5b3d-4a7e-9f80-1d2c3b4a5e6f");
+    private static final ProposedPlacement INLINE_PLACEMENT =
+            ProposedPlacement.inline("Name the failure case", "src/Review.java", 12, null, "review-key");
+    private static final InlineFeedbackChannel.DeliveredSignal LANDED =
+            lineSignal(12, InlineFeedbackChannel.Disposition.POSTED, "note-12");
+    private static final InlineFeedbackChannel.DeliveredSignal NOT_LANDED =
+            lineSignal(20, InlineFeedbackChannel.Disposition.FAILED, null);
 
     @Test
     void suppressesWhenContributingPracticeNoLongerRequiresApproval() {
@@ -172,6 +190,107 @@ class ApprovedFeedbackDeliveryListenerTest {
         verifyNoInteractions(fixture.dispatchService());
     }
 
+    @Test
+    void shouldDispatchAnApprovedProposalOfLineNotesAloneAndMarkItDeliveredWhenEveryNoteLands() {
+        Fixture fixture = fixture(lineNotesProposal(INLINE_PLACEMENT));
+        allow(fixture);
+        var sent = PracticeFeedbackDispatchService.Result.sent(null, null, List.of(LANDED));
+        when(fixture.dispatchService().dispatchApproved(fixture.job(), fixture.feedback()))
+                .thenReturn(sent);
+
+        fixture.listener().deliver(event(fixture.feedback()));
+
+        verify(fixture.ledger()).recordApprovedPlacements(fixture.feedback(), null, null, List.of(LANDED));
+        verify(fixture.feedbackRepository()).markApprovedDelivered(7L, LINE_NOTES_ID);
+    }
+
+    @Test
+    void shouldNotDispatchAProposalWithNeitherASummaryNorALineNote() {
+        Fixture fixture = fixture(lineNotesProposal(ProposedPlacement.inline(" ", "src/Review.java", 12, null, "k")));
+
+        fixture.listener().deliver(event(fixture.feedback()));
+
+        verifyNoInteractions(fixture.dispatchService(), fixture.ledger());
+        verify(fixture.feedbackRepository()).findByIdAndWorkspaceId(LINE_NOTES_ID, 7L);
+        verifyNoMoreInteractions(fixture.feedbackRepository());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("outcomesWithALandedLineNoteAndNoSummary")
+    void shouldKeepALandedLineNoteAsPartialDeliveryWithoutASummary(
+            PracticeFeedbackDispatchService.Result result, Consumer<FeedbackRepository> partialTransition) {
+        Fixture fixture = fixture(lineNotesProposal(INLINE_PLACEMENT));
+        allow(fixture);
+        when(fixture.dispatchService().dispatchApproved(fixture.job(), fixture.feedback()))
+                .thenReturn(result);
+
+        fixture.listener().deliver(event(fixture.feedback()));
+
+        verify(fixture.ledger()).recordApprovedPlacements(fixture.feedback(), null, null, result.deliveredSignals());
+        verify(fixture.feedbackRepository()).findByIdAndWorkspaceId(LINE_NOTES_ID, 7L);
+        partialTransition.accept(verify(fixture.feedbackRepository()));
+        verifyNoMoreInteractions(fixture.feedbackRepository());
+    }
+
+    static Stream<Arguments> outcomesWithALandedLineNoteAndNoSummary() {
+        return Stream.of(
+                arguments(
+                        PracticeFeedbackDispatchService.Result.suppressed(
+                                FeedbackSuppressionReason.APPROVAL_STALE, null, null, List.of(LANDED, NOT_LANDED)),
+                        (Consumer<FeedbackRepository>) repository -> repository.markApprovedPartiallyDelivered(
+                                7L, LINE_NOTES_ID, FeedbackSuppressionReason.APPROVAL_STALE.name())),
+                arguments(
+                        PracticeFeedbackDispatchService.Result.failed(null, null, List.of(LANDED, NOT_LANDED)),
+                        (Consumer<FeedbackRepository>)
+                                repository -> repository.markApprovedPartiallyFailed(7L, LINE_NOTES_ID)),
+                arguments(
+                        PracticeFeedbackDispatchService.Result.uncertain(null, null, List.of(LANDED, NOT_LANDED)),
+                        (Consumer<FeedbackRepository>)
+                                repository -> repository.markApprovedPartiallyDelivered(7L, LINE_NOTES_ID, null)));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("settledOutcomesWithOnlyAFailedLineNote")
+    void shouldNotCountAFailedLineNoteAsDelivered(
+            PracticeFeedbackDispatchService.Result result, Consumer<FeedbackRepository> transition) {
+        Fixture fixture = fixture(lineNotesProposal(INLINE_PLACEMENT));
+        allow(fixture);
+        when(fixture.dispatchService().dispatchApproved(fixture.job(), fixture.feedback()))
+                .thenReturn(result);
+
+        fixture.listener().deliver(event(fixture.feedback()));
+
+        verify(fixture.feedbackRepository()).findByIdAndWorkspaceId(LINE_NOTES_ID, 7L);
+        transition.accept(verify(fixture.feedbackRepository()));
+        verifyNoMoreInteractions(fixture.feedbackRepository());
+    }
+
+    static Stream<Arguments> settledOutcomesWithOnlyAFailedLineNote() {
+        return Stream.of(
+                arguments(
+                        PracticeFeedbackDispatchService.Result.suppressed(
+                                FeedbackSuppressionReason.APPROVAL_STALE, null, null, List.of(NOT_LANDED)),
+                        (Consumer<FeedbackRepository>) repository -> repository.markApprovedSuppressed(
+                                7L, LINE_NOTES_ID, FeedbackSuppressionReason.APPROVAL_STALE.name())),
+                arguments(
+                        PracticeFeedbackDispatchService.Result.failed(null, null, List.of(NOT_LANDED)),
+                        (Consumer<FeedbackRepository>) repository -> repository.markApprovedFailed(7L, LINE_NOTES_ID)));
+    }
+
+    @Test
+    void shouldLeaveTheProposalPreparedWhileAnUnsettledAttemptHasOnlyAFailedLineNote() {
+        Fixture fixture = fixture(lineNotesProposal(INLINE_PLACEMENT));
+        allow(fixture);
+        when(fixture.dispatchService().dispatchApproved(fixture.job(), fixture.feedback()))
+                .thenReturn(PracticeFeedbackDispatchService.Result.uncertain(null, null, List.of(NOT_LANDED)));
+
+        fixture.listener().deliver(event(fixture.feedback()));
+
+        verify(fixture.feedbackRepository()).findByIdAndWorkspaceId(LINE_NOTES_ID, 7L);
+        verifyNoMoreInteractions(fixture.feedbackRepository());
+        verifyNoInteractions(fixture.ledger());
+    }
+
     private static void allow(Fixture fixture) {
         when(fixture.policy()
                         .evaluatePullRequest(
@@ -183,13 +302,17 @@ class ApprovedFeedbackDeliveryListenerTest {
     }
 
     private static Fixture fixture() {
+        return fixture(proposal(UUID.randomUUID(), UUID.randomUUID(), "Exact proposal"));
+    }
+
+    private static Fixture fixture(Feedback feedback) {
         FeedbackRepository feedbackRepository = mock(FeedbackRepository.class);
         FeedbackApprovalRepository approvalRepository = mock(FeedbackApprovalRepository.class);
         AgentJobRepository jobRepository = mock(AgentJobRepository.class);
         PracticeFeedbackDeliveryPolicy policy = mock(PracticeFeedbackDeliveryPolicy.class);
         PracticeFeedbackDispatchService dispatchService = mock(PracticeFeedbackDispatchService.class);
         FeedbackApprovalEligibility eligibility = mock(FeedbackApprovalEligibility.class);
-        Feedback feedback = proposal(UUID.randomUUID(), UUID.randomUUID(), "Exact proposal");
+        FeedbackLedgerRecorder ledger = mock(FeedbackLedgerRecorder.class);
         AgentJob job = agentJob();
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
         when(approvalRepository.findByFeedbackIdAndWorkspaceId(feedback.getId(), 7L))
@@ -205,15 +328,17 @@ class ApprovedFeedbackDeliveryListenerTest {
             return true;
         });
         ApprovedFeedbackDeliveryListener listener = new ApprovedFeedbackDeliveryListener(
+                feedbackRepository, approvalRepository, jobRepository, policy, dispatchService, eligibility, ledger);
+        return new Fixture(
+                listener,
                 feedbackRepository,
                 approvalRepository,
-                jobRepository,
                 policy,
                 dispatchService,
                 eligibility,
-                mock(FeedbackLedgerRecorder.class));
-        return new Fixture(
-                listener, feedbackRepository, approvalRepository, policy, dispatchService, eligibility, feedback, job);
+                ledger,
+                feedback,
+                job);
     }
 
     private static ApprovedFeedbackReadyEvent event(Feedback feedback) {
@@ -238,6 +363,33 @@ class ApprovedFeedbackDeliveryListenerTest {
                 .build();
     }
 
+    private static Feedback lineNotesProposal(ProposedPlacement placement) {
+        return Feedback.builder()
+                .id(LINE_NOTES_ID)
+                .agentJobId(UUID.randomUUID())
+                .workspaceId(7L)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .recipientUserId(8L)
+                .aboutUserId(8L)
+                .channel(FeedbackChannel.IN_CONTEXT)
+                .position(7_000)
+                .deliveryState(FeedbackDeliveryState.PREPARED)
+                .proposedPlacements(new ArrayList<>(List.of(placement)))
+                .proposedPracticeSlugs(new ArrayList<>(List.of("review-quality")))
+                .source(FeedbackSource.AGENT)
+                .build();
+    }
+
+    private static InlineFeedbackChannel.DeliveredSignal lineSignal(
+            int line, InlineFeedbackChannel.Disposition disposition, @Nullable String externalRef) {
+        return new InlineFeedbackChannel.DeliveredSignal(
+                "approved:" + LINE_NOTES_ID + ":" + line,
+                FeedbackAnchor.DiffAnchor.singleLine("src/Review.java", line),
+                disposition,
+                externalRef,
+                null);
+    }
+
     private record Fixture(
             ApprovedFeedbackDeliveryListener listener,
             FeedbackRepository feedbackRepository,
@@ -245,6 +397,7 @@ class ApprovedFeedbackDeliveryListenerTest {
             PracticeFeedbackDeliveryPolicy policy,
             PracticeFeedbackDispatchService dispatchService,
             FeedbackApprovalEligibility eligibility,
+            FeedbackLedgerRecorder ledger,
             Feedback feedback,
             AgentJob job) {}
 }

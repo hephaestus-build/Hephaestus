@@ -12,8 +12,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -83,10 +85,8 @@ class PracticeFeedbackDispatchRecovery {
                     var feedback = feedbackRepository
                             .findByIdAndWorkspaceId(dispatch.approvedFeedbackId(), dispatch.getWorkspaceId())
                             .orElse(null);
-                    if (feedback == null
-                            || feedback.getBody() == null
-                            || !feedback.getBody().equals(dispatch.getBody())) {
-                        fail(dispatch, "Approved feedback is missing or no longer matches its immutable body");
+                    if (feedback == null || !dispatchService.matchesImmutablePackage(feedback, dispatch)) {
+                        fail(dispatch, "Approved feedback is missing or no longer matches its immutable package");
                         continue;
                     }
                 }
@@ -114,29 +114,29 @@ class PracticeFeedbackDispatchRecovery {
                 .orElse(null);
         if (feedback == null) return;
         feedbackLedgerRecorder.recordApprovedPlacements(
-                feedback, result.externalRef(), result.externalUrl(), dispatchService.deliveredSignals(dispatch));
+                feedback, result.externalRef(), result.externalUrl(), result.deliveredSignals());
         if (result.status() == PracticeFeedbackDispatchService.Result.Status.SENT) {
             feedbackRepository.markApprovedDelivered(dispatch.getWorkspaceId(), dispatch.approvedFeedbackId());
         } else if (result.status() == PracticeFeedbackDispatchService.Result.Status.SUPPRESSED) {
-            if (result.externalRef() == null) {
-                feedbackRepository.markApprovedSuppressed(
+            if (result.landed()) {
+                feedbackRepository.markApprovedPartiallyDelivered(
                         dispatch.getWorkspaceId(),
                         dispatch.approvedFeedbackId(),
                         result.refusal().name());
             } else {
-                feedbackRepository.markApprovedPartiallyDelivered(
+                feedbackRepository.markApprovedSuppressed(
                         dispatch.getWorkspaceId(),
                         dispatch.approvedFeedbackId(),
                         result.refusal().name());
             }
         } else if (result.status() == PracticeFeedbackDispatchService.Result.Status.FAILED) {
-            if (result.externalRef() == null) {
-                feedbackRepository.markApprovedFailed(dispatch.getWorkspaceId(), dispatch.approvedFeedbackId());
-            } else {
+            if (result.landed()) {
                 feedbackRepository.markApprovedPartiallyFailed(
                         dispatch.getWorkspaceId(), dispatch.approvedFeedbackId());
+            } else {
+                feedbackRepository.markApprovedFailed(dispatch.getWorkspaceId(), dispatch.approvedFeedbackId());
             }
-        } else if (result.externalRef() != null) {
+        } else if (result.landed()) {
             feedbackRepository.markApprovedPartiallyDelivered(
                     dispatch.getWorkspaceId(), dispatch.approvedFeedbackId(), null);
         }
@@ -144,9 +144,9 @@ class PracticeFeedbackDispatchRecovery {
 
     private void fail(FeedbackDispatch dispatch, String error) {
         dispatchService.fail(dispatch, error);
-        FeedbackDispatch failed = dispatchRepository
-                .findByIdAndWorkspaceId(dispatch.getId(), dispatch.getWorkspaceId())
-                .orElse(dispatch);
+        Optional<FeedbackDispatch> reloaded =
+                dispatchRepository.findByIdAndWorkspaceId(dispatch.getId(), dispatch.getWorkspaceId());
+        FeedbackDispatch failed = reloaded.orElse(dispatch);
         if (isAutomaticPackage(failed)) {
             AgentJob job = agentJobRepository
                     .findByIdAndWorkspaceId(failed.getAgentJobId(), failed.getWorkspaceId())
@@ -154,23 +154,36 @@ class PracticeFeedbackDispatchRecovery {
             if (job != null) feedbackDeliveryService.projectAutomaticPackage(job, failed);
             return;
         }
-        dispatchService.projectRecovered(
-                failed,
-                () -> feedbackRepository.markApprovedFailed(failed.getWorkspaceId(), failed.approvedFeedbackId()));
+        // Only the row as it settled is projected: it keeps any copy an earlier attempt placed.
+        reloaded.filter(PracticeFeedbackDispatchRecovery::isSettled)
+                .ifPresent(settled -> dispatchService.projectRecovered(
+                        settled, () -> reconcileDomain(settled, terminalResult(settled))));
+    }
+
+    private static boolean isSettled(FeedbackDispatch dispatch) {
+        return switch (dispatch.getState()) {
+            case SENT, SUPPRESSED, FAILED -> true;
+            case PENDING, CLAIMED, UNCERTAIN -> false;
+        };
     }
 
     private static boolean isAutomaticPackage(FeedbackDispatch dispatch) {
         return dispatch.getDestination() == FeedbackDispatchDestination.AUTOMATIC_REVIEW_PACKAGE;
     }
 
-    private static PracticeFeedbackDispatchService.Result terminalResult(FeedbackDispatch dispatch) {
+    private PracticeFeedbackDispatchService.Result terminalResult(FeedbackDispatch dispatch) {
+        @Nullable String ref = dispatch.getDeliveredExternalRef();
+        @Nullable String url = dispatch.getDeliveredExternalUrl();
+        var signals = dispatchService.deliveredSignals(dispatch);
         return switch (dispatch.getState()) {
-            case SENT -> PracticeFeedbackDispatchService.Result.sent(dispatch.getDeliveredExternalRef());
+            case SENT -> PracticeFeedbackDispatchService.Result.sent(ref, url, signals);
             case SUPPRESSED ->
                 PracticeFeedbackDispatchService.Result.suppressed(
                         FeedbackSuppressionReason.valueOf(Objects.requireNonNull(dispatch.getSuppressionReason())),
-                        dispatch.getDeliveredExternalRef());
-            case FAILED -> PracticeFeedbackDispatchService.Result.failed(dispatch.getDeliveredExternalRef());
+                        ref,
+                        url,
+                        signals);
+            case FAILED -> PracticeFeedbackDispatchService.Result.failed(ref, url, signals);
             case PENDING, CLAIMED, UNCERTAIN ->
                 throw new IllegalArgumentException("Dispatch is not terminal: " + dispatch.getState());
         };

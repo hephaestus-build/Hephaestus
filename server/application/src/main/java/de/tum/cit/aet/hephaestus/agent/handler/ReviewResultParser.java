@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedReview;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
@@ -40,7 +41,8 @@ public class ReviewResultParser {
     private static final Set<String> EVIDENCE_FIELDS =
             Set.of("citations", "search", "inapplicability", "undecidability");
 
-    static final int MAX_DELIVERY_DIFF_NOTES = 30;
+    /** The line notes one review may carry; the composition contract owns the number. */
+    static final int MAX_DELIVERY_DIFF_NOTES = ComposedReview.MAX_INLINE_NOTES;
 
     private final JsonMapper objectMapper;
     private final JsonMapper lenientMapper;
@@ -424,7 +426,7 @@ public class ReviewResultParser {
     }
 
     /**
-     * An observation the {@link DeliveryComposer} withheld from the rendered delivery, identified by the
+     * An observation the review withheld from the rendered delivery, identified by the
      * {@code occurrenceKey} of the observation it was persisted as — a per-observation identity, so a
      * withheld observation is never confused with another at the same locus.
      */
@@ -436,7 +438,7 @@ public class ReviewResultParser {
      * @param filePath path relative to repo root (new path, not old)
      * @param endLine  optional last line number for multi-line (GitHub only; GitLab ignores)
      * @param deliveryKey opaque receipt-correlation key for this exact observation, carried from its
-     *     occurrence identity by {@link DeliveryComposer}; null before server-side correlation.
+     *     occurrence identity by {@link ComposedReviewAdmission}; null before server-side correlation.
      * @param contributors occurrence keys of every observation this note's text was written from: its own, and
      *     any other the composed unit cites. Null before server-side correlation and on a pre-upgrade package
      */

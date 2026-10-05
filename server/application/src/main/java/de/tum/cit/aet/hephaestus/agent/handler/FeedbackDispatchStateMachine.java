@@ -139,7 +139,7 @@ class FeedbackDispatchStateMachine {
                         null,
                         Instant.now().plus(backoff(attempt)),
                         signals)
-                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef, externalUrl)
+                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef, externalUrl, signals)
                 : PracticeFeedbackDispatchService.Result.inProgress();
     }
 
@@ -187,7 +187,7 @@ class FeedbackDispatchStateMachine {
                         null,
                         nextAttemptAt,
                         signals)
-                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef, externalUrl)
+                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef, externalUrl, signals)
                 : PracticeFeedbackDispatchService.Result.inProgress();
     }
 

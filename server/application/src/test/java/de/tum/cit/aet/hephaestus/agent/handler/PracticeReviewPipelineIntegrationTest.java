@@ -27,10 +27,9 @@ import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
-import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
-import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedReview;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -39,7 +38,6 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
-import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettings;
@@ -77,10 +75,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -88,10 +84,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
-import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
-import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
-import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
 import de.tum.cit.aet.hephaestus.testconfig.AdmittedReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -106,7 +99,6 @@ import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -149,6 +141,13 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
     private static final String BASE_SHA = "a".repeat(40);
 
     private static final String HEAD_SHA = "b".repeat(40);
+
+    /** A valid review that says nothing on the work: the composer's choice, not a missing review. */
+    private static final String SILENT_REVIEW = "{}";
+
+    /** The summary a review of {@code validAgentOutput()} writes about both of its observations. */
+    private static final String BOTH_OBSERVATIONS_SUMMARY =
+            "The description says what changed. The new method reads its input before it checks it for null.";
 
     @Autowired
     private JobTypeHandlerRegistry handlerRegistry;
@@ -215,9 +214,6 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
     private FeedbackDeliveryService feedbackDeliveryService;
 
     @Autowired
-    private ReviewHistoryContentSource historySource;
-
-    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
@@ -231,9 +227,6 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private AccountPreferencesQuery accountPreferencesQuery;
-
-    @Autowired
-    private ReactionRepository reactionRepository;
 
     private JobTypeHandler handler;
     private Workspace workspace;
@@ -708,21 +701,14 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         agentJob = admitAndSetOutput(agentJob, rawOutput);
     }
 
-    private AgentJob admitAndSetOutput(AgentJob job, String rawOutput) {
-        return admitAndSetOutput(job, rawOutput, true);
-    }
-
     /** The admission fence's own two steps, minus the ownership transaction it wraps them in. */
     private void admit(AgentJob job, JsonNode observations) {
         var pullRequests = (PullRequestReviewHandler) handler;
         pullRequests.prepareObservations(job, observations).record(job);
     }
 
-    /**
-     * @param reachedEveryPractice the coverage ledger the run left behind, which decides whether this
-     *     review is allowed to say it found nothing
-     */
-    private AgentJob admitAndSetOutput(AgentJob job, String rawOutput, boolean reachedEveryPractice) {
+    /** Admits the observations and leaves a composition that has written nothing yet; {@code compose} writes it. */
+    private AgentJob admitAndSetOutput(AgentJob job, String rawOutput) {
         JsonNode observations = OBJECT_MAPPER.readTree(withEvidence(rawOutput)).path("observations");
         admit(job, observations);
         String digest = "test-admission-digest";
@@ -733,13 +719,17 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         job.setMetadata(metadata);
         ObjectNode output = OBJECT_MAPPER.createObjectNode();
         output.putObject("feedback").put("admissionDigest", digest).putArray("units");
-        int eligible = Objects.requireNonNull(job.getEvidenceSnapshot())
-                .path("practices")
-                .size();
-        output.putObject("practiceCoverage")
-                .put("eligible", eligible)
-                .put("evaluated", reachedEveryPractice ? eligible : eligible - 1);
         job.setOutput(output);
+        var rows = observationRepository.findByAgentJobId(job.getId(), workspace.getId());
+        String review = rows.stream().anyMatch(o -> o.getOutcome() == Outcome.NOT_MET)
+                ? summaryOn(
+                        BOTH_OBSERVATIONS_SUMMARY,
+                        rows.stream()
+                                .filter(o -> o.getOutcome().isDecided())
+                                .map(o -> o.getPractice().getSlug())
+                                .toArray(String[]::new))
+                : SILENT_REVIEW;
+        compose(job, review);
         return agentJobRepository.save(job);
     }
 
@@ -852,78 +842,44 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         return observations + "\n}";
     }
 
-    private List<Feedback> unitsOf(AgentJob job, FeedbackChannel channel) {
-        return feedbackRepository.findAll().stream()
-                .filter(feedback -> feedback.getAgentJobId().equals(job.getId()) && feedback.getChannel() == channel)
-                .toList();
-    }
-
-    private List<@Nullable UUID> boundTo(Feedback feedback) {
-        return jdbcTemplate.queryForList(
-                "SELECT observation_id FROM feedback_observation WHERE feedback_id = ?", UUID.class, feedback.getId());
-    }
-
     /**
-     * The composer's output as the runner writes it: the job's admitted observations under their persisted
-     * ids, and units whose {@code {practice-slug}} placeholders name the observation of that practice.
+     * The composer's output as the runner writes it: the job's admitted observations echoed under their persisted
+     * ids, the review written whole for the work, and the private units. A {@code {practice-slug}} placeholder in
+     * the review or a unit names the observation of that practice.
      */
-    private void compose(AgentJob job, String lead, String... units) {
+    private void compose(AgentJob job, String review, String... units) {
         ObjectNode output = (ObjectNode) Objects.requireNonNull(job.getOutput());
         ObjectNode feedback = (ObjectNode) output.get("feedback");
-        feedback.put("lead", lead);
+        feedback.put("contractVersion", ComposedReview.CONTRACT_VERSION);
         var staged = feedback.putArray("observations");
         String written = "[" + String.join(",", units) + "]";
+        String said = review;
         for (Observation observation : observationRepository.findByAgentJobId(job.getId(), workspace.getId())) {
             String slug = observation.getPractice().getSlug();
+            String id = observation.getId().toString();
             staged.addObject()
-                    .put("id", observation.getId().toString())
+                    .put("id", id)
                     .put("practiceSlug", slug)
+                    .put("outcome", observation.getOutcome().name())
                     .put("anchorable", false)
                     .putArray("citations");
-            written = written.replace("{" + slug + "}", observation.getId().toString());
+            written = written.replace("{" + slug + "}", id);
+            said = said.replace("{" + slug + "}", id);
         }
         feedback.set("units", OBJECT_MAPPER.readTree(written));
+        feedback.set("review", OBJECT_MAPPER.readTree(said));
         agentJobRepository.save(job);
     }
 
-    private AgentJob reviewOf(
-            Long pullRequestId, int number, String headSha, @Nullable String signal, String rawOutput) {
-        return reviewOf(pullRequestId, number, headSha, signal, rawOutput, List.of());
-    }
-
-    private AgentJob reviewOf(
-            Long pullRequestId,
-            int number,
-            String headSha,
-            @Nullable String signal,
-            String rawOutput,
-            List<String> rechecked) {
-        AgentJob next = new AgentJob();
-        next.setWorkspace(workspace);
-        next.setWorkerId("test-worker");
-        next.setPurpose(AgentPurpose.PRACTICE_REVIEW);
-        next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
-        next.setStatus(AgentJobStatus.RUNNING);
-        next.setConfigSnapshot(agentJob.getConfigSnapshot());
-        ObjectNode metadata =
-                (ObjectNode) Objects.requireNonNull(agentJob.getMetadata()).deepCopy();
-        metadata.put("pull_request_id", pullRequestId);
-        metadata.put("pr_number", number);
-        metadata.put("commit_sha", headSha);
-        if (signal != null) metadata.put(PracticeCatalogInjector.SIGNAL_METADATA_KEY, signal);
-        if (!rechecked.isEmpty()) {
-            var admitted = metadata.putArray(AgentJob.RECHECKED_PRACTICES_METADATA_KEY);
-            rechecked.forEach(admitted::add);
+    /** A review whose one text is a summary resting on the observations of these practices. */
+    private static String summaryOn(String body, String... practiceSlugs) {
+        ObjectNode review = OBJECT_MAPPER.createObjectNode();
+        ObjectNode summary = review.putObject("summary").put("body", body);
+        var basedOn = summary.putArray("basedOn");
+        for (String slug : practiceSlugs) {
+            basedOn.add("{" + slug + "}");
         }
-        next.setMetadata(metadata);
-        next.setEvidenceSnapshot(agentJob.getEvidenceSnapshot().deepCopy());
-        next = agentJobRepository.save(next);
-        preparedEvidence.add(PreparedJobInputsFixtures.prepare(
-                evidenceFiles, next, PreparedJobInputsFixtures.filesOnly(capturedFiles)));
-        next.setStatus(AgentJobStatus.COMPLETED);
-        next = agentJobRepository.saveAndFlush(next);
-        preparedJobIds.add(next.getId());
-        return admitAndSetOutput(next, rawOutput);
+        return OBJECT_MAPPER.writeValueAsString(review);
     }
 
     @Nested
@@ -970,27 +926,43 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             Observation supporting = row(rows, "The description names the issue");
             var inlineA = onLine(landing, 3);
             var inlineB = onLine(failing, 9);
-            var unit = new ComposedFeedbackUnit(
-                    FeedbackChannel.IN_CONTEXT,
-                    "error-handling",
-                    List.of(landing.getId().toString(), supporting.getId().toString()),
-                    ComposedFeedbackUnit.Action.NEW,
-                    null,
-                    null,
-                    "Null reaches the handler",
-                    null,
-                    "Guard the input before the lookup",
-                    null,
-                    new ComposedFeedbackUnit.InContextPlacement(
-                            ComposedFeedbackUnit.InContextPlacement.PlacementKind.DIFF,
-                            new ComposedFeedbackUnit.ResolvedAnchor(
-                                    landing.getId().toString(), 0, "src/App.java", "NEW", 3, 3)));
+            String failingNote = "The parser reads this input before it checks it; check it first, as on line 3.";
+            var review = new ComposedReview(
+                    new ComposedReview.Summary(
+                            "The description lists what changed but never says why.",
+                            List.of(summarised.getId().toString())),
+                    List.of(
+                            new ComposedReview.InlineNote(
+                                    "Null reaches the handler here. Guard the input before the lookup.",
+                                    List.of(
+                                            landing.getId().toString(),
+                                            supporting.getId().toString()),
+                                    new ComposedReview.ResolvedAnchor(
+                                            landing.getId().toString(), 0, "src/App.java", "NEW", 3, null)),
+                            new ComposedReview.InlineNote(
+                                    failingNote,
+                                    List.of(failing.getId().toString()),
+                                    new ComposedReview.ResolvedAnchor(
+                                            failing.getId().toString(), 0, "src/App.java", "NEW", 9, null))),
+                    List.of());
             List<ValidatedObservation> admitted =
                     List.of(validated(summarised, null), inlineA, inlineB, validated(supporting, null));
-            DeliveryContent content = Objects.requireNonNull(DeliveryComposer.composeAdmitted(
-                    admitted, ArtifactKinds.PULL_REQUEST, Map.of(), List.of(unit), null));
-            String landingKey = "observation:" + landing.getOccurrenceKey();
-            String failingKey = "observation:" + failing.getOccurrenceKey();
+            AdmittedDelivery.Automatic automatic =
+                    switch (AdmittedDelivery.decide(
+                            review,
+                            ArtifactKinds.PULL_REQUEST,
+                            admitted,
+                            PullRequestReviewHandler.subjectsOf(rows),
+                            List.of(),
+                            admitted)) {
+                        case AdmittedDelivery.Automatic decided -> decided;
+                        case AdmittedDelivery.Proposed proposed ->
+                            throw new AssertionError("Every observation is automatic, so nothing waits for approval");
+                    };
+            DeliveryContent content = Objects.requireNonNull(automatic.content());
+            assertThat(content.diffNotes()).hasSize(2);
+            String landingKey = "observation:" + landing.getOccurrenceKey() + "#0";
+            String failingKey = "observation:" + failing.getOccurrenceKey() + "#0";
             when(commentPoster.post(any())).thenReturn(new SummaryHandle("summary-ref"));
             when(diffNotePoster.reconcileInlineNotes(eq(agentJob), any()))
                     .thenReturn(
@@ -1008,7 +980,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                                             signal(failingKey, 9, Disposition.FAILED))));
 
             assertThatThrownBy(() -> feedbackDeliveryService.deliverFeedback(
-                            agentJob, content, content.contributingPracticeSlugs(admitted)))
+                            agentJob, content, automatic.contributingPracticeSlugs()))
                     .isInstanceOf(JobDeliveryException.class);
             jdbcTemplate.update(
                     "UPDATE feedback_dispatch SET attempt_count = ?, next_attempt_at = CURRENT_TIMESTAMP"
@@ -1039,9 +1011,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                             "SELECT body FROM feedback WHERE agent_job_id = ? AND delivery_state = 'FAILED'",
                             String.class,
                             agentJob.getId()))
-                    .singleElement()
-                    .asString()
-                    .contains("Second unchecked input");
+                    .as("the note that never landed is kept as it was written")
+                    .containsExactly(failingNote);
             assertThat(jdbcTemplate.queryForList("""
                             SELECT fp.posted_comment_ref FROM feedback_placement fp
                             JOIN feedback f ON f.id = fp.feedback_id
@@ -1100,350 +1071,6 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     SELECT fo.observation_id FROM feedback_observation fo
                     JOIN feedback f ON f.id = fo.feedback_id WHERE f.agent_job_id = ? AND f.delivery_state = ?
                     """, UUID.class, agentJob.getId(), state.name());
-        }
-    }
-
-    @Nested
-    class RepeatedPraise {
-
-        /** The Ready-review lead on staging: a critique no observation in the review supports. */
-        private static final String LEAD =
-                "SwiftLint has stalled in the pipeline and the VoiceOver pass is still unchecked.";
-
-        private static final String BOTH_HOLD = """
-                {"observations": [
-                  {"practiceSlug": "pr-description-quality", "summary": "The description names the issue it closes",
-                   "outcome": "MET", "severity": null,
-                   "evidenceRationale": "The body closes the issue."},
-                  {"practiceSlug": "error-handling", "summary": "Errors reach the caller",
-                   "outcome": "MET", "severity": null,
-                   "evidenceRationale": "Every failure path returns an error."}
-                ]}""";
-
-        /** The manual MR !2 shape on staging: one strength held again, the other practice had no subject. */
-        private static final String ONE_HOLDS_ONE_ABSTAINS = """
-                {"observations": [
-                  {"practiceSlug": "pr-description-quality", "summary": "The description names the issue it closes",
-                   "outcome": "MET", "severity": null,
-                   "evidenceRationale": "The body closes the issue."},
-                  {"practiceSlug": "error-handling", "summary": "No error path changed",
-                   "outcome": "NOT_APPLICABLE", "severity": null,
-                   "evidenceRationale": "The change touches no error path.",
-                   "evidence": {
-                     "citations": [{"sourceKind": "scm.pull-request.core", "artifactPath": "context/metadata.json",
-                                    "path": "body", "startLine": 1, "endLine": 1, "quote": "Test body"}],
-                     "inapplicability": {"consulted": ["scm.pull-request.core"], "subject": "an error path",
-                                         "ruledOutBy": "the change adds no failing call"}}}
-                ]}""";
-
-        @Test
-        void aStrengthAlreadyPraisedOnAnEarlierMergeRequestIsNotPostedAgainOnEitherReviewOfTheNextOne() {
-            Long firstPr = pullRequest(8000L, 49, "firstsha");
-            AgentJob first = reviewOf(firstPr, 49, "firstsha", null, BOTH_HOLD);
-            compose(first, LEAD, strengthUnit("The issue link names the outcome", "Keep closing issues this way"));
-            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-first"));
-            handler.deliver(first);
-            verify(commentPoster).post(argThat(write -> write.job().equals(first)));
-            assertThat(deliveredBody(first)).contains("The issue link names the outcome");
-
-            Map<String, byte[]> history = new HashMap<>();
-            historySource.contribute(new ContextRequest.PracticeReviewRequest(agentJob), history);
-            assertThat(new String(history.get(SandboxLayout.HISTORY_PREFIX + "feedback.json"), StandardCharsets.UTF_8))
-                    .as("the next review's composer is given the praise already delivered")
-                    .contains("The issue link names the outcome");
-
-            autonomy(PracticeAutonomy.HUMAN_APPROVAL);
-            AgentJob manual = reviewOf(prId, 50, "pipelinesha", null, ONE_HOLDS_ONE_ABSTAINS);
-            compose(manual, LEAD, abstentionUnit());
-            handler.deliver(manual);
-
-            autonomy(PracticeAutonomy.AUTOMATIC);
-            AgentJob ready = reviewOf(prId, 50, "pipelinesha", "scm.pull_request.ready", BOTH_HOLD);
-            compose(ready, LEAD);
-            handler.deliver(ready);
-
-            verify(commentPoster, never()).post(argThat(write -> !write.job().equals(first)));
-            assertThat(feedbackRepository.findAll())
-                    .filteredOn(feedback -> !feedback.getAgentJobId().equals(first.getId()))
-                    .noneMatch(feedback -> feedback.getDeliveryState() == FeedbackDeliveryState.AWAITING_APPROVAL
-                            || feedback.getDeliveryState() == FeedbackDeliveryState.DELIVERED);
-            assertThat(observationRepository.findByAgentJobId(ready.getId(), workspace.getId()))
-                    .hasSize(2);
-            assertThat(jdbcTemplate.queryForObject("""
-                            SELECT count(*) FROM feedback_observation fo
-                            JOIN feedback f ON f.id = fo.feedback_id WHERE f.agent_job_id IN (?, ?)
-                            """, Integer.class, manual.getId(), ready.getId()))
-                    .isZero();
-        }
-
-        /** One unchanged lapse, raised on the work and prepared for a conversation, as each review composes it. */
-        private static final String SWALLOWED_ERROR = """
-                {"observations": [
-                  {"practiceSlug": "error-handling", "summary": "Export errors stop at the log",
-                   "outcome": "NOT_MET", "severity": "MAJOR",
-                   "evidenceRationale": "The export call logs the failure and returns an empty file."}
-                ]}""";
-
-        @Test
-        void shouldSuppressRepeatedGuidanceWhenARepairRecheckStillRecordsTheSameNegative() {
-            AgentJob first = reviewOf(prId, 50, "pipelinesha", null, SWALLOWED_ERROR);
-            compose(first, LEAD, lapseNote(), lapseBrief());
-            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-first"));
-            handler.deliver(first);
-
-            AgentJob second = reviewOf(
-                    prId,
-                    50,
-                    "pipelinesha",
-                    ScmSignals.PULL_REQUEST_EDITED.value(),
-                    SWALLOWED_ERROR,
-                    List.of("error-handling"));
-            compose(second, LEAD, lapseNote(), lapseBrief());
-            handler.deliver(second);
-
-            verify(commentPoster, times(1)).post(any());
-            assertThat(deliveredBody(first)).contains("Return the export error to the caller");
-            List<UUID> current = observationRepository.findByAgentJobId(second.getId(), workspace.getId()).stream()
-                    .map(Observation::getId)
-                    .toList();
-            assertThat(unitsOf(second, FeedbackChannel.IN_CONTEXT))
-                    .singleElement()
-                    .satisfies(held -> {
-                        assertThat(held.getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
-                        assertThat(held.getSuppressionReason())
-                                .isEqualTo(FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE);
-                        assertThat(boundTo(held)).containsExactlyElementsOf(current);
-                    });
-            assertThat(unitsOf(first, FeedbackChannel.IN_CHAT))
-                    .as("a note on the work is not echoed into a conversation")
-                    .isEmpty();
-            assertThat(unitsOf(second, FeedbackChannel.IN_CHAT))
-                    .as("the withheld note leaves this review's own brief to its own routing")
-                    .singleElement()
-                    .satisfies(brief -> {
-                        assertThat(brief.getDeliveryState()).isEqualTo(FeedbackDeliveryState.PREPARED);
-                        assertThat(boundTo(brief)).containsExactlyElementsOf(current);
-                    });
-        }
-
-        @Test
-        void shouldReplaceTheCurrentNegativeWithAPositiveFromAnAdmittedRepairReview() {
-            AgentJob first = reviewOf(prId, 50, "pipelinesha", null, SWALLOWED_ERROR);
-            List<Observation> earlier = observationRepository.findByAgentJobId(first.getId(), workspace.getId());
-            String repaired = """
-                    {"observations": [
-                      {"practiceSlug": "error-handling", "summary": "Export errors reach the caller",
-                       "outcome": "MET", "severity": null,
-                       "evidenceRationale": "The caller receives the export failure instead of an empty file."}
-                    ]}""";
-            AgentJob second = reviewOf(
-                    prId,
-                    50,
-                    "pipelinesha",
-                    ScmSignals.PULL_REQUEST_EDITED.value(),
-                    repaired,
-                    List.of("error-handling"));
-            List<Observation> later = observationRepository.findByAgentJobId(second.getId(), workspace.getId());
-            assertThat(later).singleElement().satisfies(row -> {
-                assertThat(row.getAgentJobId()).isEqualTo(second.getId());
-                assertThat(row.getOutcome()).isEqualTo(Outcome.MET);
-            });
-            assertThat(LatestRun.perClaim(observationRepository.findStandingForWork(
-                            workspace.getId(), ArtifactKinds.PULL_REQUEST, prId, developer.getId())))
-                    .extracting(Observation::getId)
-                    .containsExactly(later.getFirst().getId());
-            assertThat(observationRepository.findById(earlier.getFirst().getId()))
-                    .isPresent();
-        }
-
-        private String lapseNote() {
-            return """
-                    {"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"error-handling",
-                     "basedOn":["{error-handling}"],"title":"Export errors stop at the log",
-                     "nextStep":"Return the export error to the caller","placement":{"kind":"ARTIFACT"}}""";
-        }
-
-        private String lapseBrief() {
-            return """
-                    {"channel":"IN_CHAT","action":"NEW","practiceSlug":"error-handling",
-                     "basedOn":["{error-handling}"],"title":"Where export failures go",
-                     "notes":{"situation":"The export call logs a failure and returns an empty file.",
-                              "capability":"Deciding who should learn that an export failed.",
-                              "evidenceSummary":"The review cites the logging branch of the export call.",
-                              "inConversationSignal":"They name who needs the error and how it reaches them."}}""";
-        }
-
-        @Test
-        void aDistinctComposedStrengthIsPostedAutomaticallyWithoutTheLead() {
-            AgentJob review = reviewOf(prId, 50, "pipelinesha", "scm.pull_request.ready", BOTH_HOLD);
-            compose(
-                    review,
-                    LEAD,
-                    strengthUnit("The retry path returns the upstream error", "Add the same to the export call"));
-            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-distinct"));
-
-            handler.deliver(review);
-
-            String body = deliveredBody(review);
-            assertThat(body)
-                    .contains("The retry path returns the upstream error")
-                    .doesNotContain(LEAD);
-            assertThat(jdbcTemplate.queryForList("""
-                            SELECT p.slug FROM feedback_observation fo
-                            JOIN feedback f ON f.id = fo.feedback_id
-                            JOIN observation o ON o.id = fo.observation_id
-                            JOIN practice p ON p.id = o.practice_id
-                            WHERE f.agent_job_id = ? AND f.delivery_state = 'DELIVERED'
-                            """, String.class, review.getId()))
-                    .as("the strength the note never mentioned stays open to the other channels")
-                    .containsExactly("pr-description-quality");
-        }
-
-        private String strengthUnit(String title, String nextStep) {
-            return """
-                    {"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"pr-description-quality",
-                     "basedOn":["{pr-description-quality}"],"title":"%s","nextStep":"%s",
-                     "placement":{"kind":"ARTIFACT"}}""".formatted(title, nextStep);
-        }
-
-        private String abstentionUnit() {
-            return """
-                    {"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"error-handling",
-                     "basedOn":["{error-handling}"],"title":"Tick the issue's done list as it lands",
-                     "nextStep":"Tick the done items before merging","placement":{"kind":"ARTIFACT"}}""";
-        }
-
-        private void autonomy(PracticeAutonomy autonomy) {
-            for (Practice practice : practiceRepository.findByWorkspaceIdAndSlugIn(
-                    workspace.getId(), Set.of("pr-description-quality", "error-handling"))) {
-                practice.setAutonomy(autonomy);
-                practiceRepository.saveAndFlush(practice);
-            }
-        }
-
-        private String deliveredBody(AgentJob job) {
-            return feedbackRepository.findAll().stream()
-                    .filter(feedback -> feedback.getAgentJobId().equals(job.getId())
-                            && feedback.getDeliveryState() == FeedbackDeliveryState.DELIVERED)
-                    .map(Feedback::getBody)
-                    .filter(Objects::nonNull)
-                    .findFirst()
-                    .orElseThrow();
-        }
-
-        private Long pullRequest(long nativeId, int number, String headSha) {
-            Instant now = Instant.now();
-            pullRequestRepository.upsertCore(
-                    nativeId,
-                    Objects.requireNonNull(repository.getProvider().getId()),
-                    number,
-                    "Earlier change",
-                    "Closes #1",
-                    "OPEN",
-                    null,
-                    "https://github.com/org/pipeline-repo/pull/" + number,
-                    false,
-                    null,
-                    0,
-                    now,
-                    now,
-                    now,
-                    developer.getId(),
-                    repository.getId(),
-                    null,
-                    null,
-                    false,
-                    false,
-                    1,
-                    10,
-                    5,
-                    3,
-                    null,
-                    null,
-                    null,
-                    "feature/earlier",
-                    "main",
-                    headSha,
-                    "basesha",
-                    null,
-                    null);
-            return pullRequestRepository
-                    .findByRepositoryIdAndNumber(repository.getId(), number)
-                    .orElseThrow()
-                    .getId();
-        }
-    }
-
-    /**
-     * A developer's dispute holds for the observation it was about: the next review of the same work says nothing
-     * about it, and once the developer withdraws the dispute the observation may be raised again.
-     */
-    @Nested
-    class DisputedFeedback {
-
-        private static final String UNCHECKED_EXPORT = """
-                {"observations": [
-                  {"practiceSlug": "error-handling", "summary": "Export errors stop at the log",
-                   "outcome": "NOT_MET", "severity": "MAJOR",
-                   "evidenceRationale": "The export call logs the failure and returns an empty file."}
-                ]}""";
-
-        @Test
-        void shouldWithholdTheSameObservationFromTheNextReviewUntilTheDisputeIsWithdrawn() {
-            AgentJob first = reviewOf(prId, 50, "pipelinesha", null, UNCHECKED_EXPORT);
-            compose(first, "", note("Export errors stop at the log", "Return the export error to the caller"));
-            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-first"));
-            handler.deliver(first);
-            Feedback delivered = unitsOf(first, FeedbackChannel.IN_CONTEXT).stream()
-                    .filter(feedback -> feedback.getDeliveryState() == FeedbackDeliveryState.DELIVERED)
-                    .findFirst()
-                    .orElseThrow();
-
-            reactionRepository.save(Reaction.builder()
-                    .feedback(delivered)
-                    .reactorUserId(developer.getId())
-                    .resolution(FeedbackResolution.DISPUTED)
-                    .explanation("The caller retries the export and reports the failure.")
-                    .build());
-
-            AgentJob second = reviewOf(prId, 50, "pipelinesha", null, UNCHECKED_EXPORT);
-            compose(second, "", note("The export swallows its failure", "Report the failed export upward"));
-            handler.deliver(second);
-
-            verify(commentPoster, never()).post(argThat(write -> write.job().equals(second)));
-            List<UUID> observedAgain =
-                    observationRepository.findByAgentJobId(second.getId(), workspace.getId()).stream()
-                            .map(Observation::getId)
-                            .toList();
-            assertThat(unitsOf(second, FeedbackChannel.IN_CONTEXT))
-                    .noneMatch(feedback -> feedback.getDeliveryState() == FeedbackDeliveryState.DELIVERED)
-                    .anySatisfy(held -> {
-                        assertThat(held.getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
-                        assertThat(held.getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.REACTED_DISPUTED);
-                        assertThat(boundTo(held)).containsExactlyElementsOf(observedAgain);
-                    });
-
-            // Withdrawing the dispute is a response with nothing in it, as the developer's page writes it.
-            reactionRepository.save(Reaction.builder()
-                    .feedback(delivered)
-                    .reactorUserId(developer.getId())
-                    .build());
-
-            AgentJob third = reviewOf(prId, 50, "pipelinesha", null, UNCHECKED_EXPORT);
-            compose(third, "", note("Export failures never reach the caller", "Return the failure to the caller"));
-            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-third"));
-            handler.deliver(third);
-
-            verify(commentPoster).post(argThat(write -> write.job().equals(third)));
-            assertThat(unitsOf(third, FeedbackChannel.IN_CONTEXT))
-                    .anyMatch(feedback -> feedback.getDeliveryState() == FeedbackDeliveryState.DELIVERED);
-        }
-
-        private String note(String title, String nextStep) {
-            return """
-                    {"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"error-handling",
-                     "basedOn":["{error-handling}"],"title":"%s","nextStep":"%s",
-                     "placement":{"kind":"ARTIFACT"}}""".formatted(title, nextStep);
         }
     }
 
@@ -1518,7 +1145,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     }
                   ]
                 }""";
-            agentJob = admitAndSetOutput(agentJob, output, false);
+            agentJob = admitAndSetOutput(agentJob, output);
 
             handler.deliver(agentJob);
 
@@ -1528,7 +1155,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void aPartialReviewStillReportsTheProblemItFound() {
-            agentJob = admitAndSetOutput(agentJob, validAgentOutput(), false);
+            agentJob = admitAndSetOutput(agentJob, validAgentOutput());
             when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-partial"));
             when(diffNotePoster.reconcileInlineNotes(any(), any()))
                     .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));

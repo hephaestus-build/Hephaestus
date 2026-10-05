@@ -378,8 +378,7 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
                                 "Writing the test last is what leaves the review to find the gap.",
                                 "On !18, !20 and !22 the test arrived a push later.",
                                 "They name a check they could run before pushing.",
-                                null),
-                        null)));
+                                null))));
 
         JsonNode item = contribute().get("preparedConversationFeedback").get(0);
         assertThat(item.has("body")).isFalse();
@@ -468,8 +467,7 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
                         "Recognize the decision point.",
                         "The observations show the same pattern.",
                         "They can explain the decision in their own words.",
-                        null),
-                null);
+                        null));
     }
 
     private JsonNode contribute() {

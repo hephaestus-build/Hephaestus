@@ -34,7 +34,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Order(200)
 public class ReviewThreadContentSource implements EvidenceSource {
 
-    private static final SourceKind KIND = new SourceKind("scm.review-threads");
+    public static final SourceKind KIND = new SourceKind("scm.review-threads");
 
     @Override
     public Set<SourceKind> sourceKinds() {

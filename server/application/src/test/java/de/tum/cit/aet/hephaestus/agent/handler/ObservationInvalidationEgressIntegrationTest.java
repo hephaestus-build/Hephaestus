@@ -67,6 +67,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * A correction against provider delivery, on a real database with a fake provider behind the real posters: a
@@ -76,6 +77,7 @@ import tools.jackson.databind.ObjectMapper;
 class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
     private static final long ADMIN_ACCOUNT = 1L;
+    private static final String REVIEWED_HEAD = "9c4e1a7f3b2d8e6c0a5f4b3e2d1c0b9a8f7e6d5c";
     private static final List<String> SCHEDULERS =
             List.of("observation-posted-copy-correction", "practice-feedback-dispatch-recovery");
 
@@ -174,11 +176,24 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         workspace = createWorkspace("egress-ws", "Egress WS", "egress-org", AccountType.ORG, owner);
         developer = persistUser("egress-developer");
         practice = persistPractice(workspace, null, "closes-linked-issues", "Closes linked issues", null);
-        job = persistPullRequestReview(workspace, 7, Instant.now());
+        job = pinReviewedHead(persistPullRequestReview(workspace, 7, Instant.now()));
         observation = observe(practice, job, 7L, developer, Outcome.NOT_MET, Severity.MAJOR, Instant.now());
         note = noteAbout(observation, 3, "Closes #1 already.");
         when(policy.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(new PullRequest()));
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(REVIEWED_HEAD)));
+    }
+
+    /** The head commit the review ran at, pinned as the pull request review handler records it. */
+    private AgentJob pinReviewedHead(AgentJob review) {
+        ObjectNode metadata = objectMapper.convertValue(Objects.requireNonNull(review.getMetadata()), ObjectNode.class);
+        review.setMetadata(metadata.put("commit_sha", REVIEWED_HEAD));
+        return agentJobRepository.save(review);
+    }
+
+    private static PullRequest pullRequestAt(String head) {
+        PullRequest pullRequest = new PullRequest();
+        pullRequest.setHeadRefOid(head);
+        return pullRequest;
     }
 
     private void invalidate() {
@@ -218,6 +233,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
                 .deliveryState(FeedbackDeliveryState.PREPARED)
                 .body("Approved: closes #1 already.")
                 .proposedPlacements(placements)
+                .reviewedRevision(REVIEWED_HEAD)
                 .source(FeedbackSource.AGENT)
                 .createdAt(Instant.now())
                 .build());

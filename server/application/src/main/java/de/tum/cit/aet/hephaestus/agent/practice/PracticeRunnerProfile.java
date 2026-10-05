@@ -31,7 +31,8 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-session-lifecycle.ts",
             SandboxLayout.PROVIDER_HELPER_FILENAME);
 
-    private static final List<String> PROMPTS = List.of(SandboxLayout.FEEDBACK_COMPOSER_PROMPT_FILENAME);
+    private static final List<String> PROMPTS =
+            List.of(SandboxLayout.FEEDBACK_COMPOSER_PROMPT_FILENAME, SandboxLayout.REVIEW_COMPOSER_PROMPT_FILENAME);
 
     @Override
     public String runnerScript() {

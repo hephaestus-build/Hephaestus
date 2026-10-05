@@ -64,7 +64,7 @@ class ArtifactKindsAgreementTest extends BaseUnitTest {
     @DisplayName("the inline-lane shortcut says what the descriptors say")
     void inlineLaneAgreesWithTheDescriptors() {
         // The authority is the descriptor's FeedbackLane.IN_CONTEXT_INLINE; ArtifactKinds restates it
-        // because DeliveryComposer is static and has no registry to ask. Held together here, against
+        // because ComposedReviewAdmission is static and has no registry to ask. Held together here, against
         // every shipped descriptor, rather than by a comment promising they agree.
         for (ArtifactDescriptor descriptor : List.of(
                 new PullRequestArtifactDescriptor(),

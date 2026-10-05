@@ -147,3 +147,32 @@ from the current run, and at least one must belong to the unit's `practiceSlug`
 reference. Feedback that rests on the record rather than on this run is expressed through the
 history staged for the composer, and the `IN_CHAT` `notes` object carries an optional `alreadySaid`
 for it (`pi-runner.ts`). Everything else in that section stands.
+
+## Update — 2026-10-05: the review on the work is written whole in its own session
+
+This update supersedes the `IN_CONTEXT` line of § Composition contract and step 3 of § Two phases in one agent
+session for `IN_CONTEXT`. It also supersedes the rejection of a separate session for `IN_CONTEXT`.
+
+The earlier contract asked the model for a title, a placement and a next step per practice.
+Java joined those fragments into the comment.
+The result read as a template, and the server wrote sentences that no model wrote.
+
+- The model writes one complete summary and complete line notes in one `report_review` call.
+  Each body names in `basedOn` every observation that it speaks about.
+  A `withheld` entry names exact `NOT_MET` observations with a composition reason.
+- The review runs in a fresh session with only `report_review`.
+  The session loads no context files, skills, prompt templates or extensions, and it has no file or execution tools.
+  Its input is the decided observations that may appear on the work, earlier public feedback on the same work, and
+  the public facts of each practice revision.
+  An observation that cites or consulted a source outside the reviewed work stays out of the session
+  (`PublicReviewEligibility`).
+  Private history and observations with private or unknown recorded sources are excluded from public composition.
+- Private composition (`IN_APP`, `IN_CHAT`) keeps the same session and contract as before.
+- Java admits each body whole or refuses it whole.
+  It never assembles or edits semantic claims; provider safety escaping follows the pipeline contract.
+  The composition output carries `contractVersion` 2.
+  When a review is owed, an output without that version or without a review is a delivery failure.
+  This failure makes no claim about the work.
+
+Everything else in this ADR stands. The contract lives in `agent/review-composer.md`, `pi-runner-composition.ts`,
+`ComposedReview` and `ComposedReviewAdmission`.

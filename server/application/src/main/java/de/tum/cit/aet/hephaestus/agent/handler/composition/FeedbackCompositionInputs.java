@@ -20,9 +20,12 @@ public final class FeedbackCompositionInputs {
         ARTIFACT,
     }
 
-    /** Per-run composition limits; delivery may impose additional per-recipient limits. */
+    /**
+     * Per-run composition limits; delivery may impose additional per-recipient limits. The reviewed work takes one
+     * review: a summary and the line notes it places, whose number the composer decides.
+     */
     private static final Map<FeedbackChannel, Integer> MAX_UNITS =
-            Map.of(FeedbackChannel.IN_CONTEXT, 3, FeedbackChannel.IN_APP, 2, FeedbackChannel.IN_CHAT, 3);
+            Map.of(FeedbackChannel.IN_CONTEXT, 1, FeedbackChannel.IN_APP, 2, FeedbackChannel.IN_CHAT, 3);
 
     /** Minimum distinct pieces of reviewed work required for a pattern claim. */
     public static final int MIN_DISTINCT_ARTIFACTS = 2;

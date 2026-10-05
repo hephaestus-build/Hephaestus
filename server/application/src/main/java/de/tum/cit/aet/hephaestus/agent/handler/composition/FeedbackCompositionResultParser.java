@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.handler.composition;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeveloperTextSanitizer;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -31,15 +32,12 @@ public class FeedbackCompositionResultParser {
 
     private static final int MAX_PRACTICE_SLUG_LENGTH = 128;
 
-    /** A ceiling on the payload, not on the opening: the composer clamps the lead to its own budget. */
-    private static final int MAX_LEAD_LENGTH = 4_000;
+    private static final int MAX_OBSERVATION_ID_LENGTH = 64;
 
+    /** The private-lane units of a composition: the developer's practice pages and the mentor conversation. */
     public List<ComposedFeedbackUnit> parse(@Nullable JsonNode jobOutput) {
-        if (jobOutput == null || !jobOutput.isObject()) {
-            return List.of();
-        }
-        JsonNode payload = jobOutput.get(OUTPUT_KEY);
-        if (payload == null || !payload.isObject()) {
+        JsonNode payload = payloadOf(jobOutput);
+        if (payload == null) {
             return List.of();
         }
         JsonNode units = payload.get("units");
@@ -74,12 +72,222 @@ public class FeedbackCompositionResultParser {
                 .toList();
     }
 
+    /**
+     * Whether the composition was written under the contract whose review is written whole. One that was not came
+     * from an earlier runner; its words for the work were fragments and nothing here may assemble them.
+     */
+    public boolean writtenWhole(@Nullable JsonNode jobOutput) {
+        JsonNode payload = payloadOf(jobOutput);
+        JsonNode version = payload == null ? null : payload.get("contractVersion");
+        return version != null && version.isIntegralNumber() && version.asInt() == ComposedReview.CONTRACT_VERSION;
+    }
+
+    /**
+     * The review written for the work, or null when there is none or it breaks the contract the runner enforces.
+     * A malformed review is never read as silence: only a valid review that says nothing is one. A text whose support
+     * the delivery gates later refuse is a different case, decided per text at admission.
+     */
+    public @Nullable ComposedReview review(@Nullable JsonNode jobOutput) {
+        JsonNode payload = payloadOf(jobOutput);
+        if (payload == null) return null;
+        JsonNode review = payload.get("review");
+        if (review == null || !review.isObject() || !onlyFields(review, "summary", "inline", "withheld")) {
+            return null;
+        }
+        Map<String, StagedObservation> observations = readObservations(payload.get("observations"));
+        try {
+            ComposedReview.Summary summary = null;
+            JsonNode summaryNode = review.get("summary");
+            if (summaryNode != null && !summaryNode.isNull()) {
+                summary = summaryOf(summaryNode, observations);
+                if (summary == null) return invalid("summary");
+            }
+            List<ComposedReview.InlineNote> inline = new ArrayList<>();
+            Set<String> anchors = new HashSet<>();
+            for (JsonNode note : listOf(review.get("inline"), ComposedReview.MAX_INLINE_NOTES)) {
+                ComposedReview.InlineNote read = inlineOf(note, observations);
+                if (read == null
+                        || !anchors.add(read.anchor().observationId()
+                                + '#'
+                                + read.anchor().citationIndex())) {
+                    return invalid("line note");
+                }
+                inline.add(read);
+            }
+            List<ComposedReview.Withheld> withheld = new ArrayList<>();
+            for (JsonNode decision : listOf(review.get("withheld"), Integer.MAX_VALUE)) {
+                ComposedReview.Withheld read = withheldOf(decision, observations);
+                if (read == null) return invalid("withholding decision");
+                withheld.add(read);
+            }
+            Set<String> said = new HashSet<>();
+            if (summary != null) said.addAll(summary.basedOn());
+            inline.forEach(note -> said.addAll(note.basedOn()));
+            if (withheld.stream()
+                    .flatMap(decision -> decision.basedOn().stream())
+                    .anyMatch(said::contains)) {
+                return invalid("said and withheld observation");
+            }
+            return new ComposedReview(summary, inline, withheld);
+        } catch (IllegalArgumentException malformed) {
+            return invalid(malformed.getMessage());
+        }
+    }
+
+    private static @Nullable ComposedReview invalid(@Nullable String part) {
+        log.warn("The composed review breaks its contract ({}); it is not delivered", part);
+        return null;
+    }
+
+    /** The items of an optional list; anything else, or more than {@code max}, is not a list this contract takes. */
+    private static List<JsonNode> listOf(@Nullable JsonNode node, int max) {
+        if (node == null || node.isNull()) return List.of();
+        if (!node.isArray() || node.size() > max) {
+            throw new IllegalArgumentException("not a list of at most " + max);
+        }
+        List<JsonNode> items = new ArrayList<>(node.size());
+        node.forEach(items::add);
+        return items;
+    }
+
+    private static boolean onlyFields(JsonNode node, String... allowed) {
+        Set<String> names = Set.of(allowed);
+        return node.properties().stream().allMatch(property -> names.contains(property.getKey()));
+    }
+
+    /**
+     * The next step a composition written before the review on the work had its own envelope gave each observation
+     * it spoke about on the work, by observation id. Read for history only: such a composition is not delivered
+     * again.
+     */
+    public Map<String, String> historicalNextSteps(@Nullable JsonNode jobOutput) {
+        JsonNode payload = payloadOf(jobOutput);
+        if (payload == null) return Map.of();
+        JsonNode units = payload.get("units");
+        if (units == null || !units.isArray()) {
+            return Map.of();
+        }
+        Map<String, StagedObservation> observations = readObservations(payload.get("observations"));
+        Map<String, String> nextSteps = new LinkedHashMap<>();
+        for (JsonNode unit : units) {
+            if (!unit.isObject() || channelOf(unit) != FeedbackChannel.IN_CONTEXT) {
+                continue;
+            }
+            String nextStep =
+                    DeveloperTextSanitizer.sanitize(text(unit, "nextStep", ComposedFeedbackUnit.MAX_NEXT_STEP_LENGTH));
+            if (nextStep.isBlank()) {
+                continue;
+            }
+            for (String id : strings(unit.get("basedOn"))) {
+                if (observations.containsKey(id)) {
+                    nextSteps.putIfAbsent(id, nextStep);
+                }
+            }
+        }
+        return Map.copyOf(nextSteps);
+    }
+
+    private static ComposedReview.@Nullable Summary summaryOf(
+            @Nullable JsonNode node, Map<String, StagedObservation> observations) {
+        if (node == null || !node.isObject()) {
+            return null;
+        }
+        String body = publishable(node, ComposedReview.MAX_SUMMARY_LENGTH);
+        List<String> basedOn = grounded(node.get("basedOn"), observations);
+        if (body == null || basedOn == null) {
+            log.warn("Composed summary is empty, too long, or rests on an observation this run did not admit");
+            return null;
+        }
+        return new ComposedReview.Summary(body, basedOn);
+    }
+
+    private static ComposedReview.@Nullable InlineNote inlineOf(
+            JsonNode node, Map<String, StagedObservation> observations) {
+        if (!node.isObject()) {
+            return null;
+        }
+        String body = publishable(node, ComposedReview.MAX_INLINE_LENGTH);
+        List<String> basedOn = grounded(node.get("basedOn"), observations);
+        ComposedReview.ResolvedAnchor anchor = resolveAnchor(node.get("anchor"), observations);
+        if (body == null || basedOn == null || anchor == null || !basedOn.contains(anchor.observationId())) {
+            log.warn("Composed line note is empty, too long, ungrounded, or not placeable on its own evidence");
+            return null;
+        }
+        return new ComposedReview.InlineNote(body, basedOn, anchor);
+    }
+
+    private static ComposedReview.@Nullable Withheld withheldOf(
+            JsonNode node, Map<String, StagedObservation> observations) {
+        if (!node.isObject()) {
+            return null;
+        }
+        List<String> basedOn = grounded(node.get("basedOn"), observations);
+        ComposedFeedbackUnit.WithholdReason reason = withholdReasonOf(node, "reason");
+        if (basedOn == null
+                || reason == null
+                || basedOn.stream().anyMatch(id -> {
+                    StagedObservation observation = observations.get(id);
+                    return observation == null || !"NOT_MET".equals(observation.outcome());
+                })) {
+            log.warn("Composed withholding names no admitted observation or no reason");
+            return null;
+        }
+        return new ComposedReview.Withheld(basedOn, reason);
+    }
+
+    /**
+     * The text exactly as written, whitespace included, unless it is blank, over its bound, or carries what only the
+     * server writes into a comment: an HTML comment, which is where the server's own markers live, or the tail of a
+     * broken JSON envelope. Such a text is refused whole; no character of a text that is published is changed.
+     */
+    private static @Nullable String publishable(JsonNode node, int maxLength) {
+        JsonNode value = node.get("body");
+        String body = value == null || !value.isString() ? null : value.asString();
+        if (body == null
+                || body.isBlank()
+                || body.length() > maxLength
+                || body.contains("<!--")
+                || !DeveloperTextSanitizer.stripEnvelopeCorruption(body).equals(body)) {
+            return null;
+        }
+        return body;
+    }
+
+    /**
+     * The ids named, when {@code basedOn} is an array of at least one string, each an observation this run admitted.
+     * Nothing is dropped from it: a text whose support names anything else says something no observation backs.
+     */
+    private static @Nullable List<String> grounded(@Nullable JsonNode node, Map<String, StagedObservation> staged) {
+        if (node == null || !node.isArray() || node.isEmpty()) {
+            return null;
+        }
+        Set<String> ids = new LinkedHashSet<>();
+        for (JsonNode entry : node) {
+            if (!entry.isString()
+                    || entry.asString().isBlank()
+                    || !staged.containsKey(entry.asString().strip())) {
+                return null;
+            }
+            String id = entry.asString().strip();
+            StagedObservation observation = staged.get(id);
+            if (observation == null) return null;
+            String outcome = observation.outcome();
+            if (!"MET".equals(outcome) && !"NOT_MET".equals(outcome)) return null;
+            ids.add(id);
+        }
+        return List.copyOf(ids);
+    }
+
     private static @Nullable ComposedFeedbackUnit read(
             JsonNode unit, Map<String, StagedObservation> observations, Set<PreparedTarget> preparedTargets) {
         if (unit == null || !unit.isObject()) {
             return null;
         }
         FeedbackChannel channel = channelOf(unit);
+        if (channel == FeedbackChannel.IN_CONTEXT) {
+            // A composition written before the review on the work had its own envelope; it is not delivered again.
+            return null;
+        }
         ComposedFeedbackUnit.Action action = actionOf(unit);
         String practiceSlug = text(unit, "practiceSlug", MAX_PRACTICE_SLUG_LENGTH);
         if (channel == null || action == null || practiceSlug == null) {
@@ -104,21 +312,11 @@ public class FeedbackCompositionResultParser {
         }
 
         if (action == ComposedFeedbackUnit.Action.WITHHOLD) {
-            ComposedFeedbackUnit.WithholdReason reason = withholdReasonOf(unit);
+            ComposedFeedbackUnit.WithholdReason reason = withholdReasonOf(unit, "withholdReason");
             return reason == null
                     ? null
                     : new ComposedFeedbackUnit(
-                            channel,
-                            normalizedPracticeSlug,
-                            basedOn,
-                            action,
-                            null,
-                            reason,
-                            null,
-                            null,
-                            null,
-                            null,
-                            null);
+                            channel, normalizedPracticeSlug, basedOn, action, null, reason, null, null, null, null);
         }
 
         String supersedesThreadKey = null;
@@ -139,6 +337,10 @@ public class FeedbackCompositionResultParser {
         if (title == null) {
             return null;
         }
+        if (unit.get("placement") != null && !unit.get("placement").isNull()) {
+            log.warn("Composed {} unit carries a placement, which only the review on the work has", channel);
+            return null;
+        }
 
         if (channel == FeedbackChannel.IN_CHAT) {
             ComposedFeedbackUnit.ConversationBrief brief = notesOf(unit);
@@ -154,32 +356,12 @@ public class FeedbackCompositionResultParser {
                             title,
                             null,
                             null,
-                            brief,
-                            null);
+                            brief);
         }
 
         String nextStep =
                 DeveloperTextSanitizer.sanitize(text(unit, "nextStep", ComposedFeedbackUnit.MAX_NEXT_STEP_LENGTH));
-        if (nextStep == null) return null;
-
-        String body = null;
-        ComposedFeedbackUnit.InContextPlacement placement = null;
-        if (channel == FeedbackChannel.IN_CONTEXT) {
-            if (unit.hasNonNull("body")) return null;
-            placement = resolvePlacement(unit.get("placement"), observations, basedOn, normalizedPracticeSlug);
-            if (placement == null) {
-                log.warn("Composed IN_CONTEXT unit has no valid placement: practice={}", practiceSlug);
-                return null;
-            }
-        } else if (unit.get("placement") != null && !unit.get("placement").isNull()) {
-            log.warn("Composed {} unit carries an anchor, which only IN_CONTEXT may have", channel);
-            return null;
-        }
-        if (channel == FeedbackChannel.IN_APP) {
-            body = DeveloperTextSanitizer.sanitize(text(unit, "body", ComposedFeedbackUnit.MAX_BODY_LENGTH));
-            if (body == null) return null;
-        }
-
+        String body = DeveloperTextSanitizer.sanitize(text(unit, "body", ComposedFeedbackUnit.MAX_BODY_LENGTH));
         ComposedFeedbackUnit composed = new ComposedFeedbackUnit(
                 channel,
                 normalizedPracticeSlug,
@@ -190,41 +372,16 @@ public class FeedbackCompositionResultParser {
                 title,
                 body,
                 nextStep,
-                null,
-                placement);
+                null);
         return composed.isComplete() ? composed : null;
     }
 
-    private static ComposedFeedbackUnit.@Nullable InContextPlacement resolvePlacement(
-            @Nullable JsonNode placement,
-            Map<String, StagedObservation> observations,
-            List<String> basedOn,
-            String practiceSlug) {
-        if (placement == null || !placement.isObject()) return null;
-        String kind = text(placement, "kind", 16);
-        if ("ARTIFACT".equals(kind)) {
-            if (placement.hasNonNull("observationId") || placement.hasNonNull("citationIndex")) return null;
-            boolean grounded = basedOn.stream()
-                    .map(observations::get)
-                    .anyMatch(observation -> observation != null && practiceSlug.equals(observation.practiceSlug()));
-            if (!grounded) return null;
-            return new ComposedFeedbackUnit.InContextPlacement(
-                    ComposedFeedbackUnit.InContextPlacement.PlacementKind.ARTIFACT, null);
-        }
-        if (!"DIFF".equals(kind)) return null;
-        ComposedFeedbackUnit.ResolvedAnchor anchor = resolveAnchor(placement, observations);
-        return anchor == null
-                ? null
-                : new ComposedFeedbackUnit.InContextPlacement(
-                        ComposedFeedbackUnit.InContextPlacement.PlacementKind.DIFF, anchor);
-    }
-
-    private static ComposedFeedbackUnit.@Nullable ResolvedAnchor resolveAnchor(
+    private static ComposedReview.@Nullable ResolvedAnchor resolveAnchor(
             @Nullable JsonNode anchor, Map<String, StagedObservation> observations) {
         if (anchor == null || !anchor.isObject()) {
             return null;
         }
-        String observationId = text(anchor, "observationId", 64);
+        String observationId = text(anchor, "observationId", MAX_OBSERVATION_ID_LENGTH);
         JsonNode indexNode = anchor.get("citationIndex");
         if (observationId == null || indexNode == null || !indexNode.isIntegralNumber()) {
             return null;
@@ -244,14 +401,16 @@ public class FeedbackCompositionResultParser {
                 || citation.startLine() == null) {
             return null;
         }
-        return new ComposedFeedbackUnit.ResolvedAnchor(
+        return new ComposedReview.ResolvedAnchor(
                 observationId, index, citation.path(), citation.side(), citation.startLine(), citation.endLine());
     }
 
-    /** How the review opens, in the composer's words; null when it wrote none. */
-    @Nullable
-    public String lead(@Nullable JsonNode jobOutput) {
-        return jobOutput == null ? null : text(jobOutput.path("feedback"), "lead", MAX_LEAD_LENGTH);
+    private static @Nullable JsonNode payloadOf(@Nullable JsonNode jobOutput) {
+        if (jobOutput == null || !jobOutput.isObject()) {
+            return null;
+        }
+        JsonNode payload = jobOutput.get(OUTPUT_KEY);
+        return payload == null || !payload.isObject() ? null : payload;
     }
 
     private static Map<String, StagedObservation> readObservations(@Nullable JsonNode node) {
@@ -260,7 +419,7 @@ public class FeedbackCompositionResultParser {
             return observations;
         }
         for (JsonNode entry : node) {
-            String id = text(entry, "id", 64);
+            String id = text(entry, "id", MAX_OBSERVATION_ID_LENGTH);
             if (id == null) {
                 continue;
             }
@@ -280,6 +439,7 @@ public class FeedbackCompositionResultParser {
                     id,
                     new StagedObservation(
                             normalizedSlug(text(entry, "practiceSlug", MAX_PRACTICE_SLUG_LENGTH)),
+                            text(entry, "outcome", 32),
                             entry.path("anchorable").asBoolean(false),
                             citations));
         }
@@ -364,8 +524,8 @@ public class FeedbackCompositionResultParser {
         return null;
     }
 
-    private static ComposedFeedbackUnit.@Nullable WithholdReason withholdReasonOf(JsonNode unit) {
-        String value = text(unit, "withholdReason", 32);
+    private static ComposedFeedbackUnit.@Nullable WithholdReason withholdReasonOf(JsonNode node, String field) {
+        String value = text(node, field, 32);
         if (value == null) {
             return null;
         }
@@ -403,7 +563,10 @@ public class FeedbackCompositionResultParser {
     }
 
     private record StagedObservation(
-            @Nullable String practiceSlug, boolean anchorable, List<StagedCitation> citations) {}
+            @Nullable String practiceSlug,
+            @Nullable String outcome,
+            boolean anchorable,
+            List<StagedCitation> citations) {}
 
     private record PreparedTarget(String threadKey, FeedbackChannel channel, String practiceSlug) {}
 

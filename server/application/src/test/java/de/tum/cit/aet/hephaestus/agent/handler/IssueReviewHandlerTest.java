@@ -101,7 +101,6 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                                 PracticeRevisionService.class,
                                 invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision()),
                         mock(AnsweredPractices.class)),
-                practiceCatalogInjector,
                 new ReviewResultParser(objectMapper),
                 new FeedbackCompositionResultParser(),
                 deliveryService,
@@ -150,10 +149,11 @@ class IssueReviewHandlerTest extends BaseUnitTest {
         job.setMetadata(handler.createSubmission(sampleRequest()).metadata());
         var practice = new Practice();
         practice.setSlug("issue-practice");
+        practice.setName("Review the issue");
         practice.setCriteria("Review the issue.");
         PracticeTestEvidence.configure(practice, ArtifactKinds.ISSUE);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.ISSUE));
-        var revision = new PracticeRevision();
+        var revision = new PracticeRevision(practice, 1);
         ReflectionTestUtils.setField(revision, "id", 12L);
         practice.setCurrentRevision(revision);
         when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.ISSUE))

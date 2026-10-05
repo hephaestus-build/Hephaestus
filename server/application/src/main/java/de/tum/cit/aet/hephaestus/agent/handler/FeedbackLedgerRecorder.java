@@ -209,48 +209,7 @@ public class FeedbackLedgerRecorder {
         if (observations.isEmpty()) {
             return;
         }
-        // A package still settling records the copies it has placed so far, so a correction can reach them; a
-        // later record of the same package adds what became known since, and never a second unit.
         Long workspaceId = job.getWorkspace().getId();
-        Feedback feedback = feedbackRepository
-                .findByAgentJobIdAndPositionAndWorkspaceId(job.getId(), IN_CONTEXT_UNIT_ORDINAL, workspaceId)
-                .orElse(null);
-        boolean created = feedback == null;
-        Instant now = Instant.now();
-        if (feedback == null) {
-            Observation any = observations.get(0);
-            long recipientUserId = any.getAboutUserId();
-            String feedbackThreadKey = feedbackThreadKeyFor(any);
-            UUID supersedesId = summaryDelivered
-                    ? feedbackPlacementRepository
-                            .findLatestDeliveredSummary(feedbackThreadKey)
-                            .map(FeedbackPlacement::getFeedbackId)
-                            .orElse(null)
-                    : null;
-            feedback = feedbackRepository.save(Feedback.builder()
-                    .agentJobId(job.getId())
-                    .workspaceId(workspaceId)
-                    .artifactKind(any.getArtifactKind())
-                    .artifactId(any.getArtifactId())
-                    // recipient == about for the author-side catalogue (single source); they diverge only for
-                    // reviewer-audience practices (ADR 0021).
-                    .recipientUserId(recipientUserId)
-                    .aboutUserId(recipientUserId)
-                    .channel(FeedbackChannel.IN_CONTEXT)
-                    .position(IN_CONTEXT_UNIT_ORDINAL)
-                    .deliveryState(FeedbackDeliveryState.DELIVERED)
-                    .body(summaryDelivered ? delivery.mrNote() : null)
-                    .source(FeedbackSource.AGENT)
-                    .threadKey(feedbackThreadKey)
-                    .replacesId(supersedesId)
-                    .createdAt(now)
-                    .deliveredAt(now)
-                    .build());
-            if (supersedesId != null) {
-                feedbackRepository.supersedeDelivered(workspaceId, supersedesId);
-            }
-        }
-
         // Reaction suppression already wrote its REACTED_* units before this runs and does NOT delete the
         // Observation, so exclude those rows here or they would be bound a second time.
         Set<UUID> alreadySuppressed =
@@ -292,6 +251,48 @@ public class FeedbackLedgerRecorder {
                 // with the repository's findByAgentJobId iteration order.
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
+
+        // A package still settling records the copies it has placed so far, so a correction can reach them; a
+        // later record of the same package adds what became known since, and never a second unit.
+        Feedback feedback = feedbackRepository
+                .findByAgentJobIdAndPositionAndWorkspaceId(job.getId(), IN_CONTEXT_UNIT_ORDINAL, workspaceId)
+                .orElse(null);
+        boolean created = feedback == null;
+        Instant now = Instant.now();
+        if (feedback == null) {
+            // The unit is addressed to the person the placed words are about, read off the evidence they rest on.
+            Observation subject = subjectOf(assessed.isEmpty() ? observations : assessed, job);
+            long recipientUserId = subject.getAboutUserId();
+            String feedbackThreadKey = feedbackThreadKeyFor(subject);
+            UUID supersedesId = summaryDelivered
+                    ? feedbackPlacementRepository
+                            .findLatestDeliveredSummary(feedbackThreadKey)
+                            .map(FeedbackPlacement::getFeedbackId)
+                            .orElse(null)
+                    : null;
+            feedback = feedbackRepository.save(Feedback.builder()
+                    .agentJobId(job.getId())
+                    .workspaceId(workspaceId)
+                    .artifactKind(subject.getArtifactKind())
+                    .artifactId(subject.getArtifactId())
+                    // recipient == about for the author-side catalogue (single source); they diverge only for
+                    // reviewer-audience practices (ADR 0021).
+                    .recipientUserId(recipientUserId)
+                    .aboutUserId(recipientUserId)
+                    .channel(FeedbackChannel.IN_CONTEXT)
+                    .position(IN_CONTEXT_UNIT_ORDINAL)
+                    .deliveryState(FeedbackDeliveryState.DELIVERED)
+                    .body(summaryDelivered ? delivery.mrNote() : null)
+                    .source(FeedbackSource.AGENT)
+                    .threadKey(feedbackThreadKey)
+                    .replacesId(supersedesId)
+                    .createdAt(now)
+                    .deliveredAt(now)
+                    .build());
+            if (supersedesId != null) {
+                feedbackRepository.supersedeDelivered(workspaceId, supersedesId);
+            }
+        }
         int ordinal = created ? 0 : feedbackObservationRepository.countForFeedback(workspaceId, feedback.getId());
         for (Observation f : assessed) {
             EvidenceRole role = f.getOutcome() == Outcome.NOT_MET ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
@@ -551,7 +552,8 @@ public class FeedbackLedgerRecorder {
             return;
         }
         Set<String> keys = Set.copyOf(undeliveredKeys);
-        Observation any = observations.get(0);
+        List<Observation> behind = behindNotes(observations, delivery, keys);
+        Observation any = subjectOf(behind.isEmpty() ? observations : behind, job);
         Feedback feedback = feedbackRepository.save(Feedback.builder()
                 .agentJobId(job.getId())
                 .workspaceId(job.getWorkspace().getId())
@@ -571,7 +573,7 @@ public class FeedbackLedgerRecorder {
                 .createdAt(Instant.now())
                 .build());
         int ordinal = 0;
-        for (Observation f : behindNotes(observations, delivery, keys).stream()
+        for (Observation f : behind.stream()
                 .filter(f -> f.getOutcome().isDecided())
                 .sorted(ObservationOrder.worstFirst())
                 .toList()) {
@@ -586,7 +588,7 @@ public class FeedbackLedgerRecorder {
             FeedbackSuppressionReason reason,
             List<Observation> observations,
             List<Observation> evidence) {
-        Observation any = observations.get(0);
+        Observation any = subjectOf(evidence.isEmpty() ? observations : evidence, job);
         String feedbackThreadKey = feedbackThreadKeyFor(any);
         UUID replacesId = feedbackPlacementRepository
                 .findLatestDeliveredSummary(feedbackThreadKey)
@@ -662,20 +664,26 @@ public class FeedbackLedgerRecorder {
     public void recordProposal(AgentJob job, @Nullable DeliveryContent delivery) {
         publishFeedbackLaneTrigger(job);
         final int position = APPROVAL_UNIT_ORDINAL;
-        if (delivery == null || delivery.mrNote() == null) {
+        if (delivery == null
+                || (delivery.mrNote() == null && delivery.diffNotes().isEmpty())) {
             recordWithheldOnly(job, delivery);
             return;
         }
-        String body = PullRequestCommentPoster.sanitize(delivery.mrNote());
-        if (body.isBlank()) return;
-        String providerSummary = commentFormatter.appendDisclosure(body, job);
+        // A review of line notes alone waits with no summary: none is written for it.
+        String body = delivery.mrNote() == null ? null : PullRequestCommentPoster.sanitize(delivery.mrNote());
+        String providerSummary = body == null || body.isBlank() ? null : commentFormatter.appendDisclosure(body, job);
+        List<ProposedPlacement> placements = proposedPlacements(job, delivery, providerSummary);
+        if (placements.isEmpty()) {
+            recordSuppressedUnit(job, delivery, FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
+            return;
+        }
         if (feedbackRepository.existsByAgentJobIdAndPosition(job.getId(), position)) return;
         List<Observation> proposed = writtenFrom(
                 observationRepository.findByAgentJobId(
                         job.getId(), job.getWorkspace().getId()),
                 delivery);
         if (proposed.isEmpty()) return;
-        Observation first = proposed.get(0);
+        Observation first = subjectOf(proposed, job);
         Feedback feedback = feedbackRepository.save(Feedback.builder()
                 .agentJobId(job.getId())
                 .workspaceId(job.getWorkspace().getId())
@@ -687,7 +695,7 @@ public class FeedbackLedgerRecorder {
                 .position(position)
                 .deliveryState(FeedbackDeliveryState.AWAITING_APPROVAL)
                 .body(providerSummary)
-                .proposedPlacements(proposedPlacements(job, delivery, providerSummary))
+                .proposedPlacements(placements)
                 .reviewedRevision(reviewedRevision(job))
                 .proposedPracticeSlugs(proposed.stream()
                         .map(observation -> observation.getPractice().getSlug())
@@ -702,8 +710,9 @@ public class FeedbackLedgerRecorder {
                 job.getWorkspace().getId(), feedbackThreadKeyFor(first), feedback.getId());
         int ordinal = 0;
         for (Observation observation : proposed) {
-            feedbackObservationRepository.insertIfAbsent(
-                    feedback.getId(), observation.getId(), EvidenceRole.PRIMARY.name(), ordinal++);
+            EvidenceRole role =
+                    observation.getOutcome() == Outcome.NOT_MET ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
+            feedbackObservationRepository.insertIfAbsent(feedback.getId(), observation.getId(), role.name(), ordinal++);
         }
         recordWithheldOnly(job, delivery);
     }
@@ -718,9 +727,12 @@ public class FeedbackLedgerRecorder {
                 .toList();
     }
 
-    private List<ProposedPlacement> proposedPlacements(AgentJob job, DeliveryContent delivery, String summary) {
+    private List<ProposedPlacement> proposedPlacements(
+            AgentJob job, DeliveryContent delivery, @Nullable String summary) {
         var placements = new ArrayList<ProposedPlacement>(delivery.diffNotes().size() + 1);
-        placements.add(ProposedPlacement.summary(summary));
+        if (summary != null) {
+            placements.add(ProposedPlacement.summary(summary));
+        }
         for (DiffNote note : delivery.diffNotes()) {
             String body = PullRequestCommentPoster.sanitize(note.body());
             if (!body.isBlank()) {
@@ -731,6 +743,19 @@ public class FeedbackLedgerRecorder {
                         note.endLine(),
                         note.deliveryKey()));
             }
+        }
+        return List.copyOf(placements);
+    }
+
+    /** The summary and line notes of a package that never landed, as composed. */
+    private static List<ProposedPlacement> undeliveredPlacements(DeliveryContent delivery) {
+        var placements = new ArrayList<ProposedPlacement>(delivery.diffNotes().size() + 1);
+        if (delivery.mrNote() != null) {
+            placements.add(ProposedPlacement.summary(delivery.mrNote()));
+        }
+        for (DiffNote note : delivery.diffNotes()) {
+            placements.add(ProposedPlacement.inline(
+                    note.body(), note.filePath(), note.startLine(), note.endLine(), note.deliveryKey()));
         }
         return List.copyOf(placements);
     }
@@ -796,7 +821,8 @@ public class FeedbackLedgerRecorder {
         // developer's private page a passenger of the public comment — the same mistake as gating it on
         // silence, one level up. An in-context note is one lane's output, not a precondition for the others.
         publishFeedbackLaneTrigger(job);
-        if (delivery == null || delivery.mrNote() == null) {
+        if (delivery == null
+                || (delivery.mrNote() == null && delivery.diffNotes().isEmpty())) {
             return; // nothing to post on the work; the lanes above are already awake
         }
         if (!deliveryAllowed()) {
@@ -811,7 +837,11 @@ public class FeedbackLedgerRecorder {
         if (observations.isEmpty()) {
             return;
         }
-        Observation any = observations.get(0);
+        List<Observation> assessed = writtenFrom(observations, delivery).stream()
+                .filter(f -> f.getOutcome().isDecided())
+                .sorted(ObservationOrder.worstFirst())
+                .toList();
+        Observation any = subjectOf(assessed.isEmpty() ? observations : assessed, job);
         Instant now = Instant.now();
         Feedback feedback = feedbackRepository.save(Feedback.builder()
                 .agentJobId(job.getId())
@@ -824,15 +854,13 @@ public class FeedbackLedgerRecorder {
                 .position(UNDELIVERED_UNIT_ORDINAL)
                 .deliveryState(FeedbackDeliveryState.FAILED)
                 .body(delivery.mrNote())
+                // Every placement the package would have made, line notes included, as it would have read.
+                .proposedPlacements(undeliveredPlacements(delivery))
                 .source(FeedbackSource.AGENT)
                 .threadKey(feedbackThreadKeyFor(any))
                 .createdAt(now)
                 .build());
         int ordinal = 0;
-        List<Observation> assessed = writtenFrom(observations, delivery).stream()
-                .filter(f -> f.getOutcome().isDecided())
-                .sorted(ObservationOrder.worstFirst())
-                .toList();
         for (Observation f : assessed) {
             EvidenceRole role = f.getOutcome() == Outcome.NOT_MET ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
             feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal++);
@@ -842,6 +870,20 @@ public class FeedbackLedgerRecorder {
                 job.getId(),
                 feedback.getId(),
                 assessed.size());
+    }
+
+    /**
+     * The observation that names whom a unit resting on {@code bound} is addressed to. Every one of them must be
+     * about the same person: admission refuses a review whose parts are about different people before anything is
+     * written to the provider, so meeting one here means the package was not admitted that way.
+     */
+    private static Observation subjectOf(List<Observation> bound, AgentJob job) {
+        Observation subject = bound.get(0);
+        if (bound.stream().anyMatch(observation -> !observation.getAboutUserId().equals(subject.getAboutUserId()))) {
+            throw new IllegalStateException(
+                    "Feedback rests on observations about more than one person: jobId=" + job.getId());
+        }
+        return subject;
     }
 
     /** Match a placement only by its exact delivery identity. Shared coordinates do not establish identity. */

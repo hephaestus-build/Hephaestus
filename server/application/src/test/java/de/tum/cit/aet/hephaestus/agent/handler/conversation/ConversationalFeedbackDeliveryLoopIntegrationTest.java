@@ -291,8 +291,7 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                         "Recognize the decision point.",
                         "The observations show the same pattern.",
                         "They can explain the decision in their own words.",
-                        null),
-                null);
+                        null));
     }
 
     private List<Feedback> conversationUnits() {

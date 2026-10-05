@@ -137,10 +137,12 @@ class DiffNotePoster {
         SummaryChannel.FeedbackTarget target =
                 commentPoster.buildTarget(job, kind, job.getWorkspace().getId());
 
-        List<InlineFeedbackChannel.InlineFeedback> observations =
-                mapObservations(job, diffNotes == null ? List.of() : diffNotes, packageId);
+        List<DiffNote> requested = diffNotes == null ? List.of() : diffNotes;
+        List<InlineFeedbackChannel.InlineFeedback> observations = mapObservations(job, requested, packageId);
+        int erased = requested.size() - observations.size();
 
         if (observations.isEmpty()) {
+            if (erased > 0) return new DiffNoteResult(0, erased, List.of());
             try {
                 channel.clearStaleFeedback(target, HEPHAESTUS_MARKER);
             } catch (OutboundEgressSuppressedException e) {
@@ -159,11 +161,11 @@ class DiffNotePoster {
                     "Inline observation delivery: kind={}, posted={}, failed={}, jobId={}",
                     kind,
                     result.posted(),
-                    result.failed(),
+                    result.failed() + erased,
                     job.getId());
             return new DiffNoteResult(
                     result.posted(),
-                    result.failed(),
+                    result.failed() + erased,
                     result.signals(),
                     result.suppressed(),
                     result.suppressedDeliveryKeys());

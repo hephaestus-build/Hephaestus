@@ -12,10 +12,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
-import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
@@ -27,9 +25,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,59 +71,6 @@ class PracticeCatalogInjector {
         this.objectMapper = objectMapper;
         this.practiceRepository = practiceRepository;
         this.workspaceDefaults = workspaceDefaults;
-    }
-
-    /**
-     * Resolve {@code slug -> whyItMatters} for the {@code focus}-scoped active practices of a workspace,
-     * surfaced verbatim as the "Why this matters" line on critiques. Deliberately NOT written into the model
-     * workspace — only {@code getCriteria()} reaches the agent — so the principle stays server-controlled and
-     * cannot be fabricated or drift in model prose. Practices with a blank principle are omitted.
-     */
-    Map<String, String> whyBySlug(Workspace workspace, ArtifactKind focus) {
-        return reviewedPractices(workspace, focus).stream()
-                .filter(p -> p.getWhyItMatters() != null && !p.getWhyItMatters().isBlank())
-                .collect(Collectors.toMap(Practice::getSlug, Practice::getWhyItMatters, (a, b) -> a));
-    }
-
-    /** Stage exactly the immutable revisions which produced a composition job's observations. */
-    Map<String, String> injectComposition(Map<String, byte[]> files, List<Observation> observations) {
-        Map<String, PracticeRevision> revisions = new LinkedHashMap<>();
-        for (Observation observation : observations) {
-            PracticeRevision revision = observation.getPracticeRevision();
-            if (revision == null || revision.getId() == null) {
-                throw new JobPreparationException(
-                        "Observation has no reproducible practice revision: " + observation.getId());
-            }
-            PracticeRevision prior = revisions.putIfAbsent(revision.getSlug(), revision);
-            if (prior != null && !Objects.equals(prior.getId(), revision.getId())) {
-                throw new JobPreparationException(
-                        "One composition contains multiple revisions of " + revision.getSlug());
-            }
-        }
-        ArrayNode index = objectMapper.createArrayNode();
-        Map<String, String> why = new LinkedHashMap<>();
-        revisions.values().stream()
-                .sorted(Comparator.comparing(PracticeRevision::getSlug))
-                .forEach(revision -> {
-                    ObjectNode entry = index.addObject();
-                    entry.put("slug", revision.getSlug());
-                    entry.put("name", revision.getName());
-                    entry.put("revisionId", revision.getId());
-                    String criteria = revision.getCriteria();
-                    files.put(
-                            SandboxLayout.PRACTICES_PREFIX + revision.getSlug() + ".md",
-                            criteria.getBytes(StandardCharsets.UTF_8));
-                    if (revision.getWhyItMatters() != null
-                            && !revision.getWhyItMatters().isBlank()) {
-                        why.put(revision.getSlug(), revision.getWhyItMatters());
-                    }
-                });
-        try {
-            files.put(SandboxLayout.PRACTICES_PREFIX + "index.json", objectMapper.writeValueAsBytes(index));
-        } catch (JacksonException e) {
-            throw new JobPreparationException("Failed to serialize composition practice index: " + e.getMessage(), e);
-        }
-        return Map.copyOf(why);
     }
 
     private static JsonNode admittedPractices(AgentJob job) {
@@ -283,6 +226,13 @@ class PracticeCatalogInjector {
                 throw new JobPreparationException("Practice has no current revision: " + p.getSlug());
             }
             entry.put("revisionId", p.getCurrentRevision().getId());
+            // What the review on the work is told about the practice, from the revision this run measures
+            // against: the review composes from these and the observations, never from the criteria.
+            entry.put("whyItMatters", p.getCurrentRevision().getWhyItMatters());
+            ArrayNode knownLimitations = entry.putArray("knownLimitations");
+            p.getCurrentRevision().getAutomatedReviewPolicy().knownLimitations().stream()
+                    .map(PracticeEvidenceLimitation::description)
+                    .forEach(knownLimitations::add);
             // A pointer, not a fence: what may be CITED is what the run staged (inputs/manifest.json), so
             // reading beyond this list is expected, not a violation.
             ArrayNode readsSources = entry.putArray("readsSources");

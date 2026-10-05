@@ -101,6 +101,14 @@ class PullRequestCommentPoster {
             Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
     /**
+     * Whether a text carries a standalone approval line. A composed text that does is refused whole before it is
+     * published, never shortened: the words around such a line were written with it.
+     */
+    static boolean speaksApproval(String body) {
+        return APPROVAL_LANGUAGE.matcher(body).find();
+    }
+
+    /**
      * Matches invisible Unicode characters: bidi controls, zero-width chars, BOM.
      * Prevents text direction attacks and @mention bypass via zero-width spaces.
      * Excludes U+200D (Zero Width Joiner) — used in compound emoji sequences.
@@ -117,8 +125,6 @@ class PullRequestCommentPoster {
      * from untrusted agent output.
      */
     private static final Pattern UNSAFE_MARKDOWN_LINK = Pattern.compile("\\[([^\\]]*)\\]\\((?!(?i)https?://)[^)]*\\)");
-
-    private static final Pattern EXCESSIVE_NEWLINES = Pattern.compile("\\n{3,}");
 
     private final Map<IntegrationKind, SummaryChannel> channels;
 
@@ -370,10 +376,7 @@ class PullRequestCommentPoster {
         result = MARKDOWN_IMAGE_REF.matcher(result).replaceAll("");
         result = UNSAFE_MARKDOWN_LINK.matcher(result).replaceAll("$1");
         result = AT_MENTION.matcher(result).replaceAll("`@$1`");
-        result = APPROVAL_LANGUAGE.matcher(result).replaceAll("");
-        result = EXCESSIVE_NEWLINES.matcher(result).replaceAll("\n\n");
-
-        result = result.strip();
+        if (result.isBlank()) return "";
         String truncationNotice = "\n\n[... truncated. The comment exceeded the length limit.]";
         boolean truncated = result.length() > MAX_BODY_LENGTH;
         if (truncated) {

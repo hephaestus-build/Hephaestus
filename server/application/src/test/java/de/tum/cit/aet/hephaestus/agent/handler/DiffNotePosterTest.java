@@ -159,7 +159,7 @@ class DiffNotePosterTest extends BaseUnitTest {
     }
 
     @Test
-    void blankBodyNote_isSkipped_andClearsStaleWhenAllBlank() {
+    void shouldFailErasedFeedbackWithoutClearingExistingFeedback() {
         RecordingChannel channel = new RecordingChannel();
         DiffNotePoster poster = poster(channel);
         DiffNote blank = new DiffNote("src/A.java", 10, null, "   ", "ck-blank", null);
@@ -167,8 +167,9 @@ class DiffNotePosterTest extends BaseUnitTest {
         DiffNotePoster.DiffNoteResult result = poster.reconcileInlineNotes(gitlabJob(), List.of(blank));
 
         assertThat(result.posted()).isZero();
+        assertThat(result.failed()).isEqualTo(1);
         assertThat(channel.posted).isNull();
-        assertThat(channel.cleared).isTrue();
+        assertThat(channel.cleared).isFalse();
     }
 
     @Test
