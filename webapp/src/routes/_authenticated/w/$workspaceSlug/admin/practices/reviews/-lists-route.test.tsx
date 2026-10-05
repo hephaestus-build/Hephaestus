@@ -3,7 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
+import type { ReviewRunSummary } from "@/api/types.gen";
+import { reviewRuns } from "@/components/admin/practice-reviews/fixtures";
+
 import { server } from "@/mocks/server";
+import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
@@ -57,6 +61,32 @@ function recordRequests() {
 		}),
 	);
 	return { reviewUrls, observationUrls, feedbackUrls, workUrls };
+}
+
+/** Two finished reviews, one per page, so the second page's row shows that it arrived. */
+const [FIRST_PAGE, SECOND_PAGE] = twoCompletedReviews();
+
+function twoCompletedReviews(): [ReviewRunSummary, ReviewRunSummary] {
+	const [first, second] = reviewRuns.filter((run) => run.status === "COMPLETED");
+	if (!first || !second) {
+		throw new Error("The fixture has fewer than two completed reviews");
+	}
+	return [first, second];
+}
+
+/** The reviews endpoint with two pages of one review each, every request recorded. */
+function serveReviewPages(reviewUrls: URL[]) {
+	server.use(
+		http.get("*/workspaces/:workspaceSlug/practices/reviews", ({ request }) => {
+			const url = new URL(request.url);
+			reviewUrls.push(url);
+			const number = Number(url.searchParams.get("page"));
+			return HttpResponse.json({
+				content: [FIRST_PAGE, SECOND_PAGE].slice(number, number + 1),
+				page: { number, size: 25, totalElements: 2, totalPages: 2 },
+			});
+		}),
+	);
 }
 
 describe("practice review list routes", () => {
@@ -219,5 +249,28 @@ describe("practice review list routes", () => {
 		);
 		expect(workUrls.at(-1)?.searchParams.get("kind")).toBeNull();
 		expect(router.state.location.search).toMatchObject({ kind: "scm.issue" });
+	});
+
+	/**
+	 * The list loads the next page at its end, under the same filters: a next page that lost a filter
+	 * would append rows that do not match it. The observer never fires here, so the press is what asks.
+	 */
+	it("asks for the next page of reviews under the same filters, and keeps the loaded rows", async () => {
+		vi.stubGlobal("IntersectionObserver", ObserverStub);
+		const { reviewUrls } = recordRequests();
+		serveReviewPages(reviewUrls);
+
+		renderRouteAtWithRouter('/w/acme/admin/practices/reviews/runs?status=["COMPLETED"]');
+		await screen.findByRole("link", { name: FIRST_PAGE.target.title }, ROUTE_RENDER_WAIT);
+		await userEvent.click(screen.getByRole("button", { name: "Show more reviews" }));
+		await screen.findByRole("link", { name: SECOND_PAGE.target.title }, ROUTE_RENDER_WAIT);
+
+		const next = reviewUrls.at(-1);
+		expect(next?.searchParams.get("page")).toBe("1");
+		expect(next?.searchParams.get("size")).toBe("25");
+		expect(values(next, "status")).toStrictEqual(["COMPLETED"]);
+		screen.getByRole("link", { name: FIRST_PAGE.target.title });
+		// The last page is in, so the list ends without a button.
+		expect(screen.queryByRole("button", { name: "Show more reviews" })).toBeNull();
 	});
 });

@@ -1,9 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import {
 	listGroupsOptions,
-	listPracticeReviewFeedbackOptions,
+	listPracticeReviewFeedbackInfiniteOptions,
 	listPracticesOptions,
 } from "@/api/@tanstack/react-query.gen";
 import { FeedbackListPage } from "@/components/admin/practice-reviews/FeedbackListPage";
@@ -15,9 +15,10 @@ import {
 	feedbackSearchSchema,
 	REVIEW_PAGE_SIZE,
 } from "@/components/admin/practice-reviews/review-search";
-import { useClampedPage } from "@/hooks/use-clamped-page";
 import { useReviewPeople } from "@/hooks/use-review-people";
-import { pageParam, useSearchState } from "@/lib/search-params";
+import { useSearchState } from "@/lib/search-params";
+import { pagedListState } from "@/runtime/tanstack-query/infinite-list";
+import { pagedModelParams } from "@/runtime/tanstack-query/spring-page";
 
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/admin/practices/reviews/feedback",
@@ -32,40 +33,26 @@ function FeedbackListRoute() {
 	const search = Route.useSearch();
 	const setSearch = useSearchState();
 	const updateSearch = (patch: Partial<FeedbackSearch>) => {
-		// Any change but a page's own sends the reader back to page one.
-		void setSearch((previous) => ({ ...previous, ...patch, page: pageParam(patch.page) }), {
-			replace: true,
-		});
+		void setSearch((previous) => ({ ...previous, ...patch }), { replace: true });
 	};
 
-	const feedbackQueryResult = useQuery({
-		...listPracticeReviewFeedbackOptions({
+	const feedbackQueryResult = useInfiniteQuery({
+		...listPracticeReviewFeedbackInfiniteOptions({
 			path: { workspaceSlug },
 			query: feedbackQuery(search, REVIEW_PAGE_SIZE),
 		}),
+		...pagedModelParams,
 	});
 	// The groups only describe each practice option; there is no group facet here.
 	const groupsQuery = useQuery({ ...listGroupsOptions({ path: { workspaceSlug } }) });
 	const practicesQuery = useQuery({ ...listPracticesOptions({ path: { workspaceSlug } }) });
 	const people = useReviewPeople(workspaceSlug);
 
-	// Reconciles the page in the URL with the page the server actually has, so it belongs beside the
-	// query rather than on the screen that only draws what it is handed.
-	useClampedPage(search.page, feedbackQueryResult.data?.page?.totalPages, (page) =>
-		updateSearch({ page }),
-	);
-
 	return (
 		<FeedbackListPage
-			workspaceSlug={workspaceSlug}
 			search={search}
 			onSearchChange={updateSearch}
-			feedback={feedbackQueryResult.data}
-			isLoading={feedbackQueryResult.isLoading}
-			error={feedbackQueryResult.isError ? feedbackQueryResult.error : undefined}
-			onRetry={() => {
-				void feedbackQueryResult.refetch();
-			}}
+			feedback={pagedListState(feedbackQueryResult)}
 			practices={{
 				options: practiceFacetOptions(practicesQuery.data, groupsQuery.data),
 				isLoading: practicesQuery.isLoading,

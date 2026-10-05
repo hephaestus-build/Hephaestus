@@ -1,9 +1,11 @@
 import type { Meta, StoryContext, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, waitFor, within } from "storybook/test";
 
-import type { ListPracticeReviewsResponse, ReviewRunSummary } from "@/api/types.gen";
+import type { ReviewRunSummary } from "@/api/types.gen";
+import type { PagedListState } from "@/runtime/tanstack-query/infinite-list";
 import { withStandardPage, withWidePage } from "@/stories/decorators";
 import { settledPopup } from "@/stories/overlay";
+import { loadedList, narrowedList } from "@/stories/paged-list";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 
@@ -11,14 +13,18 @@ import { reviewRuns } from "./fixtures";
 import { REVIEW_PAGE_SIZE, type RunsSearch, runsQuery } from "./review-search";
 import { ReviewRunsPage } from "./ReviewRunsPage";
 
+/** Spies a story hands to the list, so its play can assert on them. */
+const loadMoreReviews = fn();
+const retryReviews = fn();
+
 /** The fixture's reviews, one of which completed and then failed to process what it produced. */
 const RUNS: ReviewRunSummary[] = reviewRuns.map((run) =>
 	run.id === "11111111-1111-1111-1111-111111111111" ? { ...run, resultProcessing: "FAILED" } : run,
 );
 
 /**
- * The page of reviews the endpoint would return for a search, computed from the fixture instead of
- * mocked over HTTP. The screen takes its rows as a prop, so a story that wants to prove a facet
+ * The reviews the endpoint would return for a search, computed from the fixture instead of mocked
+ * over HTTP. The screen takes its rows as a prop, so a story that wants to prove a facet
  * narrows the list has to answer it — and answering it in a function keeps the whole file
  * network-free, which is what stops one story's failure from becoming every story's failure on the
  * shared Docs page.
@@ -26,9 +32,13 @@ const RUNS: ReviewRunSummary[] = reviewRuns.map((run) =>
  * It filters through `runsQuery`, the very transformation the route sends, so a story cannot
  * "prove" a window the screen never asks for.
  */
-function reviewsFor(search: RunsSearch): ListPracticeReviewsResponse {
+function reviewsFor(
+	list: PagedListState<ReviewRunSummary>,
+	search: RunsSearch,
+): PagedListState<ReviewRunSummary> {
 	const query = runsQuery(search, REVIEW_PAGE_SIZE);
-	const rows = RUNS.filter(
+	return narrowedList(
+		list,
 		(run) =>
 			(query.status === undefined || query.status.includes(run.status)) &&
 			(query.resultProcessing === undefined ||
@@ -36,16 +46,8 @@ function reviewsFor(search: RunsSearch): ListPracticeReviewsResponse {
 					query.resultProcessing.includes(run.resultProcessing))) &&
 			(!query.from || run.createdAt >= query.from) &&
 			(!query.to || run.createdAt < query.to),
+		query.size,
 	);
-	return {
-		content: rows.slice(query.page * query.size, query.page * query.size + query.size),
-		page: {
-			number: query.page,
-			size: query.size,
-			totalElements: rows.length,
-			totalPages: Math.max(1, Math.ceil(rows.length / query.size)),
-		},
-	};
 }
 
 /**
@@ -79,13 +81,9 @@ const meta = {
 	decorators: [withWidePage, withStandardPage],
 	tags: ["autodocs"],
 	args: {
-		workspaceSlug: "demo",
 		search: { status: undefined, resultProcessing: undefined },
 		onSearchChange: fn(),
-		reviews: reviewsFor({ status: undefined, resultProcessing: undefined }),
-		isLoading: false,
-		error: null,
-		onRetry: fn(),
+		reviews: loadedList(RUNS),
 	},
 	// The screen is controlled: with a frozen `search` prop every facet reads as dead. The rows
 	// follow the search the same way the route's query would.
@@ -99,7 +97,7 @@ const meta = {
 						patch(next);
 						args.onSearchChange(next);
 					}}
-					reviews={reviewsFor(search)}
+					reviews={reviewsFor(args.reviews, search)}
 				/>
 			)}
 		</StatefulPatch>
@@ -280,9 +278,9 @@ export const MobileAppliedDateRange: Story = {
 	},
 };
 
-/** The skeleton draws `REVIEW_PAGE_SIZE` rows, so results replace it without moving the pager. */
+/** The skeleton draws `REVIEW_PAGE_SIZE` rows, so the first page replaces it without a jump. */
 export const Loading: Story = {
-	args: { reviews: undefined, isLoading: true },
+	args: { reviews: { status: "loading" } },
 	parameters: { chromatic: { viewports: [1440] } },
 	render: (args) => <ReviewRunsPage {...args} />,
 	play: async ({ canvas }) => {
@@ -292,12 +290,7 @@ export const Loading: Story = {
 };
 
 export const NoReviewsYet: Story = {
-	args: {
-		reviews: {
-			content: [],
-			page: { number: 0, size: REVIEW_PAGE_SIZE, totalElements: 0, totalPages: 1 },
-		},
-	},
+	args: { reviews: loadedList([]) },
 	parameters: { chromatic: { viewports: [1440] } },
 	render: (args) => <ReviewRunsPage {...args} />,
 	play: async ({ canvas }) => {
@@ -312,14 +305,76 @@ export const NoReviewsYet: Story = {
 /** The status decides the wording and whether Retry is offered; this screen only forwards it. */
 export const LoadFailed: Story = {
 	args: {
-		reviews: undefined,
-		error: { status: 500, detail: "The review index is unavailable." },
+		reviews: {
+			status: "error",
+			error: { status: 500, detail: "The review index is unavailable." },
+			onRetry: retryReviews,
+		},
 	},
 	parameters: { chromatic: { viewports: [1440] } },
 	render: (args) => <ReviewRunsPage {...args} />,
-	play: async ({ args, canvas, userEvent }) => {
+	play: async ({ canvas, userEvent }) => {
 		await canvas.findByText("We could not load reviews");
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
-		await expect(args.onRetry).toHaveBeenCalled();
+		await expect(retryReviews).toHaveBeenCalled();
+	},
+};
+
+/**
+ * More reviews than the first page: the next page is asked for when the end of the list scrolls into
+ * view, with no press.
+ */
+export const LoadsMoreAtTheEnd: Story = {
+	args: { reviews: loadedList(RUNS, { hasMore: true, onLoadMore: loadMoreReviews }) },
+	parameters: { chromatic: { viewports: [1440] } },
+	play: async ({ canvas }) => {
+		const more = await canvas.findByRole("button", { name: "Show more reviews" });
+		more.scrollIntoView();
+		await waitFor(async () => expect(loadMoreReviews).toHaveBeenCalled());
+	},
+};
+
+/** The next page on its way: rows in the list's shape stand in for it, and the press waits. */
+export const LoadingMore: Story = {
+	args: {
+		reviews: loadedList(RUNS, { hasMore: true, isLoadingMore: true, onLoadMore: loadMoreReviews }),
+	},
+	parameters: { chromatic: { viewports: [1440] } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Loading…" })).toBeDisabled();
+		await expect(loadMoreReviews).not.toHaveBeenCalled();
+	},
+};
+
+/** Every review is loaded: the list ends after its last row, with nothing to press. */
+export const EndOfList: Story = {
+	args: { reviews: loadedList(RUNS, { onLoadMore: loadMoreReviews }) },
+	parameters: { chromatic: { viewports: [1440] } },
+	play: async ({ canvas }) => {
+		await canvas.findByText("7 reviews.");
+		await expect(canvas.queryByRole("button", { name: /Show more/u })).not.toBeInTheDocument();
+		await expect(loadMoreReviews).not.toHaveBeenCalled();
+	},
+};
+
+/**
+ * The next page failed: the loaded reviews stay, the end says so and asks for nothing by itself, and
+ * Retry asks again.
+ */
+export const LoadMoreFailed: Story = {
+	args: {
+		reviews: loadedList(RUNS, {
+			hasMore: true,
+			loadMoreError: new TypeError("Failed to fetch"),
+			onLoadMore: loadMoreReviews,
+		}),
+	},
+	parameters: { chromatic: { viewports: [1440] } },
+	play: async ({ canvas, userEvent }) => {
+		await canvas.findByRole("list", { name: /Practice reviews/u });
+		await expect(canvas.getByRole("alert")).toHaveTextContent("We could not load more reviews.");
+		await expect(loadMoreReviews).not.toHaveBeenCalled();
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
+		await expect(loadMoreReviews).toHaveBeenCalledOnce();
 	},
 };

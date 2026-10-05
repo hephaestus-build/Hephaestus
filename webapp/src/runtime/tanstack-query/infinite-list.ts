@@ -2,7 +2,7 @@ import type { InfiniteData } from "@tanstack/react-query";
 
 import { type LoadState, type PanelState, queryLoadState } from "@/components/common/panel-state";
 
-import { loadedPages } from "./spring-page";
+import { loadedPages, type PagedModel } from "./spring-page";
 
 /** An infinite list's paging, once its first page is in. */
 export interface MorePages {
@@ -57,4 +57,17 @@ export function infiniteListState<TPage, TReady extends object>(
 		more.loadMoreError = query.error;
 	}
 	return { status: "ready", ...settled(loadedPages(query.data)), ...more };
+}
+
+/** A paged list's state: its loaded rows as one list, and the total the server counted. */
+export type PagedListState<TRow> = PanelState<{ rows: TRow[]; total?: number } & MorePages>;
+
+/** One infinite query over `PagedModel` pages as a list's state. */
+export function pagedListState<TRow>(
+	query: InfiniteQueryLike<PagedModel<TRow>>,
+): PagedListState<TRow> {
+	return infiniteListState(query, (pages) => ({
+		rows: pages.flatMap((page) => page.content ?? []),
+		total: pages[0]?.page?.totalElements,
+	}));
 }

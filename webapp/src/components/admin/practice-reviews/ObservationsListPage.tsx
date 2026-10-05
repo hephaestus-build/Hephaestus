@@ -1,13 +1,7 @@
-import { Link } from "@tanstack/react-router";
-
-import type {
-	ListPracticeReviewObservationsResponse,
-	Practice,
-	ReviewObservation,
-} from "@/api/types.gen";
+import type { Practice, ReviewObservation } from "@/api/types.gen";
 import type { FacetSource } from "@/components/common/FacetMultiSelect";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { TablePagination } from "@/components/common/TablePagination";
+import type { PagedListState } from "@/runtime/tanstack-query/infinite-list";
 
 import {
 	clearedObservationFilters,
@@ -16,17 +10,14 @@ import {
 } from "./ObservationFilters";
 import { ObservationResults, type ObservationResultsState } from "./ObservationResults";
 import type { ObservationsSearch } from "./review-search";
+import { ReviewListEnd } from "./ReviewListEnd";
 import type { ReviewPeople } from "./ReviewPersonFacet";
 
 export interface ObservationsListPageProps {
-	workspaceSlug: string;
 	search: ObservationsSearch;
 	onSearchChange: (patch: Partial<ObservationsSearch>) => void;
-	/** The page of observations the current `search` selects, or `undefined` while it is unknown. */
-	observations: ListPracticeReviewObservationsResponse | undefined;
-	isLoading: boolean;
-	error: unknown;
-	onRetry?: () => void;
+	/** The observations the current `search` selects, as far as they are loaded. */
+	observations: PagedListState<ReviewObservation>;
 	groups: FacetSource;
 	practices: FacetSource;
 	/**
@@ -39,13 +30,9 @@ export interface ObservationsListPageProps {
 }
 
 function resultsState(
-	isLoading: boolean,
 	rows: ReviewObservation[],
 	onClearFilters: (() => void) | undefined,
 ): ObservationResultsState {
-	if (isLoading) {
-		return { status: "loading" };
-	}
 	if (rows.length > 0) {
 		return { status: "ready", observations: rows };
 	}
@@ -55,19 +42,15 @@ function resultsState(
 }
 
 export function ObservationsListPage({
-	workspaceSlug,
 	search,
 	onSearchChange,
 	observations,
-	isLoading,
-	error,
-	onRetry,
 	groups,
 	practices,
 	practiceRecords,
 	people,
 }: ObservationsListPageProps) {
-	const rows = observations?.content ?? [];
+	const rows = observations.status === "ready" ? observations.rows : [];
 	// Guarded on the filter being set, because that is the only condition under which the first row
 	// names the filtered person — unfiltered, row zero is whoever happens to sort first, and the facet
 	// would put a stranger's name on somebody else's id.
@@ -84,32 +67,27 @@ export function ObservationsListPage({
 				groups={groups}
 				practices={practices}
 				people={people}
-				total={observations?.page?.totalElements}
+				total={observations.status === "ready" ? observations.total : undefined}
 				scopedWork={rows[0]?.reviewedWork}
 				subjectName={filteredSubject?.name ?? filteredSubject?.login}
 			/>
-			{error == null ? (
-				<ObservationResults
-					practices={practiceRecords}
-					state={resultsState(isLoading, rows, hasFilter ? reset : undefined)}
+			{observations.status === "error" && (
+				<QueryErrorAlert
+					error={observations.error}
+					title="We could not load observations"
+					onRetry={observations.onRetry}
 				/>
-			) : (
-				<QueryErrorAlert error={error} title="We could not load observations" onRetry={onRetry} />
 			)}
-			<TablePagination
-				page={observations?.page?.number ?? search.page ?? 0}
-				totalPages={observations?.page?.totalPages ?? 0}
-				renderPageLink={(page, props) => (
-					<Link
-						{...props}
-						// Why `from`: `order` in `review-search.ts`.
-						from="/w/$workspaceSlug/admin/practices/reviews/observations"
-						to="/w/$workspaceSlug/admin/practices/reviews/observations"
-						params={{ workspaceSlug }}
-						search={(previous) => ({ ...previous, page: page === 0 ? undefined : page })}
+			{observations.status === "loading" && <ObservationResults state={{ status: "loading" }} />}
+			{observations.status === "ready" && (
+				<>
+					<ObservationResults
+						practices={practiceRecords}
+						state={resultsState(rows, hasFilter ? reset : undefined)}
 					/>
-				)}
-			/>
+					<ReviewListEnd {...observations} noun="observations" />
+				</>
+			)}
 		</section>
 	);
 }

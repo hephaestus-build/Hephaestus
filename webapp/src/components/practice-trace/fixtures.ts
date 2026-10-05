@@ -1,7 +1,6 @@
 import type {
 	ArtifactTrace,
 	DeliveryPolicyTrace,
-	PagedModelTracedArtifact,
 	PracticeSignal,
 	PracticeTraceEntry,
 	ReviewedWorkRef,
@@ -466,19 +465,4 @@ export function tracedArtifact(artifactId: number) {
 		throw new Error(`No traced-artifact fixture with id ${artifactId}`);
 	}
 	return match;
-}
-
-export function tracedArtifactPage(
-	content: TracedArtifact[] = tracedArtifacts,
-	size = 20,
-): PagedModelTracedArtifact {
-	return {
-		content,
-		page: {
-			number: 0,
-			size,
-			totalElements: content.length,
-			totalPages: Math.max(1, Math.ceil(content.length / size)),
-		},
-	};
 }

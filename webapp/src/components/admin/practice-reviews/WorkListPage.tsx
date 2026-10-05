@@ -1,12 +1,10 @@
-import { Link } from "@tanstack/react-router";
 import { RadarIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { ListTracedArtifactsResponse } from "@/api/types.gen";
+import type { TracedArtifact } from "@/api/types.gen";
 import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { ResultCount } from "@/components/common/ResultCount";
-import { TablePagination } from "@/components/common/TablePagination";
 import { TraceKindFilter } from "@/components/practice-trace/TraceKindFilter";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,46 +17,40 @@ import {
 } from "@/components/ui/empty";
 import { artifactKindNoun } from "@/lib/artifact-kinds";
 import { hasText } from "@/lib/text";
+import type { PagedListState } from "@/runtime/tanstack-query/infinite-list";
 
 import { REVIEW_PAGE_SIZE, type WorkSearch } from "./review-search";
+import { ReviewListEnd } from "./ReviewListEnd";
 import { ReviewResultsSkeleton } from "./ReviewResultsSkeleton";
 import { ReviewRowList } from "./ReviewRow";
 import { WorkRow } from "./WorkRow";
 
 export interface WorkListPageProps {
-	workspaceSlug: string;
 	search: WorkSearch;
 	onSearchChange: (patch: Partial<WorkSearch>) => void;
-	/** The page of work the current search asked for. Absent until the first answer arrives. */
-	work: ListTracedArtifactsResponse | undefined;
-	isLoading: boolean;
-	error: unknown;
-	onRetry: () => void;
+	/** The work the current search selects, as far as it is loaded. */
+	work: PagedListState<TracedArtifact>;
 }
 
 /**
  * Every piece of work this workspace recorded anything about, including the work no review ever
  * started on — the list to open when a pull request was expected to be reviewed and was not.
  */
-export function WorkListPage({
-	workspaceSlug,
-	search,
-	onSearchChange,
-	work,
-	isLoading,
-	error,
-	onRetry,
-}: WorkListPageProps) {
-	const rows = work?.content ?? [];
+export function WorkListPage({ search, onSearchChange, work }: WorkListPageProps) {
+	const rows = work.status === "ready" ? work.rows : [];
 	const hasFilter = hasText(search.kind);
 	// The toolbar's Reset and the empty state's button are one action, not two copies of it.
 	const reset = () => onSearchChange({ kind: undefined });
 	let results: ReactNode;
-	if (error != null) {
+	if (work.status === "error") {
 		results = (
-			<QueryErrorAlert error={error} title="We could not load the work" onRetry={onRetry} />
+			<QueryErrorAlert
+				error={work.error}
+				title="We could not load the work"
+				onRetry={work.onRetry}
+			/>
 		);
-	} else if (isLoading) {
+	} else if (work.status === "loading") {
 		results = <ReviewResultsSkeleton label="Loading work" rows={REVIEW_PAGE_SIZE} />;
 	} else if (rows.length === 0) {
 		results = (
@@ -89,11 +81,14 @@ export function WorkListPage({
 		);
 	} else {
 		results = (
-			<ReviewRowList label="Work, most recent first">
-				{rows.map((row) => (
-					<WorkRow key={`${row.artifactKind}:${row.artifactId}`} work={row} />
-				))}
-			</ReviewRowList>
+			<>
+				<ReviewRowList label="Work, most recent first">
+					{rows.map((row) => (
+						<WorkRow key={`${row.artifactKind}:${row.artifactId}`} work={row} />
+					))}
+				</ReviewRowList>
+				<ReviewListEnd {...work} noun="work" />
+			</>
 		);
 	}
 
@@ -104,7 +99,7 @@ export function WorkListPage({
 				onReset={reset}
 				actions={
 					<ResultCount
-						total={work?.page?.totalElements}
+						total={work.status === "ready" ? work.total : undefined}
 						noun={["piece of work", "pieces of work"]}
 						hasFilter={hasFilter}
 					/>
@@ -117,19 +112,6 @@ export function WorkListPage({
 				/>
 			</FilterToolbar>
 			{results}
-			<TablePagination
-				page={work?.page?.number ?? search.page ?? 0}
-				totalPages={work?.page?.totalPages ?? 0}
-				renderPageLink={(page, props) => (
-					<Link
-						{...props}
-						to="/w/$workspaceSlug/admin/practices/reviews/work"
-						params={{ workspaceSlug }}
-						// Spread, as the review list does: page 2 of one kind stays that kind.
-						search={{ ...search, page: page === 0 ? undefined : page }}
-					/>
-				)}
-			/>
 		</section>
 	);
 }
