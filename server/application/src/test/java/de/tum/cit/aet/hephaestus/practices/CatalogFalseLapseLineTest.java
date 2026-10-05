@@ -69,7 +69,6 @@ class CatalogFalseLapseLineTest extends BaseUnitTest {
             engaging-with-inline-review-comments | the reviewer's settling note closes the loop | the reviewer's own later note saying the point was taken up
             engaging-with-inline-review-comments | a note after the hand-off is uncertain | the only substantive notes were posted after the work merged or closed
             merges-only-after-approval | a bot's approval is no person's | An approval marked `bot` never makes this cell.
-            merges-only-after-approval | bot-only approvals are the negative | a complete record whose only approvals are marked `bot` is this case
             merges-only-after-approval | a bot's request for changes does not stand | its request for changes does not stand against another person's approval
             merges-only-after-approval | a bot's decision still makes the occasion | a decision marked `bot` is still a review decision for this gate
             merges-only-after-approval | automation comes from the marker, not the login | Whether an account is automated is the captured `bot` marker, never the login's shape

@@ -10,7 +10,7 @@ export interface SubjectFacts {
 	merge: boolean;
 	/** One word or less of content, a lone punctuation mark, or a bare filler such as "fix" or "wip". */
 	bare: boolean;
-	/** The same subject, ignoring case and trailing punctuation, appears on an earlier commit. */
+	/** The same subject, ignoring case and trailing punctuation, appears on another authored commit. */
 	repeat: boolean;
 	/**
 	 * The subject joins clauses with "and", "&", "+", a comma, a semicolon or a sentence break, or the body lists two or more
@@ -30,17 +30,31 @@ const FILLER =
 const CONJUNCTION = /\s(?:and|&|\+)\s|,\s*\w|;\s*\w|\.\s+\p{Lu}/u;
 const DANGLING = /\b(?:a|an|the|and|or|to|for|of|in|on|with|by)$|["'(]$/iu;
 
+const normalizedSubject = (subject: string) => subject.toLowerCase().replace(/[.!\s]+$/u, "");
+
+const isMerge = (commit: ChangeCommit, subject: string) =>
+	commit.parents.length > 1 ||
+	/^Merge (?:branch|remote-tracking branch|pull request|request)\b/iu.test(subject);
+
+const subjectOf = (commit: ChangeCommit) => (commit.message.split(/\r?\n/u)[0] ?? "").trim();
+
 export function subjectFacts(commits: readonly ChangeCommit[]): SubjectFacts[] {
-	const seen = new Set<string>();
+	// commits.json promises no order, so a repeat is counted across the range, never against "earlier".
+	const authoredSubjects = new Map<string, number>();
+	for (const commit of commits) {
+		const subject = subjectOf(commit);
+		if (!isMerge(commit, subject)) {
+			const normalized = normalizedSubject(subject);
+			authoredSubjects.set(normalized, (authoredSubjects.get(normalized) ?? 0) + 1);
+		}
+	}
 	const facts: SubjectFacts[] = [];
 	for (const commit of commits) {
 		const lines = commit.message.split(/\r?\n/u);
-		const subject = (lines[0] ?? "").trim();
+		const subject = subjectOf(commit);
 		const body = lines.slice(1).filter((line) => line.trim().length > 0);
-		const merge =
-			commit.parents.length > 1 ||
-			/^Merge (?:branch|remote-tracking branch|pull request|request)\b/iu.test(subject);
-		const normalized = subject.toLowerCase().replace(/[.!\s]+$/u, "");
+		const merge = isMerge(commit, subject);
+		const normalized = normalizedSubject(subject);
 		const words = subject
 			.replace(/^[a-z]+(?:\([^)]*\))?!?:\s*/iu, "")
 			.split(/\s+/u)
@@ -57,16 +71,13 @@ export function subjectFacts(commits: readonly ChangeCommit[]): SubjectFacts[] {
 			subject,
 			merge,
 			bare,
-			repeat: !merge && seen.has(normalized),
+			repeat: !merge && (authoredSubjects.get(normalized) ?? 0) > 1,
 			joinedClauses: !merge && (CONJUNCTION.test(subject) || bulleted),
 			cutOff: !merge && DANGLING.test(subject),
 			bodyLines: body.length,
 			files: commit.files,
 			line: commit.line,
 		});
-		if (!merge) {
-			seen.add(normalized);
-		}
 	}
 	return facts;
 }

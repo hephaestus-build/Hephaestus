@@ -467,7 +467,7 @@ void test("a literal and a named asset color are told apart, and the asset's dar
 			[
 				[4, "literal white/black", null],
 				[5, "named asset", true],
-				[7, "literal RGB", null],
+				[7, "fixed components", null],
 			],
 		);
 	} finally {
@@ -567,19 +567,124 @@ void test("a named color resolves only to one colorset, exact name first; two ca
 	}
 });
 
-void test("system gray colors remain adaptive leads rather than literals", async () => {
+void test("a named color given a bundle is a named asset; the main bundle resolves, another bundle stays unknown", async () => {
 	const { root, script } = await stage("uses-adaptive-colors-for-every-appearance");
 	try {
-		const source =
-			'struct Card: View {\n    var body: some View {\n        Text("x").foregroundStyle(.gray)\n        Text("x").background(Color(.systemGray2))\n        Text("x").background(Color(uiColor: .systemGray6))\n    }\n}\n';
+		mkdirSync(path.join(root, "repo/App/Assets.xcassets/Brand.colorset"), { recursive: true });
+		writeFileSync(
+			path.join(root, "repo/App/Assets.xcassets/Brand.colorset/Contents.json"),
+			'{"colors":[{"color":{},"idiom":"universal"},{"color":{},"idiom":"universal","appearances":[{"appearance":"luminosity","value":"dark"}]}]}',
+		);
+		const source = [
+			"struct Card: View {",
+			"    var body: some View {",
+			'        Text("a").foregroundStyle(Color("Brand", bundle: .main))',
+			'        Text("b").foregroundStyle(Color("Brand", bundle: nil))',
+			// A package's own catalog: the checkout's Brand.colorset may not be the one it holds.
+			'        Text("c").foregroundStyle(Color("Brand", bundle: .module))',
+			// The same argument shape names an image, not a color.
+			'        Image("Brand", bundle: .module)',
+			"    }",
+			"}",
+			"",
+		].join("\n");
 		writeFileSync(path.join(root, "repo/App/Card.swift"), source);
 		const result = await script(
 			path.join(root, "repo"),
 			new Map([whole("App/Card.swift", source)]),
 			metadata,
 		);
-		assert.equal(result.metrics.literalColors, 1);
-		assert.equal(result.metrics.systemAdaptiveColors, 2);
+		assert.deepEqual(
+			result.hints.map((h) => [
+				h.line,
+				h.pattern,
+				h.flags.bundle ?? null,
+				h.flags.hasDarkAppearance,
+			]),
+			[
+				[3, "named asset", null, true],
+				[4, "named asset", null, true],
+				[5, "named asset", ".module", "unknown"],
+			],
+		);
+		assert.equal(result.metrics.namedAssetColors, 3);
+		assert.ok(result.directions.some((d) => /bundle other than the main one/u.test(d)));
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("no gray is literal or adaptive by its spelling: each is left to the review to classify", async () => {
+	const { root, script } = await stage("uses-adaptive-colors-for-every-appearance");
+	try {
+		const source =
+			'struct Card: View {\n    var body: some View {\n        Text("x").foregroundStyle(.gray)\n        Text("x").background(Color(.systemGray2))\n        Text("x").background(Color(uiColor: .systemGray6))\n        Text("Start").padding().background(Color.gray)\n    }\n}\n';
+		writeFileSync(path.join(root, "repo/App/Card.swift"), source);
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([whole("App/Card.swift", source)]),
+			metadata,
+		);
+		assert.equal(result.metrics.literalColors, 0);
+		assert.equal(result.metrics.systemAdaptiveColors, 0);
+		assert.equal(result.metrics.colorsToClassify, 4);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("only spellings that fix the kind are counted literal or adaptive; standard, UIKit, converted and app colors are left to classify", async () => {
+	const { root, script } = await stage("uses-adaptive-colors-for-every-appearance");
+	try {
+		const source = `struct Card: View {
+    var body: some View {
+        Image(systemName: "house.fill").foregroundStyle(.pink)
+        Text("Plant helper").background(Color.green, in: RoundedRectangle(cornerRadius: 8))
+        Text("Card").background(SwiftUI.Color.purple.opacity(0.10))
+        Text("Brand").background(Color.brandGreen)
+        Text("Tile").background(Color(uiColor: .systemGreen))
+        Text("Fixed").background(Color(uiColor: .green))
+        Text("Fixed").background(Color(UIColor.green))
+        Text("Converted").background(Color(.red))
+        Text("Tinted").tint(.pink)
+        Text("Beige").background(Color(red: 0.96, green: 0.94, blue: 0.90))
+        Text("Paper").background(Color(white: 0.95))
+        Text("Ink").foregroundStyle(.black)
+        Text("Quiet").foregroundStyle(.secondary)
+        Text("Glass").background(.regularMaterial)
+        Text("Accent").foregroundStyle(.tint)
+    }
+}
+`;
+		writeFileSync(path.join(root, "repo/App/Card.swift"), source);
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([whole("App/Card.swift", source)]),
+			metadata,
+		);
+		assert.deepEqual(
+			result.hints.map((h) => [h.line, h.pattern]),
+			[
+				[3, "member given to a color modifier"],
+				[4, "SwiftUI Color member"],
+				[5, "SwiftUI Color member"],
+				[6, "SwiftUI Color member"],
+				[7, "UIKit color"],
+				[8, "UIKit color"],
+				[9, "UIKit color"],
+				[10, "Color from a value"],
+				[11, "member given to a color modifier"],
+				[12, "fixed components"],
+				[13, "fixed components"],
+				[14, "literal white/black"],
+				[15, "semantic"],
+				[16, "material"],
+				[17, "accent"],
+			],
+		);
+		assert.equal(result.metrics.literalColors, 3);
+		assert.equal(result.metrics.systemAdaptiveColors, 3);
+		assert.equal(result.metrics.colorsToClassify, 9);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

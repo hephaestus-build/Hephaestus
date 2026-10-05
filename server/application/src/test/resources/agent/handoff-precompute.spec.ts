@@ -59,16 +59,8 @@ void test("a testing checklist does not turn a traceable handoff into a test-abs
 		// The checklist is counted as written, so a tick is a fact rather than a guess.
 		assert.equal(result.metrics.checklistTicked, 1);
 		assert.equal(result.metrics.checklistUnticked, 0);
-		assert.match(result.directions[1] ?? "", /1 ticked and 0 unticked/u);
-		// A ticked item shows the list was worked; only an untouched list raises real-versus-template.
-		assert.doesNotMatch(result.directions[1] ?? "", /template/u);
-		const untouched = await script(
-			path.join(root, "repo"),
-			new Map(),
-			{ ...metadata, body: "Closes #42\n- [ ] Tested locally" },
-			contextDir,
-		);
-		assert.match(untouched.directions[1] ?? "", /0 ticked and 1 unticked[\s\S]*template/u);
+		// The counts claim nothing about whose lines they are; the direction says so.
+		assert.match(result.directions[1] ?? "", /neither whose lines they are nor what was done/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

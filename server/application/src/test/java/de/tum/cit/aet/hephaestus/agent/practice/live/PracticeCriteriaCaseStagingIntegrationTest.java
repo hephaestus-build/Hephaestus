@@ -57,6 +57,13 @@ class PracticeCriteriaCaseStagingIntegrationTest {
                     .isTrue();
             assertThat(workspace.resolve(path)).exists();
         }
+        assertThat(index.path("sources"))
+                .noneMatch(source -> source.path("kind").asString().equals("scm.pull-request.commits"));
+        for (var artifact : index.path("artifacts")) {
+            if (artifact.path("artifact").path("path").asString().equals(PracticeCriteriaCaseFixtures.COMMITS)) {
+                assertThat(artifact.path("kind").asString()).isEqualTo("scm.pull-request.core");
+            }
+        }
         var task = mapper.readTree(
                 workspace.resolve(SandboxLayout.TASK_ENVELOPE_FILENAME).toFile());
         assertThat(task.path("repositoryRoot").asString())
@@ -69,9 +76,42 @@ class PracticeCriteriaCaseStagingIntegrationTest {
                 .filter(entry -> entry.getKey().startsWith("repo/"))
                 .toList();
         assertThat(files.size()).isEqualTo(repositoryFiles.size());
-        assertThat(mapper.readTree(workspace.resolve("context/commits.json").toFile())
-                        .path("commits"))
-                .hasSize(1);
+        var supplied = scenario.path("files");
+        for (var entry : supplied.properties()) {
+            if (entry.getKey().startsWith("context/") && !entry.getKey().equals("context/metadata.json")) {
+                assertThat(workspace.resolve(entry.getKey()))
+                        .as("supplied %s in %s", entry.getKey(), scenario.path("id"))
+                        .hasContent(entry.getValue().asString());
+            }
+        }
+        var metadata =
+                mapper.readTree(workspace.resolve("context/metadata.json").toFile());
+        var defaults = mapper.readTree(PracticeCriteriaCaseFixtures.FIXTURE_DIR
+                .resolve("metadata.json")
+                .toFile());
+        for (var field : defaults.properties()) {
+            assertThat(metadata.has(field.getKey()))
+                    .as("default %s", field.getKey())
+                    .isTrue();
+        }
+        if (supplied.has("context/metadata.json")) {
+            for (var field : mapper.readTree(
+                            supplied.path("context/metadata.json").asString())
+                    .properties()) {
+                assertThat(metadata.get(field.getKey()))
+                        .as("supplied metadata %s in %s", field.getKey(), scenario.path("id"))
+                        .isEqualTo(field.getValue());
+            }
+        }
+        Path commits = workspace.resolve(PracticeCriteriaCaseFixtures.COMMITS);
+        boolean omitted = StreamSupport.stream(scenario.path("omit").spliterator(), false)
+                .anyMatch(path -> path.asString().equals(PracticeCriteriaCaseFixtures.COMMITS));
+        if (omitted) {
+            assertThat(commits).as("an intended missing commit capture").doesNotExist();
+            assertThat(paths).doesNotContain(PracticeCriteriaCaseFixtures.COMMITS);
+        } else if (!supplied.has(PracticeCriteriaCaseFixtures.COMMITS)) {
+            assertThat(mapper.readTree(commits.toFile()).path("commits")).hasSize(1);
+        }
         try (var practices = Files.list(workspace.resolve(SandboxLayout.PRACTICES_PREFIX))) {
             assertThat(practices.count()).isEqualTo(scenario.path("expected").size() + 1L);
         }

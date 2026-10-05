@@ -4,7 +4,7 @@
 // whether and how soon the same reviewer approved afterwards, whether the note came after the work
 // merged or closed, and the authored commits that came after it. The review decides for each row
 // whether the note asked something of this change and whether the author engaged; the script never does.
-import { type ChangeCommit, readCommits } from "../lib/change.ts";
+import { type ChangeCommit, readCapturedCommits } from "../lib/change.ts";
 import { contextFile } from "../lib/context.ts";
 import {
 	type GeneralComment,
@@ -39,7 +39,7 @@ function approvalAfter(
 	decisions: readonly ReviewDecision[],
 	reviewer: string | undefined,
 	at: string | undefined,
-	commits: readonly ChangeCommit[],
+	commits: readonly ChangeCommit[] | null,
 	authorNotes: readonly { createdAt?: string }[],
 ): string {
 	const approval = decisions
@@ -55,13 +55,13 @@ function approvalAfter(
 		return "";
 	}
 	const seconds = Math.round((millisBetween(at, approval.submittedAt) ?? 0) / 1000);
-	const commitsBetween = commits.filter(
+	const commitsBetween = (commits ?? []).filter(
 		(c) => c.parents.length < 2 && between(c.committedAt, at, approval.submittedAt),
 	).length;
 	const notesBetween = authorNotes.filter((n) =>
 		between(n.createdAt, at, approval.submittedAt),
 	).length;
-	return `${String(seconds)}s later; ${String(commitsBetween)} commit(s) and ${String(notesBetween)} author note(s) between`;
+	return `${String(seconds)}s later; ${commits === null ? "unknown commit count" : `${String(commitsBetween)} commit(s)`} and ${String(notesBetween)} author note(s) between`;
 }
 
 export default async function engagingWithInlineReviewComments(
@@ -76,7 +76,8 @@ export default async function engagingWithInlineReviewComments(
 	const inline = await readReviewComments(contextDir);
 	const general = await readGeneralComments(contextDir);
 	const record = await readReviewThreads(contextDir);
-	const commits = await readCommits(contextDir);
+	const capturedCommits = await readCapturedCommits(contextDir);
+	const commits = capturedCommits ?? [];
 	const decisions = record?.decisions ?? [];
 	const handOff = metadata.merged_at ?? metadata.closed_at;
 	const byOthers = (note: { author?: string }) =>
@@ -115,14 +116,18 @@ export default async function engagingWithInlineReviewComments(
 					decisions,
 					comment.author,
 					comment.createdAt,
-					commits,
+					capturedCommits,
 					authorNotes,
 				),
 				afterHandOff: later(comment.createdAt, handOff),
 				fileInChange: diffFiles.has(comment.path),
 				changeNearLine: changeNear(diffFiles.get(comment.path), comment.line),
-				commitsAfter: commitsAfter(commits, comment.createdAt),
-				commitsAfterTouchingFile: commitsAfter(commits, comment.createdAt, comment.path),
+				commitsAfter:
+					capturedCommits === null ? "unknown" : commitsAfter(commits, comment.createdAt),
+				commitsAfterTouchingFile:
+					capturedCommits === null
+						? "unknown"
+						: commitsAfter(commits, comment.createdAt, comment.path),
 			},
 		}),
 	);
@@ -147,11 +152,11 @@ export default async function engagingWithInlineReviewComments(
 					decisions,
 					note.author,
 					note.createdAt,
-					commits,
+					capturedCommits,
 					authorNotes,
 				),
 				afterHandOff: later(note.createdAt, handOff),
-				commitsAfter: commitsAfter(commits, note.createdAt),
+				commitsAfter: capturedCommits === null ? "unknown" : commitsAfter(commits, note.createdAt),
 			},
 		};
 	});
@@ -160,9 +165,11 @@ export default async function engagingWithInlineReviewComments(
 	const replied = byPeople.filter(
 		(h) => h.flags.authorReplied === true || Number(h.flags.authorNotesAfter) > 0,
 	).length;
-	const committedAfter = byPeople.filter(
-		(h) => Number(h.flags.commitsAfterTouchingFile) > 0,
-	).length;
+	// Without the commit record each note's count is unknown, and so is their sum: never a measured 0.
+	const committedAfter =
+		capturedCommits === null
+			? null
+			: byPeople.filter((h) => Number(h.flags.commitsAfterTouchingFile) > 0).length;
 	const afterHandOff = byPeople.filter((h) => h.flags.afterHandOff === true).length;
 	const directions: string[] = [];
 	if (inline === null && general === null) {
@@ -176,7 +183,7 @@ export default async function engagingWithInlineReviewComments(
 	} else {
 		const bots = hints.length - byPeople.length;
 		directions.push(
-			`${String(byPeople.length)} reviewer note(s) (${String(inlineHints.filter((h) => h.flags.bot !== true).length)} inline, ${String(conversationHints.filter((h) => h.flags.bot !== true).length)} conversation)${bots > 0 ? `, ${String(bots)} more by bots` : ""}; ${String(replied)} have a later author note; ${String(committedAfter)} have a later authored commit touching the commented file; ${String(afterHandOff)} were posted after the work merged or closed. Commits are read from ${contextFile(contextReference, "commits.json")}${commits.length === 0 ? ", which holds none here" : ""}.`,
+			`${String(byPeople.length)} reviewer note(s) (${String(inlineHints.filter((h) => h.flags.bot !== true).length)} inline, ${String(conversationHints.filter((h) => h.flags.bot !== true).length)} conversation)${bots > 0 ? `, ${String(bots)} more by bots` : ""}; ${String(replied)} have a later author note; ${committedAfter === null ? "how many have a later authored commit touching the commented file is unknown" : `${String(committedAfter)} have a later authored commit touching the commented file`}; ${String(afterHandOff)} were posted after the work merged or closed. Commit capture: ${capturedCommits === null ? "unavailable" : `${String(commits.length)} captured commit(s)`} in ${contextFile(contextReference, "commits.json")}.`,
 		);
 	}
 	return {
@@ -188,8 +195,9 @@ export default async function engagingWithInlineReviewComments(
 			conversationComments: conversationHints.filter((h) => h.flags.bot !== true).length,
 			botComments: hints.length - byPeople.length,
 			withAuthorReply: replied,
-			withLaterCommitOnFile: committedAfter,
+			...(committedAfter === null ? {} : { withLaterCommitOnFile: committedAfter }),
 			afterHandOff,
+			commitsFileAbsent: capturedCommits === null ? 1 : 0,
 		},
 		directions,
 	};

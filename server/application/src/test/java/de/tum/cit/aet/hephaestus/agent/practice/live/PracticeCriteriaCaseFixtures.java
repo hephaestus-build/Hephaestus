@@ -6,8 +6,11 @@ import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import tools.jackson.databind.JsonNode;
@@ -23,7 +26,31 @@ final class PracticeCriteriaCaseFixtures {
     /** Where {@code pi-change.ts} writes the change view ({@code CHANGE_ROOT} there). */
     static final String CHANGE_VIEW_PREFIX = "work/change/";
 
+    static final String COMMITS = "context/commits.json";
+
+    /** The source each staged context file belongs to; any other context file is the work's core record. */
+    private static final Map<String, String> CONTEXT_KINDS = Map.of(
+            "context/change.json",
+            "scm.pull-request.diff",
+            "context/comments.json",
+            "scm.pull-request.comments",
+            COMMITS,
+            "scm.pull-request.core",
+            "context/review_threads.json",
+            "scm.review-threads",
+            "context/general_comments.json",
+            "scm.general-review-comments",
+            "context/linked_work_items.json",
+            "scm.linked-work-items",
+            "context/project_inventory.json",
+            "workspace.project-inventory");
+
     private PracticeCriteriaCaseFixtures() {}
+
+    private static String content(Path file) throws IOException {
+        String text = Files.readString(file).strip();
+        return text.isEmpty() || text.equals("[]") || text.equals("{}") ? "EMPTY" : "NON_EMPTY";
+    }
 
     static void stage(Path workspace, JsonNode scenario) throws IOException, InterruptedException {
         Path repo = workspace.resolve(SandboxLayout.REPO_MOUNT_RELATIVE);
@@ -34,7 +61,6 @@ final class PracticeCriteriaCaseFixtures {
         Files.createDirectories(workspace.resolve(SandboxLayout.PRACTICES_PREFIX));
         Files.createDirectories(workspace.resolve("context/docs"));
         Files.writeString(workspace.resolve("context/description.md"), "");
-        Files.writeString(workspace.resolve("context/comments.json"), "[]\n");
         fixtureCommand(workspace, "git", "init", repo.toString());
         fixtureCommand(workspace, "git", "-C", repo.toString(), "config", "user.name", "Example Developer");
         fixtureCommand(workspace, "git", "-C", repo.toString(), "config", "user.email", "developer@example.org");
@@ -43,9 +69,13 @@ final class PracticeCriteriaCaseFixtures {
         String base = fixtureCommand(workspace, "git", "-C", repo.toString(), "rev-parse", "HEAD")
                 .trim();
         var manifest = MAPPER.createObjectNode();
-        ArrayNode artifacts = manifest.putArray("artifacts");
         String coreKind =
                 scenario.path("workType").asString().equals("issue") ? "scm.issue.core" : "scm.pull-request.core";
+        // One home per artifact: a file the scenario supplies is staged as supplied, and a default fills only
+        // what it leaves out. A path the scenario omits is left uncaptured rather than generated.
+        Map<String, String> artifacts = new LinkedHashMap<>();
+        Set<String> omitted = new HashSet<>();
+        scenario.path("omit").forEach(path -> omitted.add(path.asString()));
         for (var entry : scenario.path("files").properties()) {
             boolean repositoryFile = entry.getKey().startsWith("repo/");
             String relative = repositoryFile
@@ -54,13 +84,11 @@ final class PracticeCriteriaCaseFixtures {
             Path file = workspace.resolve(relative);
             Files.createDirectories(file.getParent());
             Files.writeString(file, entry.getValue().asString());
-            if (!relative.equals("context/description.md")) {
-                artifacts
-                        .addObject()
-                        .put("kind", repositoryFile ? "scm.repository.tree" : coreKind)
-                        .putObject("artifact")
-                        .put("path", relative);
-            }
+            artifacts.put(
+                    relative, repositoryFile ? "scm.repository.tree" : CONTEXT_KINDS.getOrDefault(relative, coreKind));
+        }
+        if (!scenario.path("files").has("context/comments.json")) {
+            Files.writeString(workspace.resolve("context/comments.json"), "[]\n");
         }
         fixtureCommand(workspace, "git", "-C", repo.toString(), "add", "--all");
         fixtureCommand(workspace, "git", "-C", repo.toString(), "commit", "--allow-empty", "-m", "Add captured files");
@@ -74,6 +102,12 @@ final class PracticeCriteriaCaseFixtures {
         metadata.put("title", "Add the change shown in the captured files");
         metadata.put("commit_sha", head);
         metadata.put("body", Files.readString(workspace.resolve("context/description.md")));
+        if (scenario.path("files").has("context/metadata.json")) {
+            // The scenario's own fields win; the defaults only fill the fields it leaves out.
+            MAPPER.readTree(scenario.path("files").path("context/metadata.json").asString())
+                    .properties()
+                    .forEach(field -> metadata.set(field.getKey(), field.getValue()));
+        }
         Files.write(workspace.resolve("context/metadata.json"), MAPPER.writeValueAsBytes(metadata));
 
         JsonNode catalogue = MAPPER.readTree(
@@ -121,30 +155,42 @@ final class PracticeCriteriaCaseFixtures {
         JsonNode files = MAPPER.readTree(
                         workspace.resolve(CHANGE_VIEW_PREFIX + "files.json").toFile())
                 .path("files");
-        Files.write(
-                workspace.resolve("context/commits.json"),
-                MAPPER.writeValueAsBytes(Map.of(
-                        "commits",
-                        List.of(Map.of(
-                                "sha",
-                                head,
-                                "message",
-                                "Add captured files",
-                                "parents",
-                                List.of(base),
-                                "files",
-                                files)))));
-        Map<String, String> contents = Map.of(
-                coreKind,
-                "NON_EMPTY",
+        boolean commitsCaptured = !omitted.contains(COMMITS);
+        if (commitsCaptured && !scenario.path("files").has(COMMITS)) {
+            Files.write(
+                    workspace.resolve(COMMITS),
+                    MAPPER.writeValueAsBytes(Map.of(
+                            "commits",
+                            List.of(Map.of(
+                                    "sha",
+                                    head,
+                                    "message",
+                                    "Add captured files",
+                                    "parents",
+                                    List.of(base),
+                                    "files",
+                                    files)))));
+        }
+        Map<String, String> contents = new LinkedHashMap<>();
+        contents.put(coreKind, "NON_EMPTY");
+        contents.put(
                 "scm.pull-request.diff",
-                Files.size(workspace.resolve(CHANGE_VIEW_PREFIX + "diff.patch")) == 0 ? "EMPTY" : "NON_EMPTY",
-                "scm.pull-request.comments",
-                "EMPTY",
-                "scm.pull-request.commits",
-                "NON_EMPTY",
-                "scm.repository.tree",
-                files.isEmpty() ? "EMPTY" : "NON_EMPTY");
+                Files.size(workspace.resolve(CHANGE_VIEW_PREFIX + "diff.patch")) == 0 ? "EMPTY" : "NON_EMPTY");
+        contents.put("scm.pull-request.comments", content(workspace.resolve("context/comments.json")));
+        contents.put("scm.repository.tree", files.isEmpty() ? "EMPTY" : "NON_EMPTY");
+        for (String file : List.of("diff.patch", "files.json", "description.authored.md")) {
+            artifacts.putIfAbsent(CHANGE_VIEW_PREFIX + file, "scm.pull-request.diff");
+        }
+        for (String file : List.of("context/description.md", "context/metadata.json", "context/comments.json")) {
+            artifacts.putIfAbsent(file, CONTEXT_KINDS.getOrDefault(file, coreKind));
+        }
+        artifacts.putIfAbsent("context/change.json", "scm.pull-request.diff");
+        if (commitsCaptured) {
+            artifacts.putIfAbsent(COMMITS, CONTEXT_KINDS.get(COMMITS));
+        }
+        for (var artifact : artifacts.entrySet()) {
+            contents.putIfAbsent(artifact.getValue(), content(workspace.resolve(artifact.getKey())));
+        }
         for (var source : contents.entrySet()) {
             manifest.withArray("sources")
                     .addObject()
@@ -153,31 +199,9 @@ final class PracticeCriteriaCaseFixtures {
                     .put("availability", "AVAILABLE")
                     .put("content", source.getValue());
         }
-        for (String file : List.of("diff.patch", "files.json", "description.authored.md")) {
-            artifacts
-                    .addObject()
-                    .put("kind", "scm.pull-request.diff")
-                    .putObject("artifact")
-                    .put("path", CHANGE_VIEW_PREFIX + file);
-        }
-        for (String file : List.of("description.md", "metadata.json")) {
-            artifacts.addObject().put("kind", coreKind).putObject("artifact").put("path", "context/" + file);
-        }
-        artifacts
-                .addObject()
-                .put("kind", "scm.pull-request.diff")
-                .putObject("artifact")
-                .put("path", "context/change.json");
-        artifacts
-                .addObject()
-                .put("kind", "scm.pull-request.comments")
-                .putObject("artifact")
-                .put("path", "context/comments.json");
-        artifacts
-                .addObject()
-                .put("kind", "scm.pull-request.commits")
-                .putObject("artifact")
-                .put("path", "context/commits.json");
+        ArrayNode registered = manifest.putArray("artifacts");
+        artifacts.forEach((path, kind) ->
+                registered.addObject().put("kind", kind).putObject("artifact").put("path", path));
         Files.write(workspace.resolve(SandboxLayout.MANIFEST_PATH), MAPPER.writeValueAsBytes(manifest));
     }
 

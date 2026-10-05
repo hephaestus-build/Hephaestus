@@ -86,7 +86,7 @@ export default async function defersReviewAsksIntoTrackedWork(
 		);
 	} else {
 		directions.push(
-			`${String(hints.length)} comment(s) by others are listed, one row each; a remark that asks nothing of this change is not an ask. Decide every ask against the head diff: addressed when the diff carries the change asked for; deferred into tracked work when the author's reply names an issue or the description defers it to one; waived when the reviewer drops the ask in their own words, in the ask or in a follow-up, otherwise deferred bare. A later approval alone does not establish a waiver. A RESOLVED thread says nothing by itself, and "approved on the condition that you do it next time" is a deferral to track, not a waiver.`,
+			`${String(hints.length)} comment(s) by others are listed, one row each; a remark that asks nothing of this change is not an ask. Decide every ask: one about the code is addressed when the head diff carries the change asked for; one about the pull request itself — mark it ready, retitle it, link an issue, fill in the description — when the captured record shows it done (metadata.json, description.md, the linked work items), and a merged pull request was not a draft when it merged; deferred into tracked work when the author's reply names an issue or the description defers it to one; waived when the reviewer drops the ask in their own words, in the ask or in a follow-up, otherwise deferred bare. A later approval alone does not establish a waiver. A RESOLVED thread says nothing by itself, and "approved on the condition that you do it next time" is a deferral to track, not a waiver.`,
 			"A two-part ask is two asks: address one part and the other still stands.",
 		);
 	}

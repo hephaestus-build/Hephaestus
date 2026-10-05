@@ -5,5 +5,6 @@
   "target_branch": "main",
   "commit_sha": "0000000000000000000000000000000000000000",
   "title": "Add login service",
-  "body": ""
+  "body": "",
+  "is_draft": false
 }

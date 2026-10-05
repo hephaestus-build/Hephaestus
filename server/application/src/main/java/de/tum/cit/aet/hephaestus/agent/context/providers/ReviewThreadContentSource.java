@@ -130,6 +130,8 @@ public class ReviewThreadContentSource implements EvidenceSource {
                 decisionArray.add(toDecision(review));
             }
             root.set("reviewDecisions", decisionArray);
+            // A withdrawn or replaced decision may be gone, so this list is no event history.
+            root.put("decisionHistoryComplete", false);
             root.put("truncated", threadsTruncated || decisionsTruncated);
 
             log.info(

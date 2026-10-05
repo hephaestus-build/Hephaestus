@@ -71,7 +71,11 @@ void test("a subject's shape is a fact — bare, repeated, listed, cut off — a
 		[by["1111111"]?.bare, by["2222222"]?.bare, by["8888888"]?.bare],
 		[false, true, false],
 	);
-	assert.equal(by["3333333"]?.repeat, true);
+	// commits.json promises no order: both commits carrying the subject are repeats.
+	assert.deepEqual(
+		[by["1111111"]?.repeat, by["3333333"]?.repeat, by["2222222"]?.repeat],
+		[true, true, false],
+	);
 	assert.equal(by["4444444"]?.joinedClauses, true);
 	assert.equal(by["7777777"]?.joinedClauses, true);
 	assert.equal(by["1111111"]?.joinedClauses, false);

@@ -1380,3 +1380,59 @@ void test("unknown approval times establish neither before-merge absence nor a l
 		rmSync(staged.root, { recursive: true, force: true });
 	}
 });
+
+void test("review engagement distinguishes unavailable commit evidence from a captured empty range", async () => {
+	for (const captured of [false, true]) {
+		const staged = await stage("engaging-with-inline-review-comments", {
+			"comments.json": [
+				{
+					author: "reviewer",
+					body: "Please fix retry.",
+					path: "App.swift",
+					line: 4,
+					created_at: "2026-04-13T14:00:00Z",
+				},
+			],
+			"review_threads.json": {
+				threads: [],
+				reviewDecisions: [
+					{ state: "APPROVED", author: "reviewer", submittedAt: "2026-04-13T14:30:00Z" },
+				],
+			},
+		});
+		try {
+			if (!captured) {
+				rmSync(nodePath.join(staged.contextDir, "commits.json"));
+			}
+			const result = await staged.script(
+				nodePath.join(staged.root, "repo"),
+				new Map(),
+				metadata,
+				staged.contextDir,
+				staged.changeDir,
+			);
+			const note = result.hints[0];
+			assert.ok(note);
+			assert.equal(result.metrics.commitsFileAbsent, captured ? 0 : 1);
+			assert.equal(note.flags.commitsAfterTouchingFile, captured ? 0 : "unknown");
+			// The sum over notes is as unknown as each note's count; a captured empty range measures 0.
+			assert.equal(result.metrics.withLaterCommitOnFile, captured ? 0 : undefined);
+			assert.match(
+				result.directions[0] ?? "",
+				captured
+					? /; 0 have a later authored commit touching the commented file;/u
+					: /how many have a later authored commit touching the commented file is unknown/u,
+			);
+			assert.match(
+				String(note.flags.reviewerApprovedAfter),
+				captured ? /0 commit\(s\)/u : /unknown commit count/u,
+			);
+			assert.match(
+				result.directions[0] ?? "",
+				captured ? /0 captured commit\(s\)/u : /Commit capture: unavailable/u,
+			);
+		} finally {
+			rmSync(staged.root, { recursive: true, force: true });
+		}
+	}
+});

@@ -1,6 +1,10 @@
 // Precompute HINTS for uses-adaptive-colors-for-every-appearance: the color expressions ADDED inside
-// SwiftUI view types, split into the criteria's literal, system-adaptive and named-asset shapes, and for
-// each named asset color whether its colorset carries a dark appearance. The role a color plays —
+// SwiftUI view types, each under the first shape its text shows, and for each named asset color whether
+// its colorset carries a dark appearance. A shape is spelling, not a type: `.green` given to
+// `foregroundStyle` is SwiftUI's context-dependent standard color, `Color(.green)` converts UIKit's fixed
+// `UIColor.green`, and a name the app defines is whatever its definition says. Only the shapes whose
+// spelling fixes the kind — components, white or black, semantic styles, materials, the accent — are
+// counted as literal or adaptive; the rest are left to the review to classify. The role a color plays —
 // content over a fill, or a background that bakes in one appearance — is the review's to read from the
 // modifier chain.
 import { readFile } from "node:fs/promises";
@@ -13,21 +17,35 @@ import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/u;
 
+// First match wins on a line, so the order runs from the shapes whose spelling fixes the kind to those it
+// does not.
 const COLORS: readonly SourcePattern[] = [
-	["literal white/black", /\bColor\.(?:white|black)\b|[:(,]\s*\.(?:white|black)\b/u],
 	[
-		"literal RGB",
-		/\bColor\s*\(\s*(?:red|hue|\.sRGB|\.displayP3)|\bUIColor\s*\(\s*red:|\bColor\s*\(\s*hex:|\bColor\s*\(\s*"#|\bColor\s*\(\s*uiColor:\s*\.(?:white|black)/u,
+		"fixed components",
+		/\bColor\s*\(\s*(?:red|hue|white|\.sRGB|\.displayP3|hex)\s*:|\bColor\s*\(\s*"#|\bUIColor\s*\(\s*(?:red|white|hue|displayP3Red)\s*:/u,
 	],
-	["gray literal", /\bColor\.gray\b|[:(,]\s*\.gray\b/u],
-	[
-		"semantic",
-		/\.(?:primary|secondary|tertiary|quaternary|systemGray[2-6]?)\b|Color\s*\(\s*\.(?:systemBackground|secondarySystemBackground|tertiarySystemBackground|label|secondaryLabel|systemGroupedBackground|separator)\b/u,
-	],
+	["literal white/black", /\b(?:UI)?Color\.(?:white|black)\b|[:(,]\s*\.(?:white|black)\b/u],
+	["UIKit color", /\bUIColor\s*\.\s*[a-z]\w*|\bColor\s*\(\s*uiColor:\s*\.[a-z]\w*/u],
+	// `Color(_:bundle:)`: the bundle is optional, and without one the app's main bundle is searched.
+	["named asset", /\bColor\s*\(\s*"[^"]+"\s*(?:\)|,\s*bundle\s*:)/u],
+	["Color from a value", /\bColor\s*\(\s*\.[a-z]\w*/u],
+	["semantic", /\.(?:primary|secondary|tertiary|quaternary)\b/u],
 	["material", /\.(?:ultraThin|thin|regular|thick|ultraThick|bar)Material\b/u],
-	["accent", /\.accentColor\b|\.tint\b|\bColor\.accent\b/u],
-	["named asset", /\bColor\s*\(\s*"[^"]+"\s*\)|\bColor\s*\(\s*\.[a-z]\w*\s*\)/u],
+	["accent", /\.accentColor\b|[:(,]\s*\.tint\b(?!\s*\()/u],
+	["SwiftUI Color member", /\bColor\s*\.\s*[a-z]\w*/u],
+	[
+		"member given to a color modifier",
+		/\.(?:foregroundStyle|foregroundColor|background|fill|tint|stroke|strokeBorder|border)\s*\(\s*\.[a-z]\w*/u,
+	],
 ];
+
+/** The shapes whose spelling leaves the kind open: a type or a definition decides it. */
+const TO_CLASSIFY = [
+	"UIKit color",
+	"Color from a value",
+	"SwiftUI Color member",
+	"member given to a color modifier",
+] as const;
 
 /** Whether a colorset carries a dark appearance; "unknown" when it cannot be read as one. */
 type DarkAppearance = boolean | "unknown";
@@ -71,6 +89,16 @@ function darkAppearanceOf(source: string): DarkAppearance {
 		);
 	}
 	return dark;
+}
+
+/** The bundle a `Color("name", bundle:)` names, or null for the main bundle it searches without one. */
+function bundleOf(context: string): string | null {
+	const bundle = /Color\s*\(\s*"[^"]+"\s*,\s*bundle\s*:\s*(?<bundle>[^,)]+(?:\([^)]*\))?)/u.exec(
+		context,
+	)?.groups?.bundle;
+	return bundle === undefined || /^(?:\.main|Bundle\.main|nil)\s*$/u.test(bundle)
+		? null
+		: bundle.trim();
 }
 
 /** How many colorsets of the checkout are read; a name beyond them is unknown. */
@@ -147,22 +175,28 @@ export default async function usesAdaptiveColorsForEveryAppearance(
 	const assets = await assetColors(repoPath);
 	const colorsetsFound = [...assets.paths.values()].reduce((sum, files) => sum + files.length, 0);
 	const hints: Hint[] = scan.hints.map((h) => {
-		if (h.pattern !== "named asset") {
+		if (h.pattern !== "named asset" && h.pattern !== "Color from a value") {
 			return h;
 		}
 		const name =
 			/Color\s*\(\s*"(?<name>[^"]+)"/u.exec(h.context)?.groups?.name ??
 			/Color\s*\(\s*\.(?<name>\w+)/u.exec(h.context)?.groups?.name ??
 			"";
+		// Which catalog another bundle, such as a package's `.module`, holds is not read here.
+		const bundle = h.pattern === "named asset" ? bundleOf(h.context) : null;
 		return {
 			...h,
-			flags: { ...h.flags, asset: name, hasDarkAppearance: appearanceOf(assets, name) },
+			flags: {
+				...h.flags,
+				asset: name,
+				...(bundle === null ? {} : { bundle }),
+				hasDarkAppearance: bundle === null ? appearanceOf(assets, name) : "unknown",
+			},
 		};
 	});
-	const literals =
-		countLabel(scan, "literal white/black") +
-		countLabel(scan, "literal RGB") +
-		countLabel(scan, "gray literal");
+	const inOtherBundles = hints.filter((h) => h.flags.bundle !== undefined).length;
+	const literals = countLabel(scan, "fixed components") + countLabel(scan, "literal white/black");
+	const toClassify = TO_CLASSIFY.reduce((sum, label) => sum + countLabel(scan, label), 0);
 	const systemAdaptive =
 		countLabel(scan, "semantic") + countLabel(scan, "material") + countLabel(scan, "accent");
 	const namedAssets = countLabel(scan, "named asset");
@@ -175,9 +209,24 @@ export default async function usesAdaptiveColorsForEveryAppearance(
 			`Found ${literals} literal colors, ${systemAdaptive} system-adaptive colors and ${namedAssets} named asset colors added in view types. For each literal, read the modifier chain. Text over a fill the same view sets is content. A literal background or text on a system background can fix one appearance. A translucent scrim over an image is content, not an adaptive screen background.`,
 		);
 	}
+	if (toClassify > 0) {
+		directions.push(
+			`${toClassify} added line(s) name a color whose spelling does not settle its kind — a UIKit color, \`Color(.name)\`, a \`Color\` member or a member given to a color modifier. Read the type it resolves to and, for a name the app defines, its definition: SwiftUI's standard colors and UIKit's dynamic colors change with the appearance, UIKit's fixed constants do not.`,
+		);
+	}
+	if (scan.hints.length > 0) {
+		directions.push(
+			"Each line is listed once, under the first shape its text shows: enumerate every color a listed line holds.",
+		);
+	}
 	if (assetsWithoutDarkAppearance > 0) {
 		directions.push(
 			`${assetsWithoutDarkAppearance} listed named asset color(s) whose colorset has no dark luminosity entry — read its color values and how it is used before judging whether it adapts.`,
+		);
+	}
+	if (inOtherBundles > 0) {
+		directions.push(
+			`${String(inOtherBundles)} listed named asset color(s) are looked up in a bundle other than the main one: which asset catalog that bundle holds was not resolved, so their dark appearance is unknown until the catalog is located.`,
 		);
 	}
 	if (namedAssets > 0 && colorsetsFound > COLORSETS_READ) {
@@ -191,6 +240,7 @@ export default async function usesAdaptiveColorsForEveryAppearance(
 			literalColors: literals,
 			systemAdaptiveColors: systemAdaptive,
 			namedAssetColors: namedAssets,
+			colorsToClassify: toClassify,
 			assetsWithoutDarkAppearance,
 			assetColorsInCheckout: colorsetsFound,
 			filesWithoutCheckout: scan.filesWithoutCheckout,

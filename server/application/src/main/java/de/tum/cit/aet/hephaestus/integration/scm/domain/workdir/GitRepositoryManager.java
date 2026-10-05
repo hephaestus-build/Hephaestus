@@ -250,29 +250,45 @@ public class GitRepositoryManager {
         });
     }
 
-    /** Commits a staged record of a change may hold: the record a review reads, not a mirror of the range. */
-    public static final int MAX_STAGED_COMMITS = 500;
-
     /**
-     * The commits of {@code base..head} with their file changes, oldest first, the newest
-     * {@link #MAX_STAGED_COMMITS} of them.
+     * Hands every commit of {@code base..head} to {@code consumer} with its file changes, in no promised order: the
+     * whole range, which a staged record of a change must hold. The walk streams, so the caller's byte budget can stop
+     * it at the first commit over it; each commit's message is read as it is handed on and released after, so the
+     * messages of the range are never held together.
+     *
+     * @throws IllegalStateException when local git storage is disabled or the mirror does not hold either end, so
+     *     a range that could not be read is never mistaken for an empty one
      */
-    public List<CommitDetails> commitsBetween(RepositoryKey repository, String base, String head) {
-        if (!isEnabled()) return List.of();
-        List<CommitDetails> commits = read(repository, repo -> {
-            List<CommitDetails> newestFirst = new ArrayList<>();
+    public void forEachCommitBetween(
+            RepositoryKey repository, String base, String head, Consumer<CommitDetails> consumer) {
+        if (!isEnabled()) {
+            throw new IllegalStateException("Local git storage is disabled; the commits of a range cannot be read");
+        }
+        read(repository, repo -> {
+            ObjectId from = repo.resolve(base);
+            ObjectId to = repo.resolve(head);
+            if (from == null || to == null) {
+                throw new IllegalStateException("The mirror does not hold the pinned range " + base + ".." + head);
+            }
             try (RevWalk walk = new RevWalk(repo)) {
-                walk.markStart(walk.parseCommit(repo.resolve(head)));
-                walk.markUninteresting(walk.parseCommit(repo.resolve(base)));
+                // REVERSE buffers the whole range before yielding, so the byte budget cannot stop it early.
+                walk.setRetainBody(false);
+                walk.markStart(walk.parseCommit(to));
+                walk.markUninteresting(walk.parseCommit(from));
                 for (RevCommit commit : walk) {
                     checkInterrupted();
-                    if (newestFirst.size() == MAX_STAGED_COMMITS) break;
-                    newestFirst.add(details(repo, commit));
+                    CommitDetails read;
+                    try {
+                        walk.parseBody(commit);
+                        read = details(repo, commit);
+                    } finally {
+                        commit.disposeBody();
+                    }
+                    consumer.accept(read);
                 }
             }
-            return List.copyOf(newestFirst.reversed());
+            return null;
         });
-        return commits == null ? List.of() : commits;
     }
 
     /** The full message, subject and body, of every commit in {@code base..head}. */

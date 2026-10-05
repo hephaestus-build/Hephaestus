@@ -207,6 +207,29 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
     }
 
     @Test
+    void failsTheCaptureRatherThanStageAPinnedRangeItCouldNotRead() {
+        var source = renderer();
+        var kind = PullRequestContentSource.CORE;
+        when(policies.isSourceUsePermitted(catalog.version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+                .thenReturn(true);
+        var job = job();
+        var key = new RepositoryKey(1L, 2L);
+        when(repositories.prepare(job)).thenReturn(new ReviewRepositoryPreparer.PreparedReview(key, "head", "base"));
+        var preparation = new ReviewPreparation();
+        preparation.prepare(repositories, job);
+        doAnswer(invocation -> {
+                    throw new IllegalStateException("The mirror does not hold the pinned range base..head");
+                })
+                .when(git)
+                .forEachCommitBetween(eq(key), eq("base"), eq("head"), any());
+
+        Throwable failure = catchThrowable(
+                () -> source.capture(new ContextRequest.PracticeReviewRequest(job, preparation), Set.of(kind)));
+
+        assertThat(failure).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void rendersPinnedCommitsWithParentsAndFileChangesForExistingPrecomputeConsumers() throws Exception {
         var source = renderer();
         var kind = PullRequestContentSource.CORE;
@@ -234,7 +257,12 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
                 1,
                 List.of(changed),
                 List.of("base"));
-        when(git.commitsBetween(key, "base", "head")).thenReturn(List.of(commit));
+        doAnswer(invocation -> {
+                    invocation.<Consumer<CommitDetails>>getArgument(3).accept(commit);
+                    return null;
+                })
+                .when(git)
+                .forEachCommitBetween(eq(key), eq("base"), eq("head"), any());
         var captured = source.capture(new ContextRequest.PracticeReviewRequest(job, preparation), Set.of(kind));
         try {
             var data = mapper.readTree(
