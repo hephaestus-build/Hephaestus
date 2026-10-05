@@ -567,6 +567,53 @@ void test("a named color resolves only to one colorset, exact name first; two ca
 	}
 });
 
+void test("a named color given a bundle is a named asset; the main bundle resolves, another bundle stays unknown", async () => {
+	const { root, script } = await stage("uses-adaptive-colors-for-every-appearance");
+	try {
+		mkdirSync(path.join(root, "repo/App/Assets.xcassets/Brand.colorset"), { recursive: true });
+		writeFileSync(
+			path.join(root, "repo/App/Assets.xcassets/Brand.colorset/Contents.json"),
+			'{"colors":[{"color":{},"idiom":"universal"},{"color":{},"idiom":"universal","appearances":[{"appearance":"luminosity","value":"dark"}]}]}',
+		);
+		const source = [
+			"struct Card: View {",
+			"    var body: some View {",
+			'        Text("a").foregroundStyle(Color("Brand", bundle: .main))',
+			'        Text("b").foregroundStyle(Color("Brand", bundle: nil))',
+			// A package's own catalog: the checkout's Brand.colorset may not be the one it holds.
+			'        Text("c").foregroundStyle(Color("Brand", bundle: .module))',
+			// The same argument shape names an image, not a color.
+			'        Image("Brand", bundle: .module)',
+			"    }",
+			"}",
+			"",
+		].join("\n");
+		writeFileSync(path.join(root, "repo/App/Card.swift"), source);
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([whole("App/Card.swift", source)]),
+			metadata,
+		);
+		assert.deepEqual(
+			result.hints.map((h) => [
+				h.line,
+				h.pattern,
+				h.flags.bundle ?? null,
+				h.flags.hasDarkAppearance,
+			]),
+			[
+				[3, "named asset", null, true],
+				[4, "named asset", null, true],
+				[5, "named asset", ".module", "unknown"],
+			],
+		);
+		assert.equal(result.metrics.namedAssetColors, 3);
+		assert.ok(result.directions.some((d) => /bundle other than the main one/u.test(d)));
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 void test("no gray is literal or adaptive by its spelling: each is left to the review to classify", async () => {
 	const { root, script } = await stage("uses-adaptive-colors-for-every-appearance");
 	try {

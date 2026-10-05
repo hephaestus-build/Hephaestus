@@ -221,7 +221,7 @@ It is absent for a head that no sync or check event has reported on. `author_bot
 Absent means a person.
 The same rule gives every `author` below its `bot: true`, so a reader never guesses from a login.
 
-**`commits.json`** — `commits`: every commit of `base_sha..head_sha`, oldest first.
+**`commits.json`** — `commits`: every commit of `base_sha..head_sha`, in no promised order: order by `parents` or the commit times.
 It is written from the prepared pinned range.
 A range the mirror cannot read fails the capture.
 A range larger than the workspace byte budget refuses the review.

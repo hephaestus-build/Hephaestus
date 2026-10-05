@@ -26,7 +26,8 @@ const COLORS: readonly SourcePattern[] = [
 	],
 	["literal white/black", /\b(?:UI)?Color\.(?:white|black)\b|[:(,]\s*\.(?:white|black)\b/u],
 	["UIKit color", /\bUIColor\s*\.\s*[a-z]\w*|\bColor\s*\(\s*uiColor:\s*\.[a-z]\w*/u],
-	["named asset", /\bColor\s*\(\s*"[^"]+"\s*\)/u],
+	// `Color(_:bundle:)`: the bundle is optional, and without one the app's main bundle is searched.
+	["named asset", /\bColor\s*\(\s*"[^"]+"\s*(?:\)|,\s*bundle\s*:)/u],
 	["Color from a value", /\bColor\s*\(\s*\.[a-z]\w*/u],
 	["semantic", /\.(?:primary|secondary|tertiary|quaternary)\b/u],
 	["material", /\.(?:ultraThin|thin|regular|thick|ultraThick|bar)Material\b/u],
@@ -88,6 +89,16 @@ function darkAppearanceOf(source: string): DarkAppearance {
 		);
 	}
 	return dark;
+}
+
+/** The bundle a `Color("name", bundle:)` names, or null for the main bundle it searches without one. */
+function bundleOf(context: string): string | null {
+	const bundle = /Color\s*\(\s*"[^"]+"\s*,\s*bundle\s*:\s*(?<bundle>[^,)]+(?:\([^)]*\))?)/u.exec(
+		context,
+	)?.groups?.bundle;
+	return bundle === undefined || /^(?:\.main|Bundle\.main|nil)\s*$/u.test(bundle)
+		? null
+		: bundle.trim();
 }
 
 /** How many colorsets of the checkout are read; a name beyond them is unknown. */
@@ -171,11 +182,19 @@ export default async function usesAdaptiveColorsForEveryAppearance(
 			/Color\s*\(\s*"(?<name>[^"]+)"/u.exec(h.context)?.groups?.name ??
 			/Color\s*\(\s*\.(?<name>\w+)/u.exec(h.context)?.groups?.name ??
 			"";
+		// Which catalog another bundle, such as a package's `.module`, holds is not read here.
+		const bundle = h.pattern === "named asset" ? bundleOf(h.context) : null;
 		return {
 			...h,
-			flags: { ...h.flags, asset: name, hasDarkAppearance: appearanceOf(assets, name) },
+			flags: {
+				...h.flags,
+				asset: name,
+				...(bundle === null ? {} : { bundle }),
+				hasDarkAppearance: bundle === null ? appearanceOf(assets, name) : "unknown",
+			},
 		};
 	});
+	const inOtherBundles = hints.filter((h) => h.flags.bundle !== undefined).length;
 	const literals = countLabel(scan, "fixed components") + countLabel(scan, "literal white/black");
 	const toClassify = TO_CLASSIFY.reduce((sum, label) => sum + countLabel(scan, label), 0);
 	const systemAdaptive =
@@ -203,6 +222,11 @@ export default async function usesAdaptiveColorsForEveryAppearance(
 	if (assetsWithoutDarkAppearance > 0) {
 		directions.push(
 			`${assetsWithoutDarkAppearance} listed named asset color(s) whose colorset has no dark luminosity entry — read its color values and how it is used before judging whether it adapts.`,
+		);
+	}
+	if (inOtherBundles > 0) {
+		directions.push(
+			`${String(inOtherBundles)} listed named asset color(s) are looked up in a bundle other than the main one: which asset catalog that bundle holds was not resolved, so their dark appearance is unknown until the catalog is located.`,
 		);
 	}
 	if (namedAssets > 0 && colorsetsFound > COLORSETS_READ) {

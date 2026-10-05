@@ -35,7 +35,6 @@ import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.StoredConfig;
 import org.eclipse.jgit.revwalk.RevCommit;
-import org.eclipse.jgit.revwalk.RevSort;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.transport.RefSpec;
 import org.eclipse.jgit.transport.TagOpt;
@@ -252,9 +251,10 @@ public class GitRepositoryManager {
     }
 
     /**
-     * Hands every commit of {@code base..head} to {@code consumer}, oldest first, with its file changes: the whole
-     * range, which a staged record of a change must hold, its size bounded by the caller's byte budget rather than
-     * a commit count. Only commits are buffered for the ordering; each one's details are read as it is handed on.
+     * Hands every commit of {@code base..head} to {@code consumer} with its file changes, in no promised order: the
+     * whole range, which a staged record of a change must hold. The walk streams, so the caller's byte budget can stop
+     * it at the first commit over it; each commit's message is read as it is handed on and released after, so the
+     * messages of the range are never held together.
      *
      * @throws IllegalStateException when local git storage is disabled or the mirror does not hold either end, so
      *     a range that could not be read is never mistaken for an empty one
@@ -271,12 +271,20 @@ public class GitRepositoryManager {
                 throw new IllegalStateException("The mirror does not hold the pinned range " + base + ".." + head);
             }
             try (RevWalk walk = new RevWalk(repo)) {
+                // REVERSE buffers the whole range before yielding, so the byte budget cannot stop it early.
+                walk.setRetainBody(false);
                 walk.markStart(walk.parseCommit(to));
                 walk.markUninteresting(walk.parseCommit(from));
-                walk.sort(RevSort.REVERSE);
                 for (RevCommit commit : walk) {
                     checkInterrupted();
-                    consumer.accept(details(repo, commit));
+                    CommitDetails read;
+                    try {
+                        walk.parseBody(commit);
+                        read = details(repo, commit);
+                    } finally {
+                        commit.disposeBody();
+                    }
+                    consumer.accept(read);
                 }
             }
             return null;

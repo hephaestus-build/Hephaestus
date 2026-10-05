@@ -376,6 +376,7 @@
 	},
 	{
 		"id": "issue-link-in-body-without-commit-capture",
+		"omit": ["context/commits.json"],
 		"expected": {
 			"links-the-change-to-its-issue": "MET"
 		},
@@ -390,6 +391,7 @@
 	},
 	{
 		"id": "resolved-review-request-without-commit-capture",
+		"omit": ["context/commits.json"],
 		"expected": {
 			"engaging-with-inline-review-comments": "MET"
 		},

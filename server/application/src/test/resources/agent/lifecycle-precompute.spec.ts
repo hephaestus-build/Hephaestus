@@ -1415,6 +1415,14 @@ void test("review engagement distinguishes unavailable commit evidence from a ca
 			assert.ok(note);
 			assert.equal(result.metrics.commitsFileAbsent, captured ? 0 : 1);
 			assert.equal(note.flags.commitsAfterTouchingFile, captured ? 0 : "unknown");
+			// The sum over notes is as unknown as each note's count; a captured empty range measures 0.
+			assert.equal(result.metrics.withLaterCommitOnFile, captured ? 0 : undefined);
+			assert.match(
+				result.directions[0] ?? "",
+				captured
+					? /; 0 have a later authored commit touching the commented file;/u
+					: /how many have a later authored commit touching the commented file is unknown/u,
+			);
 			assert.match(
 				String(note.flags.reviewerApprovedAfter),
 				captured ? /0 commit\(s\)/u : /unknown commit count/u,

@@ -165,9 +165,11 @@ export default async function engagingWithInlineReviewComments(
 	const replied = byPeople.filter(
 		(h) => h.flags.authorReplied === true || Number(h.flags.authorNotesAfter) > 0,
 	).length;
-	const committedAfter = byPeople.filter(
-		(h) => Number(h.flags.commitsAfterTouchingFile) > 0,
-	).length;
+	// Without the commit record each note's count is unknown, and so is their sum: never a measured 0.
+	const committedAfter =
+		capturedCommits === null
+			? null
+			: byPeople.filter((h) => Number(h.flags.commitsAfterTouchingFile) > 0).length;
 	const afterHandOff = byPeople.filter((h) => h.flags.afterHandOff === true).length;
 	const directions: string[] = [];
 	if (inline === null && general === null) {
@@ -181,7 +183,7 @@ export default async function engagingWithInlineReviewComments(
 	} else {
 		const bots = hints.length - byPeople.length;
 		directions.push(
-			`${String(byPeople.length)} reviewer note(s) (${String(inlineHints.filter((h) => h.flags.bot !== true).length)} inline, ${String(conversationHints.filter((h) => h.flags.bot !== true).length)} conversation)${bots > 0 ? `, ${String(bots)} more by bots` : ""}; ${String(replied)} have a later author note; ${String(committedAfter)} have a later authored commit touching the commented file; ${String(afterHandOff)} were posted after the work merged or closed. Commit capture: ${capturedCommits === null ? "unavailable" : `${String(commits.length)} captured commit(s)`} in ${contextFile(contextReference, "commits.json")}.`,
+			`${String(byPeople.length)} reviewer note(s) (${String(inlineHints.filter((h) => h.flags.bot !== true).length)} inline, ${String(conversationHints.filter((h) => h.flags.bot !== true).length)} conversation)${bots > 0 ? `, ${String(bots)} more by bots` : ""}; ${String(replied)} have a later author note; ${committedAfter === null ? "how many have a later authored commit touching the commented file is unknown" : `${String(committedAfter)} have a later authored commit touching the commented file`}; ${String(afterHandOff)} were posted after the work merged or closed. Commit capture: ${capturedCommits === null ? "unavailable" : `${String(commits.length)} captured commit(s)`} in ${contextFile(contextReference, "commits.json")}.`,
 		);
 	}
 	return {
@@ -193,7 +195,7 @@ export default async function engagingWithInlineReviewComments(
 			conversationComments: conversationHints.filter((h) => h.flags.bot !== true).length,
 			botComments: hints.length - byPeople.length,
 			withAuthorReply: replied,
-			withLaterCommitOnFile: committedAfter,
+			...(committedAfter === null ? {} : { withLaterCommitOnFile: committedAfter }),
 			afterHandOff,
 			commitsFileAbsent: capturedCommits === null ? 1 : 0,
 		},

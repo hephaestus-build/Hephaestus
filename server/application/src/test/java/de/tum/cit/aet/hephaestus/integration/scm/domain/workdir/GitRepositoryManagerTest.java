@@ -13,9 +13,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -25,6 +30,7 @@ import org.eclipse.jgit.lib.CommitBuilder;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.FileMode;
 import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectInserter;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.TreeFormatter;
 import org.eclipse.jgit.revwalk.RevWalk;
@@ -95,7 +101,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldListTheCommitsOfARangeOldestFirstWithTheirFileChanges() throws Exception {
+    void shouldListTheCommitsOfARangeWithTheirFileChanges() throws Exception {
         try (Git git = repository()) {
             String main = head(git);
             git.checkout().setCreateBranch(true).setName("feature").call();
@@ -106,22 +112,25 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             String second = commit(git, "feat: add a and b\n\nCloses #7");
             prepare();
 
-            List<CommitDetails> commits = new ArrayList<>();
-            manager.forEachCommitBetween(KEY, main, second, commits::add);
+            Map<String, CommitDetails> commits = new HashMap<>();
+            manager.forEachCommitBetween(KEY, main, second, commit -> commits.put(commit.sha(), commit));
 
-            assertThat(commits).extracting(CommitDetails::sha).containsExactly(first, second);
-            assertThat(commits.get(0).fileChanges()).singleElement().satisfies(change -> {
-                assertThat(change.filename()).isEqualTo("README.md");
-                assertThat(change.changeType()).isEqualTo(ChangeType.MODIFIED);
-                assertThat(change.additions()).isEqualTo(2);
-            });
-            assertThat(commits.get(1).fileChanges())
+            assertThat(commits).containsOnlyKeys(first, second);
+            assertThat(Objects.requireNonNull(commits.get(first)).fileChanges())
+                    .singleElement()
+                    .satisfies(change -> {
+                        assertThat(change.filename()).isEqualTo("README.md");
+                        assertThat(change.changeType()).isEqualTo(ChangeType.MODIFIED);
+                        assertThat(change.additions()).isEqualTo(2);
+                    });
+            assertThat(Objects.requireNonNull(commits.get(second)).fileChanges())
                     .extracting(CommitDetails.FileChange::filename, CommitDetails.FileChange::changeType)
                     .containsExactlyInAnyOrder(
                             Tuple.tuple("a.txt", ChangeType.ADDED), Tuple.tuple("b.txt", ChangeType.ADDED));
-            assertThat(commits.get(1).message()).isEqualTo("feat: add a and b");
-            assertThat(commits.get(1).messageBody()).isEqualTo("Closes #7");
-            assertThat(commits.get(1).parentShas()).containsExactly(first);
+            assertThat(Objects.requireNonNull(commits.get(second)).message()).isEqualTo("feat: add a and b");
+            assertThat(Objects.requireNonNull(commits.get(second)).messageBody())
+                    .isEqualTo("Closes #7");
+            assertThat(Objects.requireNonNull(commits.get(second)).parentShas()).containsExactly(first);
         }
     }
 
@@ -449,7 +458,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldHandOnEveryCommitOfARangeLongerThanAnyFormerCapOldestFirst() throws Exception {
+    void shouldHandOnEveryCommitOfARangeLongerThanAnyFormerCap() throws Exception {
         try (Git git = repository()) {
             String base = head(git);
             ObjectId tip = chain(git, ObjectId.fromString(base), 501);
@@ -458,8 +467,54 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             List<String> shas = new ArrayList<>();
             manager.forEachCommitBetween(KEY, base, tip.name(), commit -> shas.add(commit.sha()));
 
-            assertThat(shas).hasSize(501).last().isEqualTo(tip.name());
-            assertThat(shas).doesNotHaveDuplicates().doesNotContain(base);
+            assertThat(shas)
+                    .hasSize(501)
+                    .doesNotHaveDuplicates()
+                    .contains(tip.name())
+                    .doesNotContain(base);
+        }
+    }
+
+    @Test
+    void shouldHandOnTheWholeRangeWithItsTimesParentsAndMessagesWhenCommitDatesRunBackwards() throws Exception {
+        try (Git git = repository()) {
+            ObjectId base = ObjectId.fromString(head(git));
+            ObjectId shared;
+            ObjectId first;
+            ObjectId late;
+            ObjectId merge;
+            try (var inserter = git.getRepository().newObjectInserter();
+                    var walk = new RevWalk(git.getRepository())) {
+                ObjectId tree = walk.parseCommit(base).getTree().getId();
+                // A branch committed with a clock behind its parent's.
+                shared = commitAt(inserter, tree, 300, "Shared", base);
+                first = commitAt(inserter, tree, 400, "First branch\n\nWhy it is needed.", shared);
+                late = commitAt(inserter, tree, 100, "Branch with a clock behind\n\nIts own body.", shared);
+                merge = commitAt(inserter, tree, 500, "Merge", first, late);
+                inserter.flush();
+            }
+            var update = git.getRepository().updateRef("HEAD");
+            update.setNewObjectId(merge);
+            update.forceUpdate();
+            prepare();
+
+            Map<String, CommitDetails> commits = new HashMap<>();
+            manager.forEachCommitBetween(KEY, base.name(), merge.name(), commit -> commits.put(commit.sha(), commit));
+
+            assertThat(commits).containsOnlyKeys(shared.name(), first.name(), late.name(), merge.name());
+            CommitDetails behind = Objects.requireNonNull(commits.get(late.name()));
+            assertThat(behind.message()).isEqualTo("Branch with a clock behind");
+            assertThat(behind.messageBody()).isEqualTo("Its own body.");
+            assertThat(behind.authorName()).isEqualTo("Test");
+            assertThat(behind.authoredAt()).isEqualTo(Instant.ofEpochSecond(100));
+            assertThat(behind.committedAt()).isEqualTo(Instant.ofEpochSecond(100));
+            assertThat(behind.parentShas()).containsExactly(shared.name());
+            assertThat(Objects.requireNonNull(commits.get(first.name())).messageBody())
+                    .isEqualTo("Why it is needed.");
+            assertThat(Objects.requireNonNull(commits.get(merge.name())).parentShas())
+                    .containsExactly(first.name(), late.name());
+            assertThat(Objects.requireNonNull(commits.get(shared.name())).parentShas())
+                    .containsExactly(base.name());
         }
     }
 
@@ -527,6 +582,20 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         update.setNewObjectId(tip);
         update.forceUpdate();
         return tip;
+    }
+
+    private static ObjectId commitAt(
+            ObjectInserter inserter, ObjectId tree, long epochSecond, String message, ObjectId... parents)
+            throws IOException {
+        PersonIdent ident =
+                new PersonIdent("Test", "test@example.com", Instant.ofEpochSecond(epochSecond), ZoneOffset.UTC);
+        CommitBuilder commit = new CommitBuilder();
+        commit.setTreeId(tree);
+        commit.setParentIds(parents);
+        commit.setAuthor(ident);
+        commit.setCommitter(ident);
+        commit.setMessage(message);
+        return inserter.insert(commit);
     }
 
     private void prepare() {

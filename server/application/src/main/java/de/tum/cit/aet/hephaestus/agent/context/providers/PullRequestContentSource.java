@@ -69,7 +69,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     public static final String DESCRIPTION_FILE = OUTPUT_PREFIX + "description.md";
 
     /**
-     * Commit messages and file changes, oldest first. Staged on the server so admission can
+     * Commit messages and file changes, in no promised order. Staged on the server so admission can
      * verify citations of commit messages.
      */
     public static final String COMMITS_FILE = OUTPUT_PREFIX + "commits.json";
