@@ -3,7 +3,7 @@ import { type TestContext, test } from "node:test";
 
 import { PGlite } from "@electric-sql/pglite";
 
-import { type Queryable, writeOrRewind } from "./lib/practices-demo-revisions.ts";
+import { type Queryable, workspaceToSeed, writeOrRewind } from "./lib/practices-demo-database.ts";
 
 // The columns and foreign keys the rewind touches, as the baseline schema declares them. An
 // observation keeps its row when its revision goes (`ON DELETE SET NULL`), so only the rewind's own
@@ -23,6 +23,8 @@ const SCHEMA = `
 		id bigint PRIMARY KEY,
 		practice_revision_id bigint REFERENCES practice_revision (id) ON DELETE SET NULL
 	);
+	CREATE TABLE workspace (id bigint PRIMARY KEY, slug text NOT NULL, practices_enabled boolean NOT NULL);
+	INSERT INTO workspace VALUES (7, 'demo', true), (8, 'quiet', false);
 	INSERT INTO practice VALUES (1, 7, NULL);
 	INSERT INTO practice_revision (id, practice_id, revision_number, review_rule_fingerprint, criteria)
 		VALUES (10, 1, 1, 'before', 'one concern'), (11, 1, 2, 'after', 'one concern');
@@ -151,3 +153,12 @@ for (const [name, statement] of Object.entries({
 		assert.deepEqual(await revisions(db), [10, 11]);
 	});
 }
+
+void test("the seed goes only into a workspace that shows its practice pages", async (t) => {
+	const db = await database(t);
+
+	assert.equal(await workspaceToSeed(db, "demo", "seed"), 7);
+	await assert.rejects(workspaceToSeed(db, "quiet", "seed"), /practice reviews turned off/u);
+	assert.equal(await workspaceToSeed(db, "quiet", "remove"), 8);
+	await assert.rejects(workspaceToSeed(db, "missing", "remove"), /No workspace with slug missing/u);
+});

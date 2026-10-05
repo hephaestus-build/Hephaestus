@@ -4,6 +4,31 @@ export interface Queryable {
 }
 
 /**
+ * The id of the workspace the demo goes into. A workspace with practice reviews off hides both pages the
+ * demo is for, so the seed refuses it before it writes; removal works either way.
+ */
+export async function workspaceToSeed(
+	client: Queryable,
+	slug: string,
+	mode: "seed" | "remove",
+): Promise<number> {
+	const { rows } = await client.query(
+		"SELECT id, practices_enabled FROM workspace WHERE slug = $1",
+		[slug],
+	);
+	const workspace = rows[0];
+	if (workspace === undefined) {
+		throw new Error(`No workspace with slug ${slug}`);
+	}
+	if (mode === "seed" && workspace.practices_enabled !== true) {
+		throw new Error(
+			`${slug} has practice reviews turned off, so its practice pages are hidden. Turn on Start practice reviews under Practices → Review settings, then run the seed again.`,
+		);
+	}
+	return Number(workspace.id);
+}
+
+/**
  * Rewinds the practice revisions that the server appended for the seed. A revision goes back only
  * while it is current, differs from the one before it in its fingerprint alone, and no observation
  * pins it: the next review would append the same revision again.

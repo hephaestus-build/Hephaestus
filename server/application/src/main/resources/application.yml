@@ -12,7 +12,9 @@ spring:
             worker-node: prod,worker
 
     config:
-        import: optional:file:.env[.properties]
+        # `bootRun` runs in the application module, so `../` is `server/`, where `.env.example` and the
+        # compose file the local profile starts both live.
+        import: optional:file:../.env[.properties]
 
     # Moments enables scheduling independently of our runtime-role gate; no calendar events are used.
     modulith:
@@ -274,6 +276,8 @@ hephaestus:
         audience: ${HEPHAESTUS_AUTH_AUDIENCE:hephaestus-spa}
         access-ttl: ${HEPHAESTUS_AUTH_ACCESS_TTL:24h}
         step-up-max-age: ${HEPHAESTUS_AUTH_STEP_UP_MAX_AGE:5m}
+        # Passwordless local sign-in, which the practices demo seed uses. The prod profile refuses it.
+        dev-login-enabled: ${HEPHAESTUS_AUTH_DEV_LOGIN_ENABLED:false}
         cookie-name: ${HEPHAESTUS_AUTH_COOKIE_NAME:__Host-HEPHAESTUS_AT}
         state-cookie-key: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY:}
         # Chrome extension ids allowed to sign in (comma-separated). Each id allows exactly the callback

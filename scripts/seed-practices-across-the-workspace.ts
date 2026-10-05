@@ -5,8 +5,8 @@ import { parseArgs } from "node:util";
 import { Client } from "pg";
 
 import { isLoopbackHost, positivePort, readEnvFile } from "./lib/env.ts";
-import { isRecord } from "./lib/json.ts";
-import { rewindRevisions, writeOrRewind } from "./lib/practices-demo-revisions.ts";
+import { isRecord, parseJson } from "./lib/json.ts";
+import { rewindRevisions, workspaceToSeed, writeOrRewind } from "./lib/practices-demo-database.ts";
 import {
 	type ArtifactRef,
 	type Bucket,
@@ -28,6 +28,7 @@ import {
 	readerCards,
 	seedId,
 } from "./lib/practices-demo.ts";
+import { completeTransparencyNotice } from "./lib/research-consent.ts";
 
 /**
  * Writes the practices demo (`scripts/lib/practices-demo.ts`) into the development database, or
@@ -283,6 +284,22 @@ async function devSignIn(
 	if (signedIn.rowCount !== 1) {
 		throw new Error(`The server at ${server} does not read the database the seed would write`);
 	}
+	await completeTransparencyNotice(async (method, route, body) => {
+		const json =
+			body === undefined
+				? {}
+				: { headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
+		const response = await fetch(`${server}${route}`, {
+			method,
+			...json,
+			headers: { authorization: `Bearer ${token}`, ...json.headers },
+			signal: AbortSignal.timeout(10_000),
+		});
+		if (!response.ok) {
+			throw new Error(`${method} ${route} at ${server} failed with ${response.status}`);
+		}
+		return response.status === 204 ? undefined : parseJson(await response.text());
+	});
 	return { server, token };
 }
 
@@ -305,9 +322,10 @@ async function postDev(
 	});
 	if (!response.ok) {
 		const detail = await response.text().catch(() => "");
-		throw new Error(
-			`The server refused ${what} with ${response.status}; is HEPHAESTUS_DEV_SEED_ENABLED set? ${detail}`.trim(),
-		);
+		// The dev endpoints exist only while the flag is set, so a missing one is the flag.
+		const hint =
+			response.status === 404 ? " Set HEPHAESTUS_DEV_SEED_ENABLED=true in server/.env." : "";
+		throw new Error(`The server refused ${what} with ${response.status}.${hint} ${detail}`.trim());
 	}
 	return response;
 }
@@ -636,14 +654,7 @@ async function main(): Promise<void> {
 	});
 	await client.connect();
 	try {
-		const workspace = await client.query<{ id: number }>(
-			"SELECT id FROM workspace WHERE slug = $1",
-			[WORKSPACE_SLUG],
-		);
-		const workspaceId = workspace.rows[0]?.id;
-		if (workspaceId === undefined) {
-			throw new Error(`No workspace with slug ${WORKSPACE_SLUG}`);
-		}
+		const workspaceId = await workspaceToSeed(client, WORKSPACE_SLUG, mode);
 		// Before any write: the server must answer dev sign-in from this very database.
 		const devServer = await devSignIn(client, env);
 		await client.query("BEGIN");
