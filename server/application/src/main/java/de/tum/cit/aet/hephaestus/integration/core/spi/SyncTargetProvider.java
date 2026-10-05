@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.spi;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -19,12 +20,6 @@ import org.jspecify.annotations.Nullable;
  */
 public interface SyncTargetProvider
         extends SyncTimestampProvider, BackfillStateProvider, RepositoryAvailabilityProvider {
-    /**
-     * Gets all active sync targets across all scopes — targets in active-status scopes with
-     * at least one configured repository. Never null (may be empty).
-     */
-    List<SyncTarget> getActiveSyncTargets();
-
     /**
      * @return list of sync targets for the scope, never null (may be empty if scope not found)
      */
@@ -63,6 +58,12 @@ public interface SyncTargetProvider
     default List<SyncSession> getSyncSessions(IntegrationKind kind) {
         return List.of();
     }
+
+    /**
+     * Gets the sync session of one scope, under the same eligibility as {@link #getSyncSessions}.
+     * Unlike the batch, a stored credential of this scope that cannot be read throws.
+     */
+    Optional<SyncSession> getSyncSession(Long scopeId, IntegrationKind kind);
 
     default SyncStatistics getSyncStatistics() {
         return new SyncStatistics(0, 0, 0, 0, false);

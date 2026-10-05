@@ -163,6 +163,9 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         lenient()
                 .when(syncTargetProvider.getSyncSessions(IntegrationKind.GITLAB))
                 .thenReturn(List.of(session));
+        lenient()
+                .when(syncTargetProvider.getSyncSession(WORKSPACE_ID, IntegrationKind.GITLAB))
+                .thenReturn(Optional.of(session));
     }
 
     private Connection activeGitLabConnection() {
@@ -491,7 +494,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 "https://gitlab.com",
                 List.of(target),
                 session.syncContext());
-        when(syncTargetProvider.getSyncSessions(IntegrationKind.GITLAB)).thenReturn(List.of(session));
+        when(syncTargetProvider.getSyncSession(WORKSPACE_ID, IntegrationKind.GITLAB))
+                .thenReturn(Optional.of(session));
         when(syncTargetProvider.getSyncTargetsForScope(WORKSPACE_ID)).thenReturn(List.of(target));
         project.setProvider(TestEntities.gitProvider(100L, IdentityProviderType.GITLAB));
         var metadata = mock(GitLabProjectResponse.class);

@@ -206,8 +206,10 @@ public class ConnectionService {
     /**
      * Decrypts the stored {@link BearerToken} for the workspace's ACTIVE Connection,
      * if any. A credential the configured keys cannot read surfaces as {@link CredentialUnreadableException}.
+     * That exception leaves a joined transaction committable, so a batch over every workspace can skip
+     * the unreadable one and still return the others.
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = CredentialUnreadableException.class)
     public Optional<BearerToken> findActiveBearerToken(long workspaceId, IntegrationKind kind) {
         return connectionRepository
                 .findActive(workspaceId, kind)

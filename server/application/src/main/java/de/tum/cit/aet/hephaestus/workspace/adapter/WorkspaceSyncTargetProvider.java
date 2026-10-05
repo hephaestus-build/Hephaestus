@@ -4,6 +4,7 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -82,17 +83,12 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
         this.practiceReviewRepositoryTargetRepository = practiceReviewRepositoryTargetRepository;
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<SyncTarget> getActiveSyncTargets() {
-        return workspaceRepository.findAll().stream()
-                .filter(ws -> ws.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
-                .filter(ws -> hasActiveProvider(ws, IntegrationKind.GITHUB))
-                .flatMap(ws -> ws.getRepositoriesToMonitor().stream()
-                        // Apply repository filter to respect monitoring configuration (e.g., dev environment limits)
-                        .filter(workspaceScopeFilter::isRepositoryAllowed)
-                        .map(rtm -> SyncTargetFactory.create(ws, rtm, connectionService)))
-                .toList();
+    private void logSkippedForUnreadableCredential(Workspace workspace, CredentialUnreadableException e) {
+        log.error(
+                "Skipping workspace from sync enumeration: reason=credentialUnreadable, workspaceId={}, connectionId={}, kind={}",
+                workspace.getId(),
+                e.connectionId(),
+                e.kind());
     }
 
     private boolean hasActiveProvider(Workspace workspace, IntegrationKind kind) {
@@ -104,7 +100,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
         } catch (IllegalStateException e) {
             // A single corrupt workspace with ACTIVE Connections for BOTH GitHub and GitLab makes
             // findActiveProviderKind fail loud. This filter runs while streaming EVERY workspace at
-            // the top of the daily sync cron (getSyncSessions/getSyncStatistics/getActiveSyncTargets);
+            // the top of the daily sync cron (getSyncSessions/getSyncStatistics);
             // letting the throw escape would abort the whole enumeration and silently skip the sync
             // for every other tenant until the bad row is fixed out-of-band. Drop just this workspace.
             log.error(
@@ -526,8 +522,25 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                 .filter(ws -> ws.getStatus() == WorkspaceStatus.ACTIVE)
                 .filter(ws -> hasActiveProvider(ws, kind))
                 .filter(workspaceScopeFilter::isWorkspaceAllowed)
-                .map(this::toSyncSession)
+                .<SyncSession>mapMulti((ws, sessions) -> {
+                    try {
+                        sessions.accept(toSyncSession(ws));
+                    } catch (CredentialUnreadableException e) {
+                        logSkippedForUnreadableCredential(ws, e);
+                    }
+                })
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<SyncSession> getSyncSession(Long scopeId, IntegrationKind kind) {
+        return workspaceRepository
+                .findById(scopeId)
+                .filter(ws -> ws.getStatus() == WorkspaceStatus.ACTIVE)
+                .filter(ws -> hasActiveProvider(ws, kind))
+                .filter(workspaceScopeFilter::isWorkspaceAllowed)
+                .map(this::toSyncSession);
     }
 
     @Override

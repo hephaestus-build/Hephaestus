@@ -217,9 +217,8 @@ public class GitLabDataSyncScheduler {
      * {@code RECONCILIATION} run.
      */
     public void syncWorkspaceNow(long workspaceId, SyncExecutionHandle handle, SyncJobType type) {
-        SyncSession session = syncTargetProvider.getSyncSessions(IntegrationKind.GITLAB).stream()
-                .filter(candidate -> candidate.scopeId().equals(workspaceId))
-                .findFirst()
+        SyncSession session = syncTargetProvider
+                .getSyncSession(workspaceId, IntegrationKind.GITLAB)
                 .orElseThrow(
                         () -> new IllegalStateException("No active GitLab sync scope for workspace " + workspaceId));
         syncScope(session, handle, type);
