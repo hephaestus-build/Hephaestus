@@ -26,6 +26,17 @@ public interface WorkspaceDataSyncTrigger {
     void syncAllRepositories(long workspaceId);
 
     /**
+     * Brings a workspace up to date when the server starts. {@code fullSync} carries the startup
+     * full-sync setting; without it, an implementation runs only the work that must not wait for
+     * the next sync, such as reconciling which repositories the workspace monitors.
+     */
+    default void syncOnStartup(long workspaceId, boolean fullSync) {
+        if (fullSync) {
+            syncAllRepositories(workspaceId);
+        }
+    }
+
+    /**
      * Runs a sync for a single newly-monitored repository identified by sync-target id.
      *
      * <p>Used when a repository is added to monitoring after the workspace is already

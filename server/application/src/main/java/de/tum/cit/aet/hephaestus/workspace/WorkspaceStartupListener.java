@@ -23,7 +23,8 @@ import org.springframework.stereotype.Component;
  * <ol>
  *   <li>Provision workspaces (create from config or load from database)</li>
  *   <li>Publish {@link WorkspacesInitializedEvent} - signals installation consumer can start</li>
- *   <li>Activate workspaces (run full GraphQL sync for repos, issues, PRs)</li>
+ *   <li>Activate workspaces (reconcile GitHub App repositories, then run the full GraphQL sync for repos,
+ *       issues, PRs if startup sync is enabled)</li>
  * </ol>
  *
  * <p>Phases 1-3 run on {@code applicationTaskExecutor} so {@link ApplicationReadyEvent} dispatch
@@ -98,7 +99,7 @@ public class WorkspaceStartupListener {
         log.info("Workspaces initialized: count={}", workspaceCount);
         eventPublisher.publishEvent(new WorkspacesInitializedEvent(workspaceCount));
 
-        // Phase 3: Activate workspaces (run full sync - this can take a while)
+        // Phase 3: Activate workspaces in parallel (repository reconciliation and full sync can take a while)
         workspaceActivationService.activateAllWorkspaces();
     }
 }

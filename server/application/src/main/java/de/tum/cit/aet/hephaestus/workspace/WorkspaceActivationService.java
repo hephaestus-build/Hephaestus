@@ -192,7 +192,8 @@ public class WorkspaceActivationService {
     /**
      * Activate a single workspace: start its NATS consumer scope from the persisted routing, then run the
      * startup sync. Webhook events are processed while the sync runs, and a sync that discovers
-     * repositories reconciles the scope's filter.
+     * repositories reconciles the scope's filter. The startup sync always runs; the startup full-sync
+     * setting decides only whether it includes the full data sync.
      */
     public void activateWorkspace(Workspace workspace) {
         if (workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE) {
@@ -212,41 +213,39 @@ public class WorkspaceActivationService {
             natsConsumerService.ifAvailable(svc -> svc.startConsumingScope(workspace.getId()));
         }
 
-        if (syncSchedulerProperties.runOnStartup()) {
-            log.info("Starting monitoring on startup: workspaceId={}", workspace.getId());
+        boolean fullSync = syncSchedulerProperties.runOnStartup();
+        log.info("Starting monitoring on startup: workspaceId={}, fullSync={}", workspace.getId(), fullSync);
 
-            // Set workspace context for the sync operations (enables MDC logging).
-            Long installationId = connectionService
-                    .findActiveGitHubAppConfig(workspace.getId())
-                    .map(ConnectionConfig.GitHubAppConfig::installationId)
-                    .orElse(null);
-            WorkspaceContext workspaceContext = WorkspaceContext.fromWorkspace(workspace, Set.of(), installationId);
-            WorkspaceContextHolder.setContext(workspaceContext);
-            try {
-                IntegrationKind kind = connectionService
-                        .findActiveProviderKind(workspace.getId())
-                        .orElse(IntegrationKind.GITHUB);
-                WorkspaceDataSyncTrigger trigger = dataSyncTriggers.get(kind);
-                if (trigger == null) {
-                    log.debug(
-                            "Skipped startup sync: reason=noTriggerForKind, workspaceId={}, kind={}",
-                            workspace.getId(),
-                            kind);
-                } else {
-                    trigger.syncAllRepositories(workspace.getId());
-                }
-
-                log.info("Completed monitoring on startup: workspaceId={}", workspace.getId());
-            } catch (Exception e) {
-                log.error(
-                        "Failed monitoring on startup: workspaceId={}, accountLogin={}, error={}",
+        // Set workspace context for the sync operations (enables MDC logging).
+        Long installationId = connectionService
+                .findActiveGitHubAppConfig(workspace.getId())
+                .map(ConnectionConfig.GitHubAppConfig::installationId)
+                .orElse(null);
+        WorkspaceContext workspaceContext = WorkspaceContext.fromWorkspace(workspace, Set.of(), installationId);
+        WorkspaceContextHolder.setContext(workspaceContext);
+        try {
+            IntegrationKind kind =
+                    connectionService.findActiveProviderKind(workspace.getId()).orElse(IntegrationKind.GITHUB);
+            WorkspaceDataSyncTrigger trigger = dataSyncTriggers.get(kind);
+            if (trigger == null) {
+                log.debug(
+                        "Skipped startup sync: reason=noTriggerForKind, workspaceId={}, kind={}",
                         workspace.getId(),
-                        workspace.getAccountLogin(),
-                        e.getMessage(),
-                        e);
-            } finally {
-                WorkspaceContextHolder.clearContext();
+                        kind);
+            } else {
+                trigger.syncOnStartup(workspace.getId(), fullSync);
             }
+
+            log.info("Completed monitoring on startup: workspaceId={}", workspace.getId());
+        } catch (Exception e) {
+            log.error(
+                    "Failed monitoring on startup: workspaceId={}, accountLogin={}, error={}",
+                    workspace.getId(),
+                    workspace.getAccountLogin(),
+                    e.getMessage(),
+                    e);
+        } finally {
+            WorkspaceContextHolder.clearContext();
         }
     }
 

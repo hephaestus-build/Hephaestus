@@ -9,6 +9,8 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -233,7 +235,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private SyncJobRepository syncJobRepository;
 
-    @Autowired
+    @MockitoSpyBean
     private IntegrationNatsConsumer integrationNatsConsumer;
 
     @Autowired
@@ -487,6 +489,60 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
         assertThat(webhookId(connected)).isEqualTo(WEBHOOK_ID);
         verify(gitLabWebhookClient, times(1)).registerGroupWebhook(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    void shouldKeepTheScopeRoutingWhenAMonitorRemovalRollsBack() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        Set<String> routed = expectedFilter(connected);
+        await().atMost(Duration.ofSeconds(10)).until(() -> filterSubjects().equals(routed));
+        clearInvocations(integrationNatsConsumer);
+
+        transactionTemplate.executeWithoutResult(status -> {
+            workspaceRepositoryMonitorService.removeRepositoryFromMonitor(connected.getWorkspaceSlug(), REPOSITORY);
+            verify(integrationNatsConsumer, never()).updateScopeConsumer(connected.getId());
+            status.setRollbackOnly();
+        });
+
+        verify(integrationNatsConsumer, never()).updateScopeConsumer(connected.getId());
+        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY))
+                .isTrue();
+        assertThat(filterSubjects()).isEqualTo(routed);
+    }
+
+    @Test
+    void shouldRouteTheScopeFromTheMonitorsWhenARemovalAndAnAdditionCommit() throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        Set<String> withRepository = expectedFilter(connected);
+        await().atMost(Duration.ofSeconds(10)).until(() -> filterSubjects().equals(withRepository));
+        Set<String> withoutRepository = new HashSet<>(withRepository);
+        withoutRepository.remove(ConsumerSubjectMath.repositoryFilter(STREAM, REPOSITORY));
+        clearInvocations(integrationNatsConsumer);
+
+        transactionTemplate.executeWithoutResult(status -> {
+            workspaceRepositoryMonitorService.removeRepositoryFromMonitor(connected.getWorkspaceSlug(), REPOSITORY);
+            verify(integrationNatsConsumer, never()).updateScopeConsumer(connected.getId());
+        });
+
+        verify(integrationNatsConsumer, atLeastOnce()).updateScopeConsumer(connected.getId());
+        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY))
+                .isFalse();
+        await().atMost(Duration.ofSeconds(10)).until(() -> filterSubjects().equals(withoutRepository));
+        clearInvocations(integrationNatsConsumer);
+
+        transactionTemplate.executeWithoutResult(status -> {
+            workspaceRepositoryMonitorService.addRepositoryToMonitor(connected.getWorkspaceSlug(), REPOSITORY);
+            verify(integrationNatsConsumer, never()).updateScopeConsumer(connected.getId());
+        });
+
+        verify(integrationNatsConsumer, atLeastOnce()).updateScopeConsumer(connected.getId());
+        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY))
+                .isTrue();
+        await().atMost(Duration.ofSeconds(10)).until(() -> filterSubjects().equals(withRepository));
     }
 
     @Test
