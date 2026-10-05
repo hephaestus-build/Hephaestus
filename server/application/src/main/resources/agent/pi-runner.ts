@@ -302,7 +302,7 @@ interface PracticeIndexEntry {
 	group?: string;
 	readsSources: string[];
 	exhaustiveSources: string[];
-	/** The public facts of the practice revision, which the review on the work is composed from. */
+	/** What the practice revision is about, shown to the review on the work as explanatory context. */
 	name: string;
 	whyItMatters?: string;
 	knownLimitations: string[];
@@ -2306,8 +2306,8 @@ function finishReviewText(undecided: readonly string[]): string {
 	);
 }
 
-/** The public facts of each practice the review's observations were measured against, from the staged index. */
-function practiceFacts(observations: readonly Record<string, unknown>[]): ReviewPractice[] {
+/** Explanatory context on each practice the review's observations were measured against, from the staged index. */
+function practiceContext(observations: readonly Record<string, unknown>[]): ReviewPractice[] {
 	const slugs = new Set(observations.map((observation) => String(observation.practiceSlug)));
 	return practiceIndex
 		.filter((practice) => slugs.has(practice.slug))
@@ -3697,7 +3697,7 @@ async function main() {
 			observations: reviewable,
 			undecided: uncertainOutcomes(admittedObservations),
 			alreadySaid: priorPublicFeedback(history, THIS_WORK),
-			practices: practiceFacts(reviewable),
+			practices: practiceContext(reviewable),
 			notReached: notReachedSlugs,
 			lineNotes,
 		});

@@ -674,7 +674,7 @@ export function reviewToolParameters(
 	};
 }
 
-/** What the review is told about a practice: its staged revision's public facts, never its criteria. */
+/** Explanatory context from the staged practice revision, not a new assessment. */
 export interface ReviewPractice {
 	slug: string;
 	name: string;
@@ -690,7 +690,7 @@ export interface ReviewTurnInput {
 	undecided: readonly { practiceSlug: string; outcome: string }[];
 	/** What was already said on this same work, from priorPublicFeedback. */
 	alreadySaid: readonly unknown[];
-	/** The practices of the decided observations. */
+	/** Context on the practices of the decided observations. */
 	practices: readonly ReviewPractice[];
 	/** Practices this review did not reach at all. */
 	notReached: readonly string[];
@@ -728,7 +728,7 @@ export function buildReviewTurn(input: ReviewTurnInput): string {
 			: [],
 	}));
 	return `## The review to write
-The measurement of this work is finished. Below is everything this review may rest on: the decided observations of this work, what was already said on this same work, and the practices they were measured against.
+The measurement of this work is finished. Below is everything this review may rest on: the decided observations of this work, what was already said on this same work, and context on the practices they were measured against.
 
 ### Decided observations of this work
 \`\`\`json
@@ -737,7 +737,7 @@ ${JSON.stringify({ observations: input.observations }, null, 1)}
 ${undecided}
 ### Already said on this work
 ${said}
-### The practices
+### Practice context
 ${practices}
 ### Where the words go
 - The summary: one comment on the work.
