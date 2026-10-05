@@ -111,9 +111,10 @@ public class GitLabHistoricalBackfillService {
         GitLabMergeRequestSyncService mrSync = services.getMergeRequestSyncService();
         if (issueSync == null && mrSync == null) return 0;
 
-        List<SyncSession> sessions = syncTargetProvider.getSyncSessions(IntegrationKind.GITLAB).stream()
-                .filter(session -> scopeFilter == null || scopeFilter.equals(session.scopeId()))
-                .toList();
+        List<SyncSession> sessions = scopeFilter == null
+                ? syncTargetProvider.getSyncSessions(IntegrationKind.GITLAB)
+                : syncTargetProvider.getSyncSession(scopeFilter, IntegrationKind.GITLAB).stream()
+                        .toList();
         if (sessions.isEmpty()) return 0;
 
         int batchSize = syncSchedulerProperties.backfill().batchSize();

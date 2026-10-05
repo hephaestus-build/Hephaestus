@@ -267,9 +267,8 @@ public class GitHubDataSyncScheduler {
      * @param type the job type; decides whether the body ends with a deletion sweep
      */
     public void syncWorkspaceNow(long workspaceId, SyncExecutionHandle handle, SyncJobType type) {
-        SyncSession session = syncTargetProvider.getSyncSessions(IntegrationKind.GITHUB).stream()
-                .filter(candidate -> candidate.scopeId().equals(workspaceId))
-                .findFirst()
+        SyncSession session = syncTargetProvider
+                .getSyncSession(workspaceId, IntegrationKind.GITHUB)
                 .orElseThrow(
                         () -> new IllegalStateException("No active GitHub sync scope for workspace " + workspaceId));
         runScopeSyncBody(session, handle, type);
