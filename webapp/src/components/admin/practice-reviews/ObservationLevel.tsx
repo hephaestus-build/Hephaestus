@@ -1,5 +1,6 @@
 import { CircleSlashIcon, MessageSquareTextIcon, Undo2Icon } from "lucide-react";
 
+import { cn } from "cn";
 import type {
 	GetPracticeReviewObservationResponse,
 	ObservationInvalidation,
@@ -10,6 +11,7 @@ import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Section } from "@/components/layout/Section";
@@ -171,9 +173,10 @@ export function ObservationLevel({
 
 				{hasText(record.evidenceRationale) && (
 					<Section level={3} title="Why this was raised">
-						<p className="text-sm leading-relaxed whitespace-pre-wrap">
-							{record.evidenceRationale}
-						</p>
+						{/* The reviewer writes its rationale in Markdown, as the developer's own row shows it. */}
+						<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "text-sm")}>
+							<UntrustedMarkdown>{record.evidenceRationale}</UntrustedMarkdown>
+						</div>
 					</Section>
 				)}
 

@@ -49,6 +49,9 @@ const markedIncorrect: ReviewObservationDetail = {
  * the footer, behind a popover that will not submit without a reason, because an invalidation
  * without one is not something the developer could read.
  */
+/** Streamdown draws bold as a span it marks, not as a `strong` element. */
+const STRONG = '[data-streamdown="strong"]';
+
 const meta = {
 	component: ObservationLevel,
 	parameters: { layout: "fullscreen" },
@@ -108,6 +111,40 @@ export const Default: Story = {
 		await expect(
 			panel.queryByRole("button", { name: "Restore observation" }),
 		).not.toBeInTheDocument();
+	},
+};
+
+/**
+ * The rationale is the reviewer's own Markdown, rendered the way the developer's row renders it: a
+ * quoted file or value is code, a list is a list, and nothing shows as stray markup.
+ */
+export const MarkdownRationale: Story = {
+	args: {
+		observation: ready({
+			...reviewObservationDetail,
+			evidenceRationale: [
+				"#### Two failures, one status",
+				"",
+				"`CacheService.find` returns **404** for both cases:",
+				"",
+				"1. the key is not in the cache",
+				"2. the caller may not read the entry",
+				"",
+				"The second one is a `403`.  ",
+				"See the [status code guide](https://example.com/status-codes).",
+			].join("\n"),
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		panel.getByRole("heading", { level: 4, name: "Two failures, one status" });
+		await expect(panel.getByText("CacheService.find", { selector: "code" })).toBeVisible();
+		await expect(panel.getByText("404", { selector: STRONG })).toBeVisible();
+		await expect(panel.getByRole("link", { name: "status code guide" })).toHaveAttribute(
+			"href",
+			"https://example.com/status-codes",
+		);
+		await expect(panel.queryByText(/\*\*|`/u)).toBeNull();
 	},
 };
 
