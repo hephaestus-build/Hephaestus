@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
+
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
@@ -573,13 +575,14 @@ public class WorkspaceRepositoryMonitorService {
 
     /**
      * Refreshes the scope consumer for a stored monitor and starts its sync unless {@code deferSync}; persists neither
-     * the monitor nor its workspace.
+     * the monitor nor its workspace. The consumer reads its routing from committed monitors, so the refresh waits for
+     * the caller's transaction to commit and does not run if it rolls back.
      */
     private void announceRepositoryMonitor(Workspace workspace, RepositoryToMonitor monitor, boolean deferSync) {
         boolean repositoryAllowed = workspaceScopeFilter.isRepositoryAllowed(monitor);
         if (shouldUseNats(workspace) && repositoryAllowed) {
-            // Update workspace consumer to include new repository subjects
-            natsConsumerService.ifAvailable(svc -> svc.updateScopeConsumer(workspace.getId()));
+            Long workspaceId = workspace.getId();
+            afterCommit(() -> natsConsumerService.ifAvailable(svc -> svc.updateScopeConsumer(workspaceId)));
         }
         if (deferSync) {
             log.debug(
@@ -613,8 +616,9 @@ public class WorkspaceRepositoryMonitorService {
         workspace.getRepositoriesToMonitor().remove(monitor);
         workspaceRepository.save(workspace);
         if (shouldUseNats(workspace)) {
-            // Update workspace consumer to remove repository subjects
-            natsConsumerService.ifAvailable(svc -> svc.updateScopeConsumer(workspace.getId()));
+            // Like announceRepositoryMonitor, the refresh waits for the commit that removes the monitor.
+            Long workspaceId = workspace.getId();
+            afterCommit(() -> natsConsumerService.ifAvailable(svc -> svc.updateScopeConsumer(workspaceId)));
         }
     }
 

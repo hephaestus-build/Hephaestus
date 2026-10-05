@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycl
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepositoryMonitorService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
 import java.time.Instant;
@@ -32,7 +31,9 @@ import org.springframework.web.reactive.function.client.WebClient;
  * and ensures each one maps to an active workspace — creating, suspending, or repointing
  * workspaces as the App's installation list changes. Lives in the GitHub adapter so the
  * workspace module never imports {@link GitHubAppTokenService} or speaks the
- * {@code /app/installations} payload shape.
+ * {@code /app/installations} payload shape. It does not enumerate an installation's repositories:
+ * workspace activation reconciles them later, so a slow installation does not delay the other
+ * workspaces.
  *
  * <p>Intentionally not {@code @Transactional}: per-installation reconciliation runs in
  * isolated paths so one failed installation doesn't roll back the rest. Errors are logged
@@ -57,7 +58,6 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
     private final GitHubLifecycleListener githubLifecycleListener;
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceService workspaceService;
-    private final WorkspaceRepositoryMonitorService workspaceRepositoryMonitorService;
     private final WorkspaceScopeFilter workspaceScopeFilter;
     private final WebClient webClient;
 
@@ -66,13 +66,11 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
             GitHubLifecycleListener githubLifecycleListener,
             WorkspaceRepository workspaceRepository,
             WorkspaceService workspaceService,
-            WorkspaceRepositoryMonitorService workspaceRepositoryMonitorService,
             WorkspaceScopeFilter workspaceScopeFilter) {
         this.gitHubAppTokenService = gitHubAppTokenService;
         this.githubLifecycleListener = githubLifecycleListener;
         this.workspaceRepository = workspaceRepository;
         this.workspaceService = workspaceService;
-        this.workspaceRepositoryMonitorService = workspaceRepositoryMonitorService;
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.webClient = WebClient.builder()
                 .clientConnector(WebClientConnectors.systemDns())
@@ -214,8 +212,6 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
         workspace = workspaceService.updateAccountLogin(workspace.getId(), login);
 
         log.info("Configured organization sync via webhooks: workspaceSlug={}", workspace.getWorkspaceSlug());
-
-        workspaceRepositoryMonitorService.ensureAllInstallationRepositoriesCovered(installationId, null, true);
     }
 
     private @Nullable RepositorySelection convertRepositorySelection(@Nullable String selection) {
