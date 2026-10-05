@@ -106,7 +106,8 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             String second = commit(git, "feat: add a and b\n\nCloses #7");
             prepare();
 
-            List<CommitDetails> commits = manager.commitsBetween(KEY, main, second);
+            List<CommitDetails> commits = new ArrayList<>();
+            manager.forEachCommitBetween(KEY, main, second, commits::add);
 
             assertThat(commits).extracting(CommitDetails::sha).containsExactly(first, second);
             assertThat(commits.get(0).fileChanges()).singleElement().satisfies(change -> {
@@ -445,6 +446,35 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         assertThat(manager.isRepositoryCloned(new RepositoryKey(200L, 1L))).isFalse();
         manager.deleteOrphanedRepository(1L);
         assertThat(manager.isRepositoryCloned(KEY)).isFalse();
+    }
+
+    @Test
+    void shouldHandOnEveryCommitOfARangeLongerThanAnyFormerCapOldestFirst() throws Exception {
+        try (Git git = repository()) {
+            String base = head(git);
+            ObjectId tip = chain(git, ObjectId.fromString(base), 501);
+            prepare();
+
+            List<String> shas = new ArrayList<>();
+            manager.forEachCommitBetween(KEY, base, tip.name(), commit -> shas.add(commit.sha()));
+
+            assertThat(shas).hasSize(501).last().isEqualTo(tip.name());
+            assertThat(shas).doesNotHaveDuplicates().doesNotContain(base);
+        }
+    }
+
+    @Test
+    void shouldRefuseARangeItCannotReadRatherThanReportItEmpty() throws Exception {
+        try (Git git = repository()) {
+            String base = head(git);
+            prepare();
+
+            assertThatThrownBy(() -> manager(false, LIMIT).forEachCommitBetween(KEY, base, base, commit -> {}))
+                    .isInstanceOf(IllegalStateException.class);
+            // A head the mirror does not hold is a failed read, never an empty range.
+            assertThatThrownBy(() -> manager.forEachCommitBetween(KEY, base, "c".repeat(40), commit -> {}))
+                    .isInstanceOf(GitRepositoryManager.GitOperationException.class);
+        }
     }
 
     private Git repository() throws Exception {

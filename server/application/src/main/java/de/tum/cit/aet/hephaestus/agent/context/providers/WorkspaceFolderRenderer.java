@@ -429,6 +429,11 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
         });
     }
 
+    /**
+     * The commits of the prepared pinned range, all of them, written as they are read and held to the workspace
+     * byte budget: a range too large for it refuses the whole capture rather than stage part of it, and a range
+     * that cannot be read fails it, so a staged record is always the complete one.
+     */
     private void commits(Path root, BudgetedFiles files, ReviewRepositoryPreparer.PreparedReview prepared) {
         Path target = root.resolve(PullRequestContentSource.COMMITS_FILE);
         try {
@@ -438,7 +443,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
                 generator.writeStartObject();
                 generator.writeNullProperty("synced_at");
                 generator.writeArrayPropertyStart("commits");
-                for (var commit : git.commitsBetween(prepared.key(), prepared.target(), prepared.head())) {
+                git.forEachCommitBetween(prepared.key(), prepared.target(), prepared.head(), commit -> {
                     var record = mapper.createObjectNode()
                             .put("sha", commit.sha())
                             .put("author", commit.authorName())
@@ -471,8 +476,12 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
                     }
                     generator.writeTree(record);
                     generator.flush();
-                    files.require(Files.size(target));
-                }
+                    try {
+                        files.require(Files.size(target));
+                    } catch (IOException exception) {
+                        throw new UncheckedIOException(exception);
+                    }
+                });
                 generator.writeEndArray();
                 generator.writeEndObject();
             }

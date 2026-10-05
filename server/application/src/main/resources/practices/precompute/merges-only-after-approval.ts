@@ -1,7 +1,6 @@
 // Precompute FACTS for merges-only-after-approval: the merge as the record holds it — who merged,
-// when, the provider's own review decision — one row per submitted review decision placed against
-// the merge instant and the author, and each reviewer's last decision. The review decides whether
-// another person's approval stood at the merge; the rows say what was submitted, when and by whom.
+// when, the provider's own review decision — captured decision rows placed against the merge instant.
+// Currentness and history coverage remain separate from this advisory ordering.
 import {
 	decisionRows,
 	lastDecisionPerReviewer,
@@ -47,13 +46,16 @@ export default async function mergesOnlyAfterApproval(
 		);
 	} else {
 		directions.push(
-			`Merged${merge.mergedBy === undefined ? "" : ` by ${merge.mergedBy}`}${merge.mergedByIsAuthor ? " (the author)" : ""}${merge.mergedAt === undefined ? "" : ` at ${merge.mergedAt}`}; ${decisions.length} submitted decision(s), ${approvalsBeforeMergeByOthers} of them an undismissed APPROVED before the merge by an account other than the author's that is not marked bot; the last decision of each reviewer whose decision times are all known is listed apart.`,
+			`Merged${merge.mergedBy === undefined ? "" : ` by ${merge.mergedBy}`}${merge.mergedByIsAuthor ? " (the author)" : ""}${merge.mergedAt === undefined ? "" : ` at ${merge.mergedAt}`}; ${decisions.length} captured decision(s), ${approvalsBeforeMergeByOthers} of them an undismissed APPROVED before the merge by an account other than the author's that is not marked bot; the last captured decision of each reviewer whose decision times are all known is listed apart.`,
 		);
 		if (unknownDecisionTimes > 0) {
 			directions.push(
 				`${unknownDecisionTimes} decision time(s) are unknown: the dated approval count is a lower bound, and no historical last decision is established for those reviewers.`,
 			);
 		}
+		directions.push(
+			"Read decisionHistoryComplete in review_threads.json: row ordering does not establish complete historical coverage. Apply the practice criteria to that qualification.",
+		);
 	}
 	return {
 		hints: [mergeRow(metadata, merge, contextReference), ...rows, ...last],

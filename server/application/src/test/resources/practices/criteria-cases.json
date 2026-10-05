@@ -166,6 +166,53 @@
 		"workType": "pull_request"
 	},
 	{
+		"id": "system-color-fills",
+		"expected": {
+			"uses-adaptive-colors-for-every-appearance": "MET"
+		},
+		"files": {
+			"repo/Header.swift": "import SwiftUI\nstruct Header: View {\n    var body: some View {\n        VStack {\n            Text(\"Plant helper\").padding().background(Color.green, in: RoundedRectangle(cornerRadius: 8))\n            Image(systemName: \"leaf\").foregroundStyle(.teal)\n            Text(\"Water today\").padding().background(Color.gray.opacity(0.2))\n        }\n    }\n}\n"
+		},
+		"reason": "SwiftUI's standard colors are context-dependent and change with the appearance; none of them is a literal.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "form-checklist-untouched",
+		"expected": {
+			"ready-and-traceable-handoff": "MET"
+		},
+		"files": {
+			"context/description.md": "Closes #42\n\nAdds the quiz results screen.\n\n## Definition of Done\n\n- [ ] The description explains the result\n- [ ] I built and ran the changed app flow locally\n",
+			"repo/.gitlab/merge_request_templates/Default.md": "## Definition of Done\n\n- [ ] The description explains the result\n- [ ] I built and ran the changed app flow locally\n",
+			"repo/App/Results.swift": "import SwiftUI\nstruct Results: View {\n    let score: Int\n    var body: some View { Text(\"Score: \\(score)\") }\n}\n"
+		},
+		"reason": "A form's checklist left as supplied is boilerplate, not the author saying the work is unfinished.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "authored-unfinished-handoff",
+		"expected": {
+			"ready-and-traceable-handoff": "NOT_MET"
+		},
+		"files": {
+			"context/description.md": "Closes #42\n\nAdds the quiz results screen. Still to do before this is finished: the empty-results state.\n",
+			"repo/App/Results.swift": "import SwiftUI\nstruct Results: View {\n    let score: Int\n    var body: some View { Text(\"Score: \\(score)\") }\n}\n"
+		},
+		"reason": "The author says the work is unfinished while the pull request asks for review.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "uikit-constant-background",
+		"expected": {
+			"uses-adaptive-colors-for-every-appearance": "NOT_MET"
+		},
+		"files": {
+			"repo/Header.swift": "import SwiftUI\nimport UIKit\nstruct Header: View {\n    var body: some View { Text(\"Reports\").frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(uiColor: .green)) }\n}\n"
+		},
+		"reason": "UIKit's UIColor.green is a fixed constant, so a screen background converted from it holds one appearance.",
+		"workType": "pull_request"
+	},
+	{
 		"id": "async-swallow",
 		"expected": {
 			"uses-structured-concurrency-safely": "MET",
@@ -286,6 +333,88 @@
 			"repo/Loader.swift": "import Foundation\nfunc load() {\n    do { try store.save() } catch { print(\"Save failed: \\(error)\") }\n}\n"
 		},
 		"reason": "The print records the failure with context. Only the logger practice asks for a different reporting mechanism.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "approval-current-bot-only-history-incomplete",
+		"expected": {
+			"merges-only-after-approval": "UNDETERMINED"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-05T12:00:00Z\", \"merged_by\": \"author\", \"author\": \"author\", \"assignees\": []}\n",
+			"context/review_threads.json": "{\"threads\": [], \"reviewDecisions\": [{\"state\": \"APPROVED\", \"author\": \"automation\", \"bot\": true, \"submittedAt\": \"2026-10-05T10:00:00Z\"}], \"decisionHistoryComplete\": false, \"truncated\": false}\n",
+			"context/project_inventory.json": "{\"contributors\": [\"author\", \"reviewer\"]}\n"
+		},
+		"reason": "A current bot-only snapshot does not rule out a human approval that stood at merge and was withdrawn afterward.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "approval-undated-after-unavailable-native-read",
+		"expected": {
+			"merges-only-after-approval": "UNDETERMINED"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-05T12:00:00Z\", \"merged_by\": \"author\", \"author\": \"author\", \"assignees\": []}\n",
+			"context/review_threads.json": "{\"threads\": [], \"reviewDecisions\": [{\"state\": \"APPROVED\", \"author\": \"reviewer\"}], \"decisionHistoryComplete\": false, \"truncated\": false}\n",
+			"context/project_inventory.json": "{\"contributors\": [\"author\", \"reviewer\"]}\n"
+		},
+		"reason": "An undated retained approval after unavailable native reads cannot prove that it stood when the work merged.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "approval-confirmed-standing-before-merge",
+		"expected": {
+			"merges-only-after-approval": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"state\": \"MERGED\", \"is_merged\": true, \"merged_at\": \"2026-10-05T12:00:00Z\", \"merged_by\": \"author\", \"author\": \"author\", \"assignees\": []}\n",
+			"context/review_threads.json": "{\"threads\": [], \"reviewDecisions\": [{\"state\": \"APPROVED\", \"author\": \"reviewer\", \"submittedAt\": \"2026-10-05T10:00:00Z\"}], \"decisionHistoryComplete\": false, \"truncated\": false}\n",
+			"context/project_inventory.json": "{\"contributors\": [\"author\", \"reviewer\"]}\n"
+		},
+		"reason": "A native date recovered from a standing approval after merge is a historical positive witness even if current readiness later becomes unknown.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "issue-link-in-body-without-commit-capture",
+		"expected": {
+			"links-the-change-to-its-issue": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"author\": \"author\", \"title\": \"Add search\", \"body\": \"Closes #12\", \"source_branch\": \"add-search\", \"state\": \"OPEN\", \"is_merged\": false}\n",
+			"context/description.md": "Closes #12\n",
+			"context/project_inventory.json": "{\"issues\":[{\"number\":12,\"title\":\"Search saved items\",\"state\":\"OPEN\"}]}\n",
+			"context/linked_work_items.json": "[{\"number\":12,\"title\":\"Search saved items\",\"state\":\"OPEN\",\"how\":\"closesOnMerge\"}]\n"
+		},
+		"reason": "A provider closing reference settles the link without needing commit history.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "resolved-review-request-without-commit-capture",
+		"expected": {
+			"engaging-with-inline-review-comments": "MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"author\": \"author\", \"title\": \"Add search\", \"body\": \"Closes #12\", \"source_branch\": \"add-search\", \"state\": \"OPEN\", \"is_merged\": false}\n",
+			"context/comments.json": "[{\"author\":\"reviewer\",\"body\":\"Could you rename this variable to match the domain term?\",\"path\":\"Search.swift\",\"line\":4,\"thread\":1,\"created_at\":\"2026-10-05T10:00:00Z\"}]\n",
+			"context/review_threads.json": "{\"threads\":[{\"id\":1,\"state\":\"RESOLVED\",\"resolvedBy\":\"author\"}],\"reviewDecisions\":[],\"decisionHistoryComplete\":false,\"truncated\":false}\n",
+			"context/general_comments.json": "[]\n"
+		},
+		"reason": "A captured resolution is a visible response; unavailable commits do not erase it.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "polite-review-request-not-explicitly-optional",
+		"expected": {
+			"engaging-with-inline-review-comments": "NOT_MET"
+		},
+		"files": {
+			"context/metadata.json": "{\"author\": \"author\", \"title\": \"Add search\", \"body\": \"Closes #12\", \"source_branch\": \"add-search\", \"state\": \"OPEN\", \"is_merged\": false}\n",
+			"context/comments.json": "[{\"author\":\"reviewer\",\"body\":\"Could you consider fixing the retry action? It currently never invokes the request.\",\"path\":\"Search.swift\",\"line\":4,\"thread\":1,\"created_at\":\"2026-10-05T10:00:00Z\"}]\n",
+			"context/review_threads.json": "{\"threads\":[{\"id\":1,\"state\":\"UNRESOLVED\"}],\"reviewDecisions\":[],\"decisionHistoryComplete\":false,\"truncated\":false}\n",
+			"context/general_comments.json": "[]\n",
+			"context/commits.json": "{\"commits\":[]}\n"
+		},
+		"reason": "Polite wording does not turn an unanswered request about broken behavior into optional future advice.",
 		"workType": "pull_request"
 	}
 ]

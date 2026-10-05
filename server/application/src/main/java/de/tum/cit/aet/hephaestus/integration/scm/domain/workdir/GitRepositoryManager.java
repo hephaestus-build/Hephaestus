@@ -35,6 +35,7 @@ import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.StoredConfig;
 import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevSort;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.transport.RefSpec;
 import org.eclipse.jgit.transport.TagOpt;
@@ -250,29 +251,36 @@ public class GitRepositoryManager {
         });
     }
 
-    /** Commits a staged record of a change may hold: the record a review reads, not a mirror of the range. */
-    public static final int MAX_STAGED_COMMITS = 500;
-
     /**
-     * The commits of {@code base..head} with their file changes, oldest first, the newest
-     * {@link #MAX_STAGED_COMMITS} of them.
+     * Hands every commit of {@code base..head} to {@code consumer}, oldest first, with its file changes: the whole
+     * range, which a staged record of a change must hold, its size bounded by the caller's byte budget rather than
+     * a commit count. Only commits are buffered for the ordering; each one's details are read as it is handed on.
+     *
+     * @throws IllegalStateException when local git storage is disabled or the mirror does not hold either end, so
+     *     a range that could not be read is never mistaken for an empty one
      */
-    public List<CommitDetails> commitsBetween(RepositoryKey repository, String base, String head) {
-        if (!isEnabled()) return List.of();
-        List<CommitDetails> commits = read(repository, repo -> {
-            List<CommitDetails> newestFirst = new ArrayList<>();
+    public void forEachCommitBetween(
+            RepositoryKey repository, String base, String head, Consumer<CommitDetails> consumer) {
+        if (!isEnabled()) {
+            throw new IllegalStateException("Local git storage is disabled; the commits of a range cannot be read");
+        }
+        read(repository, repo -> {
+            ObjectId from = repo.resolve(base);
+            ObjectId to = repo.resolve(head);
+            if (from == null || to == null) {
+                throw new IllegalStateException("The mirror does not hold the pinned range " + base + ".." + head);
+            }
             try (RevWalk walk = new RevWalk(repo)) {
-                walk.markStart(walk.parseCommit(repo.resolve(head)));
-                walk.markUninteresting(walk.parseCommit(repo.resolve(base)));
+                walk.markStart(walk.parseCommit(to));
+                walk.markUninteresting(walk.parseCommit(from));
+                walk.sort(RevSort.REVERSE);
                 for (RevCommit commit : walk) {
                     checkInterrupted();
-                    if (newestFirst.size() == MAX_STAGED_COMMITS) break;
-                    newestFirst.add(details(repo, commit));
+                    consumer.accept(details(repo, commit));
                 }
             }
-            return List.copyOf(newestFirst.reversed());
+            return null;
         });
-        return commits == null ? List.of() : commits;
     }
 
     /** The full message, subject and body, of every commit in {@code base..head}. */

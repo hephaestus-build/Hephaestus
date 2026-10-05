@@ -221,8 +221,11 @@ It is absent for a head that no sync or check event has reported on. `author_bot
 Absent means a person.
 The same rule gives every `author` below its `bot: true`, so a reader never guesses from a login.
 
-**`commits.json`** — `commits`: the commits of `base_sha..head_sha`, oldest first, the newest 500 of them when there are more.
-It is written whenever the checkout was prepared.
+**`commits.json`** — `commits`: every commit of `base_sha..head_sha`, oldest first.
+It is written from the prepared pinned range.
+A range the mirror cannot read fails the capture.
+A range larger than the workspace byte budget refuses the review.
+A staged record is never partial.
 It is staged, not derived in the container.
 
 A commit-message quote is verified against its cited artifact.
@@ -247,7 +250,22 @@ When present, `thread` names the `id` of an entry in `review_threads.json`.
 It is absent when the provider does not say.
 Other optional fields are `outdated` (only when `true`), `created_at`, `author`, and `bot` (only when `true`). `general_comments.json` entries carry `bot` the same way beside their `author`.
 
-**`review_threads.json`** — `threads`, `reviewDecisions` and `truncated`.
+**`review_threads.json`** — `threads`, `reviewDecisions`, `decisionHistoryComplete` and `truncated`.
+`reviewDecisions` holds the last known decisions, without their complete history.
+The rows do not establish current GitLab review readiness when `metadata.json` omits `review_decision`.
+A withdrawn or replaced decision may be missing.
+`decisionHistoryComplete` is always `false`.
+`truncated` describes only the list's cap.
+
+On GitLab, an approval's `submittedAt` records its native `approved_at`.
+The server reads this date from a standing approval after merge.
+A native date before merge remains a historical witness if current readiness later becomes unknown.
+The field is absent when that read did not establish the date.
+
+GitLab writes approval system notes through an asynchronous worker.
+A note's recording time bounds the original approval act from above, but does not date it.
+GitLab names no approved revision for an approval.
+
 A thread: `id` (what a comment's `thread` names), `state` (`RESOLVED` or `UNRESOLVED`).
 When present, `path`, `line`, `resolvedBy`, `resolvedAt`, `outdated` and `createdAt`. `resolvedAt` is the moment the provider recorded: GitLab can supply it on the discussion.
 GitHub's GraphQL thread carries no such moment.

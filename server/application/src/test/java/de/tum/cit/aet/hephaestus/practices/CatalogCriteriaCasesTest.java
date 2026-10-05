@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.util.HashSet;
@@ -36,7 +37,9 @@ class CatalogCriteriaCasesTest extends BaseUnitTest {
                 assertThat(scenario.path("expected").properties()).isNotEmpty();
                 for (var expected : scenario.path("expected").properties()) {
                     assertThat(slugs).contains(expected.getKey());
-                    assertThat(expected.getValue().asString()).isIn("MET", "NOT_MET", "NOT_APPLICABLE");
+                    assertThat(Outcome.values())
+                            .extracting(Outcome::name)
+                            .contains(expected.getValue().asString());
                 }
                 for (var file : scenario.path("files").properties()) {
                     assertThat(file.getKey()).matches("(?:repo|context)/.+").doesNotContain("..");

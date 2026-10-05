@@ -264,8 +264,10 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         for (var entry : standing.entrySet()) {
             var review = entry.getValue();
             Instant date = dates.get(entry.getKey());
-            if (!Objects.equals(review.getSubmittedAt(), date)) {
+            if (!Objects.equals(review.getSubmittedAt(), date) || review.getCommitId() != null) {
                 review.setSubmittedAt(date);
+                // GitLab never names the approved revision; a head an earlier version stored for it was a guess.
+                review.setCommitId(null);
                 reviewRepository.save(review);
             }
         }
@@ -709,80 +711,31 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Process an {@code approved} or {@code approval} event: the hook's user approved. GitLab sends {@code approved}
-     * when the approval meets the merge request's approval rules and {@code approval} when approvals are still missing
-     * (<a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/services/ee/merge_requests/execute_approval_hooks_service.rb">execute_approval_hooks_service.rb</a>),
-     * so both are the same act by one person.
-     *
-     * <p>Creates a new APPROVED review or gives a dismissed one again, anchored to the head the hook names. The hook does not date the approval;
-     * its receipt time is used only for ingestion ordering. It applies only to the merge request as stored now ({@link #actsOnStoredHead}) and
-     * only where no later read of the reviews is stored ({@link PullRequest#takesReviewSnapshotAt}); otherwise it
-     * changes nothing and announces nothing.
+     * Approval hooks refresh readiness; only the native approval snapshot owns current membership and dates.
+     * GitLab's asynchronous hook worker reloads the current merge request, so its head is not the approved revision
+     * (<a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v19.4.1-ee/app/workers/merge_requests/execute_approval_hooks_worker.rb">provider source</a>).
      */
     @Transactional
     @Nullable
     public PullRequest processApproved(GitLabMergeRequestEventDTO event, ProcessingContext context) {
+        return refreshApprovals(event, context, "approval");
+    }
+
+    /** Forgets the stored review decision for a later read to settle; an occasion of {@code kind} records no review. */
+    private @Nullable PullRequest refreshApprovals(
+            GitLabMergeRequestEventDTO event, ProcessingContext context, String kind) {
         PullRequest pr = processInternal(event, context);
-        if (pr == null || event.user() == null) return pr;
+        if (pr == null) return pr;
         if (!actsOnStoredHead(event, pr)) {
-            log.debug("Skipped approval of another head than the stored one: prId={}", pr.getId());
-            return pr;
-        }
-        // An approval is recorded for the head the hook names, never for one assumed from the stored merge request.
-        String approvedCommit = namedHead(event);
-        if (approvedCommit == null) {
-            log.debug("Skipped approval that names no head: prId={}", pr.getId());
+            log.debug("Skipped {} of another head than the stored one: prId={}", kind, pr.getId());
             return pr;
         }
         if (!pr.takesReviewSnapshotAt(context.observedAt())) {
-            log.debug("Skipped approval older than the stored reviews: prId={}", pr.getId());
+            log.debug("Skipped {} older than the stored reviews: prId={}", kind, pr.getId());
             return pr;
         }
-
-        User approver = findOrCreateUser(event.user(), Objects.requireNonNull(context.providerId()));
-        if (approver == null) return pr;
-
-        long approvalNativeId = generateApprovalNativeId(pr.getNativeId(), approver.getNativeId());
-        var existingReview = reviewRepository.findByNativeIdAndProviderId(
-                approvalNativeId, Objects.requireNonNull(context.providerId()));
-        Instant approvedAt = context.observedAt();
-
-        if (existingReview.isPresent()) {
-            // Re-approval: the approval row was dismissed by an unapproval, or it approves another head. GitLab's reset
-            // on a push dismisses no one, so an approval of the new head finds the earlier head's approval standing.
-            PullRequestReview review = existingReview.get();
-            if (review.getState() != PullRequestReview.State.APPROVED
-                    || review.isDismissed()
-                    || !approvedCommit.equals(review.getCommitId())) {
-                review.setState(PullRequestReview.State.APPROVED);
-                review.setDismissed(false);
-                review.setSubmittedAt(null);
-                review.setUpdatedAt(approvedAt);
-                review.setCommitId(approvedCommit);
-                reviewRepository.save(review);
-                forgetReviewReadiness(pr);
-
-                ScmEventPayload.ReviewData.from(review)
-                        .ifPresent(reviewData -> eventPublisher.publishEvent(
-                                new ScmDomainEvent.ReviewSubmitted(reviewData, EventContext.from(context))));
-                log.debug("Updated review to APPROVED: prId={}, reviewerId={}", pr.getId(), approver.getLogin());
-            }
-        } else {
-            PullRequestReview review = createApprovalReview(approvalNativeId, pr, approver);
-            review.setSubmittedAt(null);
-            review.setCreatedAt(approvedAt);
-            review.setUpdatedAt(approvedAt);
-            review.setCommitId(approvedCommit);
-            reviewRepository.save(review);
-            pr.addReview(review);
-            forgetReviewReadiness(pr);
-
-            ScmEventPayload.ReviewData.from(review)
-                    .ifPresent(reviewData -> eventPublisher.publishEvent(
-                            new ScmDomainEvent.ReviewSubmitted(reviewData, EventContext.from(context))));
-            log.debug("Created approval review: prId={}, reviewerId={}", pr.getId(), approver.getLogin());
-        }
-
+        forgetReviewReadiness(pr);
+        log.debug("Approvals to read again after {}: prId={}", kind, pr.getId());
         return pr;
     }
 
@@ -812,93 +765,24 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 || lastCommit.id().equals(pr.getHeadRefOid());
     }
 
-    /** The head {@code event} names, or {@code null} when it names none. */
-    private static @Nullable String namedHead(GitLabMergeRequestEventDTO event) {
-        var attrs = event.objectAttributes();
-        return attrs != null
-                        && attrs.lastCommit() != null
-                        && !attrs.lastCommit().id().isBlank()
-                ? attrs.lastCommit().id()
-                : null;
-    }
-
     /**
-     * Process an {@code unapproved} or {@code unapproval} event: the hook's user withdrew their approval. GitLab sends
-     * {@code unapproved} when the merge request stops meeting its approval rules and {@code unapproval} otherwise
-     * (<a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/services/ee/merge_requests/remove_approval_service.rb">remove_approval_service.rb</a>).
-     *
-     * <p>Dismisses the existing approval review. Withdrawing an approval is not a request for changes: that is its
-     * own system note, recorded by
-     * {@link de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler}.
-     *
-     * <p>GitLab sends the same actions, marked {@code system}, when it resets approvals itself after a push: all of
-     * them ({@code approvals_reset_on_push}) or only Code Owners' ({@code code_owner_approvals_reset_on_push}). Its user
-     * is whoever pushed, not someone withdrawing an approval, and the hook does not say whose approvals went. So a reset
-     * leaves the review decision unknown and dismisses no one; the readiness read after the event reconciles the
-     * approvals with GitLab's whole approver list.
+     * Withdrawal and reset hooks refresh readiness through the same native snapshot as approval hooks.
+     * A reset's actor is the pusher, and delayed withdrawal may follow a new approval; neither identifies
+     * whose approvals still stand.
      */
     @Transactional
     @Nullable
     public PullRequest processUnapproved(GitLabMergeRequestEventDTO event, ProcessingContext context) {
-        PullRequest pr = processInternal(event, context);
-        if (pr == null) return pr;
-        if (!actsOnStoredHead(event, pr)) {
-            log.debug("Skipped unapproval of another head than the stored one: prId={}", pr.getId());
-            return pr;
-        }
         var attrs = event.objectAttributes();
-        if (attrs != null && attrs.isSystemInitiated()) {
-            if (pr.takesReviewSnapshotAt(context.observedAt())) {
-                forgetReviewReadiness(pr);
-            }
-            log.info(
-                    "GitLab reset approvals: prId={}, systemAction={}",
-                    pr.getId(),
-                    sanitizeForLog(attrs.systemAction()));
-            return pr;
-        }
-        if (event.user() == null) return pr;
-        if (!pr.takesReviewSnapshotAt(context.observedAt())) {
-            log.debug("Skipped unapproval older than the stored reviews: prId={}", pr.getId());
-            return pr;
-        }
-
-        User approver = findOrCreateUser(event.user(), Objects.requireNonNull(context.providerId()));
-        if (approver == null) return pr;
-
-        long approvalNativeId = generateApprovalNativeId(pr.getNativeId(), approver.getNativeId());
-        reviewRepository
-                .findByNativeIdAndProviderId(approvalNativeId, Objects.requireNonNull(context.providerId()))
-                .ifPresent(review -> {
-                    if (review.getState() == PullRequestReview.State.DISMISSED) {
-                        log.debug(
-                                "Review already DISMISSED, skipping: prId={}, reviewerId={}",
-                                pr.getId(),
-                                approver.getLogin());
-                        return;
-                    }
-                    review.setState(PullRequestReview.State.DISMISSED);
-                    review.setDismissed(true);
-                    review.setUpdatedAt(context.observedAt());
-                    reviewRepository.save(review);
-                    forgetReviewReadiness(pr);
-
-                    ScmEventPayload.ReviewData.from(review)
-                            .ifPresent(reviewData -> eventPublisher.publishEvent(
-                                    new ScmDomainEvent.ReviewDismissed(reviewData, EventContext.from(context))));
-                    log.debug("Dismissed review (unapproval): prId={}, reviewerId={}", pr.getId(), approver.getLogin());
-                });
-
-        return pr;
+        return refreshApprovals(
+                event,
+                context,
+                attrs != null && attrs.isSystemInitiated()
+                        ? "approval reset " + sanitizeForLog(attrs.systemAction())
+                        : "unapproval");
     }
 
-    /**
-     * Leaves the merge request's review decision unknown once a webhook changed where one person's review stands, with
-     * the mergeability and merge status GitLab derives from the approvals. The hook names that one act; what every
-     * reviewer's acts now add up to is the readiness read's or the sync's to read ({@link #reviewDecision}), so what is
-     * stored would otherwise outlive the act that changed it, also when that read fails. Runs in the caller's
-     * transaction.
-     */
+    /** Keeps readiness unknown after a review event until an authoritative snapshot is read. */
     public void forgetReviewReadiness(PullRequest pr) {
         if (forgetReadiness(pr)) {
             pullRequestRepository.save(pr);
@@ -1518,28 +1402,10 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         review.setProvider(pr.getProvider());
         review.setState(PullRequestReview.State.APPROVED);
         review.setHtmlUrl(pr.getHtmlUrl() + "#approvals");
-        // approvedBy names who currently approves; it does not date their approval.
-        // This is a recorded association with the stored work, not the originally approved commit.
-        review.setCommitId(resolveApprovalCommit(pr));
+        // approvedBy names who currently approves; it names neither the approved head nor when. Both stay unknown.
         review.setAuthor(approver);
         review.setPullRequest(pr);
         return review;
-    }
-
-    /**
-     * Returns the stored commit associated with a snapshot approval. Prefers the MR head
-     * ({@code headRefOid}), falls back to the merge commit. May return {@code null}
-     * when neither is populated (e.g., minimal PR stubs created from webhooks).
-     */
-    @Nullable
-    private static String resolveApprovalCommit(PullRequest pr) {
-        if (pr.getHeadRefOid() != null && !pr.getHeadRefOid().isBlank()) {
-            return pr.getHeadRefOid();
-        }
-        if (pr.getMergeCommitSha() != null && !pr.getMergeCommitSha().isBlank()) {
-            return pr.getMergeCommitSha();
-        }
-        return null;
     }
 
     private void reconcileApprovals(
@@ -1581,37 +1447,28 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             PullRequestReview existingReview = existingReviewsByNativeId.get(approvalNativeId);
             if (existingReview != null) {
                 boolean changed = false;
-                // A renewed standing approval gets the current recorded head association. GitLab's approver list
-                // does not identify the originally approved commit; an unchanged approval keeps its association.
+                // A renewed standing approval is a new act whose time the approver list does not name: it does not
+                // inherit the withdrawn one's.
                 if (existingReview.getState() != PullRequestReview.State.APPROVED || existingReview.isDismissed()) {
                     existingReview.setState(PullRequestReview.State.APPROVED);
                     existingReview.setDismissed(false);
                     existingReview.setSubmittedAt(null);
                     existingReview.setUpdatedAt(ctx != null ? ctx.observedAt() : Instant.now());
-                    String commit = resolveApprovalCommit(pr);
-                    if (commit != null) {
-                        existingReview.setCommitId(commit);
-                    }
                     changed = true;
                     log.debug(
                             "Updated review to APPROVED from sync: prId={}, reviewerId={}",
                             pr.getId(),
                             user.getLogin());
                 }
-                // Fill a missing recorded association without changing one already stored.
-                if (existingReview.getCommitId() == null) {
-                    String commit = resolveApprovalCommit(pr);
-                    if (commit != null) {
-                        existingReview.setCommitId(commit);
-                        changed = true;
-                    }
-                }
                 var submittedAt = pr.getState() == Issue.State.MERGED && nativeDates == null
                         ? existingReview.getSubmittedAt()
                         : nativeDates == null ? null : nativeDates.get(user.getNativeId());
                 boolean dateChanged = !Objects.equals(existingReview.getSubmittedAt(), submittedAt);
                 if (dateChanged) existingReview.setSubmittedAt(submittedAt);
-                if (changed || dateChanged) {
+                // GitLab never names the approved revision; a head an earlier version stored for it was a guess.
+                boolean guessedHead = existingReview.getCommitId() != null;
+                if (guessedHead) existingReview.setCommitId(null);
+                if (changed || dateChanged || guessedHead) {
                     reviewRepository.save(existingReview);
 
                     if (changed && ctx != null) {

@@ -495,172 +495,69 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             assertThat(hasPullRequestMerged).isFalse();
         }
 
-        @Test
-        void processApprovedCreatesReview() {
+        /** The stored merge request at the hook's head, with its author resolvable and a decision on record. */
+        private PullRequest storedForApprovalHook() {
             PullRequest pr = createPullRequestEntity();
             pr.setNativeId(RAW_MR_ID);
             pr.setHeadRefOid(APPROVAL_HEAD);
-            // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
+            pr.setReviewDecision(ReviewDecision.REVIEW_REQUIRED);
             when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(pr));
-
-            User author = createUserEntity();
             when(userRepository.findByNativeIdAndProviderId(RAW_USER_ID, PROVIDER_ID))
-                    .thenReturn(Optional.of(author));
+                    .thenReturn(Optional.of(createUserEntity()));
+            return pr;
+        }
 
-            User approver = createApproverEntity();
-            when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
-                    .thenReturn(approver);
+        private PullRequestReview standingApproval(PullRequest pr, PullRequestReview.State state) {
+            PullRequestReview review = new PullRequestReview();
+            review.setNativeId(GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID));
+            review.setState(state);
+            review.setDismissed(state == PullRequestReview.State.DISMISSED);
+            review.setHtmlUrl("https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5#approvals");
+            review.setAuthor(createApproverEntity());
+            review.setPullRequest(pr);
+            pr.getReviews().add(review);
+            return review;
+        }
 
-            long expectedReviewId = GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID);
-            when(reviewRepository.findByNativeIdAndProviderId(expectedReviewId, PROVIDER_ID))
-                    .thenReturn(Optional.empty());
-
-            GitLabMergeRequestEventDTO event = createApprovalEvent("approved", "opened", APPROVAL_HEAD);
-            PullRequest result = processor.processApproved(event, createContext());
-
-            assertThat(result).isNotNull();
-
-            ArgumentCaptor<PullRequestReview> reviewCaptor = ArgumentCaptor.forClass(PullRequestReview.class);
-            verify(reviewRepository).save(reviewCaptor.capture());
-
-            PullRequestReview savedReview = reviewCaptor.getValue();
-            assertThat(savedReview.getState()).isEqualTo(PullRequestReview.State.APPROVED);
-            assertThat(savedReview.getAuthor()).isEqualTo(approver);
-            assertThat(savedReview.getNativeId()).isEqualTo(expectedReviewId);
-
+        private List<Object> publishedEvents() {
             ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
             verify(eventPublisher, atLeastOnce()).publishEvent(eventCaptor.capture());
-
-            boolean hasReviewSubmitted =
-                    eventCaptor.getAllValues().stream().anyMatch(e -> e instanceof ScmDomainEvent.ReviewSubmitted);
-            assertThat(hasReviewSubmitted).isTrue();
+            return eventCaptor.getAllValues();
         }
 
         @Test
-        void processUnapprovedDismissesReview() {
-            PullRequest pr = createPullRequestEntity();
-            pr.setNativeId(RAW_MR_ID);
-            // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
-            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
-                    .thenReturn(Optional.of(pr));
-            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
+        void shouldRecordNoApprovalAndForgetTheDecisionWhenAnApprovalHookArrives() {
+            PullRequest pr = storedForApprovalHook();
 
-            User author = createUserEntity();
-            when(userRepository.findByNativeIdAndProviderId(RAW_USER_ID, PROVIDER_ID))
-                    .thenReturn(Optional.of(author));
-
-            User approver = createApproverEntity();
-            when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
-                    .thenReturn(approver);
-
-            long expectedNativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID);
-            PullRequestReview existingReview = new PullRequestReview();
-            existingReview.setNativeId(expectedNativeId);
-            existingReview.setState(PullRequestReview.State.APPROVED);
-            existingReview.setHtmlUrl("https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5#approvals");
-            existingReview.setSubmittedAt(Instant.now());
-            existingReview.setAuthor(approver);
-            existingReview.setPullRequest(pr);
-            pr.getReviews().add(existingReview);
-
-            when(reviewRepository.findByNativeIdAndProviderId(expectedNativeId, PROVIDER_ID))
-                    .thenReturn(Optional.of(existingReview));
-
-            GitLabMergeRequestEventDTO event = createApprovalEvent("unapproved", "opened");
-            PullRequest result = processor.processUnapproved(event, createContext());
+            PullRequest result = processor.processApproved(
+                    createApprovalEvent("approved", "opened", APPROVAL_HEAD), createContext());
 
             assertThat(result).isNotNull();
-
-            assertThat(existingReview.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
-            assertThat(existingReview.isDismissed()).isTrue();
-            verify(reviewRepository).save(existingReview);
-
-            // ReviewDismissed is published (not ReviewSubmitted)
-            ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-            verify(eventPublisher, atLeastOnce()).publishEvent(eventCaptor.capture());
-
-            boolean hasReviewDismissed =
-                    eventCaptor.getAllValues().stream().anyMatch(e -> e instanceof ScmDomainEvent.ReviewDismissed);
-            assertThat(hasReviewDismissed).isTrue();
-        }
-
-        @Test
-        void processApprovedIdempotent() {
-            PullRequest pr = createPullRequestEntity();
-            pr.setNativeId(RAW_MR_ID);
-            pr.setHeadRefOid(APPROVAL_HEAD);
-            // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
-            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
-            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
-
-            User author = createUserEntity();
-            when(userRepository.findByNativeIdAndProviderId(RAW_USER_ID, PROVIDER_ID))
-                    .thenReturn(Optional.of(author));
-
-            User approver = createApproverEntity();
-            when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
-                    .thenReturn(approver);
-
-            // Review ALREADY exists — simulates duplicate approval webhook
-            long expectedNativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID);
-            PullRequestReview existingReview = new PullRequestReview();
-            existingReview.setNativeId(expectedNativeId);
-            existingReview.setState(PullRequestReview.State.APPROVED);
-            existingReview.setCommitId(APPROVAL_HEAD);
-            when(reviewRepository.findByNativeIdAndProviderId(expectedNativeId, PROVIDER_ID))
-                    .thenReturn(Optional.of(existingReview));
-
-            GitLabMergeRequestEventDTO event = createApprovalEvent("approved", "opened", APPROVAL_HEAD);
-            PullRequest result = processor.processApproved(event, createContext());
-
-            assertThat(result).isNotNull();
-            // Review should NOT be saved again
+            // GitLab fires the hook from the reloaded merge request: the approver may have withdrawn since, so the
+            // approver list the readiness read takes next is what records the approval.
+            assertThat(pr.getReviews()).isEmpty();
             verify(reviewRepository, never()).save(any(PullRequestReview.class));
+            assertThat(publishedEvents()).noneMatch(e -> e instanceof ScmDomainEvent.ReviewSubmitted);
+            assertThat(pr.getReviewDecision()).isNull();
         }
 
         @Test
-        void processUnapprovedNoExistingReview() {
-            PullRequest pr = createPullRequestEntity();
-            pr.setNativeId(RAW_MR_ID);
-            // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
-            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
-            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
+        void shouldDismissNoApprovalAndForgetTheDecisionWhenAnUnapprovalHookArrives() {
+            PullRequest pr = storedForApprovalHook();
+            PullRequestReview standing = standingApproval(pr, PullRequestReview.State.APPROVED);
 
-            User author = createUserEntity();
-            when(userRepository.findByNativeIdAndProviderId(RAW_USER_ID, PROVIDER_ID))
-                    .thenReturn(Optional.of(author));
-
-            User approver = createApproverEntity();
-            when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
-                    .thenReturn(approver);
-
-            // No existing review — findById returns empty
-            long expectedReviewId = GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID);
-            when(reviewRepository.findByNativeIdAndProviderId(expectedReviewId, PROVIDER_ID))
-                    .thenReturn(Optional.empty());
-
-            GitLabMergeRequestEventDTO event = createApprovalEvent("unapproved", "opened");
-            PullRequest result = processor.processUnapproved(event, createContext());
+            PullRequest result =
+                    processor.processUnapproved(createApprovalEvent("unapproved", "opened"), createContext());
 
             assertThat(result).isNotNull();
-            // No save should happen (no review to update)
+            assertThat(standing.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(standing.isDismissed()).isFalse();
             verify(reviewRepository, never()).save(any(PullRequestReview.class));
-            // Only PullRequestUpdated from process(), no ReviewSubmitted
-            ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-            verify(eventPublisher, atLeastOnce()).publishEvent(eventCaptor.capture());
-            boolean hasReviewSubmitted =
-                    eventCaptor.getAllValues().stream().anyMatch(e -> e instanceof ScmDomainEvent.ReviewSubmitted);
-            assertThat(hasReviewSubmitted).isFalse();
+            assertThat(publishedEvents()).noneMatch(e -> e instanceof ScmDomainEvent.ReviewDismissed);
+            assertThat(pr.getReviewDecision()).isNull();
         }
 
         @Test
@@ -808,97 +705,50 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         }
 
         @Test
-        void processUnapproved_alreadyDismissed_isIdempotent() {
-            PullRequest pr = createPullRequestEntity();
-            pr.setNativeId(RAW_MR_ID);
-            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
-                    .thenReturn(Optional.of(pr));
-            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
+        void shouldNotGiveADismissedApprovalAgainWhenAnApprovalHookArrives() {
+            PullRequest pr = storedForApprovalHook();
+            PullRequestReview dismissed = standingApproval(pr, PullRequestReview.State.DISMISSED);
 
-            User author = createUserEntity();
-            when(userRepository.findByNativeIdAndProviderId(RAW_USER_ID, PROVIDER_ID))
-                    .thenReturn(Optional.of(author));
+            processor.processApproved(createApprovalEvent("approved", "opened", APPROVAL_HEAD), createContext());
 
-            User approver = createApproverEntity();
-            when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
-                    .thenReturn(approver);
-
-            // Review already in DISMISSED state
-            long expectedNativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID);
-            PullRequestReview existingReview = new PullRequestReview();
-            existingReview.setNativeId(expectedNativeId);
-            existingReview.setState(PullRequestReview.State.DISMISSED);
-            existingReview.setDismissed(true);
-            existingReview.setHtmlUrl("https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5#approvals");
-            existingReview.setSubmittedAt(Instant.now());
-            existingReview.setAuthor(approver);
-            existingReview.setPullRequest(pr);
-            pr.getReviews().add(existingReview);
-
-            when(reviewRepository.findByNativeIdAndProviderId(expectedNativeId, PROVIDER_ID))
-                    .thenReturn(Optional.of(existingReview));
-
-            GitLabMergeRequestEventDTO event = createApprovalEvent("unapproved", "opened");
-            PullRequest result = processor.processUnapproved(event, createContext());
-
-            assertThat(result).isNotNull();
-            // Already DISMISSED — save() should NOT be called
+            assertThat(dismissed.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
+            assertThat(dismissed.isDismissed()).isTrue();
             verify(reviewRepository, never()).save(any(PullRequestReview.class));
-            assertThat(existingReview.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
+            assertThat(publishedEvents()).noneMatch(e -> e instanceof ScmDomainEvent.ReviewSubmitted);
+            assertThat(pr.getReviewDecision()).isNull();
         }
 
         @Test
-        void shouldGiveADismissedApprovalAgainWhenTheApproverApprovesAgain() {
+        void shouldLeaveAStandingApprovalWithItsNativeDateAndUnknownHeadAloneWhenAnApprovalHookArrives() {
+            PullRequest pr = storedForApprovalHook();
+            // A standing approval the readiness read recorded with GitLab's own date and no head.
+            Instant approvedAt = Instant.parse("2026-10-05T12:56:28.794Z");
+            PullRequestReview standing = standingApproval(pr, PullRequestReview.State.APPROVED);
+            standing.setSubmittedAt(approvedAt);
+
+            processor.processApproved(createApprovalEvent("approved", "opened", APPROVAL_HEAD), createContext());
+
+            assertThat(standing.getCommitId()).isNull();
+            assertThat(standing.getSubmittedAt()).isEqualTo(approvedAt);
+            assertThat(standing.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+            verify(reviewRepository, never()).save(any(PullRequestReview.class));
+        }
+
+        @Test
+        void shouldChangeNothingWhenAnOlderApprovalHookNamesAnotherHead() {
             PullRequest pr = createPullRequestEntity();
-            pr.setNativeId(RAW_MR_ID);
             pr.setHeadRefOid(APPROVAL_HEAD);
+            pr.setReviewDecision(ReviewDecision.REVIEW_REQUIRED);
+            pr.setUpdatedAt(Instant.parse("2024-01-15T14:00:01Z"));
             when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
-                    .thenReturn(Optional.of(pr));
-            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(pr));
 
-            User author = createUserEntity();
-            when(userRepository.findByNativeIdAndProviderId(RAW_USER_ID, PROVIDER_ID))
-                    .thenReturn(Optional.of(author));
+            processor.processApproved(createApprovalEvent("approved", "opened", "b".repeat(40)), createContext());
 
-            User approver = createApproverEntity();
-            when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
-                    .thenReturn(approver);
-
-            // Dismissed by a prior unapproval
-            long expectedNativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID);
-            PullRequestReview existingReview = new PullRequestReview();
-            existingReview.setNativeId(expectedNativeId);
-            existingReview.setState(PullRequestReview.State.DISMISSED);
-            existingReview.setDismissed(true);
-            existingReview.setHtmlUrl("https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5#approvals");
-            existingReview.setSubmittedAt(Instant.now().minusSeconds(3600));
-            existingReview.setAuthor(approver);
-            existingReview.setPullRequest(pr);
-            pr.getReviews().add(existingReview);
-
-            when(reviewRepository.findByNativeIdAndProviderId(expectedNativeId, PROVIDER_ID))
-                    .thenReturn(Optional.of(existingReview));
-
-            GitLabMergeRequestEventDTO event = createApprovalEvent("approved", "opened", APPROVAL_HEAD);
-            PullRequest result = processor.processApproved(event, createContext());
-
-            assertThat(result).isNotNull();
-
-            // Review should be updated to APPROVED and saved
-            assertThat(existingReview.getState()).isEqualTo(PullRequestReview.State.APPROVED);
-            assertThat(existingReview.isDismissed()).isFalse();
-            verify(reviewRepository).save(existingReview);
-
-            // ReviewSubmitted event should be emitted for the state change
-            ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-            verify(eventPublisher, atLeastOnce()).publishEvent(eventCaptor.capture());
-            boolean hasReviewSubmitted =
-                    eventCaptor.getAllValues().stream().anyMatch(e -> e instanceof ScmDomainEvent.ReviewSubmitted);
-            assertThat(hasReviewSubmitted).isTrue();
+            assertThat(pr.getReviewDecision())
+                    .as("an older snapshot of another head must not invalidate newer readiness")
+                    .isEqualTo(ReviewDecision.REVIEW_REQUIRED);
+            verify(reviewRepository, never()).save(any(PullRequestReview.class));
         }
 
         @Test
@@ -1673,6 +1523,114 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             // Verify stale approval was dismissed (not CHANGES_REQUESTED — unapproval is distinct)
             assertThat(staleReview.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
         }
+
+        @ParameterizedTest
+        @CsvSource(
+                nullValues = "none",
+                value = {"false, none", "false, old-head", "true, old-head"})
+        void shouldInventNoHeadAndKeepNoDateAnOpenMergeRequestsReadCannotHaveRecorded(
+                boolean withdrawn, @Nullable String storedHead) {
+            PullRequest pr = createPullRequestEntity();
+            pr.setNativeId(RAW_MR_ID);
+            User approver = createApproverEntity();
+            Instant notedAt = Instant.parse("2026-10-05T12:56:28.794Z");
+            PullRequestReview noted = new PullRequestReview();
+            noted.setNativeId(GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID));
+            noted.setProvider(gitLabProvider);
+            noted.setState(PullRequestReview.State.APPROVED);
+            noted.setHtmlUrl("https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5#approvals");
+            noted.setSubmittedAt(notedAt);
+            noted.setCommitId(storedHead);
+            if (withdrawn) {
+                noted.setState(PullRequestReview.State.DISMISSED);
+                noted.setDismissed(true);
+            }
+            noted.setAuthor(approver);
+            noted.setPullRequest(pr);
+            pr.getReviews().add(noted);
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
+            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
+            lenient()
+                    .when(gitLabUserService.findOrCreateUser(
+                            argThat((GitLabUserLookup lookup) ->
+                                    lookup != null && "gid://gitlab/User/12345".equals(lookup.globalId())),
+                            eq(PROVIDER_ID)))
+                    .thenReturn(createUserEntity());
+            lenient()
+                    .when(gitLabUserService.findOrCreateUser(
+                            argThat((GitLabUserLookup lookup) ->
+                                    lookup != null && "gid://gitlab/User/11111".equals(lookup.globalId())),
+                            eq(PROVIDER_ID)))
+                    .thenReturn(approver);
+
+            var syncData = new GitLabMergeRequestProcessor.SyncMergeRequestData(
+                    "gid://gitlab/MergeRequest/999555",
+                    "5",
+                    "Add awesome feature",
+                    "This MR adds an awesome feature",
+                    "opened",
+                    false,
+                    null,
+                    null,
+                    true,
+                    "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                    "2024-01-15T10:00:00Z",
+                    "2024-01-15T10:00:00Z",
+                    null,
+                    null,
+                    1,
+                    10,
+                    2,
+                    3,
+                    "feature/awesome-feature",
+                    "main",
+                    "abc123",
+                    null,
+                    null,
+                    false,
+                    0,
+                    "gid://gitlab/User/12345",
+                    "testuser",
+                    "Test User",
+                    "https://gitlab.com/uploads/avatar.png",
+                    "https://gitlab.com/testuser",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    List.of(new GitLabMergeRequestProcessor.SyncUserData(
+                            "gid://gitlab/User/11111",
+                            "reviewer1",
+                            "Reviewer One",
+                            "https://gitlab.com/uploads/avatar.png",
+                            "https://gitlab.com/reviewer1",
+                            null,
+                            null)),
+                    null,
+                    null,
+                    GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
+                    null // closingIssueNumbers
+                    ,
+                    null);
+            processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
+
+            // approvedBy lists who approves, not when nor which head. GitLab's own dates are read only once merged, so
+            // a date on an open merge request is no native one and goes. A head stored for the approval, renewed or
+            // unchanged, was a guess and goes too.
+            assertThat(noted.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(noted.getSubmittedAt()).isNull();
+            assertThat(noted.getCommitId()).isNull();
+        }
     }
 
     @Nested
@@ -1761,7 +1719,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             review.setSubmittedAt(materialVersion);
             assertThat(read(snapshot(actualApproval), readAt)).isTrue();
             assertThat(review.getSubmittedAt()).isEqualTo(actualApproval);
-            assertThat(review.getCommitId()).isEqualTo(APPROVAL_HEAD);
+            assertThat(review.getCommitId())
+                    .as("a head an earlier version guessed for the approval goes with the read")
+                    .isNull();
             verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.ReviewSubmitted.class));
 
             assertThat(read(null, readAt.plusSeconds(1))).isTrue();
@@ -1769,6 +1729,21 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             assertThat(read(snapshot(null), readAt.plusSeconds(2))).isTrue();
             assertThat(review.getSubmittedAt()).isNull();
             verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.ReviewSubmitted.class));
+        }
+
+        @Test
+        void shouldKeepTheNativeDateOfAHeadlessApprovalThroughALaterReadWithoutDates() {
+            stubSnapshotWrite();
+            review.setCommitId(null);
+            assertThat(read(snapshot(actualApproval), readAt)).isTrue();
+            assertThat(review.getSubmittedAt()).isEqualTo(actualApproval);
+
+            assertThat(read(null, readAt.plusSeconds(1))).isTrue();
+
+            assertThat(review.getSubmittedAt()).isEqualTo(actualApproval);
+            assertThat(review.getCommitId())
+                    .as("GitLab's approval date names no approved revision")
+                    .isNull();
         }
 
         @Test
@@ -1823,6 +1798,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                             ProcessingContext.forSync(1L, testRepo)))
                     .isTrue();
             assertThat(review.getSubmittedAt()).isEqualTo(actualApproval);
+            assertThat(review.getCommitId()).isNull();
             assertThat(pr.getMergeable()).isFalse();
             assertThat(pr.getReviewDecision()).isEqualTo(ReviewDecision.REVIEW_REQUIRED);
             assertThat(pr.getReviewersObservedAt()).isEqualTo(readAt);

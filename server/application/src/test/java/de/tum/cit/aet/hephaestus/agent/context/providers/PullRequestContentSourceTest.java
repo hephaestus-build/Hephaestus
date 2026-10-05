@@ -133,9 +133,6 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         lenient()
                 .when(gitRepositoryManager.changedPaths(REPOSITORY, BASE, HEAD))
                 .thenReturn(Set.of("a.txt"));
-        lenient()
-                .when(gitRepositoryManager.commitsBetween(REPOSITORY, BASE, HEAD))
-                .thenReturn(List.of());
     }
 
     private Map<String, byte[]> captureFiles(ContextRequest request) {
@@ -461,7 +458,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             var captured = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
 
             assertThat(captured.files()).doesNotContainKey(PullRequestContentSource.COMMITS_FILE);
-            verify(gitRepositoryManager, never()).commitsBetween(any(), any(), any());
+            verify(gitRepositoryManager, never()).forEachCommitBetween(any(), any(), any(), any());
         }
     }
 

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
@@ -34,7 +35,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabHeadPipeline;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadinessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabPullRequestReviewCommentProcessor;
@@ -154,6 +157,9 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private GitLabReviewReconciler reviewReconciler;
+
+    @Autowired
+    private GitLabMergeRequestProcessor mergeRequestProcessor;
 
     @Autowired
     private GitLabGraphQlResponseHandler graphQlResponseHandler;
@@ -301,8 +307,38 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR_ID, NATIVE_USER_ID);
 
         @BeforeEach
-        void approveAsTheCommenter() throws Exception {
-            receive(loadPayload("note.mergerequest.system.approved"));
+        void approveAsTheCommenter() {
+            String head = "b".repeat(40);
+            transactionTemplate.executeWithoutResult(status -> pullRequestRepository
+                    .findById(savedPr.getId())
+                    .orElseThrow()
+                    .setHeadRefOid(head));
+            PullRequest stored = pullRequestRepository.findById(savedPr.getId()).orElseThrow();
+            var approver = new GitLabMergeRequestProcessor.SyncUserData(
+                    "gid://gitlab/User/" + NATIVE_USER_ID,
+                    FIXTURE_AUTHOR_LOGIN,
+                    FIXTURE_AUTHOR_LOGIN,
+                    null,
+                    null,
+                    null,
+                    null);
+            var facts = new GitLabMergeRequestReadinessReader.Facts(
+                    Objects.requireNonNull(savedRepo.getNativeId()),
+                    NATIVE_MR_ID,
+                    "opened",
+                    Objects.requireNonNull(stored.getUpdatedAt()),
+                    head,
+                    true,
+                    "mergeable",
+                    true,
+                    GitLabHeadPipeline.NOT_CAPTURED,
+                    List.of(),
+                    List.of(approver),
+                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
+                    null);
+            assertThat(mergeRequestProcessor.applyReadiness(
+                            savedRepo, MR_IID, facts, Instant.now(), ProcessingContext.forSync(null, savedRepo)))
+                    .isTrue();
             assertThat(reviewState(APPROVAL_NATIVE_ID)).isEqualTo(PullRequestReview.State.APPROVED);
             eventListener.clear();
         }
@@ -346,8 +382,8 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     "gid://gitlab/Note/4538603", NATIVE_USER_ID);
             assertThat(reviewState(nativeId)).isEqualTo(PullRequestReview.State.CHANGES_REQUESTED);
             assertThat(reviewState(APPROVAL_NATIVE_ID))
-                    .as("GitLab withdraws the approval of a reviewer who requests changes")
-                    .isEqualTo(PullRequestReview.State.DISMISSED);
+                    .as("the note does not replace the native approval snapshot")
+                    .isEqualTo(PullRequestReview.State.APPROVED);
             assertThat(reviewDecision())
                     .as("one person's decision changed, so the stored decision no longer stands")
                     .isNull();

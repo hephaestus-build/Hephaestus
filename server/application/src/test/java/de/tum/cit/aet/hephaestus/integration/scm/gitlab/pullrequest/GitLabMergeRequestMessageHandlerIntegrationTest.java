@@ -384,9 +384,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     class ApprovalEvents {
 
         @Test
-        void approveMergeRequest_createsReview() throws Exception {
+        void shouldCreateApprovalOnlyFromTheSnapshotReadAfterTheHook() throws Exception {
             // The approval hook is the first MR !4 hook, so it also creates the merge request.
-            receive(loadPayload("merge_request.approved"));
+            receiveWithApprovals(loadPayload("merge_request.approved"), List.of(approver()));
 
             transactionTemplate.executeWithoutResult(status -> {
                 PullRequest pr = pullRequestRepository
@@ -413,12 +413,12 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         @Test
-        @DisplayName("dismisses the review on an 'unapproved' event")
+        @DisplayName("dismisses the review when the native snapshot no longer lists the approver")
         void unapproveMergeRequest_dismissesReview() throws Exception {
-            receive(loadPayload("merge_request.approved"));
+            receiveWithApprovals(loadPayload("merge_request.approved"), List.of(approver()));
             eventListener.clear();
 
-            receive(loadPayload("merge_request.unapproved"));
+            receiveWithApprovals(loadPayload("merge_request.unapproved"), List.of());
 
             transactionTemplate.executeWithoutResult(status -> {
                 long nativeId = GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR4_ID, NATIVE_APPROVER_ID);
@@ -798,22 +798,22 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
          * one person's act, and the stored decision no longer stands after it.
          */
         @Test
-        void shouldRecordEachApproversActAndForgetTheDecisionItChanged() throws Exception {
+        void shouldRefreshApprovalMembershipOnlyFromTheNativeSnapshot() throws Exception {
             receive(loadPayload("merge_request.approval"));
-            assertThat(approvalState()).isEqualTo(PullRequestReview.State.APPROVED);
-
-            setReviewDecision(MR4_IID, ReviewDecision.APPROVED);
-            receive(loadPayload("merge_request.unapproval"));
-
-            assertThat(approvalState()).isEqualTo(PullRequestReview.State.DISMISSED);
+            assertThat(approvalState()).isNull();
             assertThat(reviewDecision(MR4_IID)).isNull();
 
-            setReviewDecision(MR4_IID, ReviewDecision.REVIEW_REQUIRED);
-            receive(loadPayload("merge_request.unapproval"));
+            receiveWithApprovals(loadPayload("merge_request.approval"), List.of(approver()));
+            assertThat(approvalState()).isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(reviewDecision(MR4_IID)).isEqualTo(ReviewDecision.APPROVED);
 
-            assertThat(reviewDecision(MR4_IID))
-                    .as("a redelivered hook changes no one's review, so it leaves a newer sync's decision standing")
-                    .isEqualTo(ReviewDecision.REVIEW_REQUIRED);
+            receive(loadPayload("merge_request.unapproval"));
+            assertThat(approvalState()).isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(reviewDecision(MR4_IID)).isNull();
+
+            receiveWithApprovals(loadPayload("merge_request.unapproval"), List.of());
+            assertThat(approvalState()).isEqualTo(PullRequestReview.State.DISMISSED);
+            assertThat(reviewDecision(MR4_IID)).isEqualTo(ReviewDecision.REVIEW_REQUIRED);
         }
 
         private void sync(GitLabMergeRequestProcessor.SyncMergeRequestData data) {
@@ -839,13 +839,6 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     .getReviewDecision();
         }
 
-        private void setReviewDecision(int iid, ReviewDecision decision) {
-            transactionTemplate.executeWithoutResult(status -> pullRequestRepository
-                    .findByRepositoryIdAndNumber(savedRepo.getId(), iid)
-                    .orElseThrow()
-                    .setReviewDecision(decision));
-        }
-
         /** Each review of MR !2 by its author's login. */
         private Map<String, PullRequestReview.State> reviewStates() {
             return Objects.requireNonNull(transactionTemplate.execute(status -> {
@@ -862,8 +855,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     }
 
     /**
-     * An approval act, and GitLab's own reset, apply to the merge request as stored now: the head a hook names decides
-     * that, not when it arrived. Then the dated review snapshot orders it against reads of the approvals.
+     * Refresh occasions cannot overwrite newer native snapshots or establish approval membership themselves.
      */
     @Nested
     class ApprovalActsOnTheCurrentHead {
@@ -885,7 +877,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @ParameterizedTest
         @ValueSource(strings = {"approvals_reset_on_push", "code_owner_approvals_reset_on_push"})
         void shouldNotLetAResetOfAnEarlierHeadUndoAnApprovalOfTheCurrentOne(String systemAction) throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:30:00 +0100"));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:30:00 +0100"),
+                    List.of(approver()));
             setReviewDecision(ReviewDecision.APPROVED);
             eventListener.clear();
 
@@ -894,7 +888,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             PullRequestReview approval = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
             assertThat(approval.getState()).isEqualTo(PullRequestReview.State.APPROVED);
             assertThat(approval.isDismissed()).isFalse();
-            assertThat(approval.getCommitId()).isEqualTo(NEXT_HEAD);
+            assertThat(approval.getCommitId())
+                    .as("a hook names the merge request's current head, not the approved revision")
+                    .isNull();
             assertThat(reviewDecision()).isEqualTo(ReviewDecision.APPROVED);
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewDismissed.class))
                     .isEmpty();
@@ -902,7 +898,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         @Test
         void shouldForgetTheDecisionButDismissNoOneWhenGitLabResetsApprovalsOnTheCurrentHead() throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:30:00 +0100"));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:30:00 +0100"),
+                    List.of(approver()));
             setReviewDecision(ReviewDecision.APPROVED);
             eventListener.clear();
 
@@ -933,7 +931,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @ValueSource(booleans = {false, true})
         void shouldNotLetAWithdrawalOrResetOfAnOlderVersionOfTheSameHeadUndoTheApproval(boolean system)
                 throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:30:00 +0100"));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:30:00 +0100"),
+                    List.of(approver()));
             setReviewDecision(ReviewDecision.APPROVED);
             eventListener.clear();
 
@@ -952,27 +952,30 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         @Test
-        void shouldApplyAWithdrawalOfTheStoredVersionReceivedLater() throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:30:00 +0100"));
+        void shouldKeepTheLastApprovalWhenTheWithdrawalRefreshIsUnavailable() throws Exception {
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:30:00 +0100"),
+                    List.of(approver()));
             eventListener.clear();
 
             receive(approvalEvent("merge_request.unapproved", NEXT_HEAD, "2026-01-31 22:30:00 +0100"));
 
             assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getState())
-                    .isEqualTo(PullRequestReview.State.DISMISSED);
+                    .isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(reviewDecision()).isNull();
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewDismissed.class))
-                    .hasSize(1);
+                    .isEmpty();
         }
 
         @Test
-        void shouldRecordAnApprovalOfThePushedHeadOverTheApprovalGitLabResetOnThePush() throws Exception {
-            handler.handle(loadPayload("merge_request.approved"), Instant.now());
+        void shouldLeaveAStandingApprovalToTheReadWhenAnApprovalHookArrivesAfterAReset() throws Exception {
+            receiveWithApprovals(loadPayload("merge_request.approved"), List.of(approver()));
             // GitLab's reset on the push says whose approvals went only by resetting them all, so it dismisses no one.
             receive(systemReset(NEXT_HEAD, "2026-01-31 22:30:00 +0100", "approvals_reset_on_push"));
-            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getCommitId())
-                    .isEqualTo(FIXTURE_HEAD);
             eventListener.clear();
 
+            // GitLab fires the hook from the merge request as it is when the hook runs, so the head it names is no
+            // approved revision, and an approval that already stands is the readiness read's to reconcile.
             GitLabMergeRequestEventDTO reapproval =
                     approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:30:00 +0100");
             receive(reapproval);
@@ -980,16 +983,16 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
             PullRequestReview approval = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
             assertThat(approval.getState()).isEqualTo(PullRequestReview.State.APPROVED);
-            assertThat(approval.getCommitId()).isEqualTo(NEXT_HEAD);
-            // Once: the redelivery approves the head already recorded.
+            assertThat(approval.getCommitId()).isNull();
+            assertThat(approval.getSubmittedAt()).isNull();
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
-                    .hasSize(1);
+                    .isEmpty();
         }
 
         @ParameterizedTest
         @ValueSource(booleans = {false, true})
         void shouldKeepTheStandingApprovalWhenAnApprovalAfterThePushNamesNoHead(boolean blank) throws Exception {
-            handler.handle(loadPayload("merge_request.approved"), Instant.now());
+            receiveWithApprovals(loadPayload("merge_request.approved"), List.of(approver()));
             receive(systemReset(NEXT_HEAD, "2026-01-31 22:30:00 +0100", "approvals_reset_on_push"));
             eventListener.clear();
 
@@ -997,7 +1000,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
             PullRequestReview approval = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
             assertThat(approval.getState()).isEqualTo(PullRequestReview.State.APPROVED);
-            assertThat(approval.getCommitId()).isEqualTo(FIXTURE_HEAD);
+            assertThat(approval.getCommitId())
+                    .as("a hook names the merge request's current head, not the approved revision")
+                    .isNull();
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
                     .isEmpty();
         }
@@ -1013,16 +1018,16 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         @Test
-        void shouldRecordTwoPeoplesApprovalsReceivedAtTheSameInstant() throws Exception {
+        void shouldRecordNoApprovalsFromTwoHooksReceivedAtTheSameInstant() throws Exception {
             Instant receivedAt = Instant.parse("2026-09-30T10:00:00.000001Z");
 
             handler.handle(loadPayload("merge_request.approved"), receivedAt);
             handler.handle(asTutor(loadPayload("merge_request.approved")), receivedAt);
 
-            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getState())
-                    .isEqualTo(PullRequestReview.State.APPROVED);
-            assertThat(Objects.requireNonNull(approval(NATIVE_TUTOR_ID)).getState())
-                    .isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(approval(NATIVE_APPROVER_ID)).isNull();
+            assertThat(approval(NATIVE_TUTOR_ID)).isNull();
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+                    .isEmpty();
         }
     }
 
@@ -1045,7 +1050,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @Test
         void shouldRemoveAGuessedApprovalDateOnlyOnAnAcceptedWholeSnapshotWithoutAnotherApprovalEvent()
                 throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"),
+                    List.of(approver()));
             PullRequestReview initial = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
             assertThat(initial.getSubmittedAt()).isNull();
             Instant legacyDate = Instant.parse("2026-01-31T21:00:00Z");
@@ -1086,14 +1093,16 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(current.getSubmittedAt()).isNull();
             assertThat(current.getState()).isEqualTo(PullRequestReview.State.APPROVED);
             assertThat(current.isDismissed()).isFalse();
-            assertThat(current.getCommitId()).isEqualTo(NEXT_HEAD);
+            assertThat(current.getCommitId()).isNull();
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
                     .isEmpty();
         }
 
         @Test
         void shouldPersistAMatchingMergedNativeDateWithoutAnotherApprovalEvent() throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"),
+                    List.of(approver()));
             PullRequestReview initial = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
             transactionTemplate.executeWithoutResult(tx -> {
                 PullRequest merged = pullRequestRepository
@@ -1136,7 +1145,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(read(merged, readAt)).isTrue();
             PullRequestReview dated = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
             assertThat(dated.getSubmittedAt()).isEqualTo(actualDate);
-            assertThat(dated.getCommitId()).isEqualTo(NEXT_HEAD);
+            assertThat(dated.getCommitId()).isNull();
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
                     .isEmpty();
             assertThat(read(merged.withApprovalRows(null), readAt.plusSeconds(1)))
@@ -1148,7 +1157,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @ParameterizedTest
         @ValueSource(booleans = {true, false})
         void shouldKeepSnapshotApprovalMembershipWhenOldDecisionNotesAreReplayed(boolean listed) throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"),
+                    List.of(approver()));
             read(
                     facts(
                             NEXT_HEAD,
@@ -1179,7 +1190,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     .isEqualTo(listed ? PullRequestReview.State.APPROVED : PullRequestReview.State.DISMISSED);
             assertThat(after.isDismissed()).isEqualTo(!listed);
             assertThat(after.getSubmittedAt()).isNull();
-            assertThat(after.getCommitId()).isEqualTo(NEXT_HEAD);
+            assertThat(after.getCommitId()).isNull();
         }
 
         @Test
@@ -1211,7 +1222,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         @Test
         void shouldForgetTheMergeabilityAWithdrawalChangesAndRecoverItOnTheNextRead() throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"),
+                    List.of(approver()));
             setReadiness(true, MergeStateStatus.CLEAN, ReviewDecision.APPROVED);
 
             // Its readiness read failed: only the hook itself is recorded.
@@ -1222,19 +1235,23 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(withdrawn.getMergeable()).isNull();
             assertThat(withdrawn.getMergeStateStatus()).isNull();
             assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getState())
-                    .isEqualTo(PullRequestReview.State.DISMISSED);
+                    .isEqualTo(PullRequestReview.State.APPROVED);
 
             read(mergeability(false, "not_approved"), Instant.now());
 
             assertThat(stored().getMergeStateStatus()).isEqualTo(MergeStateStatus.BLOCKED);
             assertThat(stored().getMergeable()).isFalse();
             assertThat(stored().getReviewDecision()).isEqualTo(ReviewDecision.REVIEW_REQUIRED);
+            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getState())
+                    .isEqualTo(PullRequestReview.State.DISMISSED);
         }
 
         @Test
         void shouldForgetTheMergeabilityAResetChangesWithoutDismissingAnyoneAndRecoverItOnTheNextRead()
                 throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"),
+                    List.of(approver()));
             setReadiness(true, MergeStateStatus.CLEAN, ReviewDecision.APPROVED);
 
             receive(systemReset(NEXT_HEAD, "2026-01-31 22:32:00 +0100", "approvals_reset_on_push"));
@@ -1347,7 +1364,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         @Test
         void shouldDismissTheTutorWhoseApprovalGitLabResetOnThePush() throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"),
+                    List.of(approver()));
             receive(systemReset(NEXT_HEAD, "2026-01-31 22:32:00 +0100", "approvals_reset_on_push"));
 
             read(facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, false, List.of(), "not_approved"), Instant.now());
@@ -1360,8 +1379,12 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         @Test
         void shouldKeepTheApproversASelectiveResetLeft() throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
-            receive(asTutor(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100")));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"),
+                    List.of(approver()));
+            receiveWithApprovals(
+                    asTutor(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100")),
+                    List.of(approver(), tutor()));
             receive(systemReset(NEXT_HEAD, "2026-01-31 22:32:00 +0100", "code_owner_approvals_reset_on_push"));
 
             read(facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, List.of(tutor()), "mergeable"), Instant.now());
@@ -1374,9 +1397,14 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         @Test
-        void shouldGiveAnApprovalGivenAgainItsStandingAndTheCurrentHead() throws Exception {
-            receive(approvalEvent("merge_request.approved", FIXTURE_HEAD, "2026-01-31 22:31:00 +0100"));
-            receive(approvalEvent("merge_request.unapproved", FIXTURE_HEAD, "2026-01-31 22:32:00 +0100"));
+        void shouldReadARenewedApprovalWithoutGuessingItsApprovedHead() throws Exception {
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", FIXTURE_HEAD, "2026-01-31 22:31:00 +0100"),
+                    List.of(approver()));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.unapproved", FIXTURE_HEAD, "2026-01-31 22:32:00 +0100"), List.of());
+            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getState())
+                    .isEqualTo(PullRequestReview.State.DISMISSED);
             // The tutor never approved, so this hook only moves the head.
             receive(asTutor(approvalEvent("merge_request.unapproved", NEXT_HEAD, "2026-01-31 22:33:00 +0100")));
 
@@ -1387,12 +1415,16 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             PullRequestReview approval = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
             assertThat(approval.getState()).isEqualTo(PullRequestReview.State.APPROVED);
             assertThat(approval.isDismissed()).isFalse();
-            assertThat(approval.getCommitId()).isEqualTo(NEXT_HEAD);
+            assertThat(approval.getCommitId())
+                    .as("a renewed approval inherits no head")
+                    .isNull();
         }
 
         @Test
-        void shouldNotLetAReadBegunBeforeAWithdrawalPutTheApprovalBack() throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+        void shouldKeepLastMembershipAndUnknownReadinessWhenTheReadPredatesTheWithdrawalHook() throws Exception {
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"),
+                    List.of(approver()));
             Instant readBegun = Instant.now();
             handler.handle(
                     approvalEvent("merge_request.unapproved", NEXT_HEAD, "2026-01-31 22:32:00 +0100"),
@@ -1401,14 +1433,16 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             read(facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, List.of(approver()), "mergeable"), readBegun);
 
             assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getState())
-                    .isEqualTo(PullRequestReview.State.DISMISSED);
+                    .isEqualTo(PullRequestReview.State.APPROVED);
             assertThat(reviewDecision()).isNull();
         }
 
         @ParameterizedTest
         @ValueSource(strings = {"checking", "approvals_syncing"})
         void shouldConfirmNothingWhileGitLabIsStillSettlingTheMergeRequest(String status) throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"),
+                    List.of(approver()));
 
             read(facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, List.of(), status), Instant.now());
 
@@ -1420,7 +1454,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         @Test
         void shouldLeaveTheApprovalsAndTheDecisionUnknownWhenTheApproversWereNotRead() throws Exception {
-            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            receiveWithApprovals(
+                    approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"),
+                    List.of(approver()));
 
             read(facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, null, "mergeable"), Instant.now());
 
@@ -1504,7 +1540,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(recovered.getMergeStateStatus()).isEqualTo(MergeStateStatus.BLOCKED);
             PullRequestReview tutorApproval = Objects.requireNonNull(mr2Approval(NATIVE_TUTOR_ID));
             assertThat(tutorApproval.getState()).isEqualTo(PullRequestReview.State.APPROVED);
-            assertThat(tutorApproval.getCommitId()).isEqualTo(NEXT_HEAD);
+            assertThat(tutorApproval.getCommitId())
+                    .as("the approver list names who approves, not the approved head")
+                    .isNull();
         }
 
         @Test
@@ -1546,7 +1584,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             PullRequestReview approval = Objects.requireNonNull(mr2Approval(NATIVE_APPROVER_ID));
             assertThat(mr2().getState()).isEqualTo(Issue.State.MERGED);
             assertThat(approval.getSubmittedAt()).isEqualTo(actualDate);
-            assertThat(approval.getCommitId()).isEqualTo(FIRST_HEAD);
+            assertThat(approval.getCommitId())
+                    .as("a native approval date names no head")
+                    .isNull();
             eventListener.clear();
             syncPage(node, List.of(), rows);
             assertThat(Objects.requireNonNull(mr2Approval(NATIVE_APPROVER_ID)).getSubmittedAt())
@@ -1792,6 +1832,30 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 .put("username", "tutor")
                 .put("name", "Tutor");
         return objectMapper.treeToValue(payload, GitLabMergeRequestEventDTO.class);
+    }
+
+    /** Delivers a hook, then applies the independent native approver snapshot the test specifies. */
+    private void receiveWithApprovals(
+            GitLabMergeRequestEventDTO event, List<GitLabMergeRequestProcessor.SyncUserData> currentApprovers) {
+        receive(event);
+        PullRequest current = stored();
+        var facts = new GitLabMergeRequestReadinessReader.Facts(
+                savedRepo.getNativeId(),
+                NATIVE_MR4_ID,
+                "opened",
+                Objects.requireNonNull(current.getUpdatedAt()),
+                Objects.requireNonNull(current.getHeadRefOid()),
+                true,
+                currentApprovers.isEmpty() ? "not_approved" : "mergeable",
+                !currentApprovers.isEmpty(),
+                GitLabHeadPipeline.NOT_CAPTURED,
+                List.of(),
+                currentApprovers,
+                GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
+                null);
+        assertThat(mergeRequestProcessor.applyReadiness(
+                        savedRepo, MR4_IID, facts, Instant.now(), ProcessingContext.forSync(null, savedRepo)))
+                .isTrue();
     }
 
     private GitLabMergeRequestProcessor.SyncUserData approver() {
@@ -2096,15 +2160,15 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         @Test
         void domainEvents_mr4Approval() throws Exception {
-            // Approve -> ReviewSubmitted
-            receive(loadPayload("merge_request.approved"));
+            // A native approval snapshot publishes ReviewSubmitted.
+            receiveWithApprovals(loadPayload("merge_request.approved"), List.of(approver()));
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
                     .hasSize(1);
 
             eventListener.clear();
 
-            // Unapprove -> ReviewDismissed (not CHANGES_REQUESTED — unapproval is a distinct action)
-            receive(loadPayload("merge_request.unapproved"));
+            // A native withdrawal snapshot publishes ReviewDismissed, never CHANGES_REQUESTED.
+            receiveWithApprovals(loadPayload("merge_request.unapproved"), List.of());
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewDismissed.class))
                     .hasSize(1);
         }
@@ -2415,7 +2479,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                             Objects.requireNonNull(savedRepo.getProvider().getId()))
                     .orElseThrow();
             assertThat(approval.getSubmittedAt()).isEqualTo(actualDate);
-            assertThat(approval.getCommitId()).isEqualTo(MR2_HEAD);
+            assertThat(approval.getCommitId())
+                    .as("GitLab names no approved revision, so a head stored for the approval was a guess and goes")
+                    .isNull();
             assertThat(merged.getHeadCheckState()).isNull();
             assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
                     .isEmpty();

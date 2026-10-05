@@ -156,7 +156,11 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         var captured = provider.capture(request(metadataWithPr()), provider.sourceKinds());
 
         JsonNode out = objectMapper.readTree(captured.files().get(FILE_KEY));
-        assertThat(out.propertyNames()).containsExactlyInAnyOrder("threads", "reviewDecisions", "truncated");
+        assertThat(out.propertyNames())
+                .containsExactlyInAnyOrder("threads", "reviewDecisions", "decisionHistoryComplete", "truncated");
+        assertThat(out.get("decisionHistoryComplete").asBoolean())
+                .as("current decisions are no history, however whole the list is")
+                .isFalse();
         assertThat(out.get("threads")).isEmpty();
         assertThat(out.get("reviewDecisions")).isEmpty();
         assertThat(out.get("truncated").asBoolean()).isFalse();

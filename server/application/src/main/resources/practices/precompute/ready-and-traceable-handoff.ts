@@ -1,4 +1,4 @@
-// Precompute traceability hints; the model judges readiness from the captured handoff.
+// Precompute traceability hints and checklist facts; the model judges readiness from the captured handoff.
 import { readCommits } from "../lib/change.ts";
 import { branchIssueReferences, issueNumberReferences } from "../lib/references.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
@@ -28,20 +28,15 @@ export default async function readyAndTraceableHandoff(
 		);
 	}
 
-	// Readiness: the checklist as written, counted, so a tick is never guessed at.
+	// Readiness: the checklist as written, counted, so a tick is never guessed at. The counts cannot say whose
+	// lines they are; the model reads that from the description.
 	const description = m.body ?? "";
-	const ticked = (description.match(/^\s*[-*]\s*\[[xX]\]/gmu) ?? []).length;
-	const unticked = (description.match(/^\s*[-*]\s*\[ \]/gmu) ?? []).length;
+	const ticked = (description.match(/^\s*[-*+]\s*\[[xX]\]/gmu) ?? []).length;
+	const unticked = (description.match(/^\s*[-*+]\s*\[ \]/gmu) ?? []).length;
 	const draftMarker = /\b(?:wip|do not merge|draft)\b/iu.test(m.title ?? "");
 	if (ticked + unticked > 0) {
-		// Whether the list is a real Definition of Done or a template left in place matters only when none
-		// of it is ticked; a ticked item already shows the author worked the list.
-		const untouched =
-			ticked === 0
-				? " Read the lines in description.md to tell a real Definition of Done from a template that was left in place."
-				: "";
 		directions.push(
-			`Checklist fact: the description carries ${ticked} ticked and ${unticked} unticked checkbox line(s)${draftMarker ? "; the title carries a draft-style word" : ""}.${untouched}`,
+			`Checklist fact: the description carries ${ticked} ticked and ${unticked} unticked checkbox line(s)${draftMarker ? "; the title carries a draft-style word" : ""}. These counts say neither whose lines they are nor what was done. Where work/change/description.authored.md exists, it separates the form's lines from the author's; otherwise compare description.md with the form. Judge whether the author adopted the checklist or wrote equivalent prose; a form's line left unticked as supplied is boilerplate, not unfinished work, and a tick is a claim, not a result.`,
 		);
 	} else if (draftMarker) {
 		directions.push(
