@@ -254,7 +254,8 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
 
         @BeforeEach
         void stubSession() {
-            when(syncTargetProvider.getSyncSessions(IntegrationKind.GITHUB)).thenReturn(List.of(session()));
+            when(syncTargetProvider.getSyncSession(WORKSPACE_ID, IntegrationKind.GITHUB))
+                    .thenReturn(Optional.of(session()));
             // Override the outer setUp's critical-rate-limit stub. That gate warns on its own, which
             // would make "did the sweep warn?" unanswerable — two warnings and no way to tell whose.
             lenient().when(rateLimitTracker.isCritical(WORKSPACE_ID)).thenReturn(false);

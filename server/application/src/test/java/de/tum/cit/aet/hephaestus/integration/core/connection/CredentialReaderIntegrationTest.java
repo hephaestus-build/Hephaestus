@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -12,6 +13,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -33,6 +35,12 @@ class CredentialReaderIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private ConnectionService connectionService;
+
+    @Autowired
+    private CredentialBundleConverter credentialBundleConverter;
 
     @Test
     void shouldRecordTheCiphertextItCannotReadAndClearItWhenItReadsAgain() {
@@ -92,6 +100,32 @@ class CredentialReaderIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isNull();
     }
 
+    @Test
+    void shouldCommitTheOuterReadWhenItSkipsAnUnreadableCredential() {
+        User owner = persistUser("reader-owner-" + System.nanoTime());
+        Workspace unreadable =
+                createWorkspace("reader-ws-" + System.nanoTime(), "Reader Test", "reader-org", AccountType.ORG, owner);
+        Workspace healthy =
+                createWorkspace("reader-ws-" + System.nanoTime(), "Reader Test", "reader-org", AccountType.ORG, owner);
+        BearerToken healthyToken = new BearerToken("glpat-synthetic-healthy", null);
+        activeGitLabConnection(unreadable, TOKEN, new CredentialBundleConverter(OTHER_KEY, false));
+        activeGitLabConnection(healthy, healthyToken, credentialBundleConverter);
+        TransactionTemplate readOnly =
+                new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
+        readOnly.setReadOnly(true);
+
+        Optional<BearerToken> read = readOnly.execute(__ -> {
+            assertThatThrownBy(
+                            () -> connectionService.findActiveBearerToken(unreadable.getId(), IntegrationKind.GITLAB))
+                    .isInstanceOf(CredentialUnreadableException.class);
+            return connectionService.findActiveBearerToken(healthy.getId(), IntegrationKind.GITLAB);
+        });
+
+        assertThat(read).contains(healthyToken);
+        assertThatThrownBy(() -> connectionService.findActiveBearerToken(unreadable.getId(), IntegrationKind.GITLAB))
+                .isInstanceOf(CredentialUnreadableException.class);
+    }
+
     /** The record is written by the reader's own worker, so the row is read until it carries it. */
     private Connection awaitMark(long id) {
         Instant deadline = Instant.now().plusSeconds(5);
@@ -117,5 +151,22 @@ class CredentialReaderIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 new ConnectionConfig.GitHubAppConfig(100L, null, null, Set.of())));
         connection.setCredentials(TOKEN, new CredentialBundleConverter(OTHER_KEY, false));
         return connectionRepository.saveAndFlush(connection);
+    }
+
+    private void activeGitLabConnection(Workspace workspace, BearerToken token, CredentialBundleConverter converter) {
+        Connection connection = new Connection(
+                workspace,
+                IntegrationKind.GITLAB,
+                "gitlab-" + System.nanoTime(),
+                new ConnectionConfig.GitLabConfig(
+                        "https://gitlab.example.com",
+                        null,
+                        null,
+                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
+                        Set.of(),
+                        null));
+        connection.setState(IntegrationState.ACTIVE);
+        connection.setCredentials(token, converter);
+        connectionRepository.saveAndFlush(connection);
     }
 }

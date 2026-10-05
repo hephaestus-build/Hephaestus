@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
@@ -146,30 +147,39 @@ public class WorkspaceActivationService {
             // No active SCM connection — nothing to sync until one is bound.
             return false;
         }
-        return switch (providerKind.get()) {
-            case GITHUB -> {
-                if (connectionService
-                                .findActiveGitHubPatConfig(workspace.getId())
-                                .isPresent()
-                        && !hasBearerToken(workspace.getId(), IntegrationKind.GITHUB)) {
-                    log.info(
-                            "Skipped workspace activation: reason=patModeWithoutToken, workspaceId={}",
-                            workspace.getId());
-                    yield true;
+        try {
+            return switch (providerKind.get()) {
+                case GITHUB -> {
+                    if (connectionService
+                                    .findActiveGitHubPatConfig(workspace.getId())
+                                    .isPresent()
+                            && !hasBearerToken(workspace.getId(), IntegrationKind.GITHUB)) {
+                        log.info(
+                                "Skipped workspace activation: reason=patModeWithoutToken, workspaceId={}",
+                                workspace.getId());
+                        yield true;
+                    }
+                    yield false;
                 }
-                yield false;
-            }
-            case GITLAB -> {
-                if (!hasBearerToken(workspace.getId(), IntegrationKind.GITLAB)) {
-                    log.info(
-                            "Skipped workspace activation: reason=gitlabPatModeWithoutToken, workspaceId={}",
-                            workspace.getId());
-                    yield true;
+                case GITLAB -> {
+                    if (!hasBearerToken(workspace.getId(), IntegrationKind.GITLAB)) {
+                        log.info(
+                                "Skipped workspace activation: reason=gitlabPatModeWithoutToken, workspaceId={}",
+                                workspace.getId());
+                        yield true;
+                    }
+                    yield false;
                 }
-                yield false;
-            }
-            case SLACK, OUTLINE -> false;
-        };
+                case SLACK, OUTLINE -> false;
+            };
+        } catch (CredentialUnreadableException e) {
+            log.error(
+                    "Skipped workspace activation: reason=credentialUnreadable, workspaceId={}, connectionId={}, kind={}",
+                    workspace.getId(),
+                    e.connectionId(),
+                    e.kind());
+            return true;
+        }
     }
 
     private boolean hasBearerToken(long workspaceId, IntegrationKind kind) {

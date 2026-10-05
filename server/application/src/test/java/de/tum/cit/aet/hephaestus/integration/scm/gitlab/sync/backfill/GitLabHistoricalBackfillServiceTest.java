@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.BackfillProperties;
@@ -109,6 +111,20 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
         lenient()
                 .when(syncTargetProvider.getSyncSessions(IntegrationKind.GITLAB))
                 .thenReturn(List.of(session()));
+        lenient()
+                .when(syncTargetProvider.getSyncSession(SCOPE_ID, IntegrationKind.GITLAB))
+                .thenReturn(Optional.of(session()));
+    }
+
+    @Test
+    void shouldPropagateUnreadableCredentialWhenScopedPassReadsItsSession() {
+        CredentialUnreadableException unreadable =
+                new CredentialUnreadableException(50, IntegrationKind.GITLAB, new IllegalStateException());
+        when(syncTargetProvider.getSyncSession(SCOPE_ID, IntegrationKind.GITLAB))
+                .thenThrow(unreadable);
+
+        assertThatThrownBy(() -> service.runBackfillPass(SCOPE_ID, handle)).isSameAs(unreadable);
+        verify(issueSyncService, never()).backfillIssues(any(), any(), any(), anyInt());
     }
 
     @Test
