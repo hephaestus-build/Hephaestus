@@ -12,6 +12,11 @@ function main(): void {
 	const result = spawnSync(isWindows ? "gradlew.bat" : "./gradlew", process.argv.slice(2), {
 		stdio: "inherit",
 		cwd: gradlewDir,
+		// Node shims can select another runtime after a test changes HOME or its working directory.
+		env: {
+			...process.env,
+			PATH: `${path.dirname(process.execPath)}${path.delimiter}${process.env.PATH ?? ""}`,
+		},
 		shell: isWindows,
 	});
 
