@@ -215,6 +215,8 @@ tasks.withType<Test>().configureEach {
     timeout.set(Duration.ofMinutes(20))
     systemProperty("spring.profiles.active", "test")
     systemProperty("file.encoding", "UTF-8")
+    // The launcher selects Node through PATH. Track it when the test configuration is cached.
+    environment("PATH", providers.environmentVariable("PATH").get())
     environment("MANAGEMENT_PORT", "0")
     environment("SERVER_PORT", "0")
     jvmArgs("-XX:+EnableDynamicAgentLoading", "-XX:+ExitOnOutOfMemoryError")
