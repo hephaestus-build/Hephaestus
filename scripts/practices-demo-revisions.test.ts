@@ -119,30 +119,35 @@ void test("a seed that succeeds is committed and keeps the appended revision", a
 	assert.equal(await currentRevision(db), 11);
 });
 
-void test("a rewind that fails reports both failures and undoes its own steps", async (t) => {
-	const db = await database(t);
-	const lostConnection = new Error("connection lost");
-	const failingDelete: Queryable = {
-		query: async (text, values) => {
-			if (text.startsWith("DELETE FROM practice_revision")) {
-				throw lostConnection;
-			}
-			return db.query(text, values);
-		},
-	};
-	const failure = new Error("the seed fails");
+for (const [name, statement] of Object.entries({
+	rollback: "ROLLBACK",
+	delete: "DELETE FROM practice_revision",
+})) {
+	void test(`a ${name} that fails reports both failures and keeps the revision`, async (t) => {
+		const db = await database(t);
+		const lostConnection = new Error("connection lost");
+		const failing: Queryable = {
+			query: async (text, values) => {
+				if (text.startsWith(statement)) {
+					throw lostConnection;
+				}
+				return db.query(text, values);
+			},
+		};
+		const failure = new Error("the seed fails");
 
-	await assert.rejects(
-		writeOrRewind(failingDelete, WORKSPACE, APPENDED, async () => {
-			throw failure;
-		}),
-		(error) => {
-			assert.ok(error instanceof AggregateError);
-			assert.deepEqual(error.errors, [failure, lostConnection]);
-			return true;
-		},
-	);
+		await assert.rejects(
+			writeOrRewind(failing, WORKSPACE, APPENDED, async () => {
+				throw failure;
+			}),
+			(error) => {
+				assert.ok(error instanceof AggregateError);
+				assert.deepEqual(error.errors, [failure, lostConnection]);
+				return true;
+			},
+		);
 
-	assert.equal(await currentRevision(db), 11);
-	assert.deepEqual(await revisions(db), [10, 11]);
-});
+		assert.equal(await currentRevision(db), 11);
+		assert.deepEqual(await revisions(db), [10, 11]);
+	});
+}

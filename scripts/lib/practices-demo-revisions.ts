@@ -38,7 +38,7 @@ export async function rewindRevisions(
 /**
  * Runs `write` in a transaction and commits it. If `write` fails, the transaction rolls back, and
  * so do the revisions the server appended for the seed, since the first job that records them
- * rolled back too. Rethrows the failure, joined by the rewind's if that failed.
+ * rolled back too. Rethrows the failure, joined by the cleanup's if that failed.
  */
 export async function writeOrRewind<Result>(
 	client: Queryable,
@@ -51,17 +51,17 @@ export async function writeOrRewind<Result>(
 	try {
 		result = await write();
 	} catch (error) {
-		await client.query("ROLLBACK");
 		try {
+			await client.query("ROLLBACK");
 			await client.query("BEGIN");
 			await rewindRevisions(client, workspaceId, appendedIds);
 			await client.query("COMMIT");
-		} catch (rewindError) {
+		} catch (cleanupError) {
 			await client.query("ROLLBACK").catch(() => undefined);
 			throw new AggregateError(
-				[error, rewindError],
-				"The seed failed, and so did the rewind of the revisions the server appended for it",
-				{ cause: rewindError },
+				[error, cleanupError],
+				"The seed failed, and so did the rollback and rewind that undo it",
+				{ cause: cleanupError },
 			);
 		}
 		throw error;
