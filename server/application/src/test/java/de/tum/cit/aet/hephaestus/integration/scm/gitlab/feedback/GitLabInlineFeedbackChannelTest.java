@@ -250,7 +250,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
     void editsInPlaceWhenKeyMatchesPriorBotThread() {
         stubResolvedMr();
         Map<String, Object> botNote =
-                note("gid://Note/OLD", "stale feedback " + MARKER + "\n" + ckTag("ck-stable"), false);
+                note("gid://Note/OLD", "stale feedback " + MARKER + "\n" + ckTag("observation:ck-stable:0"), false);
         Map<String, Object> disc = discussion("gid://Disc/OLD", List.of(botNote));
         stubDiscussionsReturning(List.of(disc));
 
@@ -263,7 +263,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
         InlineResult result = channel.postInlineFeedback(
                 gitlabTarget(),
                 List.of(new InlineFeedback(
-                        new DiffAnchor("src/Foo.java", 10, null), "fresh text", MARKER, "ck-stable")));
+                        new DiffAnchor("src/Foo.java", 10, null), "fresh text", MARKER, "observation:ck-stable:0")));
 
         verify(updateSpec).variable("id", "gid://Note/OLD");
         assertThat(result.posted()).isEqualTo(1);
@@ -506,7 +506,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         stubDiscussionsReturning(List.of(discussion(
                 "gid://gitlab/Discussion/1",
-                List.of(note("gid://gitlab/Note/7", "fix\n\n" + MARKER + ckTag("observation:key"), false)))));
+                List.of(note("gid://gitlab/Note/7", "fix\n\n" + MARKER + ckTag("observation:key:0"), false)))));
 
         assertThat(channel.findPosted(gitlabTarget(), List.of(lookedUp()), false))
                 .singleElement()
@@ -517,7 +517,7 @@ class GitLabInlineFeedbackChannelTest extends BaseUnitTest {
     }
 
     private static InlineFeedback lookedUp() {
-        return new InlineFeedback(new DiffAnchor("src/Foo.java", 10, null), "fix", MARKER, "observation:key");
+        return new InlineFeedback(new DiffAnchor("src/Foo.java", 10, null), "fix", MARKER, "observation:key:0");
     }
 
     private void stubResolvedMr() {

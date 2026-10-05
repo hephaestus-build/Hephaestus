@@ -147,7 +147,7 @@ class AdmittedDeliveryTest extends BaseUnitTest {
         assertThat(content.mrNote()).isNull();
         assertThat(content.diffNotes()).singleElement().satisfies(diff -> {
             assertThat(diff.body()).isEqualTo("Call the checked helper on this line.");
-            assertThat(diff.deliveryKey()).isEqualTo("observation:" + posted.occurrenceKey() + "#0");
+            assertThat(diff.deliveryKey()).isEqualTo("observation:" + posted.occurrenceKey() + ":0");
             assertThat(diff.contributors()).containsExactly(posted.occurrenceKey());
         });
     }

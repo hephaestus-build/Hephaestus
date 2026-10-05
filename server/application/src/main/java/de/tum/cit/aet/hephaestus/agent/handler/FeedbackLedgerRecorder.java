@@ -674,7 +674,7 @@ public class FeedbackLedgerRecorder {
         String providerSummary = body == null || body.isBlank() ? null : commentFormatter.appendDisclosure(body, job);
         List<ProposedPlacement> placements = proposedPlacements(job, delivery, providerSummary);
         if (placements.isEmpty()) {
-            recordSuppressedUnit(job, delivery, FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
+            recordSuppressedUnitInCurrentTransaction(job, delivery, FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
             return;
         }
         if (feedbackRepository.existsByAgentJobIdAndPosition(job.getId(), position)) return;

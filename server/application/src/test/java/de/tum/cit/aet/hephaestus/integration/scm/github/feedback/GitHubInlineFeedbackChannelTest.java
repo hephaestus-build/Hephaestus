@@ -250,14 +250,17 @@ class GitHubInlineFeedbackChannelTest extends BaseUnitTest {
         FeedbackTarget target = githubTarget();
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
         when(gitHubProvider.forScope(1L)).thenReturn(client);
-        stubReviewThreads(List.of(thread("THREAD_foo", "RC_old_foo", "earlier\n" + ckTag("ck-foo"), false, false)));
+        stubReviewThreads(
+                List.of(thread("THREAD_foo", "RC_old_foo", "earlier\n" + ckTag("observation:ck-foo:0"), false, false)));
 
         InlineResult result = channel.postInlineFeedback(
                 target,
-                List.of(new InlineFeedback(new DiffAnchor("src/Foo.java", 10, null), "fix1", "marker", "ck-foo")));
+                List.of(new InlineFeedback(
+                        new DiffAnchor("src/Foo.java", 10, null), "fix1", "marker", "observation:ck-foo:0")));
 
         assertThat(result.posted()).isEqualTo(1);
-        assertThat(signalForKey(result, "ck-foo").disposition()).isEqualTo(Disposition.PRESERVED_EXISTING);
+        assertThat(signalForKey(result, "observation:ck-foo:0").disposition())
+                .isEqualTo(Disposition.PRESERVED_EXISTING);
         // No node-id resolution and no mutation happened — nothing new to post.
         verify(prNodeIdResolver, never()).resolve(any(Long.class), any(), any(), any(Integer.class));
         verify(client, never()).documentName("AddPullRequestReviewWithThreads");

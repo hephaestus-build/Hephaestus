@@ -224,7 +224,7 @@ final class ComposedReviewAdmission {
     /** One note per citation, so the key names the citation as well as the observation. */
     private static @Nullable String deliveryKey(ValidatedObservation anchored, int citationIndex) {
         String key = anchored.occurrenceKey();
-        return key == null ? null : "observation:" + key + "#" + citationIndex;
+        return key == null ? null : "observation:" + key + ":" + citationIndex;
     }
 
     private static List<ValidatedObservation> resolve(List<String> basedOn, Map<String, ValidatedObservation> byId) {

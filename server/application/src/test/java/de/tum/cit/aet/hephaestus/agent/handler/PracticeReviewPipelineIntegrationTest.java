@@ -961,8 +961,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     };
             DeliveryContent content = Objects.requireNonNull(automatic.content());
             assertThat(content.diffNotes()).hasSize(2);
-            String landingKey = "observation:" + landing.getOccurrenceKey() + "#0";
-            String failingKey = "observation:" + failing.getOccurrenceKey() + "#0";
+            String landingKey = "observation:" + landing.getOccurrenceKey() + ":0";
+            String failingKey = "observation:" + failing.getOccurrenceKey() + ":0";
             when(commentPoster.post(any())).thenReturn(new SummaryHandle("summary-ref"));
             when(diffNotePoster.reconcileInlineNotes(eq(agentJob), any()))
                     .thenReturn(

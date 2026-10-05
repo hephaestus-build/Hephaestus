@@ -11,6 +11,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -31,6 +32,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluationComm
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluationRecorder;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
+import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApproval;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalDecision;
@@ -53,6 +55,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -702,6 +705,70 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         assertThat(policy().evaluateForRecipient(
                                 job, DeliveryPolicyStage.COMPOSITION, null, surface, AUTHOR_ID, Set.of())
                         .allowed())
+                .isTrue();
+    }
+
+    private static final String REVIEWED_HEAD = "1111111111111111111111111111111111111111";
+    private static final String MOVED_HEAD = "2222222222222222222222222222222222222222";
+
+    private static AgentJob approvedJob(AgentJobType type, @Nullable String pinnedHead) {
+        AgentJob job = new AgentJob();
+        job.setJobType(type);
+        ObjectNode metadata = JsonMapper.builder().build().createObjectNode();
+        if (pinnedHead != null) metadata.put("commit_sha", pinnedHead);
+        job.setMetadata(metadata);
+        return job;
+    }
+
+    private static Feedback proposal(@Nullable String reviewedRevision) {
+        return Feedback.builder().reviewedRevision(reviewedRevision).build();
+    }
+
+    private static PracticeFeedbackDeliveryPolicy.Decision<PullRequest> headAt(String head) {
+        PullRequest pullRequest = new PullRequest();
+        pullRequest.setHeadRefOid(head);
+        return PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequest);
+    }
+
+    @Test
+    void shouldPreferTheProposalsRecordedRevisionOverADifferingJobPin() {
+        AgentJob job = approvedJob(AgentJobType.PULL_REQUEST_REVIEW, MOVED_HEAD);
+
+        assertThat(PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(
+                        proposal(REVIEWED_HEAD), job, headAt(REVIEWED_HEAD)))
+                .isTrue();
+        assertThat(PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(
+                        proposal(REVIEWED_HEAD), job, headAt(MOVED_HEAD)))
+                .isFalse();
+    }
+
+    @Test
+    void shouldFallBackToTheJobPinWhenTheProposalRecordedNoRevision() {
+        assertThat(PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(
+                        proposal(null),
+                        approvedJob(AgentJobType.PULL_REQUEST_REVIEW, REVIEWED_HEAD),
+                        headAt(REVIEWED_HEAD)))
+                .isTrue();
+    }
+
+    @Test
+    void shouldRefuseAnApprovedPullRequestWithoutAPinOrWhoseHeadMoved() {
+        assertThat(PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(
+                        proposal(null), approvedJob(AgentJobType.PULL_REQUEST_REVIEW, null), headAt(REVIEWED_HEAD)))
+                .isFalse();
+        assertThat(PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(
+                        proposal(null),
+                        approvedJob(AgentJobType.PULL_REQUEST_REVIEW, REVIEWED_HEAD),
+                        headAt(MOVED_HEAD)))
+                .isFalse();
+    }
+
+    @Test
+    void shouldLeaveAnIssuesCurrentnessToItsSnapshotPolicy() {
+        assertThat(PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(
+                        proposal(null),
+                        approvedJob(AgentJobType.ISSUE_REVIEW, null),
+                        PracticeFeedbackDeliveryPolicy.Decision.allowed(new Issue())))
                 .isTrue();
     }
 }

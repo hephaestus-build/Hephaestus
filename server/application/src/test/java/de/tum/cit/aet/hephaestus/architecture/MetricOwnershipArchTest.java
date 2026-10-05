@@ -51,7 +51,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Checks module ownership in source because javac inlines String constants.
- * Registration names are inspected syntactically; types are not resolved.
+ * Registration names are inspected syntactically. A call counts as a registration only when its receiver's
+ * Micrometer origin is visible in the same source; types are not otherwise resolved.
  */
 @Tag("architecture")
 class MetricOwnershipArchTest {
@@ -246,12 +247,12 @@ class MetricOwnershipArchTest {
                 .anyMatch(importTree -> Set.of(
                                 "io.micrometer.core.instrument.Meter.Id", "io.micrometer.core.instrument.Meter.*")
                         .contains(importTree.getQualifiedIdentifier().toString()));
-        boolean staticBuilder = staticBuilderImported(unit);
+        MicrometerOrigins origins = MicrometerOrigins.of(unit);
         Set<String> declaredTypes = declaredTypes(unit);
         new TreeScanner<Void, Void>() {
             @Override
             public Void visitMethodInvocation(MethodInvocationTree node, Void unused) {
-                nameArguments(node, staticBuilder, forwarders, declaredTypes)
+                nameArguments(node, origins, forwarders, declaredTypes)
                         .forEach(argument ->
                                 checkName(argument, node.getMethodSelect().toString()));
                 return super.visitMethodInvocation(node, null);
@@ -297,19 +298,100 @@ class MetricOwnershipArchTest {
         });
     }
 
+    /**
+     * What one unit's source shows comes from Micrometer: the types it imports from it, the variables it declares
+     * with a registry type, and the members it statically imports from the {@code Metrics} facade.
+     */
+    private record MicrometerOrigins(
+            Set<String> importedTypes,
+            boolean wildcardImport,
+            Set<String> registries,
+            Set<String> staticFacade,
+            boolean staticBuilder) {
+
+        private static final String PACKAGE = "io.micrometer.";
+        private static final String FACADE = "io.micrometer.core.instrument.Metrics";
+
+        static MicrometerOrigins of(CompilationUnitTree unit) {
+            Set<String> importedTypes = new HashSet<>();
+            Set<String> staticFacade = new HashSet<>();
+            boolean wildcard = false;
+            for (var importTree : unit.getImports()) {
+                String name = importTree.getQualifiedIdentifier().toString();
+                if (importTree.isStatic()) {
+                    if (name.startsWith(FACADE + ".")) staticFacade.add(lastSegment(name));
+                } else if (name.startsWith(PACKAGE)) {
+                    if (name.endsWith(".*")) wildcard = true;
+                    else importedTypes.add(lastSegment(name));
+                }
+            }
+            Set<String> registries = new HashSet<>();
+            var origins = new MicrometerOrigins(
+                    importedTypes, wildcard, registries, staticFacade, staticBuilderImported(unit));
+            new TreeScanner<Void, Void>() {
+                @Override
+                public Void visitVariable(VariableTree node, Void unused) {
+                    if (node.getType() != null) {
+                        String type = node.getType().toString();
+                        if (lastSegment(type).endsWith("MeterRegistry") && origins.type(type)) {
+                            registries.add(node.getName().toString());
+                        }
+                    }
+                    return super.visitVariable(node, null);
+                }
+            }.scan(unit, null);
+            return origins;
+        }
+
+        /** Whether a type reference, simple or qualified, names a Micrometer type. */
+        boolean type(String reference) {
+            return reference.startsWith(PACKAGE)
+                    || (!reference.contains(".") && (importedTypes.contains(reference) || wildcardImport));
+        }
+
+        /** Whether a call's receiver is a registry, the facade, or the {@code more()} view of either. */
+        boolean receiver(ExpressionTree expression) {
+            return switch (expression) {
+                case ParenthesizedTree parenthesized -> receiver(parenthesized.getExpression());
+                case IdentifierTree identifier ->
+                    registries.contains(identifier.getName().toString())
+                            || (identifier.getName().contentEquals("Metrics") && type("Metrics"));
+                case MemberSelectTree select ->
+                    select.toString().equals(FACADE)
+                            || (select.getExpression() instanceof IdentifierTree self
+                                    && self.getName().contentEquals("this")
+                                    && registries.contains(
+                                            select.getIdentifier().toString()))
+                            || receiver(select.getExpression());
+                case MethodInvocationTree call ->
+                    call.getMethodSelect() instanceof MemberSelectTree more
+                            && more.getIdentifier().contentEquals("more")
+                            && receiver(more.getExpression());
+                default -> false;
+            };
+        }
+
+        /** Whether an unqualified call reaches the facade through a static import. */
+        boolean facadeMember(String method) {
+            return staticFacade.contains(method) || staticFacade.contains("*");
+        }
+    }
+
     /** The arguments of one call that Micrometer, or a method that forwards to it, reads as a meter name. */
     private static Set<ExpressionTree> nameArguments(
-            MethodInvocationTree node, boolean staticBuilder, Set<String> forwarders, Set<String> declaredTypes) {
+            MethodInvocationTree node, MicrometerOrigins origins, Set<String> forwarders, Set<String> declaredTypes) {
         String select = node.getMethodSelect().toString();
         String method = lastSegment(select);
-        String receiver = select.equals(method) ? "" : lastSegment(select.substring(0, select.lastIndexOf('.')));
+        String owner = select.equals(method) ? "" : select.substring(0, select.lastIndexOf('.'));
+        String receiver = lastSegment(owner);
         boolean builder = method.equals("builder")
-                && ((staticBuilder && select.equals("builder"))
-                        || BUILDERS.stream()
-                                .anyMatch(type ->
-                                        select.equals(type + ".builder") || select.endsWith("." + type + ".builder")));
+                && (owner.isEmpty() ? origins.staticBuilder() : BUILDERS.contains(receiver) && origins.type(owner));
+        boolean registration = REGISTRATIONS.contains(method)
+                && (node.getMethodSelect() instanceof MemberSelectTree member
+                        ? origins.receiver(member.getExpression())
+                        : origins.facadeMember(method));
         Set<ExpressionTree> arguments = new LinkedHashSet<>();
-        if ((builder || REGISTRATIONS.contains(method)) && !node.getArguments().isEmpty()) {
+        if ((builder || registration) && !node.getArguments().isEmpty()) {
             arguments.add(node.getArguments().getFirst());
         }
         Set<String> receivers =
@@ -344,7 +426,7 @@ class MetricOwnershipArchTest {
     }
 
     private static Set<String> forwardedNameParameters(CompilationUnitTree unit, Set<String> forwarders) {
-        boolean staticBuilder = staticBuilderImported(unit);
+        MicrometerOrigins origins = MicrometerOrigins.of(unit);
         Set<String> declaredTypes = declaredTypes(unit);
         Set<String> forwarded = new HashSet<>();
         new TreeScanner<Void, String>() {
@@ -361,7 +443,7 @@ class MetricOwnershipArchTest {
                 new TreeScanner<Void, Void>() {
                     @Override
                     public Void visitMethodInvocation(MethodInvocationTree node, Void ignored) {
-                        for (var argument : nameArguments(node, staticBuilder, forwarders, declaredTypes)) {
+                        for (var argument : nameArguments(node, origins, forwarders, declaredTypes)) {
                             if (argument instanceof IdentifierTree identifier) {
                                 int index =
                                         parameters.indexOf(identifier.getName().toString());
@@ -549,8 +631,8 @@ class MetricOwnershipArchTest {
             })
     void shouldRejectLiteralNamesForEveryRegistrationApi(String api) throws IOException {
         assertThat(literalViolations(
-                        parse("import io.micrometer.core.instrument.*; class Fixture { void register() { " + api
-                                + " /* comment */ (\n(\"test.literal\")); } }"),
+                        parse("import io.micrometer.core.instrument.*; class Fixture { MeterRegistry registry;"
+                                + " void register() { " + api + " /* comment */ (\n(\"test.literal\")); } }"),
                         FIXTURE_CATALOGS))
                 .hasSize(1);
     }
@@ -628,7 +710,9 @@ class MetricOwnershipArchTest {
     void shouldIgnoreCommentsTagLiteralsAndUnrelatedBuilders() throws IOException {
         assertThat(literalViolations(parse("""
                 import io.micrometer.core.instrument.Counter;
+                import io.micrometer.core.instrument.MeterRegistry;
                 class Fixture {
+                    MeterRegistry registry;
                     // registry.counter("comment");
                     String example = "Counter.builder(\\"documentation\\")";
                     void register() {
@@ -641,6 +725,42 @@ class MetricOwnershipArchTest {
                     }
                 }
                 """), FIXTURE_CATALOGS)).isEmpty();
+    }
+
+    @Test
+    void shouldIgnoreANonMicrometerFactoryNamedLikeARegistrationAndTheMethodsThatCallIt() throws IOException {
+        assertThat(literalViolations(parse("""
+                import io.micrometer.core.instrument.MeterRegistry;
+                class Fixture {
+                    record Placement(String body) {
+                        static Placement summary(String body) { return new Placement(body); }
+                    }
+                    MeterRegistry registry;
+                    Placement placements(String summary) { return Placement.summary(summary); }
+                    void compose() {
+                        Placement.summary("The complete review.");
+                        placements("The complete review.");
+                    }
+                }
+                """), FIXTURE_CATALOGS)).isEmpty();
+    }
+
+    @Test
+    void shouldStillRejectALiteralRegistrySummaryAndTheMethodThatForwardsToIt() throws IOException {
+        assertThat(literalViolations(parse("""
+                import io.micrometer.core.instrument.MeterRegistry;
+                class Fixture {
+                    private final MeterRegistry registry;
+                    Fixture(MeterRegistry registry) { this.registry = registry; }
+                    void observe(String name) { this.registry.summary(name); }
+                    void record() {
+                        registry.summary("inline.summary");
+                        observe("inline.forwarded");
+                    }
+                }
+                """), FIXTURE_CATALOGS))
+                .hasSize(2)
+                .allSatisfy(violation -> assertThat(violation).contains("passes a string literal to"));
     }
 
     @Test

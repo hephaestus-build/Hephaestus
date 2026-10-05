@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
@@ -22,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyResolver;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyResolver.FactAnswer;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
+import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalRepository;
@@ -697,6 +699,28 @@ public class PracticeFeedbackDeliveryPolicy {
             throw new JobDeliveryException("Job has no workspace: jobId=" + job.getId());
         }
         return job.getWorkspace().getId();
+    }
+
+    /**
+     * An approved pull request package is written only onto the head it was reviewed at: the revision the proposal
+     * recorded, else the job's pinned commit. Without either, nothing proves the approval still describes the work.
+     * Issues have no head; their snapshot policy owns their currentness.
+     */
+    static boolean reviewedRevisionMatches(Feedback feedback, AgentJob job, Decision<?> decision) {
+        if (ArtifactKinds.ISSUE.equals(AgentJobService.artifactKindFor(Objects.requireNonNull(job.getJobType())))) {
+            return true;
+        }
+        String reviewed = feedback.getReviewedRevision() != null ? feedback.getReviewedRevision() : pinnedHead(job);
+        return reviewed != null
+                && decision.artifact() instanceof PullRequest pullRequest
+                && reviewed.equals(pullRequest.getHeadRefOid());
+    }
+
+    private static @Nullable String pinnedHead(AgentJob job) {
+        JsonNode metadata = job.getMetadata();
+        if (metadata == null) return null;
+        String pin = metadata.path("commit_sha").asString();
+        return pin == null || pin.isBlank() ? null : pin;
     }
 
     public record Decision<T>(

@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Disposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
@@ -300,7 +299,7 @@ class PracticeFeedbackDispatchService {
                 } else {
                     PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
                     if (!decision.allowed()) return stateMachine.refuse(dispatch, owner, decision.refusal());
-                    if (!reviewedRevisionMatches(feedback, job, decision)) {
+                    if (!PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(feedback, job, decision)) {
                         return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.APPROVAL_STALE);
                     }
                     Integer began = transactionTemplate.execute(
@@ -319,7 +318,7 @@ class PracticeFeedbackDispatchService {
                     return stateMachine.refuse(
                             dispatch, owner, decision.refusal(), summaryRef, summaryUrl, inlineSignals);
                 }
-                if (!reviewedRevisionMatches(feedback, job, decision)) {
+                if (!PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(feedback, job, decision)) {
                     return stateMachine.refuse(
                             dispatch,
                             owner,
@@ -499,27 +498,6 @@ class PracticeFeedbackDispatchService {
         }
         return stateMachine.retryPackage(
                 dispatch, owner, "Dispatch retry limit exhausted", summaryRef, summaryUrl, signals);
-    }
-
-    /**
-     * An approved pull request package is written only onto the head it was reviewed at: the revision the proposal
-     * recorded, else the job's pinned commit. Without either, nothing proves the approval still describes the work.
-     * Issues have no head; their snapshot policy owns their currentness.
-     */
-    private static boolean reviewedRevisionMatches(
-            Feedback feedback, AgentJob job, PracticeFeedbackDeliveryPolicy.Decision<?> decision) {
-        if (isIssue(job)) return true;
-        String reviewed = feedback.getReviewedRevision() != null ? feedback.getReviewedRevision() : pinnedHead(job);
-        return reviewed != null
-                && decision.target() instanceof PullRequest pullRequest
-                && reviewed.equals(pullRequest.getHeadRefOid());
-    }
-
-    private static @Nullable String pinnedHead(AgentJob job) {
-        JsonNode metadata = job.getMetadata();
-        if (metadata == null) return null;
-        String pin = metadata.path("commit_sha").asString();
-        return pin == null || pin.isBlank() ? null : pin;
     }
 
     private PracticeFeedbackDeliveryPolicy.Decision<?> evaluateAtEgress(FeedbackDispatch dispatch, AgentJob job) {
