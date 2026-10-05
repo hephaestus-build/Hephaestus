@@ -284,6 +284,14 @@ async function devSignIn(
 	if (signedIn.rowCount !== 1) {
 		throw new Error(`The server at ${server} does not read the database the seed would write`);
 	}
+	return { server, token };
+}
+
+/**
+ * Completes the transparency notice for the seed's dev account, which the server requires before the
+ * dev endpoints answer it. Removal writes only to the database, so it never needs this.
+ */
+async function completeNotice({ server, token }: DevServer): Promise<void> {
 	await completeTransparencyNotice(async (method, route, body) => {
 		const json =
 			body === undefined
@@ -300,7 +308,6 @@ async function devSignIn(
 		}
 		return response.status === 204 ? undefined : parseJson(await response.text());
 	});
-	return { server, token };
 }
 
 /** POSTs to a dev endpoint; a refusal names the flag it needs, since that is the usual cause. */
@@ -666,6 +673,7 @@ async function main(): Promise<void> {
 			);
 			return;
 		}
+		await completeNotice(devServer);
 		// Outside a transaction: the server locks each practice row to append its revision.
 		const pinned = await pinReviewRevisions(
 			devServer,
