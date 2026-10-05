@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
@@ -9,7 +8,6 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobService;
 import de.tum.cit.aet.hephaestus.agent.job.DeliveryStatus;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
-import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Disposition;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
@@ -28,7 +26,6 @@ class FeedbackDeliveryService {
 
     private static final Logger log = LoggerFactory.getLogger(FeedbackDeliveryService.class);
 
-    private final PullRequestCommentPoster commentPoster;
     private final PracticeFeedbackDeliveryPolicy deliveryPolicy;
     private final FeedbackLedgerRecorder feedbackLedgerRecorder;
     private final PracticeFeedbackCommentFormatter commentFormatter;
@@ -36,13 +33,11 @@ class FeedbackDeliveryService {
     private final AgentJobRepository agentJobRepository;
 
     FeedbackDeliveryService(
-            PullRequestCommentPoster commentPoster,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
             FeedbackLedgerRecorder feedbackLedgerRecorder,
             PracticeFeedbackCommentFormatter commentFormatter,
             PracticeFeedbackDispatchService dispatchService,
             AgentJobRepository agentJobRepository) {
-        this.commentPoster = commentPoster;
         this.deliveryPolicy = deliveryPolicy;
         this.feedbackLedgerRecorder = feedbackLedgerRecorder;
         this.commentFormatter = commentFormatter;
@@ -56,10 +51,6 @@ class FeedbackDeliveryService {
 
     void recordProposal(AgentJob job, @Nullable DeliveryContent delivery) {
         feedbackLedgerRecorder.recordProposal(job, delivery);
-    }
-
-    ExistingDeliveryLookup findExistingSummary(AgentJob job) {
-        return commentPoster.findExistingSummaryComment(job);
     }
 
     boolean recoverAutomaticPackageIfPresent(AgentJob job) {
@@ -93,7 +84,10 @@ class FeedbackDeliveryService {
         }
 
         DeliveryContent providerPackage = providerPackage(job, delivery);
-        if (providerPackage.mrNote() == null && providerPackage.diffNotes().isEmpty()) {
+        // Blank notes keep their place so each note keeps its key and support; they carry nothing to post.
+        if (providerPackage.mrNote() == null
+                && providerPackage.diffNotes().stream()
+                        .allMatch(note -> note.body().isBlank())) {
             recordGateSuppressed(job, delivery, FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
             return;
         }
@@ -121,7 +115,7 @@ class FeedbackDeliveryService {
             return;
         }
         List<DeliveredSignal> signals = dispatchService.deliveredSignals(dispatch);
-        boolean inlineDelivered = signals.stream().anyMatch(signal -> signal.disposition() != Disposition.FAILED);
+        boolean inlineDelivered = signals.stream().anyMatch(DeliveredSignal::acknowledged);
         if (dispatch.getDeliveredExternalRef() == null && !inlineDelivered) return;
         feedbackLedgerRecorder.recordWithoutConversation(
                 job,
@@ -138,7 +132,7 @@ class FeedbackDeliveryService {
             List<DeliveredSignal> signals = dispatchService.deliveredSignals(dispatch);
             var artifactKind = artifactKind(job);
             boolean summaryDelivered = dispatch.getDeliveredExternalRef() != null;
-            boolean inlineDelivered = signals.stream().anyMatch(signal -> signal.disposition() != Disposition.FAILED);
+            boolean inlineDelivered = signals.stream().anyMatch(DeliveredSignal::acknowledged);
 
             if (dispatch.getState() == FeedbackDispatchState.SENT) {
                 feedbackLedgerRecorder.record(
@@ -195,26 +189,45 @@ class FeedbackDeliveryService {
                 dispatch.getAgentJobId(), dispatch.getWorkspaceId(), status, dispatch.getDeliveredExternalRef());
     }
 
+    /**
+     * The package as the provider will show it, sealed before it is persisted: the summary with its disclosure, each
+     * line note's provider-safe text with its own, and the marker that scopes this package's inline copies. A retry
+     * posts and reads back exactly this text instead of rebuilding it.
+     */
     private DeliveryContent providerPackage(AgentJob job, DeliveryContent delivery) {
+        List<ReviewResultParser.DiffNote> notes = delivery.diffNotes().stream()
+                .map(note -> {
+                    String sanitized = PullRequestCommentPoster.sanitize(note.body());
+                    return new ReviewResultParser.DiffNote(
+                            note.filePath(),
+                            note.startLine(),
+                            note.endLine(),
+                            sanitized.isBlank() ? "" : commentFormatter.appendInlineFeedbackPrompt(sanitized, job),
+                            note.deliveryKey(),
+                            note.contributors());
+                })
+                .toList();
+        String marker = InlinePackageScope.automaticMarker(job.getId());
         String summary = delivery.mrNote();
-        if (summary == null) return delivery;
-        String sanitized = PullRequestCommentPoster.sanitize(summary);
+        String sanitized = summary == null ? "" : PullRequestCommentPoster.sanitize(summary);
         if (sanitized.isBlank())
             return new DeliveryContent(
                     null,
-                    delivery.diffNotes(),
+                    notes,
                     delivery.withheld(),
-                    delivery.summaryContributors() == null ? null : List.of());
+                    delivery.summaryContributors() == null ? null : List.of(),
+                    marker);
         return new DeliveryContent(
                 commentFormatter.format(sanitized, job),
-                delivery.diffNotes(),
+                notes,
                 delivery.withheld(),
-                delivery.summaryContributors());
+                delivery.summaryContributors(),
+                marker);
     }
 
     private static List<String> missingInlineKeys(DeliveryContent delivery, List<DeliveredSignal> signals) {
         Set<String> delivered = signals.stream()
-                .filter(signal -> signal.disposition() != Disposition.FAILED)
+                .filter(DeliveredSignal::acknowledged)
                 .map(DeliveredSignal::deliveryKey)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());

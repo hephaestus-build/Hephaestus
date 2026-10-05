@@ -157,13 +157,11 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRecoverTheSummaryForTheSameReviewJob() {
+    void shouldSettleARecoveredDeliveryFromItsOwnPackageRatherThanAMarker() {
         AgentJob job = jobWithMetadata(sampleJobMetadata());
-        ExistingDeliveryLookup found = ExistingDeliveryLookup.found("IC_existing");
-        when(feedbackService.findExistingSummary(job)).thenReturn(found);
 
-        assertThat(handler.findExistingDelivery(job)).isSameAs(found);
-        verify(feedbackService).findExistingSummary(job);
+        assertThat(handler.reconcilesDeliveryState()).isTrue();
+        assertThat(handler.findExistingDelivery(job).kind()).isEqualTo(ExistingDeliveryLookup.Kind.UNKNOWN);
     }
 
     private PullRequestReviewSubmissionRequest sampleRequest() {

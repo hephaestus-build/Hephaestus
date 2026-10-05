@@ -226,6 +226,9 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
     private DiffNotePoster diffNotePoster;
 
     @Autowired
+    private PracticeFeedbackCommentFormatter commentFormatter;
+
+    @Autowired
     private AccountPreferencesQuery accountPreferencesQuery;
 
     private JobTypeHandler handler;
@@ -259,7 +262,6 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         reset(commentPoster, diffNotePoster, accountPreferencesQuery);
         databaseTestUtils.cleanDatabase();
         releaseSilentMode();
-        when(commentPoster.findExistingSummaryComment(any())).thenReturn(ExistingDeliveryLookup.absent());
         AgentHandlerTestDoubles.resolveSummaryWrites(commentPoster);
         when(commentPoster.findExisting(any())).thenReturn(ExistingDeliveryLookup.absent());
 
@@ -373,9 +375,14 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         preparedJobIds.add(agentJob.getId());
 
         handler = handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW);
-        when(diffNotePoster.reconcileInlineNotes(any(), any()))
-                .thenReturn(new DiffNotePoster.DiffNoteResult(0, 0, List.of()));
+        stubInlinePackageDelivered();
         when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(anyLong())).thenReturn(true);
+    }
+
+    /** The provider accounts for every line note of a package without returning a handle to record. */
+    private void stubInlinePackageDelivered() {
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any()))
+                .thenReturn(new DiffNotePoster.DiffNoteResult(List.of(), true, false, false, false, List.of()));
     }
 
     @Autowired
@@ -947,37 +954,29 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     List.of());
             List<ValidatedObservation> admitted =
                     List.of(validated(summarised, null), inlineA, inlineB, validated(supporting, null));
-            AdmittedDelivery.Automatic automatic =
-                    switch (AdmittedDelivery.decide(
-                            review,
-                            ArtifactKinds.PULL_REQUEST,
-                            admitted,
-                            PullRequestReviewHandler.subjectsOf(rows),
-                            List.of(),
-                            admitted)) {
-                        case AdmittedDelivery.Automatic decided -> decided;
-                        case AdmittedDelivery.Proposed proposed ->
-                            throw new AssertionError("Every observation is automatic, so nothing waits for approval");
-                    };
+            var decided = AdmittedDelivery.decide(
+                    review,
+                    ArtifactKinds.PULL_REQUEST,
+                    admitted,
+                    PullRequestReviewHandler.subjectsOf(rows),
+                    List.of(),
+                    admitted);
+            if (!(decided instanceof AdmittedDelivery.Automatic automatic)) {
+                throw new AssertionError("Every observation is automatic, so nothing waits for approval");
+            }
             DeliveryContent content = Objects.requireNonNull(automatic.content());
             assertThat(content.diffNotes()).hasSize(2);
             String landingKey = "observation:" + landing.getOccurrenceKey() + ":0";
             String failingKey = "observation:" + failing.getOccurrenceKey() + ":0";
             when(commentPoster.post(any())).thenReturn(new SummaryHandle("summary-ref"));
-            when(diffNotePoster.reconcileInlineNotes(eq(agentJob), any()))
+            when(diffNotePoster.deliverPackage(eq(agentJob), any(), any(), any(), any()))
                     .thenReturn(
-                            new DiffNotePoster.DiffNoteResult(
-                                    1,
-                                    1,
-                                    List.of(
-                                            signal(landingKey, 3, Disposition.POSTED),
-                                            signal(failingKey, 9, Disposition.FAILED))),
-                            new DiffNotePoster.DiffNoteResult(
-                                    1,
-                                    1,
-                                    List.of(
-                                            signal(landingKey, 3, Disposition.PRESERVED_EXISTING),
-                                            signal(failingKey, 9, Disposition.FAILED))));
+                            incomplete(
+                                    signal(landingKey, 3, Disposition.POSTED),
+                                    signal(failingKey, 9, Disposition.FAILED)),
+                            incomplete(
+                                    signal(landingKey, 3, Disposition.PRESERVED_EXISTING),
+                                    signal(failingKey, 9, Disposition.FAILED)));
 
             assertThatThrownBy(() -> feedbackDeliveryService.deliverFeedback(
                             agentJob, content, automatic.contributingPracticeSlugs()))
@@ -1002,7 +1001,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             }
 
             verify(commentPoster, times(1)).post(any());
-            verify(diffNotePoster, times(2)).reconcileInlineNotes(eq(agentJob), any());
+            verify(diffNotePoster, times(2)).deliverPackage(eq(agentJob), any(), any(), any(), any());
             assertThat(stateOf(FeedbackDeliveryState.DELIVERED))
                     .as("the summary, the note that landed and what that note cites; never the note that failed")
                     .containsExactlyInAnyOrder(summarised.getId(), landing.getId(), supporting.getId());
@@ -1011,8 +1010,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                             "SELECT body FROM feedback WHERE agent_job_id = ? AND delivery_state = 'FAILED'",
                             String.class,
                             agentJob.getId()))
-                    .as("the note that never landed is kept as it was written")
-                    .containsExactly(failingNote);
+                    .as("the note that never landed is kept as the package sealed it for the pull request")
+                    .containsExactly(commentFormatter.appendInlineFeedbackPrompt(failingNote, agentJob));
             assertThat(jdbcTemplate.queryForList("""
                             SELECT fp.posted_comment_ref FROM feedback_placement fp
                             JOIN feedback f ON f.id = fp.feedback_id
@@ -1055,14 +1054,16 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             return validated(row, evidence);
         }
 
+        /** A note that landed under {@code disposition}, or for {@code FAILED} one provably never requested. */
         private static DeliveredSignal signal(String key, int line, Disposition disposition) {
-            boolean landed = disposition != Disposition.FAILED;
-            return new DeliveredSignal(
-                    key,
-                    new DiffAnchor("src/App.java", line, null),
-                    disposition,
-                    landed ? "note-" + key : null,
-                    landed ? "discussion-" + key : null);
+            DiffAnchor anchor = new DiffAnchor("src/App.java", line, null);
+            return disposition == Disposition.FAILED
+                    ? DeliveredSignal.notSent(key, anchor)
+                    : new DeliveredSignal(key, anchor, disposition, "note-" + key, "discussion-" + key);
+        }
+
+        private static DiffNotePoster.DiffNoteResult incomplete(DeliveredSignal... signals) {
+            return new DiffNotePoster.DiffNoteResult(List.of(signals), false, false, false, false, List.of());
         }
 
         /** The observations bound to this job's feedback recorded in {@code state}. */
@@ -1090,7 +1091,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     .extracting(Feedback::getDeliveryState, Feedback::getSuppressionReason)
                     .containsExactly(FeedbackDeliveryState.SUPPRESSED, FeedbackSuppressionReason.INSTANCE_SILENCED);
             verify(commentPoster, never()).post(any());
-            verify(diffNotePoster, never()).reconcileInlineNotes(any(), any());
+            verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
 
             releaseSilentMode();
             assertThat(feedbackRepository.findAll())
@@ -1101,7 +1102,6 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             handler.deliver(newEvent);
 
             verify(commentPoster).post(argThat(write -> write.job().equals(newEvent)));
-            verify(diffNotePoster).reconcileInlineNotes(eq(newEvent), any());
             assertThat(observationRepository.findAll()).hasSize(4);
             assertThat(feedbackRepository.findAll())
                     .extracting(Feedback::getDeliveryState)
@@ -1112,8 +1112,6 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         void fullPipelineFromParseToDelivery() {
             setJobOutput(validAgentOutput());
             when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-123"));
-            when(diffNotePoster.reconcileInlineNotes(any(), any()))
-                    .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
 
             handler.deliver(agentJob);
 
@@ -1124,7 +1122,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     .containsExactlyInAnyOrder(Outcome.MET, Outcome.NOT_MET);
 
             verify(commentPoster).post(argThat(write -> write.job().equals(agentJob)));
-            verify(diffNotePoster).reconcileInlineNotes(eq(agentJob), any());
+            // A package with no line notes writes nothing inline, so it never touches what earlier packages placed.
+            verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
 
             // AgentJobExecutor persists deliveryStatus, not handler.deliver(), so it stays null here.
             assertThat(agentJob.getDeliveryCommentId()).isEqualTo("comment-123");
@@ -1157,8 +1156,6 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         void aPartialReviewStillReportsTheProblemItFound() {
             agentJob = admitAndSetOutput(agentJob, validAgentOutput());
             when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-partial"));
-            when(diffNotePoster.reconcileInlineNotes(any(), any()))
-                    .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
 
             handler.deliver(agentJob);
 
@@ -1206,7 +1203,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
 
             assertThat(observationRepository.findAll()).isEmpty();
             verify(commentPoster, never()).post(any());
-            verify(diffNotePoster, never()).reconcileInlineNotes(any(), any());
+            verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
         }
 
         @Test
@@ -1259,7 +1256,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             assertThat(observationRepository.findAll()).hasSize(2);
 
             verify(commentPoster, never()).post(any());
-            verify(diffNotePoster, never()).reconcileInlineNotes(any(), any());
+            verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
 
             assertThat(agentJob.getDeliveryCommentId()).isNull();
             assertThat(agentJob.getDeliveryStatus()).isNull();
@@ -1274,8 +1271,6 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         void redeliveryNoDuplicates() {
             setJobOutput(validAgentOutput());
             when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-789"));
-            when(diffNotePoster.reconcileInlineNotes(any(), any()))
-                    .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
 
             handler.deliver(agentJob);
             assertThat(observationRepository.findAll()).hasSize(2);

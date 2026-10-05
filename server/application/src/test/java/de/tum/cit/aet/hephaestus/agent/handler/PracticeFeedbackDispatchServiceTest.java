@@ -54,6 +54,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -163,11 +164,10 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .when(repository.claim(any(), any(), anyString(), any(), any(Integer.class), anyInt()))
                 .thenReturn(1);
         lenient().when(repository.beginWrite(any(), any(), anyString())).thenReturn(1);
-        lenient().when(repository.beginInlineWrite(any(), any(), anyString())).thenReturn(1);
-        lenient().when(repository.finish(any())).thenReturn(1);
         lenient()
-                .when(diffNotePoster.reconcileInlineNotes(any(), eq(List.of())))
-                .thenReturn(new DiffNotePoster.DiffNoteResult(0, 0, List.of()));
+                .when(repository.beginInlineWrite(any(), any(), anyString(), anyString()))
+                .thenReturn(1);
+        lenient().when(repository.finish(any())).thenReturn(1);
         lenient()
                 .when(policy.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(REVIEWED_HEAD)));
@@ -185,7 +185,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         assertThat(result.refusal()).isEqualTo(FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
         assertThat(result.landed()).isFalse();
         verify(channel, never()).postSummary(any(), any());
-        verify(diffNotePoster, never()).reconcileInlineNotes(any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -193,7 +193,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         dispatch = dispatch(FeedbackDispatchState.UNCERTAIN, true, 1);
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch));
-        when(channel.findExistingSummary(any(), eq(summaryMarker(job))))
+        when(channel.findExistingSummary(any(), eq(new FeedbackContent("body", summaryMarker(job)))))
                 .thenReturn(ExistingSummaryLookup.found(
                         new SummaryHandle("provider-42", "https://github.com/owner/repo/pull/42#issuecomment-987654")));
 
@@ -276,13 +276,69 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(dispatch));
         when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
         when(channel.postSummary(any(), any())).thenReturn(new SummaryHandle("provider-8"));
-        when(diffNotePoster.reconcileInlineNotes(any(), any()))
-                .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any())).thenReturn(delivered(List.of()));
 
         service.dispatchAutomaticPackage(
                 job, new ReviewResultParser.DeliveryContent(body, lineNotes, List.of(), null), Set.of("practice"));
 
         verify(channel).postSummary(any(), any());
+    }
+
+    @Test
+    void shouldStoreTheReceiptUnderThisLeaseBeforeAnInlineRequestAndRefuseItOnceTheLeaseIsGone() {
+        var lineNotes = List.of(new ReviewResultParser.DiffNote("src/App.java", 3, null, "Split this.", "k", null));
+        dispatch = withPackage(
+                dispatch(job, FeedbackDispatchState.PENDING, false, 0, ""),
+                new ReviewResultParser.DeliveryContent(null, lineNotes, List.of(), List.of()));
+        when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
+                .thenReturn(Optional.of(dispatch));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Predicate<List<InlineFeedbackChannel.DeliveredSignal>>> fence =
+                ArgumentCaptor.forClass(Predicate.class);
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), fence.capture()))
+                .thenReturn(delivered(List.of()));
+
+        service.dispatchAutomaticPackage(
+                job, new ReviewResultParser.DeliveryContent(null, lineNotes, List.of(), List.of()), Set.of("practice"));
+        var attempted = InlineFeedbackChannel.DeliveredSignal.attempted(
+                "k", FeedbackAnchor.DiffAnchor.singleLine("src/App.java", 3));
+
+        assertThat(fence.getValue().test(List.of(attempted))).isTrue();
+        verify(repository)
+                .beginInlineWrite(
+                        eq(dispatch.getId()),
+                        eq(7L),
+                        anyString(),
+                        argThat(placements -> placements.contains("\"writeMayHaveStarted\":true")));
+        when(repository.beginInlineWrite(any(), any(), anyString(), anyString()))
+                .thenReturn(0);
+        assertThat(fence.getValue().test(List.of(attempted))).isFalse();
+    }
+
+    @Test
+    void shouldKeepAnUnconfirmedInlineWriteUncertainOnTheLastAttemptButFailOneProvablyNeverRequested() {
+        var lineNotes = List.of(new ReviewResultParser.DiffNote("src/App.java", 3, null, "Split this.", "k", null));
+        dispatch = withPackage(
+                dispatch(
+                        job,
+                        FeedbackDispatchState.UNCERTAIN,
+                        false,
+                        PracticeFeedbackDispatchService.MAX_ATTEMPTS - 1,
+                        ""),
+                new ReviewResultParser.DeliveryContent(null, lineNotes, List.of(), List.of()));
+        when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
+                .thenReturn(Optional.of(dispatch));
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any()))
+                .thenReturn(
+                        new DiffNotePoster.DiffNoteResult(List.of(), false, true, false, false, List.of()),
+                        new DiffNotePoster.DiffNoteResult(List.of(), false, false, false, false, List.of()));
+        var content = new ReviewResultParser.DeliveryContent(null, lineNotes, List.of(), List.of());
+
+        var unconfirmed = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
+        var neverRequested = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
+
+        assertThat(unconfirmed.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        assertThat(neverRequested.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.FAILED);
     }
 
     /** The last note delivered on this review's work to its developer, as the ledger stored it. */
@@ -383,7 +439,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         verify(repository).claim(any(), any(), anyString(), leaseUntil.capture(), any(Integer.class), anyInt());
         assertThat(leaseUntil.getValue()).isAfterOrEqualTo(before.plus(PracticeFeedbackDispatchService.LEASE));
         InOrder order = inOrder(channel, policy, repository);
-        order.verify(channel).findExistingSummary(any(), eq(summaryMarker(job)));
+        order.verify(channel).findExistingSummary(any(), eq(new FeedbackContent("body", summaryMarker(job))));
         order.verify(policy).evaluatePullRequest(any(), any(), any(), any());
         order.verify(repository).beginWrite(any(), any(), anyString());
         order.verify(channel).postSummary(any(), eq(new FeedbackContent("body", summaryMarker(job))));
@@ -448,20 +504,37 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
     @Test
     void anInlineOnlyPackageClaimedPastTheBudgetIsSentWhenEveryNoteIsAcknowledged() {
+        when(diffNotePoster.findUnacknowledged(eq(job), any(), any(), any()))
+                .thenReturn(new DiffNotePoster.InlineLookup(List.of(), true, false));
+
         var result = service.recover(pastBudgetInlineOnly("POSTED"), job);
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
-        verify(diffNotePoster, never()).reconcileInlineNotes(any(), any());
-        verify(repository, never()).beginInlineWrite(any(), any(), anyString());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(repository, never()).beginInlineWrite(any(), any(), anyString(), anyString());
     }
 
     @Test
-    void anInlineOnlyPackageClaimedPastTheBudgetFailsWhileANoteIsUnaccounted() {
+    void anInlineOnlyPackageClaimedPastTheBudgetFailsWhenItsMissingNoteWasNeverRequested() {
+        when(diffNotePoster.findUnacknowledged(eq(job), any(), any(), any()))
+                .thenReturn(new DiffNotePoster.InlineLookup(List.of(), false, false));
+
         var result = service.recover(pastBudgetInlineOnly("FAILED"), job);
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.FAILED);
-        verify(diffNotePoster, never()).reconcileInlineNotes(any(), any());
-        verify(repository, never()).beginInlineWrite(any(), any(), anyString());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(repository, never()).beginInlineWrite(any(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void anInlineOnlyPackageClaimedPastTheBudgetKeepsLookingWhileAMissingNoteMayStillLand() {
+        when(diffNotePoster.findUnacknowledged(eq(job), any(), any(), any()))
+                .thenReturn(new DiffNotePoster.InlineLookup(List.of(), false, true));
+
+        var result = service.recover(pastBudgetInlineOnly("FAILED"), job);
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -503,7 +576,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
                 .thenReturn(Optional.of(approved));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
-        when(channel.findExistingSummary(any(), eq(approvedMarker(feedback))))
+        when(channel.findExistingSummary(any(), eq(new FeedbackContent("approved body", approvedMarker(feedback)))))
                 .thenReturn(ExistingSummaryLookup.absent());
         when(policy.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.suppressed(
@@ -526,7 +599,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
                 .thenReturn(Optional.of(approved));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
-        when(channel.findExistingSummary(any(), eq(approvedMarker(feedback))))
+        when(channel.findExistingSummary(any(), eq(new FeedbackContent("approved body", approvedMarker(feedback)))))
                 .thenReturn(ExistingSummaryLookup.absent());
         when(channel.postSummary(any(), eq(new FeedbackContent("approved body", approvedMarker(feedback)))))
                 .thenReturn(new SummaryHandle("summary-ref"));
@@ -536,19 +609,21 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 InlineFeedbackChannel.Disposition.POSTED,
                 "inline-ref",
                 "thread-ref");
-        when(diffNotePoster.reconcileApprovedInlineNotes(any(), any(), any()))
-                .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of(signal)));
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any())).thenReturn(delivered(List.of(signal)));
 
         var result = service.dispatchApproved(job, feedback);
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
         verify(repository).claim(any(), any(), anyString(), any(), any(Integer.class), anyInt());
         verify(diffNotePoster)
-                .reconcileApprovedInlineNotes(
-                        job,
-                        feedback.getId(),
-                        List.of(new ReviewResultParser.DiffNote(
-                                "src/Review.java", 12, null, "exact inline", "old-key", null)));
+                .deliverPackage(
+                        eq(job),
+                        argThat(scope -> feedback.getId().equals(scope.approvedFeedbackId())
+                                && scope.marker().equals(InlinePackageScope.approvedMarker(feedback.getId()))),
+                        eq(List.of(new ReviewResultParser.DiffNote(
+                                "src/Review.java", 12, null, "exact inline", "old-key", null))),
+                        any(),
+                        any());
     }
 
     @Test
@@ -561,7 +636,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(initial))
                 .thenReturn(Optional.of(recovering));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
-        when(channel.findExistingSummary(any(), eq(approvedMarker(feedback))))
+        when(channel.findExistingSummary(any(), eq(new FeedbackContent("approved body", approvedMarker(feedback)))))
                 .thenReturn(ExistingSummaryLookup.absent(), found("summary-ref"));
         when(channel.postSummary(any(), eq(new FeedbackContent("approved body", approvedMarker(feedback)))))
                 .thenReturn(new SummaryHandle("summary-ref"));
@@ -571,10 +646,10 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 InlineFeedbackChannel.Disposition.POSTED,
                 "inline-ref",
                 "thread-ref");
-        when(diffNotePoster.reconcileApprovedInlineNotes(any(), any(), any()))
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any()))
                 .thenReturn(
-                        new DiffNotePoster.DiffNoteResult(0, 1, List.of()),
-                        new DiffNotePoster.DiffNoteResult(1, 0, List.of(deliveredSignal)));
+                        new DiffNotePoster.DiffNoteResult(List.of(), false, false, false, false, List.of()),
+                        delivered(List.of(deliveredSignal)));
 
         var incomplete = service.dispatchApproved(job, feedback);
         var recovered = service.dispatchApproved(job, feedback);
@@ -662,7 +737,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         order.verify(channel)
                 .findExistingSummary(
                         argThat(target -> target.subjectExternalId().equals("acme/api#5")),
-                        eq(approvedMarker(feedback)));
+                        eq(new FeedbackContent("approved body", approvedMarker(feedback))));
         order.verify(repository).beginWrite(any(), any(), anyString());
         order.verify(channel)
                 .postSummary(
@@ -723,8 +798,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
         var first = lineSignal(feedback, 0, InlineFeedbackChannel.Disposition.POSTED);
         var second = lineSignal(feedback, 1, InlineFeedbackChannel.Disposition.POSTED);
-        when(diffNotePoster.reconcileApprovedInlineNotes(job, feedback.getId(), APPROVED_LINE_NOTES))
-                .thenReturn(new DiffNotePoster.DiffNoteResult(2, 0, List.of(first, second)));
+        when(diffNotePoster.deliverPackage(eq(job), any(), eq(APPROVED_LINE_NOTES), any(), any()))
+                .thenReturn(delivered(List.of(first, second)));
 
         var result = service.dispatchApproved(job, feedback);
 
@@ -737,7 +812,9 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         var insert = ArgumentCaptor.forClass(FeedbackDispatchInsert.class);
         verify(repository).insertIfAbsent(insert.capture());
         assertThat(insert.getValue().body()).isEmpty();
-        assertThat(insert.getValue().packageContent()).contains("exact inline", "second inline");
+        assertThat(insert.getValue().packageContent())
+                .contains("exact inline", "second inline")
+                .contains("\"inlineMarker\":\"" + InlinePackageScope.approvedMarker(feedback.getId()) + "\"");
         verify(repository)
                 .finish(argThat(completion -> completion.state().equals(FeedbackDispatchState.SENT.name())
                         && completion.externalRef() == null
@@ -757,10 +834,11 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(lineNotesOnlyDispatch(feedback.getId(), FeedbackDispatchState.PENDING, 0)))
                 .thenReturn(Optional.of(recovering));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
-        when(diffNotePoster.reconcileApprovedInlineNotes(job, feedback.getId(), APPROVED_LINE_NOTES))
+        when(diffNotePoster.deliverPackage(eq(job), any(), eq(APPROVED_LINE_NOTES), any(), any()))
                 .thenReturn(
-                        new DiffNotePoster.DiffNoteResult(1, 1, List.of(landed, refused)),
-                        new DiffNotePoster.DiffNoteResult(1, 0, List.of(retried)));
+                        new DiffNotePoster.DiffNoteResult(
+                                List.of(landed, refused), false, false, false, false, List.of()),
+                        delivered(List.of(landed, retried)));
 
         var incomplete = service.dispatchApproved(job, feedback);
         var recovered = service.dispatchApproved(job, feedback);
@@ -793,12 +871,75 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void missingApprovedProposalKeepsAnUnknownInlineWriteRecoverablePastItsBudget() {
+        Feedback feedback = lineNotesOnlyFeedback("reviewed-revision");
+        var first = lineSignal(feedback, 0, InlineFeedbackChannel.Disposition.FAILED);
+        var unknown = InlineFeedbackChannel.DeliveredSignal.attempted(first.deliveryKey(), first.anchor());
+        var landed = lineSignal(feedback, 1, InlineFeedbackChannel.Disposition.POSTED);
+        var dispatch = lineNotesOnlyDispatch(
+                feedback.getId(),
+                FeedbackDispatchState.UNCERTAIN,
+                PracticeFeedbackDispatchService.MAX_ATTEMPTS - 1,
+                true,
+                storedPlacements(unknown, landed));
+        when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.empty());
+
+        var result = service.recover(dispatch, job);
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        assertThat(result.deliveredSignals())
+                .anySatisfy(signal -> {
+                    assertThat(signal.deliveryKey()).isEqualTo(unknown.deliveryKey());
+                    assertThat(signal.unconfirmed()).isTrue();
+                })
+                .anySatisfy(signal -> {
+                    assertThat(signal.externalRef()).isEqualTo(landed.externalRef());
+                    assertThat(signal.acknowledged()).isTrue();
+                });
+        verify(repository).finish(argThat(completion -> completion.nextAttemptAt() != null));
+        verify(channel, never()).postSummary(any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void missingApprovedProposalExhaustsItsBudgetWhenEveryInlineNoteWasProvenNotCreated() {
+        Feedback feedback = lineNotesOnlyFeedback("reviewed-revision");
+        var first = lineSignal(feedback, 0, InlineFeedbackChannel.Disposition.FAILED);
+        var second = lineSignal(feedback, 1, InlineFeedbackChannel.Disposition.FAILED);
+        var dispatch = lineNotesOnlyDispatch(
+                feedback.getId(),
+                FeedbackDispatchState.UNCERTAIN,
+                PracticeFeedbackDispatchService.MAX_ATTEMPTS - 1,
+                false,
+                storedPlacements(
+                        InlineFeedbackChannel.DeliveredSignal.notSent(first.deliveryKey(), first.anchor()),
+                        InlineFeedbackChannel.DeliveredSignal.notSent(second.deliveryKey(), second.anchor())));
+        when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.empty());
+
+        var result = service.recover(dispatch, job);
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.FAILED);
+        assertThat(result.deliveredSignals()).allSatisfy(signal -> {
+            assertThat(signal.acknowledged()).isFalse();
+            assertThat(signal.unconfirmed()).isFalse();
+        });
+        verify(channel, never()).postSummary(any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void shouldSendApprovedLineNotesClaimedPastTheBudgetOnceEveryNoteIsFound() {
-        Feedback feedback = lineNotesOnlyFeedback(null);
+        Feedback feedback = lineNotesOnlyFeedback("proposal-revision");
+        when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
         var landed = lineSignal(feedback, 0, InlineFeedbackChannel.Disposition.POSTED);
         var found = lineSignal(feedback, 1, InlineFeedbackChannel.Disposition.POSTED);
-        when(diffNotePoster.findUnacknowledged(eq(job), eq(APPROVED_LINE_NOTES), eq(feedback.getId()), any()))
-                .thenReturn(new DiffNotePoster.InlineLookup(List.of(found), true));
+        when(diffNotePoster.findUnacknowledged(
+                        eq(job),
+                        argThat(scope -> feedback.getId().equals(scope.approvedFeedbackId())
+                                && "proposal-revision".equals(scope.reviewedRevision())),
+                        eq(APPROVED_LINE_NOTES),
+                        any()))
+                .thenReturn(new DiffNotePoster.InlineLookup(List.of(found), true, false));
 
         var result = service.recover(
                 lineNotesOnlyDispatch(
@@ -815,16 +956,17 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .extracting(InlineFeedbackChannel.DeliveredSignal::deliveryKey)
                 .containsExactlyInAnyOrder(landed.deliveryKey(), found.deliveryKey());
         verify(channel, never()).findExistingSummary(any(), any());
-        verify(diffNotePoster, never()).reconcileApprovedInlineNotes(any(), any(), any());
-        verify(repository, never()).beginInlineWrite(any(), any(), anyString());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(repository, never()).beginInlineWrite(any(), any(), anyString(), anyString());
     }
 
     @Test
     void shouldFailApprovedLineNotesClaimedPastTheBudgetWhileANoteCannotBeFound() {
-        Feedback feedback = lineNotesOnlyFeedback(null);
+        Feedback feedback = lineNotesOnlyFeedback("proposal-revision");
+        when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
         var landed = lineSignal(feedback, 0, InlineFeedbackChannel.Disposition.POSTED);
-        when(diffNotePoster.findUnacknowledged(eq(job), eq(APPROVED_LINE_NOTES), eq(feedback.getId()), any()))
-                .thenReturn(new DiffNotePoster.InlineLookup(List.of(), false));
+        when(diffNotePoster.findUnacknowledged(eq(job), any(), eq(APPROVED_LINE_NOTES), any()))
+                .thenReturn(new DiffNotePoster.InlineLookup(List.of(), false, false));
 
         var result = service.recover(
                 lineNotesOnlyDispatch(
@@ -842,7 +984,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .containsExactly(landed.deliveryKey());
         verify(channel, never()).findExistingSummary(any(), any());
         verify(channel, never()).postSummary(any(), any());
-        verify(diffNotePoster, never()).reconcileApprovedInlineNotes(any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -859,8 +1001,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
         assertThat(result.suppressionReason()).isEqualTo(FeedbackSuppressionReason.APPROVAL_STALE);
-        verify(repository, never()).beginInlineWrite(any(), any(), anyString());
-        verify(diffNotePoster, never()).reconcileApprovedInlineNotes(any(), any(), any());
+        verify(repository, never()).beginInlineWrite(any(), any(), anyString(), anyString());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -878,7 +1020,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
         assertThat(result.suppressionReason()).isEqualTo(FeedbackSuppressionReason.APPROVAL_STALE);
-        verify(diffNotePoster, never()).reconcileApprovedInlineNotes(any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -890,17 +1032,19 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
         when(policy.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(recorded)));
-        when(diffNotePoster.reconcileApprovedInlineNotes(job, feedback.getId(), APPROVED_LINE_NOTES))
-                .thenReturn(new DiffNotePoster.DiffNoteResult(
-                        2,
-                        0,
-                        List.of(
-                                lineSignal(feedback, 0, InlineFeedbackChannel.Disposition.POSTED),
-                                lineSignal(feedback, 1, InlineFeedbackChannel.Disposition.POSTED))));
+        when(diffNotePoster.deliverPackage(eq(job), any(), eq(APPROVED_LINE_NOTES), any(), any()))
+                .thenReturn(delivered(List.of(
+                        lineSignal(feedback, 0, InlineFeedbackChannel.Disposition.POSTED),
+                        lineSignal(feedback, 1, InlineFeedbackChannel.Disposition.POSTED))));
 
         var result = service.dispatchApproved(job, feedback);
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
+    }
+
+    /** Every note acknowledged: what the poster returns for a package it fully delivered or found. */
+    private static DiffNotePoster.DiffNoteResult delivered(List<InlineFeedbackChannel.DeliveredSignal> signals) {
+        return new DiffNotePoster.DiffNoteResult(signals, true, false, false, false, List.of());
     }
 
     /** A proposal approved as line notes alone: it has no summary, so its body is absent. */
@@ -981,13 +1125,15 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         var placements = JsonMapper.builder().build().createArrayNode();
         for (var signal : signals) {
             var anchor = (FeedbackAnchor.DiffAnchor) signal.anchor();
-            placements
+            var placement = placements
                     .addObject()
                     .put("deliveryKey", signal.deliveryKey())
                     .put("path", anchor.filePath())
                     .put("startLine", anchor.newLineNumber())
                     .put("disposition", signal.disposition().name())
                     .put("externalRef", signal.externalRef());
+            Boolean started = signal.writeMayHaveStarted();
+            if (started != null) placement.put("writeMayHaveStarted", started);
         }
         return placements;
     }

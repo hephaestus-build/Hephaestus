@@ -67,19 +67,13 @@ public class JobTypeHandlerConfiguration {
 
     @Bean
     FeedbackDeliveryService feedbackDeliveryService(
-            PullRequestCommentPoster commentPoster,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
             FeedbackLedgerRecorder feedbackLedgerRecorder,
             PracticeFeedbackCommentFormatter commentFormatter,
             PracticeFeedbackDispatchService dispatchService,
             AgentJobRepository agentJobRepository) {
         return new FeedbackDeliveryService(
-                commentPoster,
-                deliveryPolicy,
-                feedbackLedgerRecorder,
-                commentFormatter,
-                dispatchService,
-                agentJobRepository);
+                deliveryPolicy, feedbackLedgerRecorder, commentFormatter, dispatchService, agentJobRepository);
     }
 
     @Bean
@@ -133,7 +127,6 @@ public class JobTypeHandlerConfiguration {
             FeedbackCompositionResultParser compositionResultParser,
             ReviewOutputService deliveryService,
             InContextDeliveryGate inContextDeliveryGate,
-            PullRequestCommentPoster commentPoster,
             FeedbackLedgerRecorder feedbackLedgerRecorder,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
             PracticeFeedbackCommentFormatter commentFormatter,
@@ -148,7 +141,6 @@ public class JobTypeHandlerConfiguration {
                 compositionResultParser,
                 deliveryService,
                 inContextDeliveryGate,
-                commentPoster,
                 feedbackLedgerRecorder,
                 deliveryPolicy,
                 commentFormatter,

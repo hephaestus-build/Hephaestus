@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedReview;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
@@ -343,12 +342,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     }
 
     @Override
-    public ExistingDeliveryLookup findExistingDelivery(AgentJob job) {
-        return feedbackService.findExistingSummary(job);
-    }
-
-    @Override
-    public boolean reconcilesMoreThanOneProviderObject() {
+    public boolean reconcilesDeliveryState() {
         return true;
     }
 }

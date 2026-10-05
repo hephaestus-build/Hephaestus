@@ -10,11 +10,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueComment;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueCommentConnection;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -184,14 +182,18 @@ public class GitHubSummaryChannel implements SummaryChannel {
     }
 
     /**
-     * Scans this PR/issue's comments for one whose body contains {@code marker}, walking the connection
-     * backwards from its newest end — the summary a crashed delivery already posted is the newest comment.
+     * Scans this PR/issue's comments for the viewer's own comment with the exact body {@link #postSummary} sends,
+     * walking the connection backwards from its newest end — the summary a crashed delivery already posted is
+     * the newest comment. A marker-bearing comment that is not that copy, a human's included, leaves the answer
+     * {@code UNKNOWN} unless the copy itself is found.
      */
     @Override
-    public ExistingSummaryLookup findExistingSummary(FeedbackTarget target, String marker) {
+    public ExistingSummaryLookup findExistingSummary(FeedbackTarget target, FeedbackContent expected) {
+        String marker = expected.marker();
         if (marker == null || marker.isBlank()) {
             return ExistingSummaryLookup.unknown();
         }
+        String expectedBody = expected.externalBody();
         long scopeId = target.ref().workspaceId();
         if (gitHubProvider.isRateLimitCritical(scopeId)) {
             return ExistingSummaryLookup.unknown();
@@ -219,6 +221,7 @@ public class GitHubSummaryChannel implements SummaryChannel {
         }
 
         String cursor = null;
+        boolean conflict = false;
         for (int page = 0; page < EXISTING_SUMMARY_SEARCH_PAGE_BUDGET; page++) {
             try {
                 ClientGraphQlResponse response = gitHubProvider
@@ -238,30 +241,39 @@ public class GitHubSummaryChannel implements SummaryChannel {
                 }
                 gitHubProvider.trackRateLimit(scopeId, response);
 
-                GHIssueCommentConnection connection =
-                        response.field(commentsPath).toEntity(GHIssueCommentConnection.class);
-                if (connection == null) {
+                Map<String, Object> connection = response.field(commentsPath).getValue();
+                if (connection == null
+                        || !(connection.get("nodes") instanceof List<?> nodes)
+                        || !(connection.get("pageInfo") instanceof Map<?, ?> pageInfo)) {
                     return ExistingSummaryLookup.unknown();
                 }
-                if (connection.getNodes() != null) {
-                    for (GHIssueComment node : connection.getNodes()) {
-                        if (node.getBody() != null && node.getBody().contains(marker) && node.getId() != null) {
-                            return ExistingSummaryLookup.found(new SummaryHandle(
-                                    node.getId(),
-                                    node.getUrl() == null ? null : node.getUrl().toString()));
-                        }
+                for (Object node : nodes) {
+                    if (!(node instanceof Map<?, ?> comment) || !(comment.get("body") instanceof String body)) {
+                        conflict = true;
+                        continue;
                     }
+                    if (!body.contains(marker)) continue;
+                    if (Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
+                            && body.equals(expectedBody)
+                            && comment.get("id") instanceof String id
+                            && !id.isBlank()) {
+                        return ExistingSummaryLookup.found(
+                                new SummaryHandle(id, comment.get("url") instanceof String url ? url : null));
+                    }
+                    conflict = true;
                 }
 
-                GHPageInfo pageInfo = connection.getPageInfo();
-                boolean hasPreviousPage = pageInfo != null && pageInfo.getHasPreviousPage();
-                if (!hasPreviousPage) {
-                    return ExistingSummaryLookup.absent();
+                Object hasPreviousPage = pageInfo.get("hasPreviousPage");
+                if (Boolean.FALSE.equals(hasPreviousPage)) {
+                    return conflict ? ExistingSummaryLookup.unknown() : ExistingSummaryLookup.absent();
                 }
-                cursor = pageInfo.getStartCursor();
-                if (cursor == null || cursor.isBlank()) {
+                if (!Boolean.TRUE.equals(hasPreviousPage)
+                        || !(pageInfo.get("startCursor") instanceof String next)
+                        || next.isBlank()
+                        || next.equals(cursor)) {
                     return ExistingSummaryLookup.unknown();
                 }
+                cursor = next;
             } catch (RuntimeException e) {
                 log.debug(
                         "Existing-summary dedup lookup failed (treated as unknown, not absent): scopeId={}, error={}",

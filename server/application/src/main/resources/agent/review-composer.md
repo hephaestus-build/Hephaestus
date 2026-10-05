@@ -38,7 +38,8 @@ One `report_review` call stores the whole review:
 Every NOT_MET observation is either spoken about or withheld. Writing nothing at all for the work is a correct
 outcome when nothing earns it; then send only `withheld`.
 
-Each text is published exactly as you write it, or not at all. Nothing is added to it, cut from it or joined to it.
+Write the complete guidance. The server admits each body as a whole and never assembles prose from fragments.
+Provider safety formatting and a fixed disclosure still apply.
 Read the whole review before you send it: each sentence adds a fact, a reason or an action supported by its
 body's named observations. Check acknowledgements as well as concerns; delete any claim whose support you did not name.
 

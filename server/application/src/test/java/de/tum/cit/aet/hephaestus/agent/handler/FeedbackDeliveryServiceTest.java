@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -42,9 +43,8 @@ import org.mockito.Mock;
 class FeedbackDeliveryServiceTest extends BaseUnitTest {
 
     private static final long WORKSPACE_ID = 99L;
-
-    @Mock
-    private PullRequestCommentPoster commentPoster;
+    private static final UUID OTHER_JOB_ID = UUID.fromString("00000000-0000-0000-0000-000000000456");
+    private static final String DISCLOSURE = "\n\n<sub>AI-generated feedback.</sub>";
 
     @Mock
     private PracticeFeedbackDeliveryPolicy deliveryPolicy;
@@ -66,7 +66,7 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         service = new FeedbackDeliveryService(
-                commentPoster, deliveryPolicy, ledgerRecorder, commentFormatter, dispatchService, jobRepository);
+                deliveryPolicy, ledgerRecorder, commentFormatter, dispatchService, jobRepository);
     }
 
     @Test
@@ -107,6 +107,7 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
         AgentJob job = job();
         DeliveryContent delivery = delivery();
         allow(job, Set.of("practice"));
+        stubDisclosure();
         when(commentFormatter.format("Summary", job)).thenReturn("Formatted summary");
         when(dispatchService.dispatchAutomaticPackage(eq(job), any(), eq(Set.of("practice"))))
                 .thenReturn(PracticeFeedbackDispatchService.Result.sent("summary-1"));
@@ -118,8 +119,49 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
         var content = ArgumentCaptor.forClass(DeliveryContent.class);
         verify(dispatchService).dispatchAutomaticPackage(eq(job), content.capture(), eq(Set.of("practice")));
         assertThat(content.getValue().mrNote()).isEqualTo("Formatted summary");
-        assertThat(content.getValue().diffNotes()).isEqualTo(delivery.diffNotes());
+        assertThat(content.getValue().inlineMarker()).isEqualTo(InlinePackageScope.automaticMarker(jobId()));
+        assertThat(content.getValue().diffNotes()).singleElement().satisfies(note -> {
+            assertThat(note.body()).isEqualTo("Inline" + DISCLOSURE);
+            assertThat(note.deliveryKey()).isEqualTo("inline-1");
+        });
         assertThat(job.getDeliveryCommentId()).isEqualTo("summary-1");
+    }
+
+    @Test
+    void shouldSealADistinctInlineMarkerPerReviewWhileEachNoteKeepsItsKeyAndSources() {
+        AgentJob first = job();
+        AgentJob second = job();
+        second.setId(OTHER_JOB_ID);
+        allow(first, Set.of("practice"));
+        allow(second, Set.of("practice"));
+        stubDisclosure();
+        when(commentFormatter.format(eq("Summary"), any())).thenReturn("Formatted summary");
+        when(dispatchService.dispatchAutomaticPackage(any(), any(), eq(Set.of("practice"))))
+                .thenReturn(PracticeFeedbackDispatchService.Result.sent("summary-1"));
+        FeedbackDispatch dispatch = dispatchState(FeedbackDispatchState.SENT);
+        when(dispatchService.automaticPackage(any())).thenReturn(dispatch);
+        var delivery = new DeliveryContent(
+                "Summary",
+                List.of(new DiffNote("src/App.java", 10, null, "Inline", "observation:occ-1:0", List.of("occ-1"))),
+                List.of(),
+                List.of("occ-1"));
+
+        service.deliverFeedback(first, delivery, Set.of("practice"));
+        service.deliverFeedback(second, delivery, Set.of("practice"));
+
+        var content = ArgumentCaptor.forClass(DeliveryContent.class);
+        verify(dispatchService, times(2)).dispatchAutomaticPackage(any(), content.capture(), eq(Set.of("practice")));
+        assertThat(content.getAllValues())
+                .extracting(DeliveryContent::inlineMarker)
+                .containsExactly(
+                        InlinePackageScope.automaticMarker(jobId()), InlinePackageScope.automaticMarker(OTHER_JOB_ID));
+        assertThat(content.getAllValues())
+                .allSatisfy(packageContent -> assertThat(packageContent.diffNotes())
+                        .singleElement()
+                        .satisfies(note -> {
+                            assertThat(note.deliveryKey()).isEqualTo("observation:occ-1:0");
+                            assertThat(note.contributors()).containsExactly("occ-1");
+                        }));
     }
 
     @Test
@@ -135,9 +177,10 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
         String note = "This explicit RGB fill stays the same in Dark Mode.\n\nCheck its contrast in both appearances.";
         var composed = new DeliveryContent(
                 paragraphs + " Thanks @alice for the preview.",
-                List.of(new DiffNote("App/ContentView.swift", 13, null, note, "observation:occ-1#0", List.of("occ-1"))),
+                List.of(new DiffNote("App/ContentView.swift", 13, null, note, "observation:occ-1:0", List.of("occ-1"))),
                 List.of(),
                 List.of("occ-1"));
+        stubDisclosure();
         when(commentFormatter.format(paragraphs + " Thanks `@alice` for the preview.", job))
                 .thenReturn("Formatted review");
         when(dispatchService.dispatchAutomaticPackage(eq(job), any(), eq(Set.of("practice"))))
@@ -151,8 +194,8 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
         verify(dispatchService).dispatchAutomaticPackage(eq(job), content.capture(), eq(Set.of("practice")));
         assertThat(content.getValue().mrNote()).isEqualTo("Formatted review");
         assertThat(content.getValue().diffNotes()).singleElement().satisfies(diff -> {
-            assertThat(diff.body()).isEqualTo(note);
-            assertThat(diff.deliveryKey()).isEqualTo("observation:occ-1#0");
+            assertThat(diff.body()).isEqualTo(note + DISCLOSURE);
+            assertThat(diff.deliveryKey()).isEqualTo("observation:occ-1:0");
         });
         assertThat(PullRequestCommentPoster.sanitize(note)).isEqualTo(note);
     }
@@ -171,9 +214,27 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRecordSuppressionWhenEveryLineNoteSanitizesAwayAndNoSummaryRemains() {
+        AgentJob job = job();
+        allow(job, Set.of("practice"));
+        var composed = new DeliveryContent(
+                null,
+                List.of(new DiffNote(
+                        "src/App.java", 10, null, "<iframe></iframe>", "observation:occ-1:0", List.of("occ-1"))),
+                List.of(),
+                List.of());
+
+        service.deliverFeedback(job, composed, Set.of("practice"));
+
+        verify(ledgerRecorder).recordSuppressedUnit(job, composed, FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
+        verifyNoInteractions(dispatchService, commentFormatter);
+    }
+
+    @Test
     void nonterminalDispatchResultFailsTheJobForDurableRecovery() {
         AgentJob job = job();
         allow(job, Set.of());
+        stubDisclosure();
         when(commentFormatter.format("Summary", job)).thenReturn("Formatted summary");
         when(dispatchService.dispatchAutomaticPackage(eq(job), any(), eq(Set.of())))
                 .thenReturn(PracticeFeedbackDispatchService.Result.uncertain());
@@ -272,6 +333,11 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
 
         verify(ledgerRecorder).record(job, delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-1", null);
         assertThat(job.getDeliveryCommentId()).isEqualTo("summary-1");
+    }
+
+    private void stubDisclosure() {
+        when(commentFormatter.appendInlineFeedbackPrompt(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0) + DISCLOSURE);
     }
 
     private void allow(AgentJob job, Set<String> practices) {

@@ -86,7 +86,6 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 deliveryService,
                 InContextDeliveryGateFixtures.gate(
                         practiceRepository, mock(ObservationRepository.class), mock(FeedbackLedgerRecorder.class)),
-                mock(PullRequestCommentPoster.class),
                 mock(FeedbackLedgerRecorder.class),
                 mock(PracticeFeedbackDeliveryPolicy.class),
                 mock(PracticeFeedbackCommentFormatter.class),

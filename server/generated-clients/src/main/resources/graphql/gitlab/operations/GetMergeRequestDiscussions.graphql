@@ -1,4 +1,8 @@
 query GetMergeRequestDiscussions($fullPath: ID!, $iid: String!, $first: Int!, $after: String) {
+    # The identity this request authenticated as; a package copy counts only when its note author matches.
+    currentUser {
+        id
+    }
     project(fullPath: $fullPath) {
         mergeRequest(iid: $iid) {
             discussions(first: $first, after: $after) {

@@ -626,9 +626,9 @@ if (scenario !== undefined && scenario !== "") {
 									}
 									return;
 								}
-								// The private composition sees the person's history, and what the review on the work said.
+								// The private composition sees the person's history, and the review planned for the work as a draft.
 								record(
-									`private-turn history=${String(text.includes(PRIVATE_HISTORY_SENTENCE))} review=${String(text.includes("What the review on this work says"))}`,
+									`private-turn history=${String(text.includes(PRIVATE_HISTORY_SENTENCE))} review=${String(text.includes("The review planned for this work (a draft, not delivered)"))}`,
 								);
 								const card = {
 									channel: "IN_APP",

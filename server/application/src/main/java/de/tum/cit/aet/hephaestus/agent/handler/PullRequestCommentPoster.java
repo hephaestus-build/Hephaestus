@@ -158,7 +158,7 @@ class PullRequestCommentPoster {
     /** Returns {@code UNKNOWN}, never {@code ABSENT}, when the lookup cannot be completed. */
     ExistingDeliveryLookup findExisting(SummaryWrite write) {
         try {
-            return lookup(write.channel(), write.target(), write.content().marker());
+            return lookup(write.channel(), write.target(), write.content());
         } catch (RuntimeException e) {
             log.debug(
                     "Existing-summary dedup lookup failed (treated as unknown): jobId={}, error={}",
@@ -220,49 +220,9 @@ class PullRequestCommentPoster {
         }
     }
 
-    /** Returns {@code UNKNOWN}, never {@code ABSENT}, when the lookup cannot be completed. */
-    ExistingDeliveryLookup findExistingSummaryComment(AgentJob job) {
-        return findExistingSummaryComment(job, summaryMarkerFor(job));
-    }
-
-    private ExistingDeliveryLookup findExistingSummaryComment(AgentJob job, String marker) {
-        IntegrationKind kind = job.getIntegrationKind();
-        if (kind == null) {
-            return ExistingDeliveryLookup.unknown();
-        }
-        SummaryChannel channel = channels.get(kind);
-        if (channel == null) {
-            return ExistingDeliveryLookup.unknown();
-        }
-        JsonNode metadata = job.getMetadata();
-        if (metadata == null || job.getWorkspace() == null) {
-            return ExistingDeliveryLookup.unknown();
-        }
-        try {
-            long workspaceId = job.getWorkspace().getId();
-            FeedbackTarget target;
-            if (metadata.has("issue_number")) {
-                String repoFullName = requireMetadataText(metadata, "repository_full_name");
-                int issueNumber = requireMetadataInt(metadata, "issue_number");
-                String subjectExternalId = channel.formatIssueSubjectId(repoFullName, issueNumber);
-                target = new FeedbackTarget(new IntegrationRef(kind, workspaceId, null), subjectExternalId, null);
-            } else if (metadata.has("pr_number")) {
-                target = buildTarget(job, kind, workspaceId);
-            } else {
-                return ExistingDeliveryLookup.unknown();
-            }
-            return lookup(channel, target, marker);
-        } catch (RuntimeException e) {
-            log.debug(
-                    "Existing-summary dedup lookup failed (treated as unknown): jobId={}, error={}",
-                    job.getId(),
-                    e.toString());
-            return ExistingDeliveryLookup.unknown();
-        }
-    }
-
-    private static ExistingDeliveryLookup lookup(SummaryChannel channel, FeedbackTarget target, String marker) {
-        SummaryChannel.ExistingSummaryLookup lookup = channel.findExistingSummary(target, marker);
+    private static ExistingDeliveryLookup lookup(
+            SummaryChannel channel, FeedbackTarget target, FeedbackContent expected) {
+        SummaryChannel.ExistingSummaryLookup lookup = channel.findExistingSummary(target, expected);
         return switch (lookup.kind()) {
             case FOUND ->
                 ExistingDeliveryLookup.found(
@@ -318,10 +278,10 @@ class PullRequestCommentPoster {
             throw new JobDeliveryException(e.toString(), e);
         }
 
-        String resourceUrl = optionalMetadataText(metadata, "commit_sha");
+        String reviewedRevision = optionalMetadataText(metadata, "commit_sha");
 
         IntegrationRef ref = new IntegrationRef(kind, workspaceId, null);
-        return new FeedbackTarget(ref, subjectExternalId, resourceUrl);
+        return new FeedbackTarget(ref, subjectExternalId, reviewedRevision);
     }
 
     static String summaryMarkerFor(AgentJob job) {

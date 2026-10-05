@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor.DiffAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
-import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Disposition;
 import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
@@ -82,7 +81,7 @@ public class FeedbackLedgerRecorder {
                     summaryUrl));
         }
         for (DeliveredSignal signal : inlineSignals) {
-            if (signal.disposition() == Disposition.FAILED) continue;
+            if (!signal.acknowledged()) continue;
             DiffAnchor anchor = (DiffAnchor) signal.anchor();
             feedbackPlacementRepository.insertProviderPlacementIfAbsent(new ProviderPlacement(
                     UUID.randomUUID(),
@@ -194,7 +193,7 @@ public class FeedbackLedgerRecorder {
             @Nullable String summaryExternalUrl,
             boolean conversationalDeliveryEligible) {
         boolean summaryDelivered = summaryExternalRef != null;
-        boolean inlineDelivered = inlineSignals.stream().anyMatch(signal -> signal.disposition() != Disposition.FAILED);
+        boolean inlineDelivered = inlineSignals.stream().anyMatch(DeliveredSignal::acknowledged);
         if (conversationalDeliveryEligible) {
             publishFeedbackLaneTrigger(job);
         }
@@ -317,7 +316,7 @@ public class FeedbackLedgerRecorder {
         if (ArtifactKinds.hasInlineLane(artifact) && inlineDelivered) {
             for (DiffNote note : delivery.diffNotes()) {
                 DeliveredSignal signal = matchSignal(note, inlineSignals);
-                if (signal == null || signal.disposition() == Disposition.FAILED) {
+                if (signal == null || !signal.acknowledged()) {
                     continue;
                 }
                 inlinePlacementCount +=
@@ -376,7 +375,7 @@ public class FeedbackLedgerRecorder {
 
     private static Set<String> deliveredKeys(List<DeliveredSignal> signals) {
         return signals.stream()
-                .filter(signal -> signal.disposition() != Disposition.FAILED)
+                .filter(DeliveredSignal::acknowledged)
                 .map(DeliveredSignal::deliveryKey)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());

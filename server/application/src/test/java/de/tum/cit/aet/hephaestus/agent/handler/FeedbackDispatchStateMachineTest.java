@@ -93,6 +93,40 @@ class FeedbackDispatchStateMachineTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldNeverRelabelAWriteThatMayHaveStartedAsUnsent() {
+        var anchor = FeedbackAnchor.DiffAnchor.singleLine("Same.java", 10);
+        var unsent = DeliveredSignal.notSent("key", anchor);
+        var attempted = DeliveredSignal.attempted("key", anchor);
+        var historical = new DeliveredSignal("key", anchor, Disposition.FAILED, null, null);
+        var postedWithoutId = new DeliveredSignal("key", anchor, Disposition.POSTED, null, null);
+
+        assertThat(machine().mergeSignals(List.of(attempted), List.of(unsent))).containsExactly(attempted);
+        assertThat(machine().mergeSignals(List.of(historical), List.of(unsent))).containsExactly(historical);
+        assertThat(machine().mergeSignals(List.of(unsent), List.of(attempted))).containsExactly(attempted);
+        assertThat(postedWithoutId.acknowledged()).isFalse();
+        assertThat(postedWithoutId.unconfirmed()).isTrue();
+    }
+
+    @Test
+    void shouldKeepTheStoredArrayShapeAndReadAMissingWriteFactAsUnknown() {
+        var mapper = new ObjectMapper();
+        var dispatch = mock(FeedbackDispatch.class);
+        when(dispatch.getDeliveredPlacements()).thenReturn(mapper.readTree("""
+            [{"recurrenceKey":"legacy","path":"Same.java","startLine":10,"disposition":"FAILED"},
+             {"deliveryKey":"unsent","path":"Same.java","startLine":11,"disposition":"FAILED",
+              "writeMayHaveStarted":false}]
+            """));
+
+        var signals = machine().deliveredSignals(dispatch);
+
+        assertThat(signals.getFirst().deliveryKey()).isEqualTo("legacy");
+        assertThat(signals.getFirst().writeMayHaveStarted()).isNull();
+        assertThat(signals.getFirst().unconfirmed()).isTrue();
+        assertThat(signals.getLast().writeMayHaveStarted()).isFalse();
+        assertThat(signals.getLast().unconfirmed()).isFalse();
+    }
+
+    @Test
     void shouldReadStoredPermalinksAndKeepLegacyPlacementsWithoutInventingLinks() {
         var mapper = new ObjectMapper();
         var dispatch = mock(FeedbackDispatch.class);

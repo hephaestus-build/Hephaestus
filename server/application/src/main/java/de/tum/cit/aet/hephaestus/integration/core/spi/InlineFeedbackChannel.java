@@ -8,26 +8,53 @@ import org.jspecify.annotations.Nullable;
  * document-anchor comments). Kinds that don't declare {@link Capability#INLINE_FEEDBACK}
  * never resolve via this registry — Slack and similar messaging vendors are
  * compile-time excluded.
+ *
+ * <p>Inline feedback is delivered as one sealed package. A channel appends the items that have no copy yet and
+ * never edits, deletes, minimizes or recreates a copy, whoever replied to it and whatever the provider marked it.
  */
 public interface InlineFeedbackChannel {
     IntegrationKind kind();
 
-    InlineResult postInlineFeedback(SummaryChannel.FeedbackTarget target, List<InlineFeedback> feedback);
-
-    default InlineResult postImmutablePackage(SummaryChannel.FeedbackTarget target, List<InlineFeedback> feedback) {
-        return postInlineFeedback(target, feedback);
-    }
-
-    void clearStaleFeedback(SummaryChannel.FeedbackTarget target, String marker);
+    /**
+     * Appends the items that have no copy on the target yet. A new note is requested only after a complete scan of
+     * the target's existing copies, and only after {@code fence} durably accepted it; a refused fence ends the call
+     * before the request. Every item given yields exactly one signal.
+     */
+    InlineResult postImmutablePackage(
+            SummaryChannel.FeedbackTarget target, List<InlineFeedback> feedback, Readback readback, WriteFence fence);
 
     /**
-     * The items that already have a note on the target, matched by delivery key, reported as
-     * {@code PRESERVED_EXISTING}, without writing anything. {@code null} when the channel cannot tell, so a caller
-     * that may not post again never reads an unanswered lookup as proof that nothing was posted.
+     * The items that already have a verified copy on the target, reported as {@code PRESERVED_EXISTING} with its
+     * native handle, without writing anything. {@code null} when the channel cannot tell, so a caller that may not
+     * post again never reads an unanswered lookup as proof that nothing was posted. A conflicting copy is not
+     * reported: it proves neither delivery nor absence.
      */
-    default @Nullable List<DeliveredSignal> findPosted(
-            SummaryChannel.FeedbackTarget target, List<InlineFeedback> feedback, boolean immutablePackage) {
-        return null;
+    @Nullable
+    List<DeliveredSignal> findPosted(
+            SummaryChannel.FeedbackTarget target, List<InlineFeedback> feedback, Readback readback);
+
+    /**
+     * How the copies of a package were rendered; sealed with the package, never chosen later. In every mode a copy
+     * counts only with its key, the exact body this mode renders, its native anchor (or the fallback’s static location metadata) and authorship by the
+     * identity the same response authenticated. A copy that carries the key without all of that is a conflict:
+     * neither delivered nor absent.
+     */
+    enum Readback {
+        /** The package sealed its own marker and its final text. */
+        AUTHORED,
+        /** A historical approved package: its marker, with the text rebuilt as it was then. */
+        PACKAGE,
+        /** A historical automatic package under the shared marker, which earlier GitHub copies did not carry. */
+        SHARED,
+    }
+
+    /**
+     * Durably records, before a create request leaves, which items it carries and every signal already returned in
+     * this call. False when the record could not be made, so nothing is requested.
+     */
+    @FunctionalInterface
+    interface WriteFence {
+        boolean beforeCreate(List<InlineFeedback> attempting, List<DeliveredSignal> completed);
     }
 
     /**
@@ -47,9 +74,9 @@ public interface InlineFeedbackChannel {
      * <ul>
      *   <li>{@code POSTED} — a new inline note/thread was created.
      *   <li>{@code FELL_BACK} — the anchor was out of the diff hunk, posted as a plain comment instead.
-     *   <li>{@code PRESERVED_EXISTING} — an equivalent note already exists (e.g. a human-replied thread) and was
-     *       intentionally left untouched rather than re-posted.
-     *   <li>{@code FAILED} — the note could not be delivered (unsupported anchor, API error, rate limit).
+     *   <li>{@code PRESERVED_EXISTING} — a verified copy already exists and was left untouched.
+     *   <li>{@code FAILED} — no copy is known; {@link DeliveredSignal#writeMayHaveStarted()} says whether one may
+     *       still exist.
      * </ul>
      */
     enum Disposition {
@@ -63,6 +90,9 @@ public interface InlineFeedbackChannel {
      * What actually happened to one feedback unit, keyed by {@code deliveryKey} so the caller can reconcile it
      * against the persisted placement. {@code externalRef} is the vendor note id and {@code threadExternalRef}
      * the enclosing discussion/thread id; both are {@code null} when no durable handle exists (e.g. a failure).
+     *
+     * @param writeMayHaveStarted for an unacknowledged unit: {@code false} when no copy can exist from this
+     *     attempt, {@code true} when creation remains unconfirmed, {@code null} when unrecorded and unknown
      */
     record DeliveredSignal(
             @Nullable String deliveryKey,
@@ -70,28 +100,51 @@ public interface InlineFeedbackChannel {
             Disposition disposition,
             @Nullable String externalRef,
             @Nullable String threadExternalRef,
-            @Nullable String externalUrl) {
+            @Nullable String externalUrl,
+            @Nullable Boolean writeMayHaveStarted) {
+        public DeliveredSignal(
+                @Nullable String deliveryKey,
+                FeedbackAnchor anchor,
+                Disposition disposition,
+                @Nullable String externalRef,
+                @Nullable String threadExternalRef,
+                @Nullable String externalUrl) {
+            this(deliveryKey, anchor, disposition, externalRef, threadExternalRef, externalUrl, null);
+        }
+
         public DeliveredSignal(
                 @Nullable String deliveryKey,
                 FeedbackAnchor anchor,
                 Disposition disposition,
                 @Nullable String externalRef,
                 @Nullable String threadExternalRef) {
-            this(deliveryKey, anchor, disposition, externalRef, threadExternalRef, null);
+            this(deliveryKey, anchor, disposition, externalRef, threadExternalRef, null, null);
+        }
+
+        /** No copy can exist from this attempt: it was unrequested or provably refused before creation. */
+        public static DeliveredSignal notSent(@Nullable String deliveryKey, FeedbackAnchor anchor) {
+            return new DeliveredSignal(deliveryKey, anchor, Disposition.FAILED, null, null, null, false);
+        }
+
+        /** A create request for this unit may have left, and no copy of it is known. */
+        public static DeliveredSignal attempted(@Nullable String deliveryKey, FeedbackAnchor anchor) {
+            return new DeliveredSignal(deliveryKey, anchor, Disposition.FAILED, null, null, null, true);
+        }
+
+        /** Whether a copy is known on the target: a placed or kept unit with a durable native id. */
+        public boolean acknowledged() {
+            return disposition != Disposition.FAILED && externalRef != null && !externalRef.isBlank();
+        }
+
+        /** Whether this unacknowledged unit may still have a copy that a later lookup could find. */
+        public boolean unconfirmed() {
+            return !acknowledged() && !Boolean.FALSE.equals(writeMayHaveStarted);
         }
     }
 
     /**
-     * Aggregate delivery result. {@code signals} carries the per-unit {@link DeliveredSignal}s the placement
-     * layer persists; a path with no per-unit outcomes (rate-limit short-circuit, empty input) reports via
-     * {@link #counts}, which leaves {@code signals} empty.
-     *
-     * <p>Counting invariant (both shipped impls): {@code posted} counts every signal whose {@link Disposition}
-     * is not {@code FAILED} (i.e. {@code POSTED}, {@code FELL_BACK}, {@code PRESERVED_EXISTING}); {@code failed}
-     * counts {@code FAILED} signals. Every unit that produced an outcome contributes exactly one
-     * signal, so {@code posted + failed == signals.size()} across the signalled feedback. A unit the channel
-     * skips outright (e.g. a blank body the GitHub impl drops without posting) yields no signal and no count, so
-     * it is simply absent from both sides rather than violating the equality.
+     * Aggregate delivery result: one {@link DeliveredSignal} per item given, which the placement layer persists.
+     * {@code posted} counts acknowledged signals and {@code failed} the others.
      */
     record InlineResult(
             int posted,
@@ -99,18 +152,18 @@ public interface InlineFeedbackChannel {
             List<DeliveredSignal> signals,
             boolean suppressed,
             List<String> suppressedDeliveryKeys) {
-        public InlineResult(int posted, int failed, List<DeliveredSignal> signals) {
-            this(posted, failed, signals, false, List.of());
+        /** The signals of one call, counted by acknowledgement. */
+        public static InlineResult of(List<DeliveredSignal> signals) {
+            int posted =
+                    (int) signals.stream().filter(DeliveredSignal::acknowledged).count();
+            return new InlineResult(posted, signals.size() - posted, List.copyOf(signals), false, List.of());
         }
 
-        /** Count-only result with no per-unit signals (rate-limit short-circuit / empty input). */
-        public static InlineResult counts(int posted, int failed) {
-            return new InlineResult(posted, failed, List.of());
-        }
-
-        public static InlineResult suppressed(
-                int posted, int failed, List<DeliveredSignal> signals, List<String> suppressedDeliveryKeys) {
-            return new InlineResult(posted, failed, List.copyOf(signals), true, List.copyOf(suppressedDeliveryKeys));
+        public static InlineResult suppressed(List<DeliveredSignal> signals, List<String> suppressedDeliveryKeys) {
+            int posted =
+                    (int) signals.stream().filter(DeliveredSignal::acknowledged).count();
+            return new InlineResult(
+                    posted, signals.size() - posted, List.copyOf(signals), true, List.copyOf(suppressedDeliveryKeys));
         }
     }
 }

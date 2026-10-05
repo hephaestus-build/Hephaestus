@@ -1,14 +1,17 @@
 # Newest-end scan of a merge request's notes, for the summary-dedup lookup.
 # `last`/`before` walks the connection backwards from the newest note, so a just-posted summary is
-# found on the first request. Selects only what a marker match needs (id, body and permalink), so this is a
-# cheap scan and not a second sync path — GetMergeRequestDiscussions stays the sync/inline-finding
-# document and is untouched by this lookup.
+# found on the first request. Selects only what a copy match needs (id, body, permalink, author and the
+# identity the same request authenticated), so this is a cheap scan and not a second sync path —
+# GetMergeRequestDiscussions stays the sync/inline-finding document and is untouched by this lookup.
 #
 # Deliberately reads the noteable's FLAT `notes` connection rather than `discussions { notes }`:
 # the flat connection carries its own cursor, so every note is reachable — the nested form pages
 # notes at a fixed `first: 100` inside each discussion with no cursor of its own.
 
 query GetMergeRequestNotesNewest($fullPath: ID!, $iid: String!, $last: Int!, $before: String) {
+    currentUser {
+        id
+    }
     project(fullPath: $fullPath) {
         mergeRequest(iid: $iid) {
             notes(last: $last, before: $before) {
@@ -20,6 +23,9 @@ query GetMergeRequestNotesNewest($fullPath: ID!, $iid: String!, $last: Int!, $be
                     id
                     url
                     body
+                    author {
+                        id
+                    }
                 }
             }
         }

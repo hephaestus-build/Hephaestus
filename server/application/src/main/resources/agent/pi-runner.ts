@@ -2711,7 +2711,7 @@ function buildCompositionTurn(
 	const coverageNote = notReachedNote(notReached);
 	const admitted = JSON.stringify({ observations: observations.map(composerView) }, null, 1);
 	const onTheWork = composedFeedback.review
-		? `### What the review on this work says\nIt was written separately and may not reach the work if a delivery check holds it; do not repeat it.\n\`\`\`json\n${JSON.stringify(composedFeedback.review, null, 1)}\n\`\`\`\n`
+		? `### The review planned for this work (a draft, not delivered)\nIt was written separately and may not reach the work if a delivery check holds it, so it is not something already said: only the feedback history supports ALREADY_SAID. Do not copy its argument about this change, and do not withhold useful private guidance only because it exists.\n\`\`\`json\n${JSON.stringify(composedFeedback.review, null, 1)}\n\`\`\`\n`
 		: "";
 	const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
 	const context = [

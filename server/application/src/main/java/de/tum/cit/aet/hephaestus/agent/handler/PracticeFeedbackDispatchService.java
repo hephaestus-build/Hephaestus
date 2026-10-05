@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliverySuppressedExceptio
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
-import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Disposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -109,7 +108,11 @@ class PracticeFeedbackDispatchService {
                                 FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE,
                                 Set.copyOf(feedback.getProposedPracticeSlugs()),
                                 new DeliveryContent(
-                                        feedback.getBody(), proposedInlineNotes(feedback), List.of(), null)),
+                                        feedback.getBody(),
+                                        proposedInlineNotes(feedback),
+                                        List.of(),
+                                        null,
+                                        InlinePackageScope.approvedMarker(feedback.getId()))),
                         job));
     }
 
@@ -221,25 +224,33 @@ class PracticeFeedbackDispatchService {
                 }
             }
 
-            List<DiffNote> inlineNotes = inlineNotes(dispatch);
+            DeliveryContent sealed = packageContent(dispatch);
             if (!isIssue(job)) {
                 PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
                 if (!decision.allowed())
                     return stateMachine.refuse(
                             dispatch, owner, decision.refusal(), summaryRef, summaryUrl, inlineSignals);
-                if (!inlineNotes.isEmpty() && !stateMachine.beginInlineWrite(dispatch, owner)) {
-                    return Result.inProgress();
-                }
-                DiffNotePoster.DiffNoteResult inline = diffNotePoster.reconcileInlineNotes(job, inlineNotes);
-                inlineSignals = stateMachine.mergeSignals(inlineSignals, inline.signals());
-                if (inline.failed() > 0 || inline.suppressed()) {
-                    return stateMachine.retryPackage(
-                            dispatch,
-                            owner,
-                            "Automatic review package remains incomplete",
-                            summaryRef,
-                            summaryUrl,
-                            inlineSignals);
+                // An empty package writes nothing inline: it never retires what earlier packages placed.
+                if (!sealed.diffNotes().isEmpty()) {
+                    DiffNotePoster.DiffNoteResult inline = diffNotePoster.deliverPackage(
+                            job,
+                            InlinePackageScope.of(dispatch, sealed.inlineMarker(), null),
+                            sealed.diffNotes(),
+                            inlineSignals,
+                            receipt -> stateMachine.recordInlineAttempt(dispatch, owner, receipt));
+                    inlineSignals = inline.signals();
+                    if (inline.leaseLost()) return Result.inProgress();
+                    if (!inline.complete()) {
+                        return inline.unconfirmed()
+                                ? stateMachine.awaitUnconfirmed(dispatch, owner, summaryRef, summaryUrl, inlineSignals)
+                                : stateMachine.retryPackage(
+                                        dispatch,
+                                        owner,
+                                        "Automatic review package remains incomplete",
+                                        summaryRef,
+                                        summaryUrl,
+                                        inlineSignals);
+                    }
                 }
             }
 
@@ -255,13 +266,8 @@ class PracticeFeedbackDispatchService {
         } catch (PullRequestCommentPoster.SummaryNotSentException exception) {
             return retryUnsent(dispatch, owner, exception.getMessage());
         } catch (RuntimeException exception) {
-            if (summaryRef != null) {
-                return stateMachine.retryPackage(
-                        dispatch, owner, exception.getMessage(), summaryRef, summaryUrl, inlineSignals);
-            }
-            return writeBegan
-                    ? stateMachine.retryAfterWrite(dispatch, owner, exception.getMessage())
-                    : stateMachine.retry(dispatch, owner, exception.getMessage());
+            return stateMachine.retryFailedAttempt(
+                    dispatch, owner, exception.getMessage(), writeBegan, summaryRef, summaryUrl, inlineSignals);
         }
     }
 
@@ -283,7 +289,6 @@ class PracticeFeedbackDispatchService {
         @Nullable String summaryUrl = dispatch.getDeliveredExternalUrl();
         List<DeliveredSignal> inlineSignals = deliveredSignals(dispatch);
         boolean writeBegan = false;
-        boolean inlineWriteBegan = false;
         try {
             if (hasSummary && summaryRef == null) {
                 PullRequestCommentPoster.SummaryWrite write = summaryWrite(dispatch, job);
@@ -327,19 +332,25 @@ class PracticeFeedbackDispatchService {
                             summaryUrl,
                             inlineSignals);
                 }
-                if (!stateMachine.beginInlineWrite(dispatch, owner)) return Result.inProgress();
-                inlineWriteBegan = true;
-                DiffNotePoster.DiffNoteResult inline =
-                        diffNotePoster.reconcileApprovedInlineNotes(job, feedback.getId(), inlineNotes);
-                inlineSignals = stateMachine.mergeSignals(inlineSignals, inline.signals());
-                if (inline.failed() > 0 || inline.suppressed()) {
-                    return stateMachine.retryPackage(
-                            dispatch,
-                            owner,
-                            "Approved review package remains incomplete",
-                            summaryRef,
-                            summaryUrl,
-                            inlineSignals);
+                DiffNotePoster.DiffNoteResult inline = diffNotePoster.deliverPackage(
+                        job,
+                        InlinePackageScope.of(
+                                dispatch, packageContent(dispatch).inlineMarker(), feedback.getReviewedRevision()),
+                        inlineNotes,
+                        inlineSignals,
+                        receipt -> stateMachine.recordInlineAttempt(dispatch, owner, receipt));
+                inlineSignals = inline.signals();
+                if (inline.leaseLost()) return Result.inProgress();
+                if (!inline.complete()) {
+                    return inline.unconfirmed()
+                            ? stateMachine.awaitUnconfirmed(dispatch, owner, summaryRef, summaryUrl, inlineSignals)
+                            : stateMachine.retryPackage(
+                                    dispatch,
+                                    owner,
+                                    "Approved review package remains incomplete",
+                                    summaryRef,
+                                    summaryUrl,
+                                    inlineSignals);
                 }
             }
             return stateMachine.sent(dispatch, owner, summaryRef, summaryUrl, inlineSignals);
@@ -354,18 +365,8 @@ class PracticeFeedbackDispatchService {
         } catch (PullRequestCommentPoster.SummaryNotSentException exception) {
             return retryUnsent(dispatch, owner, exception.getMessage());
         } catch (RuntimeException exception) {
-            if (summaryRef != null) {
-                return stateMachine.retryPackage(
-                        dispatch, owner, exception.getMessage(), summaryRef, summaryUrl, inlineSignals);
-            }
-            if (writeBegan) {
-                return stateMachine.retryAfterWrite(dispatch, owner, exception.getMessage());
-            }
-            // A line note may already be on the work even when no summary is: keep what was placed and settle it.
-            if (inlineWriteBegan || dispatch.inlineWriteMayHaveStarted()) {
-                return stateMachine.retryPackage(dispatch, owner, exception.getMessage(), null, null, inlineSignals);
-            }
-            return stateMachine.retry(dispatch, owner, exception.getMessage());
+            return stateMachine.retryFailedAttempt(
+                    dispatch, owner, exception.getMessage(), writeBegan, summaryRef, summaryUrl, inlineSignals);
         }
     }
 
@@ -408,7 +409,6 @@ class PracticeFeedbackDispatchService {
      * write began. Nothing is posted here.
      */
     private Result refuseInvalidated(FeedbackDispatch dispatch, AgentJob job, String owner) {
-        boolean approved = dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE;
         @Nullable String summaryRef = dispatch.getDeliveredExternalRef();
         @Nullable String summaryUrl = dispatch.getDeliveredExternalUrl();
         List<DeliveredSignal> signals = deliveredSignals(dispatch);
@@ -427,10 +427,14 @@ class PracticeFeedbackDispatchService {
             unconfirmed = existing.kind() != ExistingDeliveryLookup.Kind.FOUND;
         }
         if (dispatch.inlineWriteMayHaveStarted() && !isIssue(job)) {
+            DeliveryContent sealed = packageContent(dispatch);
             DiffNotePoster.InlineLookup lookup = diffNotePoster.findUnacknowledged(
-                    job, inlineNotes(dispatch), approved ? dispatch.approvedFeedbackId() : null, signals);
+                    job,
+                    InlinePackageScope.recovered(dispatch, sealed.inlineMarker(), feedbackRepository),
+                    sealed.diffNotes(),
+                    signals);
             signals = stateMachine.mergeSignals(signals, lookup.found());
-            unconfirmed |= !lookup.complete();
+            unconfirmed |= lookup.unconfirmed();
         }
         if (!unconfirmed) {
             return stateMachine.refuse(
@@ -441,20 +445,7 @@ class PracticeFeedbackDispatchService {
                     summaryUrl,
                     signals);
         }
-        String error = "An earlier provider write is not confirmed yet";
-        Instant writeStartedAt = dispatch.getWriteStartedAt();
-        Instant since = writeStartedAt != null ? writeStartedAt : dispatch.getCreatedAt();
-        if (Instant.now().isAfter(since.plus(UNCONFIRMED_WINDOW))) {
-            return stateMachine.recheckAt(
-                    dispatch,
-                    owner,
-                    error,
-                    summaryRef,
-                    summaryUrl,
-                    signals,
-                    Instant.now().plus(UNCONFIRMED_RECHECK));
-        }
-        return stateMachine.retry(dispatch, owner, error, summaryRef, summaryUrl, true, signals);
+        return stateMachine.awaitUnconfirmed(dispatch, owner, summaryRef, summaryUrl, signals);
     }
 
     /**
@@ -480,21 +471,27 @@ class PracticeFeedbackDispatchService {
             summaryUrl = existing.commentUrl();
         }
         boolean summaryAccounted = !summaryStage || summaryRef != null;
-        boolean inlineAccounted;
-        if (isIssue(job)) {
-            inlineAccounted = true;
-        } else if (dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE) {
-            // An approved package's line notes are posted under package keys, not their proposal keys, so only the
-            // lookup that derives those keys can account for them; it reads the provider and writes nothing.
+        boolean inlineAccounted = true;
+        boolean inlineUnconfirmed = false;
+        if (!isIssue(job)) {
+            // The same sealed scope that posted the notes reads them back; it writes nothing.
+            DeliveryContent sealed = packageContent(dispatch);
             DiffNotePoster.InlineLookup lookup = diffNotePoster.findUnacknowledged(
-                    job, inlineNotes(dispatch), dispatch.approvedFeedbackId(), signals);
+                    job,
+                    InlinePackageScope.recovered(dispatch, sealed.inlineMarker(), feedbackRepository),
+                    sealed.diffNotes(),
+                    signals);
             signals = stateMachine.mergeSignals(signals, lookup.found());
             inlineAccounted = lookup.complete();
-        } else {
-            inlineAccounted = DiffNotePoster.acknowledgesAll(inlineNotes(dispatch), signals);
+            inlineUnconfirmed = lookup.unconfirmed();
         }
-        if (summaryAccounted && inlineAccounted && (summaryRef != null || !signals.isEmpty())) {
+        if (summaryAccounted
+                && inlineAccounted
+                && (summaryRef != null || signals.stream().anyMatch(DeliveredSignal::acknowledged))) {
             return stateMachine.sent(dispatch, owner, summaryRef, summaryUrl, signals);
+        }
+        if (inlineUnconfirmed) {
+            return stateMachine.awaitUnconfirmed(dispatch, owner, summaryRef, summaryUrl, signals);
         }
         return stateMachine.retryPackage(
                 dispatch, owner, "Dispatch retry limit exhausted", summaryRef, summaryUrl, signals);
@@ -618,10 +615,9 @@ class PracticeFeedbackDispatchService {
             return Objects.requireNonNull(externalRef, "a sent dispatch always has a provider id");
         }
 
-        /** Whether a copy is on the work: the summary, or a line note the provider placed or kept. */
+        /** Whether a copy is on the work: the summary, or a line note with a durable native handle. */
         boolean landed() {
-            return externalRef != null
-                    || deliveredSignals.stream().anyMatch(signal -> signal.disposition() != Disposition.FAILED);
+            return externalRef != null || deliveredSignals.stream().anyMatch(DeliveredSignal::acknowledged);
         }
 
         static Result sent(@Nullable String ref) {

@@ -299,6 +299,34 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldListAFencedInlineReceiptsKnownNoteAndTheReviewedWorkForItsUnknownOne() {
+        var fixture = externalInspectionFixture("https://privacy-gitlab.example.com/team/repo/-/merge_requests/19");
+        jdbc.update("""
+                UPDATE feedback_dispatch SET state='UNCERTAIN',inline_write_started=TRUE,
+                    write_started_at=CURRENT_TIMESTAMP,delivered_placements=CAST(? AS jsonb) WHERE id=?
+                """, """
+                [{"deliveryKey":"observation:a:0","path":"src/A.java","startLine":10,"disposition":"POSTED",
+                  "externalRef":"gid://gitlab/Note/7",
+                  "externalUrl":"https://privacy-gitlab.example.com/team/repo/-/merge_requests/19#note_7",
+                  "writeMayHaveStarted":true},
+                 {"deliveryKey":"observation:b:0","path":"src/B.java","startLine":20,"disposition":"FAILED",
+                  "writeMayHaveStarted":true}]
+                """, fixture.dispatchId());
+
+        var preview = personData.preview(
+                fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null)));
+
+        assertThat(preview.externalDeliveries())
+                .containsExactlyInAnyOrder(
+                        new PersonDataContributor.ExternalDelivery(
+                                fixture.workspaceId(),
+                                "https://privacy-gitlab.example.com/team/repo/-/merge_requests/19#note_7"),
+                        new PersonDataContributor.ExternalDelivery(
+                                fixture.workspaceId(),
+                                "https://privacy-gitlab.example.com/team/repo/-/merge_requests/19"));
+    }
+
+    @Test
     void shouldRejectThePreviewWhenAProviderWriteChangesOnTheSamePrimaryKey() {
         var fixture = externalInspectionFixture("https://privacy-gitlab.example.com/team/repo/-/merge_requests/19");
         var preview = personData.preview(

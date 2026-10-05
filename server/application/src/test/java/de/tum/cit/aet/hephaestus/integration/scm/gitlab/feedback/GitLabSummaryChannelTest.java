@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback;
 
+import static de.tum.cit.aet.hephaestus.integration.scm.GraphQlResponseStubValidator.Vendor.GITLAB;
+import static de.tum.cit.aet.hephaestus.integration.scm.GraphQlResponseStubValidator.assertVendorCouldReturn;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -26,9 +28,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackCon
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabBackwardPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrInfo;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -388,6 +390,13 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
 
     private static final String MARKER = "<!-- hephaestus-summary:job-1 -->";
 
+    private static final FeedbackContent EXPECTED = new FeedbackContent("/approve once fixed\nSummary text", MARKER);
+
+    /** The exact body {@code postSummary} sends for {@link #EXPECTED}, slash command escaped. */
+    private static final String EXACT = GitLabSummaryChannel.escapeSlashCommands(EXPECTED.externalBody());
+
+    private static final String BOT = "gid://gitlab/User/1";
+
     private GraphQlClient.RequestSpec mockRequestChain() {
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
         GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
@@ -397,23 +406,40 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         return spec;
     }
 
-    /** Keyed by response path, so a test that stubs the MR path fails outright if the channel reads the issue path. */
+    /**
+     * Keyed by response path, so a test that stubs the MR path fails outright if the channel reads the issue path.
+     * The page is read by {@link #BOT}.
+     */
     private ClientGraphQlResponse mockNotesPage(
             String notesPath,
             List<Map<String, Object>> notes,
             boolean hasPreviousPage,
             @Nullable String startCursor,
             List<ResponseError> errors) {
+        return mockNotesPage(notesPath, notes, hasPreviousPage, startCursor, errors, BOT);
+    }
+
+    private ClientGraphQlResponse mockNotesPage(
+            String notesPath,
+            List<Map<String, Object>> notes,
+            boolean hasPreviousPage,
+            @Nullable String startCursor,
+            List<ResponseError> errors,
+            @Nullable String currentUserId) {
         ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
         lenient().when(response.getErrors()).thenReturn(errors);
-        ClientResponseField nodesField = mock(ClientResponseField.class);
-        lenient().when(response.field(notesPath + ".nodes")).thenReturn(nodesField);
-        lenient().when(nodesField.getValue()).thenReturn(notes);
-        ClientResponseField pageInfoField = mock(ClientResponseField.class);
-        lenient().when(response.field(notesPath + ".pageInfo")).thenReturn(pageInfoField);
-        lenient()
-                .when(pageInfoField.toEntity(GitLabBackwardPageInfo.class))
-                .thenReturn(new GitLabBackwardPageInfo(hasPreviousPage, startCursor));
+        Map<String, Object> pageInfo = new HashMap<>();
+        pageInfo.put("hasPreviousPage", hasPreviousPage);
+        pageInfo.put("startCursor", startCursor);
+        Map<String, Object> connection = Map.of("nodes", notes, "pageInfo", pageInfo);
+        String document = notesPath.equals(ISSUE_NOTES_PATH) ? "GetIssueNotesNewest" : "GetMergeRequestNotesNewest";
+        assertVendorCouldReturn(GITLAB, document, notesPath, connection);
+        ClientResponseField connectionField = mock(ClientResponseField.class);
+        lenient().when(response.field(notesPath)).thenReturn(connectionField);
+        lenient().when(connectionField.getValue()).thenReturn(connection);
+        ClientResponseField userField = mock(ClientResponseField.class);
+        lenient().when(response.field("currentUser.id")).thenReturn(userField);
+        lenient().when(userField.getValue()).thenReturn(currentUserId);
         return response;
     }
 
@@ -425,14 +451,65 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
     private static final String MR_NOTES_PATH = "project.mergeRequest.notes";
     private static final String ISSUE_NOTES_PATH = "project.issue.notes";
 
+    /** A note the authenticated identity wrote. */
     private static Map<String, Object> note(String id, String body) {
+        return note(id, body, BOT);
+    }
+
+    private static Map<String, Object> note(String id, String body, String authorId) {
         return Map.of(
                 "id",
                 id,
                 "body",
                 body,
                 "url",
-                "https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
+                "https://gitlab.example.com/group/project/-/merge_requests/42#note_987654",
+                "author",
+                Map.of("id", authorId));
+    }
+
+    @Test
+    void findExistingSummary_choosesTheAuthoredExactCopyOverANewerHumanCopy() {
+        when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
+        GraphQlClient.RequestSpec spec = mockRequestChain();
+        ClientGraphQlResponse page = mockMrNotesPage(
+                List.of(note("gid://gitlab/Note/1", EXACT), note("gid://gitlab/Note/2", EXACT, "gid://gitlab/User/2")),
+                false,
+                null);
+        when(spec.execute()).thenReturn(Mono.just(page));
+
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), EXPECTED);
+
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
+        assertNotNull(result.handle());
+        assertThat(result.handle().externalId()).isEqualTo("gid://gitlab/Note/1");
+    }
+
+    @Test
+    void findExistingSummary_aMarkedNoteThatIsNotTheCopy_isUnknown_notFoundOrAbsent() {
+        when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
+        GraphQlClient.RequestSpec spec = mockRequestChain();
+        ClientGraphQlResponse page = mockMrNotesPage(
+                List.of(
+                        note("gid://gitlab/Note/1", EXPECTED.externalBody()),
+                        note("gid://gitlab/Note/2", EXACT, "gid://gitlab/User/2")),
+                false,
+                null);
+        when(spec.execute()).thenReturn(Mono.just(page));
+
+        assertThat(channel.findExistingSummary(gitlabTarget(), EXPECTED).kind())
+                .isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
+    }
+
+    @Test
+    void findExistingSummary_withoutTheAuthenticatedIdentity_isUnknown_evenWithNothingMarked() {
+        when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
+        GraphQlClient.RequestSpec spec = mockRequestChain();
+        ClientGraphQlResponse page = mockNotesPage(MR_NOTES_PATH, List.of(), false, null, List.of(), null);
+        when(spec.execute()).thenReturn(Mono.just(page));
+
+        assertThat(channel.findExistingSummary(gitlabTarget(), EXPECTED).kind())
+                .isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
 
     @Test
@@ -440,14 +517,12 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
         GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page = mockMrNotesPage(
-                List.of(
-                        note("gid://gitlab/Note/1", "a human said hi"),
-                        note("gid://gitlab/Note/2", MARKER + "\nsummary")),
+                List.of(note("gid://gitlab/Note/1", "a human said hi"), note("gid://gitlab/Note/2", EXACT)),
                 false,
                 null);
         when(spec.execute()).thenReturn(Mono.just(page));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         // The handle is the note's own global id — exactly what updateSummary passes to UpdateNote as `id`.
@@ -465,10 +540,10 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
     void findExistingSummary_walksTheNewestEndFirst() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
         GraphQlClient.RequestSpec spec = mockRequestChain();
-        ClientGraphQlResponse page = mockMrNotesPage(List.of(note("gid://gitlab/Note/9", MARKER)), true, "c");
+        ClientGraphQlResponse page = mockMrNotesPage(List.of(note("gid://gitlab/Note/9", EXACT)), true, "c");
         when(spec.execute()).thenReturn(Mono.just(page));
 
-        channel.findExistingSummary(gitlabTarget(), MARKER);
+        channel.findExistingSummary(gitlabTarget(), EXPECTED);
 
         verify(spec).variable(eq("last"), eq(100));
         verify(spec).variable(eq("before"), eq(null));
@@ -486,7 +561,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
                 null);
         when(spec.execute()).thenReturn(Mono.just(page));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.ABSENT);
     }
@@ -497,9 +572,16 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page =
                 mockMrNotesPage(List.of(note("gid://gitlab/Note/1", "unrelated")), true, "cursor-1");
-        when(spec.execute()).thenReturn(Mono.just(page));
+        ClientGraphQlResponse page2 =
+                mockMrNotesPage(List.of(note("gid://gitlab/Note/2", "unrelated")), true, "cursor-2");
+        ClientGraphQlResponse page3 =
+                mockMrNotesPage(List.of(note("gid://gitlab/Note/3", "unrelated")), true, "cursor-3");
+        when(spec.execute())
+                .thenReturn(Mono.just(page))
+                .thenReturn(Mono.just(page2))
+                .thenReturn(Mono.just(page3));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
         verify(spec, times(3)).execute();
@@ -512,7 +594,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         ClientGraphQlResponse page = mockMrNotesPage(List.of(note("gid://gitlab/Note/1", "unrelated")), true, "  ");
         when(spec.execute()).thenReturn(Mono.just(page));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
         verify(spec, times(1)).execute();
@@ -524,10 +606,10 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page1 =
                 mockMrNotesPage(List.of(note("gid://gitlab/Note/1", "unrelated")), true, "cursor-1");
-        ClientGraphQlResponse page2 = mockMrNotesPage(List.of(note("gid://gitlab/Note/2", MARKER)), false, null);
+        ClientGraphQlResponse page2 = mockMrNotesPage(List.of(note("gid://gitlab/Note/2", EXACT)), false, null);
         when(spec.execute()).thenReturn(Mono.just(page1)).thenReturn(Mono.just(page2));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         assertNotNull(result.handle());
@@ -547,7 +629,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
                 MR_NOTES_PATH, List.of(note("gid://gitlab/Note/1", "unrelated")), false, null, List.of(error));
         when(spec.execute()).thenReturn(Mono.just(page));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
@@ -565,11 +647,11 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
         // Stubbed ONLY on the issue path: reading the merge-request path would yield null nodes → UNKNOWN.
-        ClientGraphQlResponse page = mockNotesPage(
-                ISSUE_NOTES_PATH, List.of(note("gid://gitlab/Note/7", MARKER + "\nsummary")), false, null, List.of());
+        ClientGraphQlResponse page =
+                mockNotesPage(ISSUE_NOTES_PATH, List.of(note("gid://gitlab/Note/7", EXACT)), false, null, List.of());
         when(spec.execute()).thenReturn(Mono.just(page));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(gitlabIssueTarget(), MARKER);
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabIssueTarget(), EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         assertNotNull(result.handle());
@@ -590,7 +672,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
                 mockNotesPage(ISSUE_NOTES_PATH, List.of(note("gid://gitlab/Note/1", "hi")), false, null, List.of());
         when(spec.execute()).thenReturn(Mono.just(page));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(gitlabIssueTarget(), MARKER);
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabIssueTarget(), EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.ABSENT);
     }
@@ -603,10 +685,10 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         when(client.documentName(any())).thenReturn(spec);
         when(spec.variable(any(), any())).thenReturn(spec);
-        ClientGraphQlResponse page = mockMrNotesPage(List.of(note("gid://gitlab/Note/3", MARKER)), false, null);
+        ClientGraphQlResponse page = mockMrNotesPage(List.of(note("gid://gitlab/Note/3", EXACT)), false, null);
         when(spec.execute()).thenReturn(Mono.just(page));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         verify(client).documentName("GetMergeRequestNotesNewest");
@@ -618,7 +700,7 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
         GraphQlClient.RequestSpec spec = mockRequestChain();
         when(spec.execute()).thenReturn(Mono.error(new RuntimeException("connection reset")));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
@@ -627,14 +709,32 @@ class GitLabSummaryChannelTest extends BaseUnitTest {
     void findExistingSummary_rateLimitCritical_isUnknown_notAbsent() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(true);
 
-        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), MARKER);
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
 
     @Test
+    void unreadableBodyPreventsAbsenceButDoesNotHideAnExactCopy() {
+        GraphQlClient.RequestSpec spec = mockRequestChain();
+        ClientGraphQlResponse unreadable = mockMrNotesPage(List.of(Map.of("id", "gid://gitlab/Note/1")), false, null);
+        ClientGraphQlResponse found = mockMrNotesPage(
+                List.of(Map.of("id", "gid://gitlab/Note/1"), note("gid://gitlab/Note/2", EXACT)), false, null);
+        when(spec.execute()).thenReturn(Mono.just(unreadable)).thenReturn(Mono.just(found));
+        assertThat(channel.findExistingSummary(gitlabTarget(), EXPECTED).kind())
+                .isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
+        assertThat(channel.findExistingSummary(gitlabTarget(), EXPECTED).kind())
+                .isEqualTo(ExistingSummaryLookup.Presence.FOUND);
+    }
+
+    @Test
+    void blankNativeSummaryIdCannotAcknowledgeDelivery() {
+        assertThatThrownBy(() -> new SummaryHandle(" ")).isInstanceOf(FeedbackDeliveryException.class);
+    }
+
+    @Test
     void findExistingSummary_blankMarker_isUnknown() {
-        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), "  ");
+        ExistingSummaryLookup result = channel.findExistingSummary(gitlabTarget(), new FeedbackContent("body", "  "));
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }

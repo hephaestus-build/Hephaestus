@@ -553,11 +553,12 @@ export function priorPublicFeedback(history: unknown, thisWork: string | undefin
 /** What report_review tells the model it does. The rules are applied by readReview, with every reason at once. */
 export const REVIEW_TOOL_DESCRIPTION =
 	"Store the review on this piece of work: the complete summary comment, any complete notes placed on lines " +
-	"of the change, and the NOT_MET observations you decided not to raise here. Each text is published exactly " +
-	"as you write it, or not at all; nothing is added, removed or joined. One call stores the whole review; " +
+	"of the change, and the NOT_MET observations you decided not to raise here. Each body supplies the complete " +
+	"guidance; the server never assembles prose from fragments. Provider safety formatting and a fixed disclosure " +
+	"still apply. One call stores the whole review; " +
 	"a later call replaces it. Speak only about the issues the named observations decided; incidental citation " +
 	"details do not authorize new assessments or requirements. Acknowledgements must name their own support. " +
-	"A review with any wrong part is refused whole, with every reason, so it can be " +
+	"Invalid support, eligibility or placement refuses the whole review, with every reason, so it can be " +
 	"corrected and sent again.";
 
 /** An id list the schema can offer: the ids themselves when there are any, since an empty enum is invalid. */

@@ -645,6 +645,74 @@ A complete summary may draw on several practices, and its exact contributors dec
 A policy refusal is instead persisted as `SUPPRESSED` with a server-owned reason.
 These outcomes must not be conflated with a human rejection.
 
+### Copies on the reviewed work are immutable
+
+A dispatch package seals its text before it is persisted.
+An automatic package also seals its own inline marker, derived from its job, and its final line-note text.
+Thus, a retry posts and reads back the same words.
+An approved package keys each line note by its position in the full approved package.
+A retry of one note keeps that note's original position.
+
+Line notes are only appended.
+Hephaestus never edits, deletes, minimizes or reposts a copy, whether it is resolved, outdated or answered by a person.
+An empty package writes nothing inline, so it never clears what earlier packages placed.
+
+A copy counts as a delivered note only when all of these match:
+
+- The marker and delivery key.
+- The exact body that the package renders.
+- The native anchor, or static location metadata for an ordinary fallback note.
+- The native identity that authored it, read in the same response.
+
+On GitHub, the viewer must have authored the copy.
+The copy must also match the original commit and the original lines.
+
+On GitLab, the note author must be the current user.
+The note position must be on the reviewed commit, at the path and end line.
+This GitLab adapter places a single-line note at the end line.
+An ordinary fallback note proves only its exact body and static path and line metadata.
+
+Historical packages are rendered as they were posted.
+For example, an older automatic GitHub thread carried only its key.
+A copy that carries the key without all of these facts is a conflict.
+A conflict is neither delivered nor absent, so nothing is created next to it.
+A scan that is incomplete stops the create.
+Examples are a page budget, a lost cursor, or a missing connection, page flag or identity.
+
+Each note has a receipt in `delivered_placements`.
+`writeMayHaveStarted: false` proves that no copy can exist from this attempt.
+The create was unrequested or positively refused before saving a note.
+`true` means that a request may have left.
+A missing value is unknown.
+
+Before each create, a lease-guarded update stores the whole receipt and marks the attempted notes as unknown.
+GitLab fences each create individually and stores the whole receipt.
+GitHub stores the whole review batch in one update.
+If the lease is lost, no request is sent.
+
+A note whose creation remains unconfirmed is only read back, never requested again.
+A note is acknowledged only by a durable native id.
+A provider answer without an id stays unknown.
+An unknown note keeps the dispatch `UNCERTAIN`.
+The dispatch is rechecked on the unconfirmed-write schedule, also past the retry budget.
+
+A failed attempt stores the receipt it holds, never the array it loaded.
+On GitLab, the out-of-hunk fallback is allowed only after a specific rejection.
+The rejection must be a valid line-code validation answer with no top-level error and an explicit `note: null`.
+This proves that no note was saved.
+The fallback is then fenced on its own.
+
+A summary is found again only as the exact provider-formatted body.
+The authenticated identity must have written it.
+A complete scan with no marker-bearing comment is the only evidence of absence.
+A pull request or issue review job recovers through its persisted dispatch.
+A marker lookup alone never marks the job delivered.
+
+Known limits:
+
+- A historical note recorded without a key, or with a body that no longer matches, is only read back.
+- A lost-response copy may stay unknown after credential replacement. Stored native acknowledgements remain known.
+
 Autonomy is only the authority step.
 The glossary owns it in full.
 [Practice autonomy](./practice-review-glossary.mdx#practice-autonomy) owns the resolution chain, three values, and approval lifecycle.

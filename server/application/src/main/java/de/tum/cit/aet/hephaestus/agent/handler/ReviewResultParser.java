@@ -379,19 +379,30 @@ public class ReviewResultParser {
      * @param withheld the observations the composer chose not to render, for the ledger to record as SUPPRESSED
      * @param summaryContributors occurrence keys of the observations the summary note was written from; each line
      *     note carries its own. Null only on a dispatch package persisted before they were recorded
+     * @param inlineMarker the marker every inline copy of this package carries, sealed with it; null on a package
+     *     persisted before it was recorded, whose copies keep the historical marker and readback
      */
     public record DeliveryContent(
             @Nullable String mrNote,
             List<DiffNote> diffNotes,
             List<WithheldObservation> withheld,
-            @Nullable List<String> summaryContributors) {
+            @Nullable List<String> summaryContributors,
+            @Nullable String inlineMarker) {
+        public DeliveryContent(
+                @Nullable String mrNote,
+                List<DiffNote> diffNotes,
+                List<WithheldObservation> withheld,
+                @Nullable List<String> summaryContributors) {
+            this(mrNote, diffNotes, withheld, summaryContributors, null);
+        }
+
         public DeliveryContent withDiffNotes(List<DiffNote> notes) {
-            return new DeliveryContent(mrNote, notes, withheld, summaryContributors);
+            return new DeliveryContent(mrNote, notes, withheld, summaryContributors, inlineMarker);
         }
 
         /** The same decisions with nothing to place on the work. */
         public DeliveryContent withoutNote() {
-            return new DeliveryContent(null, List.of(), withheld, List.of());
+            return new DeliveryContent(null, List.of(), withheld, List.of(), inlineMarker);
         }
 
         /** Every observation some part of the content was written from; null on a pre-upgrade package. */

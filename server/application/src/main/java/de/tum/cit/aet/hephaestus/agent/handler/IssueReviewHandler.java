@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedReview;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
@@ -55,7 +54,6 @@ public class IssueReviewHandler implements JobTypeHandler {
     private final FeedbackCompositionResultParser compositionResultParser;
     private final ReviewOutputService deliveryService;
     private final InContextDeliveryGate inContextDeliveryGate;
-    private final PullRequestCommentPoster commentPoster;
     private final FeedbackLedgerRecorder feedbackLedgerRecorder;
     private final PracticeFeedbackDeliveryPolicy deliveryPolicy;
     private final PracticeFeedbackCommentFormatter commentFormatter;
@@ -71,7 +69,6 @@ public class IssueReviewHandler implements JobTypeHandler {
             FeedbackCompositionResultParser compositionResultParser,
             ReviewOutputService deliveryService,
             InContextDeliveryGate inContextDeliveryGate,
-            PullRequestCommentPoster commentPoster,
             FeedbackLedgerRecorder feedbackLedgerRecorder,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
             PracticeFeedbackCommentFormatter commentFormatter,
@@ -85,7 +82,6 @@ public class IssueReviewHandler implements JobTypeHandler {
         this.compositionResultParser = compositionResultParser;
         this.deliveryService = deliveryService;
         this.inContextDeliveryGate = inContextDeliveryGate;
-        this.commentPoster = commentPoster;
         this.feedbackLedgerRecorder = feedbackLedgerRecorder;
         this.deliveryPolicy = deliveryPolicy;
         this.commentFormatter = commentFormatter;
@@ -252,8 +248,8 @@ public class IssueReviewHandler implements JobTypeHandler {
     }
 
     @Override
-    public ExistingDeliveryLookup findExistingDelivery(AgentJob job) {
-        return commentPoster.findExistingSummaryComment(job);
+    public boolean reconcilesDeliveryState() {
+        return true;
     }
 
     void postIssueNote(

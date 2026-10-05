@@ -72,9 +72,6 @@ class IssueReviewHandlerTest extends BaseUnitTest {
     private ReviewOutputService deliveryService;
 
     @Mock
-    private PullRequestCommentPoster commentPoster;
-
-    @Mock
     private FeedbackLedgerRecorder feedbackLedgerRecorder;
 
     @Mock
@@ -106,7 +103,6 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                 deliveryService,
                 InContextDeliveryGateFixtures.gate(
                         practiceRepository, mock(ObservationRepository.class), feedbackLedgerRecorder),
-                commentPoster,
                 feedbackLedgerRecorder,
                 mock(PracticeFeedbackDeliveryPolicy.class),
                 mock(PracticeFeedbackCommentFormatter.class),

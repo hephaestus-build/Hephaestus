@@ -31,7 +31,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.feedback.ProposedPlacement;
-import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation.ProviderCopy;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
@@ -697,46 +696,53 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
     }
 
     @Test
-    void shouldReportAnAutomaticInlineNotePostedWithoutAnIdAsUnresolved() {
+    void shouldNotDeliverAnAutomaticInlineNoteReportedWithoutAnIdUntilALookupFindsIt() {
         String key = "review:" + job.getId();
         provider.omitIds = true;
-        dispatchAutomatic("", List.of(note));
+        PracticeFeedbackDispatchService.Result first = dispatchAutomatic("", List.of(note));
+        provider.omitIds = false;
         feedbackDeliveryService.recordAutomaticPackage(job, dispatch(key));
-        ledgerRecorder.recordWithoutConversation(
-                job,
-                new DeliveryContent("", List.of(note), List.of(), List.of()),
-                ArtifactKinds.PULL_REQUEST,
-                dispatchService.deliveredSignals(dispatch(key)),
-                null,
-                null);
-        invalidate();
-        settleCorrections();
+
+        assertThat(first.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        assertThat(first.landed()).isFalse();
+        assertThat(ledgerPlacements(0)).isEmpty();
+
+        recover(key);
+        feedbackDeliveryService.recordAutomaticPackage(job, dispatch(key));
 
         assertThat(dispatch(key).getState()).isEqualTo(FeedbackDispatchState.SENT);
-        assertThat(ledgerPlacements(0)).containsExactly("INLINE (no id)");
-        assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.UNRESOLVED);
+        assertThat(provider.notes.values()).containsExactly("note-1");
+        assertThat(ledgerPlacements(0)).containsExactly("INLINE note-1");
     }
 
     @Test
-    void shouldCorrectAnApprovedSummaryButReportItsInlineNotePostedWithoutAnIdAsUnresolved() {
+    void shouldCorrectAnApprovedSummaryAndKeepItsInlineNoteReportedWithoutAnIdUnplacedUntilFound() {
         Feedback approved = approvedPackage(List.of(
                 ProposedPlacement.summary("Approved: closes #1 already."),
                 new ProposedPlacement(PlacementType.INLINE, "Closes #1 already.", "src/Main.java", 3, null, null)));
+        String key = "approved:" + approved.getId();
         provider.omitIds = true;
-        PracticeFeedbackDispatchService.Result sent = dispatchService.dispatchApproved(job, approved);
+        PracticeFeedbackDispatchService.Result first = dispatchService.dispatchApproved(job, approved);
+        provider.omitIds = false;
+        ledgerRecorder.recordApprovedPlacements(
+                approved, first.externalRef(), first.externalUrl(), first.deliveredSignals());
+
+        assertThat(first.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        assertThat(ledgerPlacements(1)).containsExactly("SUMMARY summary-1");
+
+        PracticeFeedbackDispatchService.Result sent = recover(key);
         dispatchService.projectRecovered(
-                dispatch("approved:" + approved.getId()),
+                dispatch(key),
                 () -> ledgerRecorder.recordApprovedPlacements(
                         approved, sent.externalRef(), sent.externalUrl(), sent.deliveredSignals()));
-        ledgerRecorder.recordApprovedPlacements(
-                approved, sent.externalRef(), sent.externalUrl(), sent.deliveredSignals());
         invalidate();
         settleCorrections();
 
-        assertThat(dispatch("approved:" + approved.getId()).getState()).isEqualTo(FeedbackDispatchState.SENT);
-        assertThat(ledgerPlacements(1)).containsExactlyInAnyOrder("SUMMARY summary-1", "INLINE (no id)");
+        assertThat(sent.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
+        assertThat(provider.notes.values()).containsExactly("note-1");
+        assertThat(ledgerPlacements(1)).containsExactlyInAnyOrder("SUMMARY summary-1", "INLINE note-1");
         assertThat(provider.comments.get("summary-1")).containsOnlyOnce("> **Correction:**");
-        assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.UNRESOLVED);
+        assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.INLINE_REMAINS);
     }
 
     private List<@Nullable String> ledgerPlacements(int position) {
@@ -910,7 +916,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
     }
 
     @Test
-    void shouldNotRequestInlineNotesAgainPastTheAttemptBudget() {
+    void shouldReadALostInlineNoteBackPastTheAttemptBudgetWithoutRequestingItAgain() {
         String key = "review:" + job.getId();
         provider.failAfterAccept = true;
         dispatchAutomatic("", List.of(note));
@@ -923,12 +929,31 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
 
         recover(key);
 
-        assertThat(dispatch(key).getState()).isEqualTo(FeedbackDispatchState.FAILED);
+        assertThat(dispatch(key).getState()).isEqualTo(FeedbackDispatchState.SENT);
         assertThat(provider.notes.values()).containsExactly("note-1");
         feedbackDeliveryService.recordAutomaticPackage(job, dispatch(key));
         invalidate();
         settleCorrections();
-        assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.UNRESOLVED);
+        assertThat(active(observation).getProviderCopy()).isEqualTo(ProviderCopy.INLINE_REMAINS);
+    }
+
+    @Test
+    void shouldKeepLookingPastTheAttemptBudgetWhileALostInlineNoteCannotBeFound() {
+        String key = "review:" + job.getId();
+        provider.failAfterAccept = true;
+        dispatchAutomatic("", List.of(note));
+        provider.failAfterAccept = false;
+        provider.notes.clear();
+        jdbc.update(
+                "UPDATE feedback_dispatch SET attempt_count = ? WHERE destination_key = ?",
+                PracticeFeedbackDispatchService.MAX_ATTEMPTS,
+                key);
+
+        recover(key);
+
+        // An empty complete scan proves nothing about a request that may still land: nothing is requested again.
+        assertThat(dispatch(key).getState()).isEqualTo(FeedbackDispatchState.UNCERTAIN);
+        assertThat(provider.notes).isEmpty();
     }
 
     @Test
@@ -954,7 +979,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
 
         recover(key);
 
-        assertThat(dispatch(key).getState()).isEqualTo(FeedbackDispatchState.FAILED);
+        assertThat(dispatch(key).getState()).isEqualTo(FeedbackDispatchState.SENT);
         assertThat(provider.notes.values()).containsExactly("note-1");
     }
 
@@ -1126,15 +1151,18 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         }
 
         @Override
-        public ExistingSummaryLookup findExistingSummary(FeedbackTarget target, String marker) {
+        public ExistingSummaryLookup findExistingSummary(FeedbackTarget target, FeedbackContent expected) {
             if (lookupFails) {
                 return ExistingSummaryLookup.unknown();
             }
-            return comments.entrySet().stream()
-                    .filter(comment -> comment.getValue().contains(marker))
-                    .findFirst()
-                    .map(comment -> ExistingSummaryLookup.found(new SummaryHandle(comment.getKey())))
-                    .orElse(ExistingSummaryLookup.absent());
+            boolean marked = false;
+            for (Map.Entry<String, String> comment : comments.entrySet()) {
+                if (comment.getValue().equals(expected.externalBody())) {
+                    return ExistingSummaryLookup.found(new SummaryHandle(comment.getKey()));
+                }
+                marked |= comment.getValue().contains(expected.marker());
+            }
+            return marked ? ExistingSummaryLookup.unknown() : ExistingSummaryLookup.absent();
         }
 
         @Override
@@ -1147,13 +1175,19 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         }
 
         @Override
-        public InlineResult postInlineFeedback(FeedbackTarget target, List<InlineFeedback> feedback) {
+        public InlineResult postImmutablePackage(
+                FeedbackTarget target, List<InlineFeedback> feedback, Readback readback, WriteFence fence) {
+            if (!fence.beforeCreate(feedback, List.of())) {
+                return InlineResult.of(feedback.stream()
+                        .map(item -> DeliveredSignal.notSent(item.deliveryKey(), item.anchor()))
+                        .toList());
+            }
             duringWrite.run();
             List<DeliveredSignal> signals = new ArrayList<>();
             for (InlineFeedback item : feedback) {
                 String id = "note-" + (notes.size() + 1);
                 notes.put(String.valueOf(item.deliveryKey()), id);
-                // What an adapter reports when the provider accepted the note but its response names no comment.
+                // An adapter that reports a placement without naming its comment.
                 signals.add(new DeliveredSignal(
                         item.deliveryKey(), item.anchor(), Disposition.POSTED, omitIds ? null : id, null));
             }
@@ -1161,24 +1195,17 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
                 throw new FeedbackDeliveryException("Response lost after the provider accepted the notes");
             }
             if (failAfterAccept) {
-                // What a real adapter returns when the mutation's response is lost: the key, marked failed.
-                return new InlineResult(
-                        0,
-                        feedback.size(),
-                        feedback.stream()
-                                .map(item -> new DeliveredSignal(
-                                        item.deliveryKey(), item.anchor(), Disposition.FAILED, null, null))
-                                .toList());
+                // What a real adapter returns when the mutation's response is lost: the keys, unconfirmed.
+                return InlineResult.of(feedback.stream()
+                        .map(item -> DeliveredSignal.attempted(item.deliveryKey(), item.anchor()))
+                        .toList());
             }
-            return new InlineResult(signals.size(), 0, signals);
+            return InlineResult.of(signals);
         }
 
         @Override
-        public void clearStaleFeedback(FeedbackTarget target, String marker) {}
-
-        @Override
         public @Nullable List<DeliveredSignal> findPosted(
-                FeedbackTarget target, List<InlineFeedback> feedback, boolean immutablePackage) {
+                FeedbackTarget target, List<InlineFeedback> feedback, Readback readback) {
             if (lookupFails) {
                 return null;
             }

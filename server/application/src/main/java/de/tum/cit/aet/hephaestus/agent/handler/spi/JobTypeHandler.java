@@ -86,7 +86,12 @@ public interface JobTypeHandler {
         return ExistingDeliveryLookup.unknown();
     }
 
-    default boolean reconcilesMoreThanOneProviderObject() {
+    /**
+     * Whether {@link #deliver} settles a delivery it may already have made from its own persisted state, so
+     * recovery calls it directly instead of asking {@link #findExistingDelivery} first. A marker alone cannot
+     * prove what such a handler delivered.
+     */
+    default boolean reconcilesDeliveryState() {
         return false;
     }
 }

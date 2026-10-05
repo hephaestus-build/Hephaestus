@@ -223,7 +223,8 @@ public class AgentJobLifecycleService {
      *
      * <p>The crash may have happened after the comment posted but before {@code deliveryCommentId} was
      * persisted, so the handler is asked first whether a delivery already landed. An {@code UNKNOWN}
-     * answer does not post: that would risk exactly the duplicate this check exists to prevent.
+     * answer does not post: that would risk exactly the duplicate this check exists to prevent. A handler
+     * that reconciles its own delivery state is not asked; its delivery settles what it may already have made.
      *
      * @param claimedAttempts the post-increment {@code delivery_attempts} this call's CAS just wrote,
      *     which fences its terminal write (see {@link
@@ -233,6 +234,9 @@ public class AgentJobLifecycleService {
      */
     boolean recoverStuckDelivery(AgentJob job, short claimedAttempts) {
         JobTypeHandler handler = handlerRegistry.getHandler(job.getJobType());
+        if (handler.reconcilesDeliveryState()) {
+            return redeliver(handler, job, claimedAttempts);
+        }
 
         ExistingDeliveryLookup existing;
         try {
@@ -253,7 +257,7 @@ public class AgentJobLifecycleService {
             return false;
         }
 
-        if (existing.kind() == ExistingDeliveryLookup.Kind.FOUND && !handler.reconcilesMoreThanOneProviderObject()) {
+        if (existing.kind() == ExistingDeliveryLookup.Kind.FOUND) {
             String existingCommentId = existing.commentId();
             boolean won =
                     fencedDeliveryWrite(job.getId(), DeliveryStatus.DELIVERED, existingCommentId, claimedAttempts);
@@ -265,7 +269,10 @@ public class AgentJobLifecycleService {
             }
             return won;
         }
+        return redeliver(handler, job, claimedAttempts);
+    }
 
+    private boolean redeliver(JobTypeHandler handler, AgentJob job, short claimedAttempts) {
         try {
             handler.deliver(job);
             boolean won = fencedDeliveryWrite(

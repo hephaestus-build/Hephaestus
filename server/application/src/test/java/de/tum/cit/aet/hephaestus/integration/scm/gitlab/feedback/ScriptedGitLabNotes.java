@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabBackwardPageInfo;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedCommentThreads;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGraphQlClient;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGraphQlClient.Request;
@@ -18,6 +17,8 @@ import reactor.core.publisher.Mono;
 
 /** The real {@link GitLabSummaryChannel} over a GitLab whose issue and merge request notes the test controls. */
 public final class ScriptedGitLabNotes {
+
+    private static final String BOT = "gid://gitlab/User/1";
 
     private final ScriptedCommentThreads threads = new ScriptedCommentThreads("gid://gitlab/Note/");
     private final SummaryChannel channel;
@@ -60,16 +61,22 @@ public final class ScriptedGitLabNotes {
         };
     }
 
+    /** Every scripted note was written through the channel, so the identity it authenticates as wrote it. */
     private Mono<ClientGraphQlResponse> notes(String path, String noteable) {
         return threads.read(
                 noteable,
                 notes -> Map.of(
-                        path + ".nodes",
-                        notes.stream()
-                                .map(note -> Map.of("id", note.id(), "body", note.body()))
-                                .toList(),
-                        path + ".pageInfo",
-                        new GitLabBackwardPageInfo(false, null)));
+                        "currentUser.id",
+                        BOT,
+                        path,
+                        Map.of(
+                                "nodes",
+                                notes.stream()
+                                        .map(note -> Map.of(
+                                                "id", note.id(), "body", note.body(), "author", Map.of("id", BOT)))
+                                        .toList(),
+                                "pageInfo",
+                                Map.of("hasPreviousPage", false))));
     }
 
     private static int iid(Request request) {
