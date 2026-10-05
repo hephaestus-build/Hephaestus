@@ -9,7 +9,6 @@ import { toFeedbackCard } from "@/components/practice-profile/practice-feedback-
 import type { FeedbackUsefulness } from "@/components/practice-vocabulary/feedback-usefulness-defs";
 import type {
 	FeedbackBand,
-	FeedbackComment,
 	FeedbackRatingProps,
 	PracticeFeedbackCardEntry,
 	ResolvingAnswer,
@@ -38,22 +37,28 @@ export interface InAppFeedback {
 
 /**
  * The response a press on a rating writes: the pressed rating, keeping the resolution and the
- * comment the reader gave before; pressed on the rating already chosen, the rating withdrawn,
- * comment and all. A dispute stands or falls with its comment, so withdrawing drops it too — the
- * server rejects a DISPUTED response that carries no comment. The comment band is open exactly
- * while a rating stands.
+ * comment; pressed on the rating already chosen, the rating withdrawn with its note. A dispute is
+ * not the rating's to take back, so it keeps its sentence, which the server requires.
  */
 export function nextRating(
 	current: FeedbackResponseRequest | undefined,
 	pressed: FeedbackUsefulness,
 ): FeedbackResponseRequest {
 	const withdrawing = current?.usefulness === pressed;
-	const resolution = current?.resolution;
+	const disputed = current?.resolution === "DISPUTED";
 	return {
 		usefulness: withdrawing ? undefined : pressed,
-		resolution: withdrawing && resolution === "DISPUTED" ? undefined : resolution,
-		comment: withdrawing ? undefined : current?.comment,
+		resolution: current?.resolution,
+		comment: withdrawing && !disputed ? undefined : current?.comment,
 	};
+}
+
+/**
+ * Whether a rating opens its note band. A response has one comment and a dispute holds it, so a
+ * note would replace the sentence that admins read.
+ */
+export function opensNoteBand(response: FeedbackResponseRequest): boolean {
+	return response.usefulness !== undefined && response.resolution !== "DISPUTED";
 }
 
 /**
@@ -73,19 +78,15 @@ export function nextResolution(
 	};
 }
 
-/**
- * The response Send writes: the comment added under the rating it was written for. "Not accurate"
- * is the wire's dispute, which needs the sentence the band just collected.
- */
+/** The response Send writes: the comment added under the rating it was written for. */
 export function withComment(
 	current: FeedbackResponseRequest | undefined,
-	{ reason, comment }: FeedbackComment,
+	comment: string,
 ): FeedbackResponseRequest {
-	const text = comment.trim() || undefined;
 	return {
 		usefulness: current?.usefulness,
-		resolution: reason === "not-accurate" && text !== undefined ? "DISPUTED" : current?.resolution,
-		comment: text,
+		resolution: current?.resolution,
+		comment: comment.trim() || undefined,
 	};
 }
 
@@ -109,10 +110,7 @@ interface OpenBand {
 	band: FeedbackBand;
 }
 
-/**
- * The control a write came from. The mutation cannot say: its variables are the whole response,
- * and "Not accurate" and the dispute band both write DISPUTED with a comment.
- */
+/** The control a write came from. The mutation cannot say: its variables are the whole response. */
 interface WriteFrom {
 	feedbackId: string;
 	control: ResponseControl;
@@ -176,12 +174,12 @@ export function useInAppFeedback({
 	const rate = (feedbackId: string, usefulness: FeedbackUsefulness) => {
 		const next = nextRating(responseOf(feedbackId), usefulness);
 		writeFrom(feedbackId, "rating", next);
-		setOpenBand(next.usefulness === undefined ? undefined : { feedbackId, band: "comment" });
+		setOpenBand(opensNoteBand(next) ? { feedbackId, band: "comment" } : undefined);
 	};
 	const resolve = (feedbackId: string, answer: ResolvingAnswer) => {
 		writeFrom(feedbackId, "answer", nextResolution(responseOf(feedbackId), answer));
 	};
-	const send = (feedbackId: string, comment: FeedbackComment) => {
+	const send = (feedbackId: string, comment: string) => {
 		writeFrom(feedbackId, "send", withComment(responseOf(feedbackId), comment));
 		setOpenBand(undefined);
 	};

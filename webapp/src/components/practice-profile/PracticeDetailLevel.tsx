@@ -34,6 +34,7 @@ import { hasText } from "@/lib/text";
 import { newestFirst } from "./practice-feedback-cards";
 import { FeedbackEmpty, LabelledBlock, NoDescription } from "./practice-profile-blocks";
 import { PRACTICE_TABS, type PracticeTab } from "./practice-profile-search";
+import { requestedReviewNote } from "./requested-review-note";
 
 const TAB_LABELS: Record<PracticeTab, string> = {
 	observations: "Observations",
@@ -169,6 +170,7 @@ export function PracticeDetailLevel({
 			/>
 		);
 	} else if (practice) {
+		const requestedNote = requestedReviewNote(practice, runs);
 		body = (
 			<Tabs
 				value={tab}
@@ -195,6 +197,7 @@ export function PracticeDetailLevel({
 						title="Observations"
 						description="Reviews of your work that reached this practice, newest first: why each was noted, the evidence, and the next step."
 					>
+						{hasText(requestedNote) && <p className="max-w-2xl text-sm">{requestedNote}</p>}
 						<ReviewRunFeed
 							feed={feed}
 							runs={runs}

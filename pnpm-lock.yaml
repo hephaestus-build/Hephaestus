@@ -168,6 +168,9 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: 1.0.0
         version: 1.0.0(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.31.0(supports-color@8.1.1)(zod@4.4.3))(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(ws@8.21.3)(zod@4.4.3)
+      '@electric-sql/pglite':
+        specifier: 0.5.8
+        version: 0.5.8
       '@nats-io/jetstream':
         specifier: 3.4.0
         version: 3.4.0
@@ -2389,6 +2392,9 @@ packages:
     peerDependenciesMeta:
       open-ask-ai:
         optional: true
+
+  '@electric-sql/pglite@0.5.8':
+    resolution: {integrity: sha512-n9tsbUOhwx2epK1V0ZG9Ar4SHWUju04dhmzZXiSBXwBoleOvIfals33NAaWgagQVAL4Rbvx/Ptsu3P+pA09f6Q==}
 
   '@emnapi/core@1.11.0':
     resolution: {integrity: sha512-l9Oo58x0HOP5znGzVhYW9U3e5wVuA4LAZU2AGezTmkhO1CgQRFDhDg4nneHsu/t3WniXg9QrG2nIXL/ZS8ln8Q==}
@@ -15415,6 +15421,8 @@ snapshots:
       - uglify-js
       - utf-8-validate
       - webpack-cli
+
+  '@electric-sql/pglite@0.5.8': {}
 
   '@emnapi/core@1.11.0':
     dependencies:

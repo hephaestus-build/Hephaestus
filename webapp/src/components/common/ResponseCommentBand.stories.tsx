@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent } from "storybook/test";
 
 import { ResponseCommentBand } from "./ResponseCommentBand";
 
@@ -32,7 +32,7 @@ export const Optional: Story = {
 		const field = canvas.getByRole("textbox", { name: args.label });
 		await expect(field).not.toBeRequired();
 		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
-		await expect(args.onSend).toHaveBeenCalledWith({ comment: "" });
+		await expect(args.onSend).toHaveBeenCalledWith("");
 		await userEvent.type(field, "   The split was the right call.");
 		// Leading blanks never reach the comment.
 		await expect(field).toHaveValue("The split was the right call.");
@@ -41,56 +41,33 @@ export const Optional: Story = {
 	},
 };
 
-/** A reason and a required sentence: Send does nothing until one is typed. */
-export const ReasonRequired: Story = {
+/** A required sentence the admins read: Send does nothing until one is typed, and the field says who reads it. */
+export const Required: Story = {
 	args: {
-		name: "What was not helpful",
-		label: "What was missed?",
-		placeholder: "One or two sentences on what is off",
+		name: "Why you disagree",
+		label: "What is wrong in this feedback?",
+		placeholder: "One or two sentences on what is wrong",
 		required: true,
-		reasons: [
-			{ value: "not-accurate", label: "Not accurate" },
-			{ value: "not-useful", label: "Not useful" },
-		],
+		audience: "Workspace admins read your sentence, not the card.",
 	},
 	play: async ({ args, canvas }) => {
 		const field = canvas.getByRole("textbox", { name: args.label });
 		await expect(field).toBeRequired();
-		const reasons = within(canvas.getByRole("group", { name: "Reason" })).getAllByRole("button");
-		await expect(reasons.map((reason) => reason.textContent)).toStrictEqual([
-			"Not accurate",
-			"Not useful",
-		]);
+		await expect(field).toHaveAccessibleDescription(args.audience);
 		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
 		await expect(args.onSend).not.toHaveBeenCalled();
-		await userEvent.click(canvas.getByRole("button", { name: "Not useful" }));
-		await userEvent.type(field, "Each of these was already one concern.");
+		await userEvent.type(field, "#17 already split it.");
 		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
-		await expect(args.onSend).toHaveBeenCalledWith({
-			reason: "not-useful",
-			comment: "Each of these was already one concern.",
-		});
+		await expect(args.onSend).toHaveBeenCalledWith("#17 already split it.");
 	},
 };
 
 /** The comment is on its way: Send says so and every control waits. */
 export const Pending: Story = {
-	args: {
-		isPending: true,
-		sending: true,
-		reasons: [
-			{ value: "not-accurate", label: "Not accurate" },
-			{ value: "not-useful", label: "Not useful" },
-		],
-	},
+	args: { isPending: true, sending: true },
 	play: async ({ args, canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Sending…" })).toBeDisabled();
 		await expect(canvas.getByRole("button", { name: "Skip" })).toBeDisabled();
 		await expect(canvas.getByRole("textbox", { name: args.label })).toBeDisabled();
-		for (const reason of within(canvas.getByRole("group", { name: "Reason" })).getAllByRole(
-			"button",
-		)) {
-			await expect(reason).toBeDisabled();
-		}
 	},
 };

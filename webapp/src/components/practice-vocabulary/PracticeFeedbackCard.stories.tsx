@@ -303,44 +303,25 @@ export const HelpfulNoteOpen: Story = {
 		const field = canvas.getByRole("textbox", { name: "What worked about this feedback?" });
 		await expect(field).toBeVisible();
 		await expect(field).not.toBeRequired();
-		await expect(canvas.queryByRole("group", { name: "Reason" })).toBeNull();
 		await userEvent.type(field, "The split into two merge requests was the right call.");
 		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
-		await expect(args.onSendComment).toHaveBeenCalledWith({
-			comment: "The split into two merge requests was the right call.",
-		});
+		await expect(args.onSendComment).toHaveBeenCalledWith(
+			"The split into two merge requests was the right call.",
+		);
 		await userEvent.click(canvas.getByRole("button", { name: "Skip" }));
 		await expect(args.onSkipComment).toHaveBeenCalledOnce();
 	},
 };
 
-/**
- * "Not helpful" asks for a reason and a sentence; the sentence is what the dispute has to carry.
- */
-export const NotHelpfulReasonOpen: Story = {
+/** "Not helpful" opens an optional note, as "Helpful" does; Disagree is the one path to a dispute. */
+export const NotHelpfulNoteOpen: Story = {
 	args: { card: { ...card, state: "open" }, usefulness: "UNHELPFUL", openBand: "comment" },
 	play: async ({ args, canvas }) => {
 		const field = canvas.getByRole("textbox", { name: "Why was this not helpful?" });
-		await expect(field).toBeRequired();
-		const reasons = within(canvas.getByRole("group", { name: "Reason" })).getAllByRole("button");
-		await expect(reasons.map((reason) => reason.textContent)).toStrictEqual([
-			"Not accurate",
-			"Not useful",
-			"Already doing this",
-		]);
-		// Only "Not accurate" disputes the card, and only then is the sentence read by the admins.
-		await expect(field).not.toHaveAccessibleDescription(/workspace admins/u);
-		await userEvent.click(canvas.getByRole("button", { name: "Not accurate" }));
-		await expect(field).toHaveAccessibleDescription(
-			/Workspace admins read your sentence, not the card/u,
-		);
-		await userEvent.click(canvas.getByRole("button", { name: "Already doing this" }));
+		await expect(field).not.toBeRequired();
 		await userEvent.type(field, "Each of these was already one concern.");
 		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
-		await expect(args.onSendComment).toHaveBeenCalledWith({
-			reason: "already-doing",
-			comment: "Each of these was already one concern.",
-		});
+		await expect(args.onSendComment).toHaveBeenCalledWith("Each of these was already one concern.");
 	},
 };
 

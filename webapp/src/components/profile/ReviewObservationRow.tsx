@@ -349,9 +349,9 @@ function ObservationResponse({
 					label="Why do you dispute this?"
 					placeholder="One or two sentences on what is wrong"
 					required
-					audience={() => DISPUTE_AUDIENCE}
+					audience={DISPUTE_AUDIENCE}
 					isPending={isPending}
-					onSend={({ comment }) => {
+					onSend={(comment) => {
 						const sentence = comment.trim();
 						if (hasText(sentence)) {
 							record(sentence);
@@ -367,7 +367,7 @@ function ObservationResponse({
 					label="Anything to add?"
 					placeholder="Optional: a note to yourself"
 					isPending={isPending}
-					onSend={({ comment }) => record(comment.trim() || undefined)}
+					onSend={(comment) => record(comment.trim() || undefined)}
 					onSkip={() => record(undefined)}
 				/>
 			)}
