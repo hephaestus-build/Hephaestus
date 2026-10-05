@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.82.0
+
+### Minor Changes
+
+- Developers can open **Across the workspace** under **Practice profile** in the sidebar. The page shows where the developers in the workspace stand in each practice group. It counts developers and never names one. **You** marks your own part of each bar that shows its parts.
+
+  Each bar counts every developer by the standing that their Practice profile shows now. Thus, your marker always agrees with your profile. A bar shows its parts only when each part holds at least four developers. Thus, each part stands for at least three other developers, whoever reads it, and every reader sees the same bars. A bar is also held back if a comparison with its group, or of the groups together, would single out one to three developers. A held back bar shows at most how many developers it counts, with **Split held back** under it.
+
+  Four figures show your own values beside the typical range of the workspace, from seven developers. They count pieces of work reviewed, practices going well, practices needing attention, and open feedback. **Last 30 days**, **Last 90 days**, or **All time** changes the first three. Open feedback counts what is open now.
+
+  Select a group to see its bar and a bar for each of its practices. To see your own standing, trend, and next step there, select **Open in your Practice profile**.
+
+### Patch Changes
+
+- On your Practice profile, your standing, your trend, and the resolution of feedback by your work count only reviews that run on their own. A review that you request and a Past work campaign still show their results in your reviews. They do not replace the result of an earlier review of the same work. Thus, a review that you request cannot resolve feedback on its own. There is one exception: a practice that no review judged on its own takes its standing from the other reviews, and says so. When a practice reads **Needs attention** but your newest review of it is one you requested that found no problem, its **Observations** tab says that a requested review is evidence only.
+- A standing on your Practice profile shows how many pieces of your work it is read from. If fewer than three pieces back it, it says that it is an early read. One problem on your newest piece of work gives the same standing whether one, two, three, or four pieces were reviewed. A trend that waits for more work now gives the correct number of pieces that it still needs.
+- To dispute a card on your Practice profile, select **Disagree** and say what is wrong. Workspace admins read your explanation. **Not helpful** no longer offers reasons: **Not accurate** disputed the card, and the other reasons were not recorded. A rating now opens an optional note, and taking back a rating keeps your dispute.
+- Feedback on your Practice profile now cites each piece of work by its latest review that ran on its own. A review that you request takes its place only when it finds that the problem is gone. A Past work campaign never takes its place. Before, such a later review could hold back feedback about work that was already judged.
+- Heph stays out of a member's workspace navigation until a usable Heph model is configured. Administrators can still open AI models to set it up. Until then, that workspace's setup page asks for your AI choice without Heph speaking, and its choice cards list practice feedback rather than Heph. Your AI choice still applies in all your workspaces.
+- On your Practice profile, older reviews load when you scroll to the end of the list. **View earlier reviews** stays for the keyboard. If older reviews cannot load, select **Retry**.
+- Your Practice profile keeps its layout while your feedback loads. A response on a feedback card shows "Saving…" only when it takes more than a second, and only on the control that you selected. A link to a practice group that no longer exists shows the same message in every panel.
+- Your Practice profile now says that a practice was met across your recent work, where it said that the practice held. The summary now uses the same word as the counts beside it.
+- A workspace whose stored credential the server can no longer decrypt no longer stops the other workspaces from starting, receiving events, or syncing, and no longer blocks their manual syncs. The server skips only that workspace and logs which connection needs a replacement credential. A manual sync of that workspace still reports the unreadable credential.
+- A feedback card that you mark as addressed or not applicable closes as **Marked by you** on a neutral card. Only a card that your work resolves turns green, and your card says that your next work confirms your answer.
+
 ## 0.81.0
 
 ### Minor Changes
