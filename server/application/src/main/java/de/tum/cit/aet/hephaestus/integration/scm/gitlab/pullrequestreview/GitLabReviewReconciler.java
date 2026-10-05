@@ -101,10 +101,6 @@ public class GitLabReviewReconciler {
                 .orElseGet(() -> createReview(reviewNativeId, pr, author, provider, earliestNoteCreatedAt, ctx));
     }
 
-    /**
-     * GitLab's own wording for the system notes it writes on a review decision, as the notes carry it;
-     * the only place either the sync or the note webhook learns who decided what, and when.
-     */
     public static final String APPROVED_SYSTEM_NOTE = "approved this merge request";
 
     public static final String UNAPPROVED_SYSTEM_NOTE = "unapproved this merge request";
