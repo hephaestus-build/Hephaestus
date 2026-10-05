@@ -40,28 +40,11 @@ const FIXED_COLUMNS = 3;
 
 const NO_HEADS: readonly PracticeTableHead[] = [];
 
-export interface PracticeTableProps<TRow> {
+interface PracticeTableBody<TRow> {
 	"aria-label": string;
-	/**
-	 * The table sorts by standing only; the caller orders `rows` under it and the Standing header
-	 * shows it.
-	 */
-	sort: SortDirection;
-	/** Called with the sort a press on the Standing header asks for. */
-	onSortChange: (sort: SortDirection) => void;
-	/**
-	 * Heads between Standing and the subject column, each over `span` columns (one by default); a
-	 * row renders the matching cells itself.
-	 */
-	heads?: readonly PracticeTableHead[];
-	/** "Practice", "Practice group". */
-	subjectHead: string;
+	"aria-describedby"?: string;
 	rows: readonly TRow[];
 	rowKey: (row: TRow) => string;
-	/**
-	 * One `PracticeTableRow` per row: `StandingCell`, the cells under `heads`, `SubjectCell`; the
-	 * row draws its own link at its end.
-	 */
 	renderRow: (row: TRow) => ReactNode;
 	/**
 	 * What the table says when there are none, in the shape every practice surface says it in:
@@ -76,26 +59,28 @@ export interface PracticeTableProps<TRow> {
 	loadingRow?: ReactNode;
 }
 
+export interface PracticeTableFrameProps<TRow> extends PracticeTableBody<TRow> {
+	head: ReactNode;
+	/** The empty state spans this many columns. */
+	columns: number;
+}
+
 /**
- * A table of practices or practice groups by standing, in the hairline frame the practice
- * surfaces draw around it: the sortable Standing column first, the subject and its sentence, and
- * the row's own "Open …" link last. The box scrolls sideways below its columns' width rather
- * than widening the page.
+ * The hairline frame every practice table is drawn in. It scrolls sideways below its columns'
+ * width instead of widening the page.
  */
-export function PracticeTable<TRow>({
+export function PracticeTableFrame<TRow>({
 	"aria-label": label,
-	sort,
-	onSortChange,
-	heads = NO_HEADS,
-	subjectHead,
+	"aria-describedby": describedBy,
+	head,
+	columns,
 	rows,
 	rowKey,
 	renderRow,
 	empty,
 	isLoading = false,
 	loadingRow,
-}: PracticeTableProps<TRow>) {
-	const columns = heads.reduce((sum, head) => sum + (head.span ?? 1), FIXED_COLUMNS);
+}: PracticeTableFrameProps<TRow>) {
 	let body: ReactNode;
 	if (isLoading) {
 		body =
@@ -125,33 +110,81 @@ export function PracticeTable<TRow>({
 		body = rows.map((row) => <Fragment key={rowKey(row)}>{renderRow(row)}</Fragment>);
 	}
 	return (
-		<div className="overflow-hidden rounded-xl border bg-background">
-			<Table aria-label={label} aria-busy={isLoading || undefined} className="min-w-152">
+		// `shrink-0`: an `overflow-hidden` flex item has no automatic minimum size, so a level's column
+		// would squash the frame and clip its last rows.
+		<div className="shrink-0 overflow-hidden rounded-xl border bg-background">
+			<Table
+				aria-label={label}
+				aria-describedby={describedBy}
+				aria-busy={isLoading || undefined}
+				className="min-w-152"
+			>
 				<TableHeader>
-					<TableRow>
-						<TableHead aria-sort={sort === "asc" ? "ascending" : "descending"} className="w-60">
-							<SortButton
-								sorted={sort}
-								onToggle={() => onSortChange(sort === "asc" ? "desc" : "asc")}
-								className="text-foreground"
-							>
-								Standing
-							</SortButton>
-						</TableHead>
-						{heads.map((head, index) => (
-							<TableHead key={index} colSpan={head.span}>
-								{head.label}
-							</TableHead>
-						))}
-						<TableHead>{subjectHead}</TableHead>
-						<TableHead className="w-32">
-							<span className="sr-only">Open</span>
-						</TableHead>
-					</TableRow>
+					<TableRow>{head}</TableRow>
 				</TableHeader>
 				<TableBody>{body}</TableBody>
 			</Table>
 		</div>
+	);
+}
+
+export interface PracticeTableProps<TRow> extends PracticeTableBody<TRow> {
+	/**
+	 * The table sorts by standing only; the caller orders `rows` under it and the Standing header
+	 * shows it.
+	 */
+	sort: SortDirection;
+	/** Called with the sort a press on the Standing header asks for. */
+	onSortChange: (sort: SortDirection) => void;
+	/**
+	 * Heads between Standing and the subject column, each over `span` columns (one by default); a
+	 * row renders the matching cells itself.
+	 */
+	heads?: readonly PracticeTableHead[];
+	/** "Practice", "Practice group". */
+	subjectHead: string;
+	/**
+	 * One `PracticeTableRow` per row: `StandingCell`, the cells under `heads`, `SubjectCell`; the
+	 * row draws its own link at its end.
+	 */
+	renderRow: (row: TRow) => ReactNode;
+}
+
+/** Practices or practice groups by standing: Standing, the subject, then the row's link. */
+export function PracticeTable<TRow>({
+	sort,
+	onSortChange,
+	heads = NO_HEADS,
+	subjectHead,
+	...body
+}: PracticeTableProps<TRow>) {
+	return (
+		<PracticeTableFrame
+			{...body}
+			columns={heads.reduce((sum, head) => sum + (head.span ?? 1), FIXED_COLUMNS)}
+			head={
+				<>
+					<TableHead aria-sort={sort === "asc" ? "ascending" : "descending"} className="w-60">
+						<SortButton
+							sorted={sort}
+							onToggle={() => onSortChange(sort === "asc" ? "desc" : "asc")}
+							className="text-foreground"
+						>
+							Standing
+						</SortButton>
+					</TableHead>
+					{heads.map((head, index) => (
+						<TableHead key={index} colSpan={head.span}>
+							{head.label}
+						</TableHead>
+					))}
+					<TableHead>{subjectHead}</TableHead>
+					<TableHead className="w-32">
+						<span className="sr-only">Open</span>
+					</TableHead>
+				</>
+			}
+		/>
 	);
 }
 
@@ -253,7 +286,7 @@ export function StandingCell({ standing, direction, support, scope }: StandingCe
 	return (
 		<TableCell className={cn(OPEN_ROW_BAR, "whitespace-normal")}>
 			<div className="flex min-w-0 flex-col items-start gap-1.5">
-				<StandingBadge standing={standing} scope={scope} />
+				<StandingBadge standing={standing} scope={scope} support={support} />
 				<TrendNote direction={direction} support={support} scope={scope} />
 			</div>
 		</TableCell>
@@ -267,12 +300,14 @@ export interface SubjectCellProps {
 	sentence?: FeedbackTextSegment[];
 	/** What else goes under the badge: the group table's list of events. */
 	children?: ReactNode;
+	/** `OPEN_ROW_BAR` where the subject is the row's first cell. */
+	className?: string;
 }
 
 /** The subject's pill with its sentence under it, wrapping rather than widening the column. */
-export function SubjectCell({ badge, sentence, children }: SubjectCellProps) {
+export function SubjectCell({ badge, sentence, children, className }: SubjectCellProps) {
 	return (
-		<TableCell className="whitespace-normal">
+		<TableCell className={cn("whitespace-normal", className)}>
 			<div className="flex min-w-0 flex-col items-start gap-2">
 				{badge}
 				{sentence && <FeedbackText as="p" segments={sentence} className="max-w-md text-sm" />}

@@ -131,28 +131,52 @@ Never commit `application-local.yml`. It may contain secrets and machine-specifi
 
 To wipe the local database (e.g. after a bad migration or sync), run `vp run dev:reset`. The Postgres data is a bind-mounted folder (`server/postgres-data`), so `docker compose down -v` alone does not clear it — `dev:reset` removes the folder and recreates the stack.
 
-### Seeding a Practice profile
+### Seeding the practices demo
 
-To try the Practice profile against the server, use `vp run dev:practice-profile:seed`.
-It writes review runs, observations, and in-app feedback for one developer into the local database.
-It dates them relative to its execution time. Whose work it seeds comes from flags, or from the environment, or from the
-defaults the `HephaestusTest` fixtures are synced under:
+The practices demo fills one workspace with data for Practices across the workspace and the Practice profile.
+
+1. Set `HEPHAESTUS_DEV_SEED_ENABLED=true` in `server/.env`.
+2. Start the server with `vp run dev`.
+3. Run `vp run dev:practices-across-the-workspace:seed`.
+4. Sign in as the reader and open the Practice profile of the workspace.
+
+To remove the demo, run `vp run dev:practices-across-the-workspace:remove`.
+Both commands need the running server.
+You can run the seed again at any time, because it first removes its earlier rows.
 
 | Flag                        | Environment                    | Default                              |
 | --------------------------- | ------------------------------ | ------------------------------------ |
 | `--workspace`               | `SEED_WORKSPACE_SLUG`          | `hephaestustest`                     |
-| `--developer`               | `SEED_DEVELOPER_LOGIN`         | `ValentinGruener`                    |
 | `--pull-request-repository` | `SEED_PULL_REQUEST_REPOSITORY` | `HephaestusTest/practice-validation` |
 | `--issue-repository`        | `SEED_ISSUE_REPOSITORY`        | `HephaestusTest/MaxTestRepo`         |
+| `--reader`                  | `SEED_READER_LOGIN`            | `ValentinGruener`                    |
 
-Flags follow the task name, `vp run dev:practice-profile:seed --developer you`. The runs name their pull requests and issues by number in those two repositories.
-The seed refuses to run against a database that has not synced them. It connects with the `POSTGRES_*` values in `server/.env` and
-refuses any `POSTGRES_HOST` that is not a loopback address, so it cannot be pointed at a shared
-database. Every seeded row carries a recognizable id, so the seed replaces itself on re-run and
-`vp run dev:practice-profile:remove` removes exactly those rows.
+Flags follow the task name, for example `vp run dev:practices-across-the-workspace:seed --reader you`.
+A flag has priority over its environment variable.
 
-The seed addresses no writes to a provider.
-The runs are complete, and the seed writes only in-app feedback.
+#### What the demo contains
+
+`scripts/lib/practices-demo.ts` holds the demo data, which is designed to show the states below.
+The server's rules decide them, so only the running page confirms them.
+
+- 40 synthetic members, `synthetic-developer-01` to `synthetic-developer-40`, with reviews over about 75 days.
+- Two groups, testing discipline and issue traceability, held back. All other groups show their split.
+- For the reader, an existing member: each standing, a practice that improves, and a practice that declines.
+- For the reader: feedback in each state, from new and unread to marked as not applicable.
+
+The seed reviews work that the workspace already synced.
+The two repositories need pull requests 1, 2, 4, 16, 17, and 19 to 23, and issues 13 and 14.
+They also need at least 7 pull requests and 4 issues for the synthetic members.
+If work is missing, the seed stops before it writes.
+
+#### Limits and safety
+
+- The organization sync removes the synthetic members when the server starts and every night. Run the seed again after a restart.
+- Removal deletes only rows that the seed wrote, and the answers that you gave to the demo feedback. It refuses to run while a review is queued or running.
+- The seed writes reviews and observations directly with the `POSTGRES_*` values in `server/.env`. It refuses a `POSTGRES_HOST` that is not a loopback address.
+- Before it writes, the seed signs in to the server through dev sign-in and finds that account in the database. Thus, it never writes to a database that no dev server reads.
+- The server pins the practice revisions and writes the reader's feedback through two dev endpoints. Removal rewinds only the revisions that the server appended for the seed.
+- All reviews are complete, and the only feedback is in-app feedback. Thus, no worker picks up the demo, and nothing goes to a provider.
 
 ### Port overrides
 

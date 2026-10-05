@@ -8,7 +8,7 @@ import { inStoryYear } from "@/stories/story-clock";
 import { expectTouchTarget } from "@/test/controls";
 
 import { text, work } from "./feedback-text";
-import { PracticeFeedbackCard } from "./PracticeFeedbackCard";
+import { PracticeFeedbackCard, PracticeFeedbackCardSkeleton } from "./PracticeFeedbackCard";
 
 const card = NEW_FEEDBACK_CARD;
 /** One clean piece of work, reviewed on the day given, in the reader's own time zone. */
@@ -31,6 +31,8 @@ const meta = {
 		onRate: fn(),
 		onSendComment: fn(),
 		onSkipComment: fn(),
+		onDisagree: fn(),
+		onSendDispute: fn(),
 		onResolve: fn(),
 		onLearnMore: fn(),
 		onOpenPractice: fn(),
@@ -202,7 +204,6 @@ export const Resolved: Story = {
 		card: {
 			...card,
 			state: "resolved",
-			resolvedBy: "WORK",
 			cleanWork: threeClean,
 			condition: [
 				text("Resolved by the work on 9 September · "),
@@ -236,25 +237,27 @@ export const Resolved: Story = {
 };
 
 /**
- * The reader marked it addressed: the card resolves on the day they did, the meter stays where the
- * work left it, and the answer stays pressed under it, so a second press takes it back and reopens
- * the card.
+ * The reader's answer is a claim the next work confirms, not a resolution, so the card closes
+ * without the success wash. The answer stays pressed, so a second press can take it back.
  */
 export const MarkedAsAddressed: Story = {
 	args: {
 		card: {
 			...card,
-			state: "resolved",
-			resolvedBy: "DEVELOPER",
+			state: "marked",
 			cleanWork: twoClean,
-			condition: [text("Marked as addressed on 9 September")],
+			condition: [text("Marked as addressed on 9 September. Your next work confirms it.")],
 			timestamp: inStoryYear("09-09T16:05"),
 		},
 		resolution: "ADDRESSED",
 	},
 	play: async ({ args, canvas }) => {
-		await expect(canvas.getByText("Resolved 9 September")).toBeVisible();
-		await expect(canvas.getByText("Marked as addressed on 9 September")).toBeVisible();
+		await expect(canvas.getByText("Marked by you")).toBeVisible();
+		await expect(canvas.queryByText("Resolved")).toBeNull();
+		await expect(canvas.getByText("Marked 9 September")).toBeVisible();
+		await expect(
+			canvas.getByText("Marked as addressed on 9 September. Your next work confirms it."),
+		).toBeVisible();
 		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
 		const response = within(canvas.getByRole("group", { name: "Your response" }));
 		const addressed = response.getByRole("button", { name: "Addressed" });
@@ -268,9 +271,34 @@ export const MarkedAsAddressed: Story = {
 	},
 };
 
+/** A dispute must carry a sentence, which workspace admins read instead of the card. */
+export const DisagreeOpen: Story = {
+	args: { card: { ...card, state: "open" }, openBand: "dispute" },
+	play: async ({ args, canvas }) => {
+		const field = canvas.getByRole("textbox", { name: "What is wrong in this feedback?" });
+		await expect(field).toBeRequired();
+		await expect(field).toHaveAccessibleDescription(/Workspace admins read your sentence/u);
+		await userEvent.type(field, "#17 split the refactor out already.");
+		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
+		await expect(args.onSendDispute).toHaveBeenCalledWith("#17 split the refactor out already.");
+	},
+};
+
+/** A standing dispute leaves the card open. */
+export const Disputed: Story = {
+	args: { card: { ...card, state: "open" }, resolution: "DISPUTED" },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Disagree" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		await expect(canvas.getByText("Open")).toBeVisible();
+	},
+};
+
 /** "Helpful" opens the note band: an optional line, sent or skipped. */
 export const HelpfulNoteOpen: Story = {
-	args: { card: { ...card, state: "open" }, usefulness: "HELPFUL", commentOpen: true },
+	args: { card: { ...card, state: "open" }, usefulness: "HELPFUL", openBand: "comment" },
 	play: async ({ args, canvas }) => {
 		const field = canvas.getByRole("textbox", { name: "What worked about this feedback?" });
 		await expect(field).toBeVisible();
@@ -290,7 +318,7 @@ export const HelpfulNoteOpen: Story = {
  * "Not helpful" asks for a reason and a sentence; the sentence is what the dispute has to carry.
  */
 export const NotHelpfulReasonOpen: Story = {
-	args: { card: { ...card, state: "open" }, usefulness: "UNHELPFUL", commentOpen: true },
+	args: { card: { ...card, state: "open" }, usefulness: "UNHELPFUL", openBand: "comment" },
 	play: async ({ args, canvas }) => {
 		const field = canvas.getByRole("textbox", { name: "Why was this not helpful?" });
 		await expect(field).toBeRequired();
@@ -502,22 +530,19 @@ export const Withdrawn: Story = {
 	},
 };
 
-/**
- * The moment after a press on "Helpful": the rating being written is the one shown, saying so,
- * and the other rating and the band the press opened wait rather than take a second press.
- */
+/** Every response control waits, and only the control that wrote says "Saving…". Send waits without claiming to send. */
 export const RatingPending: Story = {
 	args: {
 		card: { ...card, state: "open" },
 		usefulness: "HELPFUL",
-		commentOpen: true,
+		openBand: "comment",
 		isPending: true,
+		saving: "rating",
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Saving…" })).toBeDisabled();
-		await expect(canvas.queryByRole("button", { name: "Helpful" })).toBeNull();
 		await expect(canvas.getByRole("button", { name: "Not helpful" })).toBeDisabled();
-		await expect(canvas.getByRole("button", { name: "Sending…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
 	},
 };
 
@@ -557,4 +582,13 @@ export const MobileReflow: Story = {
 		chromatic: { viewports: [320] },
 	},
 	play: expectNoPageOverflow,
+};
+
+/** Hidden from assistive technology: the list's `aria-busy` says it is loading. */
+export const Loading: Story = {
+	render: () => <PracticeFeedbackCardSkeleton />,
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("article")).toBeNull();
+		await expect(canvas.queryByRole("button")).toBeNull();
+	},
 };

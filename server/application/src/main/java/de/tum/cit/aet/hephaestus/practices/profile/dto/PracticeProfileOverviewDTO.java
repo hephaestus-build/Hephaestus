@@ -14,7 +14,7 @@ import org.jspecify.annotations.Nullable;
  * lands moments after that observation and the developer's own responses land whenever they respond, and
  * both are "since the latest run" in the only sense a reader means.
  */
-@Schema(description = "What held, what changed and which work was reviewed over a window of the developer's reviews")
+@Schema(description = "What was met, what changed and which work was reviewed over a window of the developer's reviews")
 public record PracticeProfileOverviewDTO(
         @NonNull @Schema(description = "The span every change below was measured over")
         OverviewWindowDTO window,

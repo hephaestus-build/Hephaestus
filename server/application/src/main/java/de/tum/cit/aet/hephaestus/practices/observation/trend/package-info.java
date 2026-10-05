@@ -44,7 +44,7 @@
  * </ul>
  *
  * <p>{@code TrendProperties} carries the research parameters — bundle size, the practical-equivalence half
- * width, the credibility threshold, the horizon — and validates their relationships at startup, because a
+ * width, the credibility threshold — and validates their relationships at startup, because a
  * minimum bundle larger than the bundle itself would silently report "insufficient evidence" forever.
  *
  * <h2>What this package deliberately does not say</h2>

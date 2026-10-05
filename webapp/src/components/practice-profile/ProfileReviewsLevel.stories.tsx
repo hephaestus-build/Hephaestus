@@ -160,7 +160,7 @@ export const ManyReviews: Story = {
 		}
 		await expect(frame.scrollHeight).toBeLessThanOrEqual(frame.clientHeight + 1);
 		await userEvent.click(screen.getByRole("button", { name: "View earlier reviews" }));
-		await expect(onLoadMoreOf(args.feed)).toHaveBeenCalledOnce();
+		await expect(onLoadMoreOf(args.feed)).toHaveBeenCalled();
 	},
 };
 
@@ -180,7 +180,8 @@ export const EarlierReviewsFailed: Story = {
 	play: async ({ args }) => {
 		await settledDrawerPanel();
 		await expect(screen.getByText("We could not load earlier reviews.")).toBeVisible();
-		await userEvent.click(screen.getByRole("button", { name: "View earlier reviews" }));
+		await expect(onLoadMoreOf(args.feed)).not.toHaveBeenCalled();
+		await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 		await expect(onLoadMoreOf(args.feed)).toHaveBeenCalledOnce();
 	},
 };

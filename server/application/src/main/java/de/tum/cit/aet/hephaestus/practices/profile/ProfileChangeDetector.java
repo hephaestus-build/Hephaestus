@@ -116,24 +116,14 @@ final class ProfileChangeDetector {
                     now.groupName(),
                     standingBefore.name(),
                     now.standing().name(),
-                    direction(asPracticeStanding(standingBefore), asPracticeStanding(now.standing())),
+                    direction(
+                            standingBefore.asPracticeStanding(), now.standing().asPracticeStanding()),
                     null,
                     null,
                     null,
                     refs(work, targets)));
         }
         return changes;
-    }
-
-    /** A group's standing is its practices' rolled up, on the same scale under the same names. */
-    private static PracticeStandingDTO.Standing asPracticeStanding(PracticeGroupStandingDTO.Standing standing) {
-        return switch (standing) {
-            case DEVELOPING -> PracticeStandingDTO.Standing.DEVELOPING;
-            case STRENGTH -> PracticeStandingDTO.Standing.STRENGTH;
-            case MIXED -> PracticeStandingDTO.Standing.MIXED;
-            case NOT_OBSERVED -> PracticeStandingDTO.Standing.NOT_OBSERVED;
-            case NO_OPPORTUNITY -> PracticeStandingDTO.Standing.NO_OPPORTUNITY;
-        };
     }
 
     /** Which way a move between two verdicts went, or {@code null} for a move into or out of a silence. */

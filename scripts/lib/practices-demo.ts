@@ -1,83 +1,114 @@
-import { createHash } from "node:crypto";
-import path from "node:path";
-import process from "node:process";
-import { parseArgs } from "node:util";
-
-import { Client } from "pg";
-
-import { isLoopbackHost, positivePort, readEnvFile } from "./lib/env.ts";
-
 /**
- * Seeds the development database with practice reviews of one developer's work, so the Practice
- * profile can be tried against the server rather than against fixtures: review runs on pull requests
- * and issues already synced into one workspace, the observations they recorded, and the in-app
- * feedback composed from the recurring problems, some open and some resolved. Only IN_APP feedback
- * is written, and every run is complete with both preparation lanes marked done, so no sweeper,
- * dispatcher or worker picks any of it up and nothing reaches a provider.
- *
- *     node scripts/seed-practice-profile.ts          # remove the seed's rows, then insert them
- *     node scripts/seed-practice-profile.ts remove   # remove the seed's rows only
- *
- * Flags, environment and defaults: docs/contributor/local-development.mdx § Seeding a Practice
- * profile.
- *
- * Every row the seed writes carries an id under {@link ID_PREFIX}, which is how a removal finds
- * them and how a re-run replaces them; nothing else in the database is touched. The reviewed work
- * is looked up by repository and number, never invented: a pull request or issue the workspace has
- * not synced fails the seed before it writes anything.
+ * The demo the dev seed writes for Practices across the workspace and the Practice profile: who the
+ * synthetic developers are, how each practice group splits them, and the reader's own reviews and
+ * in-app feedback. Pure data and pure functions, so a test can check the demo's shape without a
+ * database; `scripts/seed-practices-across-the-workspace.ts` writes it.
  */
 
-const { values: flags, positionals } = parseArgs({
-	options: {
-		workspace: { type: "string" },
-		developer: { type: "string" },
-		"pull-request-repository": { type: "string" },
-		"issue-repository": { type: "string" },
-	},
-	allowPositionals: true,
-});
-const setting = (flag: keyof typeof flags, name: string, fallback: string): string =>
-	flags[flag] ?? process.env[name] ?? fallback;
+/** How many synthetic developers join the workspace. */
+export const DEVELOPERS = 40;
+/** Logins no provider hands out to a person, so a synthetic developer is never mistaken for one. */
+export const LOGIN_PREFIX = "synthetic-developer-";
+/** Provider ids far above any real account's, so the seed never collides with a synced user. */
+export const NATIVE_ID_BASE = 990_000_000;
+/** A UUID v4 prefix no real row carries; the fourth group says which table the row is in. */
+export const ID_PREFIX = "5eed0000-ac05-4000";
+export const TABLE = {
+	job: "8000",
+	observation: "8001",
+	feedback: "8002",
+	reaction: "8003",
+} as const;
 
-const WORKSPACE_SLUG = setting("workspace", "SEED_WORKSPACE_SLUG", "hephaestustest");
-const DEVELOPER_LOGIN = setting("developer", "SEED_DEVELOPER_LOGIN", "ValentinGruener");
-const PULL_REQUEST_REPOSITORY = setting(
-	"pull-request-repository",
-	"SEED_PULL_REQUEST_REPOSITORY",
-	"HephaestusTest/practice-validation",
-);
-const ISSUE_REPOSITORY = setting(
-	"issue-repository",
-	"SEED_ISSUE_REPOSITORY",
-	"HephaestusTest/MaxTestRepo",
-);
+export function seedId(table: (typeof TABLE)[keyof typeof TABLE], ordinal: number): string {
+	return `${ID_PREFIX}-${table}-${ordinal.toString(16).padStart(12, "0")}`;
+}
+
+/** The seed's first job, which keeps the ids of the revisions the server appended for the seed. */
+export const FIRST_JOB = seedId(TABLE.job, 1);
 
 /**
  * The UTC calendar day `days` before today, at `time` ("HH:MM") UTC. Every moment in the seed is one
  * of these, so a run stays inside the standing's 90-day look-back and a closed card inside the page's
  * 30 days however long after this file was written the seed runs.
  */
-function daysAgo(days: number, time: string): string {
+export function daysAgo(days: number, time: string): string {
 	const day = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 	return new Date(`${day}T${time}:00Z`).toISOString();
 }
 
-/** A UUID v4 prefix no real row carries; the fourth group says which table the row is in. */
-const ID_PREFIX = "5eed0000-cafe-4000";
-const EVIDENCE_CONTRACT_VERSION = "1.0.0";
-/** `FeedbackLedgerRecorder.IN_APP_UNIT_ORDINAL_BASE`: the band an in-app piece of feedback's position sits in. */
-const IN_APP_POSITION_BASE = 7000;
+// --- the synthetic developers ---------------------------------------------------------------------
 
-type Outcome = "MET" | "NOT_MET" | "NOT_APPLICABLE" | "UNDETERMINED";
-type Severity = "CRITICAL" | "MAJOR" | "MINOR" | "INFO";
+export type Bucket = "needs" | "mixed" | "well" | "none";
 
-interface ArtifactRef {
+/**
+ * How the 40 developers split in each group: Needs attention, Mixed feedback, Going well, none.
+ * A group not listed here has no practice a pull request or issue review can observe, so nobody
+ * gets a standing in it and the page withholds its split.
+ */
+export const SPLITS: Record<string, [number, number, number, number]> = {
+	"acting-on-review-feedback": [9, 9, 9, 13],
+	"delivery-and-version-control-discipline": [9, 10, 9, 12],
+	"robust-error-handling": [6, 10, 10, 14],
+	"secure-by-default-changes": [10, 9, 9, 12],
+	"review-ready-work": [9, 9, 10, 12],
+	"decisions-and-documentation": [9, 9, 9, 13],
+	"constructive-code-review": [10, 10, 9, 11],
+	// Two at Needs attention, and the reader there too: three, so the split is held back.
+	"testing-discipline": [2, 12, 13, 13],
+	// Three with a standing: held back.
+	"issue-traceability-and-lifecycle": [1, 1, 1, 37],
+	"actionable-issue-authoring": [9, 9, 10, 12],
+	"code-craftsmanship": [10, 9, 9, 12],
+};
+
+/** How many developers with a standing in a group leave each of its practices unreviewed. */
+export const SKIPPERS_PER_PRACTICE = 6;
+
+/** Which bucket developer `index` falls in for the group at `groupIndex`, shuffled per group. */
+export function bucketOf(
+	split: [number, number, number, number],
+	groupIndex: number,
+	index: number,
+): Bucket {
+	const position = (index * 7 + groupIndex * 5) % DEVELOPERS;
+	const [needs, mixed, well] = split;
+	if (position < needs) {
+		return "needs";
+	}
+	if (position < needs + mixed) {
+		return "mixed";
+	}
+	return position < needs + mixed + well ? "well" : "none";
+}
+
+/**
+ * Whether the run `newest` places from the newest is a problem for a developer in `bucket`. Under
+ * the standing's recency weights, clean then one slip then clean reads Mixed feedback, and two slips
+ * on the newest two pieces of work read Needs attention.
+ */
+export function isProblem(bucket: Bucket, newest: number): boolean {
+	if (bucket === "mixed") {
+		return newest === 1;
+	}
+	if (bucket === "needs") {
+		return newest !== 2;
+	}
+	return false;
+}
+
+// --- the reader -----------------------------------------------------------------------------------
+
+export type Outcome = "MET" | "NOT_MET" | "NOT_APPLICABLE" | "UNDETERMINED";
+export type Severity = "CRITICAL" | "MAJOR" | "MINOR" | "INFO";
+
+export interface ArtifactRef {
 	kind: "scm.pull_request" | "scm.issue";
-	repository: string;
+	/** The number in the seed's pull request or issue repository. */
 	number: number;
 }
 
-interface Citation {
+export interface Citation {
 	sourceKind: string;
 	path: string;
 	startLine: number;
@@ -86,7 +117,7 @@ interface Citation {
 	side?: "NEW" | "OLD";
 }
 
-interface SeedObservation {
+export interface SeedObservation {
 	practice: string;
 	outcome: Outcome;
 	/** Required exactly for NOT_MET. */
@@ -98,21 +129,22 @@ interface SeedObservation {
 	citation: Citation;
 }
 
-interface SeedRun {
+export interface SeedRun {
 	key: string;
 	artifact: ArtifactRef;
 	at: string;
 	observations: SeedObservation[];
 }
 
-interface SeedResponse {
+export interface SeedResponse {
 	at: string;
 	usefulness?: "HELPFUL" | "UNHELPFUL";
 	resolution?: "ADDRESSED" | "DISPUTED" | "NOT_APPLICABLE";
-	comment?: string;
+	/** Required for a dispute. */
+	explanation?: string;
 }
 
-interface SeedCard {
+export interface SeedCard {
 	practice: string;
 	/** The run whose cycle composed the card; its job owns the feedback. */
 	composedBy: string;
@@ -127,16 +159,8 @@ interface SeedCard {
 	response?: SeedResponse;
 }
 
-const pullRequest = (number: number): ArtifactRef => ({
-	kind: "scm.pull_request",
-	repository: PULL_REQUEST_REPOSITORY,
-	number,
-});
-const issue = (number: number): ArtifactRef => ({
-	kind: "scm.issue",
-	repository: ISSUE_REPOSITORY,
-	number,
-});
+const pullRequest = (number: number): ArtifactRef => ({ kind: "scm.pull_request", number });
+const issue = (number: number): ArtifactRef => ({ kind: "scm.issue", number });
 
 const diff = (file: string, startLine: number, endLine: number, quote: string): Citation => ({
 	sourceKind: "scm.pull-request.diff",
@@ -194,13 +218,14 @@ const USER_CONTROLLER = "src/main/java/de/tum/cit/aet/users/UserController.java"
 const ROLE_CONTROLLER = "src/main/java/de/tum/cit/aet/users/RoleController.java";
 
 /**
- * The reviews, oldest first. Each run reviews one piece of work on one day and records what the
- * practices found there. The picture they draw over the developer's practice standings: untrusted
+ * The reader's reviews, oldest first. Each run reviews one piece of work on one day and records what
+ * the practices found there. The picture they draw over the reader's practice standings: untrusted
  * input improves across eight pull requests, scoping declines across eight, descriptions and review
  * comments recover after two problems, three practices stay mixed or in need of attention, and
  * dependency changes never come up.
  */
-const RUNS: SeedRun[] = [
+
+export const READER_RUNS: SeedRun[] = [
 	{
 		key: "pr1",
 		artifact: pullRequest(1),
@@ -719,11 +744,13 @@ const RUNS: SeedRun[] = [
 ];
 
 /**
- * The in-app feedback: one live card per practice, composed once a problem recurred on two pieces
- * of work. Two are unread, two were read, one was rated helpful, one was disputed, and three were
- * marked addressed once the work came back clean.
+ * The reader's in-app feedback: one card per practice, composed once a problem recurred on two pieces
+ * of work, so the page shows each state a card takes. Two are new and unread. Two were read and are
+ * still open, one of them disputed. Three were resolved by the work, as three clean pieces of work in a
+ * row followed them; the reader also marked all three addressed, but later than the work. One the
+ * reader marked addressed before the work could, and one the reader marked not applicable.
  */
-const CARDS: SeedCard[] = [
+export const READER_CARDS: SeedCard[] = [
 	{
 		practice: "scope-one-reviewable-change",
 		composedBy: "pr22",
@@ -769,7 +796,8 @@ const CARDS: SeedCard[] = [
 		nextStep:
 			"Give each commit a subject that says what it changes and why, and squash the fix-up commits before you mark the pull request ready.",
 		evidence: ["pr19", "pr20"],
-		response: { at: daysAgo(8, "11:44"), usefulness: "HELPFUL" },
+		// Marked addressed after one clean piece of work, before the work could resolve it.
+		response: { at: daysAgo(4, "10:30"), usefulness: "HELPFUL", resolution: "ADDRESSED" },
 	},
 	{
 		practice: "honours-linked-issue-acceptance-criteria",
@@ -784,9 +812,8 @@ const CARDS: SeedCard[] = [
 		evidence: ["pr16", "pr20"],
 		response: {
 			at: daysAgo(7, "10:20"),
-			usefulness: "UNHELPFUL",
-			resolution: "DISPUTED",
-			comment:
+			resolution: "NOT_APPLICABLE",
+			explanation:
 				"#16 has no linked issue with acceptance criteria; the report runner was a spike we agreed on in the channel, so there was nothing to tick.",
 		},
 	},
@@ -801,6 +828,13 @@ const CARDS: SeedCard[] = [
 		nextStep:
 			'End each issue with one sentence that starts with "Done when" and names the check a maintainer can run.',
 		evidence: ["issue13", "issue14"],
+		response: {
+			at: daysAgo(17, "09:10"),
+			usefulness: "UNHELPFUL",
+			resolution: "DISPUTED",
+			explanation:
+				"Nobody has reproduced the flake in #13 yet, so a Done when line would be a guess. We add it once we know the cause.",
+		},
 	},
 	{
 		practice: "describe-what-and-why",
@@ -842,391 +876,77 @@ const CARDS: SeedCard[] = [
 	},
 ];
 
-// --- the rows -------------------------------------------------------------------------------------
-
-/** The fourth UUID group names the table a seeded row lives in. */
-const TABLE = {
-	job: "8000",
-	observation: "8001",
-	feedback: "8002",
-	reaction: "8003",
-} as const;
-
-function seedId(table: (typeof TABLE)[keyof typeof TABLE], ordinal: number): string {
-	return `${ID_PREFIX}-${table}-${ordinal.toString(16).padStart(12, "0")}`;
+/** One card as `POST /api/dev/in-app-feedback` takes it (`DevInAppFeedbackService.Card`). */
+export interface CardPayload {
+	id: string;
+	agentJobId: string;
+	recipientUserId: number;
+	practiceSlug: string;
+	headline: string;
+	message: string;
+	nextStep: string;
+	createdAt: string;
+	deliveredAt: string | null;
+	evidence: string[];
+	response: {
+		id: string;
+		at: string;
+		usefulness: string | null;
+		resolution: string | null;
+		explanation: string | null;
+	} | null;
 }
 
-/** `FeedbackThreadKey`: the same canonical form and digest, so the server's lookups find these threads. */
-function threadKey(kind: string, locus: string, recipientUserId: number, channel: string): string {
-	// The ASCII unit separator the Java side joins the tuple with.
-	const separator = "\u001F";
-	return createHash("sha256")
-		.update(
-			`${kind}${separator}${locus}${separator}${recipientUserId}${separator}${channel}`,
-			"utf8",
-		)
-		.digest("hex");
-}
-
-/** `InAppFeedbackBody.render`: the stored layout the in-app reader splits again. */
-function inAppBody(card: SeedCard): string {
-	return `### ${card.headline}\n\n${card.message}\n\n**Try next:** ${card.nextStep}`;
-}
-
-interface Artifact {
-	id: number;
-	number: number;
-	title: string;
-	url: string;
-	repository: string;
-	kind: ArtifactRef["kind"];
-}
-
-interface Practice {
-	id: number;
-	revisionId: number;
-}
-
-interface Resolved {
-	workspaceId: number;
-	developerId: number;
-	practices: Map<string, Practice>;
-	artifacts: Map<string, Artifact>;
-}
-
-const artifactKey = (ref: ArtifactRef): string => `${ref.kind}:${ref.repository}#${ref.number}`;
-
-async function resolve(client: Client): Promise<Resolved> {
-	const workspace = await client.query<{ id: number }>("SELECT id FROM workspace WHERE slug = $1", [
-		WORKSPACE_SLUG,
-	]);
-	const workspaceId = workspace.rows[0]?.id;
-	if (workspaceId === undefined) {
-		throw new Error(`No workspace with slug ${WORKSPACE_SLUG}`);
-	}
-
-	const developer = await client.query<{ id: number }>('SELECT id FROM "user" WHERE login = $1', [
-		DEVELOPER_LOGIN,
-	]);
-	const developerId = developer.rows[0]?.id;
-	if (developerId === undefined) {
-		throw new Error(`No synced user with login ${DEVELOPER_LOGIN}`);
-	}
-
-	const slugs = [
-		...new Set(
-			[...RUNS.flatMap((run) => run.observations), ...CARDS].map((entry) => entry.practice),
-		),
-	];
-	const practiceRows = await client.query<{ slug: string; id: number; revision_id: number | null }>(
-		"SELECT slug, id, current_revision_id AS revision_id FROM practice WHERE workspace_id = $1 AND slug = ANY($2)",
-		[workspaceId, slugs],
-	);
-	const practices = new Map<string, Practice>();
-	for (const row of practiceRows.rows) {
-		if (row.revision_id === null) {
-			throw new Error(`Practice ${row.slug} has no current revision`);
+/**
+ * The reader's cards as the server takes them, given the ids the seed wrote: `jobIds` by run key and
+ * `observationIds` by run key and practice slug. A card that names a run the reader has no
+ * observation on its practice from is a mistake in this file, and fails before anything is sent.
+ */
+export function readerCards(
+	readerId: number,
+	jobIds: ReadonlyMap<string, string>,
+	observationIds: ReadonlyMap<string, string>,
+): CardPayload[] {
+	let responses = 0;
+	return READER_CARDS.map((card, index) => {
+		const agentJobId = jobIds.get(card.composedBy);
+		if (agentJobId === undefined) {
+			throw new Error(`The card on ${card.practice} names an unknown run ${card.composedBy}`);
 		}
-		practices.set(row.slug, { id: row.id, revisionId: row.revision_id });
-	}
-	const missingPractices = slugs.filter((slug) => !practices.has(slug));
-	if (missingPractices.length > 0) {
-		throw new Error(`Practices not installed in ${WORKSPACE_SLUG}: ${missingPractices.join(", ")}`);
-	}
-
-	const refs = new Map(RUNS.map((run) => [artifactKey(run.artifact), run.artifact]));
-	const artifacts = new Map<string, Artifact>();
-	for (const [key, ref] of refs) {
-		const rows = await client.query<{ id: number; title: string; html_url: string }>(
-			`SELECT i.id, i.title, i.html_url FROM issue i
-			 JOIN repository r ON r.id = i.repository_id
-			 WHERE r.name_with_owner = $1 AND i.number = $2 AND i.issue_type = $3`,
-			[ref.repository, ref.number, ref.kind === "scm.pull_request" ? "PULL_REQUEST" : "ISSUE"],
-		);
-		const row = rows.rows[0];
-		if (!row) {
-			throw new Error(`${ref.repository}#${ref.number} is not synced into this database`);
-		}
-		artifacts.set(key, {
-			id: row.id,
-			number: ref.number,
-			title: row.title,
-			url: row.html_url,
-			repository: ref.repository,
-			kind: ref.kind,
-		});
-	}
-	return { workspaceId, developerId, practices, artifacts };
-}
-
-async function removeSeed(client: Client): Promise<void> {
-	const pattern = `${ID_PREFIX}-%`;
-	// Children first: the observation and feedback foreign keys onto agent_job are RESTRICT.
-	await client.query(
-		"DELETE FROM reaction WHERE id::text LIKE $1 OR feedback_id IN (SELECT id FROM feedback WHERE id::text LIKE $1)",
-		[pattern],
-	);
-	await client.query("DELETE FROM feedback WHERE id::text LIKE $1", [pattern]);
-	await client.query("DELETE FROM observation WHERE id::text LIKE $1", [pattern]);
-	await client.query("DELETE FROM agent_job WHERE id::text LIKE $1", [pattern]);
-}
-
-/** Rows written per table; a `Record`, so the summary reads each count as the number it is. */
-type Counts = Record<
-	"agent_job" | "observation" | "feedback" | "feedback_observation" | "reaction",
-	number
->;
-
-interface Seeded {
-	/** Job id by run key; a card names the run whose cycle composed it. */
-	jobIds: Map<string, string>;
-	/** Observation id by run key and practice slug, for the cards' evidence bindings. */
-	observationIds: Map<string, string>;
-}
-
-/** Writes the review runs and the observations they recorded. */
-async function insertReviews(client: Client, resolved: Resolved, counts: Counts): Promise<Seeded> {
-	const { workspaceId, developerId } = resolved;
-	const jobIds = new Map<string, string>();
-	const observationIds = new Map<string, string>();
-	let observationOrdinal = 0;
-
-	for (const [runIndex, run] of RUNS.entries()) {
-		const artifact = resolved.artifacts.get(artifactKey(run.artifact));
-		if (!artifact) {
-			throw new Error(`Unresolved artifact for run ${run.key}`);
-		}
-		const jobId = seedId(TABLE.job, runIndex + 1);
-		jobIds.set(run.key, jobId);
-		const isPullRequest = artifact.kind === "scm.pull_request";
-		const metadata = isPullRequest
-			? {
-					title: artifact.title,
-					pr_url: artifact.url,
-					pr_number: artifact.number,
-					pull_request_id: artifact.id,
-					repository_full_name: artifact.repository,
-				}
-			: {
-					title: artifact.title,
-					issue_url: artifact.url,
-					issue_number: artifact.number,
-					issue_id: artifact.id,
-					repository_full_name: artifact.repository,
-				};
-		const startedAt = new Date(new Date(run.at).getTime() - 4 * 60_000).toISOString();
-		await client.query(
-			`INSERT INTO agent_job (
-				id, workspace_id, job_type, status, metadata, output, config_snapshot, job_token, retry_count,
-				created_at, started_at, completed_at, integration_kind, artifact_kind, available_at,
-				delivery_attempts, purpose, evidence_snapshot, in_chat_prepared_at, in_app_prepared_at,
-				practice_rollout_revision, practice_trigger_mode, trace_id
-			) VALUES (
-				$1, $2, $3, 'COMPLETED', $4, '{"outcome": "REVIEWED"}', '{}', $5, 0,
-				$6, $6, $7, 'GITHUB', $8, $6,
-				0, 'PRACTICE_REVIEW', $9, $7, $7,
-				0, 'AUTO', $10
-			)`,
-			[
-				jobId,
-				workspaceId,
-				isPullRequest ? "PULL_REQUEST_REVIEW" : "ISSUE_REVIEW",
-				JSON.stringify(metadata),
-				`seed-practice-profile-${run.key}`,
-				startedAt,
-				run.at,
-				artifact.kind,
-				JSON.stringify({ manifest: { contractVersion: EVIDENCE_CONTRACT_VERSION } }),
-				jobId.replaceAll("-", "").slice(0, 32),
-			],
-		);
-		counts.agent_job += 1;
-
-		for (const observation of run.observations) {
-			const practice = resolved.practices.get(observation.practice);
-			if (!practice) {
-				throw new Error(`Unresolved practice ${observation.practice}`);
-			}
-			observationOrdinal += 1;
-			const observationId = seedId(TABLE.observation, observationOrdinal);
-			observationIds.set(`${run.key}/${observation.practice}`, observationId);
-			const citation = {
-				sourceKind: observation.citation.sourceKind,
-				artifactPath:
-					observation.citation.sourceKind === "scm.pull-request.diff"
-						? "inputs/context/diff.patch"
-						: `${artifact.repository}#${artifact.number}`,
-				path: observation.citation.path,
-				...(observation.citation.side ? { side: observation.citation.side } : {}),
-				startLine: observation.citation.startLine,
-				endLine: observation.citation.endLine,
-				quote: observation.citation.quote,
-				quoteRedacted: false,
-			};
-			await client.query(
-				`INSERT INTO observation (
-					id, occurrence_key, agent_job_id, practice_id, artifact_kind, artifact_id, about_user_id,
-					summary, outcome, severity, evidence, evidence_rationale, observed_at,
-					practice_revision_id, origin, workspace_id
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'LIVE', $15)`,
-				[
-					observationId,
-					`seed-practice-profile-${observationOrdinal}`,
-					jobId,
-					practice.id,
-					artifact.kind,
-					artifact.id,
-					developerId,
-					observation.summary,
-					observation.outcome,
-					observation.severity ?? null,
-					JSON.stringify({ citations: [citation] }),
-					observation.rationale ?? null,
-					run.at,
-					practice.revisionId,
-					workspaceId,
-				],
-			);
-			counts.observation += 1;
-		}
-	}
-	return { jobIds, observationIds };
-}
-
-/** Writes the in-app cards, the observations each stands on and the developer's responses. */
-async function insertCards(
-	client: Client,
-	resolved: Resolved,
-	counts: Counts,
-	{ jobIds, observationIds }: Seeded,
-): Promise<void> {
-	const { workspaceId, developerId } = resolved;
-	const inAppPositions = new Map<string, number>();
-	let feedbackOrdinal = 0;
-	let reactionOrdinal = 0;
-	for (const card of CARDS) {
-		const jobId = jobIds.get(card.composedBy);
-		if (jobId === undefined) {
-			throw new Error(`Card on ${card.practice} names an unknown run ${card.composedBy}`);
-		}
-		const position = IN_APP_POSITION_BASE + (inAppPositions.get(jobId) ?? 0);
-		inAppPositions.set(jobId, position - IN_APP_POSITION_BASE + 1);
-		feedbackOrdinal += 1;
-		const feedbackId = seedId(TABLE.feedback, feedbackOrdinal);
-		const read = card.deliveredAt !== undefined;
-		await client.query(
-			`INSERT INTO feedback (
-				id, agent_job_id, workspace_id, recipient_user_id, about_user_id, channel, position,
-				delivery_state, body, source, thread_key, created_at, delivered_at,
-				proposed_placements, proposed_practice_slugs
-			) VALUES ($1, $2, $3, $4, $4, 'IN_APP', $5, $6, $7, 'AGENT', $8, $9, $10, '[]', $11)`,
-			[
-				feedbackId,
-				jobId,
-				workspaceId,
-				developerId,
-				position,
-				read ? "DELIVERED" : "PREPARED",
-				inAppBody(card),
-				threadKey("practice", card.practice, developerId, "IN_APP"),
-				card.createdAt,
-				card.deliveredAt ?? null,
-				JSON.stringify([card.practice]),
-			],
-		);
-		counts.feedback += 1;
-		for (const [ordinal, runKey] of card.evidence.entries()) {
-			const observationId = observationIds.get(`${runKey}/${card.practice}`);
-			if (observationId === undefined) {
+		const evidence = card.evidence.map((runKey) => {
+			const id = observationIds.get(`${runKey}/${card.practice}`);
+			if (id === undefined) {
 				throw new Error(
-					`Card on ${card.practice} cites run ${runKey}, which recorded nothing on it`,
+					`The card on ${card.practice} cites run ${runKey}, which recorded nothing on it`,
 				);
 			}
-			await client.query(
-				"INSERT INTO feedback_observation (feedback_id, observation_id, role, ordinal) VALUES ($1, $2, 'PRIMARY', $3)",
-				[feedbackId, observationId, ordinal],
-			);
-			counts.feedback_observation += 1;
+			return id;
+		});
+		const { response } = card;
+		if (response !== undefined) {
+			responses += 1;
 		}
-		if (card.response) {
-			if (!read) {
-				throw new Error(`Card on ${card.practice} was answered before it was read`);
-			}
-			reactionOrdinal += 1;
-			await client.query(
-				`INSERT INTO reaction (id, reactor_user_id, action, explanation, created_at, feedback_id, usefulness)
-				 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-				[
-					seedId(TABLE.reaction, reactionOrdinal),
-					developerId,
-					card.response.resolution ?? null,
-					card.response.comment ?? null,
-					card.response.at,
-					feedbackId,
-					card.response.usefulness ?? null,
-				],
-			);
-			counts.reaction += 1;
-		}
-	}
-}
-
-async function insertSeed(client: Client, resolved: Resolved): Promise<Counts> {
-	const counts: Counts = {
-		agent_job: 0,
-		observation: 0,
-		feedback: 0,
-		feedback_observation: 0,
-		reaction: 0,
-	};
-	const seeded = await insertReviews(client, resolved, counts);
-	await insertCards(client, resolved, counts, seeded);
-	return counts;
-}
-
-async function main(): Promise<void> {
-	const [mode = "seed", ...rest] = positionals;
-	if ((mode !== "seed" && mode !== "remove") || rest.length > 0) {
-		throw new Error(`Unknown mode ${positionals.join(" ")}; use "seed" (the default) or "remove"`);
-	}
-	const server = path.join(import.meta.dirname, "..", "server");
-	const env = { ...(await readEnvFile(path.join(server, ".env"))), ...process.env };
-	const host = env.POSTGRES_HOST ?? "localhost";
-	// The seed writes straight into the database, so it refuses every host but this machine's.
-	if (!isLoopbackHost(host)) {
-		throw new Error("POSTGRES_HOST must be a loopback address");
-	}
-	const client = new Client({
-		host,
-		port: positivePort(env.POSTGRES_PORT ?? "5432", "POSTGRES_PORT"),
-		database: env.POSTGRES_DB ?? "hephaestus",
-		user: env.POSTGRES_USER ?? "root",
-		password: env.POSTGRES_PASSWORD ?? "root",
+		return {
+			id: seedId(TABLE.feedback, index + 1),
+			agentJobId,
+			recipientUserId: readerId,
+			practiceSlug: card.practice,
+			headline: card.headline,
+			message: card.message,
+			nextStep: card.nextStep,
+			createdAt: card.createdAt,
+			deliveredAt: card.deliveredAt ?? null,
+			evidence,
+			response:
+				response === undefined
+					? null
+					: {
+							id: seedId(TABLE.reaction, responses),
+							at: response.at,
+							usefulness: response.usefulness ?? null,
+							resolution: response.resolution ?? null,
+							explanation: response.explanation ?? null,
+						},
+		};
 	});
-	await client.connect();
-	try {
-		await client.query("BEGIN");
-		await removeSeed(client);
-		if (mode === "remove") {
-			await client.query("COMMIT");
-			console.log("Removed the practice profile seed.");
-			return;
-		}
-		const resolved = await resolve(client);
-		const counts = await insertSeed(client, resolved);
-		await client.query("COMMIT");
-		const written = Object.entries(counts)
-			.map(([table, count]) => `${count} ${table}`)
-			.join(", ");
-		console.log(
-			`Seeded the practice profile of ${DEVELOPER_LOGIN} in ${WORKSPACE_SLUG}: ${written}`,
-		);
-	} catch (error) {
-		await client.query("ROLLBACK").catch(() => undefined);
-		throw error;
-	} finally {
-		await client.end();
-	}
 }
-
-await main();

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useSpinDelay } from "spin-delay";
 
 import { getInAppFeedbackOptions } from "@/api/@tanstack/react-query.gen";
 import type { FeedbackResponseRequest, PracticeGroup } from "@/api/types.gen";
@@ -7,10 +8,12 @@ import { type LoadState, queryLoadState } from "@/components/common/panel-state"
 import { toFeedbackCard } from "@/components/practice-profile/practice-feedback-cards";
 import type { FeedbackUsefulness } from "@/components/practice-vocabulary/feedback-usefulness-defs";
 import type {
+	FeedbackBand,
 	FeedbackComment,
 	FeedbackRatingProps,
 	PracticeFeedbackCardEntry,
 	ResolvingAnswer,
+	ResponseControl,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { useFeedbackResponseWrite } from "@/hooks/use-feedback-response-write";
 
@@ -86,6 +89,35 @@ export function withComment(
 	};
 }
 
+/** Send in the dispute band: the dispute replaces any earlier answer and keeps the rating. */
+export function withDispute(
+	current: FeedbackResponseRequest | undefined,
+	comment: string,
+): FeedbackResponseRequest {
+	return { usefulness: current?.usefulness, resolution: "DISPUTED", comment: comment.trim() };
+}
+
+/** Disagree on a standing dispute: takes it back with its sentence and keeps the rating. */
+export function withoutDispute(
+	current: FeedbackResponseRequest | undefined,
+): FeedbackResponseRequest {
+	return { usefulness: current?.usefulness, resolution: undefined, comment: undefined };
+}
+
+interface OpenBand {
+	feedbackId: string;
+	band: FeedbackBand;
+}
+
+/**
+ * The control a write came from. The mutation cannot say: its variables are the whole response,
+ * and "Not accurate" and the dispute band both write DISPUTED with a comment.
+ */
+interface WriteFrom {
+	feedbackId: string;
+	control: ResponseControl;
+}
+
 /**
  * Nothing in flight and nothing to wait for. A query held back by `enabled` reports `isPending`
  * for as long as it is held, which a page reads as a skeleton that never resolves; with the
@@ -103,14 +135,16 @@ const SETTLED_EMPTY: LoadState = { status: "ready" };
  *
  * Every press writes the complete response, keeping what the reader said before: "Helpful" and
  * "Not helpful" replace the usefulness, Send adds the comment, "Addressed" and "Not applicable"
- * replace the resolution, and pressing the chosen one again withdraws it.
+ * replace the resolution, and pressing the chosen one again withdraws it. "Disagree" opens the band
+ * that asks why, and its Send writes the dispute; pressed on a standing dispute, it takes it back.
  */
 export function useInAppFeedback({
 	workspaceSlug,
 	groups,
 	enabled = true,
 }: InAppFeedbackRequest): InAppFeedback {
-	const [openComment, setOpenComment] = useState<string>();
+	const [openBand, setOpenBand] = useState<OpenBand>();
+	const [lastWrite, setLastWrite] = useState<WriteFrom>();
 	const feedbackQuery = useQuery({
 		...getInAppFeedbackOptions({ path: { workspaceSlug } }),
 		enabled,
@@ -124,17 +158,46 @@ export function useInAppFeedback({
 	const responseOf = (feedbackId: string): FeedbackResponseRequest | undefined =>
 		pendingResponses.get(feedbackId) ?? feedback.find((item) => item.id === feedbackId)?.response;
 
+	const writeFrom = (
+		feedbackId: string,
+		control: ResponseControl,
+		response: FeedbackResponseRequest,
+	) => {
+		setLastWrite({ feedbackId, control });
+		write(feedbackId, response);
+	};
+	// A quick write says nothing; a slow one says "Saving…" after a second, for at least 500ms.
+	// `ssr: false`: its default shows the word at once when a page mounts with a write in flight.
+	const showSaving = useSpinDelay(
+		lastWrite !== undefined && pendingResponses.has(lastWrite.feedbackId),
+		{ delay: 1000, minDuration: 500, ssr: false },
+	);
+
 	const rate = (feedbackId: string, usefulness: FeedbackUsefulness) => {
 		const next = nextRating(responseOf(feedbackId), usefulness);
-		write(feedbackId, next);
-		setOpenComment(next.usefulness === undefined ? undefined : feedbackId);
+		writeFrom(feedbackId, "rating", next);
+		setOpenBand(next.usefulness === undefined ? undefined : { feedbackId, band: "comment" });
 	};
 	const resolve = (feedbackId: string, answer: ResolvingAnswer) => {
-		write(feedbackId, nextResolution(responseOf(feedbackId), answer));
+		writeFrom(feedbackId, "answer", nextResolution(responseOf(feedbackId), answer));
 	};
 	const send = (feedbackId: string, comment: FeedbackComment) => {
-		write(feedbackId, withComment(responseOf(feedbackId), comment));
-		setOpenComment(undefined);
+		writeFrom(feedbackId, "send", withComment(responseOf(feedbackId), comment));
+		setOpenBand(undefined);
+	};
+	const disagree = (feedbackId: string) => {
+		const current = responseOf(feedbackId);
+		if (current?.resolution === "DISPUTED") {
+			writeFrom(feedbackId, "disagree", withoutDispute(current));
+			setOpenBand(undefined);
+			return;
+		}
+		const open = openBand?.feedbackId === feedbackId && openBand.band === "dispute";
+		setOpenBand(open ? undefined : { feedbackId, band: "dispute" });
+	};
+	const sendDispute = (feedbackId: string, comment: string) => {
+		writeFrom(feedbackId, "send", withDispute(responseOf(feedbackId), comment));
+		setOpenBand(undefined);
 	};
 
 	return {
@@ -142,11 +205,14 @@ export function useInAppFeedback({
 		ratingProps: (feedbackId) => ({
 			usefulness: responseOf(feedbackId)?.usefulness,
 			resolution: responseOf(feedbackId)?.resolution,
-			commentOpen: openComment === feedbackId,
+			openBand: openBand?.feedbackId === feedbackId ? openBand.band : undefined,
 			isPending: pendingResponses.has(feedbackId),
+			saving: showSaving && lastWrite?.feedbackId === feedbackId ? lastWrite.control : undefined,
 			onRate: (usefulness) => rate(feedbackId, usefulness),
 			onSendComment: (comment) => send(feedbackId, comment),
-			onSkipComment: () => setOpenComment(undefined),
+			onSkipComment: () => setOpenBand(undefined),
+			onDisagree: () => disagree(feedbackId),
+			onSendDispute: (comment) => sendDispute(feedbackId, comment),
 			onResolve: (answer) => resolve(feedbackId, answer),
 		}),
 		state: enabled ? queryLoadState(feedbackQuery) : SETTLED_EMPTY,

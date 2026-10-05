@@ -37,7 +37,10 @@ export interface ResponseCommentBandProps<TReason extends string = string> {
 	 * nothing when only the reader and Heph do.
 	 */
 	audience?: (reason: TReason | undefined) => string | undefined;
+	/** Any write is in flight, so every control waits. */
 	isPending?: boolean;
+	/** The write in flight is this band's, so Send says "Sending…". */
+	sending?: boolean;
 	onSend?: (comment: ResponseComment<TReason>) => void;
 	onSkip?: () => void;
 	className?: string;
@@ -57,6 +60,7 @@ export function ResponseCommentBand<TReason extends string = string>({
 	reasons,
 	audience,
 	isPending = false,
+	sending = false,
 	onSend,
 	onSkip,
 	className,
@@ -128,8 +132,8 @@ export function ResponseCommentBand<TReason extends string = string>({
 					Skip
 				</Button>
 				<Button variant="mentor" type="submit" disabled={isPending}>
-					{isPending && <Spinner />}
-					{isPending ? "Sending…" : "Send"}
+					{sending && <Spinner />}
+					{sending ? "Sending…" : "Send"}
 				</Button>
 			</div>
 		</form>

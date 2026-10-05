@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import de.tum.cit.aet.hephaestus.practices.observation.ReviewedWorkKey;
 import java.time.Instant;
@@ -36,12 +37,19 @@ final class OpportunityBundler {
     }
 
     /**
-     * One opportunity per piece of reviewed work observed at or after {@code cutoff}, read off its latest run,
-     * newest first.
+     * One opportunity per piece of reviewed work observed at or after {@code cutoff}, read off its latest live run,
+     * newest first. Which runs count is {@link LatestRun#perLiveClaim}'s rule.
      */
     static List<EvidenceOpportunity> opportunities(List<Observation> observations, Instant cutoff) {
+        return opportunities(observations, cutoff, false);
+    }
+
+    /** {@link #opportunities} over one origin class: the live runs, or the requested and backfilled ones. */
+    static List<EvidenceOpportunity> opportunities(
+            List<Observation> observations, Instant cutoff, boolean selfSelected) {
         Map<ReviewedWorkKey, List<Observation>> byArtifact = new LinkedHashMap<>();
         observations.stream()
+                .filter(observation -> (observation.getOrigin() != ObservationOrigin.LIVE) == selfSelected)
                 .filter(observation -> !observation.getObservedAt().isBefore(cutoff))
                 .forEach(observation -> byArtifact
                         .computeIfAbsent(ReviewedWorkKey.of(observation), ignored -> new ArrayList<>())
@@ -101,8 +109,12 @@ final class OpportunityBundler {
 
     record Bundles(
             List<EvidenceOpportunity> current, List<EvidenceOpportunity> previous, List<EvidenceOpportunity> trail) {
-        int opportunitiesUntilComparable(int minimumBundleSize) {
-            return Math.max(0, minimumBundleSize - previous.size());
+        /**
+         * How many more decided opportunities a comparison needs. The previous bundle fills only once the current
+         * one is full, so what the current bundle lacks counts before what the previous one lacks.
+         */
+        int opportunitiesUntilComparable(int bundleSize, int minimumBundleSize) {
+            return Math.max(0, bundleSize - current.size()) + Math.max(0, minimumBundleSize - previous.size());
         }
     }
 }

@@ -21,13 +21,13 @@ import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -87,7 +87,8 @@ public class PracticeStandingService {
      * between the two moments. That is the property the practice profile's "what changed" reads off them.
      */
     public List<StandingSnapshot> getStandingSnapshots(Long workspaceId, Long developerId, List<Instant> edges) {
-        Instant since = clock.instant().minus(LOOKBACK_DAYS, ChronoUnit.DAYS);
+        // One instant for the evidence and the trend, so no observation lies inside the read but before the trend.
+        Instant since = practiceTrendService.horizon();
         Instant until = Collections.max(edges);
         // Verdictless observations distinguish NO_OPPORTUNITY from NOT_OBSERVED.
         List<Observation> window =
@@ -99,7 +100,93 @@ public class PracticeStandingService {
                 .toList();
         Map<UUID, String> deliveredGuidance = deliveredGuidanceByObservation(
                 workspaceId, observations.stream().map(Observation::getId).collect(Collectors.toSet()));
+        Eligibility eligibility = eligibility(workspaceId);
 
+        return edges.stream()
+                .map(edge -> snapshot(
+                        window.stream()
+                                .filter(observation ->
+                                        !observation.getObservedAt().isAfter(edge))
+                                .toList(),
+                        visible,
+                        eligibility,
+                        deliveredGuidance,
+                        since))
+                .toList();
+    }
+
+    /**
+     * Every given developer's standings now, over the evidence observed from {@code since}, read off one scan of the
+     * workspace rather than one query per developer, with the practices review is admitted for. A developer with no
+     * evidence in the span gets the snapshot of someone nothing reached: every eligible practice silent.
+     *
+     * <p>The same classification as {@link #getStandingSnapshots}, minus the delivered guidance: a reader of the
+     * workspace as a whole sees counts, never what anyone was told.
+     */
+    public WorkspaceStandings getWorkspaceStandingSnapshots(Long workspaceId, Set<Long> developerIds, Instant since) {
+        // First, so the practices every observation points at are already loaded when the gate reads them.
+        Eligibility eligibility = eligibility(workspaceId);
+        List<Observation> latest = developerIds.isEmpty()
+                ? List.of()
+                : observationRepository.findLatestRunsByWorkspaceSince(workspaceId, developerIds, since);
+        Set<UUID> visible =
+                visibilityPolicy.permitsAll(workspaceId, latest, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        Map<Long, List<Observation>> byDeveloper =
+                latest.stream().collect(Collectors.groupingBy(Observation::getAboutUserId));
+        Map<Long, StandingSnapshot> snapshots = new LinkedHashMap<>();
+        for (Long developerId : developerIds) {
+            snapshots.put(
+                    developerId,
+                    snapshot(byDeveloper.getOrDefault(developerId, List.of()), visible, eligibility, Map.of(), since));
+        }
+        return new WorkspaceStandings(snapshots, catalogOrder(eligibility));
+    }
+
+    /**
+     * Every given developer's standings as their practice profile shows them now: read over the profile's own
+     * look-back, from the trend horizon, so a developer's standing here is the one their profile shows.
+     */
+    public WorkspaceStandings getCurrentWorkspaceStandingSnapshots(Long workspaceId, Set<Long> developerIds) {
+        return getWorkspaceStandingSnapshots(workspaceId, developerIds, practiceTrendService.horizon());
+    }
+
+    /**
+     * Several developers' snapshots, and the practices review is admitted for in the workspace today per group slug,
+     * each group's in catalog order: the same list whoever asks, so a reader's own evidence never adds a practice or
+     * reorders one.
+     */
+    public record WorkspaceStandings(
+            Map<Long, StandingSnapshot> byDeveloper, Map<String, List<Practice>> eligiblePracticesByGroup) {}
+
+    /** The visible rows of {@code narrowed}, per practice slug. */
+    private static Map<String, List<Observation>> visibleByPractice(List<Observation> narrowed, Set<UUID> visible) {
+        Map<String, List<Observation>> byPractice = new LinkedHashMap<>();
+        for (Observation observation : narrowed) {
+            if (visible.contains(observation.getId())) {
+                byPractice
+                        .computeIfAbsent(observation.getPractice().getSlug(), ignored -> new ArrayList<>())
+                        .add(observation);
+            }
+        }
+        return byPractice;
+    }
+
+    private static Map<String, List<Practice>> catalogOrder(Eligibility eligibility) {
+        Map<String, List<Practice>> byGroup = new LinkedHashMap<>();
+        eligibility.practices().stream()
+                .sorted(Comparator.comparingInt(Practice::getDisplayOrder).thenComparing(Practice::getName))
+                .forEach(practice -> {
+                    PracticeGroup group = practice.getGroup();
+                    if (group != null) {
+                        byGroup.computeIfAbsent(group.getSlug(), slug -> new ArrayList<>())
+                                .add(practice);
+                    }
+                });
+        return byGroup;
+    }
+
+    /** The practices review is admitted for in the workspace today, and their slugs per group slug. */
+    private Eligibility eligibility(Long workspaceId) {
         PracticeAutonomy workspaceDefault =
                 workspaceReviewDefaultsProvider.forWorkspace(workspaceId).defaultAutonomy();
         List<Practice> eligiblePractices = practiceRepository.findByWorkspaceId(workspaceId).stream()
@@ -115,21 +202,10 @@ public class PracticeStandingService {
                         .add(practice.getSlug());
             }
         }
-
-        return edges.stream()
-                .map(edge -> snapshot(
-                        LatestRun.perClaim(window.stream()
-                                        .filter(observation ->
-                                                !observation.getObservedAt().isAfter(edge))
-                                        .toList())
-                                .stream()
-                                .filter(observation -> visible.contains(observation.getId()))
-                                .toList(),
-                        eligiblePractices,
-                        eligiblePracticesByGroup,
-                        deliveredGuidance))
-                .toList();
+        return new Eligibility(eligiblePractices, eligiblePracticesByGroup);
     }
+
+    private record Eligibility(List<Practice> practices, Map<String, List<String>> practicesByGroup) {}
 
     /**
      * Every practice the developer should see, whether or not it has anything to say, as of one edge.
@@ -141,18 +217,15 @@ public class PracticeStandingService {
      * feedback was raised and delivered, and switching a practice off does not un-say it.
      */
     private StandingSnapshot snapshot(
-            List<Observation> observations,
-            List<Practice> eligiblePractices,
-            Map<String, List<String>> eligiblePracticesByGroup,
-            Map<UUID, String> deliveredGuidance) {
-        Map<String, List<Observation>> byPractice = new LinkedHashMap<>();
-        for (Observation observation : observations) {
-            byPractice
-                    .computeIfAbsent(observation.getPractice().getSlug(), ignored -> new ArrayList<>())
-                    .add(observation);
-        }
+            List<Observation> rows,
+            Set<UUID> visible,
+            Eligibility eligibility,
+            Map<UUID, String> deliveredGuidance,
+            Instant since) {
+        Map<String, List<Observation>> byPractice = visibleByPractice(LatestRun.perClaim(rows), visible);
+        Map<String, List<Observation>> liveByPractice = visibleByPractice(LatestRun.perLiveClaim(rows), visible);
         Map<String, Practice> subjects = new LinkedHashMap<>();
-        eligiblePractices.forEach(practice -> subjects.put(practice.getSlug(), practice));
+        eligibility.practices().forEach(practice -> subjects.put(practice.getSlug(), practice));
         byPractice.forEach(
                 (slug, group) -> subjects.putIfAbsent(slug, group.getFirst().getPractice()));
 
@@ -162,19 +235,20 @@ public class PracticeStandingService {
             List<Observation> group = byPractice.getOrDefault(slug, List.of());
             PracticeEvidence evidence = group.isEmpty() ? null : PracticeEvidence.classify(group);
             List<Observation> observed = evidence == null ? List.of() : evidence.observed();
-            PracticeTrend trend = practiceTrendService.calculatePractice(slug, observed);
-            Double share = evidence != null && evidence.hasStanding() ? standingShare(evidence, trend) : null;
+            List<Observation> liveRuns = liveByPractice.getOrDefault(slug, List.of());
+            PracticeTrend trend = practiceTrendService.calculatePractice(slug, liveRuns, since);
+            Double share = evidence != null && evidence.hasStanding() ? standingShare(evidence, trend, since) : null;
             PracticeStandingDTO dto = evidence != null && share != null
                     ? toStanding(evidence, trend, deliveredGuidance, share)
                     : silentStanding(subject.getValue(), evidence);
-            standings.add(new StandingSnapshot.PracticeStanding(dto, observed, trend, share));
+            standings.add(new StandingSnapshot.PracticeStanding(dto, observed, liveRuns, trend, share));
         }
         standings.sort(Comparator.<StandingSnapshot.PracticeStanding>comparingInt(
                         standing -> standing.dto().standing().rank())
                 .thenComparingInt(standing -> worstSeverityRank(standing.dto())));
         Map<String, StandingSnapshot.PracticeStanding> practices = new LinkedHashMap<>();
         standings.forEach(standing -> practices.put(standing.dto().slug(), standing));
-        return new StandingSnapshot(practices, eligiblePracticesByGroup);
+        return new StandingSnapshot(practices, eligibility.practicesByGroup());
     }
 
     /**
@@ -232,14 +306,19 @@ public class PracticeStandingService {
      * How positive this practice's recent evidence was, in {@code [0,1]}. The standing label is a rendering of
      * this number, and the level above consumes the number rather than the label.
      *
-     * <p>One rule over the newest {@link #STANDING_WINDOW} opportunities, weighted by recency: the unit is a
-     * piece of reviewed work, and the denominator is the opportunities it had.
-     *
-     * <p>The fallback is unreachable while the look-back and the trend horizon are both
-     * {@link #LOOKBACK_DAYS} days, since a standing exists only where some observation produced a verdict.
+     * <p>One rule over the newest {@link #STANDING_WINDOW} opportunities, weighted by recency
+     * ({@code PracticeTrend#recentMetShare}). The opportunities are the live runs the trend reads
+     * ({@link LatestRun#perLiveClaim}). Only a practice that no live run judged reads its requested and backfilled
+     * work instead, by the same rule, so the two populations are never mixed. The binary fallback answers a practice
+     * whose verdicts no opportunity carries, such as one whose newest run on a piece of work reached no verdict.
      */
-    private static double standingShare(PracticeEvidence evidence, PracticeTrend trend) {
-        return trend.recentMetShare(STANDING_WINDOW, STANDING_DECAY)
+    private double standingShare(PracticeEvidence evidence, PracticeTrend trend, Instant since) {
+        OptionalDouble live = trend.recentMetShare(STANDING_WINDOW, STANDING_DECAY);
+        if (live.isPresent()) {
+            return live.getAsDouble();
+        }
+        return practiceTrendService
+                .selfSelectedMetShare(evidence.observed(), since, STANDING_WINDOW, STANDING_DECAY)
                 .orElseGet(() -> evidence.problems().isEmpty() ? 1.0 : 0.0);
     }
 
@@ -307,7 +386,8 @@ public class PracticeStandingService {
      */
     public record StandingSnapshot(
             Map<String, PracticeStanding> practices, Map<String, List<String>> eligiblePracticesByGroup) {
-        static final StandingSnapshot EMPTY = new StandingSnapshot(Map.of(), Map.of());
+        /** The snapshot of someone nothing was read for: no practice at all. */
+        public static final StandingSnapshot EMPTY = new StandingSnapshot(Map.of(), Map.of());
 
         /**
          * One practice as the snapshot read it.
@@ -316,6 +396,8 @@ public class PracticeStandingService {
          * @param evidence everything the practice's latest runs said, verdict or not, in the order
          *     {@link PracticeEvidence#observed()} builds it: problems worst severity first, then strengths, then
          *     the rows that reached no verdict; empty for a practice nothing reached
+         * @param liveRuns each piece of work's newest live run ({@link LatestRun#perLiveClaim}): what the trend and
+         *     the work resolution count
          * @param trend the trend the standing was read off, for a reader that needs the opportunities behind a
          *     standing rather than the label — which practices are holding, and over how many pieces of work
          * @param share the continuous standing of a practice that has one, else null. The level above
@@ -325,6 +407,7 @@ public class PracticeStandingService {
         public record PracticeStanding(
                 PracticeStandingDTO dto,
                 List<Observation> evidence,
+                List<Observation> liveRuns,
                 PracticeTrend trend,
                 @Nullable Double share) {
 

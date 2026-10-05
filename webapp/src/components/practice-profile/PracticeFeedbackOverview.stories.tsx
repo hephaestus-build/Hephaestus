@@ -59,7 +59,7 @@ export const Default: Story = {
 			"href",
 			"https://github.com/HephaestusTest/practice-validation/pull/21",
 		);
-		await expect(canvas.getByText("Another two practices held too.")).toBeVisible();
+		await expect(canvas.getByText("Another two practices were met too.")).toBeVisible();
 		await userEvent.click(resolvedPill);
 		await expect(args.onOpenPractice).toHaveBeenLastCalledWith("describe-what-and-why");
 

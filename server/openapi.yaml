@@ -50,6 +50,8 @@ tags:
   name: Admin
 - description: Current user's Slack privacy preferences
   name: Slack User Preferences
+- description: "How the workspace's developers split, the reader marked"
+  name: Practices Across The Workspace
 - description: Per-workspace Outline collection mirroring control plane
   name: Outline collections
 - description: The starting catalog copied into new workspaces
@@ -5750,11 +5752,11 @@ paths:
       - Practice Group Detail
   /workspaces/{workspaceSlug}/practice-profile/overview:
     get:
-      description: "Returns the practices holding as a strength, every change to a\
-        \ standing, trend, group or piece of feedback inside the window, and the work\
-        \ reviewed inside it, as structured events. The window opens at the run before\
-        \ the latest one and closes now; with no such run it spans the standing's\
-        \ look-back of 90 days."
+      description: "Returns the practices met as a strength, every change to a standing,\
+        \ trend, group or piece of feedback inside the window, and the work reviewed\
+        \ inside it, as structured events. The window opens at the run before the\
+        \ latest one and closes now; with no such run it spans the standing's look-back\
+        \ of 90 days."
       operationId: getPracticeProfileOverview
       parameters:
       - description: Workspace slug
@@ -5771,7 +5773,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticeProfileOverview"
           description: Practice profile overview returned
-      summary: "What held, what changed and which work was reviewed since the run\
+      summary: "What was met, what changed and which work was reviewed since the run\
         \ before the latest one"
       tags:
       - Practice Profile
@@ -7962,6 +7964,65 @@ paths:
       summary: Explain a named review of the calling developer's own work
       tags:
       - Practice review trace
+  /workspaces/{workspaceSlug}/practices/workspace-overview:
+    get:
+      description: "Counts developers, never names them: every count shown, and the\
+        \ three differences that ADR 0051 names, hold none or at least 4 developers,\
+        \ whoever reads it (CohortPrivacyPolicy). The splits count every developer's\
+        \ current standing and take no window."
+      operationId: getPracticesAcrossWorkspace
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticesAcrossWorkspace"
+          description: Practices across the workspace returned
+      summary: "How the workspace's developers split across practice groups and practices,\
+        \ the reader marked"
+      tags:
+      - Practices Across The Workspace
+  /workspaces/{workspaceSlug}/practices/workspace-overview/tiles:
+    get:
+      description: "A middle half shows only when at least 7 developers are counted\
+        \ in the window, whoever reads it; each window is checked on its own."
+      operationId: getPracticesAcrossWorkspaceTiles
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{2,50}$"
+      - in: query
+        name: window
+        required: true
+        schema:
+          type: string
+          enum:
+          - ALL_TIME
+          - DAYS_30
+          - DAYS_90
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticesAcrossWorkspaceTiles"
+          description: The tiles for the window returned
+      summary: The reader's figures over one window beside the workspace's middle
+        half
+      tags:
+      - Practices Across The Workspace
   /workspaces/{workspaceSlug}/practices/{practiceSlug}:
     delete:
       operationId: deletePractice
@@ -12855,7 +12916,7 @@ components:
       - overriddenCount
     HeldPractice:
       type: object
-      description: A practice the developer keeps holding
+      description: A practice the developer's newest work keeps meeting
       properties:
         cleanWork:
           type: integer
@@ -15224,8 +15285,8 @@ components:
           - scm.general-review-comments
     PracticeProfileOverview:
       type: object
-      description: "What held, what changed and which work was reviewed over a window\
-        \ of the developer's reviews"
+      description: "What was met, what changed and which work was reviewed over a\
+        \ window of the developer's reviews"
       properties:
         changes:
           type: array
@@ -15965,6 +16026,77 @@ components:
       - signals
       - subjectRoles
       - supportedAutomatedReviewModes
+    PracticesAcrossWorkspace:
+      type: object
+      description: "How the workspace's developers with a current standing split across\
+        \ the practice groups, counted in developers and never naming one, and the\
+        \ open feedback beside the reader's own. Nothing here reads a window; the\
+        \ tiles that do are read on their own"
+      properties:
+        groups:
+          type: array
+          description: "One row per practice group shown on the practice pages, in\
+            \ catalog order"
+          items:
+            $ref: "#/components/schemas/WorkspaceGroupSplit"
+        minimumDevelopersPerCount:
+          type: integer
+          format: int32
+          description: "The fewest developers a shown count holds, the reader among\
+            \ them or not"
+        openFeedback:
+          $ref: "#/components/schemas/WorkspaceTile"
+          description: "The reader's open feedback, counted by the rule the practice\
+            \ profile shows it open by, beside the middle half of every eligible developer's:\
+            \ both open now"
+      required:
+      - groups
+      - minimumDevelopersPerCount
+      - openFeedback
+    PracticesAcrossWorkspaceTiles:
+      type: object
+      description: The reader's figures over one window beside the middle half of
+        the developers with a standing in it; each window is checked on its own
+      properties:
+        developersWithAStandingInWindow:
+          type: integer
+          format: int32
+          description: "Eligible developers with a standing in a practice group shown\
+            \ in the window, the developers the tiles compare; absent while too few\
+            \ to show"
+        minimumDevelopersForMiddleHalf:
+          type: integer
+          format: int32
+          description: "The fewest developers a middle half is read over, the reader\
+            \ among them or not; below it a tile shows only the reader's own value"
+        practicesGoingWell:
+          $ref: "#/components/schemas/WorkspaceTile"
+          description: The reader's practices going well
+        practicesNeedingAttention:
+          $ref: "#/components/schemas/WorkspaceTile"
+          description: The reader's practices needing attention
+        reviewedWork:
+          $ref: "#/components/schemas/WorkspaceTile"
+          description: Pieces of the reader's work reviewed in the window
+        window:
+          type: string
+          description: The window the tiles read evidence over
+          enum:
+          - ALL_TIME
+          - DAYS_30
+          - DAYS_90
+        yourPractices:
+          type: integer
+          format: int32
+          description: "The practices the reader's profile lists, the denominator\
+            \ of the practice tiles"
+      required:
+      - minimumDevelopersForMiddleHalf
+      - practicesGoingWell
+      - practicesNeedingAttention
+      - reviewedWork
+      - window
+      - yourPractices
     PreviewRequest:
       type: object
       properties:
@@ -19871,6 +20003,48 @@ components:
       - mentorReady
       - models
       - practiceReviewsReady
+    WorkspaceGroupSplit:
+      type: object
+      description: "One practice group: how the developers with a standing split across\
+        \ it, and where the reader is"
+      properties:
+        groupColor:
+          type: string
+          description: Group colour name
+        groupIcon:
+          type: string
+          description: Group icon name
+        groupName:
+          type: string
+          description: Group name
+        groupSlug:
+          type: string
+          description: Group slug
+        practices:
+          type: array
+          description: "The group's practices review is admitted for, the same for\
+            \ every reader, each split on its own, in catalog order"
+          items:
+            $ref: "#/components/schemas/WorkspacePracticeSplit"
+        split:
+          $ref: "#/components/schemas/WorkspaceSplit"
+          description: How the developers with a standing split across the group
+        yourStanding:
+          type: string
+          description: "The reader's current standing in the group, the one their\
+            \ practice profile shows: the part they are marked in. Absent unless the\
+            \ split shows its parts and counts the reader"
+          enum:
+          - DEVELOPING
+          - STRENGTH
+          - MIXED
+          - NOT_OBSERVED
+          - NO_OPPORTUNITY
+      required:
+      - groupName
+      - groupSlug
+      - practices
+      - split
     WorkspaceListItem:
       type: object
       description: Summary information about a workspace for list views
@@ -20366,6 +20540,35 @@ components:
       - enabled
       - requiredConnectionIds
       - revision
+    WorkspacePracticeSplit:
+      type: object
+      description: "One practice of a group: how the developers with a standing split,\
+        \ and where the reader is"
+      properties:
+        practiceName:
+          type: string
+          description: Practice name
+        practiceSlug:
+          type: string
+          description: Practice slug
+        split:
+          $ref: "#/components/schemas/WorkspaceSplit"
+          description: How the developers with a standing split across the practice
+        yourStanding:
+          type: string
+          description: "The reader's current standing in the practice, the one their\
+            \ practice profile shows: the part they are marked in. Absent unless the\
+            \ split shows its parts and counts the reader"
+          enum:
+          - DEVELOPING
+          - STRENGTH
+          - MIXED
+          - NOT_OBSERVED
+          - NO_OPPORTUNITY
+      required:
+      - practiceName
+      - practiceSlug
+      - split
     WorkspaceProviders:
       type: object
       description: Available workspace creation providers and their configuration
@@ -20383,6 +20586,22 @@ components:
         gitlab:
           $ref: "#/components/schemas/GitLabProvider"
           description: "GitLab workspace provider config, null if not available"
+    WorkspaceRange:
+      type: object
+      description: "The middle half of the developers counted: the 25th to the 75th\
+        \ percentile"
+      properties:
+        high:
+          type: integer
+          format: int32
+          description: The 75th percentile
+        low:
+          type: integer
+          format: int32
+          description: The 25th percentile
+      required:
+      - high
+      - low
     WorkspaceReviewScope:
       type: object
       description: An empty repository selection admits no repository work; an empty
@@ -20413,6 +20632,56 @@ components:
       - personUserIds
       - repositories
       - repositoryMode
+    WorkspaceSplit:
+      type: object
+      description: "How the developers with a standing split across one practice group\
+        \ or one practice, counted in developers: a part per verdict and none yet,\
+        \ set only for SPLIT, and their total, set for SPLIT and TOTAL_ONLY"
+      properties:
+        developers:
+          type: integer
+          format: int32
+          description: "Every developer the split counts, the parts and none yet together,\
+            \ the reader included when counted; set for SPLIT and TOTAL_ONLY"
+        noneYet:
+          type: integer
+          format: int32
+          description: Developers with a standing in a group shown but none here;
+            set only for SPLIT
+        parts:
+          type: array
+          description: "Developers at each verdict, Needs attention, Mixed feedback\
+            \ and Going well in that order; empty unless SPLIT"
+          items:
+            $ref: "#/components/schemas/WorkspaceSplitPart"
+        shape:
+          type: string
+          description: How the split may be shown
+          enum:
+          - SPLIT
+          - TOTAL_ONLY
+          - WITHHELD
+      required:
+      - parts
+      - shape
+    WorkspaceSplitPart:
+      type: object
+      description: The developers at one verdict in a split
+      properties:
+        developers:
+          type: integer
+          format: int32
+          description: "Developers at the verdict, the reader included when counted"
+        standing:
+          type: string
+          description: The verdict the part counts
+          enum:
+          - DEVELOPING
+          - MIXED
+          - STRENGTH
+      required:
+      - developers
+      - standing
     WorkspaceTeamRepositorySettings:
       type: object
       description: Repository contribution visibility settings for a specific team
@@ -20458,6 +20727,21 @@ components:
       - hidden
       - teamId
       - workspaceId
+    WorkspaceTile:
+      type: object
+      description: "One figure: the reader's own value, then the middle half of the\
+        \ developers counted"
+      properties:
+        middle:
+          $ref: "#/components/schemas/WorkspaceRange"
+          description: The workspace's middle half; absent while too few developers
+            are counted
+        yours:
+          type: integer
+          format: int32
+          description: The reader's own value
+      required:
+      - yours
   securitySchemes:
     bearerAuth:
       bearerFormat: JWT

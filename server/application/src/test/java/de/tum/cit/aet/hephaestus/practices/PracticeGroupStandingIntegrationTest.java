@@ -118,9 +118,13 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         insertObservation(agentJob, target, developer, "Strength in " + name, "MET", null, artifactId);
     }
 
+    /** A full window of problems: four pieces of work, each with a problem, so the practice's share is nought. */
     private void persistDevelopingPractice(String slug, String name, long artifactId) {
         Practice target = persistPractice(workspace, group, slug, name);
-        insertObservation(agentJob, target, developer, "Gap in " + name, "NOT_MET", "MAJOR", artifactId);
+        for (int piece = 0; piece < 4; piece++) {
+            insertObservation(
+                    agentJob, target, developer, "Gap in " + name, "NOT_MET", "MAJOR", artifactId + 100L * piece);
+        }
     }
 
     private void persistMixedPractice(String slug, String name, long artifactId) {
@@ -248,8 +252,8 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
 
         @Test
         @WithUser
-        @DisplayName("derives DEVELOPING from a confident problem and carries the delivered feedback")
-        void shouldReturnDevelopingWithEvidence() {
+        @DisplayName("reads one confident problem as one setback and carries the delivered feedback")
+        void shouldReturnMixedWithEvidenceForOneProblem() {
             UUID observationId =
                     insertObservation(agentJob, practice, developer, "Missing rollout plan", "NOT_MET", "MAJOR", 1L);
             deliverFeedbackFor(observationId, "Add a rollout section describing how the change ships.");
@@ -266,8 +270,9 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("code-quality")
                     .jsonPath("$[0].groupName")
                     .isEqualTo("Code Quality")
+                    // One problem on one piece of work reads as it does on the newest of four: one setback.
                     .jsonPath("$[0].standing")
-                    .isEqualTo("DEVELOPING")
+                    .isEqualTo("MIXED")
                     .jsonPath("$[0].guidance")
                     .isEqualTo(
                             "Your recent feedback suggests that “PR Description Quality” is the next practice to work on.")
@@ -450,7 +455,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isOk()
                     .expectBody()
                     .jsonPath("$[0].standing")
-                    .isEqualTo("DEVELOPING")
+                    .isEqualTo("MIXED")
                     .jsonPath("$[0].observations.length()")
                     .isEqualTo(1);
         }
@@ -458,7 +463,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @Test
         @WithUser
         @DisplayName("a problem seen on a single piece of reviewed work still yields a verdict, not an empty state")
-        void shouldReportDevelopingForSingleArtifactProblem() {
+        void shouldReportAVerdictForSingleArtifactProblem() {
             insertObservation(agentJob, practice, developer, "Coin-flip hunch", "NOT_MET", "MINOR", 1L);
 
             webTestClient
@@ -470,7 +475,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isOk()
                     .expectBody()
                     .jsonPath("$[0].standing")
-                    .isEqualTo("DEVELOPING")
+                    .isEqualTo("MIXED")
                     .jsonPath("$[0].observations.length()")
                     .isEqualTo(1);
         }
@@ -694,7 +699,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .jsonPath("$[0].direction")
                     .isEqualTo("INSUFFICIENT_EVIDENCE")
                     .jsonPath("$[0].trendSupport.opportunitiesUntilComparable")
-                    .isEqualTo(4)
+                    .isEqualTo(6)
                     .jsonPath("$[0].observations.length()")
                     .isEqualTo(2);
         }
@@ -847,7 +852,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isOk()
                     .expectBody()
                     .jsonPath("$[0].standing")
-                    .isEqualTo("DEVELOPING")
+                    .isEqualTo("MIXED")
                     .jsonPath("$[0].observations.length()")
                     .isEqualTo(1)
                     .jsonPath("$[0].observations[0].title")

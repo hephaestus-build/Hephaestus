@@ -46,6 +46,49 @@ export const PracticeNotObserved: Story = {
 	},
 };
 
+const fourPieces = {
+	bundleSize: 4,
+	credibilityThreshold: 0.9,
+	currentOpportunities: 4,
+	opportunities: 8,
+	opportunitiesUntilComparable: 0,
+	previousOpportunities: 4,
+	ropeHalfWidth: 0.15,
+};
+
+/** A settled standing names how many pieces of work it is read from, beside the badge. */
+export const WithItsWork: Story = {
+	args: { support: fourPieces },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("from 4 pieces of work")).toBeVisible();
+		await userEvent.hover(canvas.getByRole("button", { name: "Going well" }));
+		const tooltip = await settledPopup();
+		await expect(tooltip).toHaveTextContent(
+			"Recent reviews here were almost entirely positive. Read from four pieces of work.",
+		);
+	},
+};
+
+/** Fewer than three pieces of work: the sentence behind the badge calls the standing an early read. */
+export const EarlyRead: Story = {
+	args: { support: { ...fourPieces, currentOpportunities: 1 } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("from 1 piece of work")).toBeVisible();
+		await userEvent.hover(canvas.getByRole("button", { name: "Going well" }));
+		const tooltip = await settledPopup();
+		await expect(tooltip).toHaveTextContent("An early read from one piece of work.");
+		await expect(tooltip).not.toHaveTextContent("almost entirely positive");
+	},
+};
+
+/** A standing no review has settled names no work, whatever support comes with it. */
+export const NotSettled: Story = {
+	args: { standing: "NOT_OBSERVED", support: fourPieces },
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByText(/pieces? of work/u)).toBeNull();
+	},
+};
+
 /** Every standing at once, which is where two entries sharing an icon would show. */
 export const EveryStanding: Story = {
 	render: (args) => (

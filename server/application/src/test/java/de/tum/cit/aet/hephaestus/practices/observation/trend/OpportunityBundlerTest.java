@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 @Tag("unit")
 class OpportunityBundlerTest {
@@ -86,7 +88,20 @@ class OpportunityBundlerTest {
 
         assertThat(result.current()).hasSize(4);
         assertThat(result.previous()).hasSize(1);
-        assertThat(result.opportunitiesUntilComparable(3)).isEqualTo(2);
+        assertThat(result.opportunitiesUntilComparable(4, 3)).isEqualTo(2);
+    }
+
+    @ParameterizedTest(name = "{0} decided pieces of work leave {1} to go")
+    @CsvSource({"0, 8", "2, 6", "4, 4", "6, 2", "8, 0"})
+    void shouldCountWhatTheCurrentBundleLacksBeforeThePreviousOne(int decided, int missing) {
+        // The previous bundle fills only once the current one is full, so two pieces of work are six short of a
+        // comparison, not four.
+        Observation[] observations = new Observation[decided];
+        for (int index = 0; index < decided; index++) {
+            observations[index] = judged(index + 1, UUID.randomUUID(), "2026-08-11T0" + index + ":00:00Z", Outcome.MET);
+        }
+
+        assertThat(bundle(observations).opportunitiesUntilComparable(4, 4)).isEqualTo(missing);
     }
 
     @Test

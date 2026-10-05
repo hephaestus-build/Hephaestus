@@ -101,6 +101,8 @@ export const Default: Story = {
 		// header; Heph's card starts under it, so the two do not touch.
 		const summary = screen.getByText("five practices in this group");
 		await expect(summary).toBeVisible();
+		// The standing names the work it is read from beside its badge.
+		await expect(screen.getAllByText("from 4 pieces of work")[0]).toBeVisible();
 		const [line] = within(screen.getByRole("dialog")).getAllByRole("separator");
 		if (!line) {
 			throw new Error("Expected the line under the header.");
@@ -153,7 +155,7 @@ export const AboutTab: Story = {
 		const stand = screen.getByRole("region", { name: "Where you stand" });
 		await expect(
 			within(stand).getByText(
-				"Recent reviews here mostly found problems. Of five practices, two need attention, one shows mixed feedback and two are going well.",
+				"Recent reviews here mostly found problems. Read from four pieces of work. Of five practices, two need attention, one shows mixed feedback and two are going well.",
 			),
 		).toBeVisible();
 		await expect(within(stand).getByText("Needs attention")).toBeVisible();
@@ -315,8 +317,12 @@ export const LoadFailed: Story = {
 	},
 };
 
+/** A slug the profile does not list, such as a stale address. */
 export const Missing: Story = {
 	args: { group: undefined, standing: undefined, practices: undefined },
+	play: async () => {
+		await expectSettledVisible(await screen.findByText("We could not find this practice group"));
+	},
 };
 
 /** At 320px the standing summary wraps under the title and nothing leaves the panel. */

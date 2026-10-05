@@ -20,7 +20,7 @@ import { StandingCountsList } from "@/components/practice-vocabulary/StandingCou
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell } from "@/components/ui/table";
 
-import { ALL_PRACTICE_GROUPS } from "./practice-profile-search";
+import { ALL_PRACTICE_GROUPS, NO_PRACTICE_GROUPS } from "./practice-profile-search";
 
 export interface AllPracticeGroupsTableProps {
 	/** Already sorted by the caller under `sort`. */
@@ -186,12 +186,7 @@ export function AllPracticeGroupsTable({
 					onOpenPractice={onOpenPractice}
 				/>
 			)}
-			empty={{
-				icon: <ClipboardCheckIcon />,
-				title: "No practices set up yet",
-				description:
-					"Practice groups appear here once a workspace admin sets up the practices this workspace reviews.",
-			}}
+			empty={{ icon: <ClipboardCheckIcon />, ...NO_PRACTICE_GROUPS }}
 			isLoading={state.status === "loading"}
 			loadingRow={loadingRow}
 		/>

@@ -113,6 +113,32 @@ class GroupTrendAggregatorTest {
         assertThat(group.support().opportunities()).isEqualTo(15);
     }
 
+    @Test
+    void shouldCountBothBundlesWhenTheGroupHasNoPracticeToWaitOn() {
+        PracticeTrend group = GroupTrendAggregator.aggregate("quality", List.of(), List.of(), properties);
+
+        // A full current bundle of four, then a previous one of four.
+        assertThat(group.support().opportunitiesUntilComparable()).isEqualTo(8);
+    }
+
+    @Test
+    void shouldWaitOnThePracticeClosestToAComparison() {
+        PracticeTrend two = PracticeTrendCalculator.calculatePractice(
+                "naming",
+                List.of(
+                        judged(1L, "2026-05-01T09:00:00Z", Outcome.MET),
+                        judged(2L, "2026-05-02T09:00:00Z", Outcome.MET)),
+                Instant.parse("2026-01-01T00:00:00Z"),
+                properties);
+        PracticeTrend none = PracticeTrendCalculator.calculatePractice(
+                "testing", List.of(), Instant.parse("2026-01-01T00:00:00Z"), properties);
+
+        PracticeTrend group =
+                GroupTrendAggregator.aggregate("quality", List.of("naming", "testing"), List.of(two, none), properties);
+
+        assertThat(group.support().opportunitiesUntilComparable()).isEqualTo(6);
+    }
+
     private PracticeTrend trend(String slug, BetaPosterior.Difference difference) {
         TrendSupport support = new TrendSupport(
                 4,

@@ -71,6 +71,19 @@ class LatestRunTest extends BaseUnitTest {
                 .containsExactly(backfilled, sizeRecovered, described);
     }
 
+    /** A requested or backfilled run is quoted in place of the live run before it, but only the live run counts. */
+    @Test
+    void shouldCountOnlyTheNewestLiveRunWhenARequestedOrBackfilledRunFollowsIt() {
+        Observation live = observation(7L, UUID.randomUUID(), NOW.minus(Duration.ofDays(1)), Outcome.NOT_MET);
+        Observation requested = observation(UUID.randomUUID(), NOW, ObservationOrigin.MANUAL);
+        Observation backfilled =
+                observation(UUID.randomUUID(), NOW.plus(Duration.ofDays(1)), ObservationOrigin.BACKFILL);
+        List<Observation> window = List.of(backfilled, requested, live);
+
+        assertThat(LatestRun.perClaim(window)).containsExactly(backfilled, requested);
+        assertThat(LatestRun.perLiveClaim(window)).containsExactly(live);
+    }
+
     @Test
     void shouldBreakATimestampTieOnTheJobIdWhenTwoRunsShareATimestamp() {
         UUID smaller = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -110,6 +123,19 @@ class LatestRunTest extends BaseUnitTest {
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(artifactId)
                 .outcome(outcome)
+                .observedAt(observedAt)
+                .build();
+    }
+
+    private static Observation observation(UUID run, Instant observedAt, ObservationOrigin origin) {
+        return Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(run)
+                .practice(practice("reviewable-diff-size"))
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(7L)
+                .outcome(Outcome.MET)
+                .origin(origin)
                 .observedAt(observedAt)
                 .build();
     }

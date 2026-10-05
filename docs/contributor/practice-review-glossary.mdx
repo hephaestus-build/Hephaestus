@@ -129,6 +129,16 @@ The **door** is what a person or a provider did. `DiscoveredVia` is how we came 
   `BACKFILL` is measured-and-never-delivered. A sweep is a standing authorization to spend *and* to speak.
 
 `MANUAL` and `BACKFILL` are self-selected samples and `LIVE` is not, which is why they are held apart in every behavioral read.
+
+A standing, a trend, and a resolution by the work count each piece of work at its newest `LIVE` review.
+A later `MANUAL` review of the same work does not hide that result.
+Only a practice that no `LIVE` review judged reads its `MANUAL` and `BACKFILL` reviews instead, by the same rule.
+Neither origin raises a Practice profile card on its own, and both stay visible as observations.
+
+Feedback cites each piece of work at its newest `LIVE` review.
+A later `MANUAL` review drops that work from the citation only if it found no problem on the practice.
+A `BACKFILL` review never changes what feedback cites.
+
 A `BACKFILL` observation is also entitled only to `IN_APP`: the developer's own practice feedback.
 That entitlement is a ceiling, not an instruction.
 The in-app router refuses a cluster made entirely of backfilled measurements (`BACKFILL_QUIET`).
@@ -489,11 +499,11 @@ Say **withdrawn**, never *deleted*, *retracted* or *invalidated*: invalidated is
 
 A piece of [feedback](./practice-feedback-language.md) on the Practice profile resolves in one of two ways, and the two are held apart everywhere the resolution is shown.
 
-| Term                     | Plain meaning                                                                                                                                                                                                                                                                                                                | Do not use for this concept                         |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| **Resolved by the work** | Three pieces of the developer's reviewed work in a row, reviewed after the feedback was prepared, came back clean on the practice. Computed from the observations when the feedback is read and never stored. A problem starts the count over, and a piece of work reviewed several times counts once, at its newest review. | auto-resolved, closed by the system, streak, passed |
-| **Marked as addressed**  | The developer answered the card with *Addressed* or *Not applicable*. Pressing the answer again takes it back and reopens the card. A dispute leaves it open. Whichever way resolved the feedback first is the one the card and the summary report.                                                                          | dismissed, acknowledged, done                       |
-| **Fell back**            | Open feedback the developer's work had started to answer, with at least one clean piece of work toward the three. A piece of work reviewed in the overview's window raised the problem again. The count went back to none. Closed feedback never falls back.                                                                 | reset, regressed, reopened                          |
+| Term                     | Plain meaning                                                                                                                                                                                                                                                                                                                  | Do not use for this concept                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| **Resolved by the work** | Three pieces of the developer's reviewed work in a row, reviewed after the feedback was prepared, came back clean on the practice. Computed from the observations when the feedback is read and never stored. A problem starts the count over. A piece of work reviewed several times counts once, at its newest [`LIVE` review](#how-a-review-was-occasioned). | auto-resolved, closed by the system, streak, passed |
+| **Marked as addressed**  | The developer answered the card with *Addressed* or *Not applicable*. The card closes as *Marked by you* on neutral ground, never in the success color of a resolution. It says that the next work confirms it. Its clean work count continues. Pressing the answer again takes it back and reopens the card. *Disagree* writes a dispute, which leaves the card open. Whichever way closed the feedback first is the one the card and the summary report. | dismissed, acknowledged, done                       |
+| **Fell back**            | Open feedback the developer's work had started to answer, with at least one clean piece of work toward the three. A piece of work reviewed in the overview's window raised the problem again. The count went back to none. Closed feedback never falls back.                                                        | reset, regressed, reopened                          |
 
 A run of three that completed once stays a resolution: a later slip is new feedback's business.
 The profile summary reports a `FEEDBACK_RESOLVED` change with who resolved it, `WORK` or `DEVELOPER`, and never merges the two into one count.
@@ -509,7 +519,7 @@ The ledger keeps it.
 
 ### Practice profile overview
 
-The overview is the Practice profile's account of what held and what changed.
+The overview is the Practice profile's account of which practices were met and what changed.
 It reads standings and the feedback ledger and composes sentences on the page.
 Nothing in it is a second standing or resolution rule.
 Its rules, in one place:
@@ -529,10 +539,11 @@ Its rules, in one place:
   5. A standing that moved up.
   6. A first observation.
   7. A trend that turned.
-  8. A practice that held.
-- **A held practice is dropped** from what held if it slipped, fell back, or got new feedback in the window.
-  Holding and moving up are not a contradiction.
-  Holding and slipping are.
+  8. A practice that was met.
+- **A met practice is dropped** from what is holding up well if it also slipped in the window.
+  The same applies if it fell back or got new feedback in the window.
+  A met practice that moved up is not a contradiction.
+  A met practice that slipped is.
 
 ## Machine names
 

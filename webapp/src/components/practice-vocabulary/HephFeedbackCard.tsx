@@ -34,7 +34,7 @@ export interface HeldPracticeRow {
 	 */
 	statement?: string;
 	/**
-	 * The evidence phrase — `held across four pull requests`, or `after !421, !423 and !425 came
+	 * The evidence phrase: `met across four pull requests`, or `after !421, !423 and !425 came
 	 * back clean` with its work references as links. It sits inside the statement's own text flow,
 	 * so a wrap never strands it alone on a line.
 	 */
@@ -96,7 +96,7 @@ function FeedbackBlockView({ label, content }: FeedbackBlock) {
 export interface HephFeedbackCardProps {
 	/** Most useful first; the composer hands over at most three. */
 	holdingUp: HeldPracticeRow[];
-	/** "Another two practices held too." when the rows could not name every held practice. */
+	/** "Another two practices were met too." when the rows could not name every held practice. */
 	holdingUpNote?: string;
 	/**
 	 * What needs the developer next, at most two rows; with none the block is left out rather than

@@ -266,7 +266,7 @@ export const AboutTab: Story = {
 	play: async () => {
 		await expectSettledVisible(await screen.findByText("Where you stand"));
 		const standingLine = screen.getByText(
-			"Recent reviews here mostly found problems. Based on your latest six pieces of reviewed work.",
+			"Recent reviews here mostly found problems. Read from six pieces of work. Your latest work counts most, and older work counts less.",
 		);
 		const trendLine = screen.getByText(
 			"Recent reviewed work carried more strengths than the stretch before it. Compared your latest six pieces of reviewed work with the five before them. Evidence spans 12 days.",
@@ -317,7 +317,8 @@ export const NotObserved: Story = {
 			screen.getByText("No review has observed this practice in your work yet."),
 		).toBeVisible();
 		await expect(screen.queryByText(/No practice in this group/u)).not.toBeInTheDocument();
-		await expect(screen.queryByText(/Based on your latest/u)).not.toBeInTheDocument();
+		await expect(screen.queryByText(/Read from|counts most/u)).not.toBeInTheDocument();
+		await expect(screen.queryByText(/pieces? of work$/u)).not.toBeInTheDocument();
 		// The header's chip is the only one: no direction is claimed over no verdict.
 		await expect(screen.getAllByText("Not enough to compare yet")).toHaveLength(1);
 	},

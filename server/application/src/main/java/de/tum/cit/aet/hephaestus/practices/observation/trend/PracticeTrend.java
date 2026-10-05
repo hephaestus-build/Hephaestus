@@ -83,31 +83,44 @@ public final class PracticeTrend {
      * A {@code decay} strictly below 0.5 is what makes the two newest opportunities outweigh everything older
      * — see the caller that chooses it.
      *
+     * <p>The share is what is left after the problems, measured against the weight of a full window: {@code 1 −
+     * Σ weight·(1 − metShare) / Σ decay^age} over every age the window has, read or not. With fewer decided
+     * opportunities than the window, the ages not reached yet count as neither a problem nor a success, so the
+     * same problems weigh the same whatever the count. One problem on the newest piece of work therefore scores
+     * the same with one, two, three or four pieces decided. Dividing by the weight of the opportunities read
+     * instead would score one problem among few pieces lower, so the label would change with the count alone.
+     *
      * @param window how many of the newest decided opportunities to consider, at least one
      * @param decay per-opportunity weight factor in {@code (0,1]}; 1.0 is an unweighted mean
      */
     public OptionalDouble recentMetShare(int window, double decay) {
+        return recentMetShare(opportunities, window, decay);
+    }
+
+    /** {@link #recentMetShare(int, double)} over any opportunities, oldest first. */
+    static OptionalDouble recentMetShare(List<EvidenceOpportunity> opportunities, int window, double decay) {
         List<EvidenceOpportunity> decided =
                 opportunities.stream().filter(EvidenceOpportunity::decided).toList();
         if (decided.isEmpty()) {
             return OptionalDouble.empty();
         }
         List<EvidenceOpportunity> recent = decided.subList(Math.max(0, decided.size() - window), decided.size());
-        double weighted = 0.0;
-        double totalWeight = 0.0;
+        double missed = 0.0;
         for (int index = recent.size() - 1, age = 0; index >= 0; index--, age++) {
-            double weight = Math.pow(decay, age);
-            weighted += weight * recent.get(index).outcomes().metShare();
-            totalWeight += weight;
+            missed += Math.pow(decay, age) * (1.0 - recent.get(index).outcomes().metShare());
         }
-        return OptionalDouble.of(weighted / totalWeight);
+        double fullWeight = 0.0;
+        for (int age = 0; age < window; age++) {
+            fullWeight += Math.pow(decay, age);
+        }
+        return OptionalDouble.of(1.0 - missed / fullWeight);
     }
 
     /**
      * How many of the newest decided opportunities came back with no problem at all, and what they were.
      *
      * <p>Counted from the newest backwards and stopped at the first opportunity that raised a problem, so
-     * the number reads as "held across N pieces of work". An opportunity that produced no verdict is skipped
+     * the number reads as "met across N pieces of work". An opportunity that produced no verdict is skipped
      * rather than counted as either side, exactly as the standing skips it. Counted over the opportunities
      * the trend keeps, so a very long run of clean work reads as that trail's length rather than the whole history.
      * {@link WorkResolution} counts the same clean opportunities forwards from a piece of feedback.

@@ -27,7 +27,7 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		standing: "STRENGTH",
-		basis: "Based on your latest four pieces of reviewed work.",
+		basis: "Your latest work counts most, and older work counts less.",
 		direction: "IMPROVING",
 		support,
 		scope: "practice",
@@ -40,8 +40,25 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		const region = canvas.getByRole("region", { name: "Where you stand" });
+		await expect(region).toHaveTextContent(
+			"Recent reviews here were almost entirely positive. Read from four pieces of work. Your latest work counts most, and older work counts less.",
+		);
 		await expect(region).toHaveTextContent(PRACTICE_TREND_DEFS.IMPROVING.label);
 		await expect(region).toHaveTextContent(PRACTICE_TREND_DEFS.IMPROVING.description);
+	},
+};
+
+/** Below three pieces of work the sentence is an early read, not the registry's pattern. */
+export const EarlyRead: Story = {
+	args: {
+		basis: undefined,
+		direction: "INSUFFICIENT_EVIDENCE",
+		support: { ...support, currentOpportunities: 1, previousOpportunities: 0, opportunities: 1 },
+	},
+	play: async ({ canvas }) => {
+		const region = canvas.getByRole("region", { name: "Where you stand" });
+		await expect(region).toHaveTextContent("An early read from one piece of work.");
+		await expect(region).not.toHaveTextContent("almost entirely positive");
 	},
 };
 
@@ -69,5 +86,25 @@ export const NotObserved: Story = {
 		await expect(canvas.getByRole("region", { name: "Where you stand" })).not.toHaveTextContent(
 			PRACTICE_TREND_DEFS.INSUFFICIENT_EVIDENCE.label,
 		);
+	},
+};
+
+/** Only a review of past work judged it, and such a review never moves a trend. */
+export const ReadFromPastWork: Story = {
+	args: {
+		basis:
+			"Read from a review that you asked for or a review of your past work. Neither moves a trend.",
+		direction: "INSUFFICIENT_EVIDENCE",
+		support: {
+			...support,
+			currentOpportunities: 0,
+			opportunities: 0,
+			opportunitiesUntilComparable: 8,
+			previousOpportunities: 0,
+		},
+	},
+	play: async ({ canvas }) => {
+		const region = canvas.getByRole("region", { name: "Where you stand" });
+		await expect(region).toHaveTextContent("No new work has been reviewed yet.");
 	},
 };

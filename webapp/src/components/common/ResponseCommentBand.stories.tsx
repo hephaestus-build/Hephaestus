@@ -77,6 +77,7 @@ export const ReasonRequired: Story = {
 export const Pending: Story = {
 	args: {
 		isPending: true,
+		sending: true,
 		reasons: [
 			{ value: "not-accurate", label: "Not accurate" },
 			{ value: "not-useful", label: "Not useful" },

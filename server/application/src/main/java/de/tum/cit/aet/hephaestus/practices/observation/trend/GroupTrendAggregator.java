@@ -36,7 +36,7 @@ final class GroupTrendAggregator {
             int missing = practiceTrends.stream()
                     .mapToInt(trend -> trend.support().opportunitiesUntilComparable())
                     .min()
-                    .orElse(properties.getMinBundleSize());
+                    .orElse(properties.getBundleSize() + properties.getMinBundleSize());
             return new PracticeTrend(
                     groupSlug,
                     TrendScope.GROUP,

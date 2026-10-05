@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { FeedbackResponse, InAppFeedback } from "@/api/types.gen";
 import { nextRating, nextResolution, useInAppFeedback } from "@/hooks/use-in-app-feedback";
@@ -168,11 +168,42 @@ describe("useInAppFeedback", () => {
 		expect(written).toHaveLength(1);
 		expect(result.current.ratingProps(feedbackId)).toMatchObject({
 			usefulness: "HELPFUL",
-			commentOpen: true,
+			openBand: "comment",
 			isPending: true,
 		});
 		reread.resolve();
 		await waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(false));
+	});
+
+	it("names the control that wrote only once the write outlasts the delay, and clears it when it settles", async () => {
+		// Only the timeouts are faked, and they also move with real time, so the reads and waits
+		// still run; the test jumps them past the delay that keeps a quick write silent.
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
+		try {
+			const reread = deferred();
+			const { result } = renderFeedback(undefined, true, reread.promise);
+			await vi.waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+			act(() => {
+				result.current.ratingProps(feedbackId).onResolve?.("ADDRESSED");
+			});
+			await vi.waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(true));
+			expect(result.current.ratingProps(feedbackId).saving).toBeUndefined();
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(1000);
+			});
+			expect(result.current.ratingProps(feedbackId).saving).toBe("answer");
+
+			reread.resolve();
+			await vi.waitFor(() => expect(result.current.ratingProps(feedbackId).isPending).toBe(false));
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(500);
+			});
+			expect(result.current.ratingProps(feedbackId).saving).toBeUndefined();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("writes the answer over a dispute and shows it until the cards have been read again", async () => {
@@ -281,5 +312,43 @@ describe("useInAppFeedback", () => {
 				comment: "The rename was its own PR",
 			},
 		});
+	});
+
+	it("opens the dispute's band on Disagree and writes the dispute with its sentence on Send", async () => {
+		const { result, written } = renderFeedback({ usefulness: "HELPFUL" });
+		await waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+		act(() => {
+			result.current.ratingProps(feedbackId).onDisagree?.();
+		});
+		expect(result.current.ratingProps(feedbackId).openBand).toBe("dispute");
+		expect(written).toHaveLength(0);
+
+		act(() => {
+			result.current.ratingProps(feedbackId).onSendDispute?.("  #17 already split it  ");
+		});
+
+		await waitFor(() => expect(written).toHaveLength(1));
+		expect(written[0]).toStrictEqual({
+			method: "PUT",
+			body: { usefulness: "HELPFUL", resolution: "DISPUTED", comment: "#17 already split it" },
+		});
+		expect(result.current.ratingProps(feedbackId).openBand).toBeUndefined();
+	});
+
+	it("takes a standing dispute back on Disagree, keeping the rating", async () => {
+		const { result, written } = renderFeedback({
+			usefulness: "UNHELPFUL",
+			resolution: "DISPUTED",
+			comment: "The rename was its own PR",
+		});
+		await waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+		act(() => {
+			result.current.ratingProps(feedbackId).onDisagree?.();
+		});
+
+		await waitFor(() => expect(written).toHaveLength(1));
+		expect(written[0]).toStrictEqual({ method: "PUT", body: { usefulness: "UNHELPFUL" } });
 	});
 });

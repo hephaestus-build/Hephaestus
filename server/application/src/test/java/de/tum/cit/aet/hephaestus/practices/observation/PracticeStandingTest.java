@@ -60,7 +60,7 @@ class PracticeStandingTest {
     private static PracticeStanding standing(PracticeStandingDTO.Standing standing, PracticeTrend trend) {
         PracticeStandingDTO dto = new PracticeStandingDTO(
                 SLUG, "Testing", null, null, null, null, standing, List.of(), List.of(), null, null);
-        return new PracticeStanding(dto, List.of(), trend, null);
+        return new PracticeStanding(dto, List.of(), List.of(), trend, null);
     }
 
     /** One review per piece of work, oldest first: {@code true} came back clean, {@code false} raised a problem. */
@@ -68,8 +68,8 @@ class PracticeStandingTest {
         List<Observation> observations = IntStream.range(0, cleanOldestFirst.length)
                 .mapToObj(index -> observation(index, cleanOldestFirst[index]))
                 .toList();
-        return new PracticeTrendService(new TrendProperties(), Clock.fixed(NOW, ZoneOffset.UTC))
-                .calculatePractice(SLUG, observations);
+        PracticeTrendService trends = new PracticeTrendService(new TrendProperties(), Clock.fixed(NOW, ZoneOffset.UTC));
+        return trends.calculatePractice(SLUG, observations, trends.horizon());
     }
 
     private static Observation observation(int index, boolean isClean) {

@@ -14,13 +14,13 @@ import {
 } from "@/components/ui/select";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 
+import { RangeControls } from "@/components/common/RangeControls";
 import type { ActivityOverviewState } from "./activity-buckets";
-import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "./activity-range";
+import { ACTIVITY_RANGE_DEFS, type ActivityRange, ACTIVITY_RANGE_OPTIONS } from "./activity-range";
 import { ActivityTiles } from "./ActivityTiles";
 import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
 import { CopyMarkdownButton } from "./CopyMarkdownButton";
 import { type MemberActivityState, MemberActivityTable } from "./MemberActivityTable";
-import { RangeControls } from "./RangeControls";
 
 export interface WorkspaceActivityTeam {
 	id: number;
@@ -107,6 +107,7 @@ export function WorkspaceActivityPage({
 				title={ACTIVITY_RANGE_DEFS[range].label}
 				actions={
 					<RangeControls
+						options={ACTIVITY_RANGE_OPTIONS}
 						range={range}
 						onRangeChange={onRangeChange}
 						updating={

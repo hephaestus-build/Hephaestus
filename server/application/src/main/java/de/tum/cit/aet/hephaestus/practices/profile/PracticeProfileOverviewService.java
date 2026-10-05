@@ -238,9 +238,9 @@ public class PracticeProfileOverviewService {
                                 DeveloperReviewRunRow::getJobId, DeveloperReviewRunRow::getReviewedAt)),
                 evidenceByFeedback,
                 InAppFeedbackEvidence.workResolutionsFrom(
-                        recent, evidenceByFeedback, practiceChangedAt, evidenceByPractice(after)),
+                        recent, evidenceByFeedback, practiceChangedAt, liveRunsByPractice(after)),
                 InAppFeedbackEvidence.workResolutionsFrom(
-                        recent, evidenceByFeedback, practiceChangedAt, evidenceByPractice(before)),
+                        recent, evidenceByFeedback, practiceChangedAt, liveRunsByPractice(before)),
                 addressed.stream()
                         .collect(Collectors.toMap(
                                 AddressedFeedbackProjection::getFeedbackId,
@@ -409,9 +409,9 @@ public class PracticeProfileOverviewService {
                 work);
     }
 
-    private static Map<String, List<Observation>> evidenceByPractice(StandingSnapshot snapshot) {
+    private static Map<String, List<Observation>> liveRunsByPractice(StandingSnapshot snapshot) {
         Map<String, List<Observation>> byPractice = new LinkedHashMap<>();
-        snapshot.practices().forEach((slug, practice) -> byPractice.put(slug, practice.evidence()));
+        snapshot.practices().forEach((slug, practice) -> byPractice.put(slug, practice.liveRuns()));
         return byPractice;
     }
 

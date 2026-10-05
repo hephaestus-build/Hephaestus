@@ -12,23 +12,32 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.feedback.PreviousInAppFeedback;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
+import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService.StandingSnapshot;
+import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
+import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The work resolves the feedback: a card on the developer's page reports how many pieces of their work in a
@@ -41,6 +50,15 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
 
     @Autowired
     private PreviousInAppFeedback previousInAppFeedback;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Autowired
+    private PracticeStandingService practiceStandingService;
+
+    @Autowired
+    private TransactionTemplate transactions;
 
     private Workspace workspace;
     private Practice practice;
@@ -237,6 +255,89 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
                 .isEqualTo("WORK")
                 .jsonPath("$[0].closedAt")
                 .isEqualTo(daysAfterPreparation(5).toString());
+    }
+
+    /**
+     * Requested re-reviews that came back clean on two pull requests whose live reviews found a problem leave the
+     * standing, the trend and the card exactly as the live reviews left them.
+     */
+    @Test
+    @WithUser
+    @DisplayName("requested re-reviews that come back clean neither hide live problems nor move the standing")
+    void shouldKeepTheLiveVerdictWhenARequestedReReviewComesBackClean() {
+        for (int number = 11; number <= 12; number++) {
+            AgentJob live = persistPullRequestReview(workspace, number, daysAfterPreparation(number - 10));
+            observe(practice, live, number, developer, NOT_MET, Severity.MAJOR, daysAfterPreparation(number - 10));
+        }
+        PracticeStandingDTO before = standing();
+        String cardBefore = cardJson();
+
+        requestedReview(11, MET, daysAfterPreparation(3));
+        requestedReview(12, MET, daysAfterPreparation(4));
+
+        PracticeStandingDTO after = standing();
+        assertThat(after.standing()).isEqualTo(PracticeStandingDTO.Standing.DEVELOPING);
+        assertThat(after.direction()).isEqualTo(before.direction());
+        assertThat(after.trendSupport()).isEqualTo(before.trendSupport());
+        assertThat(Objects.requireNonNull(after.trendSupport()).opportunities()).isEqualTo(3);
+        assertThat(cardJson()).isEqualTo(cardBefore);
+        // The workspace page reads the same standing through its one-scan query.
+        PracticeStandingDTO.Standing onTheWorkspacePage = transactions.execute(status -> {
+            StandingSnapshot snapshot = practiceStandingService
+                    .getCurrentWorkspaceStandingSnapshots(workspace.getId(), Set.of(developer.getId()))
+                    .byDeveloper()
+                    .get(developer.getId());
+            return Objects.requireNonNull(
+                            Objects.requireNonNull(snapshot).practices().get(practice.getSlug()))
+                    .dto()
+                    .standing();
+        });
+        assertThat(onTheWorkspacePage).isEqualTo(PracticeStandingDTO.Standing.DEVELOPING);
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("a requested clean re-review of a live problem does not stop that problem from resetting the count")
+    void shouldResetTheCountWhenOnlyARequestedReReviewCameBackCleanOnTheLiveProblem() {
+        cleanReview(practice, developer, 11, daysAfterPreparation(1));
+        AgentJob slip = persistPullRequestReview(workspace, 12, daysAfterPreparation(2));
+        observe(practice, slip, 12L, developer, NOT_MET, Severity.MAJOR, daysAfterPreparation(2));
+        cleanReview(practice, developer, 13, daysAfterPreparation(3));
+        cleanReview(practice, developer, 14, daysAfterPreparation(4));
+        requestedReview(12, MET, daysAfterPreparation(5));
+
+        card().jsonPath("$[0].cleanWork[*].reviewedWork.label")
+                .isEqualTo(List.of("#13", "#14"))
+                .jsonPath("$[0].closedAt")
+                .doesNotExist();
+    }
+
+    private void requestedReview(int number, Outcome outcome, Instant at) {
+        AgentJob requested = persistPullRequestReview(workspace, number, at);
+        UUID id = observe(practice, requested, number, developer, outcome, null, at);
+        jdbc.update("UPDATE observation SET origin = 'MANUAL' WHERE id = ?", id);
+    }
+
+    private PracticeStandingDTO standing() {
+        List<PracticeStandingDTO> standings = webTestClient
+                .get()
+                .uri("/workspaces/{slug}/practices/standings", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(PracticeStandingDTO.class)
+                .returnResult()
+                .getResponseBody();
+        return Objects.requireNonNull(standings).stream()
+                .filter(standing -> standing.slug().equals(practice.getSlug()))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private String cardJson() {
+        byte[] body = card().returnResult().getResponseBody();
+        return new String(Objects.requireNonNull(body), StandardCharsets.UTF_8);
     }
 
     /** When the previous card about the practice closed, which the test expects to be set. */

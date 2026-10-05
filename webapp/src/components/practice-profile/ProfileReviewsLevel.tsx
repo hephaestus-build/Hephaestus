@@ -9,8 +9,9 @@ import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDraw
 import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { TraceKindFilter } from "@/components/practice-trace/TraceKindFilter";
 import type { ReviewRunFeedState } from "@/components/profile/review-runs";
-import { EarlierReviewsButton } from "@/components/profile/ReviewRunFeed";
+import { EarlierReviews } from "@/components/profile/ReviewRunFeed";
 import { DrawerBody, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
+import { Skeleton } from "@/components/ui/skeleton";
 import { hasText } from "@/lib/text";
 
 import {
@@ -100,7 +101,7 @@ export function ProfileReviewsLevel({
 						requesting={requesting}
 						positions={positions}
 					/>
-					<EarlierReviewsButton {...feed} />
+					<EarlierReviews {...feed} loadingRow={<Skeleton className="h-12 w-full" />} />
 				</>
 			);
 			break;

@@ -741,6 +741,18 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                    ORDER BY f2.observed_at DESC, f2.agent_job_id DESC LIMIT 1)
         """;
 
+    /** {@link #LATEST_RUN_OF_CLAIM} over live runs alone: the run {@link LatestRun#perLiveClaim} keeps. */
+    String LATEST_LIVE_RUN_OF_CLAIM = """
+                  (SELECT f2.agent_job_id FROM observation f2
+                   WHERE f2.practice_id = f.practice_id
+                     AND f2.about_user_id = f.about_user_id
+                     AND f2.artifact_kind = f.artifact_kind AND f2.artifact_id = f.artifact_id
+                     AND f2.origin = 'LIVE'
+                     AND f2.superseded_at IS NULL
+        """ + VALID_LATEST_RUN_GUARD + """
+                   ORDER BY f2.observed_at DESC, f2.agent_job_id DESC LIMIT 1)
+        """;
+
     /**
      * A developer's recent observations with one of {@code outcomes}, newest first, each claim answering
      * with its latest run ({@link #LATEST_RUN_OF_CLAIM}): a re-pushed pull request's observations do not repeat
@@ -832,6 +844,52 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("workspaceId") Long workspaceId,
             @Param("since") Instant since,
             @Param("until") Instant until);
+
+    /**
+     * {@link #findByDeveloperAndWorkspaceBetween} for several developers of the workspace at once, under the same
+     * guards, for the caller to partition by {@code about_user_id}. The caller passes at least one developer.
+     */
+    @Query(value = """
+                    SELECT f.* FROM observation f
+                    WHERE f.workspace_id = :workspaceId
+                      AND f.about_user_id IN (:developerIds)
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
+              AND f.superseded_at IS NULL
+              AND f.observed_at >= :since
+              AND f.observed_at <= :until
+            ORDER BY f.observed_at DESC
+            """, nativeQuery = true)
+    List<Observation> findByWorkspaceBetween(
+            @Param("workspaceId") Long workspaceId,
+            @Param("developerIds") Collection<Long> developerIds,
+            @Param("since") Instant since,
+            @Param("until") Instant until);
+
+    /**
+     * Each claim's latest run and latest live run for several developers of the workspace, observed from
+     * {@code since} on, under the guards of {@link #findByWorkspaceBetween}: every row {@link LatestRun#perClaim} or
+     * {@link LatestRun#perLiveClaim} would keep, chosen in the database, so a span over the whole history loads only
+     * the rows a standing reads. The caller passes at least one developer.
+     */
+    @Query(
+            value = """
+                    SELECT f.* FROM observation f
+                    WHERE f.workspace_id = :workspaceId
+                      AND f.about_user_id IN (:developerIds)
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
+              AND f.superseded_at IS NULL
+              AND f.observed_at >= :since
+              AND (f.agent_job_id =""" + LATEST_RUN_OF_CLAIM + """
+                   OR (f.origin = 'LIVE' AND f.agent_job_id ="""
+                    + LATEST_LIVE_RUN_OF_CLAIM + """
+                  ))
+            ORDER BY f.observed_at DESC
+            """,
+            nativeQuery = true)
+    List<Observation> findLatestRunsByWorkspaceSince(
+            @Param("workspaceId") Long workspaceId,
+            @Param("developerIds") Collection<Long> developerIds,
+            @Param("since") Instant since);
 
     /**
      * The developer's review runs, newest first: one row per agent job that recorded an observation about

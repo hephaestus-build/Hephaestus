@@ -2,7 +2,13 @@ import type { TrendSupport } from "@/api/types.gen";
 import { andList, capitalise } from "@/lib/text";
 
 import { count as counted, spell } from "./feedback-text";
-import { PRACTICE_GROUP_STANDING_DEFS, type StandingScope } from "./practice-group-standing-defs";
+import {
+	isSettledStanding,
+	PRACTICE_GROUP_STANDING_DEFS,
+	type PracticeGroupStandingValue,
+	standingDefs,
+	type StandingScope,
+} from "./practice-group-standing-defs";
 import type { TrendDirection } from "./practice-trend-defs";
 import { type StandingCounts, summarizeStandingCounts } from "./standing-counts";
 
@@ -22,18 +28,47 @@ export function shownTrendDirection(
 	return direction !== undefined && support !== undefined ? direction : "INSUFFICIENT_EVIDENCE";
 }
 
+/** Below this many decided pieces of work, a settled standing is an early read (product vocabulary). */
+export const EARLY_READ_BELOW = 3;
+
+/** The server's count of decided pieces a standing is read from; none when no live review counted. */
+export function standingWork(support: TrendSupport | undefined): number | undefined {
+	const current = support?.currentOpportunities;
+	return current !== undefined && current > 0 ? current : undefined;
+}
+
+/** "from 3 pieces of work". */
+export function formatStandingWork(work: number): string {
+	return `from ${counted(work, "piece", "pieces", true)} of work`;
+}
+
+/** The registry's sentence with its count, or the early-read sentence below {@link EARLY_READ_BELOW}. */
+export function explainStanding(
+	standing: PracticeGroupStandingValue,
+	scope: StandingScope,
+	support: TrendSupport | undefined,
+): string {
+	const { description } = standingDefs(scope)[standing];
+	const work = isSettledStanding(standing) ? standingWork(support) : undefined;
+	if (work === undefined) {
+		return description;
+	}
+	const pieces = `${counted(work, "piece", "pieces")} of work`;
+	return work < EARLY_READ_BELOW
+		? `An early read from ${pieces}.`
+		: `${description} Read from ${pieces}.`;
+}
+
 /**
- * What a practice's standing rests on: the newest stretch of reviewed work the trend compares,
- * which is the window the standing is read from. Nothing to name when no work reached it.
+ * How a settled practice standing weighs its work. Nothing for one piece, which has nothing to
+ * weigh against.
  */
 export function formatStandingBasis(support: TrendSupport): string | undefined {
 	const current = support.currentOpportunities;
 	if (current === 0) {
-		return undefined;
+		return "Read from a review that you asked for or a review of your past work. Neither moves a trend.";
 	}
-	return current === 1
-		? "Based on your latest piece of reviewed work."
-		: `Based on your latest ${reviewedWork(current)}.`;
+	return current === 1 ? undefined : "Your latest work counts most, and older work counts less.";
 }
 
 /**
@@ -66,7 +101,7 @@ export function formatTrendProvenance(
 	// wire already counts it once.
 	const { opportunities } = support;
 	if (opportunities === 0) {
-		return "No reviewed work is available yet.";
+		return "No new work has been reviewed yet.";
 	}
 
 	const span = support.calendarSpanDays;

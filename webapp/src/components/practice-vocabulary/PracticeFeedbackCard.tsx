@@ -1,9 +1,9 @@
 import { Meter } from "@base-ui/react/meter";
 import { ArrowRightIcon, CheckIcon, ChevronRightIcon, ClockIcon, PackageIcon } from "lucide-react";
-import { type ComponentType, type Ref, useId, useState } from "react";
+import { type ComponentType, type Ref, useId } from "react";
 
 import { cn } from "cn";
-import type { InAppEvidence, InAppFeedback, ReviewedWorkRef } from "@/api/types.gen";
+import type { InAppEvidence, ReviewedWorkRef } from "@/api/types.gen";
 import { FOCUS_RING } from "@/components/common/focus";
 import { InlineLink } from "@/components/common/InlineLink";
 import { ResponseButton, toneOf } from "@/components/common/ResponseButton";
@@ -20,6 +20,7 @@ import { useNow } from "@/components/common/use-now";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { pillClasses } from "@/components/practice-vocabulary/group-visuals";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { formatDay, formatDayTime, formatShortDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
@@ -47,14 +48,21 @@ const NOT_HELPFUL_REASONS: ResponseReason<NotHelpfulReason>[] = [
 /** The note under a rating; the reason comes only with a "not helpful" one. */
 export type FeedbackComment = ResponseComment<NotHelpfulReason>;
 
+/** The band under a card's footer: the rating's comment, or the sentence a dispute carries. */
+export type FeedbackBand = "comment" | "dispute";
+
+/** The control whose write is in flight, so "Saving…" lands on it and nowhere else. */
+export type ResponseControl = "rating" | "answer" | "send" | "disagree";
+
 /**
  * An answer that resolves the feedback, the card's own way to close it beside the work coming back
- * clean. A dispute is the third resolution, but it leaves the feedback open and is written by "Not
- * accurate" under a rating, so the card offers no button for it.
+ * clean. A dispute leaves the feedback open, so it has its own Disagree button.
  */
 export type ResolvingAnswer = Exclude<FeedbackResolution, "DISPUTED">;
 
 const RESOLVING_ANSWERS: ResolvingAnswer[] = ["ADDRESSED", "NOT_APPLICABLE"];
+
+const DisagreeIcon = FEEDBACK_RESOLUTION_DEFS.DISPUTED.icon;
 
 /**
  * One piece of reviewed work in the card's strip — the evidence behind the feedback — with what
@@ -127,12 +135,6 @@ export interface PracticeFeedbackCardEntry {
 	/** The line under the next step: what ticks it, or what did. */
 	condition: FeedbackTextSegment[];
 	state: FeedbackState;
-	/**
-	 * Which way a resolved card resolved: the work's clean run, or the reader's own answer. Only the
-	 * reader's answer is theirs to take back, so only then does a resolved card keep its response
-	 * buttons.
-	 */
-	resolvedBy?: Exclude<NonNullable<InAppFeedback["closedBy"]>, "PRACTICE_CHANGED">;
 	/** When the feedback was created or, once `state` is resolved or closed, when that happened. */
 	timestamp: Date;
 }
@@ -146,15 +148,17 @@ export interface FeedbackRatingProps {
 	 */
 	resolution?: FeedbackResolution;
 	/**
-	 * Whether the comment band under the footer is open; a rating press opens it, Send and Skip
-	 * close it.
+	 * The band open under the footer, at most one: a rating press opens `comment`, a press on
+	 * Disagree opens `dispute`, and Send and Skip close either.
 	 */
-	commentOpen?: boolean;
-	/**
-	 * A response is being written: the button just pressed, if it is still the chosen one, says it is
-	 * saving, and every other response control waits for it.
-	 */
+	openBand?: FeedbackBand;
+	/** A response is being written, so every response control waits. */
 	isPending?: boolean;
+	/**
+	 * The control to say "Saving…" on, once a write has outlasted the delay that keeps a quick one
+	 * silent. The caller owns it, because two cards for one piece of feedback share one write.
+	 */
+	saving?: ResponseControl;
 	/**
 	 * A press on a rating button, the chosen one included: the caller decides that a second press
 	 * withdraws. Without it the card has no rating buttons, as a control nobody can answer is hidden
@@ -162,7 +166,11 @@ export interface FeedbackRatingProps {
 	 */
 	onRate?: (usefulness: FeedbackUsefulness) => void;
 	onSendComment?: (comment: FeedbackComment) => void;
+	/** Skip in either band: the comment's or the dispute's. */
 	onSkipComment?: () => void;
+	/** Without it the card has no Disagree button. The caller decides what a press on a standing dispute does. */
+	onDisagree?: () => void;
+	onSendDispute?: (comment: string) => void;
 	/**
 	 * A press on Addressed or Not applicable, the chosen one included: the caller decides that a
 	 * second press takes the answer back. Without it the card has none of these buttons, and neither
@@ -192,10 +200,13 @@ export interface PracticeFeedbackCardProps extends FeedbackRatingProps {
  * "Resolved 9 September" — because the minute of a resolution is the review's, not the reader's.
  */
 function formatTimestamp(date: Date, state: FeedbackState, today: Date): string {
+	const def = FEEDBACK_STATE_DEFS[state];
 	return isOpenFeedback(state)
 		? `Created ${formatDayTime(date, today)}`
-		: `${FEEDBACK_STATE_DEFS[state].label} ${formatDay(date)}`;
+		: `${def.stamp ?? def.label} ${formatDay(date)}`;
 }
+
+const DISAGREE = "Disagree";
 
 /**
  * One piece of practice feedback in three bands: what was seen, the next step with the two ways it
@@ -216,16 +227,18 @@ export function PracticeFeedbackCard({
 		nextStep,
 		condition,
 		state,
-		resolvedBy,
 		timestamp,
 	},
 	usefulness,
 	resolution,
-	commentOpen = false,
+	openBand,
 	isPending = false,
+	saving,
 	onRate,
 	onSendComment,
 	onSkipComment,
+	onDisagree,
+	onSendDispute,
 	onResolve,
 	onLearnMore,
 	onOpenPractice,
@@ -235,14 +248,13 @@ export function PracticeFeedbackCard({
 }: PracticeFeedbackCardProps) {
 	const headingId = useId();
 	const responseId = useId();
-	// Which row of buttons the reader pressed last, so a write in flight says "Saving…" on the button
-	// that asked for it and not on a pressed button in the other row.
-	const [lastPressed, setLastPressed] = useState<"rating" | "answer">("rating");
 	const shownTimestamp = formatTimestamp(timestamp, state, new Date(useNow()));
+	const sendDispute = onSendDispute && (({ comment }: ResponseComment) => onSendDispute(comment));
 	const resolved = state === "resolved";
 	// No work can tick a closed card, so it draws no count towards the threshold.
 	const closed = state === "closed";
-	const answerable = isOpenFeedback(state) || resolvedBy === "DEVELOPER";
+	// Only the reader's own answer is theirs to take back.
+	const answerable = isOpenFeedback(state) || state === "marked";
 	const BandIcon = FEEDBACK_STATE_DEFS[isOpenFeedback(state) ? "open" : state].icon;
 	const GroupIcon = group?.icon ?? PackageIcon;
 	const groupPill = hasText(group?.color) ? pillClasses(group.color) : undefined;
@@ -417,7 +429,7 @@ export function PracticeFeedbackCard({
 							{RESOLVING_ANSWERS.map((value) => {
 								const def = FEEDBACK_RESOLUTION_DEFS[value];
 								const pressed = resolution === value;
-								const saving = isPending && pressed && lastPressed === "answer";
+								const savingHere = pressed && saving === "answer";
 								return (
 									<ResponseButton
 										key={value}
@@ -425,13 +437,10 @@ export function PracticeFeedbackCard({
 										pressed={pressed}
 										disabled={isPending}
 										className="bg-background"
-										onClick={() => {
-											setLastPressed("answer");
-											onResolve(value);
-										}}
+										onClick={() => onResolve(value)}
 									>
-										{saving && <Spinner />}
-										{saving ? "Saving…" : def.label}
+										{savingHere && <Spinner />}
+										{savingHere ? "Saving…" : def.label}
 									</ResponseButton>
 								);
 							})}
@@ -450,23 +459,28 @@ export function PracticeFeedbackCard({
 						statusValues(FEEDBACK_USEFULNESS_DEFS).map((value) => {
 							const { icon: Icon, label } = FEEDBACK_USEFULNESS_DEFS[value];
 							const pressed = usefulness === value;
-							const saving = isPending && pressed && lastPressed === "rating";
+							const savingHere = pressed && saving === "rating";
 							return (
 								<ResponseButton
 									key={value}
 									tone={toneOf(FEEDBACK_USEFULNESS_DEFS[value].badgeVariant)}
 									pressed={pressed}
 									disabled={isPending}
-									onClick={() => {
-										setLastPressed("rating");
-										onRate(value);
-									}}
+									onClick={() => onRate(value)}
 								>
-									{saving ? <Spinner /> : <Icon aria-hidden />}
-									{saving ? "Saving…" : label}
+									{savingHere ? <Spinner /> : <Icon aria-hidden />}
+									{savingHere ? "Saving…" : label}
 								</ResponseButton>
 							);
 						})}
+					{onDisagree && (
+						<DisagreeButton
+							disputed={resolution === "DISPUTED"}
+							isPending={isPending}
+							saving={saving === "disagree"}
+							onClick={onDisagree}
+						/>
+					)}
 				</div>
 				{onLearnMore && (
 					<Button variant="outline" onClick={onLearnMore}>
@@ -476,18 +490,35 @@ export function PracticeFeedbackCard({
 				)}
 			</div>
 
-			{commentOpen && usefulness === "HELPFUL" && (
+			{openBand === "dispute" && (
+				<ResponseCommentBand
+					key="dispute"
+					name="Why you disagree"
+					label="What is wrong in this feedback?"
+					placeholder="One or two sentences on what is wrong"
+					required
+					audience={() =>
+						"Workspace admins read your sentence, not the card, and can correct its observations or withdraw it. The card stays open until then."
+					}
+					isPending={isPending}
+					sending={saving === "send"}
+					onSend={sendDispute}
+					onSkip={onSkipComment}
+				/>
+			)}
+			{openBand === "comment" && usefulness === "HELPFUL" && (
 				<ResponseCommentBand
 					key={usefulness}
 					name="What was helpful"
 					label="What worked about this feedback?"
 					placeholder="Optional: what helped, or what you did"
 					isPending={isPending}
+					sending={saving === "send"}
 					onSend={onSendComment}
 					onSkip={onSkipComment}
 				/>
 			)}
-			{commentOpen &&
+			{openBand === "comment" &&
 				usefulness === "UNHELPFUL" && (
 					// A reason and a sentence: the sentence is what the dispute has to carry.
 					<ResponseCommentBand
@@ -503,11 +534,79 @@ export function PracticeFeedbackCard({
 								: undefined
 						}
 						isPending={isPending}
+						sending={saving === "send"}
 						onSend={onSendComment}
 						onSkip={onSkipComment}
 					/>
 				)}
 		</article>
+	);
+}
+
+/** The card's three bands while the feedback loads. */
+export function PracticeFeedbackCardSkeleton() {
+	return (
+		<div aria-hidden className="flex flex-col overflow-hidden rounded-xl border bg-background">
+			<div className="flex flex-col gap-4 p-4">
+				<div className="flex flex-wrap items-center justify-between gap-4">
+					<div className="flex items-center gap-3">
+						<Skeleton className="h-5 w-48 rounded-full" />
+						<Skeleton className="h-5 w-36 rounded-full" />
+					</div>
+					<Skeleton className="h-5 w-16 rounded-full" />
+				</div>
+				<div className="flex flex-col gap-2.5">
+					<Skeleton className="h-7 w-full max-w-md" />
+					<Skeleton className="h-5 w-full max-w-3xl" />
+					<Skeleton className="h-5 w-3/5" />
+				</div>
+				<Skeleton className="h-5 w-72 max-w-full" />
+			</div>
+			<div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-3 border-t bg-sidebar px-4 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+				<Skeleton className="mt-0.5 size-4 rounded-full" />
+				<div className="flex min-w-0 flex-col gap-1">
+					<Skeleton className="h-5 w-20" />
+					<Skeleton className="h-5 w-full max-w-xl" />
+					<Skeleton className="h-4 w-56 max-w-full" />
+				</div>
+				<div className="col-start-2 flex flex-col items-start gap-1.5 sm:col-start-3 sm:items-end">
+					<Skeleton className="h-2 w-20 rounded-full" />
+					<Skeleton className="h-4 w-20" />
+				</div>
+			</div>
+			<div className="flex flex-wrap items-center justify-between gap-4 border-t p-4">
+				<div className="flex items-center gap-3">
+					<Skeleton className="h-5 w-28" />
+					<Skeleton className="h-8 w-24" />
+					<Skeleton className="h-8 w-28" />
+				</div>
+				<Skeleton className="h-9 w-60" />
+			</div>
+		</div>
+	);
+}
+
+function DisagreeButton({
+	disputed,
+	isPending,
+	saving,
+	onClick,
+}: {
+	disputed: boolean;
+	isPending: boolean;
+	saving: boolean;
+	onClick: () => void;
+}) {
+	return (
+		<ResponseButton
+			tone={toneOf(FEEDBACK_RESOLUTION_DEFS.DISPUTED.badgeVariant)}
+			pressed={disputed}
+			disabled={isPending}
+			onClick={onClick}
+		>
+			{saving ? <Spinner /> : <DisagreeIcon aria-hidden />}
+			{saving ? "Saving…" : DISAGREE}
+		</ResponseButton>
 	);
 }
 

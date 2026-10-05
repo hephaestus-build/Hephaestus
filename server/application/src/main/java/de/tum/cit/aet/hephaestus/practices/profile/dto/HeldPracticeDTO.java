@@ -7,7 +7,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /** A practice that stands as a strength and whose newest pieces of reviewed work all came back clean. */
-@Schema(description = "A practice the developer keeps holding")
+@Schema(description = "A practice the developer's newest work keeps meeting")
 public record HeldPracticeDTO(
         @NonNull String practiceSlug,
         @NonNull String practiceName,

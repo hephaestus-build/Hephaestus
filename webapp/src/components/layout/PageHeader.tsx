@@ -5,7 +5,7 @@ import { cn } from "cn";
 import { rendersContent } from "@/lib/react-node";
 
 export interface PageHeaderProps {
-	icon: ReactNode;
+	icon?: ReactNode;
 	title: string;
 	description?: ReactNode;
 	actions?: ReactElement | undefined;
@@ -16,9 +16,11 @@ export function PageHeader({ icon, title, description, actions, className }: Pag
 	return (
 		<header className={cn("flex flex-wrap items-start justify-between gap-4", className)}>
 			<div className="flex min-w-0 flex-1 items-start gap-3">
-				<div className="mt-1 shrink-0 text-muted-foreground [&_svg]:size-6" aria-hidden="true">
-					{icon}
-				</div>
+				{rendersContent(icon) && (
+					<div className="mt-1 shrink-0 text-muted-foreground [&_svg]:size-6" aria-hidden="true">
+						{icon}
+					</div>
+				)}
 				<div className="min-w-0 space-y-1">
 					<h1 className="text-2xl font-semibold tracking-tight break-words">{title}</h1>
 					{rendersContent(description) && (

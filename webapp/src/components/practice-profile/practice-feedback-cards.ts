@@ -32,8 +32,7 @@ const cleanCondition = (needed: number): FeedbackTextSegment[] => [
 function closureOf(feedback: InAppFeedback):
 	| {
 			at: Date;
-			state: "resolved" | "closed";
-			resolvedBy?: PracticeFeedbackCardEntry["resolvedBy"];
+			state: "resolved" | "marked" | "closed";
 			condition: FeedbackTextSegment[];
 	  }
 	| undefined {
@@ -47,7 +46,6 @@ function closureOf(feedback: InAppFeedback):
 			return {
 				at,
 				state: "resolved",
-				resolvedBy: "WORK",
 				condition:
 					feedback.cleanWork.length > 0
 						? [
@@ -61,11 +59,12 @@ function closureOf(feedback: InAppFeedback):
 		case "DEVELOPER": {
 			const answer =
 				feedback.response?.resolution === "NOT_APPLICABLE" ? "not applicable" : "addressed";
+			// The reader's claim, not a resolution: the clean work count goes on, and says whether the work
+			// bears it out.
 			return {
 				at,
-				state: "resolved",
-				resolvedBy: "DEVELOPER",
-				condition: [text(`Marked as ${answer} on ${day}`)],
+				state: "marked",
+				condition: [text(`Marked as ${answer} on ${day}. Your next work confirms it.`)],
 			};
 		}
 		case "PRACTICE_CHANGED": {
@@ -125,7 +124,6 @@ export function toFeedbackCard(
 			withdrawnAt === undefined
 				? (closure?.state ?? (feedback.readAt ? "open" : "new"))
 				: "withdrawn",
-		resolvedBy: closure?.resolvedBy,
 		timestamp: withdrawnAt ?? closure?.at ?? feedback.preparedAt,
 	};
 }

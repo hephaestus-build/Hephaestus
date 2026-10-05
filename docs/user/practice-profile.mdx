@@ -1,7 +1,7 @@
 ---
 id: practice-profile
 title: Practice profile
-description: See how your work stands across practice groups, what held and what changed, and the feedback behind it.
+description: See how your work stands across practice groups, which practices were met and what changed, and the feedback behind it.
 ---
 
 Use your Practice profile to read feedback, choose a next step, and check the evidence behind your practice standing.
@@ -40,7 +40,7 @@ The tabs show cards newest first:
 A card resolves in one of two ways:
 
 - **By your work.** Three consecutive pieces of reviewed work with no problem on the practice resolve the card. It reads *Resolved by the work* and names that work. Work that shows the problem again resets the count. The line under the next step shows the count.
-- **By you.** Your response can mark the card *Marked as addressed* or *Marked as not applicable*, with the date.
+- **By you.** Your response can mark the card *Marked as addressed* or *Marked as not applicable*, with the date. The card then shows **Marked by you** without the green color of a resolution, because your next work confirms it. The count of clean work continues.
 
 To record or undo your response:
 
@@ -48,6 +48,12 @@ To record or undo your response:
 2. To undo your response, select it again.
 
 The card opens again when you undo the response.
+
+If you think that the feedback is wrong, select **Disagree** beside **Not helpful**.
+Write one or two sentences on what is wrong, then select **Send**.
+Workspace admins read your sentence and can correct the observations or withdraw the card.
+The card stays open until then.
+
 If your workspace changes a practice after a review wrote its card, the card closes without resolution.
 It reads *Closed*, gives the date and reason, and stops counting work that shows no problem on the practice.
 A closed card stays on the page for 30 days after closure.
@@ -112,7 +118,12 @@ It has no scores, percentages, or ranking.
 The title chip opens the reviews that recorded a result about your work, newest first and grouped by day.
 A review that still runs may not appear yet, because a review appears only after it records a result about your work.
 The newest review has the **Latest** tag.
+
 A review that someone requested has the **Requested** tag.
+Its results stay visible here, but they do not move a trend, resolve a card, or start a card.
+Your standing and trend keep the result of the earlier review of the same work.
+If only requested reviews judged a practice, its standing comes from them and says so.
+If a requested review finds no problem on a practice, new feedback does not quote the earlier problem with it on that work.
 
 Each row names the work and links to the original.
 It starts with the practices to improve: the first two by name, then a count of the rest.
@@ -127,7 +138,9 @@ Elsewhere, the row counts the pieces of feedback that reached you.
 **All time** is the initial value.
 With either filter on, no row shows the **Latest** tag, because the newest included review might not be your latest.
 
-**View earlier reviews** loads older reviews.
+Older reviews load when you scroll to the end of the list.
+You can also select **View earlier reviews**.
+If older reviews cannot load, select **Retry**.
 After the whole list loads without filters, later reviews of the same work show their sequence, such as *2nd review*.
 **Request review** appears beside a row when you may request another review as author, assignee, or workspace admin.
 
@@ -159,16 +172,67 @@ The rows appear by standing, with groups that need attention first.
 1. Select a group row.
 2. To see more detail, select a practice.
 
-The group panel describes the group, what held, and what changed.
+The group panel describes the group, which practices were met, and what changed.
 It shows the next step from its newest open feedback, and each practice’s standing and trend.
 The practice panel shows observations by review, with response controls, and feedback.
 It also explains why the practice matters and what work that meets it looks like.
+
+A standing shows how many pieces of your work it is read from, for example "from 3 pieces of work".
+Your latest work counts most, and older work counts less.
+If fewer than three pieces of work back a standing, its sentence calls it an early read.
+The next piece of work can change an early read.
 
 Each panel opens over the previous panel, with the page visible behind it.
 The short path above the title shows where you are, from the page to the panel.
 
 1. To go to a position on the path, select it.
 2. To go back one level, select **Back**.
+
+## Practices across the workspace
+
+Practices across the workspace shows where the developers in your workspace stand in each practice group.
+It counts developers and never names one.
+Your own standings, trends, and next step stay in your Practice profile.
+
+1. In the sidebar, under **Practice profile**, select **Across the workspace**.
+   If the sidebar shows only icons, select the **Across the workspace** icon.
+
+### The four figures
+
+**Pieces of work reviewed**, **Practices going well**, **Practices needing attention**, and **Open feedback** each mark your own value.
+**Last 30 days**, **Last 90 days**, and **All time** change the first three.
+**Open feedback** counts what is open now.
+
+Each figure has a band for the typical range.
+The band covers the middle half of the developers with a standing in the selected range.
+For **Open feedback**, it covers the middle half of every developer that the page counts, reviewed or not.
+A quarter of them are below the band, and a quarter are above it.
+
+### The bars
+
+**All practice groups** gives each group a bar.
+It shows how many developers need attention, get mixed feedback, are going well, or have no standing yet in the group.
+**You** marks your part.
+Each developer counts with the standing that their Practice profile shows now, so your marker agrees with your profile.
+
+### What the page holds back
+
+Every count of developers on the page holds at least four developers.
+So each count stands for at least three people besides you, and everyone sees the same bars.
+
+- A bar shows its parts only when each part holds at least four developers.
+- Otherwise, it shows only its number of developers, with **Split held back** under it.
+- If that number is below four, the bar is a dashed track.
+- A practice bar is compared with its group’s bar and the group’s other practice bars. If that would single out one to three developers, it shows only its number.
+- If the groups together would single out one to three developers, every bar on the page shows only its number.
+- A figure shows its band only when it counts at least seven developers.
+
+### Open a group
+
+1. Select **Open group**.
+   A panel shows the group’s bar and a bar for each of its practices.
+2. To see your own standing, trend, and next step, select **Open in your Practice profile**.
+   The group and each practice have this link.
 
 ## When nothing has been reviewed yet
 

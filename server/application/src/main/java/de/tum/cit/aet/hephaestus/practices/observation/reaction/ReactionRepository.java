@@ -19,19 +19,22 @@ import org.springframework.stereotype.Repository;
 @WorkspaceAgnostic("Reaction scoped through Feedback.workspaceId relationship")
 public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
     /**
-     * The response that currently stands on each piece of the reactor's feedback in the workspace: the
-     * newest snapshot per piece, with its channel and recipient beside it so a query can narrow the feedback
-     * without changing which snapshot stands. Binds {@code :reactorUserId} and {@code :workspaceId};
-     * a query wraps it as {@code (...) latest}.
+     * The response that currently stands on each piece of feedback in the workspace: the newest snapshot its
+     * recipient wrote, with its channel and recipient beside it so a query can narrow the feedback without changing
+     * which snapshot stands. Binds {@code :workspaceId}; a query wraps it as {@code (...) latest}.
+     *
+     * <p>A piece of feedback has one recipient, so leading the {@code DISTINCT ON} with it changes no row; it lets
+     * PostgreSQL push a filter on {@code latest.recipient_user_id} into the subquery, which it does only for
+     * {@code DISTINCT ON} columns.
      */
     String LATEST_RESPONSE = """
-            SELECT DISTINCT ON (r.feedback_id) r.feedback_id, r.usefulness, r.action, r.explanation, r.created_at,
-                   fb.channel, fb.recipient_user_id
+            SELECT DISTINCT ON (fb.recipient_user_id, r.feedback_id)
+                   r.feedback_id, r.usefulness, r.action, r.explanation, r.created_at, fb.channel, fb.recipient_user_id
             FROM reaction r
             JOIN feedback fb ON fb.id = r.feedback_id
-            WHERE r.reactor_user_id = :reactorUserId
+            WHERE r.reactor_user_id = fb.recipient_user_id
               AND fb.workspace_id = :workspaceId
-            ORDER BY r.feedback_id, r.created_at DESC, r.id DESC
+            ORDER BY fb.recipient_user_id, r.feedback_id, r.created_at DESC, r.id DESC
         """;
 
     @Query(value = """
@@ -64,10 +67,10 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
     }
 
     /**
-     * The response that currently stands on each of these pieces of feedback, for the ones that have a
-     * response: the batch form of {@link #findCurrentResponse}, so a page of cards is one query rather than one
-     * per card. A piece of feedback whose newest snapshot says nothing — the recipient deleted their response —
-     * is absent here. The caller passes at least one id.
+     * The response that stands on each of these pieces of feedback, for the ones that have one: the newest snapshot
+     * its recipient wrote, the rule {@link #LATEST_RESPONSE} states, so the pages of several recipients are one
+     * query. A piece of feedback whose newest snapshot says nothing (the recipient deleted their response) is absent
+     * here. The caller passes at least one id.
      */
     @Query(value = """
         SELECT latest.feedback_id AS "feedbackId", latest.usefulness AS "usefulness", latest.action AS "resolution",
@@ -79,9 +82,7 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
           AND (latest.usefulness IS NOT NULL OR latest.action IS NOT NULL)
         """, nativeQuery = true)
     List<CurrentResponseRow> findCurrentResponses(
-            @Param("reactorUserId") Long reactorUserId,
-            @Param("workspaceId") Long workspaceId,
-            @Param("feedbackIds") Collection<UUID> feedbackIds);
+            @Param("workspaceId") Long workspaceId, @Param("feedbackIds") Collection<UUID> feedbackIds);
 
     interface CurrentResponseRow extends CurrentResponseProjection {
         UUID getFeedbackId();
@@ -210,6 +211,7 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
         """ + LATEST_RESPONSE + """
         ) latest
         WHERE latest.action IS NOT NULL
+          AND latest.recipient_user_id = :reactorUserId
         GROUP BY latest.action
         """, nativeQuery = true)
     List<ActionCountProjection> countByReactorAndWorkspaceGroupByAction(

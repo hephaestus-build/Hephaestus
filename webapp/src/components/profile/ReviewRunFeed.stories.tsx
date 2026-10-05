@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn } from "storybook/test";
+import { expect, fn, waitFor } from "storybook/test";
 
 import { detailRuns } from "@/stories/practice-detail-story-mock-data";
 
@@ -39,29 +39,35 @@ export const Default: Story = {
 	},
 };
 
-/** Earlier runs exist: the feed offers them, and asks for them once. */
+/** Earlier runs exist, so the timeline continues past the last card. */
 export const LoadMore: Story = {
 	args: { feed: { ...readyFeed, hasMore: true } },
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "View earlier reviews" }));
-		await expect(onLoadMore).toHaveBeenCalledOnce();
+		const press = canvas.getByRole("button", { name: "View earlier reviews" });
+		press.scrollIntoView();
+		await waitFor(async () => expect(onLoadMore).toHaveBeenCalled());
+		const before = onLoadMore.mock.calls.length;
+		await userEvent.click(press);
+		await expect(onLoadMore).toHaveBeenCalledTimes(before + 1);
 	},
 };
 
-/** While the earlier runs are on their way the button says so and takes no second press. */
+/** A run card's skeleton stands in for the next page. */
 export const LoadingMore: Story = {
 	args: { feed: { ...readyFeed, hasMore: true, isLoadingMore: true } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Loading…" })).toBeDisabled();
+		await expect(onLoadMore).not.toHaveBeenCalled();
 	},
 };
 
-/** A page that did not arrive keeps the runs already read and offers the press back. */
+/** A failed page keeps the runs already read. */
 export const LoadMoreFailed: Story = {
 	args: { feed: { ...readyFeed, hasMore: true, loadMoreError: new Error("network") } },
 	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getByText("We could not load earlier reviews.")).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: "View earlier reviews" }));
+		await expect(onLoadMore).not.toHaveBeenCalled();
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(onLoadMore).toHaveBeenCalledOnce();
 	},
 };
@@ -101,7 +107,7 @@ export const NarrowedToNothing: Story = {
 
 /**
  * A narrowing emptied the pages read so far while earlier ones remain: the feed does not yet know
- * that nothing matches, so it says only what it has read and keeps the earlier pages a press away.
+ * that nothing matches, so it says only what it has read and reads the earlier pages by itself.
  */
 export const NarrowedToNothingSoFar: Story = {
 	args: {
@@ -109,14 +115,14 @@ export const NarrowedToNothingSoFar: Story = {
 		runs: [],
 		emptyAction: <button type="button">Show every review in this group</button>,
 	},
-	play: async ({ canvas, userEvent }) => {
+	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("No reviews yet")).toBeNull();
 		await expect(canvas.getByText("The latest reviews have no observations here.")).toBeVisible();
 		await expect(
 			canvas.getByRole("button", { name: "Show every review in this group" }),
 		).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: "View earlier reviews" }));
-		await expect(onLoadMore).toHaveBeenCalledOnce();
+		await waitFor(async () => expect(onLoadMore).toHaveBeenCalledOnce());
+		await expect(canvas.getByRole("button", { name: "View earlier reviews" })).toBeVisible();
 	},
 };
 

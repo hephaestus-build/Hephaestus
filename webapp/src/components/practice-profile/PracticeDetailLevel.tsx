@@ -290,7 +290,11 @@ export function PracticeDetailLevel({
 				chips={
 					practice && (
 						<>
-							<StandingBadge standing={practice.standing} scope="practice" />
+							<StandingBadge
+								standing={practice.standing}
+								scope="practice"
+								support={practice.trendSupport}
+							/>
 							<TrendNote
 								direction={practice.direction}
 								support={practice.trendSupport}
