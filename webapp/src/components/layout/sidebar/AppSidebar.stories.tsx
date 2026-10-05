@@ -27,7 +27,7 @@ const meta = {
 	args: {
 		isAdmin: false,
 		isAppAdmin: false,
-		isMember: true,
+		showMentor: true,
 		integrationKinds: ["GITHUB", "SLACK", "OUTLINE"],
 		context: "main",
 		workspaces: [mockWorkspace],
@@ -188,11 +188,13 @@ export const LoadingWorkspaces: Story = {
 	},
 };
 
-export const HephHiddenFromNonMember: Story = {
+/** A non-member, or a workspace with no Heph model ready yet: the other entries stay. */
+export const HephHidden: Story = {
 	args: {
-		isMember: false,
+		showMentor: false,
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("link", { name: /AI mentor/u })).not.toBeInTheDocument();
+		await expect(canvas.getByRole("link", { name: "Activity" })).toBeVisible();
 	},
 };

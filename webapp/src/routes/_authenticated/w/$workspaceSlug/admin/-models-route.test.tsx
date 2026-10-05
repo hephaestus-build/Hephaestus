@@ -4,7 +4,7 @@ import { HttpResponse, http, type PathParams } from "msw";
 import { describe, expect, it, vi } from "vitest";
 import { deferred } from "@/test/async";
 
-import { listAgentsQueryKey } from "@/api/@tanstack/react-query.gen";
+import { getMemberOnboardingQueryKey, listAgentsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { AgentBinding } from "@/api/types.gen";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { server } from "@/mocks/server";
@@ -408,6 +408,55 @@ it("saves and clears only the selected tier and lists only that tier's models", 
 	);
 	expect(pickerOf(row("Practice reviews", "In-house")).textContent).toContain("GPT Test");
 	expect(pickerOf(row("Practice reviews", "Cloud")).textContent).toContain("Select a model");
+});
+
+it("lists Heph in the navigation once a Heph model is assigned, and drops it when the assignment is cleared", async () => {
+	const user = userEvent.setup();
+	let bindings: AgentBinding[] = [binding("PRACTICE_REVIEW", 20)];
+	mockModelsRoute(() => bindings);
+	server.use(
+		http.get("*/workspaces/acme/onboarding/me", () =>
+			HttpResponse.json({
+				...workspaceOnboarding(),
+				aiOptions: [
+					{
+						choice: "CLOUD",
+						mentorReady: bindings.some((entry) => entry.purpose === "MENTOR"),
+						practiceReviewsReady: true,
+						models: [],
+					},
+				],
+			}),
+		),
+		http.put("*/workspaces/acme/agents/MENTOR", () => {
+			bindings = [...bindings, binding("MENTOR", 20)];
+			return HttpResponse.json(binding("MENTOR", 20));
+		}),
+		http.delete("*/workspaces/acme/agents/MENTOR", () => {
+			bindings = bindings.filter((entry) => entry.purpose !== "MENTOR");
+			return new HttpResponse(null, { status: 204 });
+		}),
+	);
+	const queryClient = renderRouteAt("/w/acme/admin/models");
+	await screen.findByRole("region", { name: "Heph" }, ROUTE_RENDER_WAIT);
+	await waitFor(() =>
+		expect(
+			queryClient.getQueryState(getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } }))
+				?.status,
+		).toBe("success"),
+	);
+	expect(screen.queryByRole("link", { name: /AI mentor/u })).toBeNull();
+
+	await user.click(pickerOf(row("Heph")));
+	await user.click(await screen.findByRole("option", { name: /GPT Test/u }));
+	await user.click(saveButton("Heph"));
+	await screen.findByRole("link", { name: /AI mentor/u }, ROUTE_RENDER_WAIT);
+
+	await user.click(clearButton(row("Heph")));
+	await waitFor(
+		() => expect(screen.queryByRole("link", { name: /AI mentor/u })).toBeNull(),
+		ROUTE_RENDER_WAIT,
+	);
 });
 
 it("resets model drafts on workspace navigation while a previous workspace save completes", async () => {

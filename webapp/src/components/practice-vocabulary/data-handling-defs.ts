@@ -104,6 +104,8 @@ export type MemberAiChoiceDimension = (typeof MEMBER_AI_CHOICE_DIMENSIONS)[numbe
 export interface MemberAiChoiceFact {
 	tone: "pro" | "caveat" | "con" | "none";
 	text: string;
+	/** The words for one workspace that has no Heph model ready, where `text` would promise Heph. */
+	withoutHeph?: string;
 }
 
 export interface MemberAiChoiceDef extends StatusDef {
@@ -118,7 +120,11 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		badgeVariant: "secondary",
 		description: "Models your organization runs",
 		facts: {
-			"AI help": { tone: "pro", text: "Feedback and Heph" },
+			"AI help": {
+				tone: "pro",
+				text: "Feedback and Heph",
+				withoutHeph: "Practice feedback where set up",
+			},
 			Models: { tone: "caveat", text: "Usually smaller models" },
 			Speed: { tone: "caveat", text: "Limited capacity, can be slower" },
 			"Sent to": { tone: "pro", text: "Only your organization" },
@@ -131,7 +137,11 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		badgeVariant: "secondary",
 		description: "Adds models from cloud providers",
 		facts: {
-			"AI help": { tone: "pro", text: "Feedback and Heph" },
+			"AI help": {
+				tone: "pro",
+				text: "Feedback and Heph",
+				withoutHeph: "Practice feedback where set up",
+			},
 			Models: { tone: "pro", text: "Strongest models on offer" },
 			Speed: { tone: "pro", text: "More capacity, usually faster" },
 			"Sent to": { tone: "caveat", text: "Also a cloud provider" },
@@ -144,7 +154,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		badgeVariant: "secondary",
 		description: "Hephaestus without AI",
 		facts: {
-			"AI help": { tone: "con", text: "No feedback or Heph" },
+			"AI help": { tone: "con", text: "No feedback or Heph", withoutHeph: "No new AI requests" },
 			Models: { tone: "none", text: "None" },
 			Speed: { tone: "none", text: "Not applicable" },
 			"Sent to": { tone: "pro", text: "Nowhere" },

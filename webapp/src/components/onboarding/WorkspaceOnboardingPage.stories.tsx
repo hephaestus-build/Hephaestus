@@ -186,6 +186,7 @@ export const FirstVisit: Story = {
 			await expect(canvas.getByRole("radio", { name })).not.toBeChecked();
 		}
 		await expect(canvas.getByRole("heading", { level: 1, name: "Your AI choice" })).toBeVisible();
+		canvas.getByText("Heph says:");
 		await expect(
 			canvas.getByText("Compare the three below. Any answer is fine, including none."),
 		).toBeVisible();
@@ -469,6 +470,74 @@ export const HephNotCovered: Story = {
 	},
 };
 
+/**
+ * Only practice reviews have a model here: the page speaks for itself instead of Heph, and no card
+ * promises Heph in this workspace. The answer still holds in every workspace.
+ */
+export const PracticeReviewsOnly: Story = {
+	args: {
+		state: {
+			...ready,
+			data: {
+				...welcome,
+				links: [],
+				aiOptions: allCovered.map((option) => ({ ...option, mentorReady: false })),
+			},
+		},
+	},
+	play: async ({ canvas, userEvent }) => {
+		await expect(canvas.queryByText("Heph says:")).toBeNull();
+		await expect(
+			canvas.getByText(
+				"Before you start in Engineering, one question. Your answer controls future AI requests across all your workspaces.",
+			),
+		).toBeVisible();
+		await expect(canvas.queryByText(/Heph talks it through with you/u)).toBeNull();
+		canvas.getByText(/Hephaestus can review your work against your team’s practices where set up/u);
+		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
+		await expect(inHouse).toHaveAccessibleName(/AI help Practice feedback/u);
+		await expect(inHouse).not.toHaveAccessibleName(/Feedback and Heph/u);
+		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
+			/AI help No new AI requests Models/u,
+		);
+		const narration = canvas.getByText(
+			"Compare the three below. Any answer is fine, including none.",
+		);
+		await expect(narration).toHaveAttribute("aria-live", "polite");
+		await userEvent.click(inHouse);
+		await expect(narration).toHaveTextContent(
+			"Select Save AI choice to apply your choice in every workspace.",
+		);
+		await expect(
+			canvas.getByText(
+				"Practice reviews run in Engineering for this choice. Heph is not set up here yet.",
+			),
+		).toBeVisible();
+	},
+};
+
+export const NothingSetUp: Story = {
+	args: {
+		state: {
+			...ready,
+			data: {
+				...welcome,
+				links: [],
+				aiOptions: allCovered.map((option) => ({
+					...option,
+					practiceReviewsReady: false,
+					mentorReady: false,
+					models: [],
+				})),
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		canvas.getByText(/Hephaestus can review your work against your team’s practices where set up/u);
+		await expect(canvas.queryByText("Heph says:")).toBeNull();
+	},
+};
+
 export const SavedChoiceUncovered: Story = {
 	args: {
 		state: {
@@ -706,7 +775,9 @@ export const Loading: Story = {
 	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1, name: "Your AI choice" })).toBeVisible();
-		await expect(canvas.getByText("Give me a moment. I’m fetching your setup.")).toBeVisible();
+		await expect(canvas.getByText("Loading your setup…")).toBeVisible();
+		// Whether Heph is set up here is not known yet, so the page does not speak as Heph.
+		await expect(canvas.queryByText("Heph says:")).toBeNull();
 	},
 };
 
@@ -715,7 +786,7 @@ export const LoadFailed: Story = {
 		state: { status: "error", error: new Error("Unavailable"), onRetry: fn(), onLeave: fn() },
 	},
 	play: async ({ canvas, userEvent, args }) => {
-		await expect(canvas.getByText("I could not fetch your setup just now.")).toBeVisible();
+		await expect(canvas.getByText("Your setup did not load.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		if (args.state.status !== "error") {
 			throw new Error("Expected the retryable error state");

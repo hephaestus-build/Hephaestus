@@ -27,7 +27,11 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { getIntegrationCatalogOptions, listThreadsOptions } from "@/api/@tanstack/react-query.gen";
+import {
+	getIntegrationCatalogOptions,
+	getMemberOnboardingOptions,
+	listThreadsOptions,
+} from "@/api/@tanstack/react-query.gen";
 import type { SurveyInvitation } from "@/api/types.gen";
 import { UserViewBanner } from "@/components/admin/users/UserViewBanner";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
@@ -72,6 +76,7 @@ import { useProductSurveys, useSubmitProductFeedback } from "@/hooks/use-product
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
+import { isMentorSetUp } from "@/lib/mentor-preference";
 import { stepUpChallengeOf } from "@/lib/problem-detail";
 import { getProviderSlug } from "@/lib/provider/provider-terms";
 import { useSearchState } from "@/lib/search-params";
@@ -506,6 +511,17 @@ function AppSidebarContainer() {
 		enabled: sidebarContext === "mentor" && isAuthenticated && hasWorkspace,
 	});
 
+	const isMember = workspaceAccess.role !== undefined;
+	// The server refuses this read in a user view, since it carries the signed-in account's own
+	// choice. A view keeps Heph listed, as before, for the viewed member's saved conversations.
+	const onboarding = useQuery({
+		...getMemberOnboardingOptions({ path: { workspaceSlug: chromeWorkspaceSlug ?? "" } }),
+		enabled: sidebarContext === "main" && isAuthenticated && isMember && !userView && hasWorkspace,
+	});
+	const showMentor =
+		isMember &&
+		(Boolean(userView) || (onboarding.data !== undefined && isMentorSetUp(onboarding.data)));
+
 	if (!isAuthenticated || username === undefined) {
 		return null;
 	}
@@ -526,7 +542,7 @@ function AppSidebarContainer() {
 			isAdmin={workspaceAccess.isAdmin}
 			isOwner={workspaceAccess.role === "OWNER"}
 			isAppAdmin={isAppAdmin}
-			isMember={workspaceAccess.role !== undefined}
+			showMentor={showMentor}
 			readOnly={Boolean(userView)}
 			integrationKinds={integrationKinds}
 			awaitingApproval={awaitingApproval}
