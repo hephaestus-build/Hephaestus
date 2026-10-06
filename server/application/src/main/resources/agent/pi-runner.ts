@@ -3000,11 +3000,16 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 			owed.length > 0
 				? `Still owed: ${owed.join(", ")}. Record what the evidence you have read supports for these`
 				: "Record what the evidence you have read supports";
+		// The review's next tool depends on whether a selection stands, which REVIEW_NUDGE already says.
+		let correction = `Correct what its answer names and send one ${recording ? toolName : composerTool} call.`;
+		if (composerTool === "report_review") {
+			correction = `Correct what its answer names. ${REVIEW_NUDGE}`;
+		}
 		void steer(
 			activeSession,
 			measuring
 				? `You have run the same ${toolName} call ${repeats} times; its result will not change. ${next}, in one report_observation call. ${PERSIST_DISCIPLINE}`
-				: `You have run the same ${toolName} call ${repeats} times; its result will not change. Correct what its answer names and send one ${recording ? toolName : composerTool} call.`,
+				: `You have run the same ${toolName} call ${repeats} times; its result will not change. ${correction}`,
 		);
 	}
 	if (repeats >= (recording ? REPEATED_RECORDING_ABORT : REPEATED_CALL_ABORT)) {

@@ -247,6 +247,8 @@ if (scenario !== undefined && scenario !== "") {
 		buildSessionProjection: () => ({ messages: [] }),
 	};
 	let prompts = 0;
+	/** What the runner steered the session with, in order. */
+	const steered: string[] = [];
 	let wasCompacted = false;
 	/** The stall scenario's first prompt ends only when the runner aborts it, like a call in flight. */
 	let releasePrompt: (() => void) | undefined;
@@ -400,9 +402,12 @@ if (scenario !== undefined && scenario !== "") {
 							return waitForIdle();
 						},
 						dispose: () => record("dispose"),
-						steer: async () => {
+						steer: async (message?: string) => {
 							queued += 1;
 							record("steer");
+							if (message !== undefined) {
+								steered.push(message);
+							}
 						},
 						async prompt(
 							text: string,
@@ -574,6 +579,69 @@ if (scenario !== undefined && scenario !== "") {
 										return JSON.stringify(error instanceof Error ? error.message : String(error));
 									}
 								};
+								if (scenario === "compose-repeat-select" || scenario === "compose-invalid-select") {
+									// Each call as the SDK runs it: started and ended as events, so the runner's repeat
+									// guard sees it, and executed by the native tool.
+									const native = async (name: string, id: string, args: unknown) => {
+										emit({ type: "tool_execution_start", toolCallId: id, toolName: name, args });
+										try {
+											const result = await tool(name).execute(id, args);
+											emit({
+												type: "tool_execution_end",
+												toolCallId: id,
+												toolName: name,
+												isError: false,
+												result,
+											});
+											return JSON.stringify(result);
+										} catch (error) {
+											const errorMessage = error instanceof Error ? error.message : String(error);
+											emit({
+												type: "tool_execution_end",
+												toolCallId: id,
+												toolName: name,
+												isError: true,
+												result: { content: [{ type: "text", text: errorMessage }] },
+											});
+											return JSON.stringify(errorMessage);
+										}
+									};
+									/** The tools a steering message tells the session to call. */
+									const toolsNamed = (from: number) =>
+										steered
+											.slice(from)
+											.map((message) =>
+												["select_feedback", "report_review"].filter((name) =>
+													message.includes(name),
+												),
+											);
+									const said = { summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] } };
+									if (scenario === "compose-repeat-select") {
+										const speak = { selected: ["observation-1"] };
+										record(`repeat-accepted:${await native("select_feedback", "s-1", speak)}`);
+										record(
+											`repeat-mismatch:${await native("report_review", "r-1", {
+												withheld: [{ basedOn: ["observation-1"], reason: "BELOW_BAR" }],
+											})}`,
+										);
+										const before = steered.length;
+										record(`repeat-again:${await native("select_feedback", "s-2", speak)}`);
+										record(`repeat-nudge:${JSON.stringify(toolsNamed(before))}`);
+										record(`repeat-final:${await native("report_review", "r-2", said)}`);
+										return;
+									}
+									const unaccepted = { selected: [] };
+									record(`invalid-select:${await native("select_feedback", "s-1", unaccepted)}`);
+									record(`invalid-report:${await native("report_review", "r-1", said)}`);
+									const before = steered.length;
+									record(`invalid-again:${await native("select_feedback", "s-2", unaccepted)}`);
+									record(`invalid-nudge:${JSON.stringify(toolsNamed(before))}`);
+									record(
+										`invalid-corrected:${await native("select_feedback", "s-3", { selected: ["observation-1"] })}`,
+									);
+									record(`invalid-final:${await native("report_review", "r-2", said)}`);
+									return;
+								}
 								if (scenario === "compose-recover") {
 									// A selection is accepted and the response ends without the final review.
 									record(`recover-select:${await choose("s-r", { selected: ["observation-1"] })}`);
@@ -1476,6 +1544,8 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-empty",
 		"compose-reselect",
 		"compose-recover",
+		"compose-repeat-select",
+		"compose-invalid-select",
 		"compose-fold",
 		"compose-abstention",
 		"compose-unknown-outcome",
@@ -1527,6 +1597,10 @@ if (scenario !== undefined && scenario !== "") {
 					"stores only a final review that matches the selection accepted last, and nothing after it",
 				"compose-recover":
 					"asks once more for a review left unfinished, carrying the admitted rows its selection chose",
+				"compose-repeat-select":
+					"points a repeated accepted selection at the final review, which is then stored without an abort",
+				"compose-invalid-select":
+					"gives an unaccepted selection no authority over the review until a corrected one is accepted",
 				"compose-fold":
 					"counts a NOT_MET practice folded into another practice's unit as decided and asks no more",
 				"compose-abstention":
@@ -2456,6 +2530,56 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.ok(isRecord(feedback));
 							assert.deepEqual(feedback.review, { summary: null, inline: [], withheld: [] });
+							break;
+						}
+						case "compose-repeat-select":
+						case "compose-invalid-select": {
+							assert.equal(child.status, 0, child.stderr);
+							const said = (label: string) =>
+								events.find((event) => event.startsWith(`${label}:`)) ?? "";
+							const prefix = stage === "compose-repeat-select" ? "repeat" : "invalid";
+							if (stage === "compose-repeat-select") {
+								assert.match(said("repeat-accepted"), /Accepted the selection/u);
+								assert.match(said("repeat-mismatch"), /review refused, nothing was stored/u);
+								assert.match(said("repeat-again"), /Accepted the selection/u);
+								// With a selection standing, the nudge points at the final review as well as reselection.
+								assert.equal(
+									said("repeat-nudge"),
+									`repeat-nudge:${JSON.stringify([["select_feedback", "report_review"]])}`,
+								);
+							} else {
+								assert.match(
+									said("invalid-select"),
+									/selection refused, no selection is accepted yet/u,
+								);
+								// An unaccepted selection gives the review nothing to rest on.
+								assert.match(said("invalid-report"), /no selection is accepted yet/u);
+								assert.match(
+									said("invalid-again"),
+									/selection refused, no selection is accepted yet/u,
+								);
+								assert.equal(
+									said("invalid-nudge"),
+									`invalid-nudge:${JSON.stringify([["select_feedback", "report_review"]])}`,
+								);
+								assert.match(said("invalid-corrected"), /Accepted the selection/u);
+							}
+							assert.match(
+								child.stderr,
+								/the same select_feedback call 2 times — nudging to record/u,
+							);
+							assert.doesNotMatch(child.stderr, /the same select_feedback call 3 times/u);
+							assert.match(said(`${prefix}-final`), /Stored the review[\s\S]*"terminate":true/u);
+							assert.ok(!events.includes("review-retry"), events.join("\n"));
+							const feedback: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(feedback));
+							assert.deepEqual(feedback.review, {
+								summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] },
+								inline: [],
+								withheld: [],
+							});
 							break;
 						}
 						case "compose-recover": {
