@@ -180,7 +180,6 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
                     "issue_type",
                     issue.getIssueType() != null ? issue.getIssueType().getName() : null);
             meta.put("is_locked", issue.isLocked());
-            meta.put("comments_count", issue.getCommentsCount());
             meta.put("sub_issues_total", issue.getSubIssuesTotal());
             meta.put("sub_issues_completed", issue.getSubIssuesCompleted());
             meta.put(

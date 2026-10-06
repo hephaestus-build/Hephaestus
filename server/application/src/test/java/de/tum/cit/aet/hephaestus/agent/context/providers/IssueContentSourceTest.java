@@ -13,8 +13,10 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
+import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredIssueCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentProvenance;
@@ -128,6 +130,68 @@ class IssueContentSourceTest extends BaseUnitTest {
         var captured = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
 
         assertThat(captured.completeness()).containsEntry(COMMENTS, SourceCompleteness.PARTIAL);
+    }
+
+    @Test
+    void shouldCaptureAnEmptyCompleteDiscussionWhenTheProviderCountsOnlyHephaestusOwnFeedback() throws Exception {
+        Issue issue = richIssue();
+        StoredComment firstFeedback =
+                comment("hephaestus", "Feedback on this issue.", Instant.parse("2025-06-01T10:00:00Z"));
+        StoredComment secondFeedback = comment("hephaestus", "More feedback.", Instant.parse("2025-06-02T10:00:00Z"));
+        stubComments(List.of(firstFeedback, secondFeedback));
+        when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
+
+        var captured = excludingDelivered(firstFeedback, secondFeedback)
+                .capture(request(sampleMetadata()), Set.of(CORE, COMMENTS));
+
+        assertThat(objectMapper.readTree(captured.files().get(COMMENTS_KEY))).isEmpty();
+        assertThat(captured.completeness()).containsEntry(COMMENTS, SourceCompleteness.COMPLETE);
+        assertThat(captured.contentStates()).containsEntry(COMMENTS, SourceContentState.EMPTY);
+        assertThat(objectMapper.readTree(captured.files().get(METADATA_KEY)).has("comments_count"))
+                .as("the provider's total, which counts the excluded feedback, is not shown beside the capture")
+                .isFalse();
+        assertThat(issue.getCommentsCount()).isEqualTo(2);
+    }
+
+    @Test
+    void shouldCaptureOnlyThePersonsCommentWhenHephaestusOwnFeedbackSurroundsIt() throws Exception {
+        Issue issue = richIssue();
+        issue.setCommentsCount(3);
+        StoredComment firstFeedback =
+                comment("hephaestus", "Feedback on this issue.", Instant.parse("2025-06-01T10:00:00Z"));
+        StoredComment human =
+                comment("bob", "The export should cover archived items too.", Instant.parse("2025-06-02T10:00:00Z"));
+        StoredComment secondFeedback = comment("hephaestus", "More feedback.", Instant.parse("2025-06-03T10:00:00Z"));
+        stubComments(List.of(firstFeedback, human, secondFeedback));
+        when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
+
+        var captured = excludingDelivered(firstFeedback, secondFeedback)
+                .capture(request(sampleMetadata()), Set.of(CORE, COMMENTS));
+
+        JsonNode comments = objectMapper.readTree(captured.files().get(COMMENTS_KEY));
+        assertThat(comments).singleElement().satisfies(only -> {
+            assertThat(only.get("author").asString()).isEqualTo("bob");
+            assertThat(only.get("body").asString()).isEqualTo("The export should cover archived items too.");
+        });
+        assertThat(captured.completeness()).containsEntry(COMMENTS, SourceCompleteness.COMPLETE);
+        assertThat(captured.contentStates()).containsEntry(COMMENTS, SourceContentState.NON_EMPTY);
+        assertThat(objectMapper.readTree(captured.files().get(METADATA_KEY)).has("comments_count"))
+                .isFalse();
+        assertThat(issue.getCommentsCount()).isEqualTo(3);
+    }
+
+    /** A source whose delivery record names {@code delivered} as Hephaestus's own GitLab notes. */
+    private IssueContentSource excludingDelivered(StoredComment... delivered) {
+        List<DeliveredIssueCommentLookup.DeliveredComment> notes = new ArrayList<>();
+        for (StoredComment comment : delivered) {
+            notes.add(new DeliveredIssueCommentLookup.DeliveredComment(
+                    "gid://gitlab/Note/" + comment.getNativeId(), null));
+        }
+        return new IssueContentSource(
+                objectMapper,
+                issueRepository,
+                issueCommentRepository,
+                new IssueEvidenceRevision(issueCommentRepository, new IssueCommentProvenance(issueId -> notes)));
     }
 
     @Test
@@ -306,7 +370,7 @@ class IssueContentSourceTest extends BaseUnitTest {
             assertThat(meta.get("author").asString()).isEqualTo("felix");
             assertThat(meta.get("issue_type").asString()).isEqualTo("Task");
             assertThat(meta.get("is_locked").asBoolean()).isTrue();
-            assertThat(meta.get("comments_count").asInt()).isEqualTo(2);
+            assertThat(meta.has("comments_count")).isFalse();
             assertThat(meta.get("milestone").asString()).isEqualTo("v1.0");
         }
 
