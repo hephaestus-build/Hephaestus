@@ -115,6 +115,40 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
     }
 
     @Test
+    void shouldStoreTheInlineReceiptBeforeARequestOnlyUnderTheLiveLeaseAndReadItBackAsWritten() {
+        UUID dispatchId = insertDispatch(workspace.getId(), jobId, "inline-fence");
+        String receipt = """
+            [{"deliveryKey":"observation:a:0","path":"src/A.java","startLine":10,"disposition":"FAILED",\
+            "writeMayHaveStarted":true},\
+            {"deliveryKey":"observation:b:0","path":"src/B.java","startLine":20,"disposition":"FAILED",\
+            "writeMayHaveStarted":false}]""";
+        assertThat(beginInlineWrite(dispatchId, "first", receipt)).isZero();
+        assertThat(claim(dispatchId, "first", Instant.now().plusSeconds(60))).isEqualTo(1);
+
+        assertThat(beginInlineWrite(dispatchId, "first", receipt)).isEqualTo(1);
+        assertThat(beginInlineWrite(dispatchId, "second", "[]")).isZero();
+
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT inline_write_started FROM feedback_dispatch WHERE id = ?", Boolean.class, dispatchId))
+                .isTrue();
+        assertThat(jdbcTemplate.queryForList("""
+                        SELECT element->>'writeMayHaveStarted' FROM feedback_dispatch,
+                               jsonb_array_elements(delivered_placements) AS element
+                         WHERE id = ? ORDER BY element->>'deliveryKey'
+                        """, String.class, dispatchId)).containsExactly("true", "false");
+        jdbcTemplate.update(
+                "UPDATE feedback_dispatch SET lease_expires_at = ? WHERE id = ?",
+                Timestamp.from(Instant.now().minusSeconds(1)),
+                dispatchId);
+        assertThat(beginInlineWrite(dispatchId, "first", "[]")).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT jsonb_array_length(delivered_placements) FROM feedback_dispatch WHERE id = ?",
+                        Integer.class,
+                        dispatchId))
+                .isEqualTo(2);
+    }
+
+    @Test
     void shouldReopenAnUnsentWriteOnlyForTheLeaseThatClosedIt() {
         UUID dispatchId = insertDispatch(workspace.getId(), jobId, "unsent-write");
         assertThat(releaseUnsentWrite(dispatchId, "first")).isZero();
@@ -344,6 +378,11 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
 
     private int beginWrite(UUID dispatchId, String owner) {
         return transactions.execute(status -> dispatchRepository.beginWrite(dispatchId, workspace.getId(), owner));
+    }
+
+    private int beginInlineWrite(UUID dispatchId, String owner, String placements) {
+        return transactions.execute(
+                status -> dispatchRepository.beginInlineWrite(dispatchId, workspace.getId(), owner, placements));
     }
 
     private int releaseUnsentWrite(UUID dispatchId, String owner) {

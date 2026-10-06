@@ -405,8 +405,7 @@ class ConversationalFeedbackPreparerTest extends BaseUnitTest {
                 "The test arrives after the review, not with the change",
                 null,
                 null,
-                new ComposedFeedbackUnit.ConversationBrief(OBSERVED, REALISATION, EVIDENCE, SELF_CHECK, null),
-                null);
+                new ComposedFeedbackUnit.ConversationBrief(OBSERVED, REALISATION, EVIDENCE, SELF_CHECK, null));
     }
 
     private static ComposedFeedbackUnit withhold(String practiceSlug) {
@@ -417,7 +416,6 @@ class ConversationalFeedbackPreparerTest extends BaseUnitTest {
                 ComposedFeedbackUnit.Action.WITHHOLD,
                 null,
                 ComposedFeedbackUnit.WithholdReason.ALREADY_SAID,
-                null,
                 null,
                 null,
                 null,

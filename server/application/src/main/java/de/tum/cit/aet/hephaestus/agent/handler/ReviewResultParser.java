@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedReview;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
@@ -40,7 +41,8 @@ public class ReviewResultParser {
     private static final Set<String> EVIDENCE_FIELDS =
             Set.of("citations", "search", "inapplicability", "undecidability");
 
-    static final int MAX_DELIVERY_DIFF_NOTES = 30;
+    /** The line notes one review may carry; the composition contract owns the number. */
+    static final int MAX_DELIVERY_DIFF_NOTES = ComposedReview.MAX_INLINE_NOTES;
 
     private final JsonMapper objectMapper;
     private final JsonMapper lenientMapper;
@@ -377,19 +379,30 @@ public class ReviewResultParser {
      * @param withheld the observations the composer chose not to render, for the ledger to record as SUPPRESSED
      * @param summaryContributors occurrence keys of the observations the summary note was written from; each line
      *     note carries its own. Null only on a dispatch package persisted before they were recorded
+     * @param inlineMarker the marker every inline copy of this package carries, sealed with it; null on a package
+     *     persisted before it was recorded, whose copies keep the historical marker and readback
      */
     public record DeliveryContent(
             @Nullable String mrNote,
             List<DiffNote> diffNotes,
             List<WithheldObservation> withheld,
-            @Nullable List<String> summaryContributors) {
+            @Nullable List<String> summaryContributors,
+            @Nullable String inlineMarker) {
+        public DeliveryContent(
+                @Nullable String mrNote,
+                List<DiffNote> diffNotes,
+                List<WithheldObservation> withheld,
+                @Nullable List<String> summaryContributors) {
+            this(mrNote, diffNotes, withheld, summaryContributors, null);
+        }
+
         public DeliveryContent withDiffNotes(List<DiffNote> notes) {
-            return new DeliveryContent(mrNote, notes, withheld, summaryContributors);
+            return new DeliveryContent(mrNote, notes, withheld, summaryContributors, inlineMarker);
         }
 
         /** The same decisions with nothing to place on the work. */
         public DeliveryContent withoutNote() {
-            return new DeliveryContent(null, List.of(), withheld, List.of());
+            return new DeliveryContent(null, List.of(), withheld, List.of(), inlineMarker);
         }
 
         /** Every observation some part of the content was written from; null on a pre-upgrade package. */
@@ -424,7 +437,7 @@ public class ReviewResultParser {
     }
 
     /**
-     * An observation the {@link DeliveryComposer} withheld from the rendered delivery, identified by the
+     * An observation the review withheld from the rendered delivery, identified by the
      * {@code occurrenceKey} of the observation it was persisted as — a per-observation identity, so a
      * withheld observation is never confused with another at the same locus.
      */
@@ -436,7 +449,7 @@ public class ReviewResultParser {
      * @param filePath path relative to repo root (new path, not old)
      * @param endLine  optional last line number for multi-line (GitHub only; GitLab ignores)
      * @param deliveryKey opaque receipt-correlation key for this exact observation, carried from its
-     *     occurrence identity by {@link DeliveryComposer}; null before server-side correlation.
+     *     occurrence identity by {@link ComposedReviewAdmission}; null before server-side correlation.
      * @param contributors occurrence keys of every observation this note's text was written from: its own, and
      *     any other the composed unit cites. Null before server-side correlation and on a pre-upgrade package
      */

@@ -49,7 +49,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
 
     public static final SourceKind CORE = new SourceKind("scm.pull-request.core");
     public static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
-    private static final SourceKind COMMENTS = new SourceKind("scm.pull-request.comments");
+    public static final SourceKind COMMENTS = new SourceKind("scm.pull-request.comments");
 
     /** Checked by the integration framework against every descriptor that calls itself reviewable. */
     @Override

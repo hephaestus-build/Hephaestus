@@ -129,8 +129,9 @@ The extension boundaries are:
   `out/`. [Agent workspace ABI](agent/workspace-abi.mdx) is the source of truth for paths and exit codes.
 - **Observations** — the agent reports through `report_observation`. Server admission validates it, and
   persistence assigns an occurrence identity and a separate evidence-location grouping key.
-- **Feedback** — after admission, the same agent session reports through `report_feedback` in a closed
-  intervention phase. The runner refuses a practice-page card unless the practice is NOT_MET on at least `minDistinctArtifacts` distinct pieces of work.
+- **Feedback** — after admission, a fresh session writes the review on the work through `report_review`.
+  The same agent session writes private feedback through `report_feedback` in a closed intervention phase.
+  The runner refuses a practice-page card unless the practice is NOT_MET on at least `minDistinctArtifacts` distinct pieces of work.
   This threshold comes from the composition request.
   The count includes this work and the staged history.
   Thus, one occurrence stays a note on the work.

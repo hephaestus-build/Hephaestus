@@ -605,31 +605,27 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         fresh = agentJobRepository.findById(fresh.getId()).orElseThrow();
         var output = MAPPER.createObjectNode();
         var feedback = output.putObject("feedback");
+        feedback.put("contractVersion", 2);
         feedback.put(
                 "admissionDigest",
                 Objects.requireNonNull(fresh.getMetadata())
                         .path(ObservationAdmissionService.DIGEST_METADATA_KEY)
                         .asString());
-        feedback.put("lead", "The linked criteria are complete");
         feedback.putArray("observations")
                 .addObject()
                 .put("id", positive.getFirst().getId().toString())
                 .put("practiceSlug", linked.getSlug())
+                .put("outcome", positive.getFirst().getOutcome().name())
                 .put("anchorable", false)
                 .putArray("citations");
-        feedback.putArray("units")
-                .addObject()
-                .put("channel", "IN_CONTEXT")
-                .put("action", "NEW")
-                .put("practiceSlug", linked.getSlug())
-                .put("title", "Linked criteria completed")
-                .put("nextStep", "Keep the completed criteria visible")
-                .putObject("placement")
-                .put("kind", "ARTIFACT");
-        ((ObjectNode) feedback.path("units").get(0))
+        feedback.putArray("units");
+        ObjectNode review = feedback.putObject("review");
+        review.putObject("summary")
+                .put("body", "Every criterion of the linked issue is now checked off in the change.")
                 .putArray("basedOn")
                 .add(positive.getFirst().getId().toString());
-        output.putObject("practiceCoverage").put("eligible", 1).put("evaluated", 1);
+        review.putArray("inline");
+        review.putArray("withheld");
         fresh.setOutput(output);
         fresh.setStatus(AgentJobStatus.COMPLETED);
         agentJobRepository.saveAndFlush(fresh);

@@ -1,9 +1,9 @@
-# Reads a pull request's review threads for correlation-key reconciliation.
-# Used by GitHubInlineFeedbackChannel to index this reviewer's prior threads (matched
-# by the correlation key embedded in the first comment's body) before posting, and to
-# detect bot threads that the current run no longer emits so they can be minimized.
-# Only the first comment per thread is needed — the bot's own anchor comment carries the
-# correlation-key tag; a thread without that tag is not ours and is left untouched.
+# Reads a pull request's review threads for correlation-key readback.
+# Used by GitHubInlineFeedbackChannel to find the copies of an inline feedback package (matched by the
+# correlation key embedded in a thread's first comment) before posting, and to recover a copy whose create
+# response was lost. A thread without that tag is not ours and is left untouched.
+# Only the first comment per thread is needed: it is the comment the review created. Its authorship by the
+# authenticated viewer, its original commit and its original lines verify that copy.
 
 query GetPullRequestReviewThreads(
     $owner: String!,
@@ -34,6 +34,13 @@ query GetPullRequestReviewThreads(
                             id
                             url
                             body
+                            viewerDidAuthor
+                            path
+                            originalLine
+                            originalStartLine
+                            originalCommit {
+                                oid
+                            }
                         }
                     }
                 }

@@ -32,13 +32,4 @@ public record PracticeCoverageLedger(
     private static @Nullable Integer count(JsonNode node) {
         return node.isIntegralNumber() && node.asInt() >= 0 ? node.asInt() : null;
     }
-
-    /**
-     * Whether the run evaluated every practice it was eligible for. A run with no ledger has not shown
-     * that it reached anything, so it does not get to claim it did: the parser drops a ledger it cannot
-     * validate, and a run that never wrote one admits no observations either.
-     */
-    public boolean reachedEveryPractice() {
-        return eligible != null && eligible.equals(evaluated);
-    }
 }

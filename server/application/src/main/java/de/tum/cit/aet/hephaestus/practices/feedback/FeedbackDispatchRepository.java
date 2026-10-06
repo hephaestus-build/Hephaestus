@@ -173,15 +173,23 @@ public interface FeedbackDispatchRepository extends JpaRepository<FeedbackDispat
         """, nativeQuery = true)
     int beginWrite(@Param("id") UUID id, @Param("workspaceId") Long workspaceId, @Param("owner") String owner);
 
-    /** Records, before the first inline request leaves, that this lease is about to write inline notes. */
+    /**
+     * Records, before an inline create request leaves, that this lease is writing inline notes, together with the
+     * per-note receipt that names which notes the request carries.
+     */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
         UPDATE feedback_dispatch SET inline_write_started = TRUE,
-               write_started_at = COALESCE(write_started_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
+               write_started_at = COALESCE(write_started_at, CURRENT_TIMESTAMP),
+               delivered_placements = CAST(:placements AS jsonb), updated_at = CURRENT_TIMESTAMP
          WHERE id = :id AND workspace_id = :workspaceId AND state = 'CLAIMED'
            AND lease_owner = :owner AND lease_expires_at > CURRENT_TIMESTAMP
         """, nativeQuery = true)
-    int beginInlineWrite(@Param("id") UUID id, @Param("workspaceId") Long workspaceId, @Param("owner") String owner);
+    int beginInlineWrite(
+            @Param("id") UUID id,
+            @Param("workspaceId") Long workspaceId,
+            @Param("owner") String owner,
+            @Param("placements") String placements);
 
     /** Reopens the fence this lease closed, once its channel proved the create request was never sent. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)

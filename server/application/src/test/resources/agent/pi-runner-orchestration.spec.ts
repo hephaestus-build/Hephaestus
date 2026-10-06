@@ -24,6 +24,7 @@ const admittedObservation = {
 	practiceSlug: "test-practice",
 	severity: "MAJOR",
 	anchorable: true,
+	publicEligible: true,
 	citations: [
 		{
 			index: 0,
@@ -55,6 +56,14 @@ const changeCitation = {
 
 const OVERLONG_SUMMARY = "A summary that runs on ".repeat(8).trim();
 
+/** Words only the person's history holds: they may reach the private lanes and never the review on the work. */
+const PRIVATE_HISTORY_SENTENCE = "Earlier reviews told this person about the insecure call twice.";
+
+/** The review composition's whole summary, as the composer wrote it, paragraphs and all. */
+const REVIEW_SUMMARY =
+	"The login change calls `insecure()` on the path every sign-in takes.\n\n" +
+	"Route it through the checked helper so a bad token cannot reach it.";
+
 function observation(slug: string, summary: string, citation: unknown = changeCitation) {
 	return {
 		practiceSlug: slug,
@@ -63,18 +72,6 @@ function observation(slug: string, summary: string, citation: unknown = changeCi
 		severity: "MAJOR",
 		evidenceRationale: "The changed authentication code calls insecure().",
 		evidence: { citations: [citation] },
-	};
-}
-
-function feedbackUnit(practiceSlug: string, observationId: string) {
-	return {
-		channel: "IN_CONTEXT",
-		practiceSlug,
-		basedOn: [observationId],
-		action: "NEW",
-		title: "On this change",
-		nextStep: "Keep the check in place.",
-		placement: { kind: "ARTIFACT" },
 	};
 }
 
@@ -153,12 +150,37 @@ if (scenario !== undefined && scenario !== "") {
 					id: `observation-${index + 1}`,
 					citations: [],
 					anchorable: false,
+					publicEligible: true,
 				}));
 			}
 			case "compose-fold": {
 				return [
 					admittedObservation,
 					{ ...admittedObservation, id: "observation-2", practiceSlug: "second-practice" },
+				];
+			}
+			case "compose":
+			case "compose-foreign-provider": {
+				// Admission marks an observation drawn from the person's history as not for the review on the work.
+				return [
+					admittedObservation,
+					{
+						...admittedObservation,
+						id: "observation-history",
+						practiceSlug: "test-practice",
+						summary: PRIVATE_HISTORY_SENTENCE,
+						evidenceRationale: PRIVATE_HISTORY_SENTENCE,
+						publicEligible: false,
+						anchorable: false,
+						citations: [
+							{
+								index: 0,
+								sourceKind: "hephaestus.feedback-history",
+								path: "history/feedback.json",
+								anchorable: false,
+							},
+						],
+					},
 				];
 			}
 			case "compose-quiet": {
@@ -220,9 +242,21 @@ if (scenario !== undefined && scenario !== "") {
 			createCodemodeExtension: () => () => undefined,
 			getAgentDir: () => cwd,
 			DefaultResourceLoader: class {
-				constructor(options: { systemPrompt: string; agentsFilesOverride: () => unknown }) {
+				constructor(options: {
+					systemPrompt: string;
+					agentsFilesOverride: () => unknown;
+					extensionFactories?: unknown[];
+				}) {
 					assert.ok(cwd !== undefined && cwd !== "");
-					writeFileSync(nodePath.join(cwd, "system-prompt.md"), options.systemPrompt);
+					// The measurement session's loader comes first; the review composition's own follows it.
+					const first = !existsSync(nodePath.join(cwd, "system-prompt.md"));
+					writeFileSync(
+						nodePath.join(cwd, first ? "system-prompt.md" : "review-system-prompt.md"),
+						options.systemPrompt,
+					);
+					if (!first) {
+						record(`review-loader extensions=${String(options.extensionFactories?.length)}`);
+					}
 					assert.deepEqual(options.agentsFilesOverride(), { agentsFiles: [] });
 				}
 				readonly loaded = Promise.resolve();
@@ -397,6 +431,131 @@ if (scenario !== undefined && scenario !== "") {
 								settleIdle();
 								return;
 							}
+							if (
+								text.includes("## The review to write") ||
+								text.includes("The review leaves these NOT_MET observations undecided")
+							) {
+								// The review composition, in its own session: report_review is all it can call.
+								assert.deepEqual(options.tools, ["report_review"]);
+								assert.deepEqual(
+									options.customTools.map((custom) => custom.name),
+									["report_review"],
+								);
+								const review = tool("report_review");
+								if (text.includes("The review leaves")) {
+									record("review-retry");
+									return;
+								}
+								if (scenario === "compose-settle-deadline") {
+									// The response ended, but its auto-compaction remains busy until the deadline.
+									compacting = true;
+									return;
+								}
+								if (scenario === "compose-loop") {
+									// SDK validation failures emit tool events without executing the tool.
+									for (let call = 1; call <= 24; call += 1) {
+										emit({
+											type: "tool_execution_start",
+											toolCallId: `s-${call}`,
+											toolName: "report_review",
+											args: {},
+										});
+										emit({
+											type: "tool_execution_end",
+											toolCallId: `s-${call}`,
+											toolName: "report_review",
+											isError: true,
+											result: {
+												content: [
+													{
+														type: "text",
+														text: 'Validation failed for tool "report_review":\n  - /summary: Expected object',
+													},
+												],
+											},
+										});
+									}
+									return;
+								}
+								const attempt = async (id: string, args: unknown) => {
+									try {
+										return JSON.stringify(await review.execute(id, args));
+									} catch (error) {
+										return JSON.stringify(error instanceof Error ? error.message : String(error));
+									}
+								};
+								if (scenario === "compose-quiet") {
+									// Only a strength was measured: the review may say so, specifically.
+									record(
+										`review-strength:${await attempt("r-q", {
+											summary: {
+												body: "Moving the check into its own helper keeps every caller on the same path.",
+												basedOn: ["observation-1"],
+											},
+										})}`,
+									);
+									return;
+								}
+								if (scenario === "compose-abstention") {
+									record(
+										`review-abstention:${await attempt("r-a", {
+											summary: { body: "Nothing to settle here.", basedOn: ["observation-2"] },
+										})}`,
+									);
+									record(
+										`review-met:${await attempt("r-m", {
+											summary: {
+												body: "The helper you added keeps the login flow on one path.",
+												basedOn: ["observation-1"],
+											},
+										})}`,
+									);
+									return;
+								}
+								if (scenario === "compose" || scenario === "compose-foreign-provider") {
+									record(
+										`review-refused:${await attempt("r-1", {
+											summary: { body: "Fine. <!-- marker -->", basedOn: ["observation-1"] },
+											inline: [
+												{
+													body: "On this line.",
+													basedOn: ["observation-1"],
+													anchor: { observationId: "observation-2", citationIndex: 0 },
+												},
+											],
+										})}`,
+									);
+									record(
+										`review-history:${await attempt("r-h", {
+											summary: { body: "A sentence.", basedOn: ["observation-history"] },
+										})}`,
+									);
+									record(
+										`review-stored:${await attempt("r-2", {
+											summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] },
+											inline: [
+												{
+													body: "`insecure()` runs here before the token is checked; call the checked helper instead.",
+													basedOn: ["observation-1"],
+													anchor: { observationId: "observation-1", citationIndex: 0 },
+												},
+											],
+										})}`,
+									);
+									return;
+								}
+								// Every other composing scenario decides the review's one problem by withholding it.
+								const ids =
+									scenario === "compose-fold"
+										? ["observation-1", "observation-2"]
+										: ["observation-1"];
+								record(
+									`review-withheld:${await attempt("r-w", {
+										withheld: [{ basedOn: ids, reason: "ALREADY_SAID" }],
+									})}`,
+								);
+								return;
+							}
 							if (text.includes("## Undecided")) {
 								// The composer's finishing prompt: the runner asks once more for the practices
 								// with a NOT_MET observation, and a WITHHOLD is a recorded decision.
@@ -435,12 +594,12 @@ if (scenario !== undefined && scenario !== "") {
 									return;
 								}
 								if (scenario === "compose-fold") {
-									// Two practices saw one event: one unit names the practice that best names it and
-									// folds the other's observation into basedOn, which decides both.
+									// Two practices saw one event: one private unit names the practice that best names it
+									// and folds the other's observation into basedOn, which decides both.
 									const folded = await tool("report_feedback").execute("f-fold", {
 										units: [
 											{
-												channel: "IN_CONTEXT",
+												channel: "IN_APP",
 												practiceSlug: "test-practice",
 												basedOn: ["observation-1", "observation-2"],
 												action: "WITHHOLD",
@@ -451,38 +610,7 @@ if (scenario !== undefined && scenario !== "") {
 									record(`feedback-fold:${JSON.stringify(folded)}`);
 									return;
 								}
-								if (scenario === "compose-quiet") {
-									// Nothing to withhold on a practice that is not NOT_MET: the unit is skipped
-									// with the reason, and with no negatives the runner does not ask again.
-									const quiet = await tool("report_feedback")
-										.execute("f-q", {
-											units: [
-												{
-													channel: "IN_APP",
-													practiceSlug: "test-practice",
-													basedOn: ["observation-1"],
-													action: "WITHHOLD",
-													withholdReason: "BELOW_BAR",
-												},
-											],
-										})
-										.then(() => "accepted")
-										.catch((error: unknown) =>
-											error instanceof Error ? error.message : String(error),
-										);
-									record(`feedback-quiet:${quiet}`);
-									return;
-								}
-								if (scenario === "compose-abstention") {
-									// An abstention is no primary evidence; the MET strength beside it still is.
-									const reply = await tool("report_feedback").execute("f-a", {
-										units: [
-											feedbackUnit("second-practice", "observation-2"),
-											feedbackUnit("third-practice", "observation-3"),
-											feedbackUnit("test-practice", "observation-1"),
-										],
-									});
-									record(`feedback-abstention:${JSON.stringify(reply)}`);
+								if (scenario === "compose-loop") {
 									return;
 								}
 								if (scenario === "compose-silent") {
@@ -498,32 +626,10 @@ if (scenario !== undefined && scenario !== "") {
 									}
 									return;
 								}
-								if (scenario === "compose-loop") {
-									// SDK validation failures emit tool events without executing the tool.
-									for (let call = 1; call <= 24; call += 1) {
-										emit({
-											type: "tool_execution_start",
-											toolCallId: `s-${call}`,
-											toolName: "report_summary",
-											args: {},
-										});
-										emit({
-											type: "tool_execution_end",
-											toolCallId: `s-${call}`,
-											toolName: "report_summary",
-											isError: true,
-											result: {
-												content: [
-													{
-														type: "text",
-														text: 'Validation failed for tool "report_summary":\n  - /lead: Expected string',
-													},
-												],
-											},
-										});
-									}
-									return;
-								}
+								// The private composition sees the person's history, and the review planned for the work as a draft.
+								record(
+									`private-turn history=${String(text.includes(PRIVATE_HISTORY_SENTENCE))} review=${String(text.includes("The review planned for this work (a draft, not delivered)"))}`,
+								);
 								const card = {
 									channel: "IN_APP",
 									practiceSlug: "test-practice",
@@ -543,7 +649,7 @@ if (scenario !== undefined && scenario !== "") {
 										`${keyword} in ${schema.slice(0, 200)}`,
 									);
 								}
-								assert.match(schema, /One of: IN_CONTEXT, IN_APP\./u);
+								assert.match(schema, /One of: IN_APP\./u);
 								assert.match(schema, /Required: channel, practiceSlug, basedOn, action\./u);
 								assert.match(
 									schema,
@@ -558,19 +664,6 @@ if (scenario !== undefined && scenario !== "") {
 										error instanceof Error ? error.message : String(error),
 									);
 								record(`feedback-alone:${alone}`);
-								// A decision to stay quiet on the work, stored before the card: written after it,
-								// since the server reads the first thirty units and delivers no WITHHOLD.
-								await feedback.execute("f-w", {
-									units: [
-										{
-											channel: "IN_CONTEXT",
-											practiceSlug: "test-practice",
-											basedOn: ["observation-1"],
-											action: "WITHHOLD",
-											withholdReason: "ALREADY_SAID",
-										},
-									],
-								});
 								mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
 								// An earlier review of this same merge request is the same piece of work, not a second.
 								writeFileSync(
@@ -656,16 +749,7 @@ if (scenario !== undefined && scenario !== "") {
 										{ ...card, body: "x".repeat(8001) },
 										{ ...card, channel: "IN_CHAT", withholdReason: "NOT_A_REASON" },
 										{ ...card, practiceSlug: "other-practice" },
-										{
-											...card,
-											channel: "IN_CONTEXT",
-											body: undefined,
-											placement: {
-												kind: "diff",
-												observationId: "observation-1",
-												citationIndex: "0",
-											},
-										},
+										{ ...card, channel: "IN_CONTEXT", body: undefined },
 										"a unit as a string",
 									],
 								});
@@ -691,20 +775,6 @@ if (scenario !== undefined && scenario !== "") {
 										error instanceof Error ? error.message : String(error),
 									);
 								record(`feedback-bare:${bare}`);
-								const summary = tool("report_summary");
-								assert.ok(!JSON.stringify(summary.parameters).includes('"minLength"'));
-								const long = "A sentence that runs on and on without ever ending ".repeat(6);
-								const lead = await summary
-									.execute("l-1", { lead: long })
-									.then(() => "accepted")
-									.catch((error: unknown) =>
-										error instanceof Error ? error.message : String(error),
-									);
-								record(`lead-long:${lead}`);
-								const cut = await summary.execute("l-2", {
-									lead: `The auth change is the one to read first. ${long}`,
-								});
-								record(`lead-cut:${JSON.stringify(cut)}`);
 								return;
 							}
 							if (text.includes("## Unfinished practices")) {
@@ -1322,6 +1392,34 @@ if (scenario !== undefined && scenario !== "") {
 						nodePath.join(cwd, "feedback-composer.md"),
 						"Compose from admitted observations.",
 					);
+					writeFileSync(nodePath.join(cwd, "review-composer.md"), "Write the review on the work.");
+					if (stage === "compose" || stage === "compose-foreign-provider") {
+						// The person's history, staged as the server stages it for the measurement and private lanes.
+						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
+						writeFileSync(
+							nodePath.join(cwd, "history/feedback.json"),
+							JSON.stringify({
+								feedback: [
+									{
+										channel: "IN_CONTEXT",
+										artifact: {
+											kind: "scm.pull_request",
+											url: "https://gitlab.example/group/repo/-/merge_requests/3",
+										},
+										body: "An earlier comment on this same change.",
+									},
+									{
+										channel: "IN_APP",
+										artifact: {
+											kind: "scm.pull_request",
+											url: "https://gitlab.example/group/repo/-/merge_requests/1",
+										},
+										body: PRIVATE_HISTORY_SENTENCE,
+									},
+								],
+							}),
+						);
+					}
 					writeFileSync(nodePath.join(cwd, "events"), "");
 					writeFileSync(
 						nodePath.join(cwd, "evidence/metadata.json"),
@@ -1358,7 +1456,10 @@ if (scenario !== undefined && scenario !== "") {
 									IN_APP: { enabled: true, maxUnits: 1 },
 									IN_CONTEXT: { enabled: true, maxUnits: 1 },
 								},
-								inContextPlacementKinds: ["ARTIFACT"],
+								inContextPlacementKinds:
+									stage === "compose" || stage === "compose-foreign-provider"
+										? ["ARTIFACT", "DIFF"]
+										: ["ARTIFACT"],
 							}),
 						);
 					}
@@ -1532,7 +1633,12 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								child.stderr,
-								/the run is near its safety ceiling — preserving observations and composed units/u,
+								/the run is near its safety ceiling — preserving observations and composed feedback/u,
+							);
+							// The review composition was cut off by the safety line, so the private one never started.
+							assert.ok(
+								!events.some((event) => event.startsWith("private-turn")),
+								events.join("\n"),
 							);
 							reached({ "test-practice": "EVALUATED" });
 							break;
@@ -1911,12 +2017,60 @@ if (scenario !== undefined && scenario !== "") {
 						case "compose":
 						case "compose-foreign-provider": {
 							assert.equal(child.status, 0, child.stderr);
+							// Measurement, then the review on the work in a fresh session, then the private lanes in
+							// the measurement session.
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1", "prompt:2"],
+								["prompt:1", "prompt:2", "prompt:3"],
 							);
-							assert.equal(events.filter((event) => event.startsWith("create:")).length, 1);
+							assert.deepEqual(
+								events
+									.filter((event) => event.startsWith("create:"))
+									.map((event) => event.includes("tools=report_review") && !event.includes(",")),
+								[false, true],
+							);
+							assert.ok(events.includes("review-loader extensions=0"), events.join("\n"));
+							assert.equal(
+								readFileSync(nodePath.join(cwd, "review-system-prompt.md"), "utf8"),
+								"Write the review on the work.",
+							);
 							assert.ok(!events.includes("compact"), child.stderr);
+							// What the review composition was given: this work, and nothing about the person.
+							const reviewTurn = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
+							assert.match(reviewTurn, /^## The review to write/u);
+							// The captured record of this same work comes first, and the measurement task never.
+							const record = reviewTurn.indexOf('"title": "Add login"');
+							assert.ok(
+								record !== -1 && record < reviewTurn.indexOf('"id": "observation-1"'),
+								reviewTurn,
+							);
+							assert.match(reviewTurn, /linked_work_items\.json[^\n]*not part of this capture/u);
+							assert.match(reviewTurn, /"id": "observation-1"/u);
+							assert.match(reviewTurn, /"quote": "\+ insecure\(\);"/u);
+							assert.match(reviewTurn, /An earlier comment on this same change\./u);
+							assert.match(reviewTurn, /"slug": "test-practice"/u);
+							assert.doesNotMatch(reviewTurn, /Criteria\./u);
+							assert.ok(!reviewTurn.includes(PRIVATE_HISTORY_SENTENCE), reviewTurn);
+							assert.ok(!reviewTurn.includes("observation-history"), reviewTurn);
+							assert.ok(!reviewTurn.includes("Review the practice."), reviewTurn);
+							assert.match(
+								events.find((event) => event.startsWith("review-refused:")) ?? "",
+								/review refused, nothing was stored:[\s\S]*summary: body may not contain an HTML comment[\s\S]*inline #1: anchor names observation-2, which this note's basedOn does not/u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("review-history:")) ?? "",
+								/observation-history, which is not one of the observations this review may rest on/u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("review-stored:")) ?? "",
+								/Stored the review: a summary resting on 1 observation\(s\), 1 line note\(s\), 0 withholding decision\(s\)/u,
+							);
+							assert.ok(!events.includes("review-retry"), events.join("\n"));
+							// The private lanes keep the person's history, and see what the review said.
+							assert.ok(
+								events.includes("private-turn history=true review=true"),
+								events.join("\n"),
+							);
 							assert.match(
 								events.find((event) => event.startsWith("feedback-alone:")) ?? "",
 								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NOT_MET on 1/u,
@@ -1948,7 +2102,7 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								reply,
-								/#7: already have a IN_CONTEXT unit for test-practice, and the first one stands; nothing to resend for it\. Skipped\./u,
+								/#7: the review on the work is written in its own turn, not as a unit here; skipped\./u,
 							);
 							assert.match(
 								reply,
@@ -1958,15 +2112,7 @@ if (scenario !== undefined && scenario !== "") {
 								events.find((event) => event.startsWith("feedback-bare:")) ?? "",
 								/#1: IN_CHAT is not a lane this run may write for/u,
 							);
-							assert.match(
-								events.find((event) => event.startsWith("lead-long:")) ?? "",
-								/lead must be at most 240 characters, or end a sentence within them; this one is 305/u,
-							);
-							assert.match(
-								events.find((event) => event.startsWith("lead-cut:")) ?? "",
-								/Stored the opening line up to its last sentence end within 240 characters: \\"The auth change is the one to read first\.\\"/u,
-							);
-							const second = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
+							const second = readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8");
 							// Composition continues the session, which still holds the brief.
 							assert.doesNotMatch(second, /### `evidence\/metadata\.json`/u);
 							assert.match(second, /Compose from admitted observations\./u);
@@ -1989,18 +2135,24 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.ok(typeof feedback === "object" && feedback !== null);
 							assert.equal(Reflect.get(feedback, "admissionDigest"), "admitted-digest");
+							assert.equal(Reflect.get(feedback, "contractVersion"), 2);
+							assert.equal(Reflect.get(feedback, "lead"), undefined);
 							const units: unknown = Reflect.get(feedback, "units");
-							assert.ok(Array.isArray(units) && units.length === 2, JSON.stringify(units));
-							const [delivered, withheld] = units as unknown[];
-							assert.ok(typeof delivered === "object" && delivered !== null);
-							assert.ok(typeof withheld === "object" && withheld !== null);
-							assert.equal(Reflect.get(delivered, "action"), "NEW");
-							assert.equal(Reflect.get(withheld, "action"), "WITHHOLD");
-							assert.equal(
-								Reflect.get(feedback, "lead"),
-								"The auth change is the one to read first.",
-							);
-							assert.match(child.stderr, /composition: .*stored=3/u);
+							assert.ok(Array.isArray(units) && units.length === 1, JSON.stringify(units));
+							assert.ok(isRecord(units[0]) && units[0].channel === "IN_APP");
+							// The review as stored: the summary verbatim, the note on its cited line.
+							assert.deepEqual(Reflect.get(feedback, "review"), {
+								summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] },
+								inline: [
+									{
+										body: "`insecure()` runs here before the token is checked; call the checked helper instead.",
+										basedOn: ["observation-1"],
+										anchor: { observationId: "observation-1", citationIndex: 0 },
+									},
+								],
+								withheld: [],
+							});
+							assert.match(child.stderr, /\] composition: .*stored=1/u);
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
@@ -2008,10 +2160,12 @@ if (scenario !== undefined && scenario !== "") {
 							// 120k held, a prompt of a few thousand and 16k of output do not fit in 128k: the
 							// session is compacted before the prompt, and the prompt itself is sent whole.
 							assert.equal(child.status, 0, child.stderr);
+							// The review composition runs in its own fresh session, which holds nothing to compact; the
+							// private composition continues the measurement session and makes room first.
 							const order = events.filter((event) =>
-								["prompt:1", "compact", "prompt:2"].includes(event),
+								["prompt:1", "prompt:2", "compact", "prompt:3"].includes(event),
 							);
-							assert.deepEqual(order, ["prompt:1", "compact", "prompt:2"]);
+							assert.deepEqual(order, ["prompt:1", "prompt:2", "compact", "prompt:3"]);
 							assert.match(
 								child.stderr,
 								/composition: 120000 tokens held and \d+ needed exceed the 128000 window — compacting first/u,
@@ -2019,7 +2173,7 @@ if (scenario !== undefined && scenario !== "") {
 							// The compaction took the brief from the context, so the composition turn carries it again
 							// ahead of the composer's instructions — without the measuring examples and record, which
 							// the composer does not use.
-							const composition = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
+							const composition = readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8");
 							assert.match(
 								composition,
 								/### `evidence\/metadata\.json`[\s\S]*Compose from admitted observations\./u,
@@ -2031,16 +2185,16 @@ if (scenario !== undefined && scenario !== "") {
 							assert.equal(child.status, 0, child.stderr);
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1", "prompt:2", "prompt:3"],
+								["prompt:1", "prompt:2", "prompt:3", "prompt:4"],
 							);
 							assert.match(
-								readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8"),
+								readFileSync(nodePath.join(cwd, "prompt-4.md"), "utf8"),
 								/## Undecided[\s\S]*NOT_MET observation: test-practice/u,
 							);
 							// The retry knows the room each lane has left, so it writes no unit that is skipped.
 							assert.match(
-								readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8"),
-								/Room left for new units: [^;]*IN_APP 1 of 1/u,
+								readFileSync(nodePath.join(cwd, "prompt-4.md"), "utf8"),
+								/Room left for new units: IN_APP 1 of 1/u,
 							);
 							assert.match(
 								child.stderr,
@@ -2082,19 +2236,21 @@ if (scenario !== undefined && scenario !== "") {
 						}
 						case "compose-quiet": {
 							assert.equal(child.status, 0, child.stderr);
+							// Only a strength was measured: the review may acknowledge it specifically, and with no
+							// problem the private lanes, which rest on problems, are not composed at all.
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
 								["prompt:1", "prompt:2"],
 							);
 							assert.match(
-								events.find((event) => event.startsWith("feedback-quiet:")) ?? "",
-								/NOT_MET for the primary practice 'test-practice'/u,
+								events.find((event) => event.startsWith("review-strength:")) ?? "",
+								/Stored the review: a summary resting on 1 observation\(s\)/u,
+							);
+							assert.ok(
+								!events.some((event) => event.startsWith("private-turn")),
+								events.join("\n"),
 							);
 							assert.doesNotMatch(child.stderr, /asking once more/u);
-							// A POSITIVE observation is shown by what it found; its citations stay in the full record.
-							const quiet = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
-							assert.match(quiet, /"id": "observation-1",\n\s*"practiceSlug": "test-practice"/u);
-							assert.doesNotMatch(quiet, /"citations": \[\n\s*\{\n\s*"index": 0/u);
 							break;
 						}
 						case "compose-fold": {
@@ -2103,10 +2259,15 @@ if (scenario !== undefined && scenario !== "") {
 								events.find((event) => event.startsWith("feedback-fold:")) ?? "",
 								/stored/u,
 							);
-							// The turn, the finishing turn and the composition; no "## Undecided" retry follows.
+							// The turn, the finishing turn, the review and the private composition; the review's one
+							// withholding decision covers both observations, so neither composition asks again.
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1", "prompt:2", "prompt:3"],
+								["prompt:1", "prompt:2", "prompt:3", "prompt:4"],
+							);
+							assert.match(
+								events.find((event) => event.startsWith("review-withheld:")) ?? "",
+								/0 line note\(s\), 1 withholding decision\(s\)/u,
 							);
 							assert.doesNotMatch(child.stderr, /asking once more/u);
 							break;
@@ -2117,18 +2278,15 @@ if (scenario !== undefined && scenario !== "") {
 								events.filter((event) => event.startsWith("prompt:")),
 								["prompt:1", "prompt:2"],
 							);
-							const reply = events.find((event) => event.startsWith("feedback-abstention:")) ?? "";
-							for (const [position, slug] of ["second-practice", "third-practice"].entries()) {
-								assert.match(
-									reply,
-									new RegExp(
-										`#${position + 1}: At least one basedOn observation must have a MET or NOT_MET outcome for the primary practice '${slug}'`,
-										"u",
-									),
-									child.stderr,
-								);
-							}
-							assert.match(reply, /#3: stored a IN_CONTEXT unit for test-practice \(NEW\)/u);
+							// An abstention cannot carry a claim about the work; the strength beside it can.
+							assert.match(
+								events.find((event) => event.startsWith("review-abstention:")) ?? "",
+								/observation-2, which is not one of the observations this review may rest on/u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("review-met:")) ?? "",
+								/Stored the review: a summary resting on 1 observation\(s\)/u,
+							);
 							for (const file of ["out/result.json", "out/feedback.json"]) {
 								const payload: unknown = JSON.parse(readFileSync(nodePath.join(cwd, file), "utf8"));
 								assert.ok(isRecord(payload));
@@ -2141,11 +2299,11 @@ if (scenario !== undefined && scenario !== "") {
 							const feedback: unknown = JSON.parse(
 								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
 							);
-							assert.ok(isRecord(feedback) && Array.isArray(feedback.units));
-							assert.deepEqual(
-								feedback.units.map((unit: unknown) => (isRecord(unit) ? unit.practiceSlug : unit)),
-								["test-practice"],
-							);
+							assert.ok(isRecord(feedback) && isRecord(feedback.review));
+							assert.deepEqual(feedback.review.summary, {
+								body: "The helper you added keeps the login flow on one path.",
+								basedOn: ["observation-1"],
+							});
 							reached({
 								"test-practice": "EVALUATED",
 								"second-practice": "EVALUATED",
@@ -2175,17 +2333,19 @@ if (scenario !== undefined && scenario !== "") {
 							// nudged and the third ends the turn.
 							assert.match(
 								child.stderr,
-								/the same report_summary call 2 times — nudging to record/u,
+								/the same report_review call 2 times — nudging to record/u,
 							);
 							assert.match(
 								child.stderr,
-								/the same report_summary call 3 times — aborting this turn/u,
+								/the same report_review call 3 times — aborting this turn/u,
 							);
 							// Every refused call is in the transcript with the SDK's reason, and in the trace.
 							assert.match(
 								child.stderr,
-								/composer tool error: report_summary — Validation failed for tool "report_summary": - \/lead: Expected string/u,
+								/composer tool error: report_review — Validation failed for tool "report_review": - \/summary: Expected object/u,
 							);
+							// A review composition stopped by the loop guard is asked once more for what it left.
+							assert.ok(events.includes("review-retry"), events.join("\n"));
 							const debug: unknown = JSON.parse(
 								readFileSync(nodePath.join(cwd, "out/runner-debug.json"), "utf8"),
 							);
@@ -2196,7 +2356,7 @@ if (scenario !== undefined && scenario !== "") {
 								(turn: unknown) =>
 									typeof turn === "object" &&
 									turn !== null &&
-									Reflect.get(turn, "label") === "composition",
+									Reflect.get(turn, "label") === "review composition",
 							);
 							assert.ok(typeof composition === "object" && composition !== null);
 							assert.equal(Reflect.get(composition, "toolErrors"), 24);

@@ -489,10 +489,8 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void existingSummaryStillReconcilesTheRestOfAProviderPackage() {
-            when(handler.findExistingDelivery(completedJob))
-                    .thenReturn(ExistingDeliveryLookup.found("existing-comment-id"));
-            when(handler.reconcilesMoreThanOneProviderObject()).thenReturn(true);
+        void shouldLetAHandlerThatOwnsItsDeliveryStateSettleItWithoutAMarkerLookup() {
+            when(handler.reconcilesDeliveryState()).thenReturn(true);
             when(agentJobRepository.transitionDeliveryStatusFenced(
                             eq(jobId), eq(DeliveryStatus.DELIVERED), any(), any(), eq(CLAIMED_ATTEMPTS)))
                     .thenReturn(1);
@@ -500,7 +498,22 @@ class AgentJobLifecycleServiceTest extends BaseUnitTest {
             boolean result = service.recoverStuckDelivery(completedJob, CLAIMED_ATTEMPTS);
 
             assertThat(result).isTrue();
+            verify(handler, never()).findExistingDelivery(any());
             verify(handler).deliver(completedJob);
+        }
+
+        @Test
+        void shouldLeaveAnOwnedDeliveryPendingWhenItsOwnRecoveryCannotSettleIt() {
+            when(handler.reconcilesDeliveryState()).thenReturn(true);
+            doThrow(new RuntimeException("The dispatch of the review package waits for reconciliation"))
+                    .when(handler)
+                    .deliver(completedJob);
+
+            boolean result = service.recoverStuckDelivery(completedJob, CLAIMED_ATTEMPTS);
+
+            assertThat(result).isFalse();
+            verify(handler, never()).findExistingDelivery(any());
+            verify(agentJobRepository, never()).transitionDeliveryStatusFenced(any(), any(), any(), any(), anyShort());
         }
 
         @Test

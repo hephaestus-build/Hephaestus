@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -18,13 +20,13 @@ class FeedbackCompositionResultParserTest extends BaseUnitTest {
 
     private static final String OBSERVATIONS = """
         [
-          { "id": "obs-0", "practiceSlug": "ships-tests-with-the-change", "assessment": "BAD",
+          { "id": "obs-0", "practiceSlug": "ships-tests-with-the-change", "outcome": "NOT_MET",
             "severity": "MAJOR", "anchorable": true,
             "citations": [
               { "index": 0, "sourceKind": "scm.pull-request.diff", "path": "src/billing/InvoiceTotals.java",
                 "side": "NEW", "startLine": 47, "endLine": 47, "anchorable": true }
             ] },
-          { "id": "obs-1", "practiceSlug": "keeps-the-thread-moving", "assessment": "BAD",
+          { "id": "obs-1", "practiceSlug": "keeps-the-thread-moving", "outcome": "NOT_MET",
             "severity": "MINOR", "anchorable": false,
             "citations": [
               { "index": 0, "sourceKind": "scm.review-threads", "path": "thread/9",
@@ -34,44 +36,19 @@ class FeedbackCompositionResultParserTest extends BaseUnitTest {
         """;
 
     @Test
-    void readsAnInContextUnitAndResolvesItsAnchorFromTheCitation() {
-        List<ComposedFeedbackUnit> units = parser.parse(output("""
+    void shouldIgnoreAnEarlierRunnersFragmentUnitForTheWorkAndKeepItsNextStepAsHistory() {
+        JsonNode legacy = output("""
                 { "channel": "IN_CONTEXT", "practiceSlug": "ships-tests-with-the-change",
                   "basedOn": ["obs-0"], "action": "NEW",
                   "title": "This branch is untested",
                   "nextStep": "Add a case that calls total with a tax-exempt customer.",
                   "placement": { "kind": "DIFF", "observationId": "obs-0", "citationIndex": 0 } }
-                """, "[]"));
+                """, "[]");
 
-        assertThat(units).singleElement().satisfies(unit -> {
-            assertThat(unit.channel()).isEqualTo(FeedbackChannel.IN_CONTEXT);
-            assertThat(unit.basedOn()).containsExactly("obs-0");
-            var placement = unit.placement();
-            assertThat(placement).isNotNull();
-            var anchor = placement.diffAnchor();
-            assertThat(anchor).isNotNull();
-            assertThat(anchor.path()).isEqualTo("src/billing/InvoiceTotals.java");
-            assertThat(anchor.side()).isEqualTo("NEW");
-            assertThat(anchor.startLine()).isEqualTo(47);
-        });
-    }
-
-    @Test
-    void readsAnArtifactPlacedInContextUnitWithoutInventingCoordinates() {
-        List<ComposedFeedbackUnit> units = parser.parse(output("""
-                { "channel": "IN_CONTEXT", "practiceSlug": "ships-tests-with-the-change",
-                  "basedOn": ["obs-0"], "action": "NEW",
-                  "title": "The decision is not yet explained",
-                  "nextStep": "Add the constraint that makes this option necessary.",
-                  "placement": { "kind": "ARTIFACT" } }
-                """, "[]"));
-
-        assertThat(units).singleElement().satisfies(unit -> {
-            var placement = unit.placement();
-            assertThat(placement).isNotNull();
-            assertThat(placement.kind()).isEqualTo(ComposedFeedbackUnit.InContextPlacement.PlacementKind.ARTIFACT);
-            assertThat(placement.diffAnchor()).isNull();
-        });
+        assertThat(parser.parse(legacy)).isEmpty();
+        assertThat(parser.writtenWhole(legacy)).isFalse();
+        assertThat(parser.historicalNextSteps(legacy))
+                .containsExactly(Map.entry("obs-0", "Add a case that calls total with a tax-exempt customer."));
     }
 
     @Test
@@ -87,16 +64,6 @@ class FeedbackCompositionResultParserTest extends BaseUnitTest {
         assertThat(units)
                 .singleElement()
                 .satisfies(unit -> assertThat(unit.basedOn()).containsExactly("obs-0", "obs-1"));
-    }
-
-    @Test
-    void shouldRejectUnitWhenArtifactPlacementHasCoordinates() {
-        assertThat(parser.parse(output("""
-                    { "channel": "IN_CONTEXT", "practiceSlug": "ships-tests-with-the-change",
-                      "basedOn": ["obs-0"], "action": "NEW",
-                      "title": "The decision is not yet explained", "nextStep": "Add the constraint.",
-                      "placement": { "kind": "ARTIFACT", "observationId": "obs-0", "citationIndex": 0 } }
-                    """, "[]"))).isEmpty();
     }
 
     @Test
@@ -174,35 +141,6 @@ class FeedbackCompositionResultParserTest extends BaseUnitTest {
 
         assertThat(parser.parse(output(unit, "[]"))).isEmpty();
         assertThat(parser.parse(output(unit, "[\"invented-key\"]"))).hasSize(1);
-    }
-
-    @Test
-    void refusesAnAnchorPointingAtACitationTheObservationDoesNotHave() {
-        assertThat(parser.parse(output("""
-                    { "channel": "IN_CONTEXT", "practiceSlug": "ships-tests-with-the-change",
-                      "basedOn": ["obs-0"], "action": "NEW",
-                      "title": "t", "nextStep": "n",
-                      "placement": { "kind": "DIFF", "observationId": "obs-0", "citationIndex": 4 } }
-                    """, "[]"))).isEmpty();
-    }
-
-    @Test
-    void refusesAnInContextUnitAnchoredToAnObservationThatIsNotOnTheDiff() {
-        assertThat(parser.parse(output("""
-                    { "channel": "IN_CONTEXT", "practiceSlug": "keeps-the-thread-moving",
-                      "basedOn": ["obs-1"], "action": "NEW",
-                      "title": "t", "nextStep": "n",
-                      "placement": { "kind": "DIFF", "observationId": "obs-1", "citationIndex": 0 } }
-                    """, "[]"))).isEmpty();
-    }
-
-    @Test
-    void refusesAnInContextUnitWithNoAnchorAtAll() {
-        assertThat(parser.parse(output("""
-                    { "channel": "IN_CONTEXT", "practiceSlug": "ships-tests-with-the-change",
-                      "basedOn": ["obs-0"], "action": "NEW",
-                      "title": "t", "nextStep": "n" }
-                    """, "[]"))).isEmpty();
     }
 
     @Test
@@ -293,7 +231,7 @@ class FeedbackCompositionResultParserTest extends BaseUnitTest {
 
         assertThat(parser.parse(jobOutput))
                 .extracting(ComposedFeedbackUnit::channel)
-                .containsExactly(FeedbackChannel.IN_CONTEXT, FeedbackChannel.IN_APP);
+                .containsExactly(FeedbackChannel.IN_APP);
         assertThat(parser.parse(jobOutput, FeedbackChannel.IN_APP))
                 .singleElement()
                 .extracting(ComposedFeedbackUnit::title)
@@ -304,11 +242,11 @@ class FeedbackCompositionResultParserTest extends BaseUnitTest {
     void shouldKeepAllUnitsWhenEveryLaneUsesItsFullCapacity() {
         var observations = objectMapper.createArrayNode();
         var units = objectMapper.createArrayNode();
-        for (int practice = 0; practice < 10; practice++) {
+        for (int practice = 0; practice < 15; practice++) {
             String practiceSlug = "practice-" + practice;
             String observationId = "obs-" + practice;
             observations.addObject().put("id", observationId).put("practiceSlug", practiceSlug);
-            for (FeedbackChannel channel : FeedbackChannel.values()) {
+            for (FeedbackChannel channel : List.of(FeedbackChannel.IN_APP, FeedbackChannel.IN_CHAT)) {
                 var unit = units.addObject().put("channel", channel.name()).put("practiceSlug", practiceSlug);
                 unit.putArray("basedOn").add(observationId);
                 unit.put("action", "WITHHOLD").put("withholdReason", "ALREADY_SAID");
@@ -344,39 +282,96 @@ class FeedbackCompositionResultParserTest extends BaseUnitTest {
         assertThat(parser.parse(raw("{ \"units\": [ 3, null, \"x\" ] }"))).isEmpty();
     }
 
-    @Test
-    void shouldReadTrimmedLeadWhenReviewComposedOne() {
-        JsonNode jobOutput = raw("""
-            { "lead": "  You kept this to one concern; the description just never says why.  ",
-              "units": [] }
-            """);
+    // --- The review on the work ---------------------------------------------------------------------------
 
-        assertThat(parser.lead(jobOutput))
-                .isEqualTo("You kept this to one concern; the description just never says why.");
-    }
+    private static final String SUMMARY = "  The new branch in `total` has no test.\\n\\n"
+            + "    total(taxExempt)\\n\\nAdd a case that calls it with a tax-exempt customer.\\n";
 
-    @ParameterizedTest
-    @ValueSource(strings = {"{ \"units\": [] }", "{ \"lead\": null }", "{ \"lead\": \"\" }", "{ \"lead\": \"   \" }"})
-    void shouldReturnNoLeadWhenTextIsBlankOrAbsent(String feedbackJson) {
-        assertThat(parser.lead(raw(feedbackJson))).isNull();
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"{ \"lead\": 42 }", "{ \"lead\": true }", "{ \"lead\": [\"a\"] }", "{ \"lead\": {} }"})
-    void shouldReturnNoLeadWhenValueIsNotText(String feedbackJson) {
-        assertThat(parser.lead(raw(feedbackJson))).isNull();
+    private JsonNode review(String reviewJson) {
+        return raw("""
+            { "contractVersion": 2, "observations": %s, "units": [], "review": %s }
+            """.formatted(OBSERVATIONS, reviewJson));
     }
 
     @Test
-    void shouldReturnNoLeadWhenPayloadExceedsCeiling() {
-        assertThat(parser.lead(raw("{ \"lead\": \"" + "x".repeat(5_000) + "\" }")))
-                .as("the payload ceiling is a bound on what the envelope may carry, not a place to trim prose")
+    void shouldReadACompleteReviewWithEveryBodyExactlyAsWrittenAndTheAnchorFromTheCitation() {
+        JsonNode output = review("""
+            { "summary": { "body": "%s", "basedOn": ["obs-0", "obs-1"] },
+              "inline": [ { "body": "No test reaches this line.", "basedOn": ["obs-0"],
+                            "anchor": { "observationId": "obs-0", "citationIndex": 0 } } ],
+              "withheld": [] }
+            """.formatted(SUMMARY));
+
+        assertThat(parser.writtenWhole(output)).isTrue();
+        ComposedReview read = parser.review(output);
+        assertThat(read).isNotNull();
+        ComposedReview.Summary summary = read.summary();
+        assertThat(summary).isNotNull();
+        assertThat(summary.body())
+                .isEqualTo("  The new branch in `total` has no test.\n\n"
+                        + "    total(taxExempt)\n\nAdd a case that calls it with a tax-exempt customer.\n");
+        assertThat(summary.basedOn()).containsExactly("obs-0", "obs-1");
+        assertThat(read.inline()).singleElement().satisfies(note -> {
+            assertThat(note.anchor().path()).isEqualTo("src/billing/InvoiceTotals.java");
+            assertThat(note.anchor().startLine()).isEqualTo(47);
+        });
+    }
+
+    @Test
+    void shouldReadAValidEmptyReviewAsSilenceAndAMissingOneAsNoReview() {
+        assertThat(parser.review(review("{}"))).isEqualTo(ComposedReview.empty());
+        assertThat(parser.review(review("null"))).isNull();
+        assertThat(parser.review(raw("{ \"contractVersion\": 2, \"units\": [] }")))
                 .isNull();
+        assertThat(parser.review(null)).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{ \"summary\": { \"body\": \"Add the test.\", \"basedOn\": [\"obs-0\", 42] } }",
+                "{ \"summary\": { \"body\": \"Add the test.\", \"basedOn\": \"obs-0\" } }",
+                "{ \"summary\": { \"body\": \"Add the test.\", \"basedOn\": [] } }",
+                "{ \"summary\": { \"body\": \"Add the test.\", \"basedOn\": [\"obs-missing\"] } }",
+                "{ \"summary\": { \"body\": \"   \", \"basedOn\": [\"obs-0\"] } }",
+                "{ \"summary\": { \"body\": \"Fine. <!-- marker -->\", \"basedOn\": [\"obs-0\"] } }",
+                "{ \"summary\": { \"body\": \"Add the reason.}\\\"\", \"basedOn\": [\"obs-0\"] } }",
+                "{ \"inline\": [ { \"body\": \"x\", \"basedOn\": [\"obs-1\"],"
+                        + " \"anchor\": { \"observationId\": \"obs-0\", \"citationIndex\": 0 } } ] }",
+                "{ \"inline\": [ { \"body\": \"x\", \"basedOn\": [\"obs-1\"],"
+                        + " \"anchor\": { \"observationId\": \"obs-1\", \"citationIndex\": 0 } } ] }",
+                "{ \"inline\": [ { \"body\": \"x\", \"basedOn\": [\"obs-0\"],"
+                        + " \"anchor\": { \"observationId\": \"obs-0\", \"citationIndex\": 4 } } ] }",
+                "{ \"inline\": { \"body\": \"x\" } }",
+                "{ \"withheld\": [ { \"basedOn\": [\"obs-0\"], \"reason\": \"BORED\" } ] }",
+                "{ \"summary\": { \"body\": \"Add the test.\", \"basedOn\": [\"obs-0\"] },"
+                        + " \"withheld\": [ { \"basedOn\": [\"obs-0\"], \"reason\": \"BELOW_BAR\" } ] }",
+                "{ \"lead\": \"A fragment from an earlier contract.\" }",
+            })
+    void shouldReadAReviewThatBreaksItsContractAsNoReviewRatherThanAsSilence(String reviewJson) {
+        assertThat(parser.review(review(reviewJson))).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"MET", "UNDETERMINED", "NOT_APPLICABLE"})
+    void shouldRefuseWithholdingWhenTheNamedObservationIsNotNotMet(String outcome) {
+        String evidence = OBSERVATIONS.replace("NOT_MET", outcome);
+        JsonNode output = raw("""
+            { "contractVersion": 2, "observations": %s,
+              "review": { "withheld": [{ "basedOn": ["obs-0"], "reason": "ALREADY_SAID" }] } }
+            """.formatted(evidence));
+        assertThat(parser.review(output)).isNull();
     }
 
     @Test
-    void shouldReturnNoLeadWhenJobOutputIsMissing() {
-        assertThat(parser.lead(null)).isNull();
+    void shouldRefuseAWholeReviewOverTheLineNoteBoundOrWithTwoNotesOnOneLine() {
+        String note = "{ \"body\": \"x\", \"basedOn\": [\"obs-0\"],"
+                + " \"anchor\": { \"observationId\": \"obs-0\", \"citationIndex\": 0 } }";
+
+        assertThat(parser.review(review("{ \"inline\": [" + note + ", " + note + "] }")))
+                .isNull();
+        assertThat(parser.review(review("{ \"inline\": [" + String.join(", ", Collections.nCopies(31, note)) + "] }")))
+                .isNull();
     }
 
     private JsonNode output(String unitJson, String preparedThreadKeysJson) {

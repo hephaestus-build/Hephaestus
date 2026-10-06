@@ -427,7 +427,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
         assertThat(linkedTo(issue.job())).containsExactlyInAnyOrder(issue.gap(), issue.triage());
     }
 
-    private record IssueReview(AgentJob job, IssueHost host, UUID gap, UUID triage) {}
+    private record IssueReview(AgentJob job, IssueHost host, UUID gap, UUID triage, Outcome triageOutcome) {}
 
     /** The issue #7 shape: an automatic problem beside one result of a practice that needs approval. */
     private IssueReview reviewBesideTriage(Outcome triageKind) {
@@ -466,7 +466,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
                 Instant.now(),
                 evidence,
                 null);
-        return new IssueReview(review, host, gap, triaged);
+        return new IssueReview(review, host, gap, triaged, triageKind);
     }
 
     /** The composer's output for the review: both observations staged by id, one note of the problem's practice. */
@@ -475,28 +475,26 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
         ((ObjectNode) Objects.requireNonNull(review.getMetadata()))
                 .put(ObservationAdmissionService.DIGEST_METADATA_KEY, "digest-7");
         ObjectNode feedback = objectMapper.createObjectNode().putObject("feedback");
-        feedback.put("admissionDigest", "digest-7")
-                .put("lead", "Worth splitting before anyone starts, and triage can wait.");
+        feedback.put("admissionDigest", "digest-7").put("contractVersion", 2);
         var staged = feedback.putArray("observations");
         staged.addObject()
                 .put("id", issue.gap().toString())
                 .put("practiceSlug", practice.getSlug())
+                .put("outcome", "NOT_MET")
                 .put("anchorable", false)
                 .putArray("citations");
         staged.addObject()
                 .put("id", issue.triage().toString())
                 .put("practiceSlug", "triage-labels-owner")
+                .put("outcome", issue.triageOutcome().name())
                 .put("anchorable", false)
                 .putArray("citations");
-        ObjectNode unit = feedback.putArray("units").addObject();
-        unit.put("channel", "IN_CONTEXT")
-                .put("action", "NEW")
-                .put("practiceSlug", practice.getSlug())
-                .put("title", "Split the three deliverables into subtasks")
-                .put("nextStep", "Open one subtask per deliverable and link them here");
-        var cited = unit.putArray("basedOn");
+        ObjectNode summary = feedback.putObject("review").putObject("summary");
+        summary.put(
+                "body",
+                "Split the three deliverables into subtasks. Open one subtask per deliverable and link them here.");
+        var cited = summary.putArray("basedOn");
         for (UUID id : basedOn) cited.add(id.toString());
-        unit.putObject("placement").put("kind", "ARTIFACT");
         ObjectNode output = objectMapper.createObjectNode();
         output.set("feedback", feedback);
         review.setOutput(output);

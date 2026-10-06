@@ -26,3 +26,14 @@ export const SANDBOX_SETTINGS_MANAGER_OPTIONS: SettingsManagerCreateOptions = {
 export const SANDBOX_RESOURCE_LOADER_OPTIONS = {
 	noContextFiles: true,
 };
+
+/** Public composition receives its whole input inline and must not discover resources from private history. */
+export const PUBLIC_REVIEW_RESOURCE_LOADER_OPTIONS = {
+	...SANDBOX_RESOURCE_LOADER_OPTIONS,
+	noExtensions: true,
+	noSkills: true,
+	noPromptTemplates: true,
+};
+
+/** Public composition has no tool capable of reading or executing against the measurement workspace. */
+export const PUBLIC_REVIEW_TOOLS = ["report_review"];

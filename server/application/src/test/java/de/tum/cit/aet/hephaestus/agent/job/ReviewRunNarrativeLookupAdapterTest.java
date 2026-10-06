@@ -81,6 +81,37 @@ class ReviewRunNarrativeLookupAdapterTest extends BaseUnitTest {
         assertThat(narrative.nextStepByObservationId()).isEmpty();
     }
 
+    @Test
+    void shouldTakeTheAnchoredLineNoteVerbatimWhenTheReviewIsWrittenWhole() {
+        UUID anchored = UUID.randomUUID();
+        UUID summarized = UUID.randomUUID();
+        ReviewRunNarrative narrative =
+                lookUp(reviewOutput(anchored, summarized, """
+                {"summary":{"body":"Two parts of this pull request need a closer look.","basedOn":["%s","%s"]},
+                 "inline":[{"body":"Rename `doWork` so the name says what it checks.\\n\\n    boolean hasOpenReview()",
+                            "basedOn":["%s"],"anchor":{"observationId":"%s","citationIndex":0}}]}
+                """.formatted(anchored, summarized, anchored, anchored)));
+
+        assertThat(narrative.nextStepByObservationId())
+                .containsExactly(Map.entry(
+                        anchored, "Rename `doWork` so the name says what it checks.\n\n    boolean hasOpenReview()"))
+                .doesNotContainKey(summarized);
+    }
+
+    @Test
+    void shouldGiveNoLineNoteNextStepWhenTheWrittenReviewBreaksItsContract() {
+        UUID anchored = UUID.randomUUID();
+        UUID summarized = UUID.randomUUID();
+        ReviewRunNarrative narrative =
+                lookUp(reviewOutput(anchored, summarized, """
+                {"inline":[{"body":"Rename `doWork` so the name says what it checks.",
+                            "basedOn":["%s"],"anchor":{"observationId":"%s","citationIndex":0}},
+                           {"body":"  ","basedOn":["%s"],"anchor":{"observationId":"%s","citationIndex":0}}]}
+                """.formatted(anchored, anchored, anchored, anchored)));
+
+        assertThat(narrative.nextStepByObservationId()).isEmpty();
+    }
+
     private ReviewRunNarrative lookUp(JsonNode output) {
         UUID jobId = UUID.randomUUID();
         when(repository.findReviewRunNarrativesByWorkspaceIdAndIdIn(WORKSPACE_ID, List.of(jobId)))
@@ -99,6 +130,23 @@ class ReviewRunNarrativeLookupAdapterTest extends BaseUnitTest {
                    "citations":[]}],
                   "units":[%s]}}
                 """.formatted(observationId, units));
+    }
+
+    /**
+     * One output written whole: {@code anchored} cites one placeable line, {@code summarized} cites none, and the
+     * review is carried verbatim.
+     */
+    private static JsonNode reviewOutput(UUID anchored, UUID summarized, String review) {
+        return OBJECT_MAPPER.readTree("""
+                {"feedback":{"contractVersion":2,
+                  "observations":[
+                    {"id":"%s","practiceSlug":"pr-description-quality","outcome":"NOT_MET","anchorable":true,
+                     "citations":[{"path":"src/Review.java","side":"NEW","startLine":10,"endLine":12,"anchorable":true}]},
+                    {"id":"%s","practiceSlug":"pr-description-quality","outcome":"NOT_MET","anchorable":false,
+                     "citations":[]}],
+                  "units":[],
+                  "review":%s}}
+                """.formatted(anchored, summarized, review));
     }
 
     private record Row(UUID id, @Nullable JsonNode output) implements ReviewRunNarrativeRow {

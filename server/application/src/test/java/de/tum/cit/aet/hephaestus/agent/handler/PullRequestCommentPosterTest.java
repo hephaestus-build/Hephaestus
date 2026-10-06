@@ -169,24 +169,15 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
 
         @Test
         void shouldStripReferenceStyleMarkdownImages() {
-            String input = "Look at ![tracking pixel][1]";
+            String input = "Look at ![tracking pixel][1]\n\n[1]: https://evil.example/t.png";
             String result = PullRequestCommentPoster.sanitize(input);
-            assertThat(result).doesNotContain("![");
+            assertThat(result).doesNotContain("![").doesNotContain("tracking pixel");
         }
 
         @Test
-        void shouldRemoveApprovalLanguageWithPunctuation() {
-            assertThat(PullRequestCommentPoster.sanitize("LGTM!")).isBlank();
-            assertThat(PullRequestCommentPoster.sanitize("Approved.")).isBlank();
-            assertThat(PullRequestCommentPoster.sanitize("Ship it!")).isBlank();
-        }
-
-        @Test
-        void shouldRemoveApprovalLanguage() {
-            assertThat(PullRequestCommentPoster.sanitize("LGTM")).isBlank();
-            assertThat(PullRequestCommentPoster.sanitize("Approved")).isBlank();
-            assertThat(PullRequestCommentPoster.sanitize("Ready to merge")).isBlank();
-            assertThat(PullRequestCommentPoster.sanitize("Ship it")).isBlank();
+        void shouldKeepAStandaloneApprovalLineWhenSanitizing() {
+            String body = "Add a test for the empty input.\n\nLGTM\n\nRename the helper.";
+            assertThat(PullRequestCommentPoster.sanitize(body)).isEqualTo(body);
         }
 
         @Test
@@ -205,9 +196,9 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldCollapseExcessiveNewlines() {
-            String result = PullRequestCommentPoster.sanitize("Hello\n\n\n\n\nWorld");
-            assertThat(result).isEqualTo("Hello\n\nWorld");
+        void shouldPreserveComposedParagraphsAndCodeIndentation() {
+            String body = "    let foreground = Color.primary\n\n\n\nDetails about this local change.\n";
+            assertThat(PullRequestCommentPoster.sanitize(body)).isEqualTo(body);
         }
 
         @Test
@@ -226,14 +217,86 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldRemoveAnUnclosableFenceWithoutExceedingTheProviderLimit() {
+        void shouldCloseAFenceTheCutLeavesOpenWithoutExceedingTheProviderLimit() {
             String opener = "`".repeat(1_000);
             String result = PullRequestCommentPoster.sanitize(
                     opener + " java\n" + "x".repeat(PullRequestCommentPoster.MAX_BODY_LENGTH));
 
             assertThat(result).hasSizeLessThanOrEqualTo(PullRequestCommentPoster.MAX_BODY_LENGTH);
-            assertThat(result).doesNotStartWith(opener);
-            assertThat(result).endsWith("[... truncated. The comment exceeded the length limit.]");
+            assertThat(result).startsWith(opener + " java\nxxx");
+            assertThat(result).endsWith("x\n" + opener + "\n\n[... truncated. The comment exceeded the length limit.]");
+        }
+
+        @Test
+        void shouldKeepCodeLiteralsVerbatimWhileProseStaysSanitized() {
+            String code = """
+                    Pass ``Binding<Bool>`` down and keep `@State` in the view; `@Observable` owns the model.
+
+                    ```swift
+                    @State private var isOn: Bool = false
+                    let binding: Binding<Bool>
+                    // <script>alert(1)</script> ![pixel](https://evil.example/t.png) [x](javascript:alert(1)) @someone
+                    ```
+
+                        @Observable final class Model { var items: Array<String> = [] }
+                    """;
+
+            assertThat(PullRequestCommentPoster.sanitize(code)).isEqualTo(code);
+
+            String prose = "Ask @someone to review. <script>alert(1)</script><b onclick=x>bold</b> "
+                    + "![pixel](https://evil.example/t.png) [x](javascript:alert) <!-- hidden -->done";
+            assertThat(PullRequestCommentPoster.sanitize(prose))
+                    .isEqualTo("Ask `@someone` to review. alert(1)<b>bold</b>  x done");
+        }
+
+        @Test
+        void shouldRemoveEveryLiveImageWhateverItsLabelHolds() {
+            assertThat(PullRequestCommentPoster.sanitize("See ![`@x`](https://evil.example/t.png) here"))
+                    .isEqualTo("See  here");
+            assertThat(PullRequestCommentPoster.sanitize("See ![`a]b`](https://evil.example/t.png) here"))
+                    .isEqualTo("See  here");
+            assertThat(PullRequestCommentPoster.sanitize("See ![a [b]](https://evil.example/t.png) here"))
+                    .isEqualTo("See  here");
+
+            String example = "Write `![a [b]](https://evil.example/t.png)` to embed an image.";
+            assertThat(PullRequestCommentPoster.sanitize(example)).isEqualTo(example);
+        }
+
+        @Test
+        void shouldReduceAnUnsafeLinkToItsLabelAndKeepASafeOneWhole() {
+            assertThat(PullRequestCommentPoster.sanitize("[`run`](javascript:alert)"))
+                    .isEqualTo("`run`");
+            assertThat(PullRequestCommentPoster.sanitize("Open [the `Binding<Bool>` [docs]](javascript:alert(1)) now"))
+                    .isEqualTo("Open the `Binding<Bool>` [docs] now");
+
+            String safe = "Open [the `Binding<Bool>` [docs]](https://example.com/docs) now";
+            assertThat(PullRequestCommentPoster.sanitize(safe)).isEqualTo(safe);
+        }
+
+        @Test
+        void shouldKeepAMultilineCodeSpanAndNeutralizeAMentionBetweenEscapedBackticks() {
+            String multiline = "Keep `@State\nvar isOn: Binding<Bool>` as it is.";
+            assertThat(PullRequestCommentPoster.sanitize(multiline)).isEqualTo(multiline);
+
+            assertThat(PullRequestCommentPoster.sanitize("Not code: \\`@State\\`"))
+                    .isEqualTo("Not code: \\``@State`\\`");
+        }
+
+        @Test
+        void shouldProtectCodeThatARemovalExposes() {
+            assertThat(PullRequestCommentPoster.sanitize("<!--\n```swift\n@State var on: Binding<Bool>\n```"))
+                    .isEqualTo("\n```swift\n@State var on: Binding<Bool>\n```");
+        }
+
+        @Test
+        void shouldSanitizeWhatACutTurnsFromCodeIntoProse() {
+            String body = "Intro `<img src=x onerror=alert(1)>" + "y".repeat(PullRequestCommentPoster.MAX_BODY_LENGTH)
+                    + "` end";
+
+            String result = PullRequestCommentPoster.sanitize(body);
+
+            assertThat(result).hasSizeLessThanOrEqualTo(PullRequestCommentPoster.MAX_BODY_LENGTH);
+            assertThat(result).startsWith("Intro `yyy").doesNotContain("<img");
         }
 
         @Test
@@ -330,6 +393,26 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
         void shouldStripEmptyUrlLinks() {
             String result = PullRequestCommentPoster.sanitize("[click me]()");
             assertThat(result).isEqualTo("click me");
+        }
+    }
+
+    @Nested
+    class SpeaksApproval {
+
+        @Test
+        void shouldDetectApprovalWhenALineIsOnlyApproval() {
+            assertThat(PullRequestCommentPoster.speaksApproval("LGTM")).isTrue();
+            assertThat(PullRequestCommentPoster.speaksApproval("Approved.")).isTrue();
+            assertThat(PullRequestCommentPoster.speaksApproval("ready to merge"))
+                    .isTrue();
+            assertThat(PullRequestCommentPoster.speaksApproval("Add a test for the empty input.\n\nLGTM"))
+                    .isTrue();
+        }
+
+        @Test
+        void shouldNotDetectApprovalWhenThePhraseIsPartOfASentence() {
+            assertThat(PullRequestCommentPoster.speaksApproval("Before this is ready to merge, add a test."))
+                    .isFalse();
         }
     }
 

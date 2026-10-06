@@ -251,6 +251,9 @@ public class ObservationAdmissionService {
         out.put("summary", observation.getSummary());
 
         out.put("outcome", observation.getOutcome().name());
+        var revision = observation.getPracticeRevision();
+        boolean summaryOnly = revision != null && revision.getDeliveryBehavior().summaryOnly();
+        out.put("summaryOnly", summaryOnly);
         out.put(
                 "severity",
                 observation.getSeverity() == null
@@ -268,7 +271,8 @@ public class ObservationAdmissionService {
                 ObjectNode copy = citations.addObject();
                 copy.put("index", index++);
                 citation.properties().forEach(entry -> copy.set(entry.getKey(), entry.getValue()));
-                boolean anchorable = PracticePreconditionClause.DIFF_SOURCE
+                boolean anchorable = !summaryOnly
+                        && PracticePreconditionClause.DIFF_SOURCE
                                 .value()
                                 .equals(citation.path("sourceKind").asString())
                         && citation.path("path").isString()
@@ -288,6 +292,8 @@ public class ObservationAdmissionService {
         out.put(
                 "anchorable",
                 citations.valueStream().anyMatch(c -> c.path("anchorable").asBoolean()));
+        // The review on the work is composed from the observations marked here and admitted by the same rule.
+        out.put("publicEligible", PublicReviewEligibility.admits(observation.getEvidence()));
         return out;
     }
 

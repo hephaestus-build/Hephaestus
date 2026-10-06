@@ -7,13 +7,9 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueComment;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueCommentConnection;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedCommentThreads;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGraphQlClient;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGraphQlClient.Request;
-import java.util.List;
 import java.util.Map;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import reactor.core.publisher.Mono;
@@ -63,21 +59,20 @@ public final class ScriptedGitHubComments {
         };
     }
 
+    /** Every scripted comment was written through the channel, so the viewer wrote it. */
     private Mono<ClientGraphQlResponse> comments(String path, String subject) {
-        return threads.read(subject, comments -> {
-            List<GHIssueComment> nodes = comments.stream()
-                    .map(comment -> {
-                        GHIssueComment node = new GHIssueComment();
-                        node.setId(comment.id());
-                        node.setBody(comment.body());
-                        return node;
-                    })
-                    .toList();
-            GHIssueCommentConnection connection = new GHIssueCommentConnection();
-            connection.setNodes(nodes);
-            connection.setPageInfo(new GHPageInfo());
-            return Map.of(path, connection);
-        });
+        return threads.read(
+                subject,
+                comments -> Map.of(
+                        path,
+                        Map.of(
+                                "nodes",
+                                comments.stream()
+                                        .map(comment -> Map.of(
+                                                "id", comment.id(), "body", comment.body(), "viewerDidAuthor", true))
+                                        .toList(),
+                                "pageInfo",
+                                Map.of("hasPreviousPage", false))));
     }
 
     private static int number(Request request) {

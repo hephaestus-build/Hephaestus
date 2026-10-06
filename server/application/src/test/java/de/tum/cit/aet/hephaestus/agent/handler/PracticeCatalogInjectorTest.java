@@ -43,6 +43,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -67,11 +68,18 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
         p.setName(slug);
         p.setCriteria("criteria for " + slug);
         p.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
-        var revision = new PracticeRevision();
-        ReflectionTestUtils.setField(revision, "id", Math.abs((long) slug.hashCode()) + 1);
-        p.setCurrentRevision(revision);
+        p.setCurrentRevision(revisionOf(p));
         PracticeTestEvidence.configure(p, signals);
         return p;
+    }
+
+    /** The current revision of {@code p}: the fields the index reads from it, copied from the practice. */
+    private static PracticeRevision revisionOf(Practice p) {
+        var revision = new PracticeRevision();
+        ReflectionTestUtils.setField(revision, "id", Math.abs((long) p.getSlug().hashCode()) + 1);
+        ReflectionTestUtils.setField(revision, "automatedReviewPolicy", p.getAutomatedReviewPolicy());
+        ReflectionTestUtils.setField(revision, "whyItMatters", p.getWhyItMatters());
+        return revision;
     }
 
     /**
@@ -373,20 +381,39 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("whyBySlug keeps populated principles and omits blank ones")
-    void whyBySlugOmitsBlankPrinciples() {
-        Practice withWhy = practice("authoring", ScmSignals.PULL_REQUEST_OPENED);
-        withWhy.setWhyItMatters("Clear descriptions help reviewers.");
-        Practice blankWhy = practice("retrospective", ScmSignals.PULL_REQUEST_MERGED);
-        blankWhy.setWhyItMatters("   ");
+    void shouldCarryWhyItMattersAndKnownLimitationsWhenIndexingPractices() {
+        Practice limited = practice("authoring", ScmSignals.PULL_REQUEST_OPENED);
+        limited.setWhyItMatters("Clear descriptions help reviewers.");
+        PracticeAutomatedReviewPolicy policy = limited.getAutomatedReviewPolicy();
+        limited.setAutomatedReviewPolicy(new PracticeAutomatedReviewPolicy(
+                policy.sourceContractVersion(),
+                policy.automatedReview(),
+                policy.whenEvidenceIsInsufficient(),
+                List.of(new PracticeEvidenceLimitation(
+                        "RUNTIME_BEHAVIOR_NOT_OBSERVED",
+                        "Repository evidence does not establish behavior in a deployed runtime.")),
+                null));
+        limited.setCurrentRevision(revisionOf(limited));
+        Practice plain = practice("retrospective", ScmSignals.PULL_REQUEST_OPENED);
         when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.PULL_REQUEST))
-                .thenReturn(List.of(withWhy, blankWhy));
+                .thenReturn(List.of(limited, plain));
+        Map<String, byte[]> files = new HashMap<>();
 
-        Map<String, String> why = injector.whyBySlug(workspace(), ArtifactKinds.PULL_REQUEST);
+        injector.inject(files, job(null), ArtifactKinds.PULL_REQUEST);
 
-        assertThat(why)
-                .containsEntry("authoring", "Clear descriptions help reviewers.")
-                .doesNotContainKey("retrospective");
+        JsonNode index =
+                objectMapper.readTree(Objects.requireNonNull(files.get(SandboxLayout.PRACTICES_PREFIX + "index.json")));
+        JsonNode authoring = index.path(0);
+        assertThat(authoring.path("slug").asString()).isEqualTo("authoring");
+        assertThat(authoring.path("whyItMatters").asString()).isEqualTo("Clear descriptions help reviewers.");
+        assertThat(authoring.path("knownLimitations").size()).isEqualTo(1);
+        assertThat(authoring.path("knownLimitations").path(0).asString())
+                .isEqualTo("Repository evidence does not establish behavior in a deployed runtime.");
+        JsonNode retrospective = index.path(1);
+        assertThat(retrospective.path("slug").asString()).isEqualTo("retrospective");
+        assertThat(retrospective.path("whyItMatters").isNull()).isTrue();
+        assertThat(retrospective.path("knownLimitations").isArray()).isTrue();
+        assertThat(retrospective.path("knownLimitations").isEmpty()).isTrue();
     }
 
     /** Resolves every workspace to the unset defaults — AUTOMATIC autonomy, reach on the work. */

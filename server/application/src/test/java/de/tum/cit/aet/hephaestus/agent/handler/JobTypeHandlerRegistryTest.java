@@ -63,11 +63,9 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     private JobTypeHandler prReviewHandler() {
         var parser = new ReviewResultParser(objectMapper);
-        var practiceCatalogInjector = practiceCatalogInjector();
         return new PullRequestReviewHandler(
                 objectMapper,
-                practiceCatalogInjector,
-                preparation(practiceCatalogInjector),
+                preparation(practiceCatalogInjector()),
                 parser,
                 new FeedbackCompositionResultParser(),
                 deliveryService,
@@ -80,17 +78,14 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
 
     private JobTypeHandler issueReviewHandler() {
         var parser = new ReviewResultParser(objectMapper);
-        var practiceCatalogInjector = practiceCatalogInjector();
         return new IssueReviewHandler(
                 objectMapper,
-                preparation(practiceCatalogInjector),
-                practiceCatalogInjector,
+                preparation(practiceCatalogInjector()),
                 parser,
                 new FeedbackCompositionResultParser(),
                 deliveryService,
                 InContextDeliveryGateFixtures.gate(
                         practiceRepository, mock(ObservationRepository.class), mock(FeedbackLedgerRecorder.class)),
-                mock(PullRequestCommentPoster.class),
                 mock(FeedbackLedgerRecorder.class),
                 mock(PracticeFeedbackDeliveryPolicy.class),
                 mock(PracticeFeedbackCommentFormatter.class),

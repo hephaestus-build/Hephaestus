@@ -32,7 +32,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Order(210)
 public class GeneralReviewCommentContentSource implements EvidenceSource {
 
-    private static final SourceKind KIND = new SourceKind("scm.general-review-comments");
+    public static final SourceKind KIND = new SourceKind("scm.general-review-comments");
 
     @Override
     public Set<SourceKind> sourceKinds() {

@@ -16,7 +16,7 @@ public enum Capability {
 
     /** Implements {@code SummaryChannel.postSummary}. */
     FEEDBACK_DELIVERY,
-    /** Implements {@code InlineFeedbackChannel.postInlineFeedback}. */
+    /** Implements {@code InlineFeedbackChannel.postImmutablePackage}. */
     INLINE_FEEDBACK,
     /** Implements {@code ApprovalChannel.approve}. */
     APPROVAL_WORKFLOW,

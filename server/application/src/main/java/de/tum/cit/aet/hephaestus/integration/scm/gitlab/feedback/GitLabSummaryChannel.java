@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabBackwardPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrCoordinates;
 import java.util.List;
 import java.util.Locale;
@@ -224,18 +223,22 @@ public class GitLabSummaryChannel implements SummaryChannel {
     private static final int EXISTING_SUMMARY_SEARCH_PAGE_BUDGET = 3;
 
     /**
-     * Scans this MR/issue's notes for one whose body contains {@code marker}, walking the connection backwards
-     * from its newest end — the summary a crashed delivery already posted is the newest note.
+     * Scans this MR/issue's notes for the note the authenticated identity wrote with the exact body
+     * {@link #postSummary} sends, walking the connection backwards from its newest end — the summary a crashed
+     * delivery already posted is the newest note. A marker-bearing note that is not that copy, a human's
+     * included, leaves the answer {@code UNKNOWN} unless the copy itself is found.
      *
      * <p>Reads the noteable's <em>flat</em> {@code notes} connection rather than {@code discussions { notes }}:
      * the nested form pages notes at a fixed size inside each discussion with no cursor of its own, so an
      * over-long thread would hide notes no cursor can reach.
      */
     @Override
-    public ExistingSummaryLookup findExistingSummary(FeedbackTarget target, String marker) {
+    public ExistingSummaryLookup findExistingSummary(FeedbackTarget target, FeedbackContent expected) {
+        String marker = expected.marker();
         if (marker == null || marker.isBlank()) {
             return ExistingSummaryLookup.unknown();
         }
+        String expectedBody = escapeSlashCommands(expected.externalBody());
         long scopeId = target.ref().workspaceId();
         if (gitLabProvider.isRateLimitCritical(scopeId)) {
             return ExistingSummaryLookup.unknown();
@@ -255,6 +258,7 @@ public class GitLabSummaryChannel implements SummaryChannel {
         }
 
         String cursor = null;
+        boolean conflict = false;
         for (int page = 0; page < EXISTING_SUMMARY_SEARCH_PAGE_BUDGET; page++) {
             try {
                 ClientGraphQlResponse response = gitLabProvider
@@ -271,33 +275,43 @@ public class GitLabSummaryChannel implements SummaryChannel {
                     return ExistingSummaryLookup.unknown();
                 }
 
-                List<Map<String, Object>> notes = Objects.requireNonNull(response)
-                        .field(notesPath + ".nodes")
-                        .getValue();
-                if (notes == null) {
+                String currentUserId = response.field("currentUser.id").getValue();
+                Map<String, Object> connection = response.field(notesPath).getValue();
+                if (currentUserId == null
+                        || currentUserId.isBlank()
+                        || connection == null
+                        || !(connection.get("nodes") instanceof List<?> notes)
+                        || !(connection.get("pageInfo") instanceof Map<?, ?> pageInfo)) {
                     return ExistingSummaryLookup.unknown();
                 }
-                for (Map<String, Object> note : notes) {
-                    String noteId = (String) note.get("id");
-                    String body = (String) note.get("body");
-                    if (noteId != null && body != null && body.contains(marker)) {
-                        return ExistingSummaryLookup.found(new SummaryHandle(noteId, (String) note.get("url")));
+                for (Object node : notes) {
+                    if (!(node instanceof Map<?, ?> note) || !(note.get("body") instanceof String body)) {
+                        conflict = true;
+                        continue;
                     }
+                    if (!body.contains(marker)) continue;
+                    if (note.get("author") instanceof Map<?, ?> author
+                            && currentUserId.equals(author.get("id"))
+                            && body.equals(expectedBody)
+                            && note.get("id") instanceof String noteId
+                            && !noteId.isBlank()) {
+                        return ExistingSummaryLookup.found(
+                                new SummaryHandle(noteId, note.get("url") instanceof String url ? url : null));
+                    }
+                    conflict = true;
                 }
 
-                GitLabBackwardPageInfo pageInfo = Objects.requireNonNull(response)
-                        .field(notesPath + ".pageInfo")
-                        .toEntity(GitLabBackwardPageInfo.class);
-                if (pageInfo == null) {
+                Object hasPreviousPage = pageInfo.get("hasPreviousPage");
+                if (Boolean.FALSE.equals(hasPreviousPage)) {
+                    return conflict ? ExistingSummaryLookup.unknown() : ExistingSummaryLookup.absent();
+                }
+                if (!Boolean.TRUE.equals(hasPreviousPage)
+                        || !(pageInfo.get("startCursor") instanceof String next)
+                        || next.isBlank()
+                        || next.equals(cursor)) {
                     return ExistingSummaryLookup.unknown();
                 }
-                if (!pageInfo.hasPreviousPage()) {
-                    return ExistingSummaryLookup.absent();
-                }
-                cursor = pageInfo.startCursor();
-                if (cursor == null || cursor.isBlank()) {
-                    return ExistingSummaryLookup.unknown();
-                }
+                cursor = next;
             } catch (RuntimeException e) {
                 log.debug(
                         "Existing-summary dedup lookup failed (treated as unknown, not absent): scopeId={}, error={}",

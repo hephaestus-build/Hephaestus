@@ -67,19 +67,13 @@ public class JobTypeHandlerConfiguration {
 
     @Bean
     FeedbackDeliveryService feedbackDeliveryService(
-            PullRequestCommentPoster commentPoster,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
             FeedbackLedgerRecorder feedbackLedgerRecorder,
             PracticeFeedbackCommentFormatter commentFormatter,
             PracticeFeedbackDispatchService dispatchService,
             AgentJobRepository agentJobRepository) {
         return new FeedbackDeliveryService(
-                commentPoster,
-                deliveryPolicy,
-                feedbackLedgerRecorder,
-                commentFormatter,
-                dispatchService,
-                agentJobRepository);
+                deliveryPolicy, feedbackLedgerRecorder, commentFormatter, dispatchService, agentJobRepository);
     }
 
     @Bean
@@ -108,7 +102,6 @@ public class JobTypeHandlerConfiguration {
     @Bean
     PullRequestReviewHandler pullRequestReviewHandler(
             PracticeReviewPreparation preparation,
-            PracticeCatalogInjector practiceCatalogInjector,
             ReviewResultParser resultParser,
             FeedbackCompositionResultParser compositionResultParser,
             ReviewOutputService deliveryService,
@@ -117,7 +110,6 @@ public class JobTypeHandlerConfiguration {
             ObservationRepository observationRepository) {
         return new PullRequestReviewHandler(
                 objectMapper,
-                practiceCatalogInjector,
                 preparation,
                 resultParser,
                 compositionResultParser,
@@ -131,12 +123,10 @@ public class JobTypeHandlerConfiguration {
     @Bean
     IssueReviewHandler issueReviewHandler(
             PracticeReviewPreparation preparation,
-            PracticeCatalogInjector practiceCatalogInjector,
             ReviewResultParser resultParser,
             FeedbackCompositionResultParser compositionResultParser,
             ReviewOutputService deliveryService,
             InContextDeliveryGate inContextDeliveryGate,
-            PullRequestCommentPoster commentPoster,
             FeedbackLedgerRecorder feedbackLedgerRecorder,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
             PracticeFeedbackCommentFormatter commentFormatter,
@@ -147,12 +137,10 @@ public class JobTypeHandlerConfiguration {
         return new IssueReviewHandler(
                 objectMapper,
                 preparation,
-                practiceCatalogInjector,
                 resultParser,
                 compositionResultParser,
                 deliveryService,
                 inContextDeliveryGate,
-                commentPoster,
                 feedbackLedgerRecorder,
                 deliveryPolicy,
                 commentFormatter,

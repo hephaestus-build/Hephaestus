@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.feedback;
 
+import static de.tum.cit.aet.hephaestus.integration.scm.GraphQlResponseStubValidator.Vendor.GITHUB;
+import static de.tum.cit.aet.hephaestus.integration.scm.GraphQlResponseStubValidator.assertVendorCouldReturn;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -27,12 +29,10 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackCon
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueComment;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueCommentConnection;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.net.URI;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -368,36 +368,96 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
         return spec;
     }
 
-    /**
-     * One page of a backwards (newest-end) walk. The forward pair is filled with opposite/invalid values
-     * so a scan that reads {@code hasNextPage}/{@code endCursor} fails these tests instead of passing by coincidence.
-     */
+    private static final String MARKER = "<!-- marker:job-1 -->";
+
+    private static final FeedbackContent EXPECTED = new FeedbackContent("Summary text", MARKER);
+
+    /** The exact body {@code postSummary} sends for {@link #EXPECTED}. */
+    private static final String EXACT = EXPECTED.externalBody();
+
+    /** One page of a backwards (newest-end) walk; a null {@code hasPreviousPage} leaves the flag unanswered. */
     private ClientGraphQlResponse mockCommentsPageResponse(
-            String commentsPath, List<GHIssueComment> nodes, boolean hasPreviousPage, @Nullable String startCursor) {
+            String commentsPath,
+            List<Map<String, Object>> nodes,
+            @Nullable Boolean hasPreviousPage,
+            @Nullable String startCursor) {
         ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
         ClientResponseField field = mock(ClientResponseField.class);
         when(response.field(commentsPath)).thenReturn(field);
-        var pageInfo = GHPageInfo.builder()
-                .setHasPreviousPage(hasPreviousPage)
-                .setHasNextPage(!hasPreviousPage)
-                .setEndCursor("forward-cursor-decoy");
-        if (startCursor != null) pageInfo.setStartCursor(startCursor);
-        GHIssueCommentConnection connection = GHIssueCommentConnection.builder()
-                .setNodes(nodes)
-                .setPageInfo(pageInfo.build())
-                .setTotalCount(nodes.size())
-                .build();
-        when(field.toEntity(GHIssueCommentConnection.class)).thenReturn(connection);
+        Map<String, Object> pageInfo = new HashMap<>();
+        pageInfo.put("hasPreviousPage", hasPreviousPage);
+        pageInfo.put("startCursor", startCursor);
+        Map<String, Object> connection = Map.of("nodes", nodes, "pageInfo", pageInfo);
+        assertVendorCouldReturn(
+                GITHUB,
+                commentsPath.startsWith("repository.issue") ? "GetIssueCommentsNewest" : "GetPullRequestCommentsNewest",
+                commentsPath,
+                connection);
+        when(field.getValue()).thenReturn(connection);
         lenient().when(response.getErrors()).thenReturn(List.of());
         return response;
     }
 
-    private static GHIssueComment comment(String id, String body) {
-        return GHIssueComment.builder()
-                .setId(id)
-                .setBody(body)
-                .setUrl(URI.create("https://github.com/owner/repo/pull/42#issuecomment-987654"))
-                .build();
+    /** A comment the authenticated viewer wrote. */
+    private static Map<String, Object> comment(String id, String body) {
+        return comment(id, body, true);
+    }
+
+    private static Map<String, Object> comment(String id, String body, boolean viewerDidAuthor) {
+        return Map.of(
+                "id",
+                id,
+                "body",
+                body,
+                "url",
+                "https://github.com/owner/repo/pull/42#issuecomment-" + id,
+                "viewerDidAuthor",
+                viewerDidAuthor);
+    }
+
+    @Test
+    void findExistingSummary_choosesTheViewersExactCopyOverANewerHumanCopy() {
+        when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
+        GraphQlClient.RequestSpec spec = mockRequestChain();
+        ClientGraphQlResponse page = mockCommentsPageResponse(
+                "repository.pullRequest.comments",
+                List.of(comment("IC_1", EXACT), comment("IC_2", EXACT, false)),
+                false,
+                null);
+        when(spec.execute()).thenReturn(Mono.just(page));
+
+        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, EXPECTED);
+
+        assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
+        assertNotNull(result.handle());
+        assertThat(result.handle().externalId()).isEqualTo("IC_1");
+    }
+
+    @Test
+    void findExistingSummary_aMarkedCommentThatIsNotTheCopy_isUnknown_notFoundOrAbsent() {
+        when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
+        GraphQlClient.RequestSpec spec = mockRequestChain();
+        ClientGraphQlResponse page = mockCommentsPageResponse(
+                "repository.pullRequest.comments",
+                List.of(comment("IC_1", EXACT + " edited"), comment("IC_2", EXACT, false)),
+                false,
+                null);
+        when(spec.execute()).thenReturn(Mono.just(page));
+
+        assertThat(channel.findExistingSummary(PR_TARGET, EXPECTED).kind())
+                .isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
+    }
+
+    @Test
+    void findExistingSummary_aPageWithoutItsPreviousPageFlag_isUnknown_notAbsent() {
+        when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
+        GraphQlClient.RequestSpec spec = mockRequestChain();
+        ClientGraphQlResponse page = mockCommentsPageResponse(
+                "repository.pullRequest.comments", List.of(comment("IC_1", "unrelated")), null, null);
+        when(spec.execute()).thenReturn(Mono.just(page));
+
+        assertThat(channel.findExistingSummary(PR_TARGET, EXPECTED).kind())
+                .isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
 
     @Test
@@ -409,7 +469,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
                 "repository.pullRequest.comments", List.of(comment("IC_1", "unrelated")), false, null);
         when(spec.execute()).thenReturn(Mono.just(response));
 
-        channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
+        channel.findExistingSummary(PR_TARGET, EXPECTED);
 
         verify(graphQlClient).documentName("GetPullRequestCommentsNewest");
         verify(spec).variable("last", 100);
@@ -424,11 +484,11 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
                 new FeedbackTarget(new IntegrationRef(IntegrationKind.GITHUB, 1L, null), "owner/repo/issues/42", null);
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
         GraphQlClient.RequestSpec spec = mockRequestChain();
-        ClientGraphQlResponse response = mockCommentsPageResponse(
-                "repository.issue.comments", List.of(comment("IC_1", "<!-- marker:job-1 -->body")), false, null);
+        ClientGraphQlResponse response =
+                mockCommentsPageResponse("repository.issue.comments", List.of(comment("IC_1", EXACT)), false, null);
         when(spec.execute()).thenReturn(Mono.just(response));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(issueTarget, "<!-- marker:job-1 -->");
+        ExistingSummaryLookup result = channel.findExistingSummary(issueTarget, EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         verify(graphQlClient).documentName("GetIssueCommentsNewest");
@@ -441,17 +501,17 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
         GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse newestPage = mockCommentsPageResponse(
                 "repository.pullRequest.comments",
-                List.of(comment("IC_1", "unrelated"), comment("IC_2", "<!-- marker:job-1 -->body")),
+                List.of(comment("IC_1", "unrelated"), comment("IC_2", EXACT)),
                 true,
                 "start-cursor-1");
         when(spec.execute()).thenReturn(Mono.just(newestPage));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
+        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         assertNotNull(result.handle());
         assertThat(result.handle().externalId()).isEqualTo("IC_2");
-        assertThat(result.handle().url()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
+        assertThat(result.handle().url()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-IC_2");
         verify(spec, times(1)).execute();
     }
 
@@ -468,7 +528,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
                 null);
         when(spec.execute()).thenReturn(Mono.just(newestPage)).thenReturn(Mono.just(oldestPage));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
+        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.ABSENT);
         verify(spec, times(2)).execute();
@@ -494,7 +554,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
                 .thenReturn(Mono.just(page2))
                 .thenReturn(Mono.just(page3));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
+        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
         verify(spec, times(3)).execute();
@@ -508,10 +568,10 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
         ClientGraphQlResponse newestPage = mockCommentsPageResponse(
                 "repository.pullRequest.comments", List.of(comment("IC_2", "unrelated")), true, "start-cursor-1");
         ClientGraphQlResponse olderPage = mockCommentsPageResponse(
-                "repository.pullRequest.comments", List.of(comment("IC_1", "<!-- marker:job-1 -->body")), false, null);
+                "repository.pullRequest.comments", List.of(comment("IC_1", EXACT)), false, null);
         when(spec.execute()).thenReturn(Mono.just(newestPage)).thenReturn(Mono.just(olderPage));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
+        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.FOUND);
         assertNotNull(result.handle());
@@ -527,7 +587,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
                 "repository.pullRequest.comments", List.of(comment("IC_1", "unrelated")), true, null);
         when(spec.execute()).thenReturn(Mono.just(response));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
+        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
         verify(spec, times(1)).execute();
@@ -537,7 +597,7 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
     void findExistingSummary_rateLimitCritical_isUnknown_notAbsent() {
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(true);
 
-        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
+        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
@@ -548,14 +608,33 @@ class GitHubSummaryChannelTest extends BaseUnitTest {
         GraphQlClient.RequestSpec spec = mockRequestChain();
         when(spec.execute()).thenThrow(new RuntimeException("boom"));
 
-        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "<!-- marker:job-1 -->");
+        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, EXPECTED);
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }
 
     @Test
+    void unreadableBodyPreventsAbsenceButDoesNotHideAnExactCopy() {
+        GraphQlClient.RequestSpec spec = mockRequestChain();
+        ClientGraphQlResponse unreadable =
+                mockCommentsPageResponse("repository.pullRequest.comments", List.of(Map.of("id", "IC_1")), false, null);
+        ClientGraphQlResponse found = mockCommentsPageResponse(
+                "repository.pullRequest.comments", List.of(Map.of("id", "IC_1"), comment("IC_2", EXACT)), false, null);
+        when(spec.execute()).thenReturn(Mono.just(unreadable)).thenReturn(Mono.just(found));
+        assertThat(channel.findExistingSummary(PR_TARGET, EXPECTED).kind())
+                .isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
+        assertThat(channel.findExistingSummary(PR_TARGET, EXPECTED).kind())
+                .isEqualTo(ExistingSummaryLookup.Presence.FOUND);
+    }
+
+    @Test
+    void blankNativeSummaryIdCannotAcknowledgeDelivery() {
+        assertThatThrownBy(() -> new SummaryHandle(" ")).isInstanceOf(FeedbackDeliveryException.class);
+    }
+
+    @Test
     void findExistingSummary_blankMarker_isUnknown() {
-        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, "  ");
+        ExistingSummaryLookup result = channel.findExistingSummary(PR_TARGET, new FeedbackContent("body", "  "));
 
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Presence.UNKNOWN);
     }

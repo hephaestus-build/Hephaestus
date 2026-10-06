@@ -10,8 +10,9 @@
  *
  * <p>What lives here is the <em>contract</em> between the composing model and the server: the bounds the
  * stage is given ({@link de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs}),
- * the shape of what it may emit
- * ({@link de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit}), and the reader that
+ * the shape of what it may emit — the review on the work
+ * ({@link de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedReview}) and the units for the private
+ * lanes ({@link de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit}) — and the reader that
  * turns its output into something the lane producers can route
  * ({@link de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser}).
  *

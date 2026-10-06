@@ -26,14 +26,16 @@ public interface SummaryChannel {
     }
 
     /**
-     * Search the target's existing comments for one carrying {@code marker}, so a delivery-recovery retry
-     * after a crash can record the already-posted comment instead of posting a duplicate.
+     * Search the target's existing comments for the copy of {@code expected} that this channel posted, so a
+     * delivery-recovery retry after a crash can record it instead of posting a duplicate. A copy counts only with
+     * the exact body {@link #postSummary} would send and authorship by the identity the same response authenticated.
      *
-     * <p>Only {@code ABSENT} licenses posting: a channel that cannot distinguish "searched everything,
-     * nothing matched" from "could not search" must answer {@code UNKNOWN} (the default), and the caller
-     * must then leave the delivery {@code PENDING} rather than risk a second summary.
+     * <p>Only {@code ABSENT} licenses posting: a channel answers it only after a complete scan with no comment
+     * carrying the marker. An incomplete scan, or a marker-bearing comment that is not the copy, answers
+     * {@code UNKNOWN} (the default), and the caller must then leave the delivery pending rather than risk a second
+     * summary.
      */
-    default ExistingSummaryLookup findExistingSummary(FeedbackTarget target, String marker) {
+    default ExistingSummaryLookup findExistingSummary(FeedbackTarget target, FeedbackContent expected) {
         return ExistingSummaryLookup.unknown();
     }
 
@@ -58,10 +60,11 @@ public interface SummaryChannel {
         return repoFullName + "#" + issueNumber;
     }
 
+    /** @param reviewedRevision the commit the reviewed work was captured at; null for an issue or an unpinned job */
     record FeedbackTarget(
             IntegrationRef ref,
             String subjectExternalId,
-            @Nullable String resourceUrl) {}
+            @Nullable String reviewedRevision) {}
 
     record FeedbackContent(String body, String marker) {
         public String externalBody() {
@@ -73,6 +76,12 @@ public interface SummaryChannel {
 
     /** Vendor-side post identifier recorded on {@code FeedbackPlacement.postedCommentRef} for edit-in-place (ADR 0021). */
     record SummaryHandle(String externalId, @Nullable String url) {
+        public SummaryHandle {
+            if (externalId.isBlank()) {
+                throw new FeedbackDeliveryException("Provider returned a blank summary id");
+            }
+        }
+
         public SummaryHandle(String externalId) {
             this(externalId, null);
         }

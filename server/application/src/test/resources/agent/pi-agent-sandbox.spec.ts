@@ -8,12 +8,15 @@ import {
 	createAgentSession,
 	createCodemodeExtension,
 	DefaultResourceLoader,
+	defineTool,
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 
 import {
+	PUBLIC_REVIEW_RESOURCE_LOADER_OPTIONS,
+	PUBLIC_REVIEW_TOOLS,
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
 } from "../../../main/resources/agent/pi-agent-sandbox.ts";
@@ -105,6 +108,56 @@ void test("the review tool list excludes write and edit from direct and nested c
 		assert.deepEqual(session.getActiveToolNames(), []);
 		assert.ok(session.systemPrompt.startsWith(systemPrompt));
 		assert.doesNotMatch(session.systemPrompt, /coding assistant|edit tool|write tool|ignore me/u);
+	} finally {
+		session.dispose();
+	}
+});
+
+void test("public composition cannot discover or read private history through native or nested tools", async () => {
+	const privateText = "private history that must not reach a public review";
+	mkdirSync(path.join(CWD, "inputs", "history"), { recursive: true });
+	writeFileSync(path.join(CWD, "inputs", "history", "observations.json"), privateText);
+	const settingsManager = SettingsManager.create(CWD, AGENT_DIR, SANDBOX_SETTINGS_MANAGER_OPTIONS);
+	const resourceLoader = new DefaultResourceLoader({
+		cwd: CWD,
+		agentDir: AGENT_DIR,
+		settingsManager,
+		...PUBLIC_REVIEW_RESOURCE_LOADER_OPTIONS,
+		systemPrompt: "Write only from the public input.",
+		agentsFilesOverride: () => ({ agentsFiles: [] }),
+		extensionFactories: [],
+	});
+	await resourceLoader.reload();
+	const modelRuntime = await ModelRuntime.create({
+		authPath: path.join(AGENT_DIR, "auth.json"),
+		modelsPath: path.join(AGENT_DIR, "models.json"),
+	});
+	const { session } = await createAgentSession({
+		cwd: CWD,
+		agentDir: AGENT_DIR,
+		tools: PUBLIC_REVIEW_TOOLS,
+		customTools: [
+			defineTool({
+				name: "report_review",
+				label: "Record review",
+				description: "Record a public review.",
+				exposure: "model-only",
+				parameters: { type: "object", properties: {} },
+				execute: async () => ({ content: [{ type: "text", text: "Recorded" }], details: {} }),
+			}),
+		],
+		resourceLoader,
+		settingsManager,
+		modelRuntime,
+		sessionManager: SessionManager.inMemory(CWD),
+	});
+	try {
+		assert.deepEqual(session.getActiveToolNames(), ["report_review"]);
+		assert.deepEqual(session.getCallableToolNames(), []);
+		session.setActiveToolsByName(["read", "grep", "bash", "codemode"]);
+		assert.deepEqual(session.getActiveToolNames(), []);
+		assert.doesNotMatch(session.systemPrompt, /private history|ignore me/u);
+		assert.deepEqual(resourceLoader.getAgentsFiles().agentsFiles, []);
 	} finally {
 		session.dispose();
 	}

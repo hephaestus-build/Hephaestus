@@ -105,13 +105,13 @@ class FeedbackDispatchStateMachine {
     }
 
     PracticeFeedbackDispatchService.Result retry(FeedbackDispatch dispatch, String owner, @Nullable String error) {
-        return retry(
+        return retryFailedAttempt(
                 dispatch,
                 owner,
                 error,
+                dispatch.getWriteStarted(),
                 dispatch.getDeliveredExternalRef(),
                 dispatch.getDeliveredExternalUrl(),
-                dispatch.getWriteStarted(),
                 deliveredSignals(dispatch));
     }
 
@@ -139,7 +139,7 @@ class FeedbackDispatchStateMachine {
                         null,
                         Instant.now().plus(backoff(attempt)),
                         signals)
-                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef, externalUrl)
+                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef, externalUrl, signals)
                 : PracticeFeedbackDispatchService.Result.inProgress();
     }
 
@@ -187,7 +187,7 @@ class FeedbackDispatchStateMachine {
                         null,
                         nextAttemptAt,
                         signals)
-                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef, externalUrl)
+                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef, externalUrl, signals)
                 : PracticeFeedbackDispatchService.Result.inProgress();
     }
 
@@ -196,11 +196,68 @@ class FeedbackDispatchStateMachine {
         return retry(dispatch, owner, error, null, null, true, deliveredSignals(dispatch));
     }
 
-    /** Records that inline notes are about to be requested; false once the lease is lost, so nothing is sent. */
-    boolean beginInlineWrite(FeedbackDispatch dispatch, String owner) {
+    /**
+     * Records, before an inline create request leaves, the receipt of every note of the package: what the request
+     * carries as unconfirmed, what is known, what was proven not created. False once the lease is lost, so nothing is
+     * sent.
+     */
+    boolean recordInlineAttempt(FeedbackDispatch dispatch, String owner, List<DeliveredSignal> receipt) {
+        String placements = deliveredSignalsJson(receipt);
         Integer began = transactionTemplate.execute(
-                status -> repository.beginInlineWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
+                status -> repository.beginInlineWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner, placements));
         return began != null && began == 1;
+    }
+
+    /**
+     * Keeps a dispatch whose started write is unconfirmed looking for it: on the retry schedule while
+     * {@link PracticeFeedbackDispatchService#UNCONFIRMED_WINDOW} has not passed since the write began, then every
+     * {@link PracticeFeedbackDispatchService#UNCONFIRMED_RECHECK}. A lookup that finds nothing proves nothing, so it
+     * never settles the dispatch either way.
+     */
+    PracticeFeedbackDispatchService.Result awaitUnconfirmed(
+            FeedbackDispatch dispatch,
+            String owner,
+            @Nullable String externalRef,
+            @Nullable String externalUrl,
+            List<DeliveredSignal> signals) {
+        String error = "An earlier provider write is not confirmed yet";
+        Instant writeStartedAt = dispatch.getWriteStartedAt();
+        Instant since = writeStartedAt != null ? writeStartedAt : dispatch.getCreatedAt();
+        if (Instant.now().isAfter(since.plus(PracticeFeedbackDispatchService.UNCONFIRMED_WINDOW))) {
+            return recheckAt(
+                    dispatch,
+                    owner,
+                    error,
+                    externalRef,
+                    externalUrl,
+                    signals,
+                    Instant.now().plus(PracticeFeedbackDispatchService.UNCONFIRMED_RECHECK));
+        }
+        return retry(dispatch, owner, error, externalRef, externalUrl, true, signals);
+    }
+
+    /**
+     * Settles an attempt that failed midway with the receipt it holds, never the array it loaded: a completion
+     * replaces the stored array, and a note fenced in this attempt must stay unconfirmed and keep being looked for.
+     */
+    PracticeFeedbackDispatchService.Result retryFailedAttempt(
+            FeedbackDispatch dispatch,
+            String owner,
+            @Nullable String error,
+            boolean summaryWriteBegan,
+            @Nullable String summaryRef,
+            @Nullable String summaryUrl,
+            List<DeliveredSignal> inlineSignals) {
+        if (summaryWriteBegan && summaryRef == null) {
+            return retryAfterWrite(dispatch, owner, error);
+        }
+        if (dispatch.inlineWriteMayHaveStarted() || inlineSignals.stream().anyMatch(DeliveredSignal::unconfirmed)) {
+            return awaitUnconfirmed(dispatch, owner, summaryRef, summaryUrl, inlineSignals);
+        }
+        if (summaryRef != null) {
+            return retryPackage(dispatch, owner, error, summaryRef, summaryUrl, inlineSignals);
+        }
+        return retry(dispatch, owner, error, null, null, dispatch.getWriteStarted(), inlineSignals);
     }
 
     void fail(FeedbackDispatch dispatch, String error) {
@@ -247,11 +304,15 @@ class FeedbackDispatchStateMachine {
                 .toString();
     }
 
+    /**
+     * A durable handle outranks any later failure, and an unconfirmed write is never relabelled unsent: only the
+     * attempt that made the request can prove no copy was created, and that attempt reports it itself.
+     */
     private static DeliveredSignal strongerSignal(DeliveredSignal persisted, DeliveredSignal latest) {
-        if (persisted.disposition() != Disposition.FAILED && latest.disposition() == Disposition.FAILED) {
-            return persisted;
+        if (!latest.acknowledged()) {
+            if (persisted.acknowledged()) return persisted;
+            return persisted.unconfirmed() && !latest.unconfirmed() ? persisted : latest;
         }
-        if (latest.externalRef() == null && persisted.externalRef() != null) return persisted;
         if (latest.externalUrl() == null
                 && persisted.externalUrl() != null
                 && Objects.equals(latest.externalRef(), persisted.externalRef())) {
@@ -261,7 +322,8 @@ class FeedbackDispatchStateMachine {
                     latest.disposition(),
                     latest.externalRef(),
                     latest.threadExternalRef(),
-                    persisted.externalUrl());
+                    persisted.externalUrl(),
+                    latest.writeMayHaveStarted());
         }
         return latest;
     }
@@ -279,6 +341,10 @@ class FeedbackDispatchStateMachine {
         return value.substring(0, 512);
     }
 
+    /**
+     * One element of the {@code delivered_placements} array. {@code writeMayHaveStarted} is absent on elements
+     * written before it was recorded, which reads as unknown, never as unsent.
+     */
     private record StoredPlacement(
             @JsonAlias("recurrenceKey") @Nullable String deliveryKey,
 
@@ -288,7 +354,8 @@ class FeedbackDispatchStateMachine {
             Disposition disposition,
             @Nullable String externalRef,
             @Nullable String externalUrl,
-            @Nullable String threadExternalRef) {
+            @Nullable String threadExternalRef,
+            @Nullable Boolean writeMayHaveStarted) {
         private static StoredPlacement from(DeliveredSignal signal) {
             FeedbackAnchor.DiffAnchor anchor = (FeedbackAnchor.DiffAnchor) signal.anchor();
             Integer rangeStart = anchor.startLine();
@@ -300,14 +367,16 @@ class FeedbackDispatchStateMachine {
                     signal.disposition(),
                     signal.externalRef(),
                     signal.externalUrl(),
-                    signal.threadExternalRef());
+                    signal.threadExternalRef(),
+                    signal.writeMayHaveStarted());
         }
 
         private DeliveredSignal toSignal() {
             FeedbackAnchor.DiffAnchor anchor = endLine == null
                     ? FeedbackAnchor.DiffAnchor.singleLine(path, startLine)
                     : FeedbackAnchor.DiffAnchor.range(path, startLine, endLine);
-            return new DeliveredSignal(deliveryKey, anchor, disposition, externalRef, threadExternalRef, externalUrl);
+            return new DeliveredSignal(
+                    deliveryKey, anchor, disposition, externalRef, threadExternalRef, externalUrl, writeMayHaveStarted);
         }
     }
 }
