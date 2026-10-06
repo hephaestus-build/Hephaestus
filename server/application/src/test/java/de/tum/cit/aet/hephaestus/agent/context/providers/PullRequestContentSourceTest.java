@@ -20,6 +20,8 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
@@ -44,9 +46,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.JsonNode;
@@ -466,6 +471,42 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(second.get("thread").asLong()).isEqualTo(70L);
             assertThat(second.has("side")).isFalse();
             assertThat(second.has("outdated")).isFalse();
+        }
+
+        @ParameterizedTest
+        @CsvSource(
+                value = {
+                    "GITHUB, original-head, current-head, original-head",
+                    "GITHUB, NULL, current-head, current-head",
+                    "GITHUB, '', current-head, current-head",
+                    "GITHUB, NULL, NULL, NULL",
+                    "GITHUB, '', '', NULL",
+                    "GITLAB, comparison-base, reviewed-head, reviewed-head"
+                },
+                nullValues = "NULL")
+        void shouldKeepTheProvidersActualCommentRevision(
+                IdentityProviderType type,
+                @Nullable String original,
+                @Nullable String current,
+                @Nullable String expected)
+                throws Exception {
+            var comment = new PullRequestReviewComment();
+            comment.setProvider(new IdentityProvider(type, "https://scm.example"));
+            comment.setOriginalCommitId(original);
+            comment.setCommitId(current);
+            comment.setPath("src/Main.java");
+            comment.setBody("Use the shared helper here.");
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
+                    .thenReturn(List.of(comment));
+
+            JsonNode captured = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(COMMENTS))
+                    .files()
+                    .get("context/comments.json"));
+            if (expected == null) {
+                assertThat(captured.get(0).has("commit_id")).isFalse();
+            } else {
+                assertThat(captured.get(0).path("commit_id").asString()).isEqualTo(expected);
+            }
         }
 
         @Test

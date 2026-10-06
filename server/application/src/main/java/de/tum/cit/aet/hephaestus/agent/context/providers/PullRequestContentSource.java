@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewContextBuilder;
 import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
@@ -339,8 +340,16 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
                 commentNode.put("outdated", true);
             }
             commentNode.put("native_id", comment.getNativeId());
-            if (comment.getCommitId() != null) {
-                commentNode.put("commit_id", comment.getCommitId());
+            String commitId = comment.getCommitId();
+            String originalCommitId = comment.getOriginalCommitId();
+            // GitHub retains the original comment revision; GitLab's originalCommitId is the comparison base.
+            if (originalCommitId != null
+                    && !originalCommitId.isBlank()
+                    && comment.getProvider().kind() == IntegrationKind.GITHUB) {
+                commitId = originalCommitId;
+            }
+            if (commitId != null && !commitId.isBlank()) {
+                commentNode.put("commit_id", commitId);
             }
             commentNode.put("body", comment.getBody());
             if (comment.getCreatedAt() != null) {
