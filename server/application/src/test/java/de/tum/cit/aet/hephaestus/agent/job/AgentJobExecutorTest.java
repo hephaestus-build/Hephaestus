@@ -1147,6 +1147,40 @@ class AgentJobExecutorTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldFailACleanExitWithoutAValidResultAndKeepItsOtherOutput() {
+            job.setConfigSnapshot(snapshot.withPriceSnapshot(pricedSnapshot()).toJson(objectMapper));
+            stubClaimableJob();
+            JobTypeHandler handler = setupFullExecution();
+            when(practiceAgent.parseResult(any()))
+                    .thenReturn(new AgentResult(false, Map.of("feedback", Map.of("units", List.of()))));
+            AgentJob fresh = freshJob();
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(fresh));
+            when(jobRepository.findById(jobId)).thenReturn(Optional.of(fresh));
+            when(jobRepository.transitionStatus(any(), any(), any(), any(), any()))
+                    .thenReturn(1);
+            when(jobRepository.findLlmUsageById(jobId))
+                    .thenReturn(Optional.of(new AgentJobLlmUsage(2, 100, 50, 0, 0, 0)));
+
+            executor.processJob(jobId);
+
+            verify(jobRepository)
+                    .transitionStatus(
+                            eq(jobId),
+                            eq(AgentJobStatus.FAILED),
+                            any(),
+                            eq("The runner did not return a valid result."),
+                            eq(Set.of(AgentJobStatus.RUNNING)));
+            assertThat(fresh.getExitCode()).isZero();
+            assertThat(requireNonNull(fresh.getOutput()).has("feedback")).isTrue();
+            assertThat(fresh.getDeliveryStatus()).isNull();
+            verify(handler, never()).deliver(any());
+            ArgumentCaptor<LlmUsageRecorder.LlmUsageSample> sample =
+                    ArgumentCaptor.forClass(LlmUsageRecorder.LlmUsageSample.class);
+            verify(usageRecorder).record(eq(99L), sample.capture());
+            assertThat(sample.getValue().totalCalls()).isEqualTo(2);
+        }
+
+        @Test
         void shouldNotDeliverOrBillFailedOutputWhenTheTerminalFenceIsLost() {
             stubClaimableJob();
             JobTypeHandler handler =

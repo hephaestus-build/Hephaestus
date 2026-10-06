@@ -1,8 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.runtime;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -13,7 +16,11 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 class PiResultParserTest extends BaseUnitTest {
 
@@ -43,10 +50,24 @@ class PiResultParserTest extends BaseUnitTest {
                 .isEqualTo(1d);
     }
 
-    @Test
-    void missingResultFile() {
-        var result = parser.parse(new SandboxResult(0, Map.of(), "done", false, Duration.ofSeconds(10)));
-        assertThat(result.success()).isTrue();
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "",
+                "{\"observations\":[]}",
+                "{\"summary\":\"no observations\"}",
+                "Saved:\n{\"observations\":[{\"practiceSlug\":\"x\"}]}",
+                "{\"observations\":[{\"practiceSlug\":\"x\"}]}\nDone.",
+                "{\"observations\":[{\"summary\":\"\\(error)\"}]}"
+            })
+    @DisplayName("a run with no result and no usable review state is not a success, even when it exits cleanly")
+    void noUsableResultIsNotASuccess(String reviewState) {
+        Map<String, byte[]> files =
+                reviewState.isEmpty() ? Map.of() : Map.of("review-state.json", reviewState.getBytes(UTF_8));
+
+        var result = parser.parse(new SandboxResult(0, files, "done", false, Duration.ofSeconds(10)));
+
+        assertThat(result.success()).isFalse();
         assertThat(result.output()).doesNotContainKey("rawOutput");
     }
 
@@ -72,12 +93,78 @@ class PiResultParserTest extends BaseUnitTest {
     }
 
     @Test
-    void extractsJsonFromMixedText() {
-        String mixed = "Here:\n```json\n{\"observations\":[{\"practiceSlug\":\"t\",\"title\":\"a\","
-                + "\"presence\":\"ABSENT\",\"assessment\":\"BAD\",\"severity\":\"MAJOR\",\"confidence\":0.8}]}\n```";
+    @DisplayName("keeps the runner's serialized result exactly, and its observations read back verbatim")
+    void keepsNativeJsonExactly() {
+        // As JSON.stringify writes it: escaped quotes, a backslash pair before a Swift interpolation, a newline.
+        String nativeJson = """
+                {"observations":[{"practiceSlug":"silent-failure","summary":"Catch says \\"ok\\"",\
+                "outcome":"NOT_MET","severity":"MAJOR","evidence":{"citations":[{"path":"App/Weather.swift",\
+                "quote":"Text(\\"\\\\(weather.temp)°\\")"}]},\
+                "evidenceRationale":"print(\\"Error: \\\\(error)\\")\\nC:\\\\temp"}]}""";
+
         var result = parser.parse(new SandboxResult(
-                0, Map.of("result.json", mixed.getBytes(UTF_8)), "done", false, Duration.ofSeconds(10)));
-        assertThat(rawOutput(result).toString()).contains("observations").contains("ABSENT");
+                0, Map.of("result.json", nativeJson.getBytes(UTF_8)), "done", false, Duration.ofSeconds(10)));
+
+        assertThat(result.success()).isTrue();
+        assertThat(rawOutput(result)).isEqualTo(nativeJson);
+        JsonMapper mapper = JsonMapper.builder().build();
+        var parsed = new ReviewResultParser(mapper)
+                .parseObservations(mapper.readTree(rawOutput(result).toString()).get("observations"));
+        assertThat(parsed.discarded()).isEmpty();
+        ValidatedObservation observation = parsed.validObservations().getFirst();
+        assertThat(observation.summary()).isEqualTo("Catch says \"ok\"");
+        assertThat(observation.evidenceRationale()).isEqualTo("print(\"Error: \\(error)\")\nC:\\temp");
+        JsonNode evidence = requireNonNull(observation.evidence());
+        assertThat(evidence.path("citations").get(0).path("quote").asString()).isEqualTo("Text(\"\\(weather.temp)°\")");
+    }
+
+    @Test
+    @DisplayName("a malformed result is not rescued by the backup, and the run's other artifacts are kept")
+    void malformedResultKeepsOtherArtifacts() {
+        String reviewState = """
+            {"observations":[{"practiceSlug":"x","summary":"t","outcome":"MET","severity":null,
+            "evidence":{"citations":[]},"evidenceRationale":"r"}]}""";
+        var result = parser.parse(new SandboxResult(
+                0,
+                Map.of(
+                        "result.json",
+                        "Result:\n{\"observations\":[]}".getBytes(UTF_8),
+                        "review-state.json",
+                        reviewState.getBytes(UTF_8),
+                        "usage.json",
+                        "{\"model\":\"m\",\"totalCalls\":1}".getBytes(UTF_8),
+                        SandboxLayout.FEEDBACK_FILENAME,
+                        "{\"units\":[]}".getBytes(UTF_8)),
+                "done",
+                false,
+                Duration.ofSeconds(10)));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.output()).doesNotContainKey("rawOutput").containsKey("feedback");
+        assertThat(result.usage()).isNotNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "Here:\n{\"observations\":[]}",
+                "```json\n{\"observations\":[]}\n```",
+                "{\"observations\":[]}\nDone.",
+                "{\"observations\":[{\"summary\":\"\\(error)\"}]}",
+                "{\"summary\":\"no observations\"}",
+                "[]"
+            })
+    @DisplayName("refuses a result that is not one serialized object with observations, and repairs nothing")
+    void refusesMalformedResult(String malformed) {
+        var result = parser.parse(new SandboxResult(
+                0, Map.of("result.json", malformed.getBytes(UTF_8)), "done", false, Duration.ofSeconds(10)));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.output()).doesNotContainKey("rawOutput");
+        assertThat(meterRegistry
+                        .counter("agent.pi.result.parse.failure", "stage", "result")
+                        .count())
+                .isEqualTo(1d);
     }
 
     @Test
@@ -187,17 +274,6 @@ class PiResultParserTest extends BaseUnitTest {
     }
 
     @Test
-    void sanitizesSwiftEscapes() {
-        String json = "{\"observations\":[{\"practiceSlug\":\"t\",\"title\":\"line1\\nline2\","
-                + "\"presence\":\"PRESENT\",\"assessment\":\"GOOD\",\"severity\":\"INFO\",\"confidence\":0.9,"
-                + "\"reasoning\":\"Text(\\\"\\(weather.temp)°\\\")\"}]}";
-        var result = parser.parse(new SandboxResult(
-                0, Map.of("result.json", json.getBytes(UTF_8)), "done", false, Duration.ofSeconds(10)));
-        assertThat(result.success()).isTrue();
-        assertThat(rawOutput(result).toString()).contains("line1\\nline2");
-    }
-
-    @Test
     @DisplayName("watchdog-killed marker is surfaced into output")
     void surfacesWatchdogState() {
         String marker = "{\"budgetMs\":540000,\"elapsedMs\":570000,\"reason\":\"x\"}";
@@ -208,18 +284,6 @@ class PiResultParserTest extends BaseUnitTest {
                 false,
                 Duration.ofSeconds(570)));
         assertThat(result.output()).containsKey("watchdogKilled");
-    }
-
-    @Test
-    void emptyReviewStateNoOutput() {
-        String empty = "{\"observations\":[]}";
-        var result = parser.parse(new SandboxResult(
-                1,
-                Map.of("review-state.json", empty.getBytes(StandardCharsets.UTF_8)),
-                "failed",
-                false,
-                Duration.ofSeconds(10)));
-        assertThat(result.output()).doesNotContainKey("rawOutput");
     }
 
     @Test
