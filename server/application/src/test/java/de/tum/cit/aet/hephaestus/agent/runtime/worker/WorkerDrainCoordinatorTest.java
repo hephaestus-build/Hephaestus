@@ -31,8 +31,9 @@ import org.springframework.context.ApplicationEventPublisher;
 class WorkerDrainCoordinatorTest extends BaseUnitTest {
 
     @Test
-    void drainsAfterWebServerShutdown() {
-        assertThat(WorkerDrainCoordinator.PHASE).isLessThan(WebServerApplicationContext.GRACEFUL_SHUTDOWN_PHASE);
+    void shouldDrainBeforeWebServerGracefulShutdown() {
+        // Spring stops higher phases first.
+        assertThat(WorkerDrainCoordinator.PHASE).isGreaterThan(WebServerApplicationContext.GRACEFUL_SHUTDOWN_PHASE);
     }
 
     @Test
