@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -141,6 +142,134 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                                 && "inline-ref".equals(placement.postedCommentRef())
                                 && "https://github.com/owner/repo/pull/42#discussion_r123"
                                         .equals(placement.postedCommentUrl())));
+    }
+
+    @Test
+    void shouldRecordWhereApprovedLineNotesActuallyAppearedKeepingTheirProposedAnchor() {
+        Feedback feedback =
+                Feedback.builder().id(UUID.randomUUID()).workspaceId(7L).build();
+        var located = new InlineFeedbackChannel.DeliveredSignal(
+                "approved:0",
+                FeedbackAnchor.DiffAnchor.range("src/Review.java", 9, 12),
+                InlineFeedbackChannel.Disposition.POSTED,
+                "gid://gitlab/Note/1",
+                null,
+                "https://gitlab.example.com/acme/api/-/merge_requests/42#note_1",
+                true,
+                InlineFeedbackChannel.Placement.LOCATION_COMMENT);
+        // Receipts stored before placement was: a fallback was an ordinary comment and a new copy a line comment,
+        // while a kept copy proves neither, so no placement is asserted for it.
+        var fellBack = new InlineFeedbackChannel.DeliveredSignal(
+                "approved:1",
+                FeedbackAnchor.DiffAnchor.singleLine("src/Review.java", 20),
+                InlineFeedbackChannel.Disposition.FELL_BACK,
+                "gid://gitlab/Note/2",
+                null);
+        var kept = new InlineFeedbackChannel.DeliveredSignal(
+                "approved:2",
+                FeedbackAnchor.DiffAnchor.singleLine("src/Review.java", 30),
+                InlineFeedbackChannel.Disposition.PRESERVED_EXISTING,
+                "gid://gitlab/Note/3",
+                null);
+
+        var posted = new InlineFeedbackChannel.DeliveredSignal(
+                "approved:3",
+                FeedbackAnchor.DiffAnchor.singleLine("src/Review.java", 40),
+                InlineFeedbackChannel.Disposition.POSTED,
+                "gid://gitlab/Note/4",
+                null);
+
+        recorder().recordApprovedPlacements(feedback, null, null, List.of(located, fellBack, kept, posted));
+
+        var placements = ArgumentCaptor.forClass(ProviderPlacement.class);
+        verify(feedbackPlacementRepository, times(3)).insertProviderPlacementIfAbsent(placements.capture());
+        assertThat(placements.getAllValues())
+                .extracting(
+                        ProviderPlacement::postedCommentRef,
+                        ProviderPlacement::placementType,
+                        ProviderPlacement::anchorKind,
+                        ProviderPlacement::anchorPath,
+                        ProviderPlacement::anchorStartLine,
+                        ProviderPlacement::anchorEndLine)
+                .containsExactly(
+                        tuple("gid://gitlab/Note/1", "LOCATION_COMMENT", "RANGE", "src/Review.java", 9, 12),
+                        tuple("gid://gitlab/Note/2", "LOCATION_COMMENT", "LINE", "src/Review.java", 20, 20),
+                        tuple("gid://gitlab/Note/4", "INLINE", "LINE", "src/Review.java", 40, 40));
+    }
+
+    @Test
+    void shouldAssertNoPlacementForAKeptCopyWhosePlacementWasNeverRecordedYetStillDeliverItsUnit() {
+        var observation = problem();
+        when(observationRepository.findByAgentJobId(any(), anyLong())).thenReturn(List.of(observation));
+        String key = "observation:" + observation.getOccurrenceKey();
+        var note = new DiffNote("src/Foo.java", 10, null, "Fix this", key, null);
+        var kept = new InlineFeedbackChannel.DeliveredSignal(
+                key,
+                FeedbackAnchor.DiffAnchor.singleLine("src/Foo.java", 10),
+                InlineFeedbackChannel.Disposition.PRESERVED_EXISTING,
+                "gid://gitlab/Note/5",
+                "gid://gitlab/Discussion/5");
+
+        recorder()
+                .record(
+                        job(),
+                        new DeliveryContent(null, List.of(note), List.of(), null),
+                        ArtifactKinds.PULL_REQUEST,
+                        List.of(kept),
+                        null,
+                        null);
+
+        verify(feedbackPlacementRepository, never()).insertProviderPlacementIfAbsent(any());
+        var saved = ArgumentCaptor.forClass(Feedback.class);
+        verify(feedbackRepository).save(saved.capture());
+        assertThat(saved.getValue().getDeliveryState()).isEqualTo(FeedbackDeliveryState.DELIVERED);
+        UUID observationId = observation.getId();
+        verify(feedbackObservationRepository).insertIfAbsent(any(), eq(observationId), any(), anyInt());
+    }
+
+    @Test
+    void shouldRecordAnAutomaticLineNotePostedAsALocationCommentWithItsProposedAnchor() {
+        var observation = problem();
+        when(observationRepository.findByAgentJobId(any(), anyLong())).thenReturn(List.of(observation));
+        var note = new DiffNote("src/Foo.java", 10, 14, "Fix this", "ck-foo", null);
+        var signal = new InlineFeedbackChannel.DeliveredSignal(
+                "ck-foo",
+                FeedbackAnchor.DiffAnchor.range("src/Foo.java", 10, 14),
+                InlineFeedbackChannel.Disposition.PRESERVED_EXISTING,
+                "gid://gitlab/Note/9",
+                "gid://gitlab/Discussion/9",
+                "https://gitlab.example.com/acme/api/-/merge_requests/42#note_9",
+                null,
+                InlineFeedbackChannel.Placement.LOCATION_COMMENT);
+
+        recorder()
+                .record(
+                        job(),
+                        new DeliveryContent(null, List.of(note), List.of(), null),
+                        ArtifactKinds.PULL_REQUEST,
+                        List.of(signal),
+                        null,
+                        null);
+
+        var placement = ArgumentCaptor.forClass(ProviderPlacement.class);
+        verify(feedbackPlacementRepository).insertProviderPlacementIfAbsent(placement.capture());
+        assertThat(placement.getValue())
+                .extracting(
+                        ProviderPlacement::placementType,
+                        ProviderPlacement::anchorKind,
+                        ProviderPlacement::anchorPath,
+                        ProviderPlacement::anchorStartLine,
+                        ProviderPlacement::anchorEndLine,
+                        ProviderPlacement::postedCommentRef,
+                        ProviderPlacement::postedCommentUrl)
+                .containsExactly(
+                        "LOCATION_COMMENT",
+                        "RANGE",
+                        "src/Foo.java",
+                        10,
+                        14,
+                        "gid://gitlab/Note/9",
+                        "https://gitlab.example.com/acme/api/-/merge_requests/42#note_9");
     }
 
     @Test

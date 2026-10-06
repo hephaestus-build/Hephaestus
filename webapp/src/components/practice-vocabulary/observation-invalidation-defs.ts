@@ -27,7 +27,7 @@ export const PROVIDER_COPY_IN_FORCE: Record<ProviderCopy, string> = {
 	UPDATED:
 		"Every summary comment Hephaestus posted about it now opens with a correction notice, or has since been deleted.",
 	INLINE_REMAINS:
-		"Inline comments Hephaestus posted about it are still on the work unchanged, because they cannot be edited from here. Any summary comment now carries a correction notice. Remove or answer the inline comments on the pull request or merge request.",
+		"Comments Hephaestus posted about specific lines, whether on the lines or linking to them, are still on the work unchanged, because they cannot be edited from here. Any summary comment now carries a correction notice. Remove or answer those comments on the pull request or merge request.",
 	UNRESOLVED:
 		"Hephaestus cannot correct every comment about it. A summary comment could not be edited, the provider did not say which comment it accepted, or a posted comment is unconfirmed. Check the pull request or merge request and correct it there. Hephaestus keeps checking and updates this if it finds the comment.",
 };

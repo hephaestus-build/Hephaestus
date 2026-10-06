@@ -15,6 +15,7 @@ import { FeedbackLevel } from "./FeedbackLevel";
 import {
 	feedbackDetail,
 	longFeedbackDetail,
+	reviewArtifact,
 	reviewFeedbackDetail,
 	workspacePractices,
 } from "./fixtures";
@@ -66,6 +67,7 @@ const rejected: ReviewFeedbackDetail = {
 /** A proposal: the exact summary and line comments approval would send, written against a revision. */
 const awaitingApproval: ReviewFeedbackDetail = {
 	...reviewFeedbackDetail,
+	reviewedWork: reviewArtifact.reviewedWork,
 	deliveryState: "AWAITING_APPROVAL",
 	deliveredAt: undefined,
 	suppressionReason: undefined,
@@ -379,6 +381,32 @@ export const AwaitingApproval: Story = {
 
 		await userEvent.click(panel.getByRole("button", { name: "Approve for delivery" }));
 		await expect(args.onApprove).toHaveBeenCalledOnce();
+	},
+};
+
+/**
+ * On GitLab the line notes go up as comments on the merge request that link to their lines, so the
+ * preview says that, while the package below still shows each note at the lines it was written for.
+ */
+export const AwaitingApprovalOnGitLab: Story = {
+	args: {
+		feedback: ready({
+			...awaitingApproval,
+			reviewedWork: {
+				id: "425",
+				kind: "scm.pull_request",
+				label: "!425",
+				provider: "GITLAB",
+				container: "acme/api",
+			},
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(panel.getByText("1 summary and 2 comments linking to lines")).toBeVisible();
+		panel.getByText("As a comment linking to the lines on the work");
+		await expect(panel.queryByText("As an inline note on the work")).not.toBeInTheDocument();
+		await expect(panel.getByText("src/main/java/example/RetryService.java")).toBeVisible();
 	},
 };
 

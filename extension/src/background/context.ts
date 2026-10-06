@@ -453,7 +453,10 @@ export async function workFeedback(
 		for (const placement of item.placements) {
 			const { type, commentRef } = placement;
 			// Only a comment on the work itself is one the reader can go to; a blank handle identifies none.
-			if ((type !== "SUMMARY" && type !== "INLINE") || commentRef.trim() === "") {
+			if (
+				(type !== "SUMMARY" && type !== "INLINE" && type !== "LOCATION_COMMENT") ||
+				commentRef.trim() === ""
+			) {
 				continue;
 			}
 			const comment = comments.get(commentRef) ?? {

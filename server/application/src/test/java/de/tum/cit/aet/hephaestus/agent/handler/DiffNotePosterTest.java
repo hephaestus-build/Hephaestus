@@ -54,6 +54,11 @@ class DiffNotePosterTest extends BaseUnitTest {
         return stored.add(List.copyOf(receipt));
     }
 
+    /** The work still sits at the commit the package was reviewed at. */
+    private static PracticeFeedbackDeliveryPolicy.ReviewedRevision atReviewed() {
+        return PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT;
+    }
+
     /** A freshly sealed automatic package: its own marker, and no inline write begun. */
     private static final InlinePackageScope FRESH =
             new InlinePackageScope(InlinePackageScope.automaticMarker(JOB), null, true, true, null);
@@ -72,8 +77,9 @@ class DiffNotePosterTest extends BaseUnitTest {
         ScriptedChannel channel = new ScriptedChannel();
         DiffNote multi = new DiffNote("src/A.java", 10, 14, "Sealed text", "observation:a:0", List.of("a"));
 
-        DiffNotePoster.DiffNoteResult result =
-                poster(channel).deliverPackage(job(), FRESH, List.of(multi), List.of(), this::recordAttempt);
+        DiffNotePoster.DiffNoteResult result = poster(channel)
+                .deliverPackage(
+                        job(), FRESH, List.of(multi), List.of(), DiffNotePosterTest::atReviewed, this::recordAttempt);
 
         InlineFeedback sent = channel.given.getFirst().getFirst();
         FeedbackAnchor.DiffAnchor anchor = (FeedbackAnchor.DiffAnchor) sent.anchor();
@@ -95,7 +101,9 @@ class DiffNotePosterTest extends BaseUnitTest {
         InlinePackageScope historical =
                 new InlinePackageScope(InlinePackageScope.SHARED_MARKER, null, false, true, null);
 
-        poster(channel).deliverPackage(job(), historical, List.of(A), List.of(), this::recordAttempt);
+        poster(channel)
+                .deliverPackage(
+                        job(), historical, List.of(A), List.of(), DiffNotePosterTest::atReviewed, this::recordAttempt);
 
         InlineFeedback sent = channel.given.getFirst().getFirst();
         assertThat(sent.marker()).isEqualTo("<!-- hephaestus-diff-note -->");
@@ -114,7 +122,9 @@ class DiffNotePosterTest extends BaseUnitTest {
         InlinePackageScope approved = new InlinePackageScope(
                 InlinePackageScope.approvedMarker(feedbackId), feedbackId, true, true, "proposal-sha");
 
-        poster(channel).deliverPackage(job(), approved, List.of(A, B), List.of(), this::recordAttempt);
+        poster(channel)
+                .deliverPackage(
+                        job(), approved, List.of(A, B), List.of(), DiffNotePosterTest::atReviewed, this::recordAttempt);
 
         assertThat(channel.given.getFirst())
                 .extracting(InlineFeedback::deliveryKey)
@@ -136,7 +146,9 @@ class DiffNotePosterTest extends BaseUnitTest {
         List<DeliveredSignal> persisted =
                 List.of(DeliveredSignal.attempted(first, anchor(A)), DeliveredSignal.notSent(second, anchor(B)));
 
-        poster(channel).deliverPackage(job(), approved, List.of(A, B), persisted, this::recordAttempt);
+        poster(channel)
+                .deliverPackage(
+                        job(), approved, List.of(A, B), persisted, DiffNotePosterTest::atReviewed, this::recordAttempt);
 
         assertThat(channel.lookedUp).containsExactly(first);
         assertThat(channel.requested).containsExactly(second);
@@ -154,7 +166,14 @@ class DiffNotePosterTest extends BaseUnitTest {
                 new DeliveredSignal("observation:a:0", anchor(A), Disposition.FAILED, null, null),
                 DeliveredSignal.notSent("observation:b:0", anchor(B)));
 
-        poster(channel).deliverPackage(job(), STARTED, List.of(A, B, c), persisted, this::recordAttempt);
+        poster(channel)
+                .deliverPackage(
+                        job(),
+                        STARTED,
+                        List.of(A, B, c),
+                        persisted,
+                        DiffNotePosterTest::atReviewed,
+                        this::recordAttempt);
 
         assertThat(channel.requested).containsExactly("observation:b:0");
         assertThat(channel.lookedUp).containsExactly("observation:a:0", "observation:c:0");
@@ -167,7 +186,9 @@ class DiffNotePosterTest extends BaseUnitTest {
     void shouldStoreEveryNoteBeforeTheFirstRequestAndTheReturnedHandleBeforeTheNext() {
         ScriptedChannel channel = new ScriptedChannel();
 
-        poster(channel).deliverPackage(job(), FRESH, List.of(A, B), List.of(), this::recordAttempt);
+        poster(channel)
+                .deliverPackage(
+                        job(), FRESH, List.of(A, B), List.of(), DiffNotePosterTest::atReviewed, this::recordAttempt);
 
         assertThat(stored).hasSize(2);
         assertThat(signal(stored.get(0), A).unconfirmed()).isTrue();
@@ -180,13 +201,16 @@ class DiffNotePosterTest extends BaseUnitTest {
     void shouldReadBackANoteWhoseHandleWasLostAndWriteTheOneNeverRequestedAfterAStop() {
         ScriptedChannel first = new ScriptedChannel();
         first.stopAfter = "observation:a:0";
-        poster(first).deliverPackage(job(), FRESH, List.of(A, B), List.of(), this::recordAttempt);
+        poster(first)
+                .deliverPackage(
+                        job(), FRESH, List.of(A, B), List.of(), DiffNotePosterTest::atReviewed, this::recordAttempt);
         List<DeliveredSignal> persisted = stored.getLast();
 
         ScriptedChannel second = new ScriptedChannel();
         second.copies.put("observation:a:0", "note-a");
-        DiffNotePoster.DiffNoteResult result =
-                poster(second).deliverPackage(job(), STARTED, List.of(A, B), persisted, this::recordAttempt);
+        DiffNotePoster.DiffNoteResult result = poster(second)
+                .deliverPackage(
+                        job(), STARTED, List.of(A, B), persisted, DiffNotePosterTest::atReviewed, this::recordAttempt);
 
         assertThat(first.requested).containsExactly("observation:a:0");
         assertThat(second.requested).containsExactly("observation:b:0");
@@ -201,8 +225,9 @@ class DiffNotePosterTest extends BaseUnitTest {
                 DeliveredSignal.attempted("observation:a:0", anchor(A)),
                 DeliveredSignal.notSent("observation:b:0", anchor(B)));
 
-        DiffNotePoster.DiffNoteResult result =
-                poster(channel).deliverPackage(job(), STARTED, List.of(A, B), persisted, this::recordAttempt);
+        DiffNotePoster.DiffNoteResult result = poster(channel)
+                .deliverPackage(
+                        job(), STARTED, List.of(A, B), persisted, DiffNotePosterTest::atReviewed, this::recordAttempt);
 
         assertThat(channel.lookedUp).containsExactly("observation:a:0");
         assertThat(channel.requested).containsExactly("observation:b:0");
@@ -217,12 +242,20 @@ class DiffNotePosterTest extends BaseUnitTest {
         ScriptedChannel first = new ScriptedChannel();
         first.batch = true;
         first.lostResponses.addAll(Set.of("observation:a:0", "observation:b:0"));
-        poster(first).deliverPackage(job(), FRESH, List.of(A, B), List.of(), this::recordAttempt);
+        poster(first)
+                .deliverPackage(
+                        job(), FRESH, List.of(A, B), List.of(), DiffNotePosterTest::atReviewed, this::recordAttempt);
 
         ScriptedChannel second = new ScriptedChannel();
         second.copies.put("observation:a:0", "note-a");
-        DiffNotePoster.DiffNoteResult result =
-                poster(second).deliverPackage(job(), STARTED, List.of(A, B), stored.getLast(), this::recordAttempt);
+        DiffNotePoster.DiffNoteResult result = poster(second)
+                .deliverPackage(
+                        job(),
+                        STARTED,
+                        List.of(A, B),
+                        stored.getLast(),
+                        DiffNotePosterTest::atReviewed,
+                        this::recordAttempt);
 
         assertThat(first.requested).containsExactlyInAnyOrder("observation:a:0", "observation:b:0");
         assertThat(second.requested).isEmpty();
@@ -235,24 +268,40 @@ class DiffNotePosterTest extends BaseUnitTest {
     void shouldRetryANoteRefusedBeforeItsRequestButOnlyReadBackOneWhoseRequestMayHaveLeft() {
         ScriptedChannel refused = new ScriptedChannel();
         refused.refusedBeforeRequest.add("observation:a:0");
-        DiffNotePoster.DiffNoteResult preflight =
-                poster(refused).deliverPackage(job(), FRESH, List.of(A), List.of(), this::recordAttempt);
+        DiffNotePoster.DiffNoteResult preflight = poster(refused)
+                .deliverPackage(
+                        job(), FRESH, List.of(A), List.of(), DiffNotePosterTest::atReviewed, this::recordAttempt);
 
         assertThat(refused.requested).isEmpty();
         assertThat(preflight.unconfirmed()).isFalse();
         ScriptedChannel next = new ScriptedChannel();
-        poster(next).deliverPackage(job(), STARTED, List.of(A), preflight.signals(), this::recordAttempt);
+        poster(next)
+                .deliverPackage(
+                        job(),
+                        STARTED,
+                        List.of(A),
+                        preflight.signals(),
+                        DiffNotePosterTest::atReviewed,
+                        this::recordAttempt);
         assertThat(next.requested).containsExactly("observation:a:0");
 
         stored.clear();
         ScriptedChannel stopped = new ScriptedChannel();
         stopped.throwAfterFence = true;
-        DiffNotePoster.DiffNoteResult transport =
-                poster(stopped).deliverPackage(job(), FRESH, List.of(A), List.of(), this::recordAttempt);
+        DiffNotePoster.DiffNoteResult transport = poster(stopped)
+                .deliverPackage(
+                        job(), FRESH, List.of(A), List.of(), DiffNotePosterTest::atReviewed, this::recordAttempt);
 
         assertThat(transport.unconfirmed()).isTrue();
         ScriptedChannel after = new ScriptedChannel();
-        poster(after).deliverPackage(job(), STARTED, List.of(A), transport.signals(), this::recordAttempt);
+        poster(after)
+                .deliverPackage(
+                        job(),
+                        STARTED,
+                        List.of(A),
+                        transport.signals(),
+                        DiffNotePosterTest::atReviewed,
+                        this::recordAttempt);
         assertThat(after.requested).isEmpty();
         assertThat(after.lookedUp).containsExactly("observation:a:0");
     }
@@ -262,8 +311,9 @@ class DiffNotePosterTest extends BaseUnitTest {
         ScriptedChannel channel = new ScriptedChannel();
         channel.withoutIds.add("observation:a:0");
 
-        DiffNotePoster.DiffNoteResult result =
-                poster(channel).deliverPackage(job(), FRESH, List.of(A), List.of(), this::recordAttempt);
+        DiffNotePoster.DiffNoteResult result = poster(channel)
+                .deliverPackage(
+                        job(), FRESH, List.of(A), List.of(), DiffNotePosterTest::atReviewed, this::recordAttempt);
 
         assertThat(result.complete()).isFalse();
         assertThat(result.unconfirmed()).isTrue();
@@ -276,8 +326,14 @@ class DiffNotePosterTest extends BaseUnitTest {
         InlinePackageScope historicalStarted =
                 new InlinePackageScope(InlinePackageScope.SHARED_MARKER, null, false, false, null);
 
-        DiffNotePoster.DiffNoteResult result =
-                poster(channel).deliverPackage(job(), historicalStarted, List.of(A, B), List.of(), this::recordAttempt);
+        DiffNotePoster.DiffNoteResult result = poster(channel)
+                .deliverPackage(
+                        job(),
+                        historicalStarted,
+                        List.of(A, B),
+                        List.of(),
+                        DiffNotePosterTest::atReviewed,
+                        this::recordAttempt);
 
         assertThat(channel.requested).isEmpty();
         assertThat(channel.lookedUp).containsExactly("observation:a:0", "observation:b:0");
@@ -292,7 +348,14 @@ class DiffNotePosterTest extends BaseUnitTest {
         InlinePackageScope historicalUntouched =
                 new InlinePackageScope(InlinePackageScope.SHARED_MARKER, null, false, true, null);
 
-        poster(channel).deliverPackage(job(), historicalUntouched, List.of(A, B), List.of(), this::recordAttempt);
+        poster(channel)
+                .deliverPackage(
+                        job(),
+                        historicalUntouched,
+                        List.of(A, B),
+                        List.of(),
+                        DiffNotePosterTest::atReviewed,
+                        this::recordAttempt);
 
         assertThat(channel.requested).containsExactly("observation:a:0");
         assertThat(stored.getFirst())
@@ -305,11 +368,59 @@ class DiffNotePosterTest extends BaseUnitTest {
     void shouldRequestNothingOnceTheReceiptCannotBeStored() {
         ScriptedChannel channel = new ScriptedChannel();
 
-        DiffNotePoster.DiffNoteResult result =
-                poster(channel).deliverPackage(job(), FRESH, List.of(A), List.of(), receipt -> false);
+        DiffNotePoster.DiffNoteResult result = poster(channel)
+                .deliverPackage(job(), FRESH, List.of(A), List.of(), DiffNotePosterTest::atReviewed, receipt -> false);
 
         assertThat(channel.requested).isEmpty();
         assertThat(result.leaseLost()).isTrue();
+        assertThat(result.unconfirmed()).isFalse();
+    }
+
+    @Test
+    void shouldReadBackALostNoteButRequestNothingOnceTheWorkMovedPastItsReviewedCommit() {
+        ScriptedChannel channel = new ScriptedChannel();
+        channel.copies.put("observation:a:0", "note-a");
+        List<DeliveredSignal> persisted = List.of(
+                DeliveredSignal.attempted("observation:a:0", anchor(A)),
+                DeliveredSignal.notSent("observation:b:0", anchor(B)));
+
+        DiffNotePoster.DiffNoteResult result = poster(channel)
+                .deliverPackage(
+                        job(),
+                        STARTED,
+                        List.of(A, B),
+                        persisted,
+                        () -> PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED,
+                        this::recordAttempt);
+
+        assertThat(channel.lookedUp).containsExactly("observation:a:0");
+        assertThat(channel.requested).isEmpty();
+        assertThat(stored).isEmpty();
+        assertThat(result.revisionChanged()).isTrue();
+        assertThat(result.leaseLost()).isFalse();
+        assertThat(result.unconfirmed()).isFalse();
+        assertThat(signal(result.signals(), A).acknowledged()).isTrue();
+        assertThat(signal(result.signals(), B).acknowledged()).isFalse();
+        assertThat(signal(result.signals(), B).writeMayHaveStarted()).isFalse();
+    }
+
+    @Test
+    void shouldLeaveANoteOwedWithoutCallingTheWorkChangedWhenItsHeadCannotBeCompared() {
+        ScriptedChannel channel = new ScriptedChannel();
+
+        DiffNotePoster.DiffNoteResult result = poster(channel)
+                .deliverPackage(
+                        job(),
+                        FRESH,
+                        List.of(A),
+                        List.of(),
+                        () -> PracticeFeedbackDeliveryPolicy.ReviewedRevision.UNKNOWN,
+                        this::recordAttempt);
+
+        assertThat(channel.requested).isEmpty();
+        assertThat(stored).isEmpty();
+        assertThat(result.revisionChanged()).isFalse();
+        assertThat(result.complete()).isFalse();
         assertThat(result.unconfirmed()).isFalse();
     }
 
@@ -318,8 +429,14 @@ class DiffNotePosterTest extends BaseUnitTest {
         ScriptedChannel channel = new ScriptedChannel();
         DiffNote blank = new DiffNote("src/A.java", 10, null, "   ", "observation:blank:0", List.of("blank"));
 
-        DiffNotePoster.DiffNoteResult result =
-                poster(channel).deliverPackage(job(), FRESH, List.of(blank, A), List.of(), this::recordAttempt);
+        DiffNotePoster.DiffNoteResult result = poster(channel)
+                .deliverPackage(
+                        job(),
+                        FRESH,
+                        List.of(blank, A),
+                        List.of(),
+                        DiffNotePosterTest::atReviewed,
+                        this::recordAttempt);
 
         assertThat(channel.requested).containsExactly("observation:a:0");
         assertThat(result.complete()).isTrue();

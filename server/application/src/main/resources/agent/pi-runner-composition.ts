@@ -713,7 +713,8 @@ export function buildReviewTurn(input: ReviewTurnInput): string {
 					.join(", ")}.\n`;
 	const placement = input.lineNotes
 		? "- Line notes: a note sits on one citation marked `anchorable`, named by `observationId` and " +
-			"`citationIndex`. Each body stands on its own, and each placement can fail independently.\n"
+			"`citationIndex`. On GitHub it is a review comment on that line; on GitLab it is its own comment " +
+			"headed by a link to the line. Each body stands on its own, and each placement can fail independently.\n"
 		: "- This work has no lines a note can sit on; everything goes in the summary.\n";
 	const cited: CitedObservation[] = input.observations.map((observation) => ({
 		id: String(observation.id),

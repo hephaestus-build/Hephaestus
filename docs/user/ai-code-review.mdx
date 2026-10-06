@@ -112,9 +112,22 @@ For feedback tied to a changed line, an inline comment can explain:
 - why it matters
 - what you could change
 
+Where the comment appears depends on the provider:
+
+- On GitHub, it is a review comment on the lines themselves.
+- On GitLab, it is a comment on the merge request.
+  It starts with a link to the file and lines in the commit that was reviewed.
+  It is not attached to the lines, so it does not appear in the diff view.
+
 Some comments include a suggested code change.
+On GitLab, the suggestion cannot be applied from the comment, because the comment is not attached to the lines.
 
 1. Check a suggested change before you apply it.
+
+If Hephaestus has already learned of newer commits before it posts every comment of a review, it posts no more of them.
+It knows about a push only once it has synchronized the change, so a comment can still appear shortly after a push.
+Comments that were already posted stay, and Hephaestus still finds them.
+The review history shows **The change was updated before this feedback could be posted.**
 
 ### Ask for a review
 

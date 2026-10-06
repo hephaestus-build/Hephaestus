@@ -1,4 +1,4 @@
-import { FileCodeIcon, MessageSquareTextIcon } from "lucide-react";
+import { FileCodeIcon, Link2Icon, MessageSquareTextIcon } from "lucide-react";
 
 import { cn } from "cn";
 import { formatDateTime, formatRelative } from "~/components/common/format";
@@ -40,7 +40,11 @@ function Comment({
 	pageOrigin: string;
 	now: string;
 }) {
-	const Icon = comment.kind === "INLINE" ? FileCodeIcon : MessageSquareTextIcon;
+	const Icon = {
+		INLINE: FileCodeIcon,
+		LOCATION_COMMENT: Link2Icon,
+		SUMMARY: MessageSquareTextIcon,
+	}[comment.kind];
 	const label = where(comment, false);
 	const { deliveredAt } = comment;
 	return (

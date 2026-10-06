@@ -455,8 +455,9 @@ While one is in force:
   They change to the real outcome once the copy is found.
 - Delivered feedback keeps its state and stored text. Its posted copies get a durable **provider copy** outcome on the correction.
   A summary comment is edited in place to open with a correction notice.
-  The notice names the practice, never the reason. `INLINE_REMAINS` means inline comments are still there, since they have
-  no edit path. `UNRESOLVED` means a summary could not be edited.
+  The notice names the practice, never the reason.
+  `INLINE_REMAINS` means comments about specific lines remain because they have no edit path.
+  These are line comments and GitLab merge request comments linking to lines (`LOCATION_COMMENT` placements). `UNRESOLVED` means a summary could not be edited.
   It also applies if the provider confirmed a comment without returning its id.
   Then nothing can find it again. That copy is kept on the ledger rather than read as absent. A delivery still settling records each confirmed copy on its one feedback unit as it goes.
   Thus, a known summary is corrected at once while the rest stays unknown. `PENDING` lasts while a delivery citing it is unsettled or an edit must be retried. Each retry moves the correction behind every other due one.

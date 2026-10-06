@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -724,7 +725,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         return Feedback.builder().reviewedRevision(reviewedRevision).build();
     }
 
-    private static PracticeFeedbackDeliveryPolicy.Decision<PullRequest> headAt(String head) {
+    private static PracticeFeedbackDeliveryPolicy.Decision<PullRequest> headAt(@Nullable String head) {
         PullRequest pullRequest = new PullRequest();
         pullRequest.setHeadRefOid(head);
         return PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequest);
@@ -770,5 +771,57 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                         approvedJob(AgentJobType.ISSUE_REVIEW, null),
                         PracticeFeedbackDeliveryPolicy.Decision.allowed(new Issue())))
                 .isTrue();
+        assertThat(PracticeFeedbackDeliveryPolicy.reviewedRevision(
+                        approvedJob(AgentJobType.ISSUE_REVIEW, null),
+                        PracticeFeedbackDeliveryPolicy.Decision.allowed(new Issue())))
+                .isEqualTo(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT);
+    }
+
+    @Test
+    void shouldCallAnAutomaticPackageChangedOnlyWhenBothCommitsAreKnownAndDiffer() {
+        AgentJob pinned = approvedJob(AgentJobType.PULL_REQUEST_REVIEW, REVIEWED_HEAD);
+        AgentJob unpinned = approvedJob(AgentJobType.PULL_REQUEST_REVIEW, null);
+
+        assertThat(List.of(
+                        PracticeFeedbackDeliveryPolicy.reviewedRevision(pinned, headAt(REVIEWED_HEAD)),
+                        PracticeFeedbackDeliveryPolicy.reviewedRevision(pinned, headAt(MOVED_HEAD)),
+                        PracticeFeedbackDeliveryPolicy.reviewedRevision(unpinned, headAt(REVIEWED_HEAD)),
+                        PracticeFeedbackDeliveryPolicy.reviewedRevision(pinned, headAt(null)),
+                        PracticeFeedbackDeliveryPolicy.reviewedRevision(
+                                pinned,
+                                PracticeFeedbackDeliveryPolicy.Decision.suppressed(
+                                        FeedbackSuppressionReason.ARTIFACT_GONE))))
+                .containsExactly(
+                        PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT,
+                        PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED,
+                        PracticeFeedbackDeliveryPolicy.ReviewedRevision.UNKNOWN,
+                        PracticeFeedbackDeliveryPolicy.ReviewedRevision.UNKNOWN,
+                        PracticeFeedbackDeliveryPolicy.ReviewedRevision.UNKNOWN);
+    }
+
+    @Test
+    void shouldReadTheWorkspacesOwnCurrentHeadRightBeforeANewCopyWithoutRecordingAnEvaluation() {
+        AgentJob job = pullRequestJob();
+        job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        assertInstanceOf(ObjectNode.class, job.getMetadata()).put("commit_sha", REVIEWED_HEAD);
+        PullRequest pullRequest = openPullRequest();
+        pullRequest.setHeadRefOid(REVIEWED_HEAD);
+        when(pullRequestRepository.findByIdWithAuthorAndRepository(PULL_REQUEST_ID))
+                .thenReturn(Optional.of(pullRequest));
+        when(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(WORKSPACE_ID, "owner/repo"))
+                .thenReturn(true, true, false);
+
+        var atPin = policy().currentReviewedRevision(job, null);
+        pullRequest.setHeadRefOid(MOVED_HEAD);
+        var moved = policy().currentReviewedRevision(job, null);
+        pullRequest.setHeadRefOid(REVIEWED_HEAD);
+        var unmonitored = policy().currentReviewedRevision(job, null);
+
+        assertThat(atPin).isEqualTo(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT);
+        assertThat(moved).isEqualTo(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED);
+        assertThat(unmonitored)
+                .as("work this workspace no longer monitors has no current head to compare")
+                .isEqualTo(PracticeFeedbackDeliveryPolicy.ReviewedRevision.UNKNOWN);
+        verify(evaluationRecorder, never()).record(any());
     }
 }

@@ -55,6 +55,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -73,6 +74,14 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
     /** The head the review job pinned, and the merge request's head unless a test moves it. */
     private static final String REVIEWED_HEAD = "3f2b9c1d0e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c";
+
+    /** A head pushed after the review read the change. */
+    private static final String MOVED_HEAD = "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b";
+
+    /** An automatic package's line notes, keyed by their source. */
+    private static final List<ReviewResultParser.DiffNote> TWO_LINE_NOTES = List.of(
+            new ReviewResultParser.DiffNote("src/App.java", 3, null, "Split this.", "k1", null),
+            new ReviewResultParser.DiffNote("src/App.java", 9, null, "Name this.", "k2", null));
 
     /** An approved proposal's line notes, exactly as its placements record them. */
     private static final List<ReviewResultParser.DiffNote> APPROVED_LINE_NOTES = List.of(
@@ -185,7 +194,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         assertThat(result.refusal()).isEqualTo(FeedbackSuppressionReason.EMPTY_AFTER_SANITIZE);
         assertThat(result.landed()).isFalse();
         verify(channel, never()).postSummary(any(), any());
-        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -276,7 +285,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(dispatch));
         when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
         when(channel.postSummary(any(), any())).thenReturn(new SummaryHandle("provider-8"));
-        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any())).thenReturn(delivered(List.of()));
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any(), any()))
+                .thenReturn(delivered(List.of()));
 
         service.dispatchAutomaticPackage(
                 job, new ReviewResultParser.DeliveryContent(body, lineNotes, List.of(), null), Set.of("practice"));
@@ -295,7 +305,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Predicate<List<InlineFeedbackChannel.DeliveredSignal>>> fence =
                 ArgumentCaptor.forClass(Predicate.class);
-        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), fence.capture()))
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any(), fence.capture()))
                 .thenReturn(delivered(List.of()));
 
         service.dispatchAutomaticPackage(
@@ -328,10 +338,10 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 new ReviewResultParser.DeliveryContent(null, lineNotes, List.of(), List.of()));
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch));
-        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any()))
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any(), any()))
                 .thenReturn(
-                        new DiffNotePoster.DiffNoteResult(List.of(), false, true, false, false, List.of()),
-                        new DiffNotePoster.DiffNoteResult(List.of(), false, false, false, false, List.of()));
+                        new DiffNotePoster.DiffNoteResult(List.of(), false, true, false, false, false, List.of()),
+                        new DiffNotePoster.DiffNoteResult(List.of(), false, false, false, false, false, List.of()));
         var content = new ReviewResultParser.DeliveryContent(null, lineNotes, List.of(), List.of());
 
         var unconfirmed = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
@@ -354,6 +364,42 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         lenient()
                 .when(feedbackRepository.findLatestDeliveredNote(7L, 11L, "scm.pull_request", 42L))
                 .thenReturn(Optional.of(storedBody));
+    }
+
+    private static FeedbackAnchor.DiffAnchor anchorOf(ReviewResultParser.DiffNote note) {
+        return FeedbackAnchor.DiffAnchor.singleLine(note.filePath(), note.startLine());
+    }
+
+    /** The dispatch once an earlier attempt began its inline writes and stored {@code placements}. */
+    private static FeedbackDispatch inlineWriteBegun(FeedbackDispatch base, JsonNode placements) {
+        return new FeedbackDispatch(
+                base.getId(),
+                base.getDestinationKey(),
+                base.getWorkspaceId(),
+                base.getAgentJobId(),
+                base.getFeedbackId(),
+                base.getDestination(),
+                base.getState(),
+                base.getBody(),
+                base.getPracticeSlugs(),
+                base.getPackageContent(),
+                placements,
+                base.getWriteStarted(),
+                base.getWriteStartedAt(),
+                true,
+                base.getDeliveredExternalRef(),
+                base.getDeliveredExternalUrl(),
+                base.getLeaseOwner(),
+                base.getLeaseExpiresAt(),
+                base.getNextAttemptAt(),
+                base.getAttemptCount(),
+                base.getSuppressionReason(),
+                base.getLastError(),
+                base.getProjectedAt(),
+                base.getProjectionOwner(),
+                base.getProjectionExpiresAt(),
+                base.getCreatedAt(),
+                base.getUpdatedAt());
     }
 
     private static FeedbackDispatch withPackage(FeedbackDispatch base, ReviewResultParser.DeliveryContent content) {
@@ -510,7 +556,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         var result = service.recover(pastBudgetInlineOnly("POSTED"), job);
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
-        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
         verify(repository, never()).beginInlineWrite(any(), any(), anyString(), anyString());
     }
 
@@ -522,7 +568,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         var result = service.recover(pastBudgetInlineOnly("FAILED"), job);
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.FAILED);
-        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
         verify(repository, never()).beginInlineWrite(any(), any(), anyString(), anyString());
     }
 
@@ -534,7 +580,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         var result = service.recover(pastBudgetInlineOnly("FAILED"), job);
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
-        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -609,7 +655,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 InlineFeedbackChannel.Disposition.POSTED,
                 "inline-ref",
                 "thread-ref");
-        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any())).thenReturn(delivered(List.of(signal)));
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any(), any()))
+                .thenReturn(delivered(List.of(signal)));
 
         var result = service.dispatchApproved(job, feedback);
 
@@ -622,6 +669,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                                 && scope.marker().equals(InlinePackageScope.approvedMarker(feedback.getId()))),
                         eq(List.of(new ReviewResultParser.DiffNote(
                                 "src/Review.java", 12, null, "exact inline", "old-key", null))),
+                        any(),
                         any(),
                         any());
     }
@@ -646,9 +694,9 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 InlineFeedbackChannel.Disposition.POSTED,
                 "inline-ref",
                 "thread-ref");
-        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any()))
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any(), any()))
                 .thenReturn(
-                        new DiffNotePoster.DiffNoteResult(List.of(), false, false, false, false, List.of()),
+                        new DiffNotePoster.DiffNoteResult(List.of(), false, false, false, false, false, List.of()),
                         delivered(List.of(deliveredSignal)));
 
         var incomplete = service.dispatchApproved(job, feedback);
@@ -798,7 +846,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
         var first = lineSignal(feedback, 0, InlineFeedbackChannel.Disposition.POSTED);
         var second = lineSignal(feedback, 1, InlineFeedbackChannel.Disposition.POSTED);
-        when(diffNotePoster.deliverPackage(eq(job), any(), eq(APPROVED_LINE_NOTES), any(), any()))
+        when(diffNotePoster.deliverPackage(eq(job), any(), eq(APPROVED_LINE_NOTES), any(), any(), any()))
                 .thenReturn(delivered(List.of(first, second)));
 
         var result = service.dispatchApproved(job, feedback);
@@ -834,10 +882,10 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(lineNotesOnlyDispatch(feedback.getId(), FeedbackDispatchState.PENDING, 0)))
                 .thenReturn(Optional.of(recovering));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
-        when(diffNotePoster.deliverPackage(eq(job), any(), eq(APPROVED_LINE_NOTES), any(), any()))
+        when(diffNotePoster.deliverPackage(eq(job), any(), eq(APPROVED_LINE_NOTES), any(), any(), any()))
                 .thenReturn(
                         new DiffNotePoster.DiffNoteResult(
-                                List.of(landed, refused), false, false, false, false, List.of()),
+                                List.of(landed, refused), false, false, false, false, false, List.of()),
                         delivered(List.of(landed, retried)));
 
         var incomplete = service.dispatchApproved(job, feedback);
@@ -898,7 +946,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 });
         verify(repository).finish(argThat(completion -> completion.nextAttemptAt() != null));
         verify(channel, never()).postSummary(any(), any());
-        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -924,7 +972,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
             assertThat(signal.unconfirmed()).isFalse();
         });
         verify(channel, never()).postSummary(any(), any());
-        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -956,7 +1004,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .extracting(InlineFeedbackChannel.DeliveredSignal::deliveryKey)
                 .containsExactlyInAnyOrder(landed.deliveryKey(), found.deliveryKey());
         verify(channel, never()).findExistingSummary(any(), any());
-        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
         verify(repository, never()).beginInlineWrite(any(), any(), anyString(), anyString());
     }
 
@@ -984,7 +1032,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .containsExactly(landed.deliveryKey());
         verify(channel, never()).findExistingSummary(any(), any());
         verify(channel, never()).postSummary(any(), any());
-        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -1002,7 +1050,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
         assertThat(result.suppressionReason()).isEqualTo(FeedbackSuppressionReason.APPROVAL_STALE);
         verify(repository, never()).beginInlineWrite(any(), any(), anyString(), anyString());
-        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -1020,7 +1068,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
         assertThat(result.suppressionReason()).isEqualTo(FeedbackSuppressionReason.APPROVAL_STALE);
-        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -1032,7 +1080,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
         when(policy.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(recorded)));
-        when(diffNotePoster.deliverPackage(eq(job), any(), eq(APPROVED_LINE_NOTES), any(), any()))
+        when(diffNotePoster.deliverPackage(eq(job), any(), eq(APPROVED_LINE_NOTES), any(), any(), any()))
                 .thenReturn(delivered(List.of(
                         lineSignal(feedback, 0, InlineFeedbackChannel.Disposition.POSTED),
                         lineSignal(feedback, 1, InlineFeedbackChannel.Disposition.POSTED))));
@@ -1042,9 +1090,208 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
         assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SENT);
     }
 
+    @Test
+    void shouldNotPostTheSummaryOnceTheChangeMovedPastTheReviewedCommit() {
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+        when(policy.evaluatePullRequest(any(), any(), any(), any()))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(MOVED_HEAD)));
+
+        var result = dispatchAutomaticReview(job, "body", Set.of("practice"));
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
+        assertThat(result.suppressionReason()).isEqualTo(FeedbackSuppressionReason.REVIEWED_REVISION_CHANGED);
+        assertThat(result.landed()).isFalse();
+        verify(repository, never()).beginWrite(any(), any(), anyString());
+        verify(channel, never()).postSummary(any(), any());
+    }
+
+    @Test
+    void shouldRetryTheSummaryWithoutClaimingAChangeWhenTheJobPinnedNoReviewedCommit() {
+        job.setMetadata(JsonNodeFactory.instance
+                .objectNode()
+                .put("repository_full_name", "acme/api")
+                .put("pr_number", 42));
+        when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
+
+        var result = dispatchAutomaticReview(job, "body", Set.of("practice"));
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        assertThat(result.suppressionReason()).isNull();
+        verify(repository, never()).beginWrite(any(), any(), anyString());
+        verify(channel, never()).postSummary(any(), any());
+    }
+
+    @Test
+    void shouldRetryLineNotesWithoutClaimingAChangeWhileTheCurrentHeadIsUnknown() {
+        var content = new ReviewResultParser.DeliveryContent(null, TWO_LINE_NOTES, List.of(), List.of());
+        dispatch = withPackage(dispatch(job, FeedbackDispatchState.PENDING, false, 0, ""), content);
+        when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
+                .thenReturn(Optional.of(dispatch));
+        when(policy.evaluatePullRequest(any(), any(), any(), any()))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(new PullRequest()));
+
+        var result = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        assertThat(result.suppressionReason()).isNull();
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
+        verify(repository, never()).beginInlineWrite(any(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void shouldRefuseLineNotesOnAMovedHeadBeforeAnyProviderCallWhileNoInlineWriteBegan() {
+        var content = new ReviewResultParser.DeliveryContent(null, TWO_LINE_NOTES, List.of(), List.of());
+        dispatch = withPackage(dispatch(job, FeedbackDispatchState.PENDING, false, 0, ""), content);
+        when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
+                .thenReturn(Optional.of(dispatch));
+        when(policy.evaluatePullRequest(any(), any(), any(), any()))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(MOVED_HEAD)));
+
+        var result = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
+        assertThat(result.suppressionReason()).isEqualTo(FeedbackSuppressionReason.REVIEWED_REVISION_CHANGED);
+        verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
+        verify(repository, never()).beginInlineWrite(any(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void shouldKeepALineNoteFoundAfterTheHeadMovedAndRefuseOnlyTheNotesNotYetPosted() {
+        var content = new ReviewResultParser.DeliveryContent(null, TWO_LINE_NOTES, List.of(), List.of());
+        var unknown = InlineFeedbackChannel.DeliveredSignal.attempted("k1", anchorOf(TWO_LINE_NOTES.get(0)));
+        dispatch = inlineWriteBegun(
+                withPackage(dispatch(job, FeedbackDispatchState.UNCERTAIN, false, 1, ""), content),
+                storedPlacements(unknown));
+        when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
+                .thenReturn(Optional.of(dispatch));
+        when(policy.evaluatePullRequest(any(), any(), any(), any()))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(MOVED_HEAD)));
+        when(policy.currentReviewedRevision(job, null))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED);
+        var found = new InlineFeedbackChannel.DeliveredSignal(
+                "k1",
+                anchorOf(TWO_LINE_NOTES.get(0)),
+                InlineFeedbackChannel.Disposition.PRESERVED_EXISTING,
+                "gid://gitlab/Note/71",
+                null,
+                "https://gitlab.example/acme/api/-/merge_requests/42#note_71",
+                null,
+                InlineFeedbackChannel.Placement.LOCATION_COMMENT);
+        var refused = InlineFeedbackChannel.DeliveredSignal.notSent("k2", anchorOf(TWO_LINE_NOTES.get(1)));
+        var reviewedRevision = revisionCaptor();
+        when(diffNotePoster.deliverPackage(
+                        eq(job), any(), eq(TWO_LINE_NOTES), any(), reviewedRevision.capture(), any()))
+                .thenReturn(new DiffNotePoster.DiffNoteResult(
+                        List.of(found, refused), false, false, false, true, false, List.of()));
+
+        var result = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
+
+        assertThat(reviewedRevision.getValue().get())
+                .isEqualTo(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED);
+        verify(policy).currentReviewedRevision(job, null);
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
+        assertThat(result.suppressionReason()).isEqualTo(FeedbackSuppressionReason.REVIEWED_REVISION_CHANGED);
+        assertThat(result.landed()).isTrue();
+        verify(repository)
+                .finish(argThat(completion -> completion.state().equals(FeedbackDispatchState.SUPPRESSED.name())
+                        && completion.deliveredPlacements().contains("gid://gitlab/Note/71")
+                        && completion.deliveredPlacements().contains("\"placement\":\"LOCATION_COMMENT\"")));
+    }
+
+    @Test
+    void shouldKeepLookingForAnUnconfirmedLineNoteRatherThanSettleAMovedHead() {
+        var content = new ReviewResultParser.DeliveryContent(null, TWO_LINE_NOTES, List.of(), List.of());
+        var unknown = InlineFeedbackChannel.DeliveredSignal.attempted("k1", anchorOf(TWO_LINE_NOTES.get(0)));
+        var refused = InlineFeedbackChannel.DeliveredSignal.notSent("k2", anchorOf(TWO_LINE_NOTES.get(1)));
+        dispatch = inlineWriteBegun(
+                withPackage(dispatch(job, FeedbackDispatchState.UNCERTAIN, false, 1, ""), content),
+                storedPlacements(unknown));
+        when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
+                .thenReturn(Optional.of(dispatch));
+        when(diffNotePoster.deliverPackage(eq(job), any(), eq(TWO_LINE_NOTES), any(), any(), any()))
+                .thenReturn(new DiffNotePoster.DiffNoteResult(
+                        List.of(unknown, refused), false, true, false, true, false, List.of()));
+
+        var result = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
+
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.UNCERTAIN);
+        verify(repository, never())
+                .finish(argThat(completion -> completion.state().equals(FeedbackDispatchState.SUPPRESSED.name())));
+    }
+
+    @Test
+    void shouldReturnTheStoredPlacementOfASettledPackageAndLeaveAnUnrecordedOneUnknown() {
+        var content = new ReviewResultParser.DeliveryContent(null, TWO_LINE_NOTES, List.of(), List.of());
+        var located = new InlineFeedbackChannel.DeliveredSignal(
+                "k1",
+                anchorOf(TWO_LINE_NOTES.get(0)),
+                InlineFeedbackChannel.Disposition.POSTED,
+                "gid://gitlab/Note/1",
+                null,
+                null,
+                true,
+                InlineFeedbackChannel.Placement.LOCATION_COMMENT);
+        var unrecorded = new InlineFeedbackChannel.DeliveredSignal(
+                "k2",
+                anchorOf(TWO_LINE_NOTES.get(1)),
+                InlineFeedbackChannel.Disposition.PRESERVED_EXISTING,
+                "gid://gitlab/Note/2",
+                null);
+        dispatch = inlineWriteBegun(
+                withPackage(dispatch(job, FeedbackDispatchState.SENT, false, 1, ""), content),
+                storedPlacements(located, unrecorded));
+        when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
+                .thenReturn(Optional.of(dispatch));
+
+        var result = service.dispatchAutomaticPackage(job, content, Set.of("practice"));
+
+        assertThat(result.deliveredSignals())
+                .extracting(InlineFeedbackChannel.DeliveredSignal::placement)
+                .containsExactly(InlineFeedbackChannel.Placement.LOCATION_COMMENT, null);
+    }
+
+    @Test
+    void shouldReadBackAnInFlightApprovedNoteBeforeRefusingAStaleApprovalAtTheCreate() {
+        String recorded = "1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d";
+        Feedback feedback = lineNotesOnlyFeedback(recorded);
+        var unknown = InlineFeedbackChannel.DeliveredSignal.attempted(
+                "approved:" + feedback.getId() + ":0", anchorOf(APPROVED_LINE_NOTES.get(0)));
+        when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
+                .thenReturn(Optional.of(lineNotesOnlyDispatch(
+                        feedback.getId(), FeedbackDispatchState.UNCERTAIN, 1, true, storedPlacements(unknown))));
+        when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
+        when(policy.evaluatePullRequest(any(), any(), any(), any()))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(MOVED_HEAD)));
+        var landed = lineSignal(feedback, 0, InlineFeedbackChannel.Disposition.PRESERVED_EXISTING);
+        var refused = InlineFeedbackChannel.DeliveredSignal.notSent(
+                "approved:" + feedback.getId() + ":1", anchorOf(APPROVED_LINE_NOTES.get(1)));
+        var reviewedRevision = revisionCaptor();
+        when(diffNotePoster.deliverPackage(
+                        eq(job), any(), eq(APPROVED_LINE_NOTES), any(), reviewedRevision.capture(), any()))
+                .thenReturn(new DiffNotePoster.DiffNoteResult(
+                        List.of(landed, refused), false, false, false, true, false, List.of()));
+
+        when(policy.currentReviewedRevision(job, recorded))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED);
+
+        var result = service.dispatchApproved(job, feedback);
+
+        assertThat(reviewedRevision.getValue().get())
+                .isEqualTo(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED);
+        verify(policy).currentReviewedRevision(job, recorded);
+        assertThat(result.status()).isEqualTo(PracticeFeedbackDispatchService.Result.Status.SUPPRESSED);
+        assertThat(result.suppressionReason()).isEqualTo(FeedbackSuppressionReason.APPROVAL_STALE);
+        assertThat(result.deliveredSignals()).contains(landed);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ArgumentCaptor<Supplier<PracticeFeedbackDeliveryPolicy.ReviewedRevision>> revisionCaptor() {
+        return ArgumentCaptor.forClass(Supplier.class);
+    }
+
     /** Every note acknowledged: what the poster returns for a package it fully delivered or found. */
     private static DiffNotePoster.DiffNoteResult delivered(List<InlineFeedbackChannel.DeliveredSignal> signals) {
-        return new DiffNotePoster.DiffNoteResult(signals, true, false, false, false, List.of());
+        return new DiffNotePoster.DiffNoteResult(signals, true, false, false, false, false, List.of());
     }
 
     /** A proposal approved as line notes alone: it has no summary, so its body is absent. */
@@ -1134,6 +1381,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                     .put("externalRef", signal.externalRef());
             Boolean started = signal.writeMayHaveStarted();
             if (started != null) placement.put("writeMayHaveStarted", started);
+            InlineFeedbackChannel.Placement where = signal.placement();
+            if (where != null) placement.put("placement", where.name());
         }
         return placements;
     }

@@ -702,18 +702,60 @@ public class PracticeFeedbackDeliveryPolicy {
     }
 
     /**
-     * An approved pull request package is written only onto the head it was reviewed at: the revision the proposal
-     * recorded, else the job's pinned commit. Without either, nothing proves the approval still describes the work.
-     * Issues have no head; their snapshot policy owns their currentness.
+     * Whether an approved package's proposal still describes the work's current head. An approval proves nothing
+     * about work it cannot be compared with, so an unknown revision counts as stale as well as a changed one.
      */
     static boolean reviewedRevisionMatches(Feedback feedback, AgentJob job, Decision<?> decision) {
-        if (ArtifactKinds.ISSUE.equals(AgentJobService.artifactKindFor(Objects.requireNonNull(job.getJobType())))) {
-            return true;
+        return reviewedRevision(feedback.getReviewedRevision(), job, decision.artifact()) == ReviewedRevision.CURRENT;
+    }
+
+    /** How the work an automatic package was reviewed on compares with the head its egress decision read. */
+    static ReviewedRevision reviewedRevision(AgentJob job, Decision<?> decision) {
+        return reviewedRevision(null, job, decision.artifact());
+    }
+
+    /**
+     * How the pull request a package was reviewed on compares with its head, read again right before a new copy is
+     * requested. Only the workspace's own monitored work has a current head here.
+     */
+    @Transactional(readOnly = true)
+    public ReviewedRevision currentReviewedRevision(AgentJob job, @Nullable String proposalRevision) {
+        if (isIssueJob(job)) return ReviewedRevision.CURRENT;
+        long workspaceId = requireWorkspaceId(job);
+        JsonNode metadata = job.getMetadata();
+        PullRequest current = integralId(metadata, "pull_request_id")
+                .flatMap(pullRequestRepository::findByIdWithAuthorAndRepository)
+                .filter(pullRequest -> isEligibleTarget(pullRequest, metadata, "pr_number", workspaceId))
+                .orElse(null);
+        return reviewedRevision(proposalRevision, job, current);
+    }
+
+    /**
+     * A pull request package is written only onto the head it was reviewed at: the revision an approved proposal
+     * recorded, else the job's pinned commit. Only two known commits that differ prove the work changed; without
+     * either one the comparison is unknown. Issues have no head; their snapshot policy owns their currentness.
+     */
+    private static ReviewedRevision reviewedRevision(
+            @Nullable String proposalRevision, AgentJob job, @Nullable Object current) {
+        if (isIssueJob(job)) return ReviewedRevision.CURRENT;
+        String reviewed = proposalRevision != null ? proposalRevision : pinnedHead(job);
+        String head = current instanceof PullRequest pullRequest ? pullRequest.getHeadRefOid() : null;
+        if (reviewed == null || reviewed.isBlank() || head == null || head.isBlank()) {
+            return ReviewedRevision.UNKNOWN;
         }
-        String reviewed = feedback.getReviewedRevision() != null ? feedback.getReviewedRevision() : pinnedHead(job);
-        return reviewed != null
-                && decision.artifact() instanceof PullRequest pullRequest
-                && reviewed.equals(pullRequest.getHeadRefOid());
+        return reviewed.equals(head) ? ReviewedRevision.CURRENT : ReviewedRevision.CHANGED;
+    }
+
+    /** How the commit a package was reviewed at compares with the work's current head. */
+    public enum ReviewedRevision {
+        CURRENT,
+        CHANGED,
+        /** The reviewed commit or the current head is not known, so nothing was compared. */
+        UNKNOWN,
+    }
+
+    private static boolean isIssueJob(AgentJob job) {
+        return ArtifactKinds.ISSUE.equals(AgentJobService.artifactKindFor(Objects.requireNonNull(job.getJobType())));
     }
 
     private static @Nullable String pinnedHead(AgentJob job) {

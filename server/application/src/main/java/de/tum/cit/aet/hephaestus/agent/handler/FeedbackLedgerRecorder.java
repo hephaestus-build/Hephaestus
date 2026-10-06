@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor.DiffAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
+import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Placement;
 import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
@@ -81,12 +82,13 @@ public class FeedbackLedgerRecorder {
                     summaryUrl));
         }
         for (DeliveredSignal signal : inlineSignals) {
-            if (!signal.acknowledged()) continue;
+            PlacementType placed = signal.acknowledged() ? placedAs(signal) : null;
+            if (placed == null) continue;
             DiffAnchor anchor = (DiffAnchor) signal.anchor();
             feedbackPlacementRepository.insertProviderPlacementIfAbsent(new ProviderPlacement(
                     UUID.randomUUID(),
                     feedback.getId(),
-                    PlacementType.INLINE.name(),
+                    placed.name(),
                     (anchor.startLine() != null ? PlacementAnchorKind.RANGE : PlacementAnchorKind.LINE).name(),
                     anchor.filePath(),
                     anchor.startLine() != null ? anchor.startLine() : anchor.newLineNumber(),
@@ -316,14 +318,15 @@ public class FeedbackLedgerRecorder {
         if (ArtifactKinds.hasInlineLane(artifact) && inlineDelivered) {
             for (DiffNote note : delivery.diffNotes()) {
                 DeliveredSignal signal = matchSignal(note, inlineSignals);
-                if (signal == null || !signal.acknowledged()) {
+                PlacementType placed = signal != null && signal.acknowledged() ? placedAs(signal) : null;
+                if (signal == null || placed == null) {
                     continue;
                 }
                 inlinePlacementCount +=
                         feedbackPlacementRepository.insertProviderPlacementIfAbsent(new ProviderPlacement(
                                 UUID.randomUUID(),
                                 feedback.getId(),
-                                PlacementType.INLINE.name(),
+                                placed.name(),
                                 (note.endLine() != null ? PlacementAnchorKind.RANGE : PlacementAnchorKind.LINE).name(),
                                 note.filePath(),
                                 note.startLine(),
@@ -371,6 +374,20 @@ public class FeedbackLedgerRecorder {
         return observations.stream()
                 .filter(f -> evidence.contains(f.getOccurrenceKey()))
                 .toList();
+    }
+
+    /**
+     * The slot a delivered line note actually occupies, keeping the anchor it was proposed at: an ordinary comment
+     * that links to the line is no line comment. {@code null} for a copy whose placement was never recorded and
+     * cannot be told from its receipt: no placement row is asserted for it, though it still counts as delivered.
+     */
+    private static @Nullable PlacementType placedAs(DeliveredSignal signal) {
+        Placement placement = signal.actualPlacement();
+        if (placement == null) return null;
+        return switch (placement) {
+            case LINE -> PlacementType.INLINE;
+            case LOCATION_COMMENT -> PlacementType.LOCATION_COMMENT;
+        };
     }
 
     private static Set<String> deliveredKeys(List<DeliveredSignal> signals) {

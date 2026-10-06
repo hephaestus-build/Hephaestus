@@ -12,19 +12,23 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrCoordinates;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrInfo;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,15 +37,16 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.stereotype.Component;
 
 /**
- * GitLab adapter for {@link InlineFeedbackChannel}. Posts inline diff notes one at a time via
- * {@code CreateDiffNote} (GitLab has no batch API); a position GitLab rejects as outside the diff falls back to a
- * merge request comment headed by its {@code file:line}.
+ * GitLab adapter for {@link InlineFeedbackChannel}. Posts each piece of located feedback as an ordinary merge
+ * request comment via {@code CreateMergeRequestNote}, headed by a static link to its file and lines at the reviewed
+ * commit. GitLab attaches an ordinary comment to no line, so the link is the location: no diff note is created,
+ * resolved, edited or deleted to place it.
  *
- * <p>Each note carries the package marker and a hidden correlation tag with its delivery key, and is anchored to
- * the reviewed commit, never to a newer head. Before any create, the merge request's discussions are read
- * completely and the copies of the package are indexed by key; an item with a copy is never posted again, and no
- * copy is ever edited or deleted. Each create is fenced on its own, so a stop between two notes leaves the second
- * provably unrequested.
+ * <p>Each comment carries the package marker and a hidden correlation tag with its delivery key, and links to the
+ * reviewed commit, never to a newer head. Before any create, the merge request's discussions are read completely
+ * and the copies of the package are indexed by key; an item with a copy is never posted again, and no copy is ever
+ * edited or deleted. Diff notes and fallback comments this channel posted earlier stay readable as copies. Each
+ * create is fenced on its own, so a stop between two comments leaves the second provably unrequested.
  *
  * <p>Every readback mode renders the same body: GitLab copies always carried the package marker.
  *
@@ -63,14 +68,22 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
     /** Hidden per-delivery correlation tag; the key is alnum/dash/underscore/colon, so no escaping is needed. */
     private static final Pattern CK_TAG = Pattern.compile("<!-- hephaestus-diff-note-ck=([A-Za-z0-9_:-]+) -->");
 
+    /** A commit id, the only revision a location link may name. */
+    private static final Pattern COMMIT_SHA = Pattern.compile("[0-9a-fA-F]{7,64}");
+
     private final GitLabGraphQlClientProvider gitLabProvider;
     private final GitLabMrResolver mrResolver;
+    private final GitLabTokenService tokenService;
     private final OutboundEgressGuard egressGuard;
 
     public GitLabInlineFeedbackChannel(
-            GitLabGraphQlClientProvider gitLabProvider, GitLabMrResolver mrResolver, OutboundEgressGuard egressGuard) {
+            GitLabGraphQlClientProvider gitLabProvider,
+            GitLabMrResolver mrResolver,
+            GitLabTokenService tokenService,
+            OutboundEgressGuard egressGuard) {
         this.gitLabProvider = gitLabProvider;
         this.mrResolver = mrResolver;
+        this.tokenService = tokenService;
         this.egressGuard = egressGuard;
     }
 
@@ -91,25 +104,19 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
         long scopeId = target.ref().workspaceId();
         String revision = target.reviewedRevision();
         boolean rateLimited = gitLabProvider.isRateLimitCritical(scopeId);
-        if (rateLimited || revision == null || revision.isBlank()) {
-            // Without the reviewed commit no note can be anchored where the review read the code.
+        if (rateLimited || revision == null || !COMMIT_SHA.matcher(revision).matches()) {
+            // Without the reviewed commit no comment can link to the code the review read.
             log.warn(
-                    "GitLab diff notes not requested: workspaceId={}, rateLimited={}, reviewedRevision={}",
+                    "GitLab location comments not requested: workspaceId={}, rateLimited={}, reviewedRevision={}",
                     scopeId,
                     rateLimited,
-                    revision);
+                    sanitizeForLog(revision));
             return InlineResult.of(notSent(feedbackItems));
         }
         MrCoordinates mr = GitLabMrResolver.parseSubjectExternalId(target.subjectExternalId());
         MrInfo mrInfo = mrResolver.resolve(scopeId, mr.projectPath(), mr.iid());
-        if (mrInfo.startSha() == null) {
-            log.warn(
-                    "GitLab MR missing diffRefs — not requesting diff notes: workspaceId={}, mrGid={}",
-                    scopeId,
-                    mrInfo.globalId());
-            return InlineResult.of(notSent(feedbackItems));
-        }
-        Map<String, Copy> copies = indexCopies(scopeId, mr, feedbackItems, revision);
+        String projectUrl = projectUrl(scopeId, mr);
+        Map<String, Copy> copies = indexCopies(scopeId, mr, feedbackItems, revision, projectUrl);
 
         List<DeliveredSignal> completed = new ArrayList<>(feedbackItems.size());
         Set<String> processedKeys = new HashSet<>();
@@ -131,26 +138,27 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
                 completed.add(copy.verified() ? copy.preserved(item) : DeliveredSignal.notSent(key, diff));
                 continue;
             }
+            if (diff.side() != FeedbackAnchor.DiffSide.RIGHT) {
+                // The link names lines of the reviewed head; old-side lines have no address there.
+                completed.add(DeliveredSignal.notSent(key, diff));
+                continue;
+            }
             List<InlineFeedback> rest = feedbackItems.subList(index, feedbackItems.size());
             try {
                 egressGuard.requireDeliveryAllowed("gitlab.post-inline-feedback");
             } catch (OutboundEgressSuppressedException e) {
-                completed.addAll(notSent(rest));
+                completed.addAll(unrequested(rest, copies));
                 return InlineResult.suppressed(completed, deliveryKeys(rest));
             }
             if (!fence.beforeCreate(List.of(item), List.copyOf(completed))) {
-                completed.addAll(notSent(rest));
+                completed.addAll(unrequested(rest, copies));
                 return InlineResult.of(completed);
             }
-            Attempt attempt = createThread(scopeId, mrInfo, revision, diff, item, fence, completed);
+            Attempt attempt = createLocationComment(
+                    scopeId, mrInfo.globalId(), locationBody(projectUrl, revision, diff, item), diff, key);
             completed.add(attempt.signal());
-            List<InlineFeedback> after = feedbackItems.subList(index + 1, feedbackItems.size());
-            if (attempt.suppressed()) {
-                completed.addAll(notSent(after));
-                return InlineResult.suppressed(completed, deliveryKeys(rest));
-            }
             if (attempt.stop()) {
-                completed.addAll(notSent(after));
+                completed.addAll(unrequested(feedbackItems.subList(index + 1, feedbackItems.size()), copies));
                 break;
             }
         }
@@ -170,7 +178,8 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
         }
         try {
             MrCoordinates mr = GitLabMrResolver.parseSubjectExternalId(target.subjectExternalId());
-            Map<String, Copy> copies = indexCopies(scopeId, mr, feedbackItems, target.reviewedRevision());
+            Map<String, Copy> copies =
+                    indexCopies(scopeId, mr, feedbackItems, target.reviewedRevision(), projectUrl(scopeId, mr));
             List<DeliveredSignal> found = new ArrayList<>();
             for (InlineFeedback item : feedbackItems) {
                 Copy copy = copies.get(item.deliveryKey());
@@ -185,112 +194,28 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
     }
 
     /**
-     * Requests one diff note. Only GitLab's line-code validation answering a valid response with no top-level
-     * error and an explicit {@code note: null} lets the fallback follow: the position is validated before the note
-     * is saved, so that answer proves no note exists. Any other failure, a missing response or a partial note may
-     * still have created one.
+     * Requests one ordinary merge request comment. It attaches to no line, so no answer can prove a position was
+     * refused before saving: a failure, a missing response or an answer without a note may still have created one.
      */
-    private Attempt createThread(
-            long scopeId,
-            MrInfo mrInfo,
-            String revision,
-            FeedbackAnchor.DiffAnchor diff,
-            InlineFeedback item,
-            WriteFence fence,
-            List<DeliveredSignal> completed) {
-        String key = item.deliveryKey();
-        ClientGraphQlResponse response;
-        try {
-            response = gitLabProvider
-                    .forScope(scopeId)
-                    .documentName("CreateDiffNote")
-                    .variable("noteableId", mrInfo.globalId())
-                    .variable("body", postedBody(item))
-                    .variable("position", buildPosition(diff, mrInfo, revision))
-                    .execute()
-                    .block(GRAPHQL_TIMEOUT);
-        } catch (Exception e) {
-            log.warn(
-                    "GitLab diff note outcome unknown: workspaceId={}, file={}, line={}",
-                    scopeId,
-                    sanitizeForLog(diff.filePath()),
-                    diff.newLineNumber(),
-                    e);
-            return new Attempt(DeliveredSignal.attempted(key, diff), isRateLimitError(e), false);
-        }
-        if (response == null) {
-            log.warn("Null response posting GitLab diff note: workspaceId={}, file={}", scopeId, diff.filePath());
-            return new Attempt(DeliveredSignal.attempted(key, diff), false, false);
-        }
-        Map<String, Object> payload = response.field("createDiffNote").getValue();
-        Object note = payload == null ? null : payload.get("note");
-        if (note instanceof Map<?, ?> created && created.get("id") instanceof String noteId && !noteId.isBlank()) {
-            String discussionId = created.get("discussion") instanceof Map<?, ?> discussion
-                            && discussion.get("id") instanceof String id
-                    ? id
-                    : null;
-            String url = created.get("url") instanceof String noteUrl ? noteUrl : null;
-            return new Attempt(
-                    new DeliveredSignal(key, diff, Disposition.POSTED, noteId, discussionId, url, true), false, false);
-        }
-        if (response.isValid()
-                && response.getErrors().isEmpty()
-                && payload != null
-                && payload.containsKey("note")
-                && note == null
-                && payload.get("errors") instanceof List<?> errors
-                && isLineCodeError(errors)) {
-            log.info(
-                    "Diff note line outside diff hunk, falling back to MR comment: workspaceId={}, file={}, line={}",
-                    scopeId,
-                    diff.filePath(),
-                    diff.newLineNumber());
-            return postFallbackComment(scopeId, mrInfo.globalId(), diff, item, fence, completed);
-        }
-        log.warn(
-                "GitLab createDiffNote returned no note: workspaceId={}, file={}, line={}",
-                scopeId,
-                sanitizeForLog(diff.filePath()),
-                diff.newLineNumber());
-        return new Attempt(DeliveredSignal.attempted(key, diff), false, false);
-    }
-
-    /**
-     * Posts out-of-hunk feedback as a merge request comment headed by its location, fenced like any create. The
-     * diff note was proven never created, so a refused fallback reports the item as never sent.
-     */
-    private Attempt postFallbackComment(
-            long scopeId,
-            String mrGlobalId,
-            FeedbackAnchor.DiffAnchor diff,
-            InlineFeedback item,
-            WriteFence fence,
-            List<DeliveredSignal> completed) {
-        String key = item.deliveryKey();
-        try {
-            egressGuard.requireDeliveryAllowed("gitlab.post-inline-fallback");
-        } catch (OutboundEgressSuppressedException e) {
-            return new Attempt(DeliveredSignal.notSent(key, diff), true, true);
-        }
-        if (!fence.beforeCreate(List.of(item), List.copyOf(completed))) {
-            return new Attempt(DeliveredSignal.notSent(key, diff), true, false);
-        }
+    private Attempt createLocationComment(
+            long scopeId, String mrGlobalId, String body, FeedbackAnchor.DiffAnchor diff, String key) {
         ClientGraphQlResponse response;
         try {
             response = gitLabProvider
                     .forScope(scopeId)
                     .documentName("CreateMergeRequestNote")
                     .variable("noteableId", mrGlobalId)
-                    .variable("body", fallbackBody(diff, item))
+                    .variable("body", body)
                     .execute()
                     .block(GRAPHQL_TIMEOUT);
         } catch (Exception e) {
             log.warn(
-                    "Fallback MR comment outcome unknown: workspaceId={}, file={}",
+                    "GitLab location comment outcome unknown: workspaceId={}, file={}, line={}",
                     scopeId,
                     sanitizeForLog(diff.filePath()),
+                    diff.newLineNumber(),
                     e);
-            return new Attempt(DeliveredSignal.attempted(key, diff), isRateLimitError(e), false);
+            return new Attempt(DeliveredSignal.attempted(key, diff), isRateLimitError(e));
         }
         Map<String, Object> payload =
                 response == null ? null : response.field("createNote").getValue();
@@ -300,10 +225,16 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
                 && !noteId.isBlank()) {
             String url = created.get("url") instanceof String noteUrl ? noteUrl : null;
             return new Attempt(
-                    new DeliveredSignal(key, diff, Disposition.FELL_BACK, noteId, null, url, true), false, false);
+                    new DeliveredSignal(
+                            key, diff, Disposition.POSTED, noteId, null, url, true, Placement.LOCATION_COMMENT),
+                    false);
         }
-        log.warn("Fallback MR comment returned no note: workspaceId={}", scopeId);
-        return new Attempt(DeliveredSignal.attempted(key, diff), false, false);
+        log.warn(
+                "GitLab location comment returned no note: workspaceId={}, file={}, line={}",
+                scopeId,
+                sanitizeForLog(diff.filePath()),
+                diff.newLineNumber());
+        return new Attempt(DeliveredSignal.attempted(key, diff), false);
     }
 
     /**
@@ -312,7 +243,7 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
      * scan instead of passing for absence. A key whose copies do not verify is kept as a conflict.
      */
     private Map<String, Copy> indexCopies(
-            long scopeId, MrCoordinates mr, List<InlineFeedback> items, @Nullable String revision) {
+            long scopeId, MrCoordinates mr, List<InlineFeedback> items, @Nullable String revision, String projectUrl) {
         String marker = items.getFirst().marker();
         Map<String, InlineFeedback> expected = new HashMap<>();
         for (InlineFeedback item : items) {
@@ -345,7 +276,7 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
                     throw new FeedbackDeliveryException("GitLab discussion lookup was incomplete");
                 }
                 for (Object discussion : discussions) {
-                    indexDiscussion(discussion, marker, currentUserId, revision, expected, copies);
+                    indexDiscussion(discussion, marker, currentUserId, revision, projectUrl, expected, copies);
                 }
                 Object hasNextPage = pageInfo.get("hasNextPage");
                 if (Boolean.FALSE.equals(hasNextPage)) {
@@ -372,6 +303,7 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
             String marker,
             String currentUserId,
             @Nullable String revision,
+            String projectUrl,
             Map<String, InlineFeedback> expected,
             Map<String, Copy> copies) {
         if (!(node instanceof Map<?, ?> discussion)
@@ -395,32 +327,42 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
                 continue;
             }
             InlineFeedback item = expected.get(key);
-            boolean verified = item != null
-                    && note.get("author") instanceof Map<?, ?> author
-                    && currentUserId.equals(author.get("id"))
-                    && sameCopy(note, body, item, revision);
+            Placement placement = item != null
+                            && note.get("author") instanceof Map<?, ?> author
+                            && currentUserId.equals(author.get("id"))
+                    ? copyPlacement(note, body, item, revision, projectUrl)
+                    : null;
             String url = note.get("url") instanceof String noteUrl ? noteUrl : null;
             Copy previous = copies.get(key);
-            if (verified && (previous == null || !previous.verified())) {
-                copies.put(key, new Copy(true, noteId, discussionId, url));
-            } else if (!verified && previous == null) {
-                copies.put(key, new Copy(false, noteId, discussionId, url));
+            if (placement != null && (previous == null || !previous.verified())) {
+                copies.put(key, new Copy(true, noteId, discussionId, url, placement));
+            } else if (placement == null && previous == null) {
+                copies.put(key, new Copy(false, noteId, discussionId, url, null));
             }
         }
     }
 
     /**
-     * The exact body this channel posts for the item: as a diff note at its line on the reviewed commit, or as the
-     * fallback comment. This adapter places a range at its end line.
+     * Where the note appears when it is a copy of the item, else {@code null}. A copy is the exact body this channel
+     * posts for the item: the ordinary comment linking to its lines at the reviewed commit; or, posted before that,
+     * a diff note at its line on the reviewed commit (this adapter placed a range at its end line) or the ordinary
+     * comment that diff note fell back to.
      */
-    private static boolean sameCopy(Map<?, ?> note, String body, InlineFeedback item, @Nullable String revision) {
+    private static @Nullable Placement copyPlacement(
+            Map<?, ?> note, String body, InlineFeedback item, @Nullable String revision, String projectUrl) {
         if (!(item.anchor() instanceof FeedbackAnchor.DiffAnchor diff)) {
-            return false;
+            return null;
         }
-        if (body.equals(fallbackBody(diff, item))) {
-            return true;
+        // Only a position the response answered with null proves an ordinary comment; a missing one proves nothing.
+        boolean unpositioned = note.containsKey("position") && note.get("position") == null;
+        if (unpositioned
+                && ((revision != null
+                                && diff.side() == FeedbackAnchor.DiffSide.RIGHT
+                                && body.equals(locationBody(projectUrl, revision, diff, item)))
+                        || body.equals(fallbackBody(diff, item)))) {
+            return Placement.LOCATION_COMMENT;
         }
-        return revision != null
+        boolean lineCopy = revision != null
                 && body.equals(postedBody(item))
                 && note.get("position") instanceof Map<?, ?> position
                 && diff.filePath().equals(position.get("newPath"))
@@ -428,6 +370,22 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
                 && line.intValue() == diff.newLineNumber()
                 && position.get("diffRefs") instanceof Map<?, ?> diffRefs
                 && revision.equals(diffRefs.get("headSha"));
+        return lineCopy ? Placement.LINE : null;
+    }
+
+    /**
+     * The items a stopped package does not request: a verified copy the scan found is still reported as kept, so
+     * stopping never loses a copy that is already there; every other item is reported as never sent.
+     */
+    private static List<DeliveredSignal> unrequested(List<InlineFeedback> items, Map<String, Copy> copies) {
+        return items.stream()
+                .map(item -> {
+                    Copy copy = item.deliveryKey() == null ? null : copies.get(item.deliveryKey());
+                    return copy != null && copy.verified()
+                            ? copy.preserved(item)
+                            : DeliveredSignal.notSent(item.deliveryKey(), item.anchor());
+                })
+                .toList();
     }
 
     private static List<DeliveredSignal> notSent(List<InlineFeedback> items) {
@@ -443,13 +401,26 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
                 .toList();
     }
 
+    /** The key of the correlation tag this channel appends last, so text earlier in the comment cannot name one. */
     @Nullable
     private static String parseDeliveryKey(String body) {
         Matcher m = CK_TAG.matcher(body);
-        return m.find() ? m.group(1) : null;
+        String key = null;
+        while (m.find()) key = m.group(1);
+        return key;
     }
 
-    /** The diff-note body: slash commands escaped, then the package marker and the correlation tag. */
+    /**
+     * The project's web address on the workspace's configured GitLab server: each namespace and project segment
+     * encoded on its own, so the slashes between them stay the path's structure.
+     */
+    private String projectUrl(long scopeId, MrCoordinates mr) {
+        String serverUrl = tokenService.resolveServerUrl(scopeId);
+        String base = serverUrl.endsWith("/") ? serverUrl.substring(0, serverUrl.length() - 1) : serverUrl;
+        return base + "/" + encodedPath(mr.projectPath());
+    }
+
+    /** The item's body: slash commands escaped, then the package marker and the correlation tag. */
     private static String postedBody(InlineFeedback item) {
         String body = GitLabSummaryChannel.escapeSlashCommands(item.body());
         if (!item.marker().isBlank()) {
@@ -459,6 +430,32 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
         return key == null || key.isBlank() ? body : body + "\n<!-- hephaestus-diff-note-ck=" + key + " -->";
     }
 
+    /**
+     * The ordinary comment: a static link to the anchored lines of the file at the reviewed commit, then the
+     * item's body unchanged. The link is location metadata, never part of the feedback itself; its text names only
+     * the lines, so no repository file name reaches the comment's Markdown outside the encoded address.
+     */
+    private static String locationBody(
+            String projectUrl, String revision, FeedbackAnchor.DiffAnchor diff, InlineFeedback item) {
+        Integer start = diff.startLine();
+        boolean range = start != null && start < diff.newLineNumber();
+        String lines = range ? start + "-" + diff.newLineNumber() : String.valueOf(diff.newLineNumber());
+        String label = range
+                ? "View code at lines " + start + "–" + diff.newLineNumber()
+                : "View code at line " + diff.newLineNumber();
+        String link = projectUrl + "/-/blob/" + revision + "/" + encodedPath(diff.filePath()) + "#L" + lines;
+        return "**[" + label + "](" + link + ")**\n\n" + postedBody(item);
+    }
+
+    /** Each segment of a path percent-encoded, so no character of it can end the link. */
+    private static String encodedPath(String path) {
+        return Arrays.stream(path.split("/", -1))
+                .map(segment ->
+                        URLEncoder.encode(segment, StandardCharsets.UTF_8).replace("+", "%20"))
+                .collect(Collectors.joining("/"));
+    }
+
+    /** The comment a diff note outside the diff fell back to, before every item was posted as one. */
     private static String fallbackBody(FeedbackAnchor.DiffAnchor diff, InlineFeedback item) {
         return "**`" + diff.filePath() + ":" + diff.newLineNumber() + "`**\n\n" + postedBody(item);
     }
@@ -468,40 +465,26 @@ public class GitLabInlineFeedbackChannel implements InlineFeedbackChannel {
             boolean verified,
             String noteId,
             @Nullable String discussionId,
-            @Nullable String url) {
+            @Nullable String url,
+            @Nullable Placement placement) {
         DeliveredSignal preserved(InlineFeedback item) {
             return new DeliveredSignal(
-                    item.deliveryKey(), item.anchor(), Disposition.PRESERVED_EXISTING, noteId, discussionId, url);
+                    item.deliveryKey(),
+                    item.anchor(),
+                    Disposition.PRESERVED_EXISTING,
+                    noteId,
+                    discussionId,
+                    url,
+                    null,
+                    placement);
         }
     }
 
     /** One create request's outcome, and whether the rest of the package must wait. */
-    private record Attempt(DeliveredSignal signal, boolean stop, boolean suppressed) {}
-
-    /** The position on the reviewed commit; base and start come from the merge request's diff. */
-    private static Map<String, Object> buildPosition(FeedbackAnchor.DiffAnchor diff, MrInfo mrInfo, String revision) {
-        Map<String, Object> position = new HashMap<>();
-        position.put("headSha", revision);
-        position.put("startSha", mrInfo.startSha());
-        position.put("baseSha", mrInfo.baseSha());
-        // GitLab matches the position to the diff file by oldPath too. For a renamed file it should be the
-        // pre-rename path, but the DiffAnchor only carries the new one.
-        Map<String, String> paths = new HashMap<>();
-        paths.put("newPath", diff.filePath());
-        paths.put("oldPath", diff.filePath());
-        position.put("paths", paths);
-        position.put("newLine", diff.newLineNumber());
-        return position;
-    }
+    private record Attempt(DeliveredSignal signal, boolean stop) {}
 
     private static boolean isRateLimitError(Exception e) {
         String message = e.getMessage();
         return message != null && (message.contains("rate limit") || message.contains("429"));
-    }
-
-    private static boolean isLineCodeError(List<?> errors) {
-        return errors.stream()
-                .map(error -> String.valueOf(error).toLowerCase(Locale.ROOT))
-                .anyMatch(error -> error.contains("line code") || error.contains("line_code"));
     }
 }

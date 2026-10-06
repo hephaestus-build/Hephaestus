@@ -45,6 +45,8 @@ class PracticeFeedbackDispatchService {
 
     static final Duration UNCONFIRMED_RECHECK = Duration.ofHours(6);
 
+    private static final String REVISION_UNKNOWN = "The reviewed commit or the current head is not known";
+
     private final FeedbackDispatchRepository repository;
     private final PracticeFeedbackDeliveryPolicy policy;
     private final PullRequestCommentPoster commentPoster;
@@ -211,6 +213,16 @@ class PracticeFeedbackDispatchService {
                 } else {
                     PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
                     if (!decision.allowed()) return stateMachine.refuse(dispatch, owner, decision.refusal());
+                    switch (PracticeFeedbackDeliveryPolicy.reviewedRevision(job, decision)) {
+                        case CHANGED -> {
+                            return stateMachine.refuse(
+                                    dispatch, owner, FeedbackSuppressionReason.REVIEWED_REVISION_CHANGED);
+                        }
+                        case UNKNOWN -> {
+                            return stateMachine.retry(dispatch, owner, REVISION_UNKNOWN);
+                        }
+                        case CURRENT -> {}
+                    }
                     if (inlineNotes(dispatch).isEmpty() && repeatedSummaries.repeatsLastPosted(dispatch, job)) {
                         return stateMachine.refuse(dispatch, owner, FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE);
                     }
@@ -232,14 +244,45 @@ class PracticeFeedbackDispatchService {
                             dispatch, owner, decision.refusal(), summaryRef, summaryUrl, inlineSignals);
                 // An empty package writes nothing inline: it never retires what earlier packages placed.
                 if (!sealed.diffNotes().isEmpty()) {
+                    // While no inline write began nothing needs reading back, so a head proven moved is refused
+                    // here and one that cannot be compared waits; otherwise both are met at each create, after the
+                    // copies an earlier attempt may have made are read back.
+                    if (!dispatch.inlineWriteMayHaveStarted()) {
+                        switch (PracticeFeedbackDeliveryPolicy.reviewedRevision(job, decision)) {
+                            case CHANGED -> {
+                                return stateMachine.refuse(
+                                        dispatch,
+                                        owner,
+                                        FeedbackSuppressionReason.REVIEWED_REVISION_CHANGED,
+                                        summaryRef,
+                                        summaryUrl,
+                                        inlineSignals);
+                            }
+                            case UNKNOWN -> {
+                                return stateMachine.retryPackage(
+                                        dispatch, owner, REVISION_UNKNOWN, summaryRef, summaryUrl, inlineSignals);
+                            }
+                            case CURRENT -> {}
+                        }
+                    }
                     DiffNotePoster.DiffNoteResult inline = diffNotePoster.deliverPackage(
                             job,
                             InlinePackageScope.of(dispatch, sealed.inlineMarker(), null),
                             sealed.diffNotes(),
                             inlineSignals,
+                            () -> policy.currentReviewedRevision(job, null),
                             receipt -> stateMachine.recordInlineAttempt(dispatch, owner, receipt));
                     inlineSignals = inline.signals();
                     if (inline.leaseLost()) return Result.inProgress();
+                    if (inline.revisionChanged() && !inline.unconfirmed()) {
+                        return stateMachine.refuse(
+                                dispatch,
+                                owner,
+                                FeedbackSuppressionReason.REVIEWED_REVISION_CHANGED,
+                                summaryRef,
+                                summaryUrl,
+                                inlineSignals);
+                    }
                     if (!inline.complete()) {
                         return inline.unconfirmed()
                                 ? stateMachine.awaitUnconfirmed(dispatch, owner, summaryRef, summaryUrl, inlineSignals)
@@ -323,7 +366,11 @@ class PracticeFeedbackDispatchService {
                     return stateMachine.refuse(
                             dispatch, owner, decision.refusal(), summaryRef, summaryUrl, inlineSignals);
                 }
-                if (!PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(feedback, job, decision)) {
+                // With no inline write begun there is nothing to read back, so a stale approval is refused here.
+                // Otherwise it is refused at each create, after the copies an earlier attempt may have made are read
+                // back, so a write whose outcome is unknown is never settled unseen.
+                if (!dispatch.inlineWriteMayHaveStarted()
+                        && !PracticeFeedbackDeliveryPolicy.reviewedRevisionMatches(feedback, job, decision)) {
                     return stateMachine.refuse(
                             dispatch,
                             owner,
@@ -338,9 +385,19 @@ class PracticeFeedbackDispatchService {
                                 dispatch, packageContent(dispatch).inlineMarker(), feedback.getReviewedRevision()),
                         inlineNotes,
                         inlineSignals,
+                        () -> policy.currentReviewedRevision(job, feedback.getReviewedRevision()),
                         receipt -> stateMachine.recordInlineAttempt(dispatch, owner, receipt));
                 inlineSignals = inline.signals();
                 if (inline.leaseLost()) return Result.inProgress();
+                if (inline.revisionChanged() && !inline.unconfirmed()) {
+                    return stateMachine.refuse(
+                            dispatch,
+                            owner,
+                            FeedbackSuppressionReason.APPROVAL_STALE,
+                            summaryRef,
+                            summaryUrl,
+                            inlineSignals);
+                }
                 if (!inline.complete()) {
                     return inline.unconfirmed()
                             ? stateMachine.awaitUnconfirmed(dispatch, owner, summaryRef, summaryUrl, inlineSignals)

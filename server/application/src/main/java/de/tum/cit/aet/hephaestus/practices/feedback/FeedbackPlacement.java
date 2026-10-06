@@ -38,11 +38,11 @@ import org.jspecify.annotations.Nullable;
  * <em>selector</em> edge (where a body of commentary is anchored), orthogonal to the
  * {@link FeedbackObservation} <em>target</em> edge.
  *
- * <p>The diff-anchor columns are a coupled group: populated only for {@code INLINE} placements, so all
- * are nullable and NULL means "this surface carries no diff coordinate".
+ * <p>The diff-anchor columns are a coupled group: populated only for {@code INLINE} and {@code LOCATION_COMMENT}
+ * placements, so all are nullable and NULL means "this surface carries no diff coordinate".
  *
  * @see Feedback for the feedback unit being placed
- * @see PlacementType for SUMMARY/INLINE/CONVERSATION_TURN
+ * @see PlacementType for SUMMARY/INLINE/CONVERSATION_TURN/LOCATION_COMMENT
  */
 @Entity
 @Immutable
@@ -90,15 +90,15 @@ public class FeedbackPlacement {
     @Column(name = "feedback_id", nullable = false, insertable = false, updatable = false, columnDefinition = "UUID")
     private UUID feedbackId;
 
-    /** Where this placement renders: SUMMARY, INLINE, or CONVERSATION_TURN. */
+    /** Where this placement renders: SUMMARY, INLINE, CONVERSATION_TURN, or LOCATION_COMMENT. */
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "placement_type", length = 32, nullable = false)
     private PlacementType placementType;
 
-    // Only INLINE placements anchor to a diff, so every coordinate below is nullable.
+    // Only INLINE and LOCATION_COMMENT placements name a diff location, so every coordinate below is nullable.
 
-    /** Granularity of the anchor: LINE / RANGE / FILE / IMAGE. NULL for non-INLINE placements. */
+    /** Granularity of the anchor: LINE / RANGE / FILE / IMAGE. NULL for placements without a diff location. */
     @Enumerated(EnumType.STRING)
     @Column(name = "anchor_kind", length = 16)
     private PlacementAnchorKind anchorKind;

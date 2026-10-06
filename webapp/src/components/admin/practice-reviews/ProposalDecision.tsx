@@ -11,7 +11,10 @@ import type { GetPracticeReviewFeedbackResponse } from "@/api/types.gen";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { Section } from "@/components/layout/Section";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
-import { placementLabel } from "@/components/practice-vocabulary/placement-defs";
+import {
+	deliveredPlacementType,
+	placementLabel,
+} from "@/components/practice-vocabulary/placement-defs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -39,10 +42,11 @@ import { ReviewPackage } from "./ReviewPackage";
 
 /** The facts only a proposal has: where it will appear and the revision it was written against. */
 export function ProposalFacts({ feedback }: { feedback: GetPracticeReviewFeedbackResponse }) {
+	const provider = feedback.reviewedWork?.provider;
 	const placements = [
 		...new Set(
 			feedback.proposedPlacements.map((placement) =>
-				placementLabel(feedback.channel, placement.type),
+				placementLabel(feedback.channel, deliveredPlacementType(placement.type, provider)),
 			),
 		),
 	];
@@ -77,12 +81,17 @@ export function ProposalPackage({ feedback }: { feedback: GetPracticeReviewFeedb
 	const { proposedPlacements } = feedback;
 	const summary = proposedPlacements.find((placement) => placement.type === "SUMMARY");
 	const inline = proposedPlacements.filter((placement) => placement.type === "INLINE");
+	const linked =
+		deliveredPlacementType("INLINE", feedback.reviewedWork?.provider) === "LOCATION_COMMENT";
+	const [one, many] = linked
+		? ["comment linking to lines", "comments linking to lines"]
+		: ["line comment", "line comments"];
 	return (
 		<Section
 			level={3}
 			title="What will be sent"
 			description={`${summary ? "1 summary" : "No summary"} and ${inline.length} ${
-				inline.length === 1 ? "line comment" : "line comments"
+				inline.length === 1 ? one : many
 			}`}
 		>
 			{proposedPlacements.length === 0 ? (

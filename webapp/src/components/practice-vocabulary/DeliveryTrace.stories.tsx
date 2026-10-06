@@ -152,6 +152,45 @@ export const ManyInlineNotes: Story = {
 	},
 };
 
+/**
+ * On GitLab a note proposed for some lines is posted as a comment on the merge request that links to
+ * them, and the trace says so rather than calling it an inline note.
+ */
+export const DeliveredAsCommentsLinkingToLines: Story = {
+	args: {
+		feedback: {
+			channel: "IN_CONTEXT",
+			deliveryState: "DELIVERED",
+			createdAt: composedAt,
+			deliveredAt,
+			placements: [
+				{ id: "p1", placementType: "SUMMARY" },
+				{ id: "p2", placementType: "LOCATION_COMMENT" },
+			],
+		},
+	},
+	play: async ({ canvas, canvasElement }) => {
+		canvas.getByText(/As a comment linking to the lines on the work/u);
+		await expect(canvasElement.textContent).not.toContain("As an inline note");
+	},
+};
+
+/** The change got a new push after its review, so what was not yet posted stayed back. */
+export const WithheldAfterTheChangeWasUpdated: Story = {
+	args: {
+		feedback: {
+			channel: "IN_CONTEXT",
+			deliveryState: "SUPPRESSED",
+			suppressionReason: "REVIEWED_REVISION_CHANGED",
+			createdAt: composedAt,
+		},
+	},
+	play: async ({ canvas }) => {
+		canvas.getByText("The work moved on");
+		canvas.getByText("The change was updated before this feedback could be posted.");
+	},
+};
+
 export const ReplacedByNewer: Story = {
 	args: {
 		feedback: {

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
+import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Disposition;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
@@ -77,19 +78,17 @@ class FeedbackDispatchStateMachineTest extends BaseUnitTest {
                 Disposition.POSTED,
                 "opaque:1",
                 null,
-                "https://github.com/owner/repo/pull/42#discussion_r123");
+                "https://gitlab.example.com/owner/repo/-/merge_requests/42#note_123",
+                true,
+                InlineFeedbackChannel.Placement.LOCATION_COMMENT);
         var same = new DeliveredSignal("key", anchor, Disposition.PRESERVED_EXISTING, "opaque:1", "thread");
         var replaced = new DeliveredSignal("key", anchor, Disposition.POSTED, "opaque:2", "thread");
-        assertThat(machine()
-                        .mergeSignals(List.of(known), List.of(same))
-                        .getFirst()
-                        .externalUrl())
-                .isEqualTo(known.externalUrl());
-        assertThat(machine()
-                        .mergeSignals(List.of(known), List.of(replaced))
-                        .getFirst()
-                        .externalUrl())
-                .isNull();
+        var kept = machine().mergeSignals(List.of(known), List.of(same)).getFirst();
+        var other = machine().mergeSignals(List.of(known), List.of(replaced)).getFirst();
+        assertThat(kept.externalUrl()).isEqualTo(known.externalUrl());
+        assertThat(kept.placement()).isEqualTo(InlineFeedbackChannel.Placement.LOCATION_COMMENT);
+        assertThat(other.externalUrl()).isNull();
+        assertThat(other.placement()).isNull();
     }
 
     @Test
