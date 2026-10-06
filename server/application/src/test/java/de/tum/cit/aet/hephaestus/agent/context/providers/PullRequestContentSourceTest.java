@@ -481,7 +481,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     "GITHUB, '', current-head, current-head",
                     "GITHUB, NULL, NULL, NULL",
                     "GITHUB, '', '', NULL",
-                    "GITLAB, comparison-base, reviewed-head, reviewed-head"
+                    "GITHUB, '   ', '   ', NULL",
+                    "GITLAB, comparison-base, reviewed-head, reviewed-head",
+                    "GITLAB, comparison-base, NULL, NULL"
                 },
                 nullValues = "NULL")
         void shouldKeepTheProvidersActualCommentRevision(

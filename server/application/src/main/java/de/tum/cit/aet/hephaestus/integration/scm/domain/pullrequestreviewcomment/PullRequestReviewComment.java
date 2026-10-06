@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.BaseGitServiceEntity;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -122,6 +123,17 @@ public class PullRequestReviewComment extends BaseGitServiceEntity {
     @OneToMany(mappedBy = "inReplyTo")
     @ToString.Exclude
     private Set<PullRequestReviewComment> replies = new HashSet<>();
+
+    /**
+     * The revision the comment was written against, or null when none is recorded. GitHub's original commit is the
+     * revision originally reviewed; GitLab's is the comparison base, so its current commit is the reviewed head.
+     */
+    public @Nullable String reviewedRevision() {
+        if (originalCommitId != null && !originalCommitId.isBlank() && provider.kind() == IntegrationKind.GITHUB) {
+            return originalCommitId;
+        }
+        return commitId == null || commitId.isBlank() ? null : commitId;
+    }
 
     public enum Side {
         LEFT,
