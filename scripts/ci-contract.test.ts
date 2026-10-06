@@ -5,6 +5,7 @@ import { chmod, glob, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
+import { runInNewContext } from "node:vm";
 
 import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
 import { parse as parseJsonc } from "jsonc-parser";
@@ -358,6 +359,15 @@ function render(
 			}),
 		);
 	});
+}
+
+/** `toJSON(needs)` as the runner writes it: each job its result, and its outputs. */
+function jobsOf(
+	results: Readonly<Record<string, string>>,
+): Record<string, { result: string; outputs: Record<string, string> }> {
+	return Object.fromEntries(
+		Object.entries(results).map(([name, result]) => [name, { result, outputs: {} }]),
+	);
 }
 
 function gates(names: Set<string>): string[] {
@@ -2033,6 +2043,47 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("the CI gate publishes its own job's status, not the evaluation's verdict", async () => {
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const publisher = namedStep(workflow, ["jobs", "all-ci-passed"], "Create commit status");
+		// GitHub fills `job.status`, so this pins the wiring and runs the script against each value.
+		assert.equal(publisher.getIn(["env", "JOB_STATUS"]), `\${{ job.status }}`);
+		const script = String(stepInputs(publisher).get("script"));
+		const published = async (jobStatus: string | undefined) => {
+			const calls: unknown[] = [];
+			const sandbox = {
+				context: { payload: {}, sha: "a".repeat(40), repo: { owner: "owner", repo: "repo" } },
+				github: {
+					rest: {
+						repos: {
+							createCommitStatus: async (payload: unknown) => {
+								calls.push(payload);
+							},
+						},
+					},
+				},
+				process: { env: jobStatus === undefined ? {} : { JOB_STATUS: jobStatus } },
+				done: Promise.resolve(),
+			};
+			runInNewContext(`done = (async () => {\n${script}\n})();`, sandbox);
+			await sandbox.done;
+			assert.equal(calls.length, 1);
+			const payload = asRecord(calls[0], "commit status");
+			assert.equal(payload.sha, "a".repeat(40));
+			return payload.state;
+		};
+		assert.equal(await published("success"), "success");
+		assert.equal(await published("failure"), "failure");
+		assert.equal(await published("cancelled"), "error");
+		for (const unknown of [undefined, "", "neutral"]) {
+			assert.equal(
+				await published(unknown),
+				"failure",
+				`job status ${String(unknown)} is no success`,
+			);
+		}
+	});
+
 	void test("merge groups require release evidence when their aggregate tree changes the version", async (context) => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const candidateStep = namedStep(
@@ -2136,19 +2187,64 @@ void describe("CI contract", () => {
 			}),
 		);
 		const evaluate = runScript(workflow, gate, "Evaluate CI results");
+		assert.equal(
+			namedStep(workflow, gate, "Evaluate CI results").getIn(["env", "NEEDS"]),
+			`\${{ toJSON(needs) }}`,
+		);
 		// Narrowed to what the verdict is: the step's own diagnosis is for a failure to carry, not
-		// something an expected verdict should have to spell out.
-		const verdict = async (results: Record<string, string>, onVersionBranch: boolean) => {
+		// something an expected verdict should have to spell out. `needs` stands for what the runner
+		// passes when it differs from what the rendered expressions read.
+		const verdict = async (
+			results: Record<string, string>,
+			onVersionBranch: boolean,
+			needs = JSON.stringify(jobsOf({ ...green, ...results })),
+		) => {
 			const run = await runStep(
 				render(
 					evaluate,
 					{ ...green, ...results },
 					{ "release-candidate": String(onVersionBranch) },
 				),
+				{ NEEDS: needs },
 			);
 			return { failed: run.failed, outputs: run.outputs };
 		};
 		const passes = { failed: false, outputs: { status: "success" } };
+		const fails = { failed: true, outputs: { status: "failure" } };
+
+		// A job abandoned before it concluded is neither a failure nor a cancellation, and it is not a
+		// success or a skip either.
+		const skipped = Object.fromEntries(Object.keys(green).map((name) => [name, "skipped"]));
+		const abandoned = {
+			...skipped,
+			Changesets: "success",
+			"detect-changes": "abandoned",
+			"gradle-wrapper": "abandoned",
+		};
+		assert.deepEqual(await verdict(abandoned, false), fails);
+		// Each bad result on its own, among jobs that all succeeded, so it is the one the gate refuses.
+		assert.deepEqual(await verdict({ "detect-changes": "" }, false), fails);
+		const withDetection = (entry: unknown) =>
+			JSON.stringify({ ...jobsOf(green), "detect-changes": entry });
+		for (const invalid of [
+			{ outputs: {} },
+			{ result: null },
+			{ result: "neutral" },
+			{ result: "abandoned" },
+			null,
+		]) {
+			assert.deepEqual(
+				await verdict({}, false, withDetection(invalid)),
+				fails,
+				`${JSON.stringify(invalid)} is no result`,
+			);
+		}
+		for (const needs of ["", "not json", "{}", "[]", `"success"`]) {
+			assert.deepEqual(await verdict({}, false, needs), fails, `needs ${needs} judge nothing`);
+		}
+		// The same jobs with results do pass, skipped ones included.
+		assert.deepEqual(await verdict({ ...skipped, Changesets: "success" }, false), passes);
+		assert.deepEqual(await verdict({}, false), passes);
 
 		// An ordinary pull request legitimately skips the preflight, and blocking one would block
 		// every pull request in the repository.
