@@ -20,7 +20,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
@@ -265,9 +264,8 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                             .isEmpty();
         }
         if (!type.equals("feedback")) return false;
-        var row = feedbackRepository.findByIdAndWorkspaceId(id, workspaceId).orElse(null);
+        var row = feedbackRepository.findPersonHistoryRecord(id, workspaceId).orElse(null);
         if (row == null
-                || row.getDeliveryState() != FeedbackDeliveryState.DELIVERED
                 || withdrawalRepository.withdrawnAmong(workspaceId, Set.of(id)).contains(id)) return false;
         return shownFeedback(workspaceId, List.of(row), List.of(), purpose)
                         .currentness()

@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
@@ -63,6 +64,8 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -798,13 +801,52 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         }
     }
 
-    @Test
-    void deliveredHistoryRetainsOriginalSupportAndRevisionWithoutCurrentSubstitution() {
+    /** A note a newer review replaced after it was published is history the same way a delivered one is. */
+    @ParameterizedTest
+    @EnumSource(
+            value = FeedbackDeliveryState.class,
+            names = {"DELIVERED", "SUPERSEDED"})
+    void shouldCiteHistoryFeedbackOnlyWhileItsWordsMayStillBeRead(FeedbackDeliveryState state) {
         Feedback note = Feedback.builder()
                 .id(UUID.randomUUID())
                 .channel(FeedbackChannel.IN_CONTEXT)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(DELIVERED_ARTIFACT_ROW_ID)
+                .deliveryState(state)
+                .body("Review the failure path.")
+                .deliveredAt(Instant.parse("2026-07-01T09:00:00Z"))
+                .build();
+        when(feedbackRepository.findPersonHistoryRecord(note.getId(), WORKSPACE_ID))
+                .thenReturn(Optional.of(note));
+
+        assertThat(cites(note)).as("current and readable").isTrue();
+        boundTo.put(note.getId(), List.of(boundObservation(true)));
+        assertThat(cites(note)).as("its evidence moved on").isFalse();
+        boundTo.put(note.getId(), List.of(boundObservation(false)));
+        when(withdrawalRepository.withdrawnAmong(anyLong(), any())).thenReturn(Set.of(note.getId()));
+        assertThat(cites(note)).as("withdrawn").isFalse();
+        when(withdrawalRepository.withdrawnAmong(anyLong(), any())).thenReturn(Set.of());
+        when(visibilityPolicy.permitsShown(anyLong(), any(), eq(SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW)))
+                .thenReturn(Set.of());
+        assertThat(cites(note)).as("its evidence may not be read").isFalse();
+    }
+
+    private boolean cites(Feedback note) {
+        return provider.permitsHistoryRecord(
+                WORKSPACE_ID, "feedback", note.getId(), SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = FeedbackDeliveryState.class,
+            names = {"DELIVERED", "SUPERSEDED"})
+    void deliveredHistoryRetainsOriginalSupportAndRevisionWithoutCurrentSubstitution(FeedbackDeliveryState state) {
+        Feedback note = Feedback.builder()
+                .id(UUID.randomUUID())
+                .channel(FeedbackChannel.IN_CONTEXT)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(DELIVERED_ARTIFACT_ROW_ID)
+                .deliveryState(state)
                 .body("Review the failure path.")
                 .deliveredAt(Instant.parse("2026-07-01T09:00:00Z"))
                 .reviewedRevision("original-head")

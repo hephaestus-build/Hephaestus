@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -15,15 +16,20 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
+import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,6 +56,9 @@ class ReviewHistoryConsentGateIntegrationTest extends AbstractSlackConsentGateIn
 
     @Autowired
     private PracticeRevisionRepository practiceRevisionRepository;
+
+    @Autowired
+    private FeedbackPlacementRepository placementRepository;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -97,6 +106,76 @@ class ReviewHistoryConsentGateIntegrationTest extends AbstractSlackConsentGateIn
                 "C-paused");
 
         assertThat(history(review)).contains("Said in the paused channel", "Brief about the paused channel");
+    }
+
+    @Test
+    @DisplayName(
+            "feedback published on the work and then replaced stays in history; one never published there does not")
+    void shouldKeepReplacedFeedbackOnlyWhenItWasPublishedOnTheWork() {
+        UUID observation = observe(ArtifactKinds.PULL_REQUEST.value(), 4242L, "Seen on the pull request");
+        UUID published = replaced(observation, "Published then replaced", FeedbackChannel.IN_CONTEXT, true, "IC_kwDO1");
+        UUID unposted = replaced(observation, "Replaced before posting", FeedbackChannel.IN_CONTEXT, true, null);
+        UUID blank = replaced(observation, "Replaced with a blank receipt", FeedbackChannel.IN_CONTEXT, true, "  ");
+        UUID undelivered = replaced(observation, "Never delivered", FeedbackChannel.IN_CONTEXT, false, "IC_kwDO2");
+        UUID card = replaced(observation, "Replaced practice-page card", FeedbackChannel.IN_APP, true, "IC_kwDO3");
+
+        assertThat(history(newJob()))
+                .contains("Published then replaced")
+                .doesNotContain(
+                        "Replaced before posting",
+                        "Replaced with a blank receipt",
+                        "Never delivered",
+                        "Replaced practice-page card");
+        assertThat(permits(published)).isTrue();
+        assertThat(List.of(unposted, blank, undelivered, card)).noneMatch(this::permits);
+        // The published row belongs to its own workspace and recipient only.
+        long otherWorkspace = workspace.getId() + 1;
+        assertThat(feedbackRepository.findDeliveredForPersonHistory(otherWorkspace, recipient.getId()))
+                .extracting(Feedback::getId)
+                .doesNotContain(published);
+        assertThat(feedbackRepository.findDeliveredForPersonHistory(workspace.getId(), recipient.getId() + 1))
+                .extracting(Feedback::getId)
+                .doesNotContain(published);
+        assertThat(feedbackRepository.findPersonHistoryRecord(published, otherWorkspace))
+                .isEmpty();
+    }
+
+    private boolean permits(UUID feedbackId) {
+        return historySource.permitsHistoryRecord(
+                workspace.getId(), "feedback", feedbackId, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
+    }
+
+    private UUID replaced(
+            UUID observationId,
+            String body,
+            FeedbackChannel channel,
+            boolean delivered,
+            @Nullable String postedCommentRef) {
+        Feedback feedback = feedbackRepository.save(Feedback.builder()
+                .agentJobId(newJob().getId())
+                .workspaceId(workspace.getId())
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(4242L)
+                .recipientUserId(recipient.getId())
+                .aboutUserId(recipient.getId())
+                .channel(channel)
+                .position(0)
+                .deliveryState(FeedbackDeliveryState.SUPERSEDED)
+                .source(FeedbackSource.AGENT)
+                .body(body)
+                .createdAt(Instant.now())
+                .deliveredAt(delivered ? Instant.now() : null)
+                .build());
+        feedbackObservationRepository.insertIfAbsent(feedback.getId(), observationId, EvidenceRole.PRIMARY.name(), 0);
+        if (postedCommentRef != null) {
+            placementRepository.save(FeedbackPlacement.builder()
+                    .feedback(feedback)
+                    .placementType(PlacementType.SUMMARY)
+                    .postedCommentRef(postedCommentRef)
+                    .createdAt(Instant.now())
+                    .build());
+        }
+        return feedback.getId();
     }
 
     private String history(AgentJob review) {
