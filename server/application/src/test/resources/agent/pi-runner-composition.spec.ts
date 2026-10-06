@@ -581,7 +581,7 @@ void test("only what was said on this same work, on the work, is supplied as alr
 			},
 		],
 	};
-	assert.deepEqual(priorPublicFeedback(history, work, "2026-10-06T09:00:00Z"), [
+	assert.deepEqual(priorPublicFeedback(history, work, "2026-10-06T09:00:00Z").feedback, [
 		{
 			// The history names no id for it: shown as context, never as advice this work received.
 			witnessId: null,
@@ -592,7 +592,7 @@ void test("only what was said on this same work, on the work, is supplied as alr
 			eligibleForPriorAdvice: false,
 		},
 	]);
-	assert.deepEqual(priorPublicFeedback(history, undefined, "2026-10-06T09:00:00Z"), []);
+	assert.deepEqual(priorPublicFeedback(history, undefined, "2026-10-06T09:00:00Z").feedback, []);
 });
 
 const historyFeedbackId = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
@@ -623,7 +623,7 @@ void test("own feedback on this work stands as prior advice only when named, cur
 			entry(5, { deliveredAt: undefined }),
 		],
 	};
-	const said = priorPublicFeedback(history, work, "2026-10-06T09:00:00Z");
+	const said = priorPublicFeedback(history, work, "2026-10-06T09:00:00Z").feedback;
 	assert.deepEqual(
 		said.map((statement) => [statement.witnessId, statement.eligibleForPriorAdvice]),
 		[
@@ -641,7 +641,7 @@ void test("own feedback on this work stands as prior advice only when named, cur
 	assert.deepEqual(original.basedOn, [{ observationId: "earlier-1" }]);
 	// Without a known capture time nothing can be placed before it.
 	assert.ok(
-		priorPublicFeedback(history, work, null).every(
+		priorPublicFeedback(history, work, null).feedback.every(
 			(statement) => !statement.eligibleForPriorAdvice,
 		),
 	);
@@ -671,6 +671,75 @@ void test("own feedback on this work stands as prior advice only when named, cur
 		eligibleForPriorAdvice: false,
 	});
 	assert.deepEqual(witnesses.get("github:review-comment:7"), { eligibleForPriorAdvice: true });
+});
+
+void test("own history omits whole oversized or over-budget entries without hiding later usable advice", () => {
+	const artifact = {
+		kind: "scm.pull_request",
+		url: "https://gitlab.example/group/repo/-/merge_requests/3",
+	};
+	const entry = (n: number, body: string) => ({
+		channel: "IN_CONTEXT",
+		artifact,
+		id: historyFeedbackId(n),
+		body,
+		deliveredAt: "2026-10-05T09:00:00Z",
+		recordedClaimCurrentness: "CURRENT",
+	});
+	const history = {
+		feedback: [
+			entry(1, "oversized ".repeat(300)),
+			entry(2, "Useful earlier advice."),
+			entry(3, "Long earlier advice. ".repeat(35)),
+			entry(4, "Later usable advice."),
+		],
+	};
+	const limits = { sourceChars: 1200, totalChars: 1300 };
+	const view = priorPublicFeedback(
+		history,
+		"scm.pull_request:https://gitlab.example/group/repo/-/merge_requests/3",
+		"2026-10-06T09:00:00Z",
+		limits,
+	);
+	assert.deepEqual(
+		view.feedback.map((row) => row.id),
+		[historyFeedbackId(2), historyFeedbackId(4)],
+	);
+	assert.deepEqual(view.omissions, { oversizedEntries: 1, budgetEntries: 1 });
+	const witnesses = priorAdviceWitnesses(view.feedback, []);
+	assert.ok(!witnesses.has(`feedback:${historyFeedbackId(1)}`));
+	assert.ok(!witnesses.has(`feedback:${historyFeedbackId(3)}`));
+	assert.equal(witnesses.get(`feedback:${historyFeedbackId(4)}`)?.eligibleForPriorAdvice, true);
+	const input = {
+		sameWork: "The captured work.",
+		observations: [],
+		undecided: [],
+		alreadySaid: view.feedback,
+		captured: {
+			capturedAt: null,
+			recipient: { author: null, authorId: null },
+			sources: [],
+			statements: [],
+		},
+		practices: [],
+		notReached: [],
+		lineNotes: false,
+	};
+	const turn = buildReviewTurn({ ...input, ownHistoryOmissions: view.omissions });
+	const own = turn
+		.split("### Already said on this work\n")[1]
+		?.split("What people and tools said")[0];
+	assert.ok(typeof own === "string");
+	assert.ok(own.length <= limits.totalChars);
+	assert.match(own, /1 entries exceed the per-entry limit/u);
+	assert.match(own, /1 exceed the total history limit/u);
+	assert.ok(!turn.includes(historyFeedbackId(1)));
+	assert.ok(!turn.includes(historyFeedbackId(3)));
+	assert.ok(!turn.includes("oversized"));
+	assert.equal(
+		buildReviewTurn(input),
+		buildReviewTurn({ ...input, ownHistoryOmissions: { oversizedEntries: 0, budgetEntries: 0 } }),
+	);
 });
 
 // --- The report_review schema of one run ---------------------------------------------------------

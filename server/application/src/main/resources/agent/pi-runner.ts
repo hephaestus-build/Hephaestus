@@ -3831,7 +3831,11 @@ async function main() {
 			agentDir: AGENT_DIR,
 			tools: PUBLIC_REVIEW_TOOLS,
 			customTools: [
-				buildSelectionTool(restable, priorAdviceWitnesses(alreadySaid, captured.statements), state),
+				buildSelectionTool(
+					restable,
+					priorAdviceWitnesses(alreadySaid.feedback, captured.statements),
+					state,
+				),
 				buildReviewTool(lineNotes, restable, state),
 			],
 			sessionManager: SessionManager.inMemory(),
@@ -3865,7 +3869,8 @@ async function main() {
 			sameWork: buildSameWorkContext(CWD, taskEnvelope.paths.contextRoot, folderIndex, framing),
 			observations: reviewable,
 			undecided: uncertainOutcomes(admittedObservations),
-			alreadySaid,
+			alreadySaid: alreadySaid.feedback,
+			ownHistoryOmissions: alreadySaid.omissions,
 			captured,
 			practices: practiceContext(reviewable),
 			notReached: notReachedSlugs,

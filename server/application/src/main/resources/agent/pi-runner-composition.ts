@@ -1,4 +1,8 @@
-import type { CapturedPublicStatement, PublicReviewHistory } from "./pi-review-brief.ts";
+import {
+	type CapturedPublicStatement,
+	type PublicReviewHistory,
+	SAME_WORK_LIMITS,
+} from "./pi-review-brief.ts";
 
 export const CHANNELS = ["IN_CONTEXT", "IN_APP", "IN_CHAT"] as const;
 export type Channel = (typeof CHANNELS)[number];
@@ -754,6 +758,31 @@ export interface OwnPriorFeedback {
 	eligibleForPriorAdvice: boolean;
 }
 
+export interface OwnHistoryOmissions {
+	oversizedEntries: number;
+	budgetEntries: number;
+}
+
+export interface OwnPriorFeedbackView {
+	feedback: OwnPriorFeedback[];
+	omissions: OwnHistoryOmissions;
+}
+
+function ownHistoryText(
+	feedback: readonly OwnPriorFeedback[],
+	omissions?: OwnHistoryOmissions,
+): string {
+	const shown =
+		feedback.length === 0
+			? "No same-work delivered feedback is shown here.\n"
+			: `What Hephaestus delivered on this work:\n\`\`\`json\n${JSON.stringify({ alreadySaid: feedback }, null, 1)}\n\`\`\`\n`;
+	const omitted =
+		omissions !== undefined && (omissions.oversizedEntries > 0 || omissions.budgetEntries > 0)
+			? `Prior feedback omitted whole: ${omissions.oversizedEntries} entries exceed the per-entry limit; ${omissions.budgetEntries} exceed the total history limit. Their contents are not shown and cannot be prior-advice witnesses.\n`
+			: "";
+	return `${shown}${omitted}`;
+}
+
 const FEEDBACK_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 function deliveredBy(deliveredAt: unknown, capturedAt: string | null): boolean {
@@ -774,11 +803,13 @@ export function priorPublicFeedback(
 	history: unknown,
 	thisWork: string | undefined,
 	capturedAt: string | null,
-): OwnPriorFeedback[] {
+	limits: { sourceChars: number; totalChars: number } = SAME_WORK_LIMITS,
+): OwnPriorFeedbackView {
+	const omissions: OwnHistoryOmissions = { oversizedEntries: 0, budgetEntries: 0 };
 	if (thisWork === undefined || !isObject(history) || !Array.isArray(history.feedback)) {
-		return [];
+		return { feedback: [], omissions };
 	}
-	return history.feedback.flatMap((entry: unknown): OwnPriorFeedback[] => {
+	const projected = history.feedback.flatMap((entry: unknown): OwnPriorFeedback[] => {
 		if (!isObject(entry) || entry.channel !== "IN_CONTEXT") {
 			return [];
 		}
@@ -816,6 +847,19 @@ export function priorPublicFeedback(
 			},
 		];
 	});
+	const feedback: OwnPriorFeedback[] = [];
+	// Reserve the count-only omission notice before adding whole entries; omitted identities are never rendered.
+	const reserved = { oversizedEntries: projected.length, budgetEntries: projected.length };
+	for (const entry of projected) {
+		if (JSON.stringify(entry, null, 1).length > limits.sourceChars) {
+			omissions.oversizedEntries += 1;
+		} else if (ownHistoryText([...feedback, entry], reserved).length > limits.totalChars) {
+			omissions.budgetEntries += 1;
+		} else {
+			feedback.push(entry);
+		}
+	}
+	return { feedback, omissions };
 }
 
 export function priorAdviceWitnesses(
@@ -1038,6 +1082,7 @@ export interface ReviewTurnInput {
 	undecided: readonly { practiceSlug: string; outcome: string }[];
 	/** What Hephaestus already said on this same work, from priorPublicFeedback. */
 	alreadySaid: readonly OwnPriorFeedback[];
+	ownHistoryOmissions?: OwnHistoryOmissions;
 	/** The bounded captured public discussion of this same work, from buildPublicReviewHistory. */
 	captured: PublicReviewHistory;
 	/** Context on the practices of the decided observations. */
@@ -1050,10 +1095,7 @@ export interface ReviewTurnInput {
 
 /** The one prompt of the review composition: every input inline, because its session can read nothing else. */
 export function buildReviewTurn(input: ReviewTurnInput): string {
-	const own =
-		input.alreadySaid.length === 0
-			? "No same-work delivered feedback is shown here.\n"
-			: `What Hephaestus delivered on this work:\n\`\`\`json\n${JSON.stringify({ alreadySaid: input.alreadySaid }, null, 1)}\n\`\`\`\n`;
+	const own = ownHistoryText(input.alreadySaid, input.ownHistoryOmissions);
 	const others =
 		input.captured.sources.length === 0 && input.captured.omitted === undefined
 			? "What people and tools said on this work was not part of this capture, so it is unknown.\n"
