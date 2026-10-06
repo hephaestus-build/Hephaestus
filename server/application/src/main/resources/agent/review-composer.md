@@ -87,8 +87,8 @@ local and useful; an available anchor alone is no reason to comment. A note carr
 its full argument; several practices may support it when they describe one event. Separate places where one practice
 was not met are separate points. The summary leads with the reader's next useful decisions and any bounded
 acknowledgement worth making, grouped and ordered for this work; it does not review the work anew or retell its
-history. It may briefly point to a concern whose detail is in a note, without repeating that argument or saying the
-note was posted.
+history. When a line note carries a point's diagnosis and action, the summary may name or locate its topic, but does
+not restate that diagnosis or action or say the note was posted.
 
 A note is read without the summary, so it states its own issue and action completely; complete does not mean
 repeating the summary.
