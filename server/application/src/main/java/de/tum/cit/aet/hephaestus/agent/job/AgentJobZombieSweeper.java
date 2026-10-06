@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.StuckDeliveryRow;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -196,61 +197,82 @@ public class AgentJobZombieSweeper {
         log.warn("Found {} orphaned RUNNING job(s) (owning worker lost); recovering", orphans.size());
         for (OrphanedJobRef orphan : orphans) {
             try {
-                if (orphan.getRetryCount() >= agentProperties.maxRetries()) {
-                    Integer failed = transactionTemplate.execute(s -> {
-                        AgentJob job = jobRepository
-                                .findByIdWithWorkspaceForUpdate(orphan.getJobId())
-                                .orElse(null);
-                        if (job == null) return 0;
-                        int rows = jobRepository.transitionStatus(
-                                orphan.getJobId(),
-                                AgentJobStatus.FAILED,
-                                Instant.now(),
-                                "The worker that owned this job was lost. The retry limit is reached.",
-                                Set.of(AgentJobStatus.RUNNING));
-                        if (rows > 0) recordUnverifiableUsage(job);
-                        return rows;
-                    });
-                    if (failed != null && failed > 0) {
-                        orphanFailed.increment();
-                        log.warn(
-                                "Orphaned job {} hit retry cap ({}); failed",
-                                orphan.getJobId(),
-                                orphan.getRetryCount());
-                    }
-                    continue;
-                }
-                int attemptNumber = orphan.getRetryCount() + 1;
-                Instant availableAt = Instant.now().plus(AgentJobBackoff.compute(attemptNumber));
-                String newToken = AgentJob.generateJobToken();
-                String newTokenHash = AgentJob.computeTokenHash(newToken);
-                Integer requeued = transactionTemplate.execute(s -> {
-                    AgentJob job = jobRepository
-                            .findByIdWithWorkspaceForUpdate(orphan.getJobId())
-                            .orElse(null);
-                    if (job == null) return 0;
-                    // Read the token counts BEFORE requeuing: requeueOrphan zeroes the row's accumulators.
-                    AgentJobLlmUsage counts = job.getExecutionStartedAt() != null
-                            ? jobRepository.findLlmUsageById(job.getId()).orElse(null)
-                            : null;
-                    int rows = jobRepository.requeueOrphan(
-                            orphan.getJobId(),
-                            orphan.getWorkerId(),
-                            agentProperties.maxRetries(),
-                            availableAt,
-                            newToken,
-                            newTokenHash);
-                    if (rows > 0) recordUnverifiableUsage(job, counts);
-                    return rows;
-                });
-                if (requeued != null && requeued > 0) {
+                OrphanRecovery outcome = transactionTemplate.execute(s -> recoverOrphan(orphan));
+                if (outcome == OrphanRecovery.REQUEUED) {
                     orphanRequeued.increment();
                     log.warn("Requeued orphaned job {} (retry {})", orphan.getJobId(), orphan.getRetryCount() + 1);
+                } else if (outcome == OrphanRecovery.FAILED) {
+                    orphanFailed.increment();
+                    log.warn("Orphaned job {} failed at attempt {}", orphan.getJobId(), orphan.getRetryCount());
                 }
             } catch (Exception e) {
                 log.warn("Failed to recover orphaned job {}: {}", orphan.getJobId(), e.getMessage());
             }
         }
+    }
+
+    private enum OrphanRecovery {
+        NONE,
+        REQUEUED,
+        FAILED,
+    }
+
+    /**
+     * Under the row lock the admission takes, so the two decisions serialize. Only the attempt the sweep
+     * found is touched: a row another claim has taken since, or that has ended, is left as it is. An
+     * attempt whose observations were admitted is never measured again, at or below the retry cap.
+     */
+    private OrphanRecovery recoverOrphan(OrphanedJobRef orphan) {
+        AgentJob job =
+                jobRepository.findByIdWithWorkspaceForUpdate(orphan.getJobId()).orElse(null);
+        if (job == null
+                || job.getStatus() != AgentJobStatus.RUNNING
+                || !orphan.getWorkerId().equals(job.getWorkerId())
+                || job.getRetryCount() != orphan.getRetryCount()) {
+            return OrphanRecovery.NONE;
+        }
+        // Read the token counts BEFORE requeuing: requeueOrphan zeroes the row's accumulators.
+        AgentJobLlmUsage counts = job.getExecutionStartedAt() != null
+                ? jobRepository.findLlmUsageById(job.getId()).orElse(null)
+                : null;
+        if (orphan.getRetryCount() < agentProperties.maxRetries()) {
+            Instant availableAt = Instant.now().plus(AgentJobBackoff.compute(orphan.getRetryCount() + 1));
+            String newToken = AgentJob.generateJobToken();
+            if (jobRepository.requeueOrphan(
+                            orphan.getJobId(),
+                            orphan.getWorkerId(),
+                            agentProperties.maxRetries(),
+                            availableAt,
+                            newToken,
+                            AgentJob.computeTokenHash(newToken))
+                    > 0) {
+                recordUnverifiableUsage(job, counts);
+                return OrphanRecovery.REQUEUED;
+            }
+        }
+        boolean admitted = ObservationAdmissionService.isAdmitted(job);
+        if (!admitted && orphan.getRetryCount() < agentProperties.maxRetries()) {
+            return OrphanRecovery.NONE;
+        }
+        int failed = admitted
+                ? jobRepository.failAdmittedOwnedBy(
+                        orphan.getJobId(),
+                        orphan.getWorkerId(),
+                        orphan.getRetryCount(),
+                        Instant.now(),
+                        ObservationAdmissionService.INTERRUPTED_AFTER_ADMISSION)
+                : jobRepository.transitionStatusOwnedBy(
+                        orphan.getJobId(),
+                        AgentJobStatus.FAILED,
+                        Instant.now(),
+                        "The worker that owned this job was lost. The retry limit is reached.",
+                        Set.of(AgentJobStatus.RUNNING),
+                        orphan.getWorkerId());
+        if (failed == 0) {
+            return OrphanRecovery.NONE;
+        }
+        recordUnverifiableUsage(job, counts);
+        return OrphanRecovery.FAILED;
     }
 
     /**

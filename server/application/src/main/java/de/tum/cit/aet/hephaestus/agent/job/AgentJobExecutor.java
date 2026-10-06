@@ -312,10 +312,9 @@ public class AgentJobExecutor {
     }
 
     /**
-     * Stops this worker's own containers and hands each job back to the queue for a sibling to pick up,
-     * per the drain contract in docs/admin/runtime-roles.mdx. Falls back to a terminal cancel only when
-     * the worker-fenced requeue loses its CAS or the retry cap is exhausted, so an exhausted job ends up
-     * CANCELLED rather than requeued forever.
+     * Settles this worker's jobs before stopping their containers. Unadmitted attempts may requeue;
+     * admitted attempts retain their observations and fail without repeating the review. The drain
+     * contract is in docs/admin/runtime-roles.mdx.
      */
     public void cancelInFlight(AgentJobCancellationReason reason) {
         Set<UUID> snapshot = Set.copyOf(localRunningJobs);
@@ -333,6 +332,16 @@ public class AgentJobExecutor {
                             : null;
                     int updated =
                             workerId != null ? requeueOrphanWithRotation(jobId, workerId, job.getRetryCount()) : 0;
+                    // An attempt whose observations were admitted is never measured again: the requeue
+                    // refused it, so it ends here with what it recorded.
+                    if (updated == 0 && workerId != null) {
+                        updated = jobRepository.failAdmittedOwnedBy(
+                                jobId,
+                                workerId,
+                                job.getRetryCount(),
+                                Instant.now(),
+                                ObservationAdmissionService.INTERRUPTED_AFTER_ADMISSION);
+                    }
                     if (updated > 0) {
                         if (job.getExecutionStartedAt() != null) {
                             billTerminatedJob(job, "worker draining", drainCounts);
@@ -1197,6 +1206,17 @@ public class AgentJobExecutor {
                 jobRepository.save(job);
                 recordPracticeReviewRefusal(job, "person_data_erased");
                 return new TerminalClaim(job, AgentJobStatus.CANCELLED);
+            }
+
+            // Queued again after its observations were admitted: a new attempt would capture the work
+            // anew, and its citations would not be the ones the admission verified. Its earlier attempt
+            // was billed when it was requeued, and nothing has run since.
+            if (ObservationAdmissionService.isAdmitted(job)) {
+                job.setStatus(AgentJobStatus.FAILED);
+                job.setCompletedAt(Instant.now());
+                job.setErrorMessage(ObservationAdmissionService.INTERRUPTED_AFTER_ADMISSION);
+                jobRepository.save(job);
+                return new TerminalClaim(job, AgentJobStatus.FAILED);
             }
 
             if (!memberAiPolicy.permitsReview(job.getWorkspace().getId(), job.getJobType(), job.getMetadata())) {
