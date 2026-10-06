@@ -24,6 +24,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-review-brief.ts",
             "pi-folder-index.ts",
             "pi-review-turns.ts",
+            "pi-turn-context.ts",
             "pi-runner-output.ts",
             "pi-runner-usage.ts",
             "pi-runner-retry.ts",

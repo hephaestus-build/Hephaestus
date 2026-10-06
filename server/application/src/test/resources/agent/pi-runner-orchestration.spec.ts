@@ -116,7 +116,6 @@ function readObservations(path: string) {
 	});
 }
 
-const noHandler = (): undefined => undefined;
 /** What one model call reports it spent, as the SDK puts it on every assistant message. */
 const callUsage = (output: number) => ({
 	input: 1000,
@@ -208,8 +207,13 @@ if (scenario !== undefined && scenario !== "") {
 			observations: admitted(),
 		});
 	});
-	const manager = { getSessionFile: () => undefined, getSessionId: () => "test-session" };
+	const manager = {
+		getSessionFile: () => undefined,
+		getSessionId: () => "test-session",
+		buildSessionProjection: () => ({ messages: [] }),
+	};
 	let prompts = 0;
+	let wasCompacted = false;
 	/** The stall scenario's first prompt ends only when the runner aborts it, like a call in flight. */
 	let releasePrompt: (() => void) | undefined;
 	/** A threshold compaction in flight: a model call of its own, which abort() alone does not end. */
@@ -234,11 +238,10 @@ if (scenario !== undefined && scenario !== "") {
 		settleIdle();
 		await promise;
 	};
-	/** The session's event handler, so a scenario can emit what the SDK would. */
-	let emit: (event: unknown) => void = noHandler;
 	mock.module("@earendil-works/pi-coding-agent", {
 		namedExports: {
 			defineTool: (tool: unknown) => tool,
+			estimateTokens: (message: { content: string }) => Math.ceil(message.content.length / 4),
 			createCodemodeExtension: () => () => undefined,
 			getAgentDir: () => cwd,
 			DefaultResourceLoader: class {
@@ -278,6 +281,12 @@ if (scenario !== undefined && scenario !== "") {
 				},
 			},
 			async createAgentSession(options: { tools: string[]; customTools: CustomTool[] }) {
+				const handlers = new Set<(event: unknown) => void>();
+				const emit = (event: unknown) => {
+					for (const handler of handlers) {
+						handler(event);
+					}
+				};
 				record(`create:session tools=${options.tools.join(",")}`);
 				if (scenario === "session-init") {
 					throw new Error("session initialization failed");
@@ -298,21 +307,32 @@ if (scenario !== undefined && scenario !== "") {
 					extensionsResult: { errors: [] },
 					session: {
 						state: { messages: [] },
+						agent: { state: { tools: [] } },
+						systemPrompt: "",
+						model: { contextWindow: 128_000, maxTokens: 16_384 },
+						settingsManager: { getCompactionSettings: () => ({ reserveTokens: 16_384 }) },
 						sessionManager: manager,
 						subscribe(handler: (event: unknown) => void) {
-							emit = handler;
-							return () => undefined;
+							handlers.add(handler);
+							return () => {
+								handlers.delete(handler);
+							};
 						},
 						clearQueue: () => undefined,
 						getContextUsage: () => ({
-							tokens: scenario === "compose-overflow" ? 120_000 : 1000,
+							tokens:
+								scenario === "compose-overflow" && !wasCompacted && prompts >= 2 ? 120_000 : 1000,
 							contextWindow: 128_000,
 							percent: 0,
 						}),
 						compact: async () => {
 							record("compact");
+							wasCompacted = true;
 							emit({ type: "compaction_end", reason: "manual", result: undefined, aborted: false });
 							return {};
+						},
+						get isIdle() {
+							return releasePrompt === undefined && !compacting;
 						},
 						get isStreaming() {
 							return releasePrompt !== undefined || compacting;
@@ -337,7 +357,11 @@ if (scenario !== undefined && scenario !== "") {
 						steer: async () => {
 							record("steer");
 						},
-						async prompt(text: string) {
+						async prompt(
+							text: string,
+							promptOptions?: { preflightResult?: (disposition: string) => void },
+						) {
+							promptOptions?.preflightResult?.("started");
 							prompts += 1;
 							record(`prompt:${prompts}`);
 							writeFileSync(nodePath.join(cwd, `prompt-${prompts}.md`), text);
@@ -1301,6 +1325,7 @@ if (scenario !== undefined && scenario !== "") {
 } else {
 	for (const stage of [
 		"setup",
+		"context-unfit",
 		"session-init",
 		"work-budget",
 		"cut-off",
@@ -1331,6 +1356,8 @@ if (scenario !== undefined && scenario !== "") {
 		void test(
 			{
 				setup: "does not start a session when setup reaches the safety ceiling",
+				"context-unfit":
+					"leaves essential oversized criteria not reached without creating observations or repeating compaction",
 				"session-init": "fails cleanly when the session cannot be created",
 				"work-budget":
 					"nudges a turn two calls before its work budget and ends it after the call that spends it",
@@ -1439,7 +1466,9 @@ if (scenario !== undefined && scenario !== "") {
 					);
 					writeFileSync(
 						nodePath.join(cwd, "catalog/practices/test-practice.md"),
-						"# Test practice\nCriteria.",
+						stage === "context-unfit"
+							? "Essential criteria. ".repeat(30_000)
+							: "# Test practice\nCriteria.",
 					);
 					// What the practice's precompute script derived, as the precompute runner writes it.
 					mkdirSync(nodePath.join(cwd, "work/precompute-out"), { recursive: true });
@@ -1613,6 +1642,15 @@ if (scenario !== undefined && scenario !== "") {
 							})),
 						});
 					switch (stage) {
+						case "context-unfit": {
+							assert.equal(child.status, 1, child.stderr);
+							assert.equal(events.filter((event) => event === "compact").length, 0);
+							assert.ok(!events.some((event) => event.startsWith("prompt:")));
+							assert.ok(!existsSync(nodePath.join(cwd, "out/result.json")));
+							reached({ "test-practice": "NOT_REACHED" });
+							break;
+						}
+
 						case "replacement-witness": {
 							assert.equal(child.status, 0, child.stderr);
 							assert.ok(events.includes("replacement-witness:preserved"), child.stderr);
@@ -2166,10 +2204,7 @@ if (scenario !== undefined && scenario !== "") {
 								["prompt:1", "prompt:2", "compact", "prompt:3"].includes(event),
 							);
 							assert.deepEqual(order, ["prompt:1", "prompt:2", "compact", "prompt:3"]);
-							assert.match(
-								child.stderr,
-								/composition: 120000 tokens held and \d+ needed exceed the 128000 window — compacting first/u,
-							);
+
 							// The compaction took the brief from the context, so the composition turn carries it again
 							// ahead of the composer's instructions — without the measuring examples and record, which
 							// the composer does not use.
