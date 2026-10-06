@@ -349,18 +349,18 @@ On SIGTERM, the worker does these actions in order:
 1. It sends `Heartbeat{draining=true}` to the hub.
    The dispatcher stops claiming new jobs for it.
 2. It waits up to `hephaestus.worker.drain.timeout` (default 5 min) for active jobs to finish.
-3. It stops containers that still run.
-4. It returns each job to the queue with a worker-fenced requeue (`RUNNING → QUEUED`, retry-capped).
+3. It settles remaining jobs under their ownership fence, then stops their containers.
 
 The worker's HTTP connectors, including the sandbox gateway, stay open during step 2.
 Thus, an active review can still send model requests while the worker waits for it.
 The HTTP graceful shutdown starts only after the drain.
-A review that does not finish within the timeout is still requeued.
 
-This is not a plain cancel.
-Another worker's poll claims the job again, within `AGENT_MAX_RETRIES`.
-Only jobs with an exhausted retry budget or a lost fence to concurrent user-cancel become terminally canceled/failed instead.
-`timeout=0` skips step 2 and immediately applies the same requeue-first behavior.
+Unadmitted reviews return to the queue within `AGENT_MAX_RETRIES`, for another worker to claim.
+An exhausted retry budget or a concurrent cancellation leaves the job terminal instead.
+Admitted observations are never measured again.
+An interrupted review without saved completed feedback fails with an explicit reason and retains its observations.
+Completed reviews continue through normal delivery and delivery recovery.
+`timeout=0` skips step 2 and immediately applies the same recovery decisions.
 
 The compose template pins `stop_grace_period: 6m` to give the JVM 60s of headroom before Docker SIGKILLs.
 

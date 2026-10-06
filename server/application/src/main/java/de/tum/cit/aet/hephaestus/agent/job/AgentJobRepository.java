@@ -879,7 +879,8 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             + "j.jobToken = :newJobToken, j.jobTokenHash = :newJobTokenHash, "
             + "j.llmTotalCalls = 0, j.llmTotalInputTokens = 0, j.llmTotalOutputTokens = 0, "
             + "j.llmTotalReasoningTokens = 0, j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 "
-            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND j.retryCount < :maxRetries")
+            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND j.retryCount < :maxRetries "
+            + "AND " + NOT_ADMITTED)
     int requeueOrphan(
             @Param("id") UUID id,
             @Param("workerId") String workerId,
@@ -887,6 +888,36 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             @Param("availableAt") Instant availableAt,
             @Param("newJobToken") String newJobToken,
             @Param("newJobTokenHash") String newJobTokenHash);
+
+    /**
+     * The admission's digest is absent. Requeuing an admitted attempt would discard the observations its
+     * citations were verified for: the next attempt captures again and cannot submit against the digest
+     * the job carries. The predicate sits in the UPDATE, so it is evaluated under the row lock the
+     * admission takes, whatever the caller read before.
+     */
+    String NOT_ADMITTED = "COALESCE(FUNCTION('jsonb_extract_path_text', j.metadata, '"
+            + ObservationAdmissionService.DIGEST_METADATA_KEY + "'), '') = ''";
+
+    /**
+     * Ends a RUNNING attempt whose observations were admitted but whose run was lost before it finished:
+     * it fails with what is known, and its observations, capture and digest stay as recorded. Fenced on
+     * the owning worker and the attempt, so a stale caller cannot end a run another claim started;
+     * {@link #requeueOrphan} refuses exactly these rows.
+     *
+     * @return 1 if this caller ended the attempt, 0 if the row is not admitted or no longer that attempt
+     */
+    @WorkspaceAgnostic("ID-based fenced terminal write; caller is @WorkspaceAgnostic sweeper or worker-local drain")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE AgentJob j SET j.status = de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus.FAILED, "
+            + "j.completedAt = :now, j.errorMessage = :error "
+            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND j.retryCount = :attempt "
+            + "AND NOT (" + NOT_ADMITTED + ")")
+    int failAdmittedOwnedBy(
+            @Param("id") UUID id,
+            @Param("workerId") String workerId,
+            @Param("attempt") int attempt,
+            @Param("now") Instant now,
+            @Param("error") String error);
 
     /**
      * Requeue of a claim this same worker just won but could not dispatch (sandbox executor pool

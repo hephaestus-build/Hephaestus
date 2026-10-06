@@ -119,6 +119,7 @@ import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 class AgentJobExecutorTest extends BaseUnitTest {
     @BeforeEach
@@ -277,6 +278,27 @@ class AgentJobExecutorTest extends BaseUnitTest {
         executor.processJob(jobId);
         assertThat(job.getStatus()).isEqualTo(AgentJobStatus.CANCELLED);
         assertThat(job.getCancellationReason()).isEqualTo(AgentJobCancellationReason.MEMBER_AI_DECLINED);
+        verify(sandboxManager, never()).execute(any());
+        verify(llmBudgetService, never()).decide(anyLong());
+    }
+
+    @Test
+    void shouldFailAQueuedReviewBeforeCaptureWhenItsObservationsWereAlreadyAdmitted() {
+        job.setRetryCount(1);
+        job.setMetadata(JsonNodeFactory.instance
+                .objectNode()
+                .put(ObservationAdmissionService.DIGEST_METADATA_KEY, "admitted-digest"));
+        int attempt = job.getRetryCount();
+        when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any())).thenReturn(Optional.of(job));
+        when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        boolean claimed = executor.processJob(jobId);
+
+        assertThat(claimed).isFalse();
+        assertThat(job.getStatus()).isEqualTo(AgentJobStatus.FAILED);
+        assertThat(job.getErrorMessage()).isEqualTo(ObservationAdmissionService.INTERRUPTED_AFTER_ADMISSION);
+        assertThat(job.getRetryCount()).isEqualTo(attempt);
+        assertThat(ObservationAdmissionService.isAdmitted(job)).isTrue();
         verify(sandboxManager, never()).execute(any());
         verify(llmBudgetService, never()).decide(anyLong());
     }
@@ -2531,7 +2553,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
     }
 
     @Nested
-    @DisplayName("Drain requeue-first — matches the documented drain contract")
+    @DisplayName("Drain settlement")
     class DrainRequeue {
 
         @Test
@@ -2569,6 +2591,85 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .requeueOrphan(eq(jobId), eq("draining-worker"), eq(AGENT_PROPS.maxRetries()), any(), any(), any());
             verify(jobRepository, never()).transitionToCancelledOwnedBy(any(), any(), any(), any(), any(), any());
             verify(jobRepository, never()).transitionToCancelled(any(), any(), any(), any(), any());
+            verify(sandboxManager).cancel(jobId);
+        }
+
+        @Test
+        void shouldKeepTheAdmittedAttemptAndBillItBeforeStoppingItsContainer() throws Exception {
+            executor = new AgentJobExecutor(
+                    AGENT_PROPS,
+                    jobRepository,
+                    memberAiPolicy,
+                    handlerRegistry,
+                    practiceAgent,
+                    workerJwtIssuer,
+                    sandboxManager,
+                    sandboxExecutor,
+                    transactionTemplate,
+                    objectMapper,
+                    meterRegistry,
+                    new PracticeReviewRefusalMetrics(meterRegistry),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
+                    usageRecorder,
+                    llmBudgetService,
+                    NO_LIVE_ADMISSION,
+                    Optional.empty(),
+                    Optional.of(workerProps("draining-worker")));
+            job.setStatus(AgentJobStatus.RUNNING);
+            job.setRetryCount(2);
+            job.setExecutionStartedAt(Instant.now());
+            job.setMetadata(objectMapper
+                    .createObjectNode()
+                    .put(ObservationAdmissionService.DIGEST_METADATA_KEY, "admitted-digest"));
+            var originalMetadata = job.getMetadata();
+            var originalToken = job.getJobTokenHash();
+            addToLocalRunningJobs(executor, jobId);
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(job));
+            when(jobRepository.findLlmUsageById(jobId))
+                    .thenReturn(Optional.of(new AgentJobLlmUsage(3, 800, 500, 40, 200, 0)));
+            when(jobRepository.failAdmittedOwnedBy(
+                            eq(jobId),
+                            eq("draining-worker"),
+                            eq(2),
+                            any(),
+                            eq(ObservationAdmissionService.INTERRUPTED_AFTER_ADMISSION)))
+                    .thenReturn(1);
+            AtomicBoolean settled = new AtomicBoolean();
+            doAnswer(inv -> {
+                        Consumer<TransactionStatus> callback = inv.getArgument(0);
+                        callback.accept(mock(TransactionStatus.class));
+                        settled.set(true);
+                        return null;
+                    })
+                    .when(transactionTemplate)
+                    .executeWithoutResult(any());
+            doAnswer(inv -> {
+                        assertThat(settled).isTrue();
+                        return null;
+                    })
+                    .when(sandboxManager)
+                    .cancel(jobId);
+
+            executor.cancelInFlight(AgentJobCancellationReason.DRAIN_GRACEFUL);
+
+            verify(jobRepository)
+                    .failAdmittedOwnedBy(
+                            eq(jobId),
+                            eq("draining-worker"),
+                            eq(2),
+                            any(),
+                            eq(ObservationAdmissionService.INTERRUPTED_AFTER_ADMISSION));
+            verify(jobRepository, never()).transitionToCancelledOwnedBy(any(), any(), any(), any(), any(), any());
+            verify(jobRepository, never()).transitionToCancelled(any(), any(), any(), any(), any());
+            ArgumentCaptor<LlmUsageRecorder.LlmUsageSample> usage =
+                    ArgumentCaptor.forClass(LlmUsageRecorder.LlmUsageSample.class);
+            verify(usageRecorder).recordUnverifiable(eq(99L), usage.capture());
+            assertThat(usage.getValue().sourceAttempt()).isEqualTo(2);
+            assertThat(usage.getValue().totalCalls()).isEqualTo(3);
+            assertThat(usage.getValue().inputTokens()).isEqualTo(800);
+            assertThat(job.getRetryCount()).isEqualTo(2);
+            assertThat(job.getMetadata()).isEqualTo(originalMetadata);
+            assertThat(job.getJobTokenHash()).isEqualTo(originalToken);
             verify(sandboxManager).cancel(jobId);
         }
 
