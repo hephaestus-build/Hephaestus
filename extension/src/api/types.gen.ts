@@ -2773,6 +2773,10 @@ export type ObservationDetail = {
    */
   evidenceRationale?: string;
   /**
+   * Links to the comments on the reviewed work that carry the feedback behind feedbackResponse, summary first (null when that feedback was not delivered on the work or the platform returned no link)
+   */
+  feedbackCommentUrls?: Array<string>;
+  /**
    * The developer's standing answer and response handle for the newest eligible feedback about this observation, including inline-only delivery with no summary body (null when no eligible feedback exists or the newest eligible feedback has failed delivery)
    */
   feedbackResponse?: FeedbackResponse;

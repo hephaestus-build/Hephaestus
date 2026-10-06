@@ -20,10 +20,15 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackUsefulness;
+import de.tum.cit.aet.hephaestus.practices.feedback.PlacementAnchorKind;
+import de.tum.cit.aet.hephaestus.practices.feedback.PlacementAnchorSide;
+import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -89,6 +94,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
 
     @Autowired
     private FeedbackObservationRepository feedbackObservationRepository;
+
+    @Autowired
+    private FeedbackPlacementRepository feedbackPlacementRepository;
 
     @Autowired
     private ReactionRepository reactionRepository;
@@ -214,6 +222,24 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 .build());
         feedbackObservationRepository.insertIfAbsent(feedback.getId(), observationId, "PRIMARY", 0);
         return feedback;
+    }
+
+    /** Records the comment the provider posted for this feedback, with the permalink it returned. */
+    private void postComment(Feedback feedback, PlacementType type, String ref, String url) {
+        var placement = FeedbackPlacement.builder()
+                .feedback(feedback)
+                .placementType(type)
+                .postedCommentRef(ref)
+                .postedCommentUrl(url);
+        if (type == PlacementType.INLINE) {
+            placement = placement
+                    .anchorKind(PlacementAnchorKind.LINE)
+                    .anchorPath("src/Main.java")
+                    .anchorStartLine(42)
+                    .anchorEndLine(42)
+                    .anchorSide(PlacementAnchorSide.NEW);
+        }
+        feedbackPlacementRepository.save(placement.build());
     }
 
     @Test
@@ -1070,6 +1096,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo(feedback.getId().toString())
                     .jsonPath("$.feedbackResponse.usefulness")
                     .doesNotExist()
+                    // No comment link was recorded, so the developer gets none.
+                    .jsonPath("$.feedbackCommentUrls")
+                    .doesNotExist()
                     .jsonPath("$.observedAt")
                     .isNotEmpty()
                     // Internal fields must not leak
@@ -1183,6 +1212,80 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
 
         @Test
         @WithUser
+        @DisplayName("links the comments of the feedback it answers about, never the comments of other feedback "
+                + "bound to the observation")
+        void shouldLinkOnlyTheCommentsOfTheAnsweredFeedbackWhenSeveralCarriedTheObservation() {
+            Instant now = Instant.now();
+            UUID observationId = insertObservation(
+                    practiceA, developer, "Detailed observation", "NOT_MET", "MAJOR", "scm.pull_request", 42L, now);
+            Feedback older = deliverFeedbackFor(
+                    observationId, "The first note the run posted.", now.minus(1, ChronoUnit.HOURS), 0);
+            postComment(older, PlacementType.SUMMARY, "comment-old", "https://github.com/o/r/pull/42#issuecomment-1");
+            Feedback newest = deliverFeedbackFor(observationId, "The note that replaced it.", now, 1);
+            postComment(newest, PlacementType.SUMMARY, "comment-new", "https://github.com/o/r/pull/42#issuecomment-2");
+            postComment(newest, PlacementType.INLINE, "note-new", "https://github.com/o/r/pull/42#discussion_r3");
+
+            webTestClient
+                    .get()
+                    .uri(BASE_URI + "/{observationId}", workspace.getWorkspaceSlug(), observationId)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.feedbackResponse.feedbackId")
+                    .isEqualTo(newest.getId().toString())
+                    .jsonPath("$.feedbackCommentUrls")
+                    .isEqualTo(List.of(
+                            "https://github.com/o/r/pull/42#issuecomment-2",
+                            "https://github.com/o/r/pull/42#discussion_r3"));
+        }
+
+        @Test
+        @WithUser
+        @DisplayName("newer feedback that failed to deliver shows no comment link, not the link of older feedback")
+        void shouldLinkNoCommentWhenTheNewestFeedbackFailedToDeliver() {
+            Instant now = Instant.now();
+            UUID observationId = insertObservation(
+                    practiceA, developer, "Detailed observation", "NOT_MET", "MAJOR", "scm.pull_request", 42L, now);
+            Feedback delivered =
+                    deliverFeedbackFor(observationId, "The note the run posted.", now.minus(1, ChronoUnit.HOURS), 0);
+            postComment(delivered, PlacementType.SUMMARY, "comment-1", "https://github.com/o/r/pull/42#issuecomment-1");
+            Feedback failed = feedbackRepository.save(Feedback.builder()
+                    .agentJobId(agentJob.getId())
+                    .workspaceId(workspace.getId())
+                    .artifactKind(ArtifactKinds.PULL_REQUEST)
+                    .artifactId(42L)
+                    .recipientUserId(developer.getId())
+                    .aboutUserId(developer.getId())
+                    .channel(FeedbackChannel.IN_CONTEXT)
+                    .position(1)
+                    .deliveryState(FeedbackDeliveryState.FAILED)
+                    .body("The note the provider did not accept.")
+                    .source(FeedbackSource.AGENT)
+                    .createdAt(now)
+                    .build());
+            feedbackObservationRepository.insertIfAbsent(failed.getId(), observationId, "PRIMARY", 0);
+            postComment(failed, PlacementType.SUMMARY, "comment-2", "https://github.com/o/r/pull/42#issuecomment-2");
+
+            webTestClient
+                    .get()
+                    .uri(BASE_URI + "/{observationId}", workspace.getWorkspaceSlug(), observationId)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.deliveredFeedback")
+                    .isEqualTo("The note the provider did not accept.")
+                    .jsonPath("$.feedbackResponse")
+                    .doesNotExist()
+                    .jsonPath("$.feedbackCommentUrls")
+                    .doesNotExist();
+        }
+
+        @Test
+        @WithUser
         @DisplayName("feedback that landed only as a line note can be answered, and the answer taken back, from the "
                 + "observation it was written from")
         void shouldOfferTheResponseHandleWhenFeedbackLandedOnlyAsALineNote() {
@@ -1234,7 +1337,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .jsonPath("$.feedbackResponse.feedbackId")
                     .isEqualTo(landed.getId().toString())
                     .jsonPath("$.feedbackResponse.resolution")
-                    .doesNotExist();
+                    .doesNotExist()
+                    .jsonPath("$.feedbackCommentUrls")
+                    .isEqualTo(List.of("https://gitlab.example.com/a/b/-/merge_requests/1#note_1"));
 
             webTestClient
                     .put()

@@ -75,12 +75,19 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * The work at the head, linked once; under it every observation open, and none links the work
- * again.
+ * The work at the head, linked; under it every observation open. The row whose delivered feedback
+ * has no recorded comment link offers the reviewed work instead.
  */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByRole("link")).toHaveLength(1);
+		await expect(canvas.getByRole("link", { name: /^#902/u })).toHaveAttribute(
+			"href",
+			run.reviewedWork.url,
+		);
+		await expect(canvas.getByRole("link", { name: /^Open reviewed work/u })).toHaveAttribute(
+			"href",
+			onTheRun.artifactUrl,
+		);
 		for (const { summary } of run.observations) {
 			await expect(canvas.getByRole("button", { name: new RegExp(summary, "u") })).toHaveAttribute(
 				"aria-expanded",
@@ -142,6 +149,10 @@ export const WithoutALink: Story = {
 			...run,
 			reviewId: "00000000-0000-0000-0000-000000000204",
 			reviewedWork: { ...run.reviewedWork, url: undefined, container: undefined },
+			observations: run.observations.map((observation) => ({
+				...observation,
+				artifactUrl: undefined,
+			})),
 		},
 	},
 	play: async ({ canvas }) => {
