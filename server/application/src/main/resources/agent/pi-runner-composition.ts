@@ -1,3 +1,5 @@
+import type { CapturedPublicStatement, PublicReviewHistory } from "./pi-review-brief.ts";
+
 export const CHANNELS = ["IN_CONTEXT", "IN_APP", "IN_CHAT"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
@@ -10,6 +12,12 @@ export type FeedbackAction = (typeof ACTIONS)[number];
 
 export const WITHHOLD_REASONS = ["NO_MATERIAL_CHANGE", "ALREADY_SAID", "BELOW_BAR"] as const;
 export type WithholdReason = (typeof WITHHOLD_REASONS)[number];
+
+/** The reasons that say this work already received the advice, so each names where it was given. */
+export const PRIOR_ADVICE_REASONS: ReadonlySet<WithholdReason> = new Set([
+	"ALREADY_SAID",
+	"NO_MATERIAL_CHANGE",
+]);
 
 /** ComposedReview.CONTRACT_VERSION: the server delivers no review from an envelope without it. */
 export const REVIEW_CONTRACT_VERSION = 2;
@@ -51,6 +59,22 @@ export interface ReviewInlineNote {
 export interface ReviewWithheld {
 	basedOn: string[];
 	reason: WithholdReason;
+}
+
+export interface SelectionWithheld {
+	basedOn: string[];
+	reason: WithholdReason;
+	witnessIds?: string[];
+}
+
+/** Held only by the composition: the stored review repeats its decisions, never the selection itself. */
+export interface ReviewSelection {
+	selected: string[];
+	withheld: SelectionWithheld[];
+}
+
+export interface PriorAdviceWitness {
+	eligibleForPriorAdvice: boolean;
 }
 
 /** What the reviewed work is told: one summary, the notes it places on lines, and what it leaves unsaid. */
@@ -322,6 +346,15 @@ function decisionProblems(
 	return errors;
 }
 
+function withholdReasonOf(value: unknown): WithholdReason | undefined {
+	const word = typeof value === "string" ? value.trim().toUpperCase().replaceAll("-", "_") : "";
+	return WITHHOLD_REASONS.find((candidate) => candidate === word);
+}
+
+function namedTwice(ids: readonly string[]): string[] {
+	return [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
+}
+
 function inlineSupportProblem(
 	basedOn: string[] | null,
 	observations: ReadonlyMap<string, ReviewedObservation>,
@@ -441,9 +474,7 @@ export function readReview(
 			continue;
 		}
 		const basedOn = idsOf(raw.basedOn);
-		const word =
-			typeof raw.reason === "string" ? raw.reason.trim().toUpperCase().replaceAll("-", "_") : "";
-		const reason = WITHHOLD_REASONS.find((candidate) => candidate === word);
+		const reason = withholdReasonOf(raw.reason);
 		const problems: string[] = [];
 		if (basedOn === null) {
 			problems.push(NOT_AN_ID_LIST);
@@ -467,6 +498,187 @@ export function readReview(
 
 	errors.push(...decisionProblems({ summary, inline, withheld }, observations));
 	return errors.length > 0 ? { errors } : { review: { summary, inline, withheld } };
+}
+
+/** A witness proves only where advice was given; whether it made the same point stays the composer's judgement. */
+export function readSelection(
+	value: unknown,
+	observations: ReadonlyMap<string, ReviewedObservation>,
+	witnesses: ReadonlyMap<string, PriorAdviceWitness>,
+): { selection: ReviewSelection } | { errors: string[] } {
+	if (!isObject(value)) {
+		return { errors: ["the selection is one object with selected and withheld"] };
+	}
+	const errors: string[] = [];
+	const unknownFields = Object.keys(value).filter(
+		(key) => key !== "selected" && key !== "withheld",
+	);
+	if (unknownFields.length > 0) {
+		errors.push(
+			`unknown selection field(s): ${unknownFields.join(", ")} — a selection takes selected and withheld`,
+		);
+	}
+
+	const selected =
+		value.selected === undefined || value.selected === null ? [] : idsOf(value.selected);
+	if (selected === null) {
+		errors.push("selected must be an array of observation id strings");
+	} else {
+		const unknown = selected.filter((id) => !observations.has(id));
+		if (unknown.length > 0) {
+			errors.push(
+				`selected names ${unknown.join(", ")}, which is not one of the observations this review may rest on (selected takes their \`id\` field)`,
+			);
+		}
+		const undecided = selected.filter((id) => {
+			const outcome = observations.get(id)?.outcome;
+			return observations.has(id) && outcome !== "MET" && outcome !== "NOT_MET";
+		});
+		if (undecided.length > 0) {
+			errors.push(
+				`selected names ${undecided.join(", ")}, which decided nothing (not MET, not NOT_MET) and cannot carry a claim about the work`,
+			);
+		}
+		const twice = namedTwice(selected);
+		if (twice.length > 0) {
+			errors.push(`selected names ${twice.join(", ")} more than once`);
+		}
+	}
+
+	const withheld: SelectionWithheld[] = [];
+	const heldIds: string[] = [];
+	const container = value.withheld;
+	if (container !== undefined && container !== null && !Array.isArray(container)) {
+		errors.push("withheld must be an array of withholding decisions");
+	}
+	for (const [index, raw] of (Array.isArray(container) ? container : []).entries()) {
+		const label = `withheld #${index + 1}`;
+		if (!isObject(raw)) {
+			errors.push(
+				`${label}: is one object with basedOn, reason and, for a prior advice, witnessIds`,
+			);
+			continue;
+		}
+		const basedOn = idsOf(raw.basedOn);
+		const reason = withholdReasonOf(raw.reason);
+		const witnessIds =
+			raw.witnessIds === undefined || raw.witnessIds === null ? [] : idsOf(raw.witnessIds);
+		const problems: string[] = [];
+		if (basedOn === null) {
+			problems.push(NOT_AN_ID_LIST);
+		} else if (basedOn.length === 0) {
+			problems.push("basedOn is required: the observation(s) you decided not to raise");
+		}
+		heldIds.push(...(basedOn ?? []));
+		const notProblems = (basedOn ?? []).filter((id) => observations.get(id)?.outcome !== "NOT_MET");
+		if (notProblems.length > 0) {
+			problems.push(
+				`basedOn names ${notProblems.join(", ")}; only an admitted NOT_MET observation can be withheld`,
+			);
+		}
+		if (reason === undefined) {
+			problems.push(`reason must be one of ${WITHHOLD_REASONS.join(", ")}`);
+		}
+		if (witnessIds === null) {
+			problems.push("witnessIds must be an array of witnessId strings from what was already said");
+		} else {
+			const unknown = witnessIds.filter((id) => !witnesses.has(id));
+			if (unknown.length > 0) {
+				problems.push(
+					`witnessIds names ${unknown.join(", ")}, which is not a statement shown under what was already said on this work`,
+				);
+			}
+			const ineligible = witnessIds.filter(
+				(id) => witnesses.has(id) && witnesses.get(id)?.eligibleForPriorAdvice !== true,
+			);
+			if (ineligible.length > 0) {
+				problems.push(
+					`witnessIds names ${ineligible.join(", ")}, which is shown as context but cannot stand as advice this work already received (eligibleForPriorAdvice is false)`,
+				);
+			}
+			if (reason !== undefined && PRIOR_ADVICE_REASONS.has(reason) && witnessIds.length === 0) {
+				problems.push(
+					`${reason} names in witnessIds where this work already received the advice: the witnessId of a statement marked eligibleForPriorAdvice; without one, raise it or choose another reason`,
+				);
+			}
+		}
+		errors.push(...problems.map((problem) => `${label}: ${problem}`));
+		if (problems.length === 0 && reason !== undefined && basedOn !== null && witnessIds !== null) {
+			withheld.push({
+				basedOn: [...new Set(basedOn)],
+				reason,
+				...(witnessIds.length > 0 ? { witnessIds: [...new Set(witnessIds)] } : {}),
+			});
+		}
+	}
+
+	const twiceHeld = namedTwice(heldIds);
+	if (twiceHeld.length > 0) {
+		errors.push(
+			`${twiceHeld.join(", ")} is withheld more than once; each observation takes one decision`,
+		);
+	}
+	const chosen = new Set(selected);
+	const both = [...new Set(heldIds)].filter((id) => chosen.has(id));
+	if (both.length > 0) {
+		errors.push(
+			`${both.join(", ")} is both selected and withheld; an observation is one or the other`,
+		);
+	}
+	const held = new Set(heldIds);
+	const missing = [...observations]
+		.filter(
+			([id, observation]) => observation.outcome === "NOT_MET" && !chosen.has(id) && !held.has(id),
+		)
+		.map(([id]) => id);
+	if (missing.length > 0) {
+		errors.push(
+			`${missing.join(", ")} has no decision; select each NOT_MET observation to speak about it, or withhold it with its reason`,
+		);
+	}
+	return errors.length > 0 || selected === null
+		? { errors }
+		: { selection: { selected, withheld } };
+}
+
+function withholdingReasons(decisions: readonly { basedOn: string[]; reason: WithholdReason }[]) {
+	return new Map(
+		decisions.flatMap((decision) => decision.basedOn.map((id) => [id, decision.reason] as const)),
+	);
+}
+
+/** Withholding decisions are compared per observation, so their grouping may differ from the selection's. */
+export function selectionMismatch(review: ComposedReview, selection: ReviewSelection): string[] {
+	const errors: string[] = [];
+	const spoken = new Set([
+		...(review.summary?.basedOn ?? []),
+		...review.inline.flatMap((note) => note.basedOn),
+	]);
+	const chosen = new Set(selection.selected);
+	const unselected = [...spoken].filter((id) => !chosen.has(id));
+	if (unselected.length > 0) {
+		errors.push(
+			`the review speaks about ${unselected.join(", ")}, which the accepted selection does not select; leave it out of the text, or select again first`,
+		);
+	}
+	const unspoken = selection.selected.filter((id) => !spoken.has(id));
+	if (unspoken.length > 0) {
+		errors.push(
+			`the accepted selection selects ${unspoken.join(", ")}, which no text speaks about; speak about it, or select again without it`,
+		);
+	}
+	const sent = withholdingReasons(review.withheld);
+	const accepted = withholdingReasons(selection.withheld);
+	const differing = [...new Set([...sent.keys(), ...accepted.keys()])].filter(
+		(id) => sent.get(id) !== accepted.get(id),
+	);
+	if (differing.length > 0) {
+		const expected = [...accepted].map(([id, reason]) => `${id} as ${reason}`);
+		errors.push(
+			`withheld differs from the accepted selection for ${differing.join(", ")}; it repeats the selection's decisions exactly: ${expected.length > 0 ? expected.join(", ") : "none"}`,
+		);
+	}
+	return errors;
 }
 
 /** Every observation the review decided about: what it says and what it withholds. */
@@ -529,15 +741,44 @@ export function uncertainOutcomes(
 	);
 }
 
+export interface OwnPriorFeedback {
+	/** Null when the history names no feedback id: such an entry is context only. */
+	witnessId: string | null;
+	id?: unknown;
+	reviewedRevision?: unknown;
+	basedOn?: unknown;
+	deliveredAt: unknown;
+	body: unknown;
+	recordedClaimCurrentness: unknown;
+	withdrawn: unknown;
+	eligibleForPriorAdvice: boolean;
+}
+
+const FEEDBACK_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
+function deliveredBy(deliveredAt: unknown, capturedAt: string | null): boolean {
+	if (typeof deliveredAt !== "string" || capturedAt === null) {
+		return false;
+	}
+	const delivered = Date.parse(deliveredAt);
+	const captured = Date.parse(capturedAt);
+	return Number.isFinite(delivered) && Number.isFinite(captured) && delivered <= captured;
+}
+
 /**
  * What was already said on this very piece of work, from the feedback history: only the review on the work, never
- * what reached the developer's own pages or conversations, and never anything about other work.
+ * what reached the developer's own pages or conversations, and never anything about other work. Nothing missing is
+ * filled in: an entry without an id, a time or a body is context, never prior advice.
  */
-export function priorPublicFeedback(history: unknown, thisWork: string | undefined): unknown[] {
+export function priorPublicFeedback(
+	history: unknown,
+	thisWork: string | undefined,
+	capturedAt: string | null,
+): OwnPriorFeedback[] {
 	if (thisWork === undefined || !isObject(history) || !Array.isArray(history.feedback)) {
 		return [];
 	}
-	return history.feedback.flatMap((entry: unknown) => {
+	return history.feedback.flatMap((entry: unknown): OwnPriorFeedback[] => {
 		if (!isObject(entry) || entry.channel !== "IN_CONTEXT") {
 			return [];
 		}
@@ -545,18 +786,73 @@ export function priorPublicFeedback(history: unknown, thisWork: string | undefin
 		if (workIdentity(artifact.kind, artifact.url) !== thisWork) {
 			return [];
 		}
-		const { deliveredAt, body, recordedClaimCurrentness, withdrawn } = entry;
-		return [{ deliveredAt, body, recordedClaimCurrentness, withdrawn }];
+		const {
+			id,
+			reviewedRevision,
+			basedOn,
+			deliveredAt,
+			body,
+			recordedClaimCurrentness,
+			withdrawn,
+		} = entry;
+		const witnessId = typeof id === "string" && FEEDBACK_ID.test(id) ? `feedback:${id}` : null;
+		return [
+			{
+				witnessId,
+				...(id === undefined ? {} : { id }),
+				...(reviewedRevision === undefined ? {} : { reviewedRevision }),
+				...(basedOn === undefined ? {} : { basedOn }),
+				deliveredAt,
+				body,
+				recordedClaimCurrentness,
+				withdrawn,
+				eligibleForPriorAdvice:
+					witnessId !== null &&
+					typeof body === "string" &&
+					body.trim() !== "" &&
+					recordedClaimCurrentness === "CURRENT" &&
+					withdrawn !== true &&
+					deliveredBy(deliveredAt, capturedAt),
+			},
+		];
 	});
 }
 
+export function priorAdviceWitnesses(
+	own: readonly OwnPriorFeedback[],
+	captured: readonly CapturedPublicStatement[],
+): Map<string, PriorAdviceWitness> {
+	const witnesses = new Map<string, PriorAdviceWitness>();
+	for (const statement of own) {
+		if (statement.witnessId !== null) {
+			witnesses.set(statement.witnessId, {
+				eligibleForPriorAdvice: statement.eligibleForPriorAdvice,
+			});
+		}
+	}
+	for (const statement of captured) {
+		witnesses.set(statement.witnessId, {
+			eligibleForPriorAdvice: statement.eligibleForPriorAdvice,
+		});
+	}
+	return witnesses;
+}
+
+export const SELECTION_TOOL_DESCRIPTION =
+	"Choose, before writing, what the review on this piece of work will speak about: the observations it will " +
+	"discuss, and each NOT_MET observation you decide not to raise, with your reason. Nothing is published or stored " +
+	"by this call. An accepted selection replaces the one before it, until the review is final; a refused selection " +
+	"leaves the one before it standing and names every reason.";
+
 /** What report_review tells the model it does. The rules are applied by readReview, with every reason at once. */
 export const REVIEW_TOOL_DESCRIPTION =
-	"Store the review on this piece of work: the summary comment, any notes placed on lines of the change, and the " +
-	"NOT_MET observations you decided not to raise here. Each body is published whole as written, with provider " +
-	"safety formatting and a fixed disclosure; nothing is assembled from fragments. One call stores the whole " +
-	"review; a later call replaces it. Invalid support, eligibility or placement refuses the whole review, with " +
-	"every reason, so it can be corrected and sent again.";
+	"Store the final review on this piece of work: the summary comment, any notes placed on lines of the change, and " +
+	"the NOT_MET observations you decided not to raise here. It rests on exactly the accepted selection: it speaks " +
+	"about every selected observation and no other, and repeats the selection's withholding decisions. Each body is " +
+	"published whole as written, with provider safety formatting and a fixed disclosure; nothing is assembled from " +
+	"fragments. An accepted call is final and ends the composition. Invalid support, eligibility, placement or a " +
+	"mismatch with the selection refuses the whole review, with every reason, so it can be corrected, or selected " +
+	"again, and sent again.";
 
 /** Offered before the body to orient generation; field order is not enforced. */
 const SUPPORT_FIRST =
@@ -672,6 +968,58 @@ export function reviewToolParameters(
 	};
 }
 
+/** readSelection stays the final check; an empty enum is invalid, so an empty list takes no items instead. */
+export function selectionToolParameters(
+	observations: ReadonlyMap<string, ReviewedObservation>,
+	eligibleWitnesses: readonly string[],
+) {
+	const ids = [...observations.keys()];
+	const decided = ids.filter((id) => {
+		const outcome = observations.get(id)?.outcome;
+		return outcome === "MET" || outcome === "NOT_MET";
+	});
+	if (decided.length === 0) {
+		throw new Error("select_feedback needs at least one decided observation to choose from");
+	}
+	const notMet = ids.filter((id) => observations.get(id)?.outcome === "NOT_MET");
+	return {
+		type: "object",
+		properties: {
+			selected: {
+				type: "array",
+				items: { type: "string", enum: decided },
+				description:
+					"The id of each observation the review will speak about: every concern it raises and every " +
+					"positive choice it acknowledges, and no other. Leave out a MET observation that earns no words.",
+			},
+			withheld: {
+				type: "array",
+				maxItems: notMet.length,
+				description:
+					"Each NOT_MET observation you decided not to raise on this work, with your reason. Every NOT_MET " +
+					"observation is either selected or withheld.",
+				items: {
+					type: "object",
+					required: ["basedOn", "reason"],
+					properties: {
+						basedOn: idList(notMet, "The NOT_MET observation(s) you decided not to raise."),
+						reason: { type: "string", enum: [...WITHHOLD_REASONS] },
+						witnessIds: {
+							type: "array",
+							...(eligibleWitnesses.length > 0
+								? { items: { type: "string", enum: [...eligibleWitnesses] } }
+								: { maxItems: 0, items: { type: "string" } }),
+							description:
+								"For ALREADY_SAID or NO_MATERIAL_CHANGE: the witnessId of each statement under what was " +
+								"already said on this work that gave this advice.",
+						},
+					},
+				},
+			},
+		},
+	};
+}
+
 /** Explanatory context from the staged practice revision, not a new assessment. */
 export interface ReviewPractice {
 	slug: string;
@@ -688,8 +1036,10 @@ export interface ReviewTurnInput {
 	observations: readonly Record<string, unknown>[];
 	/** The practices looked at and not decided, by slug and outcome, from uncertainOutcomes. */
 	undecided: readonly { practiceSlug: string; outcome: string }[];
-	/** What was already said on this same work, from priorPublicFeedback. */
-	alreadySaid: readonly unknown[];
+	/** What Hephaestus already said on this same work, from priorPublicFeedback. */
+	alreadySaid: readonly OwnPriorFeedback[];
+	/** The bounded captured public discussion of this same work, from buildPublicReviewHistory. */
+	captured: PublicReviewHistory;
 	/** Context on the practices of the decided observations. */
 	practices: readonly ReviewPractice[];
 	/** Practices this review did not reach at all. */
@@ -700,10 +1050,15 @@ export interface ReviewTurnInput {
 
 /** The one prompt of the review composition: every input inline, because its session can read nothing else. */
 export function buildReviewTurn(input: ReviewTurnInput): string {
-	const said =
+	const own =
 		input.alreadySaid.length === 0
-			? "Nothing has been said on this work yet.\n"
-			: `\`\`\`json\n${JSON.stringify({ alreadySaid: input.alreadySaid }, null, 1)}\n\`\`\`\n`;
+			? "No same-work delivered feedback is shown here.\n"
+			: `What Hephaestus delivered on this work:\n\`\`\`json\n${JSON.stringify({ alreadySaid: input.alreadySaid }, null, 1)}\n\`\`\`\n`;
+	const others =
+		input.captured.sources.length === 0 && input.captured.omitted === undefined
+			? "What people and tools said on this work was not part of this capture, so it is unknown.\n"
+			: `Captured public discussion on this work; omitted sources remain unknown:\n\`\`\`json\n${JSON.stringify(input.captured, null, 1)}\n\`\`\`\n`;
+	const said = `${own}${others}A withholding decision that says this work already received the advice names the \`witnessId\` of a statement marked \`eligibleForPriorAdvice\`; any other statement is context only.\n`;
 	const practices = `\`\`\`json\n${JSON.stringify({ practices: input.practices }, null, 1)}\n\`\`\`\n`;
 	const undecided =
 		input.undecided.length === 0
@@ -744,5 +1099,5 @@ ${practices}
 ### Where the words go
 - The summary: one comment on the work.
 ${placement}
-${sameLinesNote(cited)}${notReachedNote(input.notReached)}Store the review with one report_review call, with every NOT_MET observation spoken about in the summary or a line note, or named under withheld with your reason.`;
+${sameLinesNote(cited)}${notReachedNote(input.notReached)}First choose what the review speaks about with one select_feedback call: every NOT_MET observation selected or withheld with your reason, and any MET observation whose choice earns an acknowledgement. Once a selection is accepted, store the whole review with one report_review call that speaks about exactly the selected observations and repeats the selection's withholding decisions. Writing nothing for the work is a decision too: it is still one final report_review call.`;
 }

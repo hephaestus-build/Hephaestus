@@ -11,8 +11,9 @@ You have one job in this turn, and it is not the job you just did.
 The review is over. Every measurement it took is already recorded and nothing you write here can add to,
 change, or contradict one. The review on the work itself was written separately. This turn shows it to you as a
 planned draft: it has not been delivered, and a delivery check may still hold it, so it is not something already
-said to the developer. Use it so you do not copy its argument about this change. Your job now is to decide what — if
-anything — is worth saying to **one developer** privately, on which surface, and in what words.
+said to the developer. Each surface is read on its own, so a point may appear on more than one when it serves this
+person there. Your job now is to decide what — if anything — is worth saying to **one developer** privately, on
+which surface, and in what words.
 
 Measurement and feedback are different acts. An observation records what was found; you can check it by
 opening the file. Feedback here is an intervention: it exists to change what this person does next, and
@@ -20,7 +21,7 @@ you can only check it by watching what they do. Write accordingly.
 
 ---
 
-## The two private surfaces, and why they must not say the same thing
+## The two private surfaces
 
 |                         | Their own practice pages              | The mentor conversation                                      |
 | ----------------------- | ------------------------------------- | ------------------------------------------------------------ |
@@ -85,8 +86,9 @@ one edit is a task-level note wearing a costume — rewrite it or drop it.
     in front of a number that is not the entry's `number`.
 
 - `<historyRoot>/feedback.json` — what has already been **said** to this developer, and on which
-  surface. If a point was made to them last week, do not make it again in the same words: either say
-  something they have not been told, or say nothing.
+  surface. If a point was already made on the surface you are writing for, do not make it again there in the same
+  words: either say something they have not been told there, or say nothing. A point made on another surface does not
+  by itself call for staying quiet here.
   An entry with `recordedClaimCurrentness: STALE` carries no `body`: the practice's review rules changed, or the
   result behind it was set aside because the reviewable content of the issue it is about changed, before any new
   review, so it records that
@@ -162,9 +164,8 @@ repeating it, even in examples or informal phrasing.
 way of working, never the person. A headline about a run of work needs evidence from more than this change.
 
 **Write to this developer about their work.** Use familiar words and the technical terms that make the
-claim precise. Start with what the evidence shows; omit an introduction or closing sentence that repeats
-it. Keep work references, links and qualifications that bound what you know. Read the whole piece before
-persisting: each sentence should add a fact, a needed distinction or an action.
+claim precise, and start with what the evidence shows. Read the whole piece before persisting: each sentence should
+add a fact, a needed distinction or an action.
 
 **The practice guides what you raise; it never shows up in the wording.** You are given the practice's own
 account of why it matters so that you know what it is asking about, not so you can repeat it. Nothing on
@@ -193,23 +194,19 @@ lane. One. Not a checklist.
 
 ## Not negotiable, everywhere
 
-- **Never write about the person.** Not "you're a careful engineer", not "you're improving", not "great work", not a
-  closing verdict on how they are doing. Praise, if you have a reason for it, names a **specific strategy they used**
-  and nothing else.
 - **Ground every unit and give it a purpose.** A card needs evidence and one next step. Mentor notes carry bound
   evidence and the capability to develop; the mentor decides the conversational move.
 - **Never invent an occurrence.** Everything you cite must be in the staged files. When captured evidence does not show
   an occurrence, do not claim whether it happened.
 - **Never invent a supersession target.** `supersedesThreadKey` must be a `threadKey` you read in
   `<preparedFeedback>`, on the **same channel and the same practice** as the unit you are writing.
-- **Never repeat what has already been said.** `<historyRoot>/feedback.json` is what has been said; only it supports
-  `ALREADY_SAID`. The planned review on the work is not history: do not copy its argument about this change, but do
-  not withhold useful private guidance only because that draft exists.
+- **Never repeat on a surface what was already said there.** `<historyRoot>/feedback.json` is what has been said,
+  and on which surface; only it supports `ALREADY_SAID`, for the surface it was said on. What another surface said,
+  including the review on the work, does not by itself call for a withholding. The planned review on the work is not
+  history.
 - **One unit per practice per channel.** Two units about one practice read as two problems.
-- **Describe the work, never the intent.** "This thread is still open", not "you ignored the reviewer".
-- **No grading vocabulary.** No presence, no assessment, no severity, no confidence, no practice slugs in
-  the prose, no talk of criteria or thresholds. Write the way a good senior colleague talks over coffee: plainly,
-  specifically, without ceremony.
+- **No grading vocabulary.** No presence, no assessment, no severity, no confidence, no talk of criteria or
+  thresholds.
 
 ---
 

@@ -182,7 +182,8 @@ if (scenario !== undefined && scenario !== "") {
 					},
 				];
 			}
-			case "compose-quiet": {
+			case "compose-quiet":
+			case "compose-empty": {
 				return [{ ...admittedObservation, outcome: "MET", severity: null }];
 			}
 			case "compose-unknown-outcome": {
@@ -282,6 +283,7 @@ if (scenario !== undefined && scenario !== "") {
 			},
 			async createAgentSession(options: { tools: string[]; customTools: CustomTool[] }) {
 				const handlers = new Set<(event: unknown) => void>();
+				let queued = 0;
 				const emit = (event: unknown) => {
 					for (const handler of handlers) {
 						handler(event);
@@ -307,7 +309,13 @@ if (scenario !== undefined && scenario !== "") {
 					extensionsResult: { errors: [] },
 					session: {
 						state: { messages: [] },
-						agent: { state: { tools: [] } },
+						agent: {
+							state: { tools: [] },
+							finishTurn: async () => {
+								record("native-finish-turn");
+								return { action: "continue" };
+							},
+						},
 						systemPrompt: "",
 						model: { contextWindow: 128_000, maxTokens: 16_384 },
 						settingsManager: { getCompactionSettings: () => ({ reserveTokens: 16_384 }) },
@@ -318,7 +326,12 @@ if (scenario !== undefined && scenario !== "") {
 								handlers.delete(handler);
 							};
 						},
-						clearQueue: () => undefined,
+						clearQueue: () => {
+							queued = 0;
+						},
+						get pendingMessageCount() {
+							return queued;
+						},
 						getContextUsage: () => ({
 							tokens:
 								scenario === "compose-overflow" && !wasCompacted && prompts >= 2 ? 120_000 : 1000,
@@ -355,6 +368,7 @@ if (scenario !== undefined && scenario !== "") {
 						},
 						dispose: () => record("dispose"),
 						steer: async () => {
+							queued += 1;
 							record("steer");
 						},
 						async prompt(
@@ -457,21 +471,40 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							if (
 								text.includes("## The review to write") ||
-								text.includes("The review leaves these NOT_MET observations undecided")
+								text.includes("The review leaves these NOT_MET observations undecided") ||
+								text.includes("The review on this work is not final yet")
 							) {
-								// The review composition, in its own session: report_review is all it can call.
-								assert.deepEqual(options.tools, ["report_review"]);
+								// The review composition, in its own session: choosing and storing the review is all it
+								// can do.
+								assert.deepEqual(options.tools, ["select_feedback", "report_review"]);
 								assert.deepEqual(
 									options.customTools.map((custom) => custom.name),
-									["report_review"],
+									["select_feedback", "report_review"],
 								);
 								const review = tool("report_review");
-								if (text.includes("The review leaves")) {
+								const selection = tool("select_feedback");
+								if (
+									text.includes("The review leaves") ||
+									text.includes("The review on this work is not final yet")
+								) {
 									record("review-retry");
 									return;
 								}
+								const choose = async (id: string, args: unknown) => {
+									try {
+										return JSON.stringify(await selection.execute(id, args));
+									} catch (error) {
+										return JSON.stringify(error instanceof Error ? error.message : String(error));
+									}
+								};
 								if (scenario === "compose-settle-deadline") {
-									// The response ended, but its auto-compaction remains busy until the deadline.
+									// A selection is accepted, and then the response ends while its auto-compaction
+									// remains busy until the deadline: no final review is ever sent.
+									record(
+										`selection-only:${await choose("s-d", {
+											withheld: [{ basedOn: ["observation-1"], reason: "BELOW_BAR" }],
+										})}`,
+									);
 									compacting = true;
 									return;
 								}
@@ -508,8 +541,49 @@ if (scenario !== undefined && scenario !== "") {
 										return JSON.stringify(error instanceof Error ? error.message : String(error));
 									}
 								};
+								if (scenario === "compose-reselect") {
+									// The composer writes before choosing, chooses wrongly, then rightly, writes a review
+									// that does not match its choice, chooses again and writes the review that does.
+									const said = {
+										summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] },
+									};
+									await this.steer();
+									record(`reselect-unselected:${await attempt("r-0", said)}`);
+									record(`reselect-before-final:${JSON.stringify(await this.agent.finishTurn())}`);
+									record(`reselect-retained:${this.pendingMessageCount}`);
+									record(`reselect-incomplete:${await choose("s-1", { selected: [] })}`);
+									record(
+										`reselect-withhold:${await choose("s-2", {
+											withheld: [{ basedOn: ["observation-1"], reason: "BELOW_BAR" }],
+										})}`,
+									);
+									record(
+										`reselect-unwitnessed:${await choose("s-3", {
+											withheld: [{ basedOn: ["observation-1"], reason: "ALREADY_SAID" }],
+										})}`,
+									);
+									record(`reselect-mismatch:${await attempt("r-1", said)}`);
+									record(`reselect-speak:${await choose("s-4", { selected: ["observation-1"] })}`);
+									record(`reselect-final:${await attempt("r-2", said)}`);
+									record(`reselect-terminal:${JSON.stringify(await this.agent.finishTurn())}`);
+									record(`reselect-drained:${this.pendingMessageCount}`);
+									// One response can carry more calls after the final one; none of them is accepted.
+									record(
+										`reselect-after-select:${await choose("s-5", { selected: ["observation-1"] })}`,
+									);
+									record(`reselect-after-review:${await attempt("r-3", said)}`);
+									return;
+								}
+								if (scenario === "compose-empty") {
+									// Only a routine strength was measured, and nothing on the work earns a comment.
+									record(`empty-select:${await choose("s-e", {})}`);
+									record(`empty-final:${await attempt("r-e", {})}`);
+									record(`empty-terminal:${JSON.stringify(await this.agent.finishTurn())}`);
+									return;
+								}
 								if (scenario === "compose-quiet") {
 									// Only a strength was measured: the review may say so, specifically.
+									record(`strength-select:${await choose("s-q", { selected: ["observation-1"] })}`);
 									record(
 										`review-strength:${await attempt("r-q", {
 											summary: {
@@ -521,6 +595,11 @@ if (scenario !== undefined && scenario !== "") {
 									return;
 								}
 								if (scenario === "compose-abstention") {
+									// Only the strength can be chosen: an abstention is not among what the review rests on.
+									record(
+										`abstention-select:${await choose("s-a", { selected: ["observation-2"] })}`,
+									);
+									record(`met-select:${await choose("s-m", { selected: ["observation-1"] })}`);
 									record(
 										`review-abstention:${await attempt("r-a", {
 											summary: { body: "Nothing to settle here.", basedOn: ["observation-2"] },
@@ -537,6 +616,7 @@ if (scenario !== undefined && scenario !== "") {
 									return;
 								}
 								if (scenario === "compose" || scenario === "compose-foreign-provider") {
+									record(`review-select:${await choose("s-1", { selected: ["observation-1"] })}`);
 									record(
 										`review-refused:${await attempt("r-1", {
 											summary: { body: "Fine. <!-- marker -->", basedOn: ["observation-1"] },
@@ -568,16 +648,14 @@ if (scenario !== undefined && scenario !== "") {
 									);
 									return;
 								}
-								// Every other composing scenario decides the review's one problem by withholding it.
+								// Every other composing scenario decides the review's problems by withholding them.
 								const ids =
 									scenario === "compose-fold"
 										? ["observation-1", "observation-2"]
 										: ["observation-1"];
-								record(
-									`review-withheld:${await attempt("r-w", {
-										withheld: [{ basedOn: ids, reason: "ALREADY_SAID" }],
-									})}`,
-								);
+								const withheld = [{ basedOn: ids, reason: "BELOW_BAR" }];
+								record(`review-select:${await choose("s-w", { withheld })}`);
+								record(`review-withheld:${await attempt("r-w", { withheld })}`);
 								return;
 							}
 							if (text.includes("## Undecided")) {
@@ -1348,6 +1426,8 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-silent",
 		"compose-loop",
 		"compose-quiet",
+		"compose-empty",
+		"compose-reselect",
 		"compose-fold",
 		"compose-abstention",
 		"compose-unknown-outcome",
@@ -1393,6 +1473,10 @@ if (scenario !== undefined && scenario !== "") {
 				"compose-loop":
 					"ends a composition that keeps calling a recording tool without recording anything",
 				"compose-quiet": "skips a WITHHOLD on a practice with nothing to withhold and asks no more",
+				"compose-empty":
+					"ends the review composition on an intentionally empty final review of positive results",
+				"compose-reselect":
+					"stores only a final review that matches the selection accepted last, and nothing after it",
 				"compose-fold":
 					"counts a NOT_MET practice folded into another practice's unit as decided and asks no more",
 				"compose-abstention":
@@ -1420,6 +1504,7 @@ if (scenario !== undefined && scenario !== "") {
 						"Compose from admitted observations.",
 					);
 					writeFileSync(nodePath.join(cwd, "review-composer.md"), "Write the review on the work.");
+					writeFileSync(nodePath.join(cwd, "feedback-style.md"), "Write clear, useful feedback.");
 					if (stage === "compose" || stage === "compose-foreign-provider") {
 						// The person's history, staged as the server stages it for the measurement and private lanes.
 						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
@@ -1678,6 +1763,16 @@ if (scenario !== undefined && scenario !== "") {
 								!events.some((event) => event.startsWith("private-turn")),
 								events.join("\n"),
 							);
+							// An accepted selection is not a review: nothing is left to deliver on the work.
+							assert.match(
+								events.find((event) => event.startsWith("selection-only:")) ?? "",
+								/Accepted the selection/u,
+							);
+							const feedback: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(feedback));
+							assert.equal(feedback.review ?? null, null);
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
@@ -2064,13 +2159,17 @@ if (scenario !== undefined && scenario !== "") {
 							assert.deepEqual(
 								events
 									.filter((event) => event.startsWith("create:"))
-									.map((event) => event.includes("tools=report_review") && !event.includes(",")),
+									.map((event) => event.endsWith("tools=select_feedback,report_review")),
 								[false, true],
+							);
+							assert.match(
+								events.find((event) => event.startsWith("review-select:")) ?? "",
+								/Accepted the selection/u,
 							);
 							assert.ok(events.includes("review-loader extensions=0"), events.join("\n"));
 							assert.equal(
 								readFileSync(nodePath.join(cwd, "review-system-prompt.md"), "utf8"),
-								"Write the review on the work.",
+								"Write clear, useful feedback.\n\nWrite the review on the work.",
 							);
 							assert.ok(!events.includes("compact"), child.stderr);
 							// What the review composition was given: this work, and nothing about the person.
@@ -2101,7 +2200,7 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								events.find((event) => event.startsWith("review-stored:")) ?? "",
-								/Stored the review: a summary resting on 1 observation\(s\), 1 line note\(s\), 0 withholding decision\(s\)/u,
+								/Stored the review: a summary resting on 1 observation\(s\), 1 line note\(s\), 0 withholding decision\(s\)[\s\S]*"terminate":true/u,
 							);
 							assert.ok(!events.includes("review-retry"), events.join("\n"));
 							// The private lanes keep the person's history, and see what the review said.
@@ -2288,6 +2387,92 @@ if (scenario !== undefined && scenario !== "") {
 							assert.doesNotMatch(child.stderr, /asking once more/u);
 							break;
 						}
+						case "compose-empty": {
+							assert.equal(child.status, 0, child.stderr);
+							// An empty final review is a decision: it ends the composition, and nobody asks again.
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("prompt:")),
+								["prompt:1", "prompt:2"],
+							);
+							assert.match(
+								events.find((event) => event.startsWith("empty-final:")) ?? "",
+								/Stored the review: no summary, 0 line note\(s\), 0 withholding decision\(s\)[\s\S]*"terminate":true/u,
+							);
+							assert.ok(events.includes('empty-terminal:{"action":"end"}'), events.join("\n"));
+							assert.equal(events.filter((event) => event === "native-finish-turn").length, 1);
+							assert.ok(!events.includes("review-retry"), events.join("\n"));
+							const feedback: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(feedback));
+							assert.deepEqual(feedback.review, { summary: null, inline: [], withheld: [] });
+							break;
+						}
+						case "compose-reselect": {
+							assert.equal(child.status, 0, child.stderr);
+							const said = (label: string) =>
+								events.find((event) => event.startsWith(`${label}:`)) ?? "";
+							assert.match(said("reselect-unselected"), /no selection is accepted yet/u);
+							assert.ok(
+								events.includes('reselect-before-final:{"action":"continue"}'),
+								events.join("\n"),
+							);
+							assert.ok(events.includes("reselect-retained:1"), events.join("\n"));
+							assert.match(
+								said("reselect-incomplete"),
+								/selection refused, no selection is accepted yet:[\s\S]*observation-1 has no decision/u,
+							);
+							assert.match(said("reselect-withhold"), /Accepted the selection/u);
+							// A refused selection leaves the accepted one standing: the next review is read against it.
+							assert.match(
+								said("reselect-unwitnessed"),
+								/selection refused, the selection accepted before it still stands:[\s\S]*ALREADY_SAID names in witnessIds/u,
+							);
+							assert.match(
+								said("reselect-mismatch"),
+								/review refused, nothing was stored:[\s\S]*speaks about observation-1, which the accepted selection does not select[\s\S]*withheld differs from the accepted selection for observation-1/u,
+							);
+							assert.match(said("reselect-speak"), /Accepted the selection/u);
+							assert.match(
+								said("reselect-final"),
+								/Stored the review: a summary resting on 1 observation\(s\)[\s\S]*"terminate":true/u,
+							);
+							assert.ok(events.includes('reselect-terminal:{"action":"end"}'), events.join("\n"));
+							assert.ok(events.includes("reselect-drained:0"), events.join("\n"));
+							assert.equal(events.filter((event) => event === "native-finish-turn").length, 2);
+							assert.match(
+								said("reselect-after-select"),
+								/final; this composition accepts nothing more/u,
+							);
+							assert.match(
+								said("reselect-after-review"),
+								/final; this composition accepts nothing more/u,
+							);
+							// The final review was the one the composition owed, so it is not asked for again.
+							assert.ok(!events.includes("review-retry"), events.join("\n"));
+							const reviewPrompts = events
+								.filter((event) => event.startsWith("prompt:"))
+								.map((event) =>
+									readFileSync(
+										nodePath.join(cwd, `prompt-${event.slice("prompt:".length)}.md`),
+										"utf8",
+									),
+								)
+								.filter((prompt) =>
+									/^## (?:The review to write|Undecided|Unfinished)/u.test(prompt),
+								);
+							assert.equal(reviewPrompts.length, 1);
+							const feedback: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(feedback));
+							assert.deepEqual(feedback.review, {
+								summary: { body: REVIEW_SUMMARY, basedOn: ["observation-1"] },
+								inline: [],
+								withheld: [],
+							});
+							break;
+						}
 						case "compose-fold": {
 							assert.equal(child.status, 0, child.stderr);
 							assert.match(
@@ -2314,6 +2499,14 @@ if (scenario !== undefined && scenario !== "") {
 								["prompt:1", "prompt:2"],
 							);
 							// An abstention cannot carry a claim about the work; the strength beside it can.
+							assert.match(
+								events.find((event) => event.startsWith("abstention-select:")) ?? "",
+								/selected names observation-2, which is not one of the observations this review may rest on/u,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("met-select:")) ?? "",
+								/Accepted the selection/u,
+							);
 							assert.match(
 								events.find((event) => event.startsWith("review-abstention:")) ?? "",
 								/observation-2, which is not one of the observations this review may rest on/u,
