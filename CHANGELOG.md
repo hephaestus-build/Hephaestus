@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.83.1
+
+### Patch Changes
+
+- A bug report that names a concrete malfunction or a way to reproduce it, but is still incomplete, is now a minor gap in "State a problem a maintainer can act on". A report that names neither stays a major gap.
+- A practice review whose observations were already accepted is no longer run again when its worker stops or is lost before it finishes. It ends as failed with a message that no completed feedback was saved, and its observations stay as recorded.
+- Observations link to the comments that carry feedback on your work. If no comment link was recorded, you can open the reviewed work instead. An empty practice Feedback tab explains the two kinds of feedback and lets you open Observations.
+- Capture of commit details now uses an indexed lookup for the target commit's file changes, reducing database load during synchronization.
+- Practice reviews reserve space for the complete next turn and restore their instructions after compaction. Essential input that cannot fit remains unassessed rather than producing an unsupported observation.
+- Reviews of newly opened issues now stop before model execution when the submitted issue snapshot has changed. This avoids reviewing superseded issue content.
+- A stopping worker now keeps its sandbox gateway open while it waits for active reviews, so a review can keep making model requests until it finishes or the drain timeout runs out.
+- The worker now starts with a larger database connection pool, which leaves room for several reviews to prepare code evidence at the same time. The other roles keep their pool size. Set `HIKARI_MAXIMUM_POOL_SIZE` to choose a different size for the worker.
+
 ## 0.83.0
 
 ### Minor Changes
