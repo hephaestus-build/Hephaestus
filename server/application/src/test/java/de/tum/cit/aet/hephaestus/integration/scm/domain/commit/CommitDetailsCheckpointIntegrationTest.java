@@ -2,6 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.commit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -10,9 +14,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 @Transactional
@@ -25,6 +33,9 @@ class CommitDetailsCheckpointIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IdentityProviderRepository providers;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void shouldDistinguishCapturedEmptyCommitsFromUnenrichedStubsWithinEachRepository() {
@@ -87,6 +98,84 @@ class CommitDetailsCheckpointIntegrationTest extends BaseIntegrationTest {
         assertThat(commit.getCommittedAt()).isEqualTo(authored);
         assertThat(commit.getAdditions()).isEqualTo(3);
         assertThat(commit.getGitDetailsCapturedAt()).isEqualTo(captured);
+    }
+
+    @Test
+    void shouldReplaceOnlyTheNamedCommitsFileChangesThroughAnUncorrelatedDelete() {
+        IdentityProvider provider = providers
+                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseGet(
+                        () -> providers.save(new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+        Repository first = repository(provider, 71004L, "replaced");
+        Repository second = repository(provider, 71005L, "neighbour");
+        String sha = "d".repeat(40);
+        String other = "e".repeat(40);
+        upsert(first, sha, "Target", null);
+        upsert(first, other, "Same repository", null);
+        upsert(second, sha, "Same SHA", null);
+        long target = commitId(first, sha);
+        long sameRepository = commitId(first, other);
+        long sameSha = commitId(second, sha);
+        for (long commit : List.of(target, sameRepository, sameSha)) {
+            addFileChange(commit, "README.md");
+        }
+
+        List<String> deletes = capturedSql(() -> commits.deleteFileChanges(first.getId(), sha)).stream()
+                .filter(sql -> sql.toLowerCase(Locale.ROOT).contains("delete from commit_file_change"))
+                .toList();
+        addFileChange(target, "CHANGELOG.md");
+        commits.deleteFileChanges(first.getId(), sha);
+        addFileChange(target, "CHANGELOG.md");
+
+        assertThat(fileNames(target)).containsExactly("CHANGELOG.md");
+        assertThat(fileNames(sameRepository)).containsExactly("README.md");
+        assertThat(fileNames(sameSha)).containsExactly("README.md");
+        assertThat(deletes).hasSize(1);
+        String plan =
+                String.join("\n", jdbc.queryForList("EXPLAIN " + deletes.getFirst(), String.class, first.getId(), sha));
+        assertThat(plan).contains("InitPlan").doesNotContain("SubPlan");
+    }
+
+    private long commitId(Repository repository, String sha) {
+        return commits.findByShaAndRepositoryId(sha, repository.getId())
+                .orElseThrow()
+                .getId();
+    }
+
+    private void addFileChange(long commitId, String filename) {
+        jdbc.update(
+                "INSERT INTO commit_file_change (filename, change_type, additions, deletions, changes, commit_id) "
+                        + "VALUES (?, 'MODIFIED', 1, 0, 1, ?)",
+                filename,
+                commitId);
+    }
+
+    private List<String> fileNames(long commitId) {
+        return jdbc
+                .queryForList(
+                        "SELECT filename FROM commit_file_change WHERE commit_id = ? ORDER BY id",
+                        String.class,
+                        commitId)
+                .stream()
+                .map(Objects::requireNonNull)
+                .toList();
+    }
+
+    private static List<String> capturedSql(Runnable work) {
+        var logger = (Logger) LoggerFactory.getLogger("org.hibernate.SQL");
+        Level level = logger.getLevel();
+        var events = new ListAppender<ILoggingEvent>();
+        events.start();
+        logger.addAppender(events);
+        logger.setLevel(Level.DEBUG);
+        try {
+            work.run();
+        } finally {
+            logger.setLevel(level);
+            logger.detachAppender(events);
+            events.stop();
+        }
+        return events.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
     }
 
     private Repository repository(IdentityProvider provider, long nativeId, String name) {
