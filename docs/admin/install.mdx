@@ -80,8 +80,8 @@ Only the listed native hosts and the unmodified self-hosted Compose topology are
   The webhook server defaults to 2 CPUs / 256 PIDs. Override them with the corresponding `APPLICATION_SERVER_*`,
   `APPLICATION_WORKER_*` or `WEBHOOK_SERVER_*` limit variables. Keep the worker's PID limit: it is the
   role with Docker access.
-- `HIKARI_MAXIMUM_POOL_SIZE` defaults to 20. Provision at least that value multiplied by the total JVM
-  replica count, plus capacity for migrations and operator access.
+- Budget the database connection pool of each runtime role, plus headroom for migrations and operator access,
+  as [Runtime roles](./runtime-roles#database-connections) describes.
 - A host in the supported matrix, plus `git` and `openssl`.
 - A **DNS A record** that points your hostname at the host.
   Ports **80 and 443** must be reachable from the internet for `Let's Encrypt` HTTP-01, OAuth callbacks, and webhooks.

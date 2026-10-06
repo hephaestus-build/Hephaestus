@@ -324,6 +324,24 @@ The app pod signs worker tokens from a key *ring*, not a single value:
 configure it through a mounted YAML/config-tree rather than a flat variable. Unset, the app logs a
 warning and generates an ephemeral key that invalidates every worker token on restart.
 
+### Database connections
+
+Preparing code evidence can hold two database connections.
+The worker also needs connections for its control traffic and to record results.
+Thus, the worker's pool must hold two connections for each review that can prepare code evidence at the same time, plus room for the rest.
+
+The worker profile gives the worker a pool of 32 connections, in Compose and on any other deployment.
+The other roles keep the application default of 20.
+`HIKARI_MAXIMUM_POOL_SIZE` overrides the pool size of each JVM that receives it.
+The Compose stacks pass it to the worker only.
+
+Each JVM replica can open up to its own pool size.
+Budget the sum of all pools against the connections that PostgreSQL makes available, less its reserved connections and the connections of other clients.
+For example, one server, one worker and one webhook server use up to 32 + 20 + 20 = 72 connections.
+If PostgreSQL allows 100 connections and reserves 3, then 25 remain for migrations, operator access and other clients.
+This example is only an illustration.
+More replicas or larger pools use more connections, and other clients need their own headroom.
+
 ## Graceful drain
 
 On SIGTERM, the worker does these actions in order:
