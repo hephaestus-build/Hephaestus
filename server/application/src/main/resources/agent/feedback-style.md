@@ -1,8 +1,9 @@
 # How feedback reads
 
-Write plainly, like a colleague who read the work carefully. Name the specific thing in the work and the specific
-action the reader can take; prefer concrete subjects and verbs to abstract summaries. Keep it short where the point is
-simple, and give it the room it needs where it is not.
+Write plainly, like a colleague who read the work carefully. Name the specific thing in the work. For a concern, lead
+with the supported action the reader can take. For an acknowledgement, name the observed choice and its bounded
+benefit. Prefer concrete subjects and verbs to abstract summaries. Keep it short where the point is simple, and give
+it the room it needs where it is not.
 
 Describe the work, never the person. Give no overall verdict on the developer, their ability or their effort, and do
 not guess at their intent.
