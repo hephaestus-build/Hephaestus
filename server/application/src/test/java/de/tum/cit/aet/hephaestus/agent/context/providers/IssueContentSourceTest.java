@@ -293,6 +293,16 @@ class IssueContentSourceTest extends BaseUnitTest {
             }
 
             @Override
+            public @Nullable Long getAuthorNativeId() {
+                return authorLogin == null ? null : 71L;
+            }
+
+            @Override
+            public User.@Nullable Type getAuthorType() {
+                return authorLogin == null ? null : User.Type.USER;
+            }
+
+            @Override
             public Instant getCreatedAt() {
                 return createdAt;
             }

@@ -133,12 +133,16 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
 
     @Test
     void contribute_generalDiscussion_emittedWithAuthorAndBody() throws Exception {
+        IssueComment recorded = comment(
+                "reviewer-a",
+                "I think this is always going to pass since confidence is always >= 0.3",
+                Instant.parse("2025-06-01T10:00:00Z"));
+        recorded.setNativeId(81L);
+        recorded.getAuthor().setNativeId(82L);
+        recorded.setUpdatedAt(Instant.parse("2025-06-01T10:30:00Z"));
         when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
                 .thenReturn(List.of(
-                        comment(
-                                "reviewer-a",
-                                "I think this is always going to pass since confidence is always >= 0.3",
-                                Instant.parse("2025-06-01T10:00:00Z")),
+                        recorded,
                         comment(
                                 "author-x",
                                 "added confidence scoring to address this",
@@ -154,6 +158,9 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         assertThat(first.get("author").asString()).isEqualTo("reviewer-a");
         assertThat(first.get("body").asString()).contains("confidence");
         assertThat(first.get("createdAt").asString()).isEqualTo("2025-06-01T10:00:00Z");
+        assertThat(first.path("nativeId").asLong()).isEqualTo(81L);
+        assertThat(first.path("authorId").asLong()).isEqualTo(82L);
+        assertThat(first.path("updatedAt").asString()).isEqualTo("2025-06-01T10:30:00Z");
     }
 
     @Test

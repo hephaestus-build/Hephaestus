@@ -252,6 +252,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         result.put("changed_files", pullRequest.getChangedFiles());
         if (pullRequest.getAuthor() != null) {
             result.put("author", pullRequest.getAuthor().getLogin());
+            result.put("author_id", pullRequest.getAuthor().getNativeId());
             if (pullRequest.getAuthor().getType() == User.Type.BOT) {
                 result.put("author_bot", true);
             }
@@ -326,12 +327,20 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
             if (Boolean.TRUE.equals(comment.getOutdated())) {
                 commentNode.put("outdated", true);
             }
+            commentNode.put("native_id", comment.getNativeId());
+            if (comment.getCommitId() != null) {
+                commentNode.put("commit_id", comment.getCommitId());
+            }
             commentNode.put("body", comment.getBody());
             if (comment.getCreatedAt() != null) {
                 commentNode.put("created_at", comment.getCreatedAt().toString());
             }
+            if (comment.getUpdatedAt() != null) {
+                commentNode.put("updated_at", comment.getUpdatedAt().toString());
+            }
             if (comment.getAuthor() != null) {
                 commentNode.put("author", comment.getAuthor().getLogin());
+                commentNode.put("author_id", comment.getAuthor().getNativeId());
                 if (comment.getAuthor().getType() == User.Type.BOT) {
                     commentNode.put("bot", true);
                 }

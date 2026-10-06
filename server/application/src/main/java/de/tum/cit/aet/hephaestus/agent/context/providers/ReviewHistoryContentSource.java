@@ -27,8 +27,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -182,19 +184,22 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             List<Feedback> deliveredRows = feedbackRepository.findDeliveredForPersonHistory(workspaceId, subjectUserId);
             List<Feedback> queuedRows =
                     feedbackRepository.findPreparedForRecipient(workspaceId, subjectUserId, Pageable.unpaged());
-            Map<UUID, ReviewClaimCurrentness> shown = shownFeedback(workspaceId, deliveredRows, queuedRows);
+            ShownFeedback shown = shownFeedback(workspaceId, deliveredRows, queuedRows);
             List<Feedback> delivered = deliveredRows.stream()
-                    .filter(f -> shown.containsKey(f.getId()))
+                    .filter(f -> shown.currentness().containsKey(f.getId()))
                     .toList();
             List<Feedback> queued = queuedRows.stream()
-                    .filter(f -> shown.containsKey(f.getId()))
+                    .filter(f -> shown.currentness().containsKey(f.getId()))
                     .toList();
-            Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(workspaceId, shown.keySet());
+            Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(
+                    workspaceId, shown.currentness().keySet());
             feedbackCount = delivered.size();
             files.put(
                     FEEDBACK_FILE, serialize(feedbackPayload(workspaceId, delivered, shown, withdrawn), FEEDBACK_FILE));
             preparedCount = queued.size();
-            files.put(PREPARED_FILE, serialize(preparedPayload(workspaceId, queued, shown, withdrawn), PREPARED_FILE));
+            files.put(
+                    PREPARED_FILE,
+                    serialize(preparedPayload(workspaceId, queued, shown.currentness(), withdrawn), PREPARED_FILE));
             completeness.put(FEEDBACK_HISTORY, SourceCompleteness.COMPLETE);
             // Reported off what has been delivered, not off the queue: the kind is "what was said to this
             // person", and a full queue with nothing delivered is still an empty record of having spoken.
@@ -227,22 +232,22 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             var items = observationsPayload(workspaceId, rows).path("observations");
             for (int i = 0; i < rows.size(); i++) {
                 ObjectNode record = (ObjectNode) items.get(i);
-                record.put("id", rows.get(i).getId().toString());
                 record.put("synced_at", rows.get(i).getObservedAt().toString());
                 observations.accept(record);
             }
         }
         if (selectedKinds.contains(FEEDBACK_HISTORY)) {
             List<Feedback> rows = feedbackRepository.findDeliveredForPersonHistory(workspaceId, personId);
-            Map<UUID, ReviewClaimCurrentness> shown = shownFeedback(workspaceId, rows, List.of());
-            List<Feedback> permitted =
-                    rows.stream().filter(row -> shown.containsKey(row.getId())).toList();
-            Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(workspaceId, shown.keySet());
+            ShownFeedback shown = shownFeedback(workspaceId, rows, List.of());
+            List<Feedback> permitted = rows.stream()
+                    .filter(row -> shown.currentness().containsKey(row.getId()))
+                    .toList();
+            Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(
+                    workspaceId, shown.currentness().keySet());
             var items =
                     feedbackPayload(workspaceId, permitted, shown, withdrawn).path("feedback");
             for (int i = 0; i < permitted.size(); i++) {
                 ObjectNode record = (ObjectNode) items.get(i);
-                record.put("id", permitted.get(i).getId().toString());
                 record.put("synced_at", permitted.get(i).getCreatedAt().toString());
                 feedback.accept(record);
             }
@@ -264,7 +269,10 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         if (row == null
                 || row.getDeliveryState() != FeedbackDeliveryState.DELIVERED
                 || withdrawalRepository.withdrawnAmong(workspaceId, Set.of(id)).contains(id)) return false;
-        return shownFeedback(workspaceId, List.of(row), List.of(), purpose).get(id) == ReviewClaimCurrentness.CURRENT;
+        return shownFeedback(workspaceId, List.of(row), List.of(), purpose)
+                        .currentness()
+                        .get(id)
+                == ReviewClaimCurrentness.CURRENT;
     }
 
     private List<Observation> visibleObservations(long workspaceId, Long subjectUserId, @Nullable UUID excludedJobId) {
@@ -297,18 +305,20 @@ public class ReviewHistoryContentSource implements EvidenceSource {
      * bound to may be shown. A row whose evidence is no longer current keeps its record but not its words, which
      * describe work as it was and are not evidence about the work as it is.
      */
-    private Map<UUID, ReviewClaimCurrentness> shownFeedback(
-            long workspaceId, List<Feedback> delivered, List<Feedback> queued) {
+    private ShownFeedback shownFeedback(long workspaceId, List<Feedback> delivered, List<Feedback> queued) {
         return shownFeedback(workspaceId, delivered, queued, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
     }
 
-    private Map<UUID, ReviewClaimCurrentness> shownFeedback(
+    /** The rows that may be read, the currentness of their evidence, and the observations each is bound to. */
+    private record ShownFeedback(Map<UUID, ReviewClaimCurrentness> currentness, Map<UUID, List<Observation>> basedOn) {}
+
+    private ShownFeedback shownFeedback(
             long workspaceId, List<Feedback> delivered, List<Feedback> queued, SourceUsePurpose purpose) {
         List<UUID> ids = Stream.concat(delivered.stream(), queued.stream())
                 .map(Feedback::getId)
                 .toList();
         if (ids.isEmpty()) {
-            return Map.of();
+            return new ShownFeedback(Map.of(), Map.of());
         }
         List<FeedbackObservationVisibility> bindings =
                 feedbackObservationRepository.findForVisibility(workspaceId, ids);
@@ -334,7 +344,13 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         Stream.concat(delivered.stream(), queued.stream())
                 .filter(f -> !live(referenceOf(f), activeThreads))
                 .forEach(f -> shown.remove(f.getId()));
-        return shown;
+        Map<UUID, List<Observation>> basedOn = bindings.stream()
+                .filter(binding -> shown.containsKey(binding.getFeedbackId()))
+                .sorted(Comparator.comparing(binding -> binding.getObservation().getId()))
+                .collect(Collectors.groupingBy(
+                        FeedbackObservationVisibility::getFeedbackId,
+                        Collectors.mapping(FeedbackObservationVisibility::getObservation, Collectors.toList())));
+        return new ShownFeedback(shown, basedOn);
     }
 
     private Set<Long> activeThreads(long workspaceId, Stream<StagedArtifactNames.Reference> artifacts) {
@@ -452,6 +468,8 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         ArrayNode items = root.putArray("observations");
         for (Observation o : observations) {
             ObjectNode node = items.addObject();
+            // The handle delivered feedback's basedOn names; a trace, not evidence that two observations agree.
+            node.put("id", o.getId().toString());
             node.put(
                     "practiceSlug",
                     o.getPractice() == null ? null : o.getPractice().getSlug());
@@ -468,8 +486,13 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         return root;
     }
 
+    /**
+     * What was delivered, each row with the observations it rests on as they were recorded: their outcome and the
+     * practice revision they were made against, never the practice's current one. A row whose words are withheld
+     * keeps these without its body; the ids are trace handles, not evidence.
+     */
     private ObjectNode feedbackPayload(
-            long workspaceId, List<Feedback> delivered, Map<UUID, ReviewClaimCurrentness> shown, Set<UUID> withdrawn) {
+            long workspaceId, List<Feedback> delivered, ShownFeedback shown, Set<UUID> withdrawn) {
         ObjectNode root = objectMapper.createObjectNode();
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
@@ -477,14 +500,36 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         ArrayNode items = root.putArray("feedback");
         for (Feedback f : delivered) {
             ObjectNode node = items.addObject();
+            node.put("id", f.getId().toString());
             node.put("channel", f.getChannel() == null ? null : f.getChannel().name());
             names.stageInto(node, f.getArtifactKind(), f.getArtifactId());
             node.put(
                     "deliveredAt",
                     f.getDeliveredAt() == null ? null : f.getDeliveredAt().toString());
-            putBody(node, f, shown, withdrawn);
+            node.put("reviewedRevision", f.getReviewedRevision());
+            ArrayNode basedOn = node.putArray("basedOn");
+            for (Observation o : shown.basedOn().getOrDefault(f.getId(), List.of())) {
+                ObjectNode support = basedOn.addObject();
+                support.put("id", o.getId().toString());
+                support.put(
+                        "practiceSlug",
+                        o.getPractice() == null ? null : o.getPractice().getSlug());
+                putPracticeRevision(support, o.getPracticeRevision());
+                support.put("outcome", o.getOutcome().name());
+            }
+            putBody(node, f, shown.currentness(), withdrawn);
         }
         return root;
+    }
+
+    private static void putPracticeRevision(ObjectNode node, @Nullable PracticeRevision revision) {
+        if (revision == null) {
+            node.putNull("practiceRevision");
+            return;
+        }
+        ObjectNode recorded = node.putObject("practiceRevision");
+        recorded.put("id", revision.getId() == null ? null : revision.getId().toString());
+        recorded.put("number", revision.getRevisionNumber());
     }
 
     /**

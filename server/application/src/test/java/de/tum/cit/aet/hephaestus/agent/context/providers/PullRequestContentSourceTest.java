@@ -354,6 +354,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             root.setLine(10);
             root.setSide(PullRequestReviewComment.Side.LEFT);
             root.setOutdated(true);
+            root.setNativeId(61L);
+            root.setCommitId("original-comment-head");
+            root.setUpdatedAt(Instant.parse("2025-06-01T12:30:00Z"));
             root.setBody("This branch was removed on purpose?");
             root.setCreatedAt(Instant.parse("2025-06-01T12:00:00Z"));
             PullRequestReviewComment reply = new PullRequestReviewComment();
@@ -377,8 +380,21 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             JsonNode first = comments.get(0);
             assertThat(first.propertyNames())
                     .containsExactlyInAnyOrder(
-                            "id", "thread", "path", "line", "side", "outdated", "body", "created_at");
+                            "id",
+                            "thread",
+                            "path",
+                            "line",
+                            "side",
+                            "outdated",
+                            "native_id",
+                            "commit_id",
+                            "body",
+                            "created_at",
+                            "updated_at");
             assertThat(first.get("id").asLong()).isEqualTo(1L);
+            assertThat(first.path("native_id").asLong()).isEqualTo(61L);
+            assertThat(first.path("commit_id").asString()).isEqualTo("original-comment-head");
+            assertThat(first.path("updated_at").asString()).isEqualTo("2025-06-01T12:30:00Z");
             assertThat(first.get("thread").asLong()).isEqualTo(70L);
             assertThat(first.get("side").asString()).isEqualTo("LEFT");
             assertThat(first.get("outdated").asBoolean()).isTrue();

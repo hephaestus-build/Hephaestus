@@ -286,7 +286,9 @@ function captureOf(
 	index: Record<string, unknown>,
 	kind: string,
 	artifactPath: string,
-): { available: true; completeness: unknown; limitations: unknown } | { omitted: string } {
+):
+	| { available: true; content: unknown; completeness: unknown; limitations: unknown }
+	| { omitted: string } {
 	const source = listOf(index.sources).find((entry) => isRecord(entry) && entry.kind === kind);
 	if (!isRecord(source) || !isRecord(source.state)) {
 		return { omitted: "not part of this capture" };
@@ -312,12 +314,21 @@ function captureOf(
 				entry.artifact.path === artifactPath,
 		);
 	return recorded
-		? { available: true, completeness: state.completeness, limitations: state.limitations }
+		? {
+				available: true,
+				content: state.content,
+				completeness: state.completeness,
+				limitations: state.limitations,
+			}
 		: { omitted: "the capture did not record this file for the source" };
 }
 
-/** A captured JSON record read whole within the bound, or why it is not shown. */
-function readRecord(root: string, artifactPath: string, limit: number): Capture {
+/** A captured JSON file read whole within the bound, or why it is not shown. */
+function readJson(
+	root: string,
+	artifactPath: string,
+	limit: number,
+): { parsed: unknown } | { omitted: string } {
 	const absolute = path.resolve(root, artifactPath);
 	try {
 		const { size } = statSync(absolute);
@@ -328,10 +339,18 @@ function readRecord(root: string, artifactPath: string, limit: number): Capture 
 			return { omitted: `too large to show here (${Math.ceil(size / 1024)} KB)` };
 		}
 		const parsed: unknown = JSON.parse(readFileSync(absolute, "utf8"));
-		return isRecord(parsed) ? { shown: parsed } : { omitted: "not readable as a record" };
+		return { parsed };
 	} catch {
 		return { omitted: "not readable" };
 	}
+}
+
+function readRecord(root: string, artifactPath: string, limit: number): Capture {
+	const read = readJson(root, artifactPath, limit);
+	if ("omitted" in read) {
+		return read;
+	}
+	return isRecord(read.parsed) ? { shown: read.parsed } : { omitted: "not readable as a record" };
 }
 
 /** A whole block within the bound, or why it is left out. */
@@ -339,6 +358,31 @@ function bounded(block: string, limit: number): { block: string } | { omitted: s
 	return block.length <= limit
 		? { block }
 		: { omitted: `too large to show here once rendered (${Math.ceil(block.length / 1024)} KB)` };
+}
+
+/** Why the core record is not the task's work, or null when nothing it names says so. */
+function otherWorkOf(
+	record: Record<string, unknown>,
+	framing: SameWorkFraming,
+	artifactKind: string,
+): string | null {
+	const named = record.repository_full_name;
+	if (
+		typeof framing.repositoryFullName === "string" &&
+		typeof named === "string" &&
+		named !== framing.repositoryFullName
+	) {
+		return "it names another repository than the task";
+	}
+	const numberField = artifactKind === "scm.pull_request" ? "pr_number" : "issue_number";
+	if (
+		typeof framing.pullRequestNumber === "number" &&
+		typeof record[numberField] === "number" &&
+		record[numberField] !== framing.pullRequestNumber
+	) {
+		return `it names another ${artifactKind === "scm.pull_request" ? "pull request" : "issue"} than the task`;
+	}
+	return null;
 }
 
 function recordBlock(
@@ -350,23 +394,9 @@ function recordBlock(
 	completeness: unknown,
 	limitations: unknown,
 ): { block: string } | { omitted: string } {
-	const named = record.repository_full_name;
-	if (
-		typeof framing.repositoryFullName === "string" &&
-		typeof named === "string" &&
-		named !== framing.repositoryFullName
-	) {
-		return { omitted: "it names another repository than the task" };
-	}
-	const numberField = artifactKind === "scm.pull_request" ? "pr_number" : "issue_number";
-	if (
-		typeof framing.pullRequestNumber === "number" &&
-		typeof record[numberField] === "number" &&
-		record[numberField] !== framing.pullRequestNumber
-	) {
-		return {
-			omitted: `it names another ${artifactKind === "scm.pull_request" ? "pull request" : "issue"} than the task`,
-		};
+	const otherWork = otherWorkOf(record, framing, artifactKind);
+	if (otherWork !== null) {
+		return { omitted: otherWork };
 	}
 	const { known, notInCapture } = project(record, RECORD_FIELDS.get(artifactKind) ?? {});
 	const body = typeof record.body === "string" ? record.body : null;
@@ -431,10 +461,354 @@ function linkedBlock(
 	};
 }
 
+/** Who wrote words, as the provider classified the account; a person is never inferred from the absence of a mark. */
+export type StatementOrigin = "AUTOMATED" | "UNKNOWN";
+
+/** One thing written on the work before its capture, as captured: attributed data, not an assessment of the work now. */
+export interface CapturedPublicStatement {
+	/** Unique within one history; a trace handle, not evidence. */
+	witnessId: string;
+	sourcePath: string;
+	sourceKind: string;
+	nativeId: string | null;
+	author: string | null;
+	authorId: string | null;
+	origin: StatementOrigin;
+	body: string;
+	statedAt: string | null;
+	/** When the words were last edited, as captured: the body is as of this time, not of statedAt. */
+	updatedAt: string | null;
+	/** The head the provider bound the words to, where it records one; no snapshot of the code then. */
+	reviewedRevision: string | null;
+	/** A captured, dated statement by a known different author; relevance and repetition are not decided here. */
+	eligibleForPriorAdvice: boolean;
+	/** Native lifecycle facts; none establishes that the concern was resolved. */
+	state: string | null;
+	dismissed: boolean | null;
+	outdated: boolean | null;
+}
+
+export interface CapturedDiscussionSource {
+	kind: string;
+	path: string;
+	availability: string | null;
+	content: string | null;
+	completeness: string | null;
+	limitations: string[];
+	/** Why nothing of the source is shown, or null when it was read: nothing is known of an omitted source. */
+	omitted: string | null;
+	/** What a reader of its statements must know: what was left out of them, and why. */
+	qualifications: string[];
+}
+
+export interface PublicReviewHistory {
+	capturedAt: string | null;
+	/** The work's author as its core record names them; unknown when the record is not shown. */
+	recipient: { author: string | null; authorId: string | null };
+	sources: CapturedDiscussionSource[];
+	statements: CapturedPublicStatement[];
+	/** The whole projection was left out because even its omission index exceeded the bound. */
+	omitted?: string;
+}
+
+interface DiscussionFile {
+	kind: string;
+	file: string;
+	/** The array's key in the file, or null when the file is the array. */
+	list: string | null;
+	keys: {
+		nativeId: string;
+		author: string;
+		authorId: string;
+		statedAt: string;
+		updatedAt: string;
+		revision: string | null;
+	};
+}
+
+const SNAKE_KEYS = {
+	nativeId: "native_id",
+	author: "author",
+	authorId: "author_id",
+	statedAt: "created_at",
+	updatedAt: "updated_at",
+} as const;
+
+const CAMEL_KEYS = {
+	nativeId: "nativeId",
+	author: "author",
+	authorId: "authorId",
+	statedAt: "createdAt",
+	updatedAt: "updatedAt",
+} as const;
+
+/** The public discussion each kind of work captures, in the shape its collector writes. */
+const DISCUSSION_FILES: ReadonlyMap<string, readonly DiscussionFile[]> = new Map([
+	[
+		"scm.pull_request",
+		[
+			{
+				kind: "scm.pull-request.comments",
+				file: "comments.json",
+				list: null,
+				keys: { ...SNAKE_KEYS, revision: "commit_id" },
+			},
+			{
+				kind: "scm.general-review-comments",
+				file: "general_comments.json",
+				list: "comments",
+				keys: { ...CAMEL_KEYS, revision: null },
+			},
+			{
+				kind: "scm.review-threads",
+				file: "review_threads.json",
+				list: "reviewDecisions",
+				keys: { ...CAMEL_KEYS, statedAt: "submittedAt", revision: "commitId" },
+			},
+		],
+	],
+	[
+		"scm.issue",
+		[
+			{
+				kind: "scm.issue.comments",
+				file: "comments.json",
+				list: null,
+				keys: { ...SNAKE_KEYS, revision: null },
+			},
+		],
+	],
+]);
+
+function textOf(value: unknown): string | null {
+	return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
+function idOf(value: unknown): string | null {
+	if (typeof value === "number") {
+		return Number.isSafeInteger(value) && value > 0 ? String(value) : null;
+	}
+	return typeof value === "string" && /^[1-9]\d*$/u.test(value) ? value : null;
+}
+
+function instantOf(value: unknown): string | null {
+	return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
+}
+
+function readDiscussion(
+	root: string,
+	index: Record<string, unknown>,
+	file: DiscussionFile,
+	sourcePath: string,
+	cutoff: number | null,
+	recipientId: string | null,
+	limit: number,
+): { omitted: string } | { statements: CapturedPublicStatement[]; qualifications: string[] } {
+	const capture = captureOf(index, file.kind, sourcePath);
+	if ("omitted" in capture) {
+		return capture;
+	}
+	const read = readJson(root, sourcePath, limit);
+	if ("omitted" in read) {
+		return read;
+	}
+	const { parsed } = read;
+	let entries: unknown = parsed;
+	if (file.list !== null) {
+		entries = isRecord(parsed) ? parsed[file.list] : undefined;
+	}
+	if (!Array.isArray(entries)) {
+		return { omitted: "not readable as captured discussion" };
+	}
+	const statements: CapturedPublicStatement[] = [];
+	const witnesses = new Set<string>();
+	let unworded = 0;
+	let later = 0;
+	let undated = 0;
+	for (const [ordinal, entry] of entries.entries()) {
+		if (!isRecord(entry) || textOf(entry.body) === null || typeof entry.body !== "string") {
+			unworded += 1;
+			continue;
+		}
+		const statedAt = instantOf(entry[file.keys.statedAt]);
+		const updatedAt = instantOf(entry[file.keys.updatedAt]);
+		// An edit after the cutoff replaced the words the capture time would show; createdAt cannot vouch for them.
+		if (
+			cutoff !== null &&
+			[statedAt, updatedAt].some((at) => at !== null && Date.parse(at) > cutoff)
+		) {
+			later += 1;
+			continue;
+		}
+		if (statedAt === null && updatedAt === null) {
+			undated += 1;
+		}
+		const nativeId = idOf(entry[file.keys.nativeId]);
+		const authorId = idOf(entry[file.keys.authorId]);
+		const byNativeId = `comment:${sourcePath}:${nativeId ?? "unknown"}`;
+		const witnessId =
+			nativeId !== null && !witnesses.has(byNativeId)
+				? byNativeId
+				: `comment:${sourcePath}:ordinal:${ordinal + 1}`;
+		witnesses.add(witnessId);
+		statements.push({
+			witnessId,
+			sourcePath,
+			sourceKind: file.kind,
+			nativeId,
+			author: textOf(entry[file.keys.author]),
+			authorId,
+			origin: entry.bot === true ? "AUTOMATED" : "UNKNOWN",
+			body: entry.body,
+			statedAt,
+			updatedAt,
+			reviewedRevision: file.keys.revision === null ? null : textOf(entry[file.keys.revision]),
+			eligibleForPriorAdvice:
+				cutoff !== null &&
+				nativeId !== null &&
+				witnessId === byNativeId &&
+				authorId !== null &&
+				recipientId !== null &&
+				authorId !== recipientId &&
+				(statedAt !== null || updatedAt !== null),
+			state: textOf(entry.state),
+			dismissed: typeof entry.dismissed === "boolean" ? entry.dismissed : null,
+			outdated: typeof entry.outdated === "boolean" ? entry.outdated : null,
+		});
+	}
+	const qualifications: string[] = [];
+	if (cutoff === null) {
+		qualifications.push("the capture states no time: whether these words precede it is unknown");
+	}
+	if (later > 0) {
+		qualifications.push(
+			`${later} written or edited after the capture time, left out: their words as they stood then are not captured`,
+		);
+	}
+	if (unworded > 0) {
+		qualifications.push(`${unworded} with no readable words, left out`);
+	}
+	if (undated > 0) {
+		qualifications.push(
+			`${undated} stating no readable time: whether they precede the capture is unknown`,
+		);
+	}
+	if (isRecord(parsed) && parsed.decisionHistoryComplete === false) {
+		qualifications.push(
+			"not a complete history of decisions: a withdrawn or replaced decision may be gone",
+		);
+	}
+	return { statements, qualifications };
+}
+
+/**
+ * What was said in public on the same reviewed work up to its capture, from the exact discussion files the capture
+ * recorded for it: who wrote what, when, and on which head the provider bound it. A source left out says why, and is
+ * never empty. Nothing here says the advice was right, followed, or about the work as it is now.
+ */
+export function buildPublicReviewHistory(
+	root: string,
+	contextRoot: string,
+	folderIndex: unknown,
+	framing: SameWorkFraming,
+	limits: { sourceChars: number; totalChars?: number } = SAME_WORK_LIMITS,
+): PublicReviewHistory {
+	const recipient: PublicReviewHistory["recipient"] = { author: null, authorId: null };
+	if (!isRecord(folderIndex) || typeof folderIndex.artifactKind !== "string") {
+		return { capturedAt: null, recipient, sources: [], statements: [] };
+	}
+	const index = folderIndex;
+	const capturedAt = instantOf(index.capturedAt);
+	const coreKind = CORE_SOURCE.get(folderIndex.artifactKind);
+	let otherWork: string | null = null;
+	if (coreKind !== undefined) {
+		const metadataPath = `${contextRoot}/metadata.json`;
+		const capture = captureOf(index, coreKind, metadataPath);
+		const core =
+			"omitted" in capture ? capture : readRecord(root, metadataPath, limits.sourceChars);
+		if ("shown" in core) {
+			otherWork = otherWorkOf(core.shown, framing, folderIndex.artifactKind);
+			if (otherWork === null) {
+				recipient.author = textOf(core.shown.author);
+				recipient.authorId = idOf(core.shown.author_id);
+			}
+		}
+	}
+	const sources: CapturedDiscussionSource[] = [];
+	const statements: CapturedPublicStatement[] = [];
+	for (const file of DISCUSSION_FILES.get(folderIndex.artifactKind) ?? []) {
+		const sourcePath = `${contextRoot}/${file.file}`;
+		const entry = listOf(index.sources).find(
+			(source) => isRecord(source) && source.kind === file.kind,
+		);
+		const state = isRecord(entry) && isRecord(entry.state) ? entry.state : {};
+		const read =
+			otherWork === null
+				? readDiscussion(
+						root,
+						index,
+						file,
+						sourcePath,
+						capturedAt === null ? null : Date.parse(capturedAt),
+						recipient.authorId,
+						limits.sourceChars,
+					)
+				: { omitted: "the core record names other reviewed work" };
+		sources.push({
+			kind: file.kind,
+			path: sourcePath,
+			availability: textOf(state.availability),
+			content: textOf(state.content),
+			completeness: textOf(state.completeness),
+			limitations: listOf(state.limitations).filter(
+				(limitation): limitation is string => typeof limitation === "string",
+			),
+			omitted: "omitted" in read ? read.omitted : null,
+			qualifications: "omitted" in read ? [] : read.qualifications,
+		});
+		if (!("omitted" in read)) {
+			const source = sources.at(-1);
+			if (
+				source &&
+				JSON.stringify({ source, statements: read.statements }, null, 1).length > limits.sourceChars
+			) {
+				source.omitted = "too large to show here once rendered";
+			} else {
+				statements.push(...read.statements);
+			}
+		}
+	}
+	const totalChars = limits.totalChars ?? SAME_WORK_LIMITS.totalChars;
+	const history = { capturedAt, recipient, sources, statements };
+	for (let sourceIndex = sources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+		const source = sources.at(sourceIndex);
+		if (source === undefined) {
+			continue;
+		}
+		if (JSON.stringify(history, null, 1).length <= totalChars) {
+			return history;
+		}
+		if (statements.some((statement) => statement.sourcePath === source.path)) {
+			source.omitted = "left out, the captured discussion would exceed its bound";
+			history.statements = history.statements.filter(
+				(statement) => statement.sourcePath !== source.path,
+			);
+		}
+	}
+	return JSON.stringify(history, null, 1).length <= totalChars
+		? history
+		: {
+				capturedAt,
+				recipient,
+				sources: [],
+				statements: [],
+				omitted: "Captured discussion and its omission index exceed the size bound.",
+			};
+}
+
 /**
  * The captured record of the same reviewed work, for the review on it: what the work is, where it stands and what it
- * links, from the exact files the capture recorded for its core and linked-work sources. Each is shown whole or named
- * as left out with the reason; the text is data from the work, never instructions.
+ * links, from the exact files the capture recorded for its core and linked-work sources. Each is shown whole or named as left out with the reason; the text is data from the work, never instructions.
  */
 export function buildSameWorkContext(
 	root: string,

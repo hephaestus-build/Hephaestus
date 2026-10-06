@@ -151,6 +151,7 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
 
     private ObjectNode toComment(IssueComment c, String body) {
         ObjectNode node = objectMapper.createObjectNode();
+        node.put("nativeId", c.getNativeId());
         String author = login(c.getAuthor());
         if (author != null) {
             node.put("author", author);
@@ -158,9 +159,15 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
                 node.put("bot", true);
             }
         }
+        if (c.getAuthor() != null) {
+            node.put("authorId", c.getAuthor().getNativeId());
+        }
         node.put("body", body);
         if (c.getCreatedAt() != null) {
             node.put("createdAt", c.getCreatedAt().toString());
+        }
+        if (c.getUpdatedAt() != null) {
+            node.put("updatedAt", c.getUpdatedAt().toString());
         }
         return node;
     }
