@@ -1745,8 +1745,9 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                             anyString());
         }
 
-        @Test
-        void shouldRefuseAClosureWhenItsSnapshotChangesAfterPreparation() {
+        @ParameterizedTest
+        @ValueSource(strings = {"scm.issue.opened", "scm.issue.closed"})
+        void shouldRefuseWhenTheIssueSnapshotChangesAfterPreparation(String signal) {
             when(reviewTargets.findIssue(999L))
                     .thenReturn(Optional.of(new ReviewTargetQuery.Target(123L, "owner/repo", 12, 789L, false)));
             ObjectNode metadata = objectMapper.createObjectNode();
@@ -1755,7 +1756,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
             metadata.put("repository_id", 123L);
             metadata.put("repository_full_name", "owner/repo");
             metadata.put("issue_number", 12);
-            metadata.put("signal", "scm.issue.closed");
+            metadata.put("signal", signal);
             metadata.put("review_snapshot_id", UUID.randomUUID().toString());
             testJob.setMetadata(metadata);
             var prepared = service.prepare(testJob, List.of(validObservation("pr-description-quality", Outcome.MET)));

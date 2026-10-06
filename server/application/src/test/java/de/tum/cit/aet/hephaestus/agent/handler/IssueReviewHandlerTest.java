@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
@@ -139,6 +140,30 @@ class IssueReviewHandlerTest extends BaseUnitTest {
 
     @Test
     void shouldPointToCapturedIssueFilesWhenPreparingTheTask() {
+        var job = issueJobWithOnePractice(true);
+        try (var prepared = handler.prepareInputs(job)) {
+            var files = PreparedJobInputsFixtures.files(prepared);
+            var task = objectMapper.readTree(Objects.requireNonNull(files.get(SandboxLayout.TASK_ENVELOPE_FILENAME)));
+            assertThat(task.path("prompt").asString())
+                    .contains(
+                            SandboxLayout.CONTEXT_PREFIX + "metadata.json",
+                            SandboxLayout.CONTEXT_PREFIX + "comments.json",
+                            SandboxLayout.CONTEXT_PREFIX + "project_inventory.json")
+                    .doesNotContain("inputs/context/");
+        }
+    }
+
+    @Test
+    void shouldRefuseBeforeWritingTheTaskWhenNoPracticeIsReady() {
+        var job = issueJobWithOnePractice(false);
+
+        assertThatThrownBy(() -> handler.prepareInputs(job))
+                .isInstanceOf(InsufficientEvidenceException.class)
+                .hasMessageContaining("No practice has sufficient evidence");
+    }
+
+    /** An issue review with one eligible practice, which readiness admits only when {@code ready}. */
+    private AgentJob issueJobWithOnePractice(boolean ready) {
         var job = new AgentJob();
         job.setId(UUID.randomUUID());
         job.setWorkspace(activePracticeWorkspace());
@@ -160,17 +185,8 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                         mock(JobFolderIndex.class)));
         when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any()))
                 .thenReturn(new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
-                        List.of(practice), mock(AutomatedReviewReadinessReport.class)));
-        try (var prepared = handler.prepareInputs(job)) {
-            var files = PreparedJobInputsFixtures.files(prepared);
-            var task = objectMapper.readTree(Objects.requireNonNull(files.get(SandboxLayout.TASK_ENVELOPE_FILENAME)));
-            assertThat(task.path("prompt").asString())
-                    .contains(
-                            SandboxLayout.CONTEXT_PREFIX + "metadata.json",
-                            SandboxLayout.CONTEXT_PREFIX + "comments.json",
-                            SandboxLayout.CONTEXT_PREFIX + "project_inventory.json")
-                    .doesNotContain("inputs/context/");
-        }
+                        ready ? List.of(practice) : List.of(), mock(AutomatedReviewReadinessReport.class)));
+        return job;
     }
 
     @Nested
