@@ -95,6 +95,7 @@ import { stopSession } from "./pi-session-lifecycle.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 import { hasText, isBlank } from "./pi-text.ts";
 import { prepareObservationArguments } from "./pi-tool-arguments.ts";
+import { prepareTurnText } from "./pi-turn-context.ts";
 
 // One session measures and composes. Persisted work/ notes survive context compaction.
 
@@ -2993,7 +2994,7 @@ async function settleSession(
 	label: string,
 	maxMs: number,
 ): Promise<boolean> {
-	if (!session.isStreaming) {
+	if (session.isIdle) {
 		return true;
 	}
 	const started = Date.now();
@@ -3056,7 +3057,6 @@ function openingIfNeeded(brief: string, composing = false): string {
 	if (openingInContext) {
 		return "";
 	}
-	openingInContext = true;
 	return composing
 		? `${prompt}\n\n${brief}\n\n`
 		: `${prompt}\n\n${brief}\n\n${OBSERVATION_EXAMPLE}\n\n${
@@ -3163,33 +3163,6 @@ Evaluate these practices: ${slugs.join(", ")}. Their criteria follow and decide 
 ${criteriaOf(slugs)}`;
 }
 
-/**
- * Include the incoming composition prompt in the space check. Pi's automatic preflight compaction
- * checks the previous assistant message, before appending this prompt. A failed manual compaction
- * leaves the SDK's normal overflow recovery available.
- */
-async function makeRoomFor(
-	session: AgentSession,
-	model: { contextWindow: number; maxTokens?: number },
-	text: string,
-): Promise<boolean> {
-	const held = session.getContextUsage()?.tokens ?? 0;
-	const needed = Math.ceil(text.length / 4) + (model.maxTokens ?? 0);
-	if (held + needed <= model.contextWindow) {
-		return false;
-	}
-	console.error(
-		`[pi-runner] composition: ${held} tokens held and ${needed} needed exceed the ${model.contextWindow} window — compacting first`,
-	);
-	try {
-		await session.compact();
-		return true;
-	} catch (error) {
-		console.error(`[pi-runner] composition: compaction failed: ${errorText(error)}`);
-		return false;
-	}
-}
-
 /** The practices with an admitted NOT_MET observation: what the composer has a decision to record on. */
 function notMetPractices(observations: readonly AdmittedObservation[]): string[] {
 	return [
@@ -3215,6 +3188,7 @@ async function askComposerOnceMore(
 	notMet: readonly string[],
 	undecided: () => readonly string[],
 	request: CompositionRequest,
+	buildText: () => string,
 	safety: ReturnType<typeof scheduleDeadline>,
 ): Promise<void> {
 	console.error(
@@ -3230,7 +3204,30 @@ async function askComposerOnceMore(
 			throw new Error("the session was still busy when the composition was asked once more");
 		}
 		if (!safety.expired()) {
-			await Promise.race([session.prompt(finishCompositionText(notMet, request)), safety.elapsed]);
+			await Promise.race([
+				(async () => {
+					const prepared = await prepareTurnText(
+						session,
+						() => `${buildText()}
+
+${finishCompositionText(notMet, request)}`,
+					);
+					if (safety.expired()) {
+						return;
+					}
+					if (prepared === null) {
+						throw new Error("essential composition input exceeds the context window");
+					}
+					await session.prompt(prepared, {
+						preflightResult: (disposition) => {
+							if (disposition === "started") {
+								openingInContext = true;
+							}
+						},
+					});
+				})(),
+				safety.elapsed,
+			]);
 		}
 	} catch (error) {
 		console.error(`[pi-runner] composition failed: ${errorText(error)}`);
@@ -3485,7 +3482,7 @@ async function main() {
 	 */
 	async function runTurn(
 		label: string,
-		text: string,
+		buildText: () => string,
 		slugs: readonly string[],
 	): Promise<StopReason | null> {
 		if (!(await settleSession(session, label, ABORT_SETTLE_MS))) {
@@ -3510,7 +3507,31 @@ async function main() {
 			stopTurn("safety", "the run is near its safety ceiling — aborting this turn");
 		});
 		try {
-			await Promise.race([session.prompt(text), safety.elapsed]);
+			await Promise.race([
+				(async () => {
+					const text = await prepareTurnText(session, buildText);
+					if (safety.expired()) {
+						return;
+					}
+					if (text === null) {
+						for (const slug of slugs) {
+							blockedPractices.add(slug);
+						}
+						console.error(
+							`[pi-runner] ${label}: essential input exceeds the context window — not reached`,
+						);
+						return;
+					}
+					await session.prompt(text, {
+						preflightResult: (disposition) => {
+							if (disposition === "started") {
+								openingInContext = true;
+							}
+						},
+					});
+				})(),
+				safety.elapsed,
+			]);
 		} catch (error) {
 			console.error(`[pi-runner] ${label} failed: ${errorText(error)}`);
 		} finally {
@@ -3529,7 +3550,12 @@ async function main() {
 			currentTurnSlugs = turn.slugs;
 			const stop = await runTurn(
 				`turn ${index + 1}/${turns.length} (${turn.id})`,
-				practicesTurnText(`## Turn ${index + 1} of ${turns.length}: ${turn.id}`, turn.slugs, brief),
+				() =>
+					practicesTurnText(
+						`## Turn ${index + 1} of ${turns.length}: ${turn.id}`,
+						turn.slugs,
+						brief,
+					),
 				turn.slugs,
 			);
 			stalls = stop === "stall" ? stalls + 1 : 0;
@@ -3552,11 +3578,12 @@ async function main() {
 			currentTurnSlugs = unfinished;
 			await runTurn(
 				"finish",
-				practicesTurnText(
-					"## Unfinished practices\nNo turn recorded a result for these practices; evaluate them now.",
-					unfinished,
-					brief,
-				),
+				() =>
+					practicesTurnText(
+						"## Unfinished practices\nNo turn recorded a result for these practices; evaluate them now.",
+						unfinished,
+						brief,
+					),
 				unfinished,
 			);
 		}
@@ -3687,6 +3714,12 @@ async function main() {
 			thinkingLevel,
 		});
 		const unsubscribeReview = subscribeSession(reviewSession);
+		let reviewContextHeld = false;
+		const unsubscribeContext = reviewSession.subscribe((event) => {
+			if (event.type === "compaction_end" && !event.aborted && !hasText(event.errorMessage)) {
+				reviewContextHeld = false;
+			}
+		});
 		activeSession = reviewSession;
 		composerTool = "report_review";
 		const historyRoot = nodePath.dirname(PREPARED_FEEDBACK_PATH);
@@ -3707,13 +3740,34 @@ async function main() {
 		});
 		const owed = () => undecidedByReview(reviewable).length;
 		const budget = compositionBudget(owed());
+		let started = false;
+		const wasStarted = () => started;
 		try {
 			const trace = openTurnTrace("review composition", budget, { owed, nudge: REVIEW_NUDGE });
 			try {
 				if (safety.expired()) {
 					throw new Error("the run reached its safety ceiling before the review was due");
 				}
-				await Promise.race([reviewSession.prompt(text), safety.elapsed]);
+				await Promise.race([
+					(async () => {
+						const prepared = await prepareTurnText(reviewSession, () => text);
+						if (safety.expired()) {
+							return;
+						}
+						if (prepared === null) {
+							throw new Error("essential review input exceeds the context window");
+						}
+						await reviewSession.prompt(prepared, {
+							preflightResult: (disposition) => {
+								if (disposition === "started") {
+									started = true;
+									reviewContextHeld = true;
+								}
+							},
+						});
+					})(),
+					safety.elapsed,
+				]);
 			} catch (error) {
 				console.error(`[pi-runner] review composition failed: ${errorText(error)}`);
 			} finally {
@@ -3724,6 +3778,7 @@ async function main() {
 			}
 			const left = undecidedByReview(reviewable);
 			if (
+				wasStarted() &&
 				(trace.stoppedBy === null || trace.stoppedBy === "loop") &&
 				left.length > 0 &&
 				(await settleSession(reviewSession, "review composition", ABORT_SETTLE_MS)) &&
@@ -3738,7 +3793,28 @@ async function main() {
 					endsWhenPaid: true,
 				});
 				try {
-					await Promise.race([reviewSession.prompt(finishReviewText(left)), safety.elapsed]);
+					await Promise.race([
+						(async () => {
+							const prepared = await prepareTurnText(
+								reviewSession,
+								() => `${reviewContextHeld ? "" : `${text}\n\n`}${finishReviewText(left)}`,
+							);
+							if (safety.expired()) {
+								return;
+							}
+							if (prepared === null) {
+								throw new Error("essential review input exceeds the context window");
+							}
+							await reviewSession.prompt(prepared, {
+								preflightResult: (disposition) => {
+									if (disposition === "started") {
+										reviewContextHeld = true;
+									}
+								},
+							});
+						})(),
+						safety.elapsed,
+					]);
 				} catch (error) {
 					console.error(`[pi-runner] review composition failed: ${errorText(error)}`);
 				} finally {
@@ -3751,6 +3827,7 @@ async function main() {
 		} finally {
 			persistComposedFeedback();
 			unsubscribeReview();
+			unsubscribeContext();
 			await stopSession(reviewSession);
 			activeSession = session;
 			composerTool = "report_feedback";
@@ -3779,6 +3856,8 @@ async function main() {
 				);
 				return notMet.filter((slug) => !decided.has(slug));
 			};
+			let started = false;
+			const wasStarted = () => started;
 			const trace = openTurnTrace("composition", compositionBudget(notMet.length), {
 				owed: () => undecided().length,
 				nudge: COMPOSITION_NUDGE,
@@ -3788,27 +3867,57 @@ async function main() {
 					throw new Error("the session was still busy when composition was due");
 				}
 				const compositionTurn = `${instructions}\n\n${buildCompositionTurn(request, admittedObservations, notReached)}`;
-				await makeRoomFor(session, model, compositionTurn);
-				// When room had to be made, the brief goes with the turn again.
-				const compositionText = `${openingIfNeeded(brief, true)}${compositionTurn}`;
-				if (safety.expired()) {
-					throw new Error("the run reached its safety ceiling while the session was compacted");
-				}
-				await Promise.race([session.prompt(compositionText), safety.elapsed]);
+				await Promise.race([
+					(async () => {
+						const compositionText = await prepareTurnText(
+							session,
+							() => `${openingIfNeeded(brief, true)}${compositionTurn}`,
+						);
+						if (safety.expired()) {
+							return;
+						}
+						if (compositionText === null) {
+							throw new Error("essential composition input exceeds the context window");
+						}
+						await session.prompt(compositionText, {
+							preflightResult: (disposition) => {
+								if (disposition === "started") {
+									openingInContext = true;
+									started = true;
+								}
+							},
+						});
+					})(),
+					safety.elapsed,
+				]);
 			} catch (error) {
 				console.error(`[pi-runner] composition failed: ${errorText(error)}`);
 			} finally {
+				if (trace.stoppedBy !== null) {
+					await settleSession(session, "composition", ABORT_SETTLE_MS);
+				}
 				closeTurnTrace(trace);
 			}
 			// A composer that ended on its own, or was cut off by a loop guard, is asked once more for the
 			// NOT_MET practices it left undecided; otherwise they have no composed next step.
 			const left = undecided();
 			if (
+				wasStarted() &&
 				(trace.stoppedBy === null || trace.stoppedBy === "loop") &&
 				left.length > 0 &&
 				!safety.expired()
 			) {
-				await askComposerOnceMore(session, left, undecided, request, safety);
+				await askComposerOnceMore(
+					session,
+					left,
+					undecided,
+					request,
+					() =>
+						openingInContext
+							? ""
+							: `${openingIfNeeded(brief, true)}${instructions}\n\n${buildCompositionTurn(request, admittedObservations, notReached)}`,
+					safety,
+				);
 			}
 		}
 	}
