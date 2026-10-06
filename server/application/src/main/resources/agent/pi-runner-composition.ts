@@ -552,14 +552,16 @@ export function priorPublicFeedback(history: unknown, thisWork: string | undefin
 
 /** What report_review tells the model it does. The rules are applied by readReview, with every reason at once. */
 export const REVIEW_TOOL_DESCRIPTION =
-	"Store the review on this piece of work: the complete summary comment, any complete notes placed on lines " +
-	"of the change, and the NOT_MET observations you decided not to raise here. Each body supplies the complete " +
-	"guidance; the server never assembles prose from fragments. Provider safety formatting and a fixed disclosure " +
-	"still apply. One call stores the whole review; " +
-	"a later call replaces it. Speak only about the issues the named observations decided; incidental citation " +
-	"details do not authorize new assessments or requirements. Acknowledgements must name their own support. " +
-	"Invalid support, eligibility or placement refuses the whole review, with every reason, so it can be " +
-	"corrected and sent again.";
+	"Store the review on this piece of work: the summary comment, any notes placed on lines of the change, and the " +
+	"NOT_MET observations you decided not to raise here. Each body is published whole as written, with provider " +
+	"safety formatting and a fixed disclosure; nothing is assembled from fragments. One call stores the whole " +
+	"review; a later call replaces it. Invalid support, eligibility or placement refuses the whole review, with " +
+	"every reason, so it can be corrected and sent again.";
+
+/** Offered before the body to orient generation; field order is not enforced. */
+const SUPPORT_FIRST =
+	"Choose these before writing the body: the id of each observation the body will discuss, every positive choice " +
+	"it acknowledges and every concern it raises, and no other. Then write the body from exactly these.";
 
 /** An id list the schema can offer: the ids themselves when there are any, since an empty enum is invalid. */
 function idList(ids: readonly string[], description: string) {
@@ -604,44 +606,40 @@ export function reviewToolParameters(
 		properties: {
 			summary: {
 				type: "object",
-				required: ["body", "basedOn"],
+				required: ["basedOn", "body"],
 				description:
 					"The one comment on the work, complete as the developer will read it. Omit it when nothing on " +
 					"this work earns a comment of its own.",
 				properties: {
+					basedOn: idList(
+						decided,
+						`${SUPPORT_FIRST} If any of them may not go out, the whole comment stays unsaid.`,
+					),
 					body: {
 						type: "string",
 						minLength: 1,
 						maxLength: REVIEW_LIMITS.summaryChars,
-						description: "The whole comment in Markdown.",
+						description: "The whole comment in Markdown, written from the observations in basedOn.",
 					},
-					basedOn: idList(
-						decided,
-						"The id of every observation this comment speaks about, and no other. If any of them may " +
-							"not go out, the whole comment stays unsaid.",
-					),
 				},
 			},
 			inline: {
 				type: "array",
 				maxItems: anchorable.length > 0 ? REVIEW_LIMITS.inlineNotes : 0,
 				description:
-					"Notes placed on lines of the change. Each is complete on its own: where a line cannot carry " +
-					"it, it is posted as a separate comment headed by its file and line.",
+					"Notes intended for cited lines of the change, each complete on its own. Each placement can fail " +
+					"independently.",
 				items: {
 					type: "object",
-					required: ["body", "basedOn", "anchor"],
+					required: ["basedOn", "body", "anchor"],
 					properties: {
+						basedOn: idList(decided, `${SUPPORT_FIRST} It includes the anchor's observation.`),
 						body: {
 							type: "string",
 							minLength: 1,
 							maxLength: REVIEW_LIMITS.inlineChars,
-							description: "The whole note in Markdown.",
+							description: "The whole note in Markdown, written from the observations in basedOn.",
 						},
-						basedOn: idList(
-							decided,
-							"The id of every observation this note speaks about; it includes the anchor's.",
-						),
 						anchor: {
 							type: "object",
 							required: ["observationId", "citationIndex"],
@@ -715,9 +713,7 @@ export function buildReviewTurn(input: ReviewTurnInput): string {
 					.join(", ")}.\n`;
 	const placement = input.lineNotes
 		? "- Line notes: a note sits on one citation marked `anchorable`, named by `observationId` and " +
-			"`citationIndex`. If the provider cannot place it on that line, it is posted as its own comment " +
-			"headed by the file and line, so write every note to stand on its own. Several notes may rest on " +
-			"one practice when they are about different lines.\n"
+			"`citationIndex`. Each body stands on its own, and each placement can fail independently.\n"
 		: "- This work has no lines a note can sit on; everything goes in the summary.\n";
 	const cited: CitedObservation[] = input.observations.map((observation) => ({
 		id: String(observation.id),
@@ -747,5 +743,5 @@ ${practices}
 ### Where the words go
 - The summary: one comment on the work.
 ${placement}
-${sameLinesNote(cited)}${notReachedNote(input.notReached)}Store the review with one report_review call. Decide every NOT_MET observation: speak about it in the summary or a line note, or name it under withheld with your reason. Writing nothing for the work is a correct outcome when nothing earns it; then send only withheld.`;
+${sameLinesNote(cited)}${notReachedNote(input.notReached)}Store the review with one report_review call, with every NOT_MET observation spoken about in the summary or a line note, or named under withheld with your reason.`;
 }

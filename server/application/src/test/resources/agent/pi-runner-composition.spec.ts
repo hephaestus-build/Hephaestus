@@ -441,10 +441,6 @@ void test("the review composition sees only what admission marked eligible, and 
 	assert.match(turn, /Looked at and not decided[^\n]*ships-tests \(NOT_APPLICABLE\)/u);
 	assert.ok(!turn.includes("No behaviour changed"), turn);
 	assert.match(turn, /did not settle one of its practices: keeps-tests-honest/u);
-	assert.match(
-		turn,
-		/posted as its own comment headed by the file and line, so write every note to stand on its own/u,
-	);
 	assert.match(turn, /Nothing has been said on this work yet\./u);
 });
 
