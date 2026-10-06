@@ -242,6 +242,38 @@ await test("application metrics stay on the private network in both Compose depl
 	}
 });
 
+await test("Compose passes the operator's database pool size to the worker only", () => {
+	const app = parseDocument(
+		readFileSync(new URL("../docker/compose.app.yaml", import.meta.url), "utf8"),
+	);
+	// Passed through without a value, so an unset variable leaves the worker profile's default in force.
+	const workerPool = ["services", "application-worker", "environment", "HIKARI_MAXIMUM_POOL_SIZE"];
+	assert.ok(app.hasIn(workerPool), "the worker receives the operator's pool size");
+	assert.equal(app.getIn(workerPool), null);
+	// The other roles keep the application's own default; only the worker is raised.
+	assert.equal(
+		app.getIn(["services", "application-server", "environment", "HIKARI_MAXIMUM_POOL_SIZE"]),
+		undefined,
+	);
+	const core = parseDocument(
+		readFileSync(new URL("../docker/compose.core.yaml", import.meta.url), "utf8"),
+	);
+	assert.equal(
+		core.getIn(["services", "webhook-server", "environment", "HIKARI_MAXIMUM_POOL_SIZE"]),
+		undefined,
+	);
+	const singleHost = parseDocument(
+		readFileSync(new URL("../docker/self-host/compose.single-host.yaml", import.meta.url), "utf8"),
+	);
+	for (const role of ["application-server", "application-worker", "webhook-server"]) {
+		assert.equal(
+			singleHost.getIn(["services", role, "environment", "HIKARI_MAXIMUM_POOL_SIZE"]),
+			undefined,
+			`single-host ${role} inherits its pool size`,
+		);
+	}
+});
+
 await test("maintenance uses the verified webapp image without its application startup or files", () => {
 	const document = parseDocument(
 		readFileSync(new URL("../docker/compose.proxy.yaml", import.meta.url), "utf8"),

@@ -402,6 +402,8 @@ services:
       APP_VERSION: ${IMAGE_TAG}
       SPRING_PROFILES_ACTIVE: prod,worker
       <<: [*practice-review-env, *scm-access-env, *observability-env, *release-identity-env]
+      # Valueless: unset, the worker profile's own pool default applies (docs/admin/runtime-roles.mdx).
+      HIKARI_MAXIMUM_POOL_SIZE:
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-}
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       # Valueless, as on application-server above; this is the pod that actually opens sandboxes.
