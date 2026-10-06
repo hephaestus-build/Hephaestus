@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.83.0
+
+### Minor Changes
+
+- Practice reviews on pull requests, merge requests and issues now contain complete, evidence-bound feedback, with independent line notes where useful. Public reviews use only the captured work and prior public feedback on that same work, and now start from the work's captured title, description, state and linked issues; private practice-page guidance and conversation notes remain separate. Feedback is withheld as a whole when one of its supporting observations cannot be delivered, and failed composition no longer publishes raw observations. Technical syntax in Markdown code, such as generic types and Swift property wrappers, is preserved by comment safety formatting.
+
+### Patch Changes
+
+- The bundled issue practice accepts a clearly stated capability without a separate acceptance checklist or design document. Who benefits and why are useful context, not prerequisites. The bundled handoff practice describes Draft and Ready presentation without implying that the work is complete. Existing workspace practices keep their definitions until an administrator accepts the catalogue update.
+
+  Issue reviews no longer receive the provider's total comment count, which also counts feedback Hephaestus posted and could be mistaken for comments missing from the review. This applies to every new review right away; earlier reviews are not rewritten.
+
+- Review cards show observations with actionable feedback first, so you can read and respond without expanding successful observations. Expanding the card still shows the complete review.
+- Practice reviews no longer stall while validating indented multiline evidence quotes. Quotes still have to match captured evidence. Citations beyond the captured change are rejected.
+- Feedback posted on the work no longer shows raw comment markers and `<sub>` tags in its rendered view and list previews; its disclosure and settings links read as plain words and links. The source view still shows the text exactly as stored.
+- A GitHub App installation with many repositories no longer delays the startup of other workspaces, such as GitLab workspaces. Each GitHub App workspace now brings its monitored repositories up to date while it starts, and records this work in its sync job history.
+- On GitLab, practice feedback about specific lines is now posted as a merge request comment that starts with a link to the lines in the reviewed commit, instead of a comment attached to the diff. Review history and admin pages show such feedback as a comment linking to the lines. Before posting each new comment, Hephaestus checks the change's latest synchronized commit; if it differs from the reviewed one, the remaining comments are withheld and the review history says the change was updated first. Comments already posted stay and are still recognized. A push that arrives after this check can still be followed by a comment.
+- Hephaestus preserves feedback already posted beside code. A retry creates a note only when the earlier attempt is positively known not to have created it. When a write is unconfirmed, Hephaestus looks for the existing copy without creating another. Prior copies count as delivered only when their author, exact text and required location match. Ordinary fallback notes use their stated file and line rather than a native code anchor. Summary recovery also verifies Hephaestus's own exact comment, so a copied marker cannot mark a review as delivered.
+- The bundled practices judge colors, commits, review follow-up and readiness more accurately. Workspaces that adopted them see the corrections as an update to accept or decline.
+
+  - A color is judged by what it resolves to. SwiftUI's standard colors, such as `.green`, count as adapting to light and dark appearance. UIKit's fixed constants, such as `UIColor.green`, and colors built from fixed values still count as fixed. A color your app defines is judged from its definition.
+  - When the code changes of a pull request could not be read, Hephaestus skips the commit practices for that review instead of recording an open question. The commit history it reads now holds every commit of the pull request, not only the newest 500.
+  - An explicit request to hold the merge counts as an open request, even outside a review thread. Optional advice for later work does not. A thread resolved before the merge, or a draft marked ready, needs no further date.
+  - A merge request template's checklist left as supplied no longer counts as saying the work is unfinished. What you write about unfinished work still does.
+  - To tell a small chore from a feature, the handoff practice can read the changed lines, not only the file names.
+  - On GitLab, an approval keeps the date GitLab itself records for it. Hephaestus no longer claims which commit an approval was given on, since GitLab does not say.
+
 ## 0.82.0
 
 ### Minor Changes
