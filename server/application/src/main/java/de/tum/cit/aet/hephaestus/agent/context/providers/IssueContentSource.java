@@ -143,17 +143,20 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
                 return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
             }
         }
-        // The snapshot token distinguishes this close from later edits and reopen/close cycles.
-        if (ScmSignals.ISSUE_CLOSED.value().equals(signal)) {
+        // An open or close review is admitted with the issue's snapshot token, which a later material change moves.
+        // Publication checks the token again; refusing here spares a review that publication would refuse.
+        if (ScmSignals.ISSUE_OPENED.value().equals(signal)
+                || ScmSignals.ISSUE_CLOSED.value().equals(signal)) {
             String admittedSnapshot = metadata.path("review_snapshot_id").asString("");
             UUID currentSnapshot = issue.getReviewSnapshotId();
             if (admittedSnapshot.isBlank()
                     || currentSnapshot == null
                     || !admittedSnapshot.equals(currentSnapshot.toString())) {
                 log.info(
-                        "Issue snapshot changed since the close review was admitted: issueId={}, jobId={}",
+                        "Issue snapshot changed since the review was admitted: issueId={}, jobId={}, signal={}",
                         issueId,
-                        job.getId());
+                        job.getId(),
+                        signal);
                 return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
             }
         }

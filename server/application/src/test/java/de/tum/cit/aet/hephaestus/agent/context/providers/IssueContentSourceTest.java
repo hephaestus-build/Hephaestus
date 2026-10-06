@@ -81,19 +81,26 @@ class IssueContentSourceTest extends BaseUnitTest {
         lenient().when(issueCommentRepository.findStoredByIssueId(ISSUE_ID)).thenReturn(List.of());
     }
 
-    @Test
-    void shouldReadNothingForACloseReviewWhoseSnapshotMovedOnSinceItWasAdmitted() {
+    @ParameterizedTest
+    @ValueSource(strings = {"scm.issue.opened", "scm.issue.closed"})
+    void shouldReadNothingWhenTheAdmittedSnapshotIsNotCurrent(String signal) {
+        UUID current = UUID.fromString("00000000-0000-0000-0000-0000000000b2");
         Issue issue = richIssue();
-        issue.setReviewSnapshotId(UUID.fromString("00000000-0000-0000-0000-0000000000b2"));
-        when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
+        issue.setReviewSnapshotId(current);
         ObjectNode stale = sampleMetadata();
-        stale.put("signal", "scm.issue.closed");
+        stale.put("signal", signal);
         stale.put("review_snapshot_id", "00000000-0000-0000-0000-0000000000b1");
         ObjectNode unidentified = sampleMetadata();
-        unidentified.put("signal", "scm.issue.closed");
+        unidentified.put("signal", signal);
+        ObjectNode admitted = sampleMetadata();
+        admitted.put("signal", signal);
+        admitted.put("review_snapshot_id", current.toString());
+        Issue unsnapshotted = richIssue();
 
-        for (ObjectNode metadata : List.of(stale, unidentified)) {
-            var captured = provider.capture(request(metadata), Set.of(CORE, COMMENTS));
+        for (var stored :
+                List.of(Map.entry(issue, stale), Map.entry(issue, unidentified), Map.entry(unsnapshotted, admitted))) {
+            when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(stored.getKey()));
+            var captured = provider.capture(request(stored.getValue()), Set.of(CORE, COMMENTS));
             assertThat(captured.files()).isEmpty();
             assertThat(captured.stateOverrides())
                     .containsEntry(CORE, new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND))
@@ -102,8 +109,9 @@ class IssueContentSourceTest extends BaseUnitTest {
         verifyNoInteractions(issueCommentRepository);
     }
 
-    @Test
-    void shouldCaptureACloseReviewWhoseSnapshotIsStillCurrent() {
+    @ParameterizedTest
+    @ValueSource(strings = {"scm.issue.opened", "scm.issue.closed"})
+    void shouldCaptureWhenTheAdmittedSnapshotIsStillCurrent(String signal) {
         Issue issue = richIssue();
         UUID snapshot = UUID.fromString("00000000-0000-0000-0000-0000000000b3");
         issue.setReviewSnapshotId(snapshot);
@@ -112,7 +120,7 @@ class IssueContentSourceTest extends BaseUnitTest {
                 comment("alice", "Export moved to #12.", Instant.parse("2025-06-02T10:00:00Z"))));
         when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
         ObjectNode metadata = sampleMetadata();
-        metadata.put("signal", "scm.issue.closed");
+        metadata.put("signal", signal);
         metadata.put("review_snapshot_id", snapshot.toString());
 
         var captured = provider.capture(request(metadata), Set.of(CORE, COMMENTS));
