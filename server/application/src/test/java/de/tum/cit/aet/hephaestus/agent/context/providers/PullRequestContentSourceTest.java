@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
@@ -74,13 +76,24 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     private static final String HEAD = "abc123def456";
     private static final String BASE = "a".repeat(40);
 
+    @Mock
+    private DeliveredPullRequestCommentLookup deliveredCommentLookup;
+
     private PullRequestContentSource provider;
 
     @BeforeEach
     void setUp() {
+        lenient()
+                .when(deliveredCommentLookup.findForPullRequest(anyLong(), anyLong()))
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of()));
         lenient().when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(new PullRequest()));
         provider = new PullRequestContentSource(
-                objectMapper, gitRepositoryManager, pullRequestRepository, reviewCommentRepository, repositoryPreparer);
+                objectMapper,
+                gitRepositoryManager,
+                pullRequestRepository,
+                reviewCommentRepository,
+                repositoryPreparer,
+                deliveredCommentLookup);
     }
 
     private static final RepositoryKey REPOSITORY = new RepositoryKey(WORKSPACE_ID, 123L);
@@ -168,6 +181,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         void shouldReadCoreFromTheSnapshotWithoutRequiringGit() {
             assertThat(provider.capture(request(sampleMetadata()), Set.of(CORE)).files())
                     .containsKey("context/metadata.json");
+            verifyNoInteractions(deliveredCommentLookup);
         }
 
         @Test
@@ -234,6 +248,13 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     .files()
                     .get("context/metadata.json"));
 
+            assertThat(metadataJson.path("subject_role").asString()).isEqualTo("AUTHOR");
+            var reviewerMetadata = sampleMetadata();
+            reviewerMetadata.put("subject_role", "REVIEWER");
+            JsonNode reviewerCore = objectMapper.readTree(provider.capture(request(reviewerMetadata), Set.of(CORE))
+                    .files()
+                    .get("context/metadata.json"));
+            assertThat(reviewerCore.path("subject_role").asString()).isEqualTo("REVIEWER");
             assertThat(metadataJson.get("state").asString()).isEqualTo("CLOSED");
             assertThat(metadataJson.get("is_merged").asBoolean()).isTrue();
             assertThat(metadataJson.get("labels").valueStream().map(JsonNode::asString))
@@ -301,6 +322,48 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(metadataJson.has("merge_state_status")).isFalse();
             assertThat(metadataJson.has("review_decision")).isFalse();
             assertThat(metadataJson.has("head_checks")).isFalse();
+        }
+
+        @Test
+        void shouldExcludeRecordedMarkerlessInlineFeedbackWithoutDroppingOtherComments() throws Exception {
+            PullRequestReviewComment own = new PullRequestReviewComment();
+            own.setNativeId(81L);
+            own.setBody("Explain how to try the timer.");
+            PullRequestReviewComment human = new PullRequestReviewComment();
+            human.setNativeId(82L);
+            human.setBody(own.getBody());
+            PullRequestReviewComment unknownId = new PullRequestReviewComment();
+            unknownId.setBody(own.getBody());
+            when(deliveredCommentLookup.findForPullRequest(WORKSPACE_ID, 456L))
+                    .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(82L), Set.of(81L)));
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
+                    .thenReturn(List.of(own, human, unknownId));
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
+            JsonNode comments = objectMapper.readTree(captured.files().get("context/comments.json"));
+
+            assertThat(comments).hasSize(2);
+            assertThat(comments.get(0).path("native_id").asLong()).isEqualTo(82L);
+            assertThat(comments.get(1).path("body").asString()).isEqualTo(own.getBody());
+            assertThat(captured.completeness()).containsEntry(COMMENTS, SourceCompleteness.COMPLETE);
+        }
+
+        @Test
+        void shouldKeepCompleteEmptyCaptureWhenOnlyRecordedInlineFeedbackExists() throws Exception {
+            PullRequestReviewComment own = new PullRequestReviewComment();
+            own.setNativeId(81L);
+            own.setBody("Explain how to try the timer.");
+            when(deliveredCommentLookup.findForPullRequest(WORKSPACE_ID, 456L))
+                    .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of(81L)));
+            when(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(eq(456L), any(), any()))
+                    .thenReturn(List.of(own));
+
+            var captured = provider.capture(request(sampleMetadata()), Set.of(COMMENTS));
+
+            assertThat(objectMapper.readTree(captured.files().get("context/comments.json")))
+                    .isEmpty();
+            assertThat(captured.completeness()).containsEntry(COMMENTS, SourceCompleteness.COMPLETE);
+            assertThat(captured.contentStates()).containsEntry(COMMENTS, SourceContentState.EMPTY);
         }
 
         @Test

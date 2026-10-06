@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -12,7 +13,9 @@ import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -25,6 +28,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,14 +50,21 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
     @Mock
     private PullRequestRepository pullRequestRepository;
 
+    @Mock
+    private DeliveredPullRequestCommentLookup deliveredCommentLookup;
+
     private GeneralReviewCommentContentSource provider;
 
     @BeforeEach
     void setUp() {
         lenient()
+                .when(deliveredCommentLookup.findForPullRequest(anyLong(), anyLong()))
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(), Set.of()));
+        lenient()
                 .when(pullRequestRepository.existsByIdAndDeletedAtIsNull(PR_ID))
                 .thenReturn(true);
-        provider = new GeneralReviewCommentContentSource(objectMapper, issueCommentRepository, pullRequestRepository);
+        provider = new GeneralReviewCommentContentSource(
+                objectMapper, issueCommentRepository, pullRequestRepository, deliveredCommentLookup);
         lenient()
                 .when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
                 .thenReturn(List.of());
@@ -85,6 +96,49 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         }
         c.setCreatedAt(createdAt);
         return c;
+    }
+
+    @Test
+    void shouldExcludeRecordedMarkerlessFeedbackWithoutDroppingOtherReviewers() throws Exception {
+        String advice = "Explain how to try the timer.";
+        IssueComment own = comment("provider-bot", advice, Instant.parse("2025-06-01T09:00:00Z"));
+        own.setNativeId(81L);
+        IssueComment human = comment("reviewer", advice, Instant.parse("2025-06-01T10:00:00Z"));
+        human.setNativeId(82L);
+        IssueComment unknownId = comment("other-reviewer", advice, Instant.parse("2025-06-01T11:00:00Z"));
+        when(deliveredCommentLookup.findForPullRequest(99L, PR_ID))
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(81L), Set.of(82L)));
+        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+                .thenReturn(List.of(own, human, unknownId));
+
+        var capture = provider.capture(request(metadataWithPr()), provider.sourceKinds());
+        JsonNode comments = objectMapper.readTree(capture.files().get(FILE_KEY)).path("comments");
+
+        assertThat(comments).hasSize(2);
+        assertThat(comments.get(0).path("nativeId").asLong()).isEqualTo(82L);
+        assertThat(comments.get(1).path("author").asString()).isEqualTo("other-reviewer");
+        assertThat(capture.contentStates())
+                .containsEntry(GeneralReviewCommentContentSource.KIND, SourceContentState.NON_EMPTY);
+    }
+
+    @Test
+    void shouldKeepCompleteEmptyCaptureWhenOnlyRecordedMarkerlessFeedbackExists() throws Exception {
+        IssueComment own =
+                comment("provider-bot", "Explain how to try the timer.", Instant.parse("2025-06-01T09:00:00Z"));
+        own.setNativeId(81L);
+        when(deliveredCommentLookup.findForPullRequest(99L, PR_ID))
+                .thenReturn(new DeliveredPullRequestCommentLookup.CommentIds(Set.of(81L), Set.of()));
+        when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
+                .thenReturn(List.of(own));
+
+        var capture = provider.capture(request(metadataWithPr()), provider.sourceKinds());
+
+        assertThat(objectMapper.readTree(capture.files().get(FILE_KEY)).path("comments"))
+                .isEmpty();
+        assertThat(capture.completeness())
+                .containsEntry(GeneralReviewCommentContentSource.KIND, SourceCompleteness.COMPLETE);
+        assertThat(capture.contentStates())
+                .containsEntry(GeneralReviewCommentContentSource.KIND, SourceContentState.EMPTY);
     }
 
     @Test

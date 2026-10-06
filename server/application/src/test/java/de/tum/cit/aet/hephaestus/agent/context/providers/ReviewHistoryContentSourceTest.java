@@ -204,6 +204,57 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void reviewerHistoryBelongsToTheActualSubjectRatherThanTheWorkAuthor() {
+        long reviewerId = AUTHOR_ID + 1;
+        Observation authorObservation = observationWithRationale("Author history.");
+        Observation reviewerObservation = observationWithRationale("Reviewer history.");
+        when(observationRepository.findForPersonHistory(AUTHOR_ID, WORKSPACE_ID))
+                .thenReturn(List.of(authorObservation));
+        when(observationRepository.findForPersonHistory(reviewerId, WORKSPACE_ID))
+                .thenReturn(List.of(reviewerObservation));
+        var authorRequest = prRequest();
+        ObjectNode metadata =
+                (ObjectNode) Objects.requireNonNull(authorRequest.job().getMetadata());
+        metadata.put("subject_role", "AUTHOR");
+        metadata.put("about_user_id", reviewerId);
+        JsonNode authorHistory =
+                read(provider.capture(authorRequest, Set.of(ReviewHistoryContentSource.OBSERVATION_HISTORY))
+                        .files()
+                        .get("inputs/history/observations.json"));
+        assertThat(authorHistory.path("observations")).hasSize(1);
+        assertThat(authorHistory.path("observations").get(0).path("id").asString())
+                .isEqualTo(authorObservation.getId().toString());
+        metadata.put("subject_role", "REVIEWER");
+        JsonNode reviewerHistory =
+                read(provider.capture(authorRequest, Set.of(ReviewHistoryContentSource.OBSERVATION_HISTORY))
+                        .files()
+                        .get("inputs/history/observations.json"));
+        assertThat(reviewerHistory.path("observations")).hasSize(1);
+        assertThat(reviewerHistory.path("observations").get(0).path("id").asString())
+                .isEqualTo(reviewerObservation.getId().toString());
+    }
+
+    @Test
+    void aMissingOrInvalidReviewerSubjectIsUnavailableRatherThanAuthorHistory() {
+        var request = prRequest();
+        ObjectNode metadata = (ObjectNode) Objects.requireNonNull(request.job().getMetadata());
+        metadata.put("subject_role", "REVIEWER");
+        for (long subject : new long[] {0, -1}) {
+            metadata.put("about_user_id", subject);
+            var capture = provider.capture(request, provider.sourceKinds());
+            assertThat(capture.files()).isEmpty();
+            assertThat(capture.stateOverrides().values())
+                    .allMatch(state -> state instanceof SourceCaptureState.Unavailable);
+        }
+        metadata.remove("about_user_id");
+        var missing = provider.capture(request, provider.sourceKinds());
+        assertThat(missing.files()).isEmpty();
+        assertThat(missing.stateOverrides().values())
+                .allMatch(state -> state instanceof SourceCaptureState.Unavailable);
+        verifyNoInteractions(observationRepository, feedbackRepository, pullRequestRepository);
+    }
+
+    @Test
     void aFirstEverReviewGetsAPresentAndEmptyHistory() {
         var observationsCapture = captureObservationHistory();
         var feedbackCapture = captureFeedbackHistory();

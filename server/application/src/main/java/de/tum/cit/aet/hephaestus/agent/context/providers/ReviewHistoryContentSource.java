@@ -539,12 +539,21 @@ public class ReviewHistoryContentSource implements EvidenceSource {
      */
     private @Nullable Long resolveSubject(ContextRequest request, AgentJob job) {
         return switch (request) {
-            case ContextRequest.PracticeReviewRequest ignored -> authorOfPullRequest(job);
+            case ContextRequest.PracticeReviewRequest ignored -> pullRequestSubject(job);
             case ContextRequest.IssueReviewRequest ignored -> authorOfIssue(job);
             case ContextRequest.DocumentReviewRequest ignored -> metadataSubject(job);
             case ContextRequest.ConversationReviewRequest ignored -> metadataSubject(job);
             case ContextRequest.MentorChatRequest ignored -> null;
         };
+    }
+
+    private @Nullable Long pullRequestSubject(AgentJob job) {
+        var metadata = job.getMetadata();
+        if (metadata != null && "REVIEWER".equals(MetaJson.optString(metadata, "subject_role"))) {
+            Long subject = metadataSubject(job);
+            return subject != null && subject > 0 ? subject : null;
+        }
+        return authorOfPullRequest(job);
     }
 
     private @Nullable Long authorOfPullRequest(AgentJob job) {

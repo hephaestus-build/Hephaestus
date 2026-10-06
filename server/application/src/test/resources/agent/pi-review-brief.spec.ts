@@ -819,3 +819,64 @@ void test("an issue discussion uses its own core recipient and stored native com
 	assert.equal(statement.eligibleForPriorAdvice, true);
 	assert.equal(history.sources.length, 1);
 });
+
+void test("reviewer history uses the captured target identity and never substitutes the work author", (t) => {
+	const reviewPath = "context/review_threads.json";
+	const index = discussionIndex("scm.general-review-comments", GENERAL_PATH);
+	const reviewIndex = discussionIndex("scm.review-threads", reviewPath);
+	index.sources.push(...reviewIndex.sources.slice(1));
+	index.artifacts.push(...reviewIndex.artifacts.slice(1));
+	const root = workspace({
+		"context/metadata.json": JSON.stringify({
+			repository_full_name: "group/repo",
+			pr_number: 7,
+			author: "owner",
+			author_id: 11,
+			subject_role: "REVIEWER",
+		}),
+		[reviewPath]: JSON.stringify({
+			reviewRecipient: { author: "reviewer", authorId: 12 },
+			reviewDecisions: [],
+		}),
+		[GENERAL_PATH]: JSON.stringify({
+			comments: [
+				{
+					nativeId: 41,
+					author: "reviewer",
+					authorId: 12,
+					body: "My own review note.",
+					createdAt: BEFORE_CAPTURE,
+				},
+				{
+					nativeId: 42,
+					author: "owner",
+					authorId: 11,
+					body: "Please explain the failure path in your review.",
+					createdAt: BEFORE_CAPTURE,
+				},
+			],
+		}),
+	});
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	const history = buildPublicReviewHistory(root, "context", index, FRAMING);
+	assert.deepEqual(history.recipient, { author: "reviewer", authorId: "12" });
+	assert.deepEqual(
+		history.statements.map((row) => row.eligibleForPriorAdvice),
+		[false, true],
+	);
+	for (const unavailable of [
+		discussionIndex("scm.general-review-comments", GENERAL_PATH),
+		{
+			...index,
+			sources: index.sources.map((source) =>
+				source.kind === "scm.review-threads"
+					? { ...source, state: { availability: "UNAVAILABLE", completeness: "COMPLETE" } }
+					: source,
+			),
+		},
+	]) {
+		const unknown = buildPublicReviewHistory(root, "context", unavailable, FRAMING);
+		assert.deepEqual(unknown.recipient, { author: null, authorId: null });
+		assert.ok(unknown.statements.every((row) => !row.eligibleForPriorAdvice));
+	}
+});
