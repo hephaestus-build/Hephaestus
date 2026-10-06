@@ -198,44 +198,77 @@ export const OneObservation: Story = {
 	},
 };
 
+/** Three strengths first, as the run lists them, and the one delivered problem last. */
 const denseRun: PracticeGroupReviewRun = {
 	...run,
 	reviewId: "00000000-0000-0000-0000-000000000205",
 	observations: [
-		...run.observations,
+		{
+			...onTheRun,
+			id: "00000000-0000-0000-0000-000000000111",
+			practiceSlug: "records-decisions",
+			practiceName: "Record significant decisions",
+			summary: "The workspace trade-off is documented",
+			evidenceRationale:
+				"The description records why one workspace per team was chosen over one per repository.",
+		},
 		{
 			...onTheRun,
 			id: "00000000-0000-0000-0000-000000000105",
 			practiceSlug: "small-changes",
 			practiceName: "Keep changes focused",
-			summary: "The refactor and the fix arrived together",
-
-			severity: "MAJOR",
+			summary: "The change does one thing",
+			evidenceRationale: "The diff touches only the cache layer it names.",
+		},
+		{
+			...onTheRun,
+			id: "00000000-0000-0000-0000-000000000109",
+			practiceSlug: "describe-what-and-why",
+			practiceName: "Describe what changed and why",
+			summary: "The description states the goal",
+			evidenceRationale: "The first paragraph names the latency the cache removes.",
 		},
 		{
 			...onTheRun,
 			id: "00000000-0000-0000-0000-000000000106",
+			outcome: "NOT_MET",
+			feedbackResponse: { feedbackId: "00000000-0000-0000-0000-000000000110" },
 			practiceSlug: "covers-new-behavior",
 			practiceName: "Cover new behavior with a test",
 			summary: "The new branch has no test exercising it",
-
-			severity: "CRITICAL",
+			severity: "MAJOR",
+			evidenceRationale: "The eviction branch arrives without a test that reaches it.",
+			deliveredFeedback: "Add a test that evicts an entry.",
+			nextStep: "Add a test that evicts an entry.",
 		},
 	],
 };
 export const ManyObservations: Story = {
-	args: { run: denseRun },
+	args: { run: denseRun, initiallyOpen: "none" },
 	play: async ({ canvas, userEvent }) => {
-		// The fourth observation is the one held back, and the button counts it rather than saying
-		// "more".
-		const held = "The new branch has no test exercising it";
-		await expect(canvas.queryByText(held)).toBeNull();
+		// The delivered problem is in the first rows, not behind "Show more", although the run lists it last.
+		const problem = canvas.getByRole("button", {
+			name: /The new branch has no test exercising it/u,
+		});
+		await expect(problem).toBeVisible();
+		await userEvent.click(problem);
+		const response = canvas.getByRole("group", {
+			name: "Your response to Cover new behavior with a test",
+		});
+		await expect(response).toBeVisible();
 
+		// A strength is the one held back, and the button counts it rather than saying "more".
+		const held = "The description states the goal";
+		await expect(canvas.queryByText(held)).toBeNull();
 		await userEvent.click(canvas.getByRole("button", { name: "Show 1 more observation" }));
 		await expect(canvas.getByText(held)).toBeVisible();
+		for (const observation of denseRun.observations) {
+			await expect(canvas.getByText(observation.summary)).toBeVisible();
+		}
 
 		await userEvent.click(canvas.getByRole("button", { name: "Show less" }));
 		await expect(canvas.queryByText(held)).toBeNull();
+		await expect(canvas.getByText("The new branch has no test exercising it")).toBeVisible();
 	},
 };
 export const MobileReflow: Story = {

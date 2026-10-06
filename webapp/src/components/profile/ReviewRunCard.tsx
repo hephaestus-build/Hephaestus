@@ -2,7 +2,7 @@ import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useState } from "react";
 
 import { cn } from "cn";
-import type { PracticeGroupReviewRun, ReviewedWorkRef } from "@/api/types.gen";
+import type { ObservationDetail, PracticeGroupReviewRun, ReviewedWorkRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,14 @@ const NO_CONTROLS: ObservationControls = {};
 /** How many observations a card shows before "Show more". */
 const COLLAPSED_OBSERVATION_COUNT = 3;
 
+function observationPriority({ outcome, feedbackResponse }: ObservationDetail): number {
+	const delivered = hasText(feedbackResponse?.feedbackId);
+	if (outcome === "NOT_MET") {
+		return delivered ? 0 : 1;
+	}
+	return delivered ? 2 : 3;
+}
+
 /**
  * One review run as a row of the timeline: the day and time in the date column, a dot on the
  * rail, and the card with the reviewed work at its head and the observations as its rows. The head
@@ -56,9 +64,12 @@ export function ReviewRunCard({
 	// One observation is one block: the row takes the work line and the card grows no head over it.
 	const merged = run.observations.length === 1;
 	const hiddenCount = Math.max(0, run.observations.length - COLLAPSED_OBSERVATION_COUNT);
+	const orderedObservations = [...run.observations].sort(
+		(a, b) => observationPriority(a) - observationPriority(b),
+	);
 	const visibleObservations = showAllObservations
-		? run.observations
-		: run.observations.slice(0, COLLAPSED_OBSERVATION_COUNT);
+		? orderedObservations
+		: orderedObservations.slice(0, COLLAPSED_OBSERVATION_COUNT);
 
 	return (
 		<TimelineItem

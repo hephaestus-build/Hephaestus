@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
 
+import { feedbackDisplayMarkdown } from "./feedback-display";
+
 export type FeedbackBodyFeedback = DeliveryFacts & { body?: string };
 
 export interface FeedbackBodyProps {
@@ -59,7 +61,7 @@ export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 				</CardHeader>
 				<CardContent className="pb-4">
 					<TabsContent value="rendered" className={UNTRUSTED_MARKDOWN_PROSE}>
-						<UntrustedMarkdown>{body}</UntrustedMarkdown>
+						<UntrustedMarkdown>{feedbackDisplayMarkdown(body)}</UntrustedMarkdown>
 					</TabsContent>
 					<TabsContent value="source">
 						<pre className="rounded-md bg-muted p-3 text-xs break-words whitespace-pre-wrap">

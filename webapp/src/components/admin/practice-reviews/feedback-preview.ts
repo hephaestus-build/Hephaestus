@@ -1,6 +1,8 @@
 import type { ReviewFeedback } from "@/api/types.gen";
 import { hasText } from "@/lib/text";
 
+import { feedbackExcerptMarkdown } from "./feedback-display";
+
 /**
  * The opening words of a piece of feedback, as a line of prose a row can be told apart by.
  *
@@ -26,7 +28,9 @@ export function feedbackPreviewText(
 		return undefined;
 	}
 
-	const { text, dropped } = flattenMarkdown(source);
+	const { text, dropped } = flattenMarkdown(
+		feedbackExcerptMarkdown(source, feedback.bodyTruncated),
+	);
 	if (!text) {
 		return undefined;
 	}
