@@ -89,6 +89,7 @@ import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -139,13 +140,25 @@ class MentorChatServiceTest extends BaseUnitTest {
     @Test
     void shouldWaitTheTurnBudgetAfterAcknowledgement() throws Exception {
         var acknowledgement = new CompletableFuture<JsonNode>();
-        var terminal = new CompletableFuture<Void>();
-        // The acknowledgement alone outlasts the budget; the terminal event follows it within the budget.
+        var waited = new AtomicReference<Duration>();
+        var acknowledgedFirst = new AtomicBoolean();
+        // The terminal event arrives at the timed wait itself, so no second timer races the acknowledgement.
+        var terminal = new CompletableFuture<Void>() {
+            @Override
+            public Void get(long timeout, TimeUnit unit)
+                    throws InterruptedException, ExecutionException, TimeoutException {
+                waited.set(Duration.of(timeout, unit.toChronoUnit()));
+                acknowledgedFirst.set(acknowledgement.isDone());
+                complete(null);
+                return super.get(timeout, unit);
+            }
+        };
         acknowledgement.completeOnTimeout(mapper.createObjectNode(), 100, TimeUnit.MILLISECONDS);
-        terminal.completeOnTimeout(null, 120, TimeUnit.MILLISECONDS);
 
         MentorChatService.awaitTurn(acknowledgement, terminal, Duration.ofMillis(50));
 
+        assertThat(acknowledgedFirst).isTrue();
+        assertThat(waited).hasValue(Duration.ofMillis(50));
         assertThat(terminal).isCompletedWithValue(null);
     }
 
