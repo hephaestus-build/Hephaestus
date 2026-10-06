@@ -15,6 +15,7 @@ import { FeedbackLevel } from "./FeedbackLevel";
 import {
 	feedbackDetail,
 	longFeedbackDetail,
+	reviewArtifact,
 	reviewFeedbackDetail,
 	workspacePractices,
 } from "./fixtures";
@@ -66,6 +67,7 @@ const rejected: ReviewFeedbackDetail = {
 /** A proposal: the exact summary and line comments approval would send, written against a revision. */
 const awaitingApproval: ReviewFeedbackDetail = {
 	...reviewFeedbackDetail,
+	reviewedWork: reviewArtifact.reviewedWork,
 	deliveryState: "AWAITING_APPROVAL",
 	deliveredAt: undefined,
 	suppressionReason: undefined,
