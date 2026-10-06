@@ -898,10 +898,23 @@ export const REVIEW_TOOL_DESCRIPTION =
 	"mismatch with the selection refuses the whole review, with every reason, so it can be corrected, or selected " +
 	"again, and sent again.";
 
+/** Preserve admission’s complete rows and qualifications; private and unselected rows are not echoed. */
+export function selectionText(
+	selection: ReviewSelection,
+	reviewable: readonly Record<string, unknown>[],
+): string {
+	const chosen = new Set(selection.selected);
+	const selectedObservations = reviewable.filter(
+		(observation) => observation.publicEligible === true && chosen.has(String(observation.id)),
+	);
+	return `\`\`\`json\n${JSON.stringify({ acceptedSelection: selection, selectedObservations }, null, 1)}\n\`\`\``;
+}
+
 /** Offered before the body to orient generation; field order is not enforced. */
 const SUPPORT_FIRST =
-	"Choose these before writing the body: the id of each observation the body will discuss, every positive choice " +
-	"it acknowledges and every concern it raises, and no other. Then write the body from exactly these.";
+	"Choose these before writing the body: the id of every observation behind an assessment this body states, and no " +
+	"other. An observation named by another body does not support this one. A MET observation supports an " +
+	"acknowledgement, never a corrective request. Then write the body from exactly these.";
 
 /** An id list the schema can offer: the ids themselves when there are any, since an empty enum is invalid. */
 function idList(ids: readonly string[], description: string) {

@@ -44,6 +44,39 @@ const admittedObservation = {
 	},
 };
 
+/** admittedObservation as the review on the work is shown it: whole, without its verification digests. */
+const publicRow = {
+	outcome: "NOT_MET",
+	id: "observation-1",
+	practiceSlug: "test-practice",
+	severity: "MAJOR",
+	anchorable: true,
+	publicEligible: true,
+	evidence: {
+		search: { consulted: ["scm.pull-request.diff"], lookedFor: "x", boundary: "y" },
+	},
+	citations: [
+		{
+			index: 0,
+			sourceKind: "scm.pull-request.diff",
+			path: "src/Auth.java",
+			side: "NEW",
+			startLine: 10,
+			endLine: 10,
+			quote: "+ insecure();",
+			anchorable: true,
+		},
+	],
+};
+
+/** The accepted selection and the rows it chose, as a composition text shows them. */
+function selectedRowsOf(text: string): unknown {
+	const block = /```json\n(?<selection>\{\n "acceptedSelection"[\s\S]*?\n\})\n```/u.exec(text);
+	const selection = block?.groups?.selection;
+	assert.ok(selection !== undefined, text);
+	return JSON.parse(selection);
+}
+
 const changeCitation = {
 	sourceKind: "scm.pull-request.diff",
 	artifactPath: "evidence/change.json",
@@ -541,6 +574,11 @@ if (scenario !== undefined && scenario !== "") {
 										return JSON.stringify(error instanceof Error ? error.message : String(error));
 									}
 								};
+								if (scenario === "compose-recover") {
+									// A selection is accepted and the response ends without the final review.
+									record(`recover-select:${await choose("s-r", { selected: ["observation-1"] })}`);
+									return;
+								}
 								if (scenario === "compose-reselect") {
 									// The composer writes before choosing, chooses wrongly, then rightly, writes a review
 									// that does not match its choice, chooses again and writes the review that does.
@@ -564,6 +602,15 @@ if (scenario !== undefined && scenario !== "") {
 									);
 									record(`reselect-mismatch:${await attempt("r-1", said)}`);
 									record(`reselect-speak:${await choose("s-4", { selected: ["observation-1"] })}`);
+									// A refused replacement answers with the selection that stands, never the one refused.
+									try {
+										await selection.execute("s-4b", { selected: ["observation-history"] });
+									} catch (error) {
+										writeFileSync(
+											nodePath.join(cwd, "refused-standing.txt"),
+											error instanceof Error ? error.message : String(error),
+										);
+									}
 									record(`reselect-final:${await attempt("r-2", said)}`);
 									record(`reselect-terminal:${JSON.stringify(await this.agent.finishTurn())}`);
 									record(`reselect-drained:${this.pendingMessageCount}`);
@@ -1428,6 +1475,7 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-quiet",
 		"compose-empty",
 		"compose-reselect",
+		"compose-recover",
 		"compose-fold",
 		"compose-abstention",
 		"compose-unknown-outcome",
@@ -1477,6 +1525,8 @@ if (scenario !== undefined && scenario !== "") {
 					"ends the review composition on an intentionally empty final review of positive results",
 				"compose-reselect":
 					"stores only a final review that matches the selection accepted last, and nothing after it",
+				"compose-recover":
+					"asks once more for a review left unfinished, carrying the admitted rows its selection chose",
 				"compose-fold":
 					"counts a NOT_MET practice folded into another practice's unit as decided and asks no more",
 				"compose-abstention":
@@ -2408,6 +2458,30 @@ if (scenario !== undefined && scenario !== "") {
 							assert.deepEqual(feedback.review, { summary: null, inline: [], withheld: [] });
 							break;
 						}
+						case "compose-recover": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.match(
+								events.find((event) => event.startsWith("recover-select:")) ?? "",
+								/Accepted the selection/u,
+							);
+							assert.ok(events.includes("review-retry"), events.join("\n"));
+							// The retry holds only what is owed and the selection that stands, with its admitted row.
+							const retry = events
+								.filter((event) => event.startsWith("prompt:"))
+								.map((event) =>
+									readFileSync(
+										nodePath.join(cwd, `prompt-${event.slice("prompt:".length)}.md`),
+										"utf8",
+									),
+								)
+								.find((prompt) => prompt.startsWith("## Undecided"));
+							assert.ok(retry !== undefined, events.join("\n"));
+							assert.deepEqual(selectedRowsOf(retry), {
+								acceptedSelection: { selected: ["observation-1"], withheld: [] },
+								selectedObservations: [publicRow],
+							});
+							break;
+						}
 						case "compose-reselect": {
 							assert.equal(child.status, 0, child.stderr);
 							const said = (label: string) =>
@@ -2433,6 +2507,11 @@ if (scenario !== undefined && scenario !== "") {
 								/review refused, nothing was stored:[\s\S]*speaks about observation-1, which the accepted selection does not select[\s\S]*withheld differs from the accepted selection for observation-1/u,
 							);
 							assert.match(said("reselect-speak"), /Accepted the selection/u);
+							const refused = readFileSync(nodePath.join(cwd, "refused-standing.txt"), "utf8");
+							assert.deepEqual(selectedRowsOf(refused), {
+								acceptedSelection: { selected: ["observation-1"], withheld: [] },
+								selectedObservations: [publicRow],
+							});
 							assert.match(
 								said("reselect-final"),
 								/Stored the review: a summary resting on 1 observation\(s\)[\s\S]*"terminate":true/u,

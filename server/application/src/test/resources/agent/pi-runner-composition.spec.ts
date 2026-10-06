@@ -25,6 +25,7 @@ import {
 	reviewToolParameters,
 	sameLinesNote,
 	selectionMismatch,
+	selectionText,
 	selectionToolParameters,
 	uncertainOutcomes,
 	undeliverableUnits,
@@ -1153,4 +1154,68 @@ void test("the selection schema offers this run's decided ids and only the witne
 	assert.throws(() =>
 		selectionToolParameters(new Map([...observations].filter(([id]) => id === "unsure")), []),
 	);
+});
+
+void test("an accepted selection is shown with the admitted public rows it selected, whole, and no others", () => {
+	const qualification =
+		`The captured diff shows the label is set in code only; whether a screen reader announces it was not run, and the second view's preview was not part of this capture. `.repeat(
+			4,
+		);
+	const reviewable = publicObservations([
+		{
+			id: "spoken",
+			practiceSlug: "makes-ui-accessible",
+			outcome: "NOT_MET",
+			publicEligible: true,
+			summary: "The save button has no accessible label",
+			evidenceRationale: qualification,
+			citations: [
+				{
+					index: 0,
+					path: "App/Editor.swift",
+					startLine: 24,
+					quote: 'Button(action: save) { Image(systemName: "checkmark") }',
+					verification: { status: "VERIFIED" },
+				},
+			],
+		},
+		{
+			id: "held",
+			practiceSlug: "describe-what-and-why",
+			outcome: "NOT_MET",
+			publicEligible: true,
+			summary: "The description gives no reason",
+			citations: [],
+		},
+		{
+			id: "routine",
+			practiceSlug: "ships-a-preview",
+			outcome: "MET",
+			publicEligible: true,
+			citations: [],
+		},
+		{
+			id: "private",
+			practiceSlug: "makes-ui-accessible",
+			outcome: "NOT_MET",
+			publicEligible: false,
+			summary: "Told twice before",
+			citations: [],
+		},
+	]);
+	const selection = {
+		selected: ["spoken", "private"],
+		withheld: [{ basedOn: ["held"], reason: "BELOW_BAR" as const }],
+	};
+	const text = selectionText(selection, reviewable);
+	const shown: unknown = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+	// The selected row exactly as admission's public view carries it: its rationale and citation unchanged.
+	assert.deepEqual(shown, {
+		acceptedSelection: selection,
+		selectedObservations: [reviewable.find((row) => row.id === "spoken")],
+	});
+	assert.ok(text.includes(JSON.stringify(qualification)), text);
+	assert.ok(!text.includes("Told twice before"), text);
+	assert.ok(!text.includes("The description gives no reason"), text);
+	assert.ok(!text.includes('"verification"'), text);
 });

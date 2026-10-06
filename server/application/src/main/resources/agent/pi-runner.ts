@@ -83,6 +83,7 @@ import {
 	readSelection,
 	reviewToolParameters,
 	selectionMismatch,
+	selectionText,
 	selectionToolParameters,
 	uncertainOutcomes,
 	undeliverableUnits,
@@ -2274,6 +2275,7 @@ const REVIEW_FINAL = "The review on this work is final; this composition accepts
 /** A refused selection leaves the accepted one standing; nothing the tool accepts is stored or published. */
 function buildSelectionTool(
 	restable: ReadonlyMap<string, ReviewedObservation>,
+	reviewable: readonly Record<string, unknown>[],
 	witnesses: ReturnType<typeof priorAdviceWitnesses>,
 	state: PublicReviewState,
 ) {
@@ -2303,9 +2305,14 @@ function buildSelectionTool(
 					state.selection === null
 						? "no selection is accepted yet"
 						: "the selection accepted before it still stands";
+				const reasons = read.errors.map((error) => `- ${error}`).join("\n");
+				const stands =
+					state.selection === null
+						? ""
+						: `\nThe selection that stands:\n${selectionText(state.selection, reviewable)}`;
 				return refusal<SelectFeedbackDetails>(
 					toolCallId,
-					`selection refused, ${standing}:\n${read.errors.map((error) => `- ${error}`).join("\n")}`,
+					`selection refused, ${standing}:\n${reasons}${stands}`,
 				);
 			}
 			state.selection = read.selection;
@@ -2313,17 +2320,13 @@ function buildSelectionTool(
 				content: [
 					{
 						type: "text",
-						text: `Accepted the selection:\n${selectionText(read.selection)}\nNow store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions. A later select_feedback call replaces this selection until the review is final.`,
+						text: `Accepted the selection:\n${selectionText(read.selection, reviewable)}\nNow store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions. A later select_feedback call replaces this selection until the review is final.`,
 					},
 				],
 				details: { accepted: true },
 			};
 		},
 	});
-}
-
-function selectionText(selection: ReviewSelection): string {
-	return `\`\`\`json\n${JSON.stringify({ acceptedSelection: selection }, null, 1)}\n\`\`\``;
 }
 
 /** Reads the review against only the observations admission marked publicEligible, and the accepted selection. */
@@ -2404,7 +2407,11 @@ function undecidedByReview(reviewable: readonly Record<string, unknown>[]): stri
 }
 
 /** Carries the accepted selection, which a compaction may have removed from the session's context. */
-function finishReviewText(undecided: readonly string[], selection: ReviewSelection | null): string {
+function finishReviewText(
+	undecided: readonly string[],
+	selection: ReviewSelection | null,
+	reviewable: readonly Record<string, unknown>[],
+): string {
 	const owed =
 		undecided.length > 0
 			? `## Undecided\nThe review leaves these NOT_MET observations undecided: ${undecided.join(", ")}.`
@@ -2412,7 +2419,7 @@ function finishReviewText(undecided: readonly string[], selection: ReviewSelecti
 	const next =
 		selection === null
 			? "Choose with one select_feedback call, then store the final review with one report_review call."
-			: `${selectionText(selection)}\nThis selection stands. Store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions, or select again first.`;
+			: `${selectionText(selection, reviewable)}\nThis selection stands. Store the final review with one report_review call that speaks about exactly the selected observations and repeats these withholding decisions, or select again first.`;
 	return `${owed}\n${next} A review that says nothing is still one final report_review call. No prose outside the calls.`;
 }
 
@@ -3833,6 +3840,7 @@ async function main() {
 			customTools: [
 				buildSelectionTool(
 					restable,
+					reviewable,
 					priorAdviceWitnesses(alreadySaid.feedback, captured.statements),
 					state,
 				),
@@ -3939,7 +3947,7 @@ async function main() {
 							const prepared = await prepareTurnText(
 								reviewSession,
 								() =>
-									`${reviewContextHeld ? "" : `${text}\n\n`}${finishReviewText(left, state.selection)}`,
+									`${reviewContextHeld ? "" : `${text}\n\n`}${finishReviewText(left, state.selection, reviewable)}`,
 							);
 							if (safety.expired()) {
 								return;
