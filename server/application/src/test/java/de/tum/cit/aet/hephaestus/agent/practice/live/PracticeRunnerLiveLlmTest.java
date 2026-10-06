@@ -207,12 +207,23 @@ class PracticeRunnerLiveLlmTest {
                     .forEach(entry ->
                             expected.put(entry.getKey(), entry.getValue().asString()));
         }
+        Map<String, String> expectedSeverity = new LinkedHashMap<>();
+        if (scenario != null) {
+            scenario.path("expectedSeverity")
+                    .properties()
+                    .forEach(entry -> expectedSeverity.put(
+                            entry.getKey(), entry.getValue().asString()));
+        }
         Map<String, String> actual = new LinkedHashMap<>();
+        Map<String, String> actualSeverity = new LinkedHashMap<>();
         for (JsonNode observation : observations) {
             String slug = observation.path("practiceSlug").asString();
             assertThat(actual.put(slug, observation.path("outcome").asString()))
                     .as("one observation per practice")
                     .isNull();
+            if (expectedSeverity.containsKey(slug)) {
+                actualSeverity.put(slug, observation.path("severity").asString());
+            }
             if ("NOT_MET".equals(observation.path("outcome").asString())) {
                 assertThat(observation.path("severity").asString()).isIn("CRITICAL", "MAJOR", "MINOR", "INFO");
             } else {
@@ -229,6 +240,14 @@ class PracticeRunnerLiveLlmTest {
                                 : scenario.path("id").asString(),
                         rawOutput)
                 .isEqualTo(expected);
+        assertThat(actualSeverity)
+                .as(
+                        "severity in %s: %s",
+                        scenario == null
+                                ? "hardcoded secret"
+                                : scenario.path("id").asString(),
+                        rawOutput)
+                .isEqualTo(expectedSeverity);
 
         // Usage diagnostics — surfaces token totals to the console so flakes show whether the call
         // even reached the LLM. Not asserted as the watchdog branch may leave usage=0.

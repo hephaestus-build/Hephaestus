@@ -430,5 +430,66 @@
 		},
 		"reason": "Polite wording does not turn an unanswered request about broken behavior into optional future advice.",
 		"workType": "pull_request"
+	},
+	{
+		"id": "defect-symptom-without-path",
+		"expected": {
+			"issue-states-an-actionable-problem": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"issue-states-an-actionable-problem": "MINOR"
+		},
+		"files": {
+			"context/comments.json": "[]\n",
+			"context/description.md": "The app crashes in the plant list.\n",
+			"context/metadata.json": "{\"title\": \"Fix a crash in the plant list\", \"body\": \"The app crashes in the plant list.\\n\"}"
+		},
+		"reason": "A stated crash is part of a defect's core, so the missing expected behavior and reproduction path are a minor gap.",
+		"workType": "issue"
+	},
+	{
+		"id": "defect-without-substance",
+		"expected": {
+			"issue-states-an-actionable-problem": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"issue-states-an-actionable-problem": "MAJOR"
+		},
+		"files": {
+			"context/comments.json": "[]\n",
+			"context/description.md": "",
+			"context/metadata.json": "{\"title\": \"Fix the app\", \"body\": \"\"}"
+		},
+		"reason": "Neither a malfunction nor a reproduction path is stated, so no part of the defect's core is there.",
+		"workType": "issue"
+	},
+	{
+		"id": "defect-generic-malfunction",
+		"expected": {
+			"issue-states-an-actionable-problem": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"issue-states-an-actionable-problem": "MAJOR"
+		},
+		"files": {
+			"context/comments.json": "[]\n",
+			"context/description.md": "The app doesn't work properly.\n",
+			"context/metadata.json": "{\"title\": \"Fix the app\", \"body\": \"The app doesn't work properly.\\n\"}"
+		},
+		"reason": "Saying the app does not work properly names no behavior a maintainer could observe and no place or path to look, so it supplies no concrete symptom.",
+		"workType": "issue"
+	},
+	{
+		"id": "defect-complete",
+		"expected": {
+			"issue-states-an-actionable-problem": "MET"
+		},
+		"files": {
+			"context/comments.json": "[]\n",
+			"context/description.md": "Saving a plant with an empty name crashes the app with \"Fatal error: Index out of range\".\n\nExpected: the form shows a validation message and the plant is not saved.\n\nSteps to reproduce:\n1. Open the plant list.\n2. Tap Add.\n3. Leave the name empty and tap Save.\n",
+			"context/metadata.json": "{\"title\": \"Saving a plant with an empty name crashes the app\", \"body\": \"Saving a plant with an empty name crashes the app with \\\"Fatal error: Index out of range\\\".\\n\\nExpected: the form shows a validation message and the plant is not saved.\\n\\nSteps to reproduce:\\n1. Open the plant list.\\n2. Tap Add.\\n3. Leave the name empty and tap Save.\\n\"}"
+		},
+		"reason": "Actual behavior, expected behavior and a repeatable path together are the defect's whole core.",
+		"workType": "issue"
 	}
 ]

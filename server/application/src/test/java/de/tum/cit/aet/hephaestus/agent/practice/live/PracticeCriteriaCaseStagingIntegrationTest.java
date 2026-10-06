@@ -59,11 +59,40 @@ class PracticeCriteriaCaseStagingIntegrationTest {
         }
         assertThat(index.path("sources"))
                 .noneMatch(source -> source.path("kind").asString().equals("scm.pull-request.commits"));
+        String commentsKind = scenario.path("workType").asString().equals("issue")
+                ? "scm.issue.comments"
+                : "scm.pull-request.comments";
         for (var artifact : index.path("artifacts")) {
-            if (artifact.path("artifact").path("path").asString().equals(PracticeCriteriaCaseFixtures.COMMITS)) {
+            String path = artifact.path("artifact").path("path").asString();
+            if (path.equals(PracticeCriteriaCaseFixtures.COMMITS)) {
                 assertThat(artifact.path("kind").asString()).isEqualTo("scm.pull-request.core");
             }
+            if (path.equals(PracticeCriteriaCaseFixtures.COMMENTS)) {
+                assertThat(artifact.path("kind").asString())
+                        .as("comments source in %s", scenario.path("id"))
+                        .isEqualTo(commentsKind);
+            }
+            // What the case expects, and why, is the oracle: no staged input may carry it.
+            assertThat(Files.readString(workspace.resolve(path)))
+                    .as("staged %s in %s", path, scenario.path("id"))
+                    .doesNotContain(scenario.path("reason").asString());
         }
+        String comments = Files.readString(workspace.resolve(PracticeCriteriaCaseFixtures.COMMENTS))
+                .strip();
+        assertThat(index.path("sources"))
+                .anySatisfy(source -> {
+                    assertThat(source.path("kind").asString()).isEqualTo(commentsKind);
+                    assertThat(source.path("state").path("availability").asString())
+                            .isEqualTo("AVAILABLE");
+                    assertThat(source.path("state").path("content").asString())
+                            .isEqualTo(comments.equals("[]") ? "EMPTY" : "NON_EMPTY");
+                })
+                .noneMatch(source -> source.path("kind")
+                        .asString()
+                        .equals(
+                                commentsKind.equals("scm.issue.comments")
+                                        ? "scm.pull-request.comments"
+                                        : "scm.issue.comments"));
         var task = mapper.readTree(
                 workspace.resolve(SandboxLayout.TASK_ENVELOPE_FILENAME).toFile());
         assertThat(task.path("repositoryRoot").asString())
@@ -112,8 +141,14 @@ class PracticeCriteriaCaseStagingIntegrationTest {
         } else if (!supplied.has(PracticeCriteriaCaseFixtures.COMMITS)) {
             assertThat(mapper.readTree(commits.toFile()).path("commits")).hasSize(1);
         }
-        try (var practices = Files.list(workspace.resolve(SandboxLayout.PRACTICES_PREFIX))) {
-            assertThat(practices.count()).isEqualTo(scenario.path("expected").size() + 1L);
+        try (var listed = Files.list(workspace.resolve(SandboxLayout.PRACTICES_PREFIX))) {
+            List<Path> practices = listed.toList();
+            assertThat(practices).hasSize(scenario.path("expected").size() + 1);
+            for (Path practice : practices) {
+                assertThat(Files.readString(practice))
+                        .as("staged %s in %s", practice.getFileName(), scenario.path("id"))
+                        .doesNotContain(scenario.path("reason").asString());
+            }
         }
     }
 
