@@ -334,6 +334,11 @@ On SIGTERM, the worker does these actions in order:
 3. It stops containers that still run.
 4. It returns each job to the queue with a worker-fenced requeue (`RUNNING → QUEUED`, retry-capped).
 
+The worker's HTTP connectors, including the sandbox gateway, stay open during step 2.
+Thus, an active review can still send model requests while the worker waits for it.
+The HTTP graceful shutdown starts only after the drain.
+A review that does not finish within the timeout is still requeued.
+
 This is not a plain cancel.
 Another worker's poll claims the job again, within `AGENT_MAX_RETRIES`.
 Only jobs with an exhausted retry budget or a lost fence to concurrent user-cancel become terminally canceled/failed instead.
