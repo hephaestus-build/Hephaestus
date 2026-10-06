@@ -1415,7 +1415,8 @@ public class AgentJobExecutor {
             return AgentJobStatus.TIMED_OUT;
         }
         if (sandboxResult.exitCode() == 0) {
-            return AgentJobStatus.COMPLETED;
+            // A clean exit without a valid result is the runner's failure, not a completed review.
+            return agentResult != null && agentResult.success() ? AgentJobStatus.COMPLETED : AgentJobStatus.FAILED;
         }
         // Distinguish envelope drift (exit 42) from generic failure — the runner emits this when
         // the task.json schemaVersion doesn't match this image. Operators need to see
@@ -1478,7 +1479,10 @@ public class AgentJobExecutor {
             String errorMessage =
                     switch (terminalStatus) {
                         case TIMED_OUT -> "The container timed out.";
-                        case FAILED -> "The container exited with code " + sandboxResult.exitCode() + ".";
+                        case FAILED ->
+                            sandboxResult.exitCode() == 0
+                                    ? "The runner did not return a valid result."
+                                    : "The container exited with code " + sandboxResult.exitCode() + ".";
                         default -> null;
                     };
             int updated = transitionTerminal(jobId, terminalStatus, Instant.now(), errorMessage);

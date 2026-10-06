@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -23,16 +24,15 @@ import tools.jackson.databind.ObjectMapper;
  * Parse Pi-runner output into an {@link AgentResult}.
  *
  * <p>Falls back to persisted review state when the primary result is absent and surfaces auxiliary
- * runner artifacts. Sanitises Swift {@code \(...)} interpolation that produces invalid JSON.
+ * runner artifacts. A malformed result is not a successful run and carries no {@code rawOutput}.
  *
- * <p>Parse failures are non-fatal (best-effort) and counted by the
- * {@code agent.pi.result.parse.failure{stage}} counter.
+ * <p>Parse failures are counted by the {@code agent.pi.result.parse.failure{stage}} counter; a malformed auxiliary
+ * artifact costs only that artifact.
  */
 @Service
 public class PiResultParser {
 
     private static final Logger log = LoggerFactory.getLogger(PiResultParser.class);
-    private static final int MAX_BRACE_ATTEMPTS = 5;
 
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
@@ -55,7 +55,10 @@ public class PiResultParser {
                 .register(meterRegistry);
     }
 
-    /** Parse the sandbox result, falling back to {@code review-state.json} when {@code result.json} is absent. */
+    /**
+     * Parse the sandbox result, falling back to {@code review-state.json} when {@code result.json} is absent. A run
+     * with no readable result is not a success, whatever its exit code.
+     */
     public AgentResult parse(SandboxResult sandboxResult) {
         boolean success = sandboxResult.exitCode() == 0 && !sandboxResult.timedOut();
         Map<String, Object> output = new HashMap<>();
@@ -70,23 +73,39 @@ public class PiResultParser {
         // were malformed would silently couple two things that must not be coupled.
         addComposedFeedback(output, sandboxResult.outputFiles().get(SandboxLayout.FEEDBACK_FILENAME));
 
+        // A malformed primary result is the run's answer; the review-state backup stands in only for a missing one.
         byte[] resultFile = sandboxResult.outputFiles().get("result.json");
         if (resultFile == null) {
             resultFile = buildResultFromReviewState(sandboxResult.outputFiles().get("review-state.json"));
+        } else if (observationsOf(resultFile, "result") == null) {
+            resultFile = null;
         }
         if (resultFile == null) {
-            return new AgentResult(success, output, usage);
+            return new AgentResult(false, output, usage);
         }
-
-        String rawContent = sanitizeSwiftEscapes(new String(resultFile, StandardCharsets.UTF_8));
-        if (isValidJsonWithObservations(rawContent)) {
-            output.put("rawOutput", rawContent);
-            return new AgentResult(success, output, usage);
-        }
-
-        String extracted = extractJsonFromText(rawContent);
-        output.put("rawOutput", extracted != null ? extracted : rawContent);
+        output.put("rawOutput", new String(resultFile, StandardCharsets.UTF_8));
         return new AgentResult(success, output, usage);
+    }
+
+    /**
+     * The runner writes its result files with {@code JSON.stringify}: one JSON object and nothing around it. Anything
+     * else is refused, never repaired or extracted from text.
+     */
+    private @Nullable JsonNode observationsOf(byte[] file, String stage) {
+        try {
+            JsonNode root = objectMapper
+                    .readerFor(JsonNode.class)
+                    .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                    .readValue(file);
+            JsonNode observations = root != null && root.isObject() ? root.get("observations") : null;
+            if (observations != null && observations.isArray()) {
+                return observations;
+            }
+            recordFailure(stage, new IllegalArgumentException("no observations array"));
+        } catch (JacksonException e) {
+            recordFailure(stage, e);
+        }
+        return null;
     }
 
     void addPracticeCoverage(Map<String, Object> output, byte @Nullable [] coverageFile) {
@@ -220,82 +239,18 @@ public class PiResultParser {
         if (reviewStateFile == null || reviewStateFile.length == 0) {
             return null;
         }
-        try {
-            JsonNode root = objectMapper.readTree(reviewStateFile);
-            JsonNode observations = root.get("observations");
-            if (observations == null || !observations.isArray() || observations.isEmpty()) {
-                return null;
-            }
-            Map<String, Object> assembled = new LinkedHashMap<>();
-            assembled.put("observations", objectMapper.treeToValue(observations, Object.class));
-            return objectMapper.writeValueAsBytes(assembled);
-        } catch (JacksonException e) {
-            recordFailure("review_state", e);
+        JsonNode observations = observationsOf(reviewStateFile, "review_state");
+        if (observations == null || observations.isEmpty()) {
             return null;
         }
+        Map<String, Object> assembled = new LinkedHashMap<>();
+        assembled.put("observations", observations);
+        return objectMapper.writeValueAsBytes(assembled);
     }
 
-    /** Drop invalid JSON escapes produced when the LLM quotes Swift string interpolation. */
-    String sanitizeSwiftEscapes(String json) {
-        if (json == null || !json.contains("\\")) {
-            return json;
-        }
-        StringBuilder sb = new StringBuilder(json.length());
-        for (int i = 0; i < json.length(); i++) {
-            char c = json.charAt(i);
-            boolean invalidEscape = c == '\\' && i + 1 < json.length() && !isJsonEscape(json.charAt(i + 1));
-            if (!invalidEscape) {
-                sb.append(c);
-            }
-        }
-        return sb.toString();
-    }
-
-    private static boolean isJsonEscape(char next) {
-        return "\"\\/bfnrtu".indexOf(next) >= 0;
-    }
-
-    /** Find the first '{'…'}' object containing an observations array (max {@value MAX_BRACE_ATTEMPTS} attempts). */
-    @Nullable
-    String extractJsonFromText(String text) {
-        int searchFrom = 0;
-        char[] chars = text.toCharArray();
-        int attempts = 0;
-        while (searchFrom < chars.length && attempts < MAX_BRACE_ATTEMPTS) {
-            int bracePos = text.indexOf('{', searchFrom);
-            if (bracePos == -1) {
-                break;
-            }
-            attempts++;
-            try (var parser = objectMapper.createParser(chars, bracePos, chars.length - bracePos)) {
-                JsonNode node = objectMapper.readTree(parser);
-                if (node != null && node.isObject() && observationsNode(node) != null) {
-                    return objectMapper.writeValueAsString(node);
-                }
-            } catch (JacksonException e) {
-                log.trace("No JSON object at position {}: {}", bracePos, e.getMessage());
-            }
-            searchFrom = bracePos + 1;
-        }
-        return null;
-    }
-
-    boolean isValidJsonWithObservations(String text) {
-        try {
-            JsonNode node = objectMapper.readTree(text);
-            return node != null && node.isObject() && observationsNode(node) != null;
-        } catch (JacksonException e) {
-            return false;
-        }
-    }
-
-    private static @Nullable JsonNode observationsNode(JsonNode root) {
-        JsonNode observations = root.get("observations");
-        return observations != null && observations.isArray() ? observations : null;
-    }
-
+    /** Logs the failure's type only: a parser message can quote the runner's output. */
     private void recordFailure(String stage, Exception e) {
-        log.warn("Failed to parse Pi {} output: {}", stage, e.getMessage());
+        log.warn("Failed to parse Pi {} output: {}", stage, e.getClass().getSimpleName());
         meterRegistry
                 .counter(AgentMetrics.AGENT_PI_RESULT_PARSE_FAILURE, Tags.of("stage", stage))
                 .increment();
