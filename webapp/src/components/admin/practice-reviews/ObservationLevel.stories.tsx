@@ -244,7 +244,7 @@ export const MarkedIncorrect: Story = {
 		await expect(precedes(panel.getByRole("heading", { level: 2 }), chip)).toBe(true);
 		await expect(
 			panel.getByText(
-				/Inline comments Hephaestus posted about it are still on the work unchanged/u,
+				/Comments Hephaestus posted about specific lines, whether on the lines or linking to them, are still on the work unchanged/u,
 			),
 		).toBeVisible();
 		await expect(

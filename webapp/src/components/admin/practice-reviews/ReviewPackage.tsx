@@ -2,6 +2,7 @@ import { FileCode2Icon } from "lucide-react";
 
 import type { GetPracticeReviewFeedbackResponse, ReviewProposedPlacement } from "@/api/types.gen";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
+import { PLACEMENT_DEFS } from "@/components/practice-vocabulary/placement-defs";
 import {
 	Accordion,
 	AccordionContent,
@@ -44,6 +45,9 @@ export function ReviewPackage({
 											{placement.endLine !== undefined && placement.endLine !== placement.startLine
 												? `Lines ${placement.startLine}–${placement.endLine}`
 												: `Line ${placement.startLine}`}
+											{placement.type === "LOCATION_COMMENT"
+												? ` · ${PLACEMENT_DEFS.LOCATION_COMMENT.label}`
+												: null}
 										</span>
 									</span>
 								</span>
@@ -62,14 +66,19 @@ export function ReviewPackage({
 }
 
 type InlinePlacement = ReviewProposedPlacement & {
-	type: "INLINE";
+	type: "INLINE" | "LOCATION_COMMENT";
 	path: string;
 	startLine: number;
 };
 
-/** The server builds an inline placement only with its file and first line; the summary has neither. */
+/**
+ * A placement about lines: proposed on them, or recorded as a comment linking to them. Either keeps its file
+ * and first line; the summary has neither.
+ */
 function isInline(placement: ReviewProposedPlacement): placement is InlinePlacement {
 	return (
-		placement.type === "INLINE" && placement.path !== undefined && placement.startLine !== undefined
+		(placement.type === "INLINE" || placement.type === "LOCATION_COMMENT") &&
+		placement.path !== undefined &&
+		placement.startLine !== undefined
 	);
 }

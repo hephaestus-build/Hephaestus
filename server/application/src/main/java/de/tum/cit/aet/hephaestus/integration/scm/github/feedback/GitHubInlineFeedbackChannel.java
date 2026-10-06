@@ -258,7 +258,8 @@ public class GitHubInlineFeedbackChannel implements InlineFeedbackChannel {
                                     comment.externalId(),
                                     reviewId,
                                     comment.url(),
-                                    true));
+                                    true,
+                                    Placement.LINE));
         }
         return signals;
     }
@@ -440,7 +441,14 @@ public class GitHubInlineFeedbackChannel implements InlineFeedbackChannel {
             @Nullable String url) {
         DeliveredSignal preserved(InlineFeedback item) {
             return new DeliveredSignal(
-                    item.deliveryKey(), item.anchor(), Disposition.PRESERVED_EXISTING, commentId, threadId, url);
+                    item.deliveryKey(),
+                    item.anchor(),
+                    Disposition.PRESERVED_EXISTING,
+                    commentId,
+                    threadId,
+                    url,
+                    null,
+                    Placement.LINE);
         }
     }
 

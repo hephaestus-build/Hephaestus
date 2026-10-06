@@ -521,6 +521,17 @@ describe("the reader's own feedback on the work", () => {
 							side: "NEW",
 							permalink: `${MR1}/diffs#note_2`,
 						},
+						// A comment on the work that links to its lines is a comment the reader can go to.
+						{
+							id: "8f4cad23-4e5f-4071-9c23-d4e5f6071829",
+							type: "LOCATION_COMMENT",
+							commentRef: "gid://gitlab/Note/3",
+							path: "b.ts",
+							startLine: 5,
+							endLine: 7,
+							side: "NEW",
+							permalink: `${MR1}#note_3`,
+						},
 						// Not a comment on the work, and a handle that identifies nothing: neither counts.
 						summary({ type: "CONVERSATION_TURN", commentRef: "turn-1" }),
 						summary({ commentRef: " " }),
@@ -548,6 +559,15 @@ describe("the reader's own feedback on the work", () => {
 				startLine: 3,
 				endLine: undefined,
 				permalink: `${MR1}/diffs#note_2`,
+				practices: ["Small, focused changes"],
+				deliveredAt: "2026-09-26T09:00:00Z",
+			},
+			{
+				kind: "LOCATION_COMMENT",
+				path: "b.ts",
+				startLine: 5,
+				endLine: 7,
+				permalink: `${MR1}#note_3`,
 				practices: ["Small, focused changes"],
 				deliveredAt: "2026-09-26T09:00:00Z",
 			},

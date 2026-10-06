@@ -56,6 +56,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor.DiffAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Disposition;
+import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Placement;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
@@ -381,8 +382,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
 
     /** The provider accounts for every line note of a package without returning a handle to record. */
     private void stubInlinePackageDelivered() {
-        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any()))
-                .thenReturn(new DiffNotePoster.DiffNoteResult(List.of(), true, false, false, false, List.of()));
+        when(diffNotePoster.deliverPackage(any(), any(), any(), any(), any(), any()))
+                .thenReturn(new DiffNotePoster.DiffNoteResult(List.of(), true, false, false, false, false, List.of()));
     }
 
     @Autowired
@@ -969,7 +970,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             String landingKey = "observation:" + landing.getOccurrenceKey() + ":0";
             String failingKey = "observation:" + failing.getOccurrenceKey() + ":0";
             when(commentPoster.post(any())).thenReturn(new SummaryHandle("summary-ref"));
-            when(diffNotePoster.deliverPackage(eq(agentJob), any(), any(), any(), any()))
+            when(diffNotePoster.deliverPackage(eq(agentJob), any(), any(), any(), any(), any()))
                     .thenReturn(
                             incomplete(
                                     signal(landingKey, 3, Disposition.POSTED),
@@ -1001,7 +1002,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             }
 
             verify(commentPoster, times(1)).post(any());
-            verify(diffNotePoster, times(2)).deliverPackage(eq(agentJob), any(), any(), any(), any());
+            verify(diffNotePoster, times(2)).deliverPackage(eq(agentJob), any(), any(), any(), any(), any());
             assertThat(stateOf(FeedbackDeliveryState.DELIVERED))
                     .as("the summary, the note that landed and what that note cites; never the note that failed")
                     .containsExactlyInAnyOrder(summarised.getId(), landing.getId(), supporting.getId());
@@ -1054,16 +1055,17 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             return validated(row, evidence);
         }
 
-        /** A note that landed under {@code disposition}, or for {@code FAILED} one provably never requested. */
+        /** A line comment that landed under {@code disposition}, or for {@code FAILED} one provably never requested. */
         private static DeliveredSignal signal(String key, int line, Disposition disposition) {
             DiffAnchor anchor = new DiffAnchor("src/App.java", line, null);
             return disposition == Disposition.FAILED
                     ? DeliveredSignal.notSent(key, anchor)
-                    : new DeliveredSignal(key, anchor, disposition, "note-" + key, "discussion-" + key);
+                    : new DeliveredSignal(
+                            key, anchor, disposition, "note-" + key, "discussion-" + key, null, null, Placement.LINE);
         }
 
         private static DiffNotePoster.DiffNoteResult incomplete(DeliveredSignal... signals) {
-            return new DiffNotePoster.DiffNoteResult(List.of(signals), false, false, false, false, List.of());
+            return new DiffNotePoster.DiffNoteResult(List.of(signals), false, false, false, false, false, List.of());
         }
 
         /** The observations bound to this job's feedback recorded in {@code state}. */
@@ -1091,7 +1093,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     .extracting(Feedback::getDeliveryState, Feedback::getSuppressionReason)
                     .containsExactly(FeedbackDeliveryState.SUPPRESSED, FeedbackSuppressionReason.INSTANCE_SILENCED);
             verify(commentPoster, never()).post(any());
-            verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+            verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
 
             releaseSilentMode();
             assertThat(feedbackRepository.findAll())
@@ -1123,7 +1125,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
 
             verify(commentPoster).post(argThat(write -> write.job().equals(agentJob)));
             // A package with no line notes writes nothing inline, so it never touches what earlier packages placed.
-            verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+            verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
 
             // AgentJobExecutor persists deliveryStatus, not handler.deliver(), so it stays null here.
             assertThat(agentJob.getDeliveryCommentId()).isEqualTo("comment-123");
@@ -1203,7 +1205,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
 
             assertThat(observationRepository.findAll()).isEmpty();
             verify(commentPoster, never()).post(any());
-            verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+            verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -1256,7 +1258,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
             assertThat(observationRepository.findAll()).hasSize(2);
 
             verify(commentPoster, never()).post(any());
-            verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any());
+            verify(diffNotePoster, never()).deliverPackage(any(), any(), any(), any(), any(), any());
 
             assertThat(agentJob.getDeliveryCommentId()).isNull();
             assertThat(agentJob.getDeliveryStatus()).isNull();

@@ -61,7 +61,9 @@ separate places where one practice was not met are separate points.
 One `report_review` call holds the whole review:
 
 - `summary` — the one comment on the work. Leave it out when nothing on this work earns a comment.
-- `inline` — notes, each on one `anchorable` citation, named by its `observationId` and `citationIndex`.
+- `inline` — notes, each on one `anchorable` citation, named by its `observationId` and `citationIndex`. On GitHub
+  it is meant to appear as a review comment on that line. On GitLab it is an ordinary comment on the merge request,
+  headed by a link to the line.
 - `withheld` — the NOT_MET observations you decided not to raise, each with your reason: `ALREADY_SAID` when this
   work was already told and nothing new has happened, `NO_MATERIAL_CHANGE` when you would only repeat the same point in
   other words, `BELOW_BAR` when it is not worth this reader's attention here.

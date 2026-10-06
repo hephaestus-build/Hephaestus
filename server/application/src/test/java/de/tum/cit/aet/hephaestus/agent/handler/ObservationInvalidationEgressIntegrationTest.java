@@ -180,6 +180,8 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         note = noteAbout(observation, 3, "Closes #1 already.");
         when(policy.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(pullRequestAt(REVIEWED_HEAD)));
+        when(policy.currentReviewedRevision(any(), any()))
+                .thenReturn(PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT);
     }
 
     /** The head commit the review ran at, pinned as the pull request review handler records it. */
@@ -1214,7 +1216,14 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
                 String id = notes.get(String.valueOf(item.deliveryKey()));
                 if (id != null) {
                     found.add(new DeliveredSignal(
-                            item.deliveryKey(), item.anchor(), Disposition.PRESERVED_EXISTING, id, null));
+                            item.deliveryKey(),
+                            item.anchor(),
+                            Disposition.PRESERVED_EXISTING,
+                            id,
+                            null,
+                            null,
+                            null,
+                            InlineFeedbackChannel.Placement.LINE));
                 }
             }
             return found;

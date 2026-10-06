@@ -54,8 +54,11 @@ export interface WorkFeedback {
 }
 
 export interface WorkComment {
-	/** The summary comment on the work, or a comment on a line of its changes. */
-	kind: "SUMMARY" | "INLINE";
+	/**
+	 * The summary comment on the work, a comment on a line of its changes, or a comment on the work as a
+	 * whole that links to lines of its changes.
+	 */
+	kind: "SUMMARY" | "INLINE" | "LOCATION_COMMENT";
 	path?: string;
 	startLine?: number;
 	endLine?: number;

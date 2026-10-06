@@ -30,7 +30,8 @@ interface DeliveredWorkFeedbackRepository extends Repository<Feedback, UUID> {
               de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.FAILED)
           AND EXISTS (SELECT p.id FROM FeedbackPlacement p WHERE p.feedback = f
               AND p.placementType IN (de.tum.cit.aet.hephaestus.practices.feedback.PlacementType.SUMMARY,
-                                     de.tum.cit.aet.hephaestus.practices.feedback.PlacementType.INLINE)
+                                     de.tum.cit.aet.hephaestus.practices.feedback.PlacementType.INLINE,
+                                     de.tum.cit.aet.hephaestus.practices.feedback.PlacementType.LOCATION_COMMENT)
               AND p.postedCommentRef IS NOT NULL AND LENGTH(TRIM(p.postedCommentRef)) > 0)
         ORDER BY f.deliveredAt DESC NULLS LAST, f.createdAt DESC, f.id DESC
         """)
@@ -72,7 +73,8 @@ interface DeliveredWorkFeedbackRepository extends Repository<Feedback, UUID> {
         WHERE p.feedback.workspaceId = :workspaceId AND p.feedback.id IN :feedbackIds
           AND p.postedCommentRef IS NOT NULL AND LENGTH(TRIM(p.postedCommentRef)) > 0
           AND p.placementType IN (de.tum.cit.aet.hephaestus.practices.feedback.PlacementType.SUMMARY,
-                                 de.tum.cit.aet.hephaestus.practices.feedback.PlacementType.INLINE)
+                                 de.tum.cit.aet.hephaestus.practices.feedback.PlacementType.INLINE,
+                                 de.tum.cit.aet.hephaestus.practices.feedback.PlacementType.LOCATION_COMMENT)
         ORDER BY p.placementType DESC, p.anchorPath, p.anchorStartLine, p.createdAt, p.id
         """)
     List<FeedbackPlacement> findPlacements(

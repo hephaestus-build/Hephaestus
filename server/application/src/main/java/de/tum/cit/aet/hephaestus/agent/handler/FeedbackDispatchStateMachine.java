@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Disposition;
+import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Placement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchCompletion;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchRepository;
@@ -313,17 +314,18 @@ class FeedbackDispatchStateMachine {
             if (persisted.acknowledged()) return persisted;
             return persisted.unconfirmed() && !latest.unconfirmed() ? persisted : latest;
         }
-        if (latest.externalUrl() == null
-                && persisted.externalUrl() != null
-                && Objects.equals(latest.externalRef(), persisted.externalRef())) {
+        if (Objects.equals(latest.externalRef(), persisted.externalRef())
+                && ((latest.externalUrl() == null && persisted.externalUrl() != null)
+                        || (latest.placement() == null && persisted.placement() != null))) {
             return new DeliveredSignal(
                     latest.deliveryKey(),
                     latest.anchor(),
                     latest.disposition(),
                     latest.externalRef(),
                     latest.threadExternalRef(),
-                    persisted.externalUrl(),
-                    latest.writeMayHaveStarted());
+                    latest.externalUrl() != null ? latest.externalUrl() : persisted.externalUrl(),
+                    latest.writeMayHaveStarted(),
+                    latest.placement() != null ? latest.placement() : persisted.placement());
         }
         return latest;
     }
@@ -343,7 +345,8 @@ class FeedbackDispatchStateMachine {
 
     /**
      * One element of the {@code delivered_placements} array. {@code writeMayHaveStarted} is absent on elements
-     * written before it was recorded, which reads as unknown, never as unsent.
+     * written before it was recorded, which reads as unknown, never as unsent; {@code placement} is absent on
+     * elements written before it was recorded, and stays absent rather than being guessed.
      */
     private record StoredPlacement(
             @JsonAlias("recurrenceKey") @Nullable String deliveryKey,
@@ -355,7 +358,8 @@ class FeedbackDispatchStateMachine {
             @Nullable String externalRef,
             @Nullable String externalUrl,
             @Nullable String threadExternalRef,
-            @Nullable Boolean writeMayHaveStarted) {
+            @Nullable Boolean writeMayHaveStarted,
+            @Nullable Placement placement) {
         private static StoredPlacement from(DeliveredSignal signal) {
             FeedbackAnchor.DiffAnchor anchor = (FeedbackAnchor.DiffAnchor) signal.anchor();
             Integer rangeStart = anchor.startLine();
@@ -368,7 +372,8 @@ class FeedbackDispatchStateMachine {
                     signal.externalRef(),
                     signal.externalUrl(),
                     signal.threadExternalRef(),
-                    signal.writeMayHaveStarted());
+                    signal.writeMayHaveStarted(),
+                    signal.placement());
         }
 
         private DeliveredSignal toSignal() {
@@ -376,7 +381,14 @@ class FeedbackDispatchStateMachine {
                     ? FeedbackAnchor.DiffAnchor.singleLine(path, startLine)
                     : FeedbackAnchor.DiffAnchor.range(path, startLine, endLine);
             return new DeliveredSignal(
-                    deliveryKey, anchor, disposition, externalRef, threadExternalRef, externalUrl, writeMayHaveStarted);
+                    deliveryKey,
+                    anchor,
+                    disposition,
+                    externalRef,
+                    threadExternalRef,
+                    externalUrl,
+                    writeMayHaveStarted,
+                    placement);
         }
     }
 }

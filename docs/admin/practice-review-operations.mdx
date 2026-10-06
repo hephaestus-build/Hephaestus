@@ -186,6 +186,37 @@ The new summary is then created.
 
 The check uses only the delivered ledger, after delivery policy permits the write.
 Two reviews with summaries still in dispatch can each post one on the same work.
+
+**Reviewed commit.** Before each new write, a pull request or merge request package checks its reviewed commit.
+It compares that commit with the head Hephaestus last synchronized for the work.
+An automatic package uses the job's pinned commit.
+An approved package uses its proposal's recorded commit, else the job's pin.
+
+The comparison runs before the summary and again before each new inline comment.
+The check reads the synchronized head, not the provider.
+A push that Hephaestus has not synchronized yet does not stop the write.
+Neither does a push between that read and the create request.
+
+- **Same commit** — the create proceeds.
+- **Different commit** — nothing more is created.
+  An automatic package is withheld as `REVIEWED_REVISION_CHANGED`, an approved one as `APPROVAL_STALE`.
+  Comments already posted stay and remain recorded.
+- **Either commit unknown** — nothing is created.
+  An automatic package retries, without a withholding reason.
+  An approved package needs a known matching commit: before its first write it is withheld as `APPROVAL_STALE`, as before.
+  Once an approved package may have written an inline comment, it retries instead, so that comment is still looked up.
+
+Copies an earlier attempt may have posted are still looked up first, against the reviewed commit, so an unconfirmed write is never settled unseen.
+
+**Where inline comments land.** GitHub inline comments are review comments on the lines.
+GitLab inline comments are ordinary merge request comments.
+
+Each starts with a static link to the file and lines at the reviewed commit, built from the workspace's configured GitLab server.
+GitLab does not attach them to the lines, so they are not diff notes and are never resolved, edited or deleted by Hephaestus.
+The ledger records them as `LOCATION_COMMENT` placements with the proposed file and lines, and the comment's own link.
+Diff notes and fallback comments that earlier versions posted are still recognized as copies.
+A GitLab anchor on the old side of the diff is not posted, since the reviewed head has no lines to link to.
+
 The write fence closes after delivery policy permits the write and before provider-adapter preparation.
 That preparation checks the rate limit and resolves the pull request, merge request, or issue before the create request.
 

@@ -4,8 +4,8 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Capability-gated SPI for posting inline feedback (SCM diff notes, knowledge-base
- * document-anchor comments). Kinds that don't declare {@link Capability#INLINE_FEEDBACK}
+ * Capability-gated SPI for posting located feedback (SCM line comments or comments linking to a line,
+ * knowledge-base document-anchor comments). Kinds that don't declare {@link Capability#INLINE_FEEDBACK}
  * never resolve via this registry — Slack and similar messaging vendors are
  * compile-time excluded.
  *
@@ -35,8 +35,8 @@ public interface InlineFeedbackChannel {
 
     /**
      * How the copies of a package were rendered; sealed with the package, never chosen later. In every mode a copy
-     * counts only with its key, the exact body this mode renders, its native anchor (or the fallback’s static location metadata) and authorship by the
-     * identity the same response authenticated. A copy that carries the key without all of that is a conflict:
+     * counts only with its key, the exact body this mode renders, its native anchor (or, for an ordinary comment, its
+     * static location link) and authorship by the identity the same response authenticated. A copy that carries the key without all of that is a conflict:
      * neither delivered nor absent.
      */
     enum Readback {
@@ -72,8 +72,8 @@ public interface InlineFeedbackChannel {
      * persist {@code posted_state} / {@code external_ref} without re-deriving it.
      *
      * <ul>
-     *   <li>{@code POSTED} — a new inline note/thread was created.
-     *   <li>{@code FELL_BACK} — the anchor was out of the diff hunk, posted as a plain comment instead.
+     *   <li>{@code POSTED} — a new copy was created.
+     *   <li>{@code FELL_BACK} — historical: the anchor was out of the diff hunk, posted as a plain comment instead.
      *   <li>{@code PRESERVED_EXISTING} — a verified copy already exists and was left untouched.
      *   <li>{@code FAILED} — no copy is known; {@link DeliveredSignal#writeMayHaveStarted()} says whether one may
      *       still exist.
@@ -87,12 +87,23 @@ public interface InlineFeedbackChannel {
     }
 
     /**
+     * Where a copy actually appears, whatever its {@link Disposition}: on the line as the provider's own line
+     * comment, or as an ordinary comment on the work that links to the line at the reviewed commit.
+     */
+    enum Placement {
+        LINE,
+        LOCATION_COMMENT,
+    }
+
+    /**
      * What actually happened to one feedback unit, keyed by {@code deliveryKey} so the caller can reconcile it
      * against the persisted placement. {@code externalRef} is the vendor note id and {@code threadExternalRef}
      * the enclosing discussion/thread id; both are {@code null} when no durable handle exists (e.g. a failure).
      *
      * @param writeMayHaveStarted for an unacknowledged unit: {@code false} when no copy can exist from this
      *     attempt, {@code true} when creation remains unconfirmed, {@code null} when unrecorded and unknown
+     * @param placement where the copy appears; {@code null} without a copy, or when it was recorded before
+     *     placement was, see {@link #actualPlacement()}
      */
     record DeliveredSignal(
             @Nullable String deliveryKey,
@@ -101,7 +112,27 @@ public interface InlineFeedbackChannel {
             @Nullable String externalRef,
             @Nullable String threadExternalRef,
             @Nullable String externalUrl,
-            @Nullable Boolean writeMayHaveStarted) {
+            @Nullable Boolean writeMayHaveStarted,
+            @Nullable Placement placement) {
+        public DeliveredSignal(
+                @Nullable String deliveryKey,
+                FeedbackAnchor anchor,
+                Disposition disposition,
+                @Nullable String externalRef,
+                @Nullable String threadExternalRef,
+                @Nullable String externalUrl,
+                @Nullable Boolean writeMayHaveStarted) {
+            this(
+                    deliveryKey,
+                    anchor,
+                    disposition,
+                    externalRef,
+                    threadExternalRef,
+                    externalUrl,
+                    writeMayHaveStarted,
+                    null);
+        }
+
         public DeliveredSignal(
                 @Nullable String deliveryKey,
                 FeedbackAnchor anchor,
@@ -139,6 +170,20 @@ public interface InlineFeedbackChannel {
         /** Whether this unacknowledged unit may still have a copy that a later lookup could find. */
         public boolean unconfirmed() {
             return !acknowledged() && !Boolean.FALSE.equals(writeMayHaveStarted);
+        }
+
+        /**
+         * Where the copy appears. A receipt recorded before placement was says it only through its disposition: a
+         * new copy was then always the provider's line comment and a fallback an ordinary comment. A kept copy
+         * from then proves neither, so it stays unknown.
+         */
+        public @Nullable Placement actualPlacement() {
+            if (placement != null || !acknowledged()) return placement;
+            return switch (disposition) {
+                case POSTED -> Placement.LINE;
+                case FELL_BACK -> Placement.LOCATION_COMMENT;
+                case PRESERVED_EXISTING, FAILED -> null;
+            };
         }
     }
 

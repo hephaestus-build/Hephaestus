@@ -7119,6 +7119,7 @@ paths:
             - PRACTICE_REQUIRES_APPROVAL
             - BACKFILL_QUIET
             - OBSERVATION_INVALIDATED
+            - REVIEWED_REVISION_CHANGED
       - in: query
         name: channel
         required: false
@@ -12094,6 +12095,7 @@ components:
           - SUMMARY
           - INLINE
           - CONVERSATION_TURN
+          - LOCATION_COMMENT
       required:
       - commentRef
       - id
@@ -12185,6 +12187,7 @@ components:
           - PRACTICE_REQUIRES_APPROVAL
           - BACKFILL_QUIET
           - OBSERVATION_INVALIDATED
+          - REVIEWED_REVISION_CHANGED
         evaluatedAt:
           type: string
           format: date-time
@@ -15909,6 +15912,7 @@ components:
             - PRACTICE_REQUIRES_APPROVAL
             - BACKFILL_QUIET
             - OBSERVATION_INVALIDATED
+            - REVIEWED_REVISION_CHANGED
       required:
       - autonomy
       - deliveredCount
@@ -16817,6 +16821,7 @@ components:
           - PRACTICE_REQUIRES_APPROVAL
           - BACKFILL_QUIET
           - OBSERVATION_INVALIDATED
+          - REVIEWED_REVISION_CHANGED
       required:
       - agentJobId
       - channel
@@ -17003,6 +17008,7 @@ components:
           - PRACTICE_REQUIRES_APPROVAL
           - BACKFILL_QUIET
           - OBSERVATION_INVALIDATED
+          - REVIEWED_REVISION_CHANGED
       required:
       - agentJobId
       - bodyTruncated
@@ -17188,6 +17194,7 @@ components:
           - PRACTICE_REQUIRES_APPROVAL
           - BACKFILL_QUIET
           - OBSERVATION_INVALIDATED
+          - REVIEWED_REVISION_CHANGED
         threadKey:
           type: string
           description: Cross-run continuity key tying successive deliveries together
@@ -17465,6 +17472,7 @@ components:
           - SUMMARY
           - INLINE
           - CONVERSATION_TURN
+          - LOCATION_COMMENT
         postedCommentRef:
           type: string
           description: Provider-native comment identifier
@@ -17541,6 +17549,7 @@ components:
           - SUMMARY
           - INLINE
           - CONVERSATION_TURN
+          - LOCATION_COMMENT
       required:
       - body
       - type

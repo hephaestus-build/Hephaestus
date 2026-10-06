@@ -126,6 +126,7 @@ public interface FeedbackPlacementRepository extends JpaRepository<FeedbackPlace
         ORDER BY CASE fp.placement_type
                      WHEN 'SUMMARY' THEN 0
                      WHEN 'INLINE' THEN 1
+                     WHEN 'LOCATION_COMMENT' THEN 1
                      WHEN 'CONVERSATION_TURN' THEN 2
                      ELSE 3
                  END,

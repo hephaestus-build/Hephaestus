@@ -1,7 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
 /**
- * The granularity of a diff anchor for an {@link PlacementType#INLINE} placement.
+ * The granularity of a diff anchor for an {@link PlacementType#INLINE} or {@link PlacementType#LOCATION_COMMENT}
+ * placement.
  *
  * <ul>
  *   <li>{@link #LINE} — a single line.</li>

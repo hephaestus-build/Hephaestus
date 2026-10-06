@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,14 +62,16 @@ class DiffNotePoster {
 
     /**
      * Delivers what the package still owes: notes whose request may have left are read back, notes proven absent
-     * are appended, each create preceded by {@code recordAttempt} durably storing the whole receipt. Once a
-     * request was recorded nothing is thrown: the returned receipt is the one to persist.
+     * are appended, each create preceded by {@code reviewedRevision} reading the work still at its reviewed commit
+     * and {@code recordAttempt} durably storing the whole receipt. Once a request was recorded nothing is thrown: the
+     * returned receipt is the one to persist.
      */
     DiffNoteResult deliverPackage(
             AgentJob job,
             InlinePackageScope scope,
             List<DiffNote> diffNotes,
             List<DeliveredSignal> recorded,
+            Supplier<PracticeFeedbackDeliveryPolicy.ReviewedRevision> reviewedRevision,
             Predicate<List<DeliveredSignal>> recordAttempt) {
         IntegrationKind kind =
                 Objects.requireNonNull(job.getIntegrationKind(), "AgentJob.integrationKind must not be null");
@@ -96,7 +99,7 @@ class DiffNotePoster {
 
         boolean suppressed = false;
         List<String> suppressedKeys = List.of();
-        PackageFence fence = new PackageFence(receipt, recordAttempt);
+        PackageFence fence = new PackageFence(receipt, reviewedRevision, recordAttempt);
         if (!unrequested.isEmpty()) {
             try {
                 InlineFeedbackChannel.InlineResult result =
@@ -118,6 +121,7 @@ class DiffNotePoster {
                 receipt.open().isEmpty(),
                 receipt.anyUnconfirmed(),
                 fence.leaseLost,
+                fence.revisionChanged,
                 suppressed,
                 suppressedKeys);
     }
@@ -325,20 +329,36 @@ class DiffNotePoster {
         }
     }
 
-    /** Stores the receipt before each create request; a refused store refuses the request. */
+    /**
+     * Before each create request, reads the work still at its reviewed commit and stores the receipt; anything else
+     * refuses the request, so it never leaves. Only a head proven different marks the package changed: one that cannot
+     * be compared just leaves the note owed. The read and the request are two steps, so a push between them is not
+     * excluded.
+     */
     private static final class PackageFence implements InlineFeedbackChannel.WriteFence {
 
         private final Receipt receipt;
+        private final Supplier<PracticeFeedbackDeliveryPolicy.ReviewedRevision> reviewedRevision;
         private final Predicate<List<DeliveredSignal>> recordAttempt;
         private boolean leaseLost;
+        private boolean revisionChanged;
 
-        PackageFence(Receipt receipt, Predicate<List<DeliveredSignal>> recordAttempt) {
+        PackageFence(
+                Receipt receipt,
+                Supplier<PracticeFeedbackDeliveryPolicy.ReviewedRevision> reviewedRevision,
+                Predicate<List<DeliveredSignal>> recordAttempt) {
             this.receipt = receipt;
+            this.reviewedRevision = reviewedRevision;
             this.recordAttempt = recordAttempt;
         }
 
         @Override
         public boolean beforeCreate(List<InlineFeedback> attempting, List<DeliveredSignal> completed) {
+            PracticeFeedbackDeliveryPolicy.ReviewedRevision revision = reviewedRevision.get();
+            if (revision != PracticeFeedbackDeliveryPolicy.ReviewedRevision.CURRENT) {
+                revisionChanged |= revision == PracticeFeedbackDeliveryPolicy.ReviewedRevision.CHANGED;
+                return false;
+            }
             List<DeliveredSignal> stored = receipt.beforeRequest(attempting, completed);
             if (!recordAttempt.test(stored)) {
                 leaseLost = true;
@@ -362,6 +382,8 @@ class DiffNotePoster {
      * @param complete whether every note is acknowledged
      * @param unconfirmed whether a note whose request may have left has no known copy
      * @param leaseLost whether a request was refused because this attempt no longer holds the dispatch
+     * @param revisionChanged whether a request was refused because the work's head is known to differ from its
+     *     reviewed commit; a head that could not be compared leaves the package incomplete instead
      * @param suppressed whether egress refused a request before it left
      * @param suppressedDeliveryKeys the notes egress refused
      */
@@ -370,6 +392,7 @@ class DiffNotePoster {
             boolean complete,
             boolean unconfirmed,
             boolean leaseLost,
+            boolean revisionChanged,
             boolean suppressed,
             List<String> suppressedDeliveryKeys) {}
 }

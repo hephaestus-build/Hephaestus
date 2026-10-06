@@ -382,6 +382,32 @@ export const AwaitingApproval: Story = {
 	},
 };
 
+/**
+ * On GitLab the line notes go up as comments on the merge request that link to their lines, so the
+ * preview says that, while the package below still shows each note at the lines it was written for.
+ */
+export const AwaitingApprovalOnGitLab: Story = {
+	args: {
+		feedback: ready({
+			...awaitingApproval,
+			reviewedWork: {
+				id: "425",
+				kind: "scm.pull_request",
+				label: "!425",
+				provider: "GITLAB",
+				container: "acme/api",
+			},
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledDrawerPanel());
+		await expect(panel.getByText("1 summary and 2 comments linking to lines")).toBeVisible();
+		panel.getByText("As a comment linking to the lines on the work");
+		await expect(panel.queryByText("As an inline note on the work")).not.toBeInTheDocument();
+		await expect(panel.getByText("src/main/java/example/RetryService.java")).toBeVisible();
+	},
+};
+
 export const AwaitingApprovalReflow: Story = {
 	args: { feedback: ready(awaitingApproval) },
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
