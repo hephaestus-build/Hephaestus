@@ -907,7 +907,13 @@ export function selectionText(
 	const selectedObservations = reviewable.filter(
 		(observation) => observation.publicEligible === true && chosen.has(String(observation.id)),
 	);
-	return `\`\`\`json\n${JSON.stringify({ acceptedSelection: selection, selectedObservations }, null, 1)}\n\`\`\``;
+	return (
+		`\`\`\`json\n${JSON.stringify({ acceptedSelection: selection, selectedObservations }, null, 1)}\n\`\`\`\n` +
+		"Write from these selected assessments, preserving their evidence qualifications. A declared affordance " +
+		"supports its bounded benefit, not an unobserved runtime or test outcome. Keep the remedy focused on the " +
+		"recorded gap and preserve unrelated behavior. Do not make another change a prerequisite unless the admitted " +
+		"evidence establishes that dependency."
+	);
 }
 
 /** Offered before the body to orient generation; field order is not enforced. */
