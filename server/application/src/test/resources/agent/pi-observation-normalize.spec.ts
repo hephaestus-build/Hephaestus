@@ -320,6 +320,10 @@ void test("a quote may drop the diff marker and read the spacing differently; th
 const mismatch = (result: ReturnType<typeof resolveQuote>) =>
 	"mismatch" in result ? result.mismatch : "";
 
+/** One indented `"text" : <value>` line of a serialized object per value, comma-separated. */
+const serializedFields = (values: string[]) =>
+	values.map((value, index) => `    "text" : ${value}${index < values.length - 1 ? "," : ""}`);
+
 /** A citation of the pull request's title, quoting what the test says it quotes. */
 const cite = (quote: string): NormalizedCitation => ({
 	sourceKind: "scm.pull-request.core",
@@ -424,6 +428,136 @@ void test("a quote is recorded as the artifact spells it: JSON escapes and non-b
 	assert.deepEqual(resolveQuote({ ...citation, quote: "## Criteria\n- [x] stored" }, serialized), {
 		quote: "## Criteria\\n- [x] stored",
 	});
+});
+
+void test("spacing reads as spacing only where the quote has some, and line breaks stay line breaks", () => {
+	const line: NormalizedCitation = {
+		sourceKind: "scm.linked-work-items",
+		artifactPath: "inputs/context/issue.json",
+		path: "inputs/context/issue.json",
+		startLine: 1,
+		endLine: 1,
+		quote: "",
+	};
+	assert.deepEqual(resolveQuote({ ...line, quote: "return  null;" }, "return null;\n"), {
+		quote: "return null;",
+	});
+	// No spacing in the quote, none in the text: dropping a space is not a reading of it.
+	assert.match(
+		mismatch(resolveQuote({ ...line, quote: "returnnull;" }, "return null;\n")),
+		/reads/u,
+	);
+	assert.match(mismatch(resolveQuote({ ...line, quote: "foo" }, "f oo\n")), /reads/u);
+	// A line break read as a line break, whatever the file ends its lines with and indents them by.
+	const crlf = "if (a) {\r\n  return null;\r\n}\r\n";
+	assert.deepEqual(resolveQuote({ ...line, endLine: 2, quote: "if (a) {\nreturn null;" }, crlf), {
+		quote: "if (a) {\r\n  return null;",
+	});
+	// Two lines are never one, and one line is never two.
+	assert.match(
+		mismatch(resolveQuote({ ...line, endLine: 2, quote: "if (a) { return null;" }, crlf)),
+		/reads/u,
+	);
+	assert.match(
+		mismatch(resolveQuote({ ...line, quote: "return\nnull;" }, "return null;\n")),
+		/reads/u,
+	);
+	// A quote ending in the `\r` of a `\r\n` line is found where that line is, spacing read as before.
+	assert.deepEqual(resolveQuote({ ...line, quote: "end\r" }, "none\nend\r\n"), {
+		quote: "end\r",
+		startLine: 2,
+		endLine: 2,
+	});
+	assert.deepEqual(resolveQuote({ ...line, quote: "end \r" }, "none\nend  \r\n"), {
+		quote: "end  \r",
+		startLine: 2,
+		endLine: 2,
+	});
+	assert.match(mismatch(resolveQuote({ ...line, quote: "end\r" }, "none\nend \r\n")), /reads/u);
+	assert.match(
+		mismatch(resolveQuote({ ...line, quote: "end\r \nnext" }, "none\nend\r\nnext\n")),
+		/reads/u,
+	);
+});
+
+void test("a quote of many indented lines resolves promptly, and so does a near miss", () => {
+	// The shape of a serialized review thread: blocks of indented fields, the same names over and over.
+	const block = serializedFields([
+		"0",
+		'"text"',
+		"0",
+		'"text"',
+		'"text"',
+		'"text"',
+		"false",
+		'"text"',
+	]);
+	const short = serializedFields(['"text"', '"text"', '"text"']);
+	const threads = [
+		"{",
+		'  "text" : [ {',
+		...block,
+		"  }, {",
+		...block,
+		"  } ],",
+		'  "text" : [ {',
+		...short,
+		"  }, {",
+		...short,
+		"  } ],",
+		'  "text" : false',
+		"}",
+	].join("\n");
+	const quote = ['  "text" : [ {', ...block, "  }, {", ...block, "  } ]"].join("\n");
+	const citation: NormalizedCitation = {
+		sourceKind: "scm.review-threads",
+		artifactPath: "threads.json",
+		path: "threads.json",
+		startLine: 2,
+		endLine: 19,
+		quote,
+	};
+	// The cited lines stop one line short of the quote; the quote occurs once, a line further on.
+	assert.deepEqual(resolveQuote(citation, threads), { quote, startLine: 2, endLine: 20 });
+	// Read without its indentation, the same lines are recorded as the file indents them.
+	const unindented = quote
+		.split("\n")
+		.map((quoted) => quoted.trimStart())
+		.join("\n");
+	assert.deepEqual(resolveQuote({ ...citation, quote: unindented }, threads), {
+		quote: quote.trimStart(),
+		startLine: 2,
+		endLine: 20,
+	});
+	// One character off at the very end, after every line before it matched.
+	assert.match(mismatch(resolveQuote({ ...citation, quote: `${quote}]` }, threads)), /reads/u);
+	// A long spaced prefix the text repeats, ending in a character the text does not hold.
+	assert.match(
+		mismatch(
+			resolveQuote(
+				{ ...citation, startLine: 1, endLine: 1, quote: `${"a ".repeat(1024)}z` },
+				`${"a ".repeat(131_072)}y`,
+			),
+		),
+		/reads/u,
+	);
+});
+
+void test("a range of the diff view past its last line names no line of it", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n" +
+		"@@ -10,2 +10,3 @@\n[L10]  keep();\n[L11] -old();\n[L11] +insecure();\n[L12] +audit();\n";
+	for (const path of [citation.path, "work/change/diff.patch"]) {
+		assert.notEqual(
+			describeCitationMismatch(
+				{ ...citation, path, startLine: 5, endLine: 2_147_483_647, quote: "" },
+				diff,
+			),
+			null,
+			`${path} has no line ${String(2_147_483_647)}`,
+		);
+	}
 });
 
 void test("a quote from the other side of the change is refused, however it is written", () => {

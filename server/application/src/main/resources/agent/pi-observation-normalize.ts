@@ -1039,11 +1039,12 @@ type LocatedQuote = ResolvedQuote & { startLine: number; endLine: number };
 function locateAsWritten(content: string, quote: string): LocatedQuote[] {
 	const hits: LocatedQuote[] = [];
 	for (const candidate of [quote, JSON.stringify(quote).slice(1, -1)]) {
-		for (const match of content.matchAll(asWrittenPattern(candidate, "g"))) {
-			const startLine = content.slice(0, match.index).split("\n").length;
-			const endLine = startLine + match[0].split("\n").length - 1;
+		for (const { start, end } of occurrencesAsWritten(content, candidate)) {
+			const written = content.slice(start, end);
+			const startLine = content.slice(0, start).split("\n").length;
+			const endLine = startLine + written.split("\n").length - 1;
 			if (!hits.some((hit) => hit.startLine === startLine)) {
-				hits.push({ quote: match[0], startLine, endLine });
+				hits.push({ quote: written, startLine, endLine });
 			}
 		}
 	}
@@ -1060,9 +1061,9 @@ function findAsWritten(text: string, quote: string): string | null {
 		if (text.includes(candidate)) {
 			return candidate;
 		}
-		const match = asWrittenPattern(candidate).exec(text);
-		if (match) {
-			return match[0];
+		const [first] = occurrencesAsWritten(text, candidate);
+		if (first !== undefined) {
+			return text.slice(first.start, first.end);
 		}
 	}
 	return null;
@@ -1078,7 +1079,7 @@ function diffKey(path: string | null, side: DiffSide | undefined): string {
  */
 const viewLines = new WeakMap<
 	ReadonlyMap<string, ReadonlyMap<number, string>>,
-	ReadonlyMap<number, { key: string; line: number }>
+	{ lineCount: number; at: ReadonlyMap<number, { key: string; line: number }> }
 >();
 
 /**
@@ -1090,7 +1091,8 @@ function annotatedDiff(content: string): Map<string, Map<number, string>> | stri
 	let newPath: string | null = null;
 	const byFile = new Map<string, Map<number, string>>();
 	const atViewLine = new Map<number, { key: string; line: number }>();
-	viewLines.set(byFile, atViewLine);
+	const viewed = content.split("\n");
+	viewLines.set(byFile, { lineCount: viewed.length, at: atViewLine });
 	// A file the diff names without a hunk — binary, renamed without edits, mode only — is known with no
 	// lines, so a citation of it is told why rather than that the change does not touch it.
 	const known = (side: DiffSide, filePath: string) => {
@@ -1099,7 +1101,7 @@ function annotatedDiff(content: string): Map<string, Map<number, string>> | stri
 			byFile.set(key, new Map());
 		}
 	};
-	for (const [index, storedLine] of content.split("\n").entries()) {
+	for (const [index, storedLine] of viewed.entries()) {
 		// Both groups are mandatory, so binding them here is what lets the annotated branch below turn
 		// on a value the compiler has seen rather than on the match object being non-null.
 		const [, annotatedLineNumber, annotatedText] =
@@ -1163,9 +1165,12 @@ function readAtViewLines(
 	quoteLines: readonly string[] | null,
 ): ResolvedQuote | null {
 	const view = viewLines.get(lines);
+	if (view === undefined) {
+		return null;
+	}
 	const key = diffKey(citation.path, citation.side);
 	if (quoteLines !== null) {
-		const viewed = view?.get(citation.startLine);
+		const viewed = view.at.get(citation.startLine);
 		if (viewed?.key !== key) {
 			return null;
 		}
@@ -1174,9 +1179,13 @@ function readAtViewLines(
 			? { quote: atView.text, startLine: viewed.line, endLine: viewed.line + quoteLines.length - 1 }
 			: null;
 	}
+	// A range past the view's last line names no line of it, however far it reaches.
+	if (citation.endLine > view.lineCount) {
+		return null;
+	}
 	const inRange: number[] = [];
 	for (let at = citation.startLine; at <= citation.endLine; at += 1) {
-		const viewed = view?.get(at);
+		const viewed = view.at.get(at);
 		if (viewed?.key === key) {
 			inRange.push(viewed.line);
 		}
@@ -1203,10 +1212,14 @@ function viewRangeOfOneFile(
 	citation: NormalizedCitation,
 ): ResolvedQuote | null {
 	const view = viewLines.get(lines);
+	// A range past the view's last line names no line of it, however far it reaches.
+	if (view === undefined || citation.endLine > view.lineCount) {
+		return null;
+	}
 	const keys = new Set<string>();
 	let adds = false;
 	for (let at = citation.startLine; at <= citation.endLine; at += 1) {
-		const viewed = view?.get(at);
+		const viewed = view.at.get(at);
 		if (viewed !== undefined) {
 			keys.add(viewed.key);
 			adds ||= lines.get(viewed.key)?.get(viewed.line)?.startsWith("+") === true;
@@ -1293,15 +1306,108 @@ function squash(text: string): string {
 	return text.replaceAll(new RegExp(`${HORIZONTAL_SPACE}+`, "gu"), "");
 }
 
-/** A regex that finds the quote as the artifact may write it: the same characters, spacing aside. */
-function asWrittenPattern(candidate: string, flags = ""): RegExp {
-	const escaped = candidate.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
-	return new RegExp(
-		escaped
-			.replaceAll(new RegExp(`${HORIZONTAL_SPACE}+`, "gu"), `${HORIZONTAL_SPACE}*`)
-			.replaceAll(/\r?\n/gu, `${HORIZONTAL_SPACE}*\\r?\\n${HORIZONTAL_SPACE}*`),
-		`${flags}u`,
+const IS_HORIZONTAL_SPACE = new RegExp(`^${HORIZONTAL_SPACE}$`, "u");
+
+/** What {@link flattened} leaves out: horizontal spacing, and a `\r` that ends a line before its `\n`. */
+const FLATTENED_OUT = new RegExp(String.raw`${HORIZONTAL_SPACE}|\r(?=\n)`, "gu");
+
+/**
+ * Text without its horizontal spacing and with `\r\n` read as `\n`, and for each character kept, its
+ * offset in the text.
+ */
+function flattened(text: string): { flat: string; offsets: Uint32Array } {
+	const offsets = new Uint32Array(text.length);
+	let kept = 0;
+	for (let offset = 0; offset < text.length; offset += 1) {
+		const character = text[offset] ?? "";
+		if (
+			!IS_HORIZONTAL_SPACE.test(character) &&
+			!(character === "\r" && text[offset + 1] === "\n")
+		) {
+			offsets[kept] = offset;
+			kept += 1;
+		}
+	}
+	return { flat: text.replaceAll(FLATTENED_OUT, ""), offsets: offsets.subarray(0, kept) };
+}
+
+/**
+ * Where the quote occurs in the text as the artifact may write it, leftmost first and never
+ * overlapping: the same characters and line breaks, each break `\n` or `\r\n`, with horizontal spacing
+ * in the text only where the quote has spacing or a line break beside it. Spacing in the quote may be
+ * absent from the text. The whole quote, spacing removed, is found by plain search in the text, spacing
+ * removed; a place found is kept only when the text's spacing there falls where the quote allows it.
+ * Each place found that is refused costs up to one pass over the quote.
+ */
+function* occurrencesAsWritten(
+	text: string,
+	candidate: string,
+): Generator<{ start: number; end: number }> {
+	const quote = flattened(candidate);
+	if (quote.flat === "") {
+		return;
+	}
+	// Whether the quote has spacing before each of its characters, and after its last.
+	const spaced = Array.from(
+		quote.offsets,
+		(offset, index) => offset > (quote.offsets[index - 1] ?? -1) + 1,
 	);
+	const spacedAfter = (quote.offsets.at(-1) ?? 0) < candidate.length - 1;
+	// A quote that ends in a bare `\r` may end where a `\r\n` of the text does, whose `\r` the text's
+	// flat form leaves out; so that `\r` is sought in the text itself, after the rest is found.
+	const endsInReturn = quote.flat.endsWith("\r");
+	const sought = endsInReturn ? quote.flat.slice(0, -1) : quote.flat;
+	if (sought === "") {
+		return;
+	}
+	const lastIndex = sought.length - 1;
+	const source = flattened(text);
+	const allowedBefore = (index: number) =>
+		spaced[index] === true || quote.flat[index] === "\n" || quote.flat[index - 1] === "\n";
+	let limit = 0;
+	let found = source.flat.indexOf(sought);
+	while (found !== -1) {
+		const at = found;
+		const offsetOf = (index: number) => source.offsets[at + index] ?? text.length;
+		let fits = true;
+		for (let index = 1; fits && index <= lastIndex; index += 1) {
+			fits = offsetOf(index) === offsetOf(index - 1) + 1 || allowedBefore(index);
+		}
+		let end = offsetOf(lastIndex) + 1;
+		if (fits && endsInReturn) {
+			if (allowedBefore(lastIndex + 1)) {
+				while (IS_HORIZONTAL_SPACE.test(text[end] ?? "")) {
+					end += 1;
+				}
+			}
+			fits = text[end] === "\r";
+			end += 1;
+		}
+		if (!fits) {
+			found = source.flat.indexOf(sought, at + 1);
+			continue;
+		}
+		let start = offsetOf(0);
+		if (allowedBefore(0)) {
+			start -= quote.flat.startsWith("\n") && start > limit && text[start - 1] === "\r" ? 1 : 0;
+			while (start > limit && IS_HORIZONTAL_SPACE.test(text[start - 1] ?? "")) {
+				start -= 1;
+			}
+		}
+		if (spacedAfter || quote.flat.endsWith("\n")) {
+			while (IS_HORIZONTAL_SPACE.test(text[end] ?? "")) {
+				end += 1;
+			}
+		}
+		yield { start, end };
+		limit = end;
+		// The search resumes at the first character the occurrence did not take, its bare `\r` included.
+		let next = at + sought.length;
+		while ((source.offsets[next] ?? text.length) < end) {
+			next += 1;
+		}
+		found = source.flat.indexOf(sought, next);
+	}
 }
 
 /**
