@@ -1,9 +1,10 @@
 import { MessageSquareTextIcon } from "lucide-react";
-import { type ReactNode, useId } from "react";
+import { type ReactElement, type ReactNode, useId } from "react";
 
 import { SectionLabel } from "@/components/common/SectionLabel";
 import {
 	Empty,
+	EmptyContent,
 	EmptyDescription,
 	EmptyHeader,
 	EmptyMedia,
@@ -15,15 +16,19 @@ export interface FeedbackEmptyProps {
 	title?: string;
 	/** When it will show up. */
 	description?: string;
+	/** The way to what is there instead. */
+	action?: ReactElement;
 }
 
 /**
  * A list of feedback with nothing in it, in the shape every practice surface says it in: the title
- * names what is missing and the sentence says when it will show up.
+ * names what is missing and the sentence says when it will show up. Feedback posted on the work
+ * stays there; these lists hold feedback about recurring patterns.
  */
 export function FeedbackEmpty({
 	title = "No feedback yet",
-	description = "Feedback appears here once a review sees the same pattern in your work more than once.",
+	description = "Feedback appears here once a review sees the same pattern in your work more than once. Feedback posted on the work stays there.",
+	action,
 }: FeedbackEmptyProps) {
 	return (
 		<Empty>
@@ -34,6 +39,7 @@ export function FeedbackEmpty({
 				<EmptyTitle>{title}</EmptyTitle>
 				<EmptyDescription>{description}</EmptyDescription>
 			</EmptyHeader>
+			{action && <EmptyContent>{action}</EmptyContent>}
 		</Empty>
 	);
 }

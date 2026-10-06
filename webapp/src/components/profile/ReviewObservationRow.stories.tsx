@@ -463,3 +463,46 @@ export const NextStepWithoutDelivery: Story = {
 		await expect(canvas.queryByText("What was checked")).not.toBeInTheDocument();
 	},
 };
+
+/**
+ * The feedback was left on the pull request as a summary and a line note. Each comment is a link to
+ * where it was left, summary first, so the reader finds the words they are responding to.
+ */
+export const FeedbackOnTheWork: Story = {
+	args: {
+		observation: {
+			...strength,
+			feedbackCommentUrls: [
+				"https://github.com/owner/repo/pull/4821#issuecomment-1",
+				"https://github.com/owner/repo/pull/4821#discussion_r2",
+			],
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Feedback on the work")).toBeVisible();
+		await expect(
+			canvas.getByRole("link", { name: /^Read feedback comment 1(?: \(opens in a new tab\))?$/u }),
+		).toHaveAttribute("href", "https://github.com/owner/repo/pull/4821#issuecomment-1");
+		await expect(
+			canvas.getByRole("link", { name: /^Read feedback comment 2(?: \(opens in a new tab\))?$/u }),
+		).toHaveAttribute("href", "https://github.com/owner/repo/pull/4821#discussion_r2");
+		// A recorded comment is the place to go, so the work itself is not offered in its stead.
+		await expect(canvas.queryByRole("link", { name: /Open reviewed work/u })).toBeNull();
+	},
+};
+
+/**
+ * The feedback was delivered, but no link to its comment was recorded. The row offers the reviewed
+ * work under its own name and never presents it as the feedback comment.
+ */
+export const NoFeedbackLinkRecorded: Story = {
+	args: { observation: { ...strength, feedbackCommentUrls: undefined } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: /Open reviewed work/u })).toHaveAttribute(
+			"href",
+			reviewedWork.artifactUrl,
+		);
+		await expect(canvas.queryByText("Feedback on the work")).toBeNull();
+		await expect(canvas.queryByRole("link", { name: /feedback comment/u })).toBeNull();
+	},
+};

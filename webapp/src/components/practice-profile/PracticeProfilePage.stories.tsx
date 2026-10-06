@@ -192,7 +192,7 @@ export const ColdStart: Story = {
 		await expect(canvas.getByText("No open feedback yet")).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Feedback appears here once a review sees the same pattern in your work more than once.",
+				"Feedback appears here once a review sees the same pattern in your work more than once. Feedback posted on the work stays there.",
 			),
 		).toBeVisible();
 		await expect(canvas.queryByRole("article")).toBeNull();
