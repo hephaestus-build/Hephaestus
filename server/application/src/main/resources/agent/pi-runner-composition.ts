@@ -684,6 +684,8 @@ export interface ReviewPractice {
 
 /** Everything the review on the work is composed from; nothing else reaches its session. */
 export interface ReviewTurnInput {
+	/** The captured record of this same work, from buildSameWorkContext: it orients; observations own assessments. */
+	sameWork: string;
 	/** The decided observations of this work the review may rest on, whole, from publicObservations. */
 	observations: readonly Record<string, unknown>[];
 	/** The practices looked at and not decided, by slug and outcome, from uncertainOutcomes. */
@@ -728,7 +730,10 @@ export function buildReviewTurn(input: ReviewTurnInput): string {
 			: [],
 	}));
 	return `## The review to write
-The measurement of this work is finished. Below is everything this review may rest on: the decided observations of this work, what was already said on this same work, and context on the practices they were measured against.
+The measurement of this work is finished. Below is the captured record of the work this review is about, then everything the review may rest on: the decided observations of this work, what was already said on this same work, and context on the practices they were measured against.
+
+### The reviewed work, as captured
+${input.sameWork}
 
 ### Decided observations of this work
 \`\`\`json

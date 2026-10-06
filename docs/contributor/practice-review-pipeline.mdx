@@ -543,7 +543,19 @@ Document and conversation reviews record observations without composing feedback
 An authenticated callback admits observations before composition starts.
 Composition can bind only to the persisted projection returned by that callback.
 
-The public session receives eligible current-work observations, prior public feedback on the same work,
+The public session first receives the captured record of the same work.
+This record comes from the exact metadata file of the core source and, for a pull request, the linked work items file.
+Each is used only when its source is `AVAILABLE` and the capture index records that file under that source.
+Only allowlisted fields are shown: title, description, links, numbers, state, draft and merge flags, branches, commit and dates.
+Each linked work item shows the same kinds of fields and how it is linked.
+A field the record does not state is listed as not in the capture, never defaulted.
+
+A record is shown whole, or named as not shown with the reason.
+Reasons are source state, an unrecorded file, empty, too large, unreadable, or naming other work.
+The record supplies captured intent, identity and state for orientation.
+Only admitted observations authorize assessments and concerns.
+
+Then the session receives eligible current-work observations, prior public feedback on the same work,
 and each owning practice revision's name, purpose and known limitations.
 It receives scope bounds for undecided and unreached practices, which support no claims.
 An observation that cites or consulted a private or unknown source stays out of this session entirely.

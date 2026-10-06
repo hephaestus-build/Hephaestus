@@ -2038,6 +2038,13 @@ if (scenario !== undefined && scenario !== "") {
 							// What the review composition was given: this work, and nothing about the person.
 							const reviewTurn = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
 							assert.match(reviewTurn, /^## The review to write/u);
+							// The captured record of this same work comes first, and the measurement task never.
+							const record = reviewTurn.indexOf('"title": "Add login"');
+							assert.ok(
+								record !== -1 && record < reviewTurn.indexOf('"id": "observation-1"'),
+								reviewTurn,
+							);
+							assert.match(reviewTurn, /linked_work_items\.json[^\n]*not part of this capture/u);
 							assert.match(reviewTurn, /"id": "observation-1"/u);
 							assert.match(reviewTurn, /"quote": "\+ insecure\(\);"/u);
 							assert.match(reviewTurn, /An earlier comment on this same change\./u);

@@ -404,6 +404,8 @@ void test("the review composition sees only what admission marked eligible, and 
 		},
 	]);
 	const turn = buildReviewTurn({
+		sameWork:
+			"A scm.pull_request, captured at 2026-10-01T10:00:00Z. Its title: Add the login screen.",
 		observations: shown,
 		undecided: uncertainOutcomes([
 			...admitted,
@@ -429,6 +431,9 @@ void test("the review composition sees only what admission marked eligible, and 
 	});
 	assert.ok(!turn.includes(PRIVATE_SENTENCE), turn);
 	assert.ok(!turn.includes("from-history"), turn);
+	// The work is named before anything the review may rest on.
+	const record = turn.indexOf("Add the login screen.");
+	assert.ok(record !== -1 && record < turn.indexOf('"id": "current"'), turn);
 	assert.match(turn, /"id": "current"/u);
 	assert.match(turn, /"name": "Describe what changed and why"/u);
 	assert.match(turn, /"whyItMatters": "A reviewer needs the reason before the diff\."/u);

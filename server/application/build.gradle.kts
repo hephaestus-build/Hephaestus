@@ -87,6 +87,7 @@ dependencies {
     implementation(libs.org.eclipse.jgit)
     implementation(libs.bucket4j.jdk17.core)
     implementation(libs.bucket4j.jdk17.postgresql)
+    implementation(libs.commonmark)
     annotationProcessor(libs.lombok)
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
     annotationProcessor(libs.therapi.scribe)

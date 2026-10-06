@@ -4,9 +4,254 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import test from "node:test";
 
-import { buildBrief } from "../../../main/resources/agent/pi-review-brief.ts";
+import { buildBrief, buildSameWorkContext } from "../../../main/resources/agent/pi-review-brief.ts";
 
 const paths = { contextRoot: "context", repositoryRoot: "repos/reviewed" };
+
+const FRAMING = { repositoryFullName: "group/repo", pullRequestNumber: 7 };
+
+/** A pull request capture index whose core and linked-work sources are in the given states. */
+function pullRequestIndex(
+	core: Record<string, unknown>,
+	linked?: Record<string, unknown>,
+	recorded = ["context/metadata.json", "context/linked_work_items.json"],
+): Record<string, unknown> {
+	const source = (kind: string, state: Record<string, unknown>, path: string) => ({
+		kind,
+		state,
+		artifacts: state.availability === "AVAILABLE" && recorded.includes(path) ? [{ path }] : [],
+	});
+	return {
+		artifactKind: "scm.pull_request",
+		capturedAt: "2026-10-01T10:00:00Z",
+		sources: [
+			source("scm.pull-request.core", core, "context/metadata.json"),
+			...(linked === undefined
+				? []
+				: [source("scm.linked-work-items", linked, "context/linked_work_items.json")]),
+		],
+		artifacts: [
+			{ kind: "scm.pull-request.core", artifact: { path: "context/metadata.json" } },
+			{ kind: "scm.linked-work-items", artifact: { path: "context/linked_work_items.json" } },
+		].filter((entry) => recorded.includes(entry.artifact.path)),
+	};
+}
+
+const METADATA = JSON.stringify({
+	title: "Add login",
+	body: "Adds the login screen.\n\nCloses #4",
+	pr_url: "https://gitlab.example/group/repo/-/merge_requests/7",
+	repository_full_name: "group/repo",
+	pr_number: 7,
+	state: "OPEN",
+	is_merged: false,
+	source_branch: "feature/login",
+	target_branch: "main",
+	author: { login: "someone-private" },
+	assignees: ["another-person"],
+});
+
+const LINKED = JSON.stringify({
+	workItems: [
+		{
+			number: 4,
+			how: "closesOnMerge",
+			title: "Login",
+			state: "OPEN",
+			url: "u4",
+			body: "Users sign in.",
+			labels: ["x"],
+		},
+	],
+	unresolvedReferences: [9],
+	truncated: false,
+});
+
+void test("the review is told what the same work is, from its exact core and linked records, with what they do not state", () => {
+	const root = workspace({
+		"context/metadata.json": METADATA,
+		"context/linked_work_items.json": LINKED,
+	});
+	try {
+		const context = buildSameWorkContext(
+			root,
+			"context",
+			pullRequestIndex(
+				{ availability: "AVAILABLE", completeness: "COMPLETE" },
+				{ availability: "AVAILABLE", completeness: "PARTIAL" },
+			),
+			FRAMING,
+		);
+		assert.match(context, /scm\.pull_request, captured at 2026-10-01T10:00:00Z/u);
+		assert.match(context, /"title": "Add login"/u);
+		// A field the capture does not state stays unknown: a missing draft flag is not "not a draft".
+		assert.match(context, /"notInCapture": \[[^\]]*"is_draft"/u);
+		assert.doesNotMatch(context, /"is_draft": false/u);
+		assert.match(context, /```markdown\nAdds the login screen\.\n\nCloses #4\n```/u);
+		assert.ok(
+			context.indexOf("metadata.json") < context.indexOf("linked_work_items.json"),
+			context,
+		);
+		assert.match(context, /"how": "closesOnMerge"/u);
+		assert.match(context, /"completeness": "PARTIAL"/u);
+		assert.match(context, /"completeness": "COMPLETE"/u);
+		assert.match(context, /"unresolvedReferences": \[\n\s*9\n\s*\]/u);
+		// People, labels and other fields the review is not oriented by never reach it.
+		assert.doesNotMatch(context, /someone-private|another-person|"labels"/u);
+		assert.doesNotMatch(context, /Not shown/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a record that is not shown is named with why, never cut or read as empty", (t) => {
+	const roots: string[] = [];
+	const captured = (files: Record<string, string>) => {
+		const root = workspace(files);
+		roots.push(root);
+		return root;
+	};
+	t.after(() => {
+		for (const root of roots) {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+	const unavailable = buildSameWorkContext(
+		captured({}),
+		"context",
+		pullRequestIndex(
+			{ availability: "UNAVAILABLE", reasonCode: "PROVIDER_UNREACHABLE" },
+			{ availability: "COLLECTION_ERROR", errorCode: "COLLECTION_FAILED" },
+		),
+		FRAMING,
+	);
+	assert.match(
+		unavailable,
+		/metadata\.json[^\n]*the source is UNAVAILABLE \(PROVIDER_UNREACHABLE\)/u,
+	);
+	assert.match(
+		unavailable,
+		/linked_work_items\.json[^\n]*the source is COLLECTION_ERROR \(COLLECTION_FAILED\)/u,
+	);
+
+	const unlisted = buildSameWorkContext(
+		captured({ "context/metadata.json": METADATA }),
+		"context",
+		pullRequestIndex({ availability: "AVAILABLE" }, undefined, []),
+		FRAMING,
+	);
+	// An available source that did not record this file shows nothing from it.
+	assert.match(unlisted, /metadata\.json[^\n]*did not record this file/u);
+	assert.match(unlisted, /linked_work_items\.json[^\n]*not part of this capture/u);
+	assert.doesNotMatch(unlisted, /Add login/u);
+
+	const oversize = buildSameWorkContext(
+		captured({
+			"context/metadata.json": JSON.stringify({ title: "Huge", body: "x".repeat(30_000) }),
+		}),
+		"context",
+		pullRequestIndex({ availability: "AVAILABLE" }),
+		FRAMING,
+	);
+	assert.match(oversize, /metadata\.json[^\n]*too large to show here \(\d+ KB\)/u);
+	assert.doesNotMatch(oversize, /Huge|xxxx/u);
+
+	const unreadable = buildSameWorkContext(
+		captured({ "context/metadata.json": "{not json" }),
+		"context",
+		pullRequestIndex({ availability: "AVAILABLE" }),
+		FRAMING,
+	);
+	assert.match(unreadable, /metadata\.json[^\n]*not readable/u);
+
+	const otherWork = buildSameWorkContext(
+		captured({ "context/metadata.json": METADATA, "context/linked_work_items.json": LINKED }),
+		"context",
+		pullRequestIndex({ availability: "AVAILABLE" }, { availability: "AVAILABLE" }),
+		{ repositoryFullName: "group/repo", pullRequestNumber: 8 },
+	);
+	assert.match(otherWork, /metadata\.json[^\n]*another pull request than the task/u);
+	assert.doesNotMatch(otherWork, /Add login|Users sign in/u);
+	assert.match(otherWork, /linked_work_items.json[^\n]*core record names other reviewed work/u);
+	const missingCore = buildSameWorkContext(
+		captured({ "context/linked_work_items.json": LINKED }),
+		"context",
+		pullRequestIndex(
+			{ availability: "UNAVAILABLE", reasonCode: "PROVIDER_UNREACHABLE" },
+			{ availability: "AVAILABLE", completeness: "PARTIAL" },
+		),
+		FRAMING,
+	);
+	assert.match(missingCore, /Users sign in/u);
+	assert.match(missingCore, /metadata.json[^\n]*UNAVAILABLE/u);
+});
+
+void test("the complete context stays in budget without slicing a source", () => {
+	const root = workspace({
+		"context/metadata.json": METADATA,
+		"context/linked_work_items.json": LINKED,
+	});
+	try {
+		const index = pullRequestIndex(
+			{ availability: "AVAILABLE", completeness: "COMPLETE" },
+			{ availability: "AVAILABLE", completeness: "PARTIAL" },
+		);
+		const context = buildSameWorkContext(root, "context", index, FRAMING, {
+			sourceChars: 24_000,
+			totalChars: 1400,
+		});
+		assert.ok(context.length <= 1400);
+		assert.ok(context.includes('"title": "Add login"') || !context.includes("Add login"));
+		assert.ok(context.includes('"body": "Users sign in."') || !context.includes("Users sign in."));
+		assert.match(context, /linked_work_items.json[^\n]*exceed its bound/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("an issue uses only its recorded issue core", () => {
+	const root = workspace({
+		"context/metadata.json": JSON.stringify({
+			title: "A capability",
+			body: "People can sign in.",
+			issue_number: 4,
+			html_url: "u4",
+			repository_full_name: "group/repo",
+			state: "OPEN",
+			author: "private-person",
+		}),
+	});
+	try {
+		const index = {
+			artifactKind: "scm.issue",
+			capturedAt: "2026-10-01T10:00:00Z",
+			sources: [
+				{
+					kind: "scm.issue.core",
+					state: { availability: "AVAILABLE", completeness: "COMPLETE" },
+					artifacts: [{ path: "context/metadata.json" }],
+				},
+			],
+			artifacts: [{ kind: "scm.issue.core", artifact: { path: "context/metadata.json" } }],
+		};
+		const context = buildSameWorkContext(root, "context", index, {
+			repositoryFullName: "group/repo",
+			pullRequestNumber: 4,
+		});
+		assert.match(context, /"issue_number": 4/u);
+		assert.match(context, /People can sign in/u);
+		assert.doesNotMatch(context, /private-person|linked_work_items|is_draft/u);
+		const mismatched = buildSameWorkContext(root, "context", index, FRAMING);
+		assert.match(mismatched, /another issue than the task/u);
+		assert.doesNotMatch(mismatched, /A capability/u);
+		const firstArtifact = index.artifacts[0];
+		assert.ok(firstArtifact);
+		firstArtifact.kind = "scm.pull-request.core";
+		assert.doesNotMatch(buildSameWorkContext(root, "context", index, FRAMING), /A capability/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
 
 function workspace(files: Record<string, string>): string {
 	const root = mkdtempSync(nodePath.join(tmpdir(), "pi-review-brief-"));

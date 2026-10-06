@@ -16,6 +16,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHand
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.UpdateOutcome;
 import java.io.Serial;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
@@ -23,7 +25,20 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.regex.MatchResult;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.commonmark.node.AbstractVisitor;
+import org.commonmark.node.Code;
+import org.commonmark.node.FencedCodeBlock;
+import org.commonmark.node.Image;
+import org.commonmark.node.IndentedCodeBlock;
+import org.commonmark.node.Link;
+import org.commonmark.node.Node;
+import org.commonmark.node.SourceSpan;
+import org.commonmark.parser.IncludeSourceSpans;
+import org.commonmark.parser.Parser;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,17 +59,31 @@ class PullRequestCommentPoster {
 
     /** Matches @mentions (e.g., @username) — backtick-escaped to prevent notification spam.
      *  Lookbehind covers start-of-line, whitespace, punctuation, and markdown formatting chars
-     *  ({@code * _ ~ > | -}) to prevent bypass via {@code *@user*}, {@code >@user}, or {@code - @user}. */
+     *  ({@code * _ ~ > | - `}) to prevent bypass via {@code *@user*}, {@code >@user}, {@code - @user}, or a
+     *  literal backtick outside code. */
     private static final Pattern AT_MENTION =
-            Pattern.compile("(?<=^|[\\s(\\[\"'*_~>|#!+={}\\-,.:;/)])@([a-zA-Z0-9][-a-zA-Z0-9._]*)", Pattern.MULTILINE);
-
-    /** Matches inline markdown images: ![alt](url) — stripped to prevent tracking pixels. */
-    private static final Pattern MARKDOWN_IMAGE_INLINE = Pattern.compile("!\\[[^\\]]*]\\([^)]*\\)");
-
-    private static final Pattern MARKDOWN_IMAGE_REF = Pattern.compile("!\\[[^\\]]*]\\[[^\\]]*]");
+            Pattern.compile("(?<=^|[\\s(\\[\"'*_~>|#!+={}\\-,.:;/)`])@([a-zA-Z0-9][-a-zA-Z0-9._]*)", Pattern.MULTILINE);
 
     /** Matches HTML comments — stripped to prevent hidden instructions for AI tools. */
     private static final Pattern HTML_COMMENT = Pattern.compile("<!--[\\s\\S]*?-->");
+
+    private static final Pattern COMMENT_OPENER = Pattern.compile("<!--");
+
+    /** Parses with source positions, so code literals can be told apart from live Markdown and HTML. */
+    private static final Parser MARKDOWN = Parser.builder()
+            .includeSourceSpans(IncludeSourceSpans.BLOCKS_AND_INLINES)
+            .build();
+
+    /**
+     * Bounds the reparse loop. Removals only shorten the text and a wrapped mention is code on the next pass, so
+     * ordinary text settles in two passes; a text that has not settled by the bound is not published.
+     */
+    private static final int MAX_SANITIZE_PASSES = 16;
+
+    /** Only http(s) links stay live; any other destination could phish or run script from untrusted output. */
+    private static final Pattern SAFE_LINK_DESTINATION = Pattern.compile("(?i)https?://");
+
+    private static final String TRUNCATION_NOTICE = "\n\n[... truncated. The comment exceeded the length limit.]";
 
     private static final Pattern HTML_TAG =
             Pattern.compile("</?([a-zA-Z][a-zA-Z0-9]*)\\b[^>]*/?>", Pattern.CASE_INSENSITIVE);
@@ -118,13 +147,6 @@ class PullRequestCommentPoster {
 
     /** Matches markdown autolinks: &lt;https://...&gt; — protected from HTML tag stripping. */
     private static final Pattern AUTOLINK = Pattern.compile("<(https?://[^>\\s]+)>");
-
-    /**
-     * Matches markdown links with non-http(s) URL schemes (e.g., javascript:, data:, vbscript:).
-     * These are stripped down to just the display text to prevent phishing/XSS vectors
-     * from untrusted agent output.
-     */
-    private static final Pattern UNSAFE_MARKDOWN_LINK = Pattern.compile("\\[([^\\]]*)\\]\\((?!(?i)https?://)[^)]*\\)");
 
     private final Map<IntegrationKind, SummaryChannel> channels;
 
@@ -293,120 +315,230 @@ class PullRequestCommentPoster {
     }
 
     /**
-     * Sanitizes untrusted agent output for safe inclusion in git provider comments. The order of the
-     * steps below is load-bearing — autolinks must survive tag stripping, and stripping must reach a
-     * fixed point before the markdown passes run.
+     * Sanitizes untrusted agent output for safe inclusion in git provider comments.
+     *
+     * <p>Code the CommonMark parser finds — code spans, fenced and indented code blocks — passes the transforms
+     * unchanged, so {@code Binding<Bool>} or {@code @State} in code stays code. Line endings and invisible controls
+     * are normalized everywhere. A live image or unsafe link is handled whole, whatever code its label holds. Each
+     * pass parses again, so a construct that a removal or a cut makes live is sanitized rather than trusted as code;
+     * a text that does not settle is not published.
      */
     static String sanitize(@Nullable String raw) {
         if (raw == null || raw.isEmpty()) {
             return "";
         }
+        String normalized = raw.replace("\r\n", "\n").replace("\r", "\n");
+        String settled = settle(INVISIBLE_CHARS.matcher(normalized).replaceAll(""));
+        if (settled == null || settled.isBlank()) return "";
+        String result = balanceCodeFences(settled);
+        // A cut can reopen what a pass settled, so the cut text is settled again; each retry cuts more.
+        int budget = MAX_BODY_LENGTH - TRUNCATION_NOTICE.length();
+        while (result.length() > MAX_BODY_LENGTH) {
+            String cut = settle(truncate(settled, budget));
+            if (cut == null) return "";
+            result = balanceCodeFences(cut);
+            budget = Math.max(0, budget - Math.max(1, result.length() - MAX_BODY_LENGTH));
+        }
+        return result;
+    }
 
-        String result = raw;
+    /** The text once a pass changes nothing more, or null when it does not settle within the bound. */
+    private static @Nullable String settle(String text) {
+        String result = text;
+        for (int pass = 0; pass < MAX_SANITIZE_PASSES; pass++) {
+            String next = sanitizePass(result);
+            if (next == null) return null;
+            if (next.equals(result)) return result;
+            result = next;
+        }
+        return null;
+    }
 
-        result = result.replace("\r\n", "\n").replace("\r", "\n");
-        result = INVISIBLE_CHARS.matcher(result).replaceAll("");
-        result = HTML_COMMENT.matcher(result).replaceAll("");
+    /** One pass in the load-bearing order: autolinks survive tag stripping, which settles before Markdown. */
+    private static @Nullable String sanitizePass(String text) {
+        String result = outsideCode(text, HTML_COMMENT, match -> "");
         // An unterminated opener matches nothing above, and runs to end of document in both renderers.
-        result = result.replace("<!--", "");
-
-        // Autolinks become plain links first, so the tag stripping below does not eat them.
-        result = AUTOLINK.matcher(result).replaceAll("$1");
-
+        result = outsideCode(result, COMMENT_OPENER, match -> "");
+        result = outsideCode(result, AUTOLINK, match -> match.group(1));
         // Loop until stable: one pass would let <scr<script>ipt> reassemble into <script>.
         String prev;
         do {
             prev = result;
-            result = HTML_TAG.matcher(result).replaceAll(mr -> {
-                String tagName = mr.group(1).toLowerCase(Locale.ROOT);
-                if (!SAFE_HTML_TAGS.contains(tagName)) {
-                    return "";
-                }
-                // Reconstructed without attributes, so no onclick/onload survives.
-                String full = mr.group();
-                boolean isClosing = full.startsWith("</");
-                boolean isSelfClosing = full.endsWith("/>");
-                if (isClosing) return "</" + tagName + ">";
-                if (isSelfClosing) return "<" + tagName + " />";
-                return "<" + tagName + ">";
-            });
+            result = outsideCode(result, HTML_TAG, PullRequestCommentPoster::safeTag);
         } while (!result.equals(prev));
+        result = withoutLiveImagesOrUnsafeLinks(result);
+        return result == null ? null : outsideCode(result, AT_MENTION, match -> "`@" + match.group(1) + "`");
+    }
 
-        result = MARKDOWN_IMAGE_INLINE.matcher(result).replaceAll("");
-        result = MARKDOWN_IMAGE_REF.matcher(result).replaceAll("");
-        result = UNSAFE_MARKDOWN_LINK.matcher(result).replaceAll("$1");
-        result = AT_MENTION.matcher(result).replaceAll("`@$1`");
-        if (result.isBlank()) return "";
-        String truncationNotice = "\n\n[... truncated. The comment exceeded the length limit.]";
-        boolean truncated = result.length() > MAX_BODY_LENGTH;
-        if (truncated) {
-            int bodyBudget = MAX_BODY_LENGTH - truncationNotice.length();
-            result = result.substring(0, bodyBudget);
-            result = balanceCodeFencesWithin(result, bodyBudget) + truncationNotice;
-        } else {
-            result = balanceCodeFences(result);
+    /** Keeps a safe tag without its attributes, so no onclick/onload survives, and drops every other tag. */
+    private static String safeTag(MatchResult match) {
+        String tagName = match.group(1).toLowerCase(Locale.ROOT);
+        if (!SAFE_HTML_TAGS.contains(tagName)) {
+            return "";
         }
-
-        return result;
+        String full = match.group();
+        if (full.startsWith("</")) return "</" + tagName + ">";
+        if (full.endsWith("/>")) return "<" + tagName + " />";
+        return "<" + tagName + ">";
     }
 
     /**
-     * Closes a fenced block the body leaves open. Counting fences is not enough: CommonMark ends a block
-     * only on a fence of the same character and at least the opening length that carries no info string, so
-     * an inner fence is content, a `~~~` is a fence, and an indented line is not one.
+     * Applies {@code replacement} to each match of {@code pattern} in the text between code literals. Each stretch
+     * is matched on its own, so a mention right after a code span counts as starting a word.
      */
-    static String balanceCodeFences(String text) {
-        Fence fence = unclosedFence(text);
-        return fence == null ? text : text + "\n" + fence.closingDelimiter();
-    }
-
-    private static String balanceCodeFencesWithin(String text, int maxLength) {
-        String result = text;
-        Fence fence;
-        while ((fence = unclosedFence(result)) != null) {
-            String closing = "\n" + fence.closingDelimiter();
-            if (result.length() + closing.length() <= maxLength) {
-                return result + closing;
-            }
-            result = result.substring(0, fence.offset()) + result.substring(fence.offset() + fence.length());
+    private static String outsideCode(String text, Pattern pattern, Function<MatchResult, String> replacement) {
+        StringBuilder out = new StringBuilder(text.length());
+        Matcher matcher = pattern.matcher(text);
+        int position = 0;
+        for (Range code : codeRanges(text)) {
+            if (code.from() < position) continue;
+            replaceWithin(text, matcher, position, code.from(), replacement, out);
+            out.append(text, code.from(), code.to());
+            position = code.to();
         }
-        return result;
+        replaceWithin(text, matcher, position, text.length(), replacement, out);
+        return out.toString();
     }
 
-    private static @Nullable Fence unclosedFence(String text) {
-        Fence open = null;
-        int lineStart = 0;
-        while (lineStart <= text.length()) {
-            int lineEnd = text.indexOf('\n', lineStart);
-            if (lineEnd < 0) lineEnd = text.length();
-            String line = text.substring(lineStart, lineEnd);
-            String stripped = line.stripLeading();
-            int indentation = line.length() - stripped.length();
-            if (indentation < 4 && !stripped.isEmpty()) {
-                char marker = stripped.charAt(0);
-                int run = 0;
-                while (run < stripped.length() && stripped.charAt(run) == marker) run++;
-                if ((marker == '`' || marker == '~') && run >= 3) {
-                    String info = stripped.substring(run);
-                    if (open == null) {
-                        if (marker != '`' || info.indexOf('`') < 0) {
-                            open = new Fence(marker, run, lineStart + indentation);
-                        }
-                    } else if (marker == open.marker() && run >= open.length() && info.isBlank()) {
-                        open = null;
-                    }
+    private static void replaceWithin(
+            String text,
+            Matcher matcher,
+            int from,
+            int to,
+            Function<MatchResult, String> replacement,
+            StringBuilder out) {
+        if (from >= to) return;
+        matcher.region(from, to);
+        int last = from;
+        while (matcher.find()) {
+            out.append(text, last, matcher.start()).append(replacement.apply(matcher));
+            last = matcher.end();
+        }
+        out.append(text, last, to);
+    }
+
+    /** The source ranges of every code span and code block line, in order. */
+    private static List<Range> codeRanges(String text) {
+        List<Range> ranges = new ArrayList<>();
+        MARKDOWN.parse(text).accept(new AbstractVisitor() {
+            @Override
+            public void visit(Code code) {
+                add(code);
+            }
+
+            @Override
+            public void visit(FencedCodeBlock block) {
+                add(block);
+            }
+
+            @Override
+            public void visit(IndentedCodeBlock block) {
+                add(block);
+            }
+
+            private void add(Node node) {
+                for (SourceSpan span : node.getSourceSpans()) {
+                    ranges.add(new Range(span.getInputIndex(), span.getInputIndex() + span.getLength()));
                 }
             }
-            if (lineEnd == text.length()) break;
-            lineStart = lineEnd + 1;
-        }
-        return open;
+        });
+        ranges.sort(Comparator.comparingInt(Range::from));
+        return ranges;
     }
 
-    private record Fence(char marker, int length, int offset) {
-        String closingDelimiter() {
-            return String.valueOf(marker).repeat(length);
+    private record Range(int from, int to) {}
+
+    /**
+     * Removes every live image and reduces every link that is not http(s) to its label, both as the parser reads
+     * them: the whole construct goes, whatever its label holds, and the label keeps its own source text. An image or
+     * link inside a label that stays is handled by the next pass. Null when the parser gives such a construct no
+     * source position, so it cannot be removed.
+     */
+    private static @Nullable String withoutLiveImagesOrUnsafeLinks(String text) {
+        List<Edit> edits = new ArrayList<>();
+        boolean[] unplaced = {false};
+        MARKDOWN.parse(text).accept(new AbstractVisitor() {
+            @Override
+            public void visit(Image image) {
+                replace(image, "");
+            }
+
+            @Override
+            public void visit(Link link) {
+                if (SAFE_LINK_DESTINATION.matcher(link.getDestination()).lookingAt()) {
+                    visitChildren(link);
+                    return;
+                }
+                Range label = rangeOf(link.getFirstChild(), link.getLastChild());
+                replace(link, label == null ? "" : text.substring(label.from(), label.to()));
+            }
+
+            private void replace(Node node, String replacement) {
+                Range range = rangeOf(node, node);
+                if (range == null) unplaced[0] = true;
+                else edits.add(new Edit(range, replacement));
+            }
+        });
+        if (unplaced[0]) return null;
+        StringBuilder out = new StringBuilder(text.length());
+        int position = 0;
+        edits.sort(Comparator.comparingInt(candidate -> candidate.range().from()));
+        for (Edit edit : edits) {
+            out.append(text, position, edit.range().from()).append(edit.replacement());
+            position = edit.range().to();
         }
+        return out.append(text, position, text.length()).toString();
+    }
+
+    /** From the start of {@code first} to the end of {@code last}; null when either has no source position. */
+    private static @Nullable Range rangeOf(@Nullable Node first, @Nullable Node last) {
+        if (first == null || last == null) return null;
+        List<SourceSpan> start = first.getSourceSpans();
+        List<SourceSpan> end = last.getSourceSpans();
+        if (start.isEmpty() || end.isEmpty()) return null;
+        SourceSpan tail = end.getLast();
+        return new Range(start.getFirst().getInputIndex(), tail.getInputIndex() + tail.getLength());
+    }
+
+    private record Edit(Range range, String replacement) {}
+
+    /**
+     * The first {@code budget} characters, with a fence the cut leaves open closed inside the budget, then the
+     * notice. The cut moves back until the closing fence fits, so the code stays code.
+     */
+    private static String truncate(String text, int budget) {
+        String cut = text.substring(0, Math.min(budget, text.length()));
+        FencedCodeBlock open;
+        while ((open = unclosedFence(cut)) != null) {
+            String closing = "\n" + closingFence(open);
+            if (cut.length() + closing.length() <= budget) {
+                cut = cut + closing;
+                break;
+            }
+            cut = cut.substring(0, Math.max(0, budget - closing.length()));
+        }
+        return cut + TRUNCATION_NOTICE;
+    }
+
+    /**
+     * Closes a fenced block the body leaves open, so text appended after the body is not swallowed into it. Only a
+     * top-level block can run to the end; a block inside a list or quote ends when its container does.
+     */
+    static String balanceCodeFences(String text) {
+        FencedCodeBlock open = unclosedFence(text);
+        return open == null ? text : text + "\n" + closingFence(open);
+    }
+
+    private static @Nullable FencedCodeBlock unclosedFence(String text) {
+        return MARKDOWN.parse(text).getLastChild() instanceof FencedCodeBlock block
+                        && block.getClosingFenceLength() == null
+                ? block
+                : null;
+    }
+
+    private static String closingFence(FencedCodeBlock block) {
+        Integer opening = block.getOpeningFenceLength();
+        return block.getFenceCharacter().repeat(opening == null ? 3 : opening);
     }
 
     static String requireMetadataText(@Nullable JsonNode metadata, String field) {

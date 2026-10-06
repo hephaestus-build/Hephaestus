@@ -169,12 +169,14 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
         AgentJob job = job();
         allow(job, Set.of("practice"));
         // Sentences an earlier sanitizer deleted or rewrote: a reference to the practice, an approval-shaped
-        // phrase inside a longer thought, a numeric bound. Each is part of the composed argument.
+        // phrase inside a longer thought, a numeric bound, Swift generics and property wrappers in code. Each is part
+        // of the composed argument.
         String paragraphs = "The practice requires the description to say why; this one says what changed only.\n\n"
                 + "Before this is ready for another look, add one sentence on the reason for the new screen.\n\n"
-                + "```swift\nlet fill = Color(red: 0.2, green: 0.6, blue: 0.3)\n```\n\n"
+                + "```swift\n@State private var isOn = false\nlet fill = Color(red: 0.2, green: 0.6, blue: 0.3)\n```\n\n"
                 + "The diff touches <= 3 files, so a short reason is enough.";
-        String note = "This explicit RGB fill stays the same in Dark Mode.\n\nCheck its contrast in both appearances.";
+        String note = "This explicit RGB fill stays the same in Dark Mode.\n\nKeep `@State` local and pass "
+                + "`Binding<Bool>` to the row.";
         var composed = new DeliveryContent(
                 paragraphs + " Thanks @alice for the preview.",
                 List.of(new DiffNote("App/ContentView.swift", 13, null, note, "observation:occ-1:0", List.of("occ-1"))),

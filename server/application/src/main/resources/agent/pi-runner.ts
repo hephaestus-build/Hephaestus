@@ -48,7 +48,7 @@ import {
 } from "./pi-observation-normalize.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, reasoningSetting, registerHephaestusProvider } from "./pi-provider.ts";
-import { buildBrief } from "./pi-review-brief.ts";
+import { buildBrief, buildSameWorkContext } from "./pi-review-brief.ts";
 import {
 	type Work,
 	deriveWindows,
@@ -3654,8 +3654,8 @@ async function main() {
 
 	/**
 	 * The review on the work, in a session of its own: fresh, with report_review as its only tool and every input
-	 * inline — the observations of this work it may rest on, what was already said on this work, and the practices.
-	 * It cannot read a file, so nothing about the person beyond this work reaches it.
+	 * inline — the captured record of this work, the observations of this work it may rest on, what was already said
+	 * on this work, and the practices. Private history is not staged into this tool-free session.
 	 */
 	async function composeReview(
 		request: CompositionRequest,
@@ -3694,6 +3694,10 @@ async function main() {
 			? parseJson(readFileSync(`${historyRoot}/feedback.json`, "utf8"))
 			: null;
 		const text = buildReviewTurn({
+			sameWork: buildSameWorkContext(CWD, taskEnvelope.paths.contextRoot, folderIndex, {
+				repositoryFullName: taskEnvelope.repositoryFullName,
+				pullRequestNumber: taskEnvelope.pullRequestNumber,
+			}),
 			observations: reviewable,
 			undecided: uncertainOutcomes(admittedObservations),
 			alreadySaid: priorPublicFeedback(history, THIS_WORK),
